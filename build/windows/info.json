@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A WillChat application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"CompanyName": "Wuhan Sesame Small Customer Service Network Technology Co., Ltd",
+			"FileDescription": "WillChat",
+			"LegalCopyright": "Copyright © 2016- 2026 Wuhan Sesame Small Customer Service Network Technology Co., Ltd.",
+			"ProductName": "WillChat",
+			"Comments": "WillChat"
 		}
 	}
 }

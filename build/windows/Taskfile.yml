@@ -109,8 +109,6 @@ tasks:
   create:nsis:installer:
     summary: Creates an NSIS installer
     dir: build/windows/nsis
-    deps:
-      - task: build
     cmds:
       # Create the Microsoft WebView2 bootstrapper if it doesn't exist
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"

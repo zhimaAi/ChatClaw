@@ -23,6 +23,8 @@ tasks:
     summary: Packages a production build of the application
     cmds:
       - task: "{{OS}}:package"
+        vars:
+          ARCH: '{{.ARCH}}'
 
   run:
     summary: Runs the application

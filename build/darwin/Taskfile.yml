@@ -134,6 +134,55 @@ tasks:
     cmds:
       - task: create:app:bundle
 
+  create:dmg:
+    summary: Creates a `.dmg` from the generated `.app` bundle
+    preconditions:
+      - sh: command -v create-dmg >/dev/null 2>&1
+        msg: "create-dmg not found. Install it first: brew install create-dmg"
+    cmds:
+      - task: '{{if eq .UNIVERSAL "true"}}package:universal{{else}}package{{end}}'
+        vars:
+          ARCH: '{{.ARCH}}'
+      - |
+        set -euo pipefail
+        APP_PATH="{{.BIN_DIR}}/{{.APP_NAME}}.app"
+        DMG_PATH="{{.DMG_OUTPUT}}"
+        DMG_VOLNAME="{{.DMG_VOLNAME}}"
+        TARGET_ARCH="{{.TARGET_ARCH}}"
+
+        if [ -z "$DMG_PATH" ]; then
+          if [ "{{.UNIVERSAL}}" = "true" ]; then
+            DMG_PATH="{{.BIN_DIR}}/{{.APP_NAME}}-universal.dmg"
+          else
+            DMG_PATH="{{.BIN_DIR}}/{{.APP_NAME}}-$TARGET_ARCH.dmg"
+          fi
+        fi
+        if [ -z "$DMG_VOLNAME" ]; then
+          DMG_VOLNAME="{{.APP_NAME}}"
+        fi
+
+        if [ ! -d "$APP_PATH" ]; then
+          echo "App bundle not found: $APP_PATH" >&2
+          exit 1
+        fi
+
+        rm -f "$DMG_PATH"
+        create-dmg \
+          --volname "$DMG_VOLNAME" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --icon "{{.APP_NAME}}.app" 150 185 \
+          --app-drop-link 450 185 \
+          "$DMG_PATH" \
+          "$APP_PATH"
+    vars:
+      # Set UNIVERSAL=true to build a universal `.app` before creating the `.dmg`.
+      UNIVERSAL: '{{.UNIVERSAL | default "false"}}'
+      # Resolved target arch used for default dmg naming (amd64/arm64).
+      TARGET_ARCH: '{{.ARCH | default ARCH}}'
+      DMG_VOLNAME: '{{.DMG_VOLNAME | default ""}}'
+      DMG_OUTPUT: '{{.DMG_OUTPUT | default ""}}'
 
   create:app:bundle:
     summary: Creates an `.app` bundle
