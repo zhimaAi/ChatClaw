@@ -5,7 +5,8 @@ import (
 	_ "embed"
 	"log"
 
-	"changeme/internal/bootstrap"
+	"willchat/internal/bootstrap"
+	"willchat/internal/sqlite"
 )
 
 //go:embed all:frontend/dist
@@ -27,6 +28,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	if err := sqlite.Init(app); err != nil {
+		log.Fatal("sqlite init failed:", err)
+	}
+	defer sqlite.Close(app)
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

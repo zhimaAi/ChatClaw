@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { WindowService } from "../wails";
+import { WindowService } from "../../bindings/willchat/internal/services/windows";
 
 const { t } = useI18n();
 

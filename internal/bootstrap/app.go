@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io/fs"
 
-	"changeme/internal/services/greet"
-	"changeme/internal/services/i18n"
-	"changeme/internal/services/windows"
+	"willchat/internal/services/greet"
+	"willchat/internal/services/i18n"
+	"willchat/internal/services/windows"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
