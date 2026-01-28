@@ -5,4 +5,12 @@ import wails from "@wailsio/runtime/plugins/vite";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue(), wails("./bindings")],
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        settings: "settings.html",
+      },
+    },
+  },
 });
