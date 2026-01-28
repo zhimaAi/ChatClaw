@@ -1,5 +1,10 @@
 package sqlite
 
+/*
+#cgo CFLAGS: -DSQLITE_ENABLE_FTS5
+*/
+import "C"
+
 import (
 	"context"
 	"database/sql"
@@ -11,12 +16,17 @@ import (
 	"willchat/internal/define"
 	"willchat/internal/sqlite/migrations"
 
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
-	"github.com/uptrace/bun/driver/sqliteshim"
 	"github.com/uptrace/bun/migrate"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+func init() {
+	sqlite_vec.Auto()
+}
 
 var (
 	once   sync.Once
@@ -42,7 +52,7 @@ func doInit(app *application.App) error {
 	dbPath = path
 	app.Logger.Info("sqlite path", "path", dbPath)
 
-	sqlDB, err := sql.Open(sqliteshim.ShimName, dbPath)
+	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return err
 	}
@@ -69,6 +79,14 @@ func doInit(app *application.App) error {
 		sqlDB.Close()
 		return err
 	}
+
+	// 验证 sqlite-vec 扩展已加载
+	var vecVersion string
+	if err := sqlDB.QueryRowContext(ctx, `SELECT vec_version()`).Scan(&vecVersion); err != nil {
+		sqlDB.Close()
+		return err
+	}
+	app.Logger.Info("sqlite-vec loaded", "version", vecVersion)
 
 	bunDB := bun.NewDB(sqlDB, sqlitedialect.New())
 
