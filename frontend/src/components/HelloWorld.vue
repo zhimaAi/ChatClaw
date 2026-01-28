@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import {Events} from "@wailsio/runtime";
-import {GreetService} from "../../bindings/changeme";
+import {GreetService} from "../../bindings/willchat";
 
 defineProps<{ msg: string }>()
 

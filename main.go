@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"log"
 
+	"willchat/internal/sqlite"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -53,6 +55,11 @@ func main() {
 		app.Quit()
 	})
 	app.SystemTray.New().SetIcon(icon).SetMenu(systrayMenu)
+
+	if err := sqlite.Init(app); err != nil {
+		log.Fatal("sqlite init failed:", err)
+	}
+	defer sqlite.Close(app)
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
