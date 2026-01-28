@@ -1,10 +1,18 @@
-import { createI18n } from 'vue-i18n'
-import { messages } from '../locales'
+import { createI18n, type I18n } from 'vue-i18n'
+import { messages, type Locale } from '../locales'
 
-// 创建 i18n 实例，默认使用中文
-export const i18n = createI18n({
-  legacy: false, // 使用 Composition API 模式
-  locale: 'zh-CN',
-  fallbackLocale: 'en-US',
-  messages,
-})
+// i18n 实例（由 initI18n 初始化）
+export let i18n: I18n
+
+/**
+ * 初始化 i18n 实例（由后端指定语言）
+ */
+export function initI18n(locale: Locale) {
+  i18n = createI18n({
+    legacy: false,
+    locale,
+    fallbackLocale: 'en-US',
+    messages,
+  })
+  return i18n
+}

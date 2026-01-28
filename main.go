@@ -22,7 +22,7 @@ func main() {
 	app, err := bootstrap.NewApp(bootstrap.Options{
 		Assets: assets,
 		Icon:   icon,
-		Locale: "zh-CN", // 语言设置: "zh-CN" 或 "en-US"
+		Locale: "en-US", // 语言设置: "zh-CN" 或 "en-US"
 	})
 	if err != nil {
 		log.Fatal(err)
