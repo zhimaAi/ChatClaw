@@ -37,12 +37,12 @@ type WindowService struct {
 }
 
 func NewWindowService(app *application.App, i18nSvc *i18n.Service, defs []WindowDefinition) (*WindowService, error) {
+	// 先检查 i18nSvc，因为后续错误需要依赖它
+	if i18nSvc == nil {
+		return nil, &errs.I18nError{Key: "error.i18n_required", Message: "i18n service is required"}
+	}
 	if app == nil {
 		return nil, errs.NewI18n(i18nSvc, "error.app_required", nil)
-	}
-	if i18nSvc == nil {
-		// 这里没法用 i18n，直接返回固定错误
-		return nil, &errs.I18nError{Key: "error.i18n_required", Message: "i18n service is required"}
 	}
 	s := &WindowService{
 		app:     app,

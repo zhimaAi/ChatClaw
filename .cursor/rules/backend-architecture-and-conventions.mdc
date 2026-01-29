@@ -29,5 +29,6 @@ if err != nil { return nil, fmt.Errorf("init window service: %w", err) }
   - 初始化通过 `sqlite.Init(app)`（内部用 `sync.Once` 保证幂等），退出时 `sqlite.Close(app)`
   - PRAGMA/扩展校验在 init 阶段完成（`busy_timeout`、`foreign_keys`、`vec_version()`）
   - 迁移统一放在 `internal/sqlite/migrations`，新增迁移用 `Migrations.MustRegister(up, down)`
-- **i18n 文案**：新增托盘/菜单等文本，优先走 `i18n.Service.T(key)`，并在 `locales.go` 维护 key → 文案映射（缺失 key 允许回退英文/返回 key）
+- **i18n 文案**：新增托盘/菜单等文本，优先走 `i18n.Service.T(key)`，翻译维护在 `internal/services/i18n/locales/*.json`（缺失 key 允许回退英文/返回 key）
+- **业务错误**：需要返回给前端的错误使用 `errs.NewI18n()`/`errs.NewI18nF()`，确保前端收到本地化后的错误文案
 

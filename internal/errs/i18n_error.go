@@ -21,17 +21,25 @@ func (e *I18nError) Error() string { return e.Message }
 func (e *I18nError) Unwrap() error { return e.Cause }
 
 func NewI18n(localizer Localizer, key string, cause error) error {
+	msg := key
+	if localizer != nil {
+		msg = localizer.T(key)
+	}
 	return &I18nError{
 		Key:     key,
-		Message: localizer.T(key),
+		Message: msg,
 		Cause:   cause,
 	}
 }
 
 func NewI18nF(localizer Localizer, key string, cause error, args ...any) error {
+	msg := key
+	if localizer != nil {
+		msg = localizer.Tf(key, args...)
+	}
 	return &I18nError{
 		Key:     key,
-		Message: localizer.Tf(key, args...),
+		Message: msg,
 		Cause:   cause,
 	}
 }
