@@ -3,8 +3,10 @@ package i18n
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
-	"strings"
+	"sync"
+
+	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"golang.org/x/text/language"
 )
 
 //go:embed locales/*.json
@@ -16,94 +18,89 @@ const (
 	LocaleEnUS = "en-US"
 )
 
-// Service 多语言服务
-type Service struct {
-	locale       string
-	translations map[string]map[string]any // locale -> nested map
+var (
+	bundle    *i18n.Bundle
+	localizer *i18n.Localizer
+	mu        sync.RWMutex
+)
+
+func init() {
+	bundle = i18n.NewBundle(language.Chinese)
+	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
+
+	// 加载翻译文件
+	bundle.LoadMessageFileFS(localesFS, "locales/zh-CN.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/en-US.json")
+
+	// 默认使用中文
+	localizer = i18n.NewLocalizer(bundle, LocaleZhCN)
 }
+
+// Service 多语言服务（暴露给前端调用）
+type Service struct{}
 
 // NewService 创建多语言服务
 func NewService(locale string) *Service {
-	s := &Service{
-		translations: make(map[string]map[string]any),
-	}
-	// 加载所有语言文件
-	s.loadLocale(LocaleZhCN)
-	s.loadLocale(LocaleEnUS)
-	// 设置当前语言
-	s.SetLocale(locale)
-	return s
+	SetLocale(locale)
+	return &Service{}
 }
 
-func (s *Service) loadLocale(locale string) {
-	data, err := localesFS.ReadFile("locales/" + locale + ".json")
-	if err != nil {
-		return
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return
-	}
-	s.translations[locale] = m
+// GetLocale 获取当前语言（暴露给前端）
+func (s *Service) GetLocale() string {
+	return GetLocale()
 }
+
+// SetLocale 设置语言（暴露给前端）
+func (s *Service) SetLocale(locale string) {
+	SetLocale(locale)
+}
+
+// ---- 包级便捷函数 ----
+
+var currentLocale = LocaleZhCN
 
 // GetLocale 获取当前语言
-func (s *Service) GetLocale() string {
-	return s.locale
+func GetLocale() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return currentLocale
 }
 
 // SetLocale 设置语言
-func (s *Service) SetLocale(locale string) {
-	if locale == LocaleZhCN || locale == LocaleEnUS {
-		s.locale = locale
-	} else {
-		s.locale = LocaleZhCN // 默认中文
+func SetLocale(locale string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if locale != LocaleZhCN && locale != LocaleEnUS {
+		locale = LocaleZhCN
 	}
+	currentLocale = locale
+	localizer = i18n.NewLocalizer(bundle, locale)
 }
 
-// T 获取翻译文本，支持嵌套 key（如 "systray.show" 或 "error.app_required"）
-func (s *Service) T(key string) string {
-	if text := s.lookup(s.locale, key); text != "" {
-		return text
+// T 获取翻译文本
+func T(key string) string {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	msg, err := localizer.Localize(&i18n.LocalizeConfig{MessageID: key})
+	if err != nil {
+		return key
 	}
-	// 回退到英文
-	if s.locale != LocaleEnUS {
-		if text := s.lookup(LocaleEnUS, key); text != "" {
-			return text
-		}
-	}
-	return key
+	return msg
 }
 
-// Tf 获取翻译文本（支持 fmt.Sprintf 格式化参数）
-func (s *Service) Tf(key string, args ...any) string {
-	return fmt.Sprintf(s.T(key), args...)
-}
+// Tf 获取翻译文本（带参数）
+func Tf(key string, data map[string]any) string {
+	mu.RLock()
+	defer mu.RUnlock()
 
-// lookup 从指定语言的翻译中查找 key（支持嵌套，如 "error.app_required"）
-func (s *Service) lookup(locale, key string) string {
-	m, ok := s.translations[locale]
-	if !ok {
-		return ""
+	msg, err := localizer.Localize(&i18n.LocalizeConfig{
+		MessageID:    key,
+		TemplateData: data,
+	})
+	if err != nil {
+		return key
 	}
-
-	parts := strings.Split(key, ".")
-	var current any = m
-
-	for _, part := range parts {
-		switch v := current.(type) {
-		case map[string]any:
-			current, ok = v[part]
-			if !ok {
-				return ""
-			}
-		default:
-			return ""
-		}
-	}
-
-	if str, ok := current.(string); ok {
-		return str
-	}
-	return ""
+	return msg
 }

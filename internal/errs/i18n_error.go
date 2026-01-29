@@ -1,10 +1,6 @@
 package errs
 
-// Localizer 用于生成本地化错误文案（来自 i18n.Service）。
-type Localizer interface {
-	T(key string) string
-	Tf(key string, args ...any) string
-}
+import "willchat/internal/services/i18n"
 
 // I18nError 业务错误：携带 i18n key，并把本地化后的 message 作为 Error() 输出。
 //
@@ -20,26 +16,36 @@ type I18nError struct {
 func (e *I18nError) Error() string { return e.Message }
 func (e *I18nError) Unwrap() error { return e.Cause }
 
-func NewI18n(localizer Localizer, key string, cause error) error {
-	msg := key
-	if localizer != nil {
-		msg = localizer.T(key)
-	}
+// New 创建 i18n 业务错误
+func New(key string) error {
 	return &I18nError{
 		Key:     key,
-		Message: msg,
+		Message: i18n.T(key),
+	}
+}
+
+// Newf 创建带参数的 i18n 业务错误
+func Newf(key string, data map[string]any) error {
+	return &I18nError{
+		Key:     key,
+		Message: i18n.Tf(key, data),
+	}
+}
+
+// Wrap 包装底层错误为 i18n 业务错误
+func Wrap(key string, cause error) error {
+	return &I18nError{
+		Key:     key,
+		Message: i18n.T(key),
 		Cause:   cause,
 	}
 }
 
-func NewI18nF(localizer Localizer, key string, cause error, args ...any) error {
-	msg := key
-	if localizer != nil {
-		msg = localizer.Tf(key, args...)
-	}
+// Wrapf 包装底层错误为带参数的 i18n 业务错误
+func Wrapf(key string, cause error, data map[string]any) error {
 	return &I18nError{
 		Key:     key,
-		Message: msg,
+		Message: i18n.Tf(key, data),
 		Cause:   cause,
 	}
 }

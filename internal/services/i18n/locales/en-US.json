@@ -1,14 +1,11 @@
 {
-  "systray": {
-    "show": "Show",
-    "quit": "Quit"
-  },
-  "error": {
-    "app_required": "app is required",
-    "i18n_required": "i18n service is required",
-    "window_name_required": "window name is required",
-    "window_create_options_required": "window '%s' CreateOptions is required",
-    "window_already_registered": "window '%s' already registered",
-    "window_not_registered": "window '%s' not registered"
-  }
+  "systray.show": "Show",
+  "systray.quit": "Quit",
+
+  "error.app_required": "app is required",
+  "error.i18n_required": "i18n service is required",
+  "error.window_name_required": "window name is required",
+  "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
+  "error.window_already_registered": "window '{{.Name}}' already registered",
+  "error.window_not_registered": "window '{{.Name}}' not registered"
 }

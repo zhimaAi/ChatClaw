@@ -5,11 +5,13 @@ go 1.25
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/ncruces/go-sqlite3 v0.20.3
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.22
 	github.com/wailsapp/wails/v3 v3.0.0-alpha.61
 	golang.org/x/sys v0.40.0
+	golang.org/x/text v0.33.0
 )
 
 require (
@@ -54,6 +56,5 @@ require (
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
