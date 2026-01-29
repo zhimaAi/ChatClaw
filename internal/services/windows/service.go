@@ -1,9 +1,9 @@
 package windows
 
 import (
-	"errors"
-	"fmt"
 	"sync"
+
+	"willchat/internal/errs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -22,21 +22,21 @@ type WindowInfo struct {
 }
 
 type WindowDefinition struct {
-	Name string
+	Name          string
 	CreateOptions func() application.WebviewWindowOptions
-	FocusOnShow bool
+	FocusOnShow   bool
 }
 
 type WindowService struct {
-	app *application.App
-	mu sync.RWMutex
+	app     *application.App
+	mu      sync.RWMutex
 	defs    map[string]WindowDefinition
 	windows map[string]*application.WebviewWindow
 }
 
 func NewWindowService(app *application.App, defs []WindowDefinition) (*WindowService, error) {
 	if app == nil {
-		return nil, errors.New("app is required")
+		return nil, errs.New("error.app_required")
 	}
 	s := &WindowService{
 		app:     app,
@@ -53,17 +53,17 @@ func NewWindowService(app *application.App, defs []WindowDefinition) (*WindowSer
 
 func (s *WindowService) register(def WindowDefinition) error {
 	if def.Name == "" {
-		return errors.New("window name is required")
+		return errs.New("error.window_name_required")
 	}
 	if def.CreateOptions == nil {
-		return fmt.Errorf("window '%s' CreateOptions is required", def.Name)
+		return errs.Newf("error.window_create_options_required", map[string]any{"Name": def.Name})
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, exists := s.defs[def.Name]; exists {
-		return fmt.Errorf("window '%s' already registered", def.Name)
+		return errs.Newf("error.window_already_registered", map[string]any{"Name": def.Name})
 	}
 	s.defs[def.Name] = def
 	return nil
@@ -78,7 +78,7 @@ func (s *WindowService) ensure(name string) (*application.WebviewWindow, error) 
 	def, ok := s.defs[name]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("window '%s' not registered", name)
+		return nil, errs.Newf("error.window_not_registered", map[string]any{"Name": name})
 	}
 
 	options := def.CreateOptions()
@@ -140,7 +140,7 @@ func (s *WindowService) Show(name string) error {
 	def, ok := s.defs[name]
 	s.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("window '%s' not registered", name)
+		return errs.Newf("error.window_not_registered", map[string]any{"Name": name})
 	}
 
 	w, err := s.ensure(name)
@@ -161,7 +161,7 @@ func (s *WindowService) Close(name string) error {
 	delete(s.windows, name)
 	s.mu.Unlock()
 	if !registered {
-		return fmt.Errorf("window '%s' not registered", name)
+		return errs.Newf("error.window_not_registered", map[string]any{"Name": name})
 	}
 	if w == nil {
 		return nil
@@ -178,7 +178,7 @@ func (s *WindowService) IsVisible(name string) (bool, error) {
 	s.mu.RUnlock()
 
 	if !registered {
-		return false, fmt.Errorf("window '%s' not registered", name)
+		return false, errs.Newf("error.window_not_registered", map[string]any{"Name": name})
 	}
 	if w == nil {
 		return false, nil

@@ -1,0 +1,41 @@
+---
+description: WillChat 后端（Go/Wails）基础架构与开发规范
+alwaysApply: false
+---
+# 后端基础架构与开发规范（Go/Wails）
+
+## 架构概览
+
+- **入口**：`main.go` 只做“组装 + 启动”——`bootstrap.NewApp(...)` → `sqlite.Init(app)` → `app.Run()`
+- **应用组装**：`internal/bootstrap/app.go` 负责创建 Wails `application.App`、注册 services、创建主窗口/子窗口服务、配置系统托盘菜单
+- **业务服务**：`internal/services/*` 为前端暴露能力（通过 `application.NewService(...)` 注册）
+- **窗口管理**：`internal/services/windows` 统一管理子窗口定义、生命周期与可见性（`ensure/show/close/toggle`）
+- **多语言**：`internal/services/i18n` 基于 `go-i18n` 封装，提供包级便捷函数 `T()`/`Tf()`
+- **业务错误**：`internal/errs` 提供 i18n 错误类型，返回给前端的错误自动本地化
+- **数据库**：`internal/sqlite` 负责路径、连接、PRAGMA、迁移（Bun + `migrate.Migrator`）
+- **环境配置**：`internal/define/env_dev.go` / `env_prod.go` 使用 build tag 切换默认 `Env/ServerURL`
+
+## 开发规范（必须遵守）
+
+- **分层依赖**：`main` → `internal/bootstrap` → `internal/services/*` / `internal/sqlite`；避免跨层“反向依赖/循环依赖”
+- **构造函数模式**：对外暴露 `NewXxx(...) *Xxx`，内部字段尽量私有（例：`greet.NewGreetService`、`i18n.NewService`、`windows.NewWindowService`）
+- **错误处理**：返回错误优先；需要补充上下文时用 `%w` 包装，避免吞错
+
+```go
+// ✅ GOOD
+if err != nil { return nil, fmt.Errorf("init window service: %w", err) }
+```
+
+- **日志**：业务/库层用 `app.Logger.Info/Warn` 记录关键路径（如 sqlite path、迁移组）；只有进程级失败才在 `main.go` 终止（`log.Fatal`）
+- **SQLite 约定**：
+  - 初始化通过 `sqlite.Init(app)`（内部用 `sync.Once` 保证幂等），退出时 `sqlite.Close(app)`
+  - PRAGMA/扩展校验在 init 阶段完成（`busy_timeout`、`foreign_keys`、`vec_version()`）
+  - 迁移统一放在 `internal/sqlite/migrations`，新增迁移用 `Migrations.MustRegister(up, down)`
+- **i18n 文案**：使用 `go-i18n` 库，翻译文件在 `internal/services/i18n/locales/*.json`，调用方式：
+  - 简单文本：`i18n.T("systray.show")`
+  - 带参数：`i18n.Tf("error.window_not_registered", map[string]any{"Name": name})`
+- **业务错误**：需要返回给前端的错误使用 `errs` 包，确保前端收到本地化后的错误文案：
+  - 简单错误：`errs.New("error.app_required")`
+  - 带参数：`errs.Newf("error.window_not_registered", map[string]any{"Name": name})`
+  - 包装底层错误：`errs.Wrap("error.xxx", err)` / `errs.Wrapf("error.xxx", err, data)`
+

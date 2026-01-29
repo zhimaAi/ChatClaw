@@ -4,6 +4,7 @@ import (
 	"embed"
 	_ "embed"
 	"log"
+	"runtime"
 
 	"willchat/internal/bootstrap"
 	"willchat/internal/sqlite"
@@ -16,6 +17,8 @@ var assets embed.FS
 var icon []byte
 
 func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
+
 	// application.RegisterEvent[string]("time")
 }
 
@@ -23,7 +26,7 @@ func main() {
 	app, err := bootstrap.NewApp(bootstrap.Options{
 		Assets: assets,
 		Icon:   icon,
-		Locale: "en-US", // 语言设置: "zh-CN" 或 "en-US"
+		// Locale 为空时自动检测系统语言
 	})
 	if err != nil {
 		log.Fatal(err)

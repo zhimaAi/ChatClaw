@@ -18,7 +18,7 @@ type Options struct {
 }
 
 func NewApp(opts Options) (*application.App, error) {
-	// 创建多语言服务
+	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
 	// 创建应用实例
@@ -49,11 +49,11 @@ func NewApp(opts Options) (*application.App, error) {
 
 	// 创建系统托盘
 	systrayMenu := app.NewMenu()
-	systrayMenu.Add(i18nService.T("systray.show")).OnClick(func(ctx *application.Context) {
+	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
 		mainWindow.Show()
 		mainWindow.Focus()
 	})
-	systrayMenu.Add(i18nService.T("systray.quit")).OnClick(func(ctx *application.Context) {
+	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
 		app.Quit()
 	})
 	app.SystemTray.New().SetIcon(opts.Icon).SetMenu(systrayMenu)
