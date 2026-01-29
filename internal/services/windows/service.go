@@ -1,9 +1,10 @@
 package windows
 
 import (
-	"errors"
-	"fmt"
 	"sync"
+
+	"willchat/internal/errs"
+	"willchat/internal/services/i18n"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -22,24 +23,30 @@ type WindowInfo struct {
 }
 
 type WindowDefinition struct {
-	Name string
+	Name          string
 	CreateOptions func() application.WebviewWindowOptions
-	FocusOnShow bool
+	FocusOnShow   bool
 }
 
 type WindowService struct {
-	app *application.App
-	mu sync.RWMutex
+	app  *application.App
+	i18n *i18n.Service
+	mu   sync.RWMutex
 	defs    map[string]WindowDefinition
 	windows map[string]*application.WebviewWindow
 }
 
-func NewWindowService(app *application.App, defs []WindowDefinition) (*WindowService, error) {
+func NewWindowService(app *application.App, i18nSvc *i18n.Service, defs []WindowDefinition) (*WindowService, error) {
 	if app == nil {
-		return nil, errors.New("app is required")
+		return nil, errs.NewI18n(i18nSvc, "error.app_required", nil)
+	}
+	if i18nSvc == nil {
+		// 这里没法用 i18n，直接返回固定错误
+		return nil, &errs.I18nError{Key: "error.i18n_required", Message: "i18n service is required"}
 	}
 	s := &WindowService{
 		app:     app,
+		i18n:    i18nSvc,
 		defs:    make(map[string]WindowDefinition),
 		windows: make(map[string]*application.WebviewWindow),
 	}
@@ -53,17 +60,17 @@ func NewWindowService(app *application.App, defs []WindowDefinition) (*WindowSer
 
 func (s *WindowService) register(def WindowDefinition) error {
 	if def.Name == "" {
-		return errors.New("window name is required")
+		return errs.NewI18n(s.i18n, "error.window_name_required", nil)
 	}
 	if def.CreateOptions == nil {
-		return fmt.Errorf("window '%s' CreateOptions is required", def.Name)
+		return errs.NewI18nF(s.i18n, "error.window_create_options_required", nil, def.Name)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, exists := s.defs[def.Name]; exists {
-		return fmt.Errorf("window '%s' already registered", def.Name)
+		return errs.NewI18nF(s.i18n, "error.window_already_registered", nil, def.Name)
 	}
 	s.defs[def.Name] = def
 	return nil
@@ -78,7 +85,7 @@ func (s *WindowService) ensure(name string) (*application.WebviewWindow, error) 
 	def, ok := s.defs[name]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("window '%s' not registered", name)
+		return nil, errs.NewI18nF(s.i18n, "error.window_not_registered", nil, name)
 	}
 
 	options := def.CreateOptions()
@@ -140,7 +147,7 @@ func (s *WindowService) Show(name string) error {
 	def, ok := s.defs[name]
 	s.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("window '%s' not registered", name)
+		return errs.NewI18nF(s.i18n, "error.window_not_registered", nil, name)
 	}
 
 	w, err := s.ensure(name)
@@ -161,7 +168,7 @@ func (s *WindowService) Close(name string) error {
 	delete(s.windows, name)
 	s.mu.Unlock()
 	if !registered {
-		return fmt.Errorf("window '%s' not registered", name)
+		return errs.NewI18nF(s.i18n, "error.window_not_registered", nil, name)
 	}
 	if w == nil {
 		return nil
@@ -178,7 +185,7 @@ func (s *WindowService) IsVisible(name string) (bool, error) {
 	s.mu.RUnlock()
 
 	if !registered {
-		return false, fmt.Errorf("window '%s' not registered", name)
+		return false, errs.NewI18nF(s.i18n, "error.window_not_registered", nil, name)
 	}
 	if w == nil {
 		return false, nil

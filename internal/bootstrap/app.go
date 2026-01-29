@@ -41,7 +41,7 @@ func NewApp(opts Options) (*application.App, error) {
 	mainWindow := windows.NewMainWindow(app)
 
 	// 创建子窗口服务
-	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
+	windowService, err := windows.NewWindowService(app, i18nService, windows.DefaultDefinitions())
 	if err != nil {
 		return nil, fmt.Errorf("init window service: %w", err)
 	}

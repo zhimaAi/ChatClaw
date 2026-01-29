@@ -1,0 +1,14 @@
+{
+  "systray": {
+    "show": "Show",
+    "quit": "Quit"
+  },
+  "error": {
+    "app_required": "app is required",
+    "i18n_required": "i18n service is required",
+    "window_name_required": "window name is required",
+    "window_create_options_required": "window '%s' CreateOptions is required",
+    "window_already_registered": "window '%s' already registered",
+    "window_not_registered": "window '%s' not registered"
+  }
+}

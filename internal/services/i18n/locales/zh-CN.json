@@ -1,0 +1,14 @@
+{
+  "systray": {
+    "show": "显示",
+    "quit": "退出"
+  },
+  "error": {
+    "app_required": "缺少应用实例",
+    "i18n_required": "缺少多语言服务",
+    "window_name_required": "缺少窗口名称",
+    "window_create_options_required": "窗口「%s」缺少 CreateOptions",
+    "window_already_registered": "窗口「%s」已注册",
+    "window_not_registered": "窗口「%s」未注册"
+  }
+}
