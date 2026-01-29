@@ -1,163 +1,75 @@
 ---
-description: WillChat 前端（Vue 3/shadcn-vue）基础架构与开发规范
+description: WillChat 前端（Vue 3/shadcn-vue）架构约束
 alwaysApply: false
 ---
-# 前端基础架构与开发规范（Vue 3 + shadcn-vue）
+
+# Vue 3 前端编码约束
 
 ## 技术栈
 
-- **框架**：Vue 3 + TypeScript + Vite
-- **UI 组件库**：shadcn-vue（new-york 风格）
-- **样式**：TailwindCSS v4
-- **状态管理**：Pinia
-- **国际化**：vue-i18n
-- **代码规范**：ESLint + Prettier
-- **与后端通信**：Wails Runtime Bindings
+Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 
-## 目录结构
+## 目录职责
 
-```
-frontend/src/
-├── assets/           # 静态资源、全局样式（index.css 包含 Tailwind + 主题变量）
-├── components/
-│   ├── layout/       # 布局组件（AppLayout 等）
-│   └── ui/           # shadcn-vue 组件（通过 CLI 添加）
-├── composables/      # 组合式函数（useXxx）
-├── i18n/             # i18n 初始化
-├── lib/              # 工具函数（cn() 等）
-├── locales/          # 语言包（zh-CN.ts, en-US.ts）
-├── stores/           # Pinia stores
-├── settings/         # settings 窗口入口
-├── App.vue           # 主窗口根组件
-└── main.ts           # 主窗口入口
-```
+当你需要创建或修改前端代码时，遵循以下目录约定：
 
-## 开发规范（必须遵守）
+- `src/components/ui/` — shadcn-vue 组件（只能通过 CLI 添加，不要手写）
+- `src/components/layout/` — 布局组件
+- `src/components/` — 其他业务组件
+- `src/composables/` — 组合式函数 `useXxx`
+- `src/stores/` — Pinia stores，命名 `useXxxStore`
+- `src/locales/` — 语言包 `zh-CN.ts` / `en-US.ts`
+- `src/lib/` — 工具函数
+- `src/assets/` — 静态资源、全局样式
 
-### 组件开发
+## 必须遵守
 
-- **使用 `<script setup lang="ts">`**：所有组件必须使用 Composition API + TypeScript
-- **Props 类型定义**：使用 `defineProps<{ ... }>()` 定义类型
-- **事件类型定义**：使用 `defineEmits<{ ... }>()` 定义事件
+1. **所有组件**：使用 `<script setup lang="ts">`，不用 Options API
+2. **导入路径**：始终用 `@/` 别名，如 `import { Button } from '@/components/ui/button'`
+3. **样式**：用 Tailwind 类名，颜色用 shadcn 语义变量（`bg-background`、`text-foreground`、`text-muted-foreground` 等）
+4. **条件类名**：用 `cn()` 函数合并，如 `cn('text-sm', disabled && 'opacity-50')`
+5. **添加 UI 组件**：运行 `npx shadcn-vue@latest add [组件名]`
+6. **翻译文本**：用 `const { t } = useI18n()`，key 格式 `模块.功能`
+7. **调用后端**：从 `@/../bindings/...` 导入，必须处理错误
+
+## 禁止
+
+- 不要手动在 `src/components/ui/` 创建文件，必须用 shadcn CLI
+- 不要写内联 style，用 Tailwind 类名
+- 不要用相对路径 `../../`，用 `@/` 别名
+- 不要硬编码用户可见文本，必须走 i18n
+- 不要直接写颜色值如 `text-gray-500`，用语义变量 `text-muted-foreground`
+
+## 代码模式
 
 ```vue
 <script setup lang="ts">
-// GOOD
+import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { useAppStore } from '@/stores'
+
+const { t } = useI18n()
+const appStore = useAppStore()
+
 defineProps<{
   title: string
   disabled?: boolean
 }>()
-
-const emit = defineEmits<{
-  (e: 'update', value: string): void
-}>()
 </script>
-```
 
-### 样式规范
-
-- **优先使用 Tailwind 类名**：避免写自定义 CSS，使用 Tailwind 工具类
-- **使用 shadcn 主题变量**：颜色使用 `bg-background`、`text-foreground`、`text-muted-foreground` 等语义化类名
-- **使用 cn() 合并类名**：条件类名使用 `cn()` 函数
-
-```vue
 <template>
-  <!-- GOOD：使用 Tailwind + shadcn 语义化类名 -->
   <div class="flex items-center gap-2 bg-background text-foreground">
-    <span :class="cn('text-sm', disabled && 'text-muted-foreground')">
-      {{ label }}
-    </span>
+    <Button :class="cn('w-full', disabled && 'opacity-50')">
+      {{ t('button.submit') }}
+    </Button>
   </div>
 </template>
-
-<script setup lang="ts">
-import { cn } from '@/lib/utils'
-</script>
 ```
 
-### 路径别名
+## 多窗口
 
-- **始终使用 `@/` 别名**：导入项目内文件时使用 `@/` 前缀
-
-```typescript
-// GOOD
-import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/stores'
-import { cn } from '@/lib/utils'
-
-// BAD
-import { Button } from '../../components/ui/button'
-```
-
-### 添加 shadcn 组件
-
-- **使用 CLI 添加**：通过 `npx shadcn-vue@latest add [组件名]` 添加组件
-- **不要手动创建 ui 组件**：shadcn 组件会自动生成到 `src/components/ui/`
-
-```bash
-# 添加新组件示例
-npx shadcn-vue@latest add dialog
-npx shadcn-vue@latest add tabs
-npx shadcn-vue@latest add input
-```
-
-### 状态管理
-
-- **全局状态用 Pinia**：主题、用户设置等全局状态放在 `stores/`
-- **组件内状态用 ref/reactive**：局部状态不需要放到 store
-- **Store 命名**：使用 `useXxxStore` 命名约定
-
-```typescript
-// GOOD：stores/app.ts
-export const useAppStore = defineStore('app', () => {
-  const theme = ref<Theme>('system')
-  // ...
-  return { theme, setTheme }
-})
-```
-
-### 与后端通信
-
-- **使用 Wails Bindings**：后端服务通过 `bindings/` 目录导入
-- **错误处理**：调用后端方法时使用 try-catch 或 .catch()
-
-```typescript
-// GOOD
-import { GreetService } from '@/../bindings/willchat/internal/services/greet'
-
-async function greet(name: string) {
-  try {
-    const result = await GreetService.Greet(name)
-    // ...
-  } catch (err) {
-    console.error('Greet failed:', err)
-  }
-}
-```
-
-### 国际化
-
-- **语言包位置**：`src/locales/zh-CN.ts` 和 `src/locales/en-US.ts`
-- **使用 useI18n**：在组件中使用 `const { t } = useI18n()`
-- **Key 命名**：使用 `模块.功能` 格式，如 `settings.title`、`hello.greetButton`
-
-```typescript
-// locales/zh-CN.ts
-export default {
-  settings: {
-    title: '设置',
-    theme: '主题',
-  },
-}
-```
-
-### 多窗口支持
-
-- **每个窗口独立入口**：`main.ts`（主窗口）、`settings/main.ts`（设置窗口）
-- **共享代码**：stores、composables、components 在窗口间共享
-- **HTML 入口**：`index.html`、`settings.html`，在 `vite.config.ts` 的 rollupOptions.input 中配置
-
-### 代码格式化
-
-- **提交前格式化**：运行 `npm run format` 格式化代码
-- **检查 lint**：运行 `npm run lint` 检查代码规范
+- 主窗口入口：`src/main.ts` + `index.html`
+- 设置窗口入口：`src/settings/main.ts` + `settings.html`
+- 新窗口需要在 `vite.config.ts` 的 `rollupOptions.input` 添加入口
