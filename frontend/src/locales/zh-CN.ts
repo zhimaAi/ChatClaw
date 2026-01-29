@@ -1,6 +1,7 @@
 export default {
   app: {
     title: 'Wails + Vue',
+    theme: '主题',
   },
   hello: {
     inputPlaceholder: '请在下方输入你的名字 👇',
