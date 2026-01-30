@@ -60,6 +60,22 @@ export default {
         douyin: '抖音',
       },
     },
+    // 功能工具设置
+    tools: {
+      tray: {
+        title: '托盘',
+        showIcon: '显示托盘图标',
+        minimizeOnClose: '关闭时最小化到托盘',
+      },
+      floatingWindow: {
+        title: '悬浮窗',
+        show: '显示悬浮窗',
+      },
+      selectionSearch: {
+        title: '划词搜索',
+        enable: '划词搜索',
+      },
+    },
     // 语言选项
     languages: {
       zhCN: '中文',

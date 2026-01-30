@@ -60,6 +60,22 @@ export default {
         douyin: 'Douyin',
       },
     },
+    // Tools settings
+    tools: {
+      tray: {
+        title: 'System Tray',
+        showIcon: 'Show Tray Icon',
+        minimizeOnClose: 'Minimize to Tray on Close',
+      },
+      floatingWindow: {
+        title: 'Floating Window',
+        show: 'Show Floating Window',
+      },
+      selectionSearch: {
+        title: 'Selection Search',
+        enable: 'Selection Search',
+      },
+    },
     // Language options
     languages: {
       zhCN: 'Chinese',

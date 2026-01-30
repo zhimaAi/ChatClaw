@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
+import ToolsSettings from './components/ToolsSettings.vue'
 import { useSettingsStore, type SettingsMenuItem } from '@/stores'
 
 const { t } = useI18n()
@@ -28,7 +29,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: null,
   generalSettings: GeneralSettings,
   snapSettings: SnapSettings,
-  tools: null,
+  tools: ToolsSettings,
   about: null,
 }
 
