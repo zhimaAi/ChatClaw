@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
+	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
@@ -44,6 +45,9 @@ func NewApp(opts Options) (*application.App, error) {
 
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
+
+	// 注册应用服务
+	app.RegisterService(application.NewService(appservice.NewAppService(app)))
 
 	// 创建主窗口
 	mainWindow := windows.NewMainWindow(app)

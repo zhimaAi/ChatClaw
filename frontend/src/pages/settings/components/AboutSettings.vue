@@ -2,9 +2,11 @@
 /**
  * 关于我们设置组件
  */
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/willchat/internal/services/browser'
+import { AppService } from '@bindings/willchat/internal/services/app'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 import LogoIcon from '@/assets/images/logo.svg'
@@ -14,8 +16,18 @@ const { t } = useI18n()
 // 官网地址
 const OFFICIAL_WEBSITE = 'https://willchat.chatwiki.com'
 
-// 应用版本（后续可以从后端获取）
-const appVersion = 'v1.7.3'
+// 应用版本
+const appVersion = ref('...')
+
+onMounted(async () => {
+  try {
+    const version = await AppService.GetVersion()
+    appVersion.value = version.startsWith('v') ? version : `v${version}`
+  } catch (error) {
+    console.error('Failed to get version:', error)
+    appVersion.value = 'unknown'
+  }
+})
 
 // 打开官网
 async function handleOpenWebsite() {
