@@ -19,7 +19,7 @@ create table if not exists providers (
     provider_id varchar(64) not null unique,
     name varchar(64) not null,
     type varchar(16) not null default 'openai',
-    icon varchar(64) not null default '',
+    icon text not null default '',
     is_builtin boolean not null default false,
     enabled boolean not null default false,
     sort_order integer not null default 0,
