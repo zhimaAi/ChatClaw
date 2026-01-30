@@ -53,13 +53,9 @@ const handleAddAssistantTab = () => {
 /**
  * macOS：双击标题栏区域触发窗口“缩放”（等同于绿灯按钮行为）
  */
-const handleTitleBarDoubleClick = async () => {
+const handleTitleBarDoubleClick = () => {
   if (!isMac.value) return
-  try {
-    await Window.Zoom()
-  } catch {
-    // ignore
-  }
+  void Window.Zoom()
 }
 </script>
 

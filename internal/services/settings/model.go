@@ -41,7 +41,7 @@ func (m *settingModel) toDTO() Setting {
 	out := Setting{
 		Key:       m.Key,
 		Type:      m.Type,
-		Category:  m.Category,
+		Category:  Category(m.Category),
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}

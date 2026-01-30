@@ -3,6 +3,7 @@
  * 设置页面组件
  * 可在主窗口和独立设置窗口中复用
  */
+import type { Component } from 'vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SettingsSidebar from './components/SettingsSidebar.vue'
@@ -21,19 +22,20 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
   about: 'settings.menu.about',
 }
 
+// 菜单项对应的内容组件（null 表示尚未实现）
+const menuComponents: Record<SettingsMenuItem, Component | null> = {
+  modelService: null,
+  generalSettings: GeneralSettings,
+  snapSettings: null,
+  tools: null,
+  about: null,
+}
+
 // 获取当前菜单的翻译文本
 const activeMenuLabel = computed(() => t(menuLabelKeys[settingsStore.activeMenu]))
 
-// 根据当前菜单返回对应的内容组件
-const currentComponent = computed(() => {
-  switch (settingsStore.activeMenu) {
-    case 'generalSettings':
-      return GeneralSettings
-    // 其他菜单页面后续实现
-    default:
-      return null
-  }
-})
+// 获取当前菜单对应的内容组件
+const currentComponent = computed(() => menuComponents[settingsStore.activeMenu])
 </script>
 
 <template>

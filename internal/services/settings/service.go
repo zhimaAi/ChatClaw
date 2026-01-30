@@ -14,11 +14,20 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// Category 设置分类
+type Category string
+
+const (
+	CategoryGeneral Category = "general" // 常规设置
+	CategorySnap    Category = "snap"    // 吸附设置
+	CategoryTools   Category = "tools"   // 功能工具
+)
+
 type Setting struct {
 	Key         string    `json:"key"`
 	Value       string    `json:"value"`
 	Type        string    `json:"type"`
-	Category    string    `json:"category"`
+	Category    Category  `json:"category"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -41,7 +50,7 @@ func (s *SettingsService) db() (*bun.DB, error) {
 	return db, nil
 }
 
-func (s *SettingsService) List(category string) ([]Setting, error) {
+func (s *SettingsService) List(category Category) ([]Setting, error) {
 	db, err := s.db()
 	if err != nil {
 		return nil, err
@@ -50,14 +59,14 @@ func (s *SettingsService) List(category string) ([]Setting, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	category = strings.TrimSpace(category)
+	cat := strings.TrimSpace(string(category))
 
 	models := make([]settingModel, 0)
 	q := db.NewSelect().
 		Model(&models).
 		OrderExpr("category ASC, key ASC")
-	if category != "" {
-		q = q.Where("category = ?", category)
+	if cat != "" {
+		q = q.Where("category = ?", cat)
 	}
 	if err := q.Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.setting_read_failed", err)
@@ -111,7 +120,7 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 	defer cancel()
 
 	// 只更新 value 字段，不改变其他元数据
-	_, err = db.NewUpdate().
+	result, err := db.NewUpdate().
 		Model((*settingModel)(nil)).
 		Set("value = ?", value).
 		Set("updated_at = ?", time.Now().UTC()).
@@ -119,6 +128,11 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 		Exec(ctx)
 	if err != nil {
 		return nil, errs.Wrap("error.setting_write_failed", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, errs.Newf("error.setting_not_found", map[string]any{"Key": key})
 	}
 
 	return s.Get(key)
