@@ -26,5 +26,30 @@ export default {
     refreshWindows: 'Refresh Window List',
     hideSettings: 'Hide Settings Window',
     windowStatus: 'Window Status',
+    // Settings menu
+    menu: {
+      modelService: 'Model Service',
+      generalSettings: 'General Settings',
+      snapSettings: 'Snap Settings',
+      tools: 'Tools',
+      about: 'About Us',
+    },
+    // General settings
+    general: {
+      title: 'General Settings',
+      language: 'Language',
+      theme: 'Theme Color',
+    },
+    // Language options
+    languages: {
+      zhCN: 'Chinese',
+      enUS: 'English',
+    },
+    // Theme options
+    themes: {
+      light: 'Light',
+      dark: 'Dark',
+      system: 'System',
+    },
   },
 }

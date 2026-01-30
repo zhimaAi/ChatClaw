@@ -6,6 +6,7 @@ import (
 
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
+	"willchat/internal/services/settings"
 	"willchat/internal/services/windows"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -36,6 +37,9 @@ func NewApp(opts Options) (*application.App, error) {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+
+	// 注册设置服务
+	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
 
 	// 创建主窗口
 	mainWindow := windows.NewMainWindow(app)

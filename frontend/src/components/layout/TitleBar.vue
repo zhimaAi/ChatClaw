@@ -16,9 +16,10 @@ const { t } = useI18n()
 
 const isMac = computed(() => System.IsMac())
 
-type StopPropagationEvent = {
-  stopPropagation: () => void
-}
+/**
+ * 关闭按钮事件类型（支持点击和键盘事件）
+ */
+type CloseButtonEvent = MouseEvent | KeyboardEvent
 
 /**
  * 处理标签页点击
@@ -30,7 +31,7 @@ const handleTabClick = (tabId: string) => {
 /**
  * 处理标签页关闭
  */
-const handleTabClose = (event: StopPropagationEvent, tabId: string) => {
+const handleTabClose = (event: CloseButtonEvent, tabId: string) => {
   event.stopPropagation()
   navigationStore.closeTab(tabId)
 }
@@ -46,48 +47,36 @@ const handleToggleSidebar = () => {
  * 新建一个 AI助手 标签页（右侧 + 按钮）
  */
 const handleAddAssistantTab = () => {
-  navigationStore.navigateToModule('assistant', t)
+  navigationStore.navigateToModule('assistant')
 }
 
 /**
  * macOS：双击标题栏区域触发窗口“缩放”（等同于绿灯按钮行为）
  */
-const handleTitleBarDoubleClick = async () => {
+const handleTitleBarDoubleClick = () => {
   if (!isMac.value) return
-  try {
-    await Window.Zoom()
-  } catch {
-    // ignore
-  }
+  void Window.Zoom()
 }
 </script>
 
 <template>
   <div
-    class="flex h-8 items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2"
+    :class="cn('flex items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2 dark:bg-[#1e1e2e]', isMac ? 'h-[46px]' : 'h-10')"
     style="--wails-draggable: drag"
   >
-    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮（单独居中对齐，避免受 tabs 的贴底布局影响） -->
+    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮 -->
     <div
-      :class="
-        cn(
-          'flex h-full shrink-0 items-start gap-2 pt-0.5',
-          // macOS 下视觉基线略靠下，这里把左侧控制区整体下移一点
-          isMac && 'translate-y-[3px]'
-        )
-      "
+      class="flex h-full shrink-0 items-center gap-4"
     >
-      <!-- macOS窗口控制按钮占位区域（Wails会自动渲染在这个位置） -->
-      <!-- macOS需要约70px，Windows不需要占位 -->
-      <div :class="cn('shrink-0', isMac ? 'w-[70px]' : 'w-2')" />
+      <div :class="cn('shrink-0', isMac ? 'w-[80px]' : 'w-2')" />
 
       <!-- 侧边栏展开/收起按钮 -->
       <button
-        class="flex size-6 shrink-0 items-center justify-center rounded hover:bg-[#ccddf5]"
+        :class="cn('flex size-6 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac && 'mt-2')"
         style="--wails-draggable: no-drag"
         @click="handleToggleSidebar"
       >
-        <img :src="IconSidebarToggle" alt="" class="size-4" />
+        <IconSidebarToggle class="size-4" />
       </button>
     </div>
 
@@ -99,11 +88,11 @@ const handleTitleBarDoubleClick = async () => {
         :class="
           cn(
             // 标签页高度略小于标题栏，顶部留出一点背景色
-            'group relative flex h-7 items-center justify-between gap-2 rounded-t-xl px-4',
-            'transition-colors duration-150',
+            'group relative flex items-center justify-between gap-2 rounded-t-xl px-4',
+            'transition-colors duration-150 h-10',
             navigationStore.activeTabId === tab.id
               ? 'bg-background text-foreground'
-              : 'bg-[#dee8fa] text-muted-foreground hover:bg-[#ccddf5]'
+              : 'bg-[#dee8fa] text-muted-foreground hover:bg-[#ccddf5] dark:bg-[#1e1e2e] dark:hover:bg-white/10'
           )
         "
         style="--wails-draggable: no-drag"
@@ -120,7 +109,7 @@ const handleTitleBarDoubleClick = async () => {
             </svg>
           </div>
           <!-- 标签页标题 -->
-          <span class="max-w-[100px] truncate text-sm">{{ tab.title }}</span>
+          <span class="max-w-[100px] truncate text-sm">{{ tab.titleKey ? t(tab.titleKey) : tab.title }}</span>
         </div>
         <!-- 关闭按钮 -->
         <div
@@ -142,13 +131,13 @@ const handleTitleBarDoubleClick = async () => {
         </div>
       </button>
 
-      <!-- + 按钮应紧挨最后一个标签页 -->
+      <!-- + 按钮应紧挨最后一个标签页，与标签页垂直居中对齐 -->
       <button
-        class="flex size-7 shrink-0 items-center justify-center rounded hover:bg-[#ccddf5]"
+        :class="cn('flex size-7 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac ? 'mb-1.5' : 'mb-1')"
         style="--wails-draggable: no-drag"
         @click="handleAddAssistantTab"
       >
-        <img :src="IconAddNewTab" alt="" class="size-4" />
+        <IconAddNewTab class="size-4" />
       </button>
     </div>
 

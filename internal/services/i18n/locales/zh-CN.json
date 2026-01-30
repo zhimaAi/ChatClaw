@@ -4,6 +4,11 @@
 
   "error.app_required": "缺少应用实例",
   "error.i18n_required": "缺少多语言服务",
+  "error.sqlite_not_initialized": "数据库尚未初始化",
+  "error.setting_key_required": "缺少设置项 key",
+  "error.setting_not_found": "未找到设置项「{{.Key}}」",
+  "error.setting_read_failed": "读取设置失败",
+  "error.setting_write_failed": "写入设置失败",
   "error.window_name_required": "缺少窗口名称",
   "error.window_create_options_required": "窗口「{{.Name}}」缺少 CreateOptions",
   "error.window_already_registered": "窗口「{{.Name}}」已注册",
