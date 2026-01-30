@@ -2,7 +2,6 @@
 /**
  * 标题栏组件
  * 包含侧边栏折叠按钮和多标签页
- * 注意：macOS/Windows窗口控制由Wails自动处理，无需手动实现
  */
 import { computed } from 'vue'
 import { System } from '@wailsio/runtime'
@@ -27,8 +26,8 @@ const handleTabClick = (tabId: string) => {
 /**
  * 处理标签页关闭
  */
-const handleTabClose = (event: Event, tabId: string) => {
-  event.stopPropagation()
+const handleTabClose = (event: { stopPropagation?: () => void } | null, tabId: string) => {
+  event?.stopPropagation?.()
   navigationStore.closeTab(tabId)
 }
 
@@ -49,29 +48,32 @@ const handleAddAssistantTab = () => {
 
 <template>
   <div
-    class="flex h-10 items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2 pt-1"
+    class="flex h-8 items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2"
     style="--wails-draggable: drag"
   >
-    <!-- macOS窗口控制按钮占位区域（Wails会自动渲染在这个位置） -->
-    <!-- macOS需要约70px，Windows不需要占位 -->
+    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮（单独居中对齐，避免受 tabs 的贴底布局影响） -->
     <div
-      :class="cn('flex shrink-0 items-center self-stretch', isMac ? 'w-[70px]' : 'w-2')"
-    />
-
-    <!-- 侧边栏展开/收起按钮 -->
-    <button
       :class="
         cn(
-          'flex shrink-0 items-center self-stretch rounded p-1 hover:bg-[#ccddf5]',
-          // macOS 下红黄绿的视觉中心略靠下，这里做 1px 微调以对齐
-          isMac && 'translate-y-px'
+          'flex h-full shrink-0 items-start gap-2 pt-0.5',
+          // macOS 下视觉基线略靠下，这里把左侧控制区整体下移一点
+          isMac && 'translate-y-[3px]'
         )
       "
-      style="--wails-draggable: no-drag"
-      @click="handleToggleSidebar"
     >
-      <img :src="IconSidebarToggle" alt="" class="size-4" />
-    </button>
+      <!-- macOS窗口控制按钮占位区域（Wails会自动渲染在这个位置） -->
+      <!-- macOS需要约70px，Windows不需要占位 -->
+      <div :class="cn('shrink-0', isMac ? 'w-[70px]' : 'w-2')" />
+
+      <!-- 侧边栏展开/收起按钮 -->
+      <button
+        class="flex size-6 shrink-0 items-center justify-center rounded hover:bg-[#ccddf5]"
+        style="--wails-draggable: no-drag"
+        @click="handleToggleSidebar"
+      >
+        <img :src="IconSidebarToggle" alt="" class="size-4" />
+      </button>
+    </div>
 
     <!-- 标签页列表 -->
     <div class="z-2 flex shrink-0 items-end gap-1 self-stretch">
@@ -80,7 +82,7 @@ const handleAddAssistantTab = () => {
         :key="tab.id"
         :class="
           cn(
-            'group relative flex items-center justify-between gap-2 rounded-t-xl px-4 py-1.5',
+            'group relative flex h-8 items-center justify-between gap-2 rounded-t-xl px-4',
             'transition-colors duration-150',
             navigationStore.activeTabId === tab.id
               ? 'bg-background text-foreground'
@@ -137,24 +139,11 @@ const handleAddAssistantTab = () => {
             />
           </svg>
         </div>
-        <!-- 选中标签页的底部装饰（左右圆角连接） -->
-        <template v-if="navigationStore.activeTabId === tab.id">
-          <div class="absolute bottom-0 left-[-12px] size-3">
-            <svg viewBox="0 0 12 12" fill="none" class="size-full">
-              <path d="M12 12H0V0c0 6.627 5.373 12 12 12z" fill="white" />
-            </svg>
-          </div>
-          <div class="absolute bottom-0 right-[-12px] size-3">
-            <svg viewBox="0 0 12 12" fill="none" class="size-full">
-              <path d="M0 12h12V0C12 6.627 6.627 12 0 12z" fill="white" />
-            </svg>
-          </div>
-        </template>
       </button>
 
       <!-- + 按钮应紧挨最后一个标签页 -->
       <button
-        class="flex shrink-0 items-center self-stretch rounded p-1 hover:bg-[#ccddf5]"
+        class="flex size-8 shrink-0 items-center justify-center rounded hover:bg-[#ccddf5]"
         style="--wails-draggable: no-drag"
         @click="handleAddAssistantTab"
       >
