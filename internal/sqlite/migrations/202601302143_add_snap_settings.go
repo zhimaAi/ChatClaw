@@ -27,8 +27,9 @@ INSERT OR IGNORE INTO settings (key, value, type, category, description, created
 			return nil
 		},
 		func(ctx context.Context, db *bun.DB) error {
-			_ = ctx
-			_ = db
+			if _, err := db.ExecContext(ctx, `DROP TABLE IF EXISTS settings;`); err != nil {
+				return err
+			}
 			return nil
 		},
 	)
