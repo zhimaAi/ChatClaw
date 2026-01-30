@@ -3,19 +3,19 @@ import type { HTMLAttributes } from 'vue'
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 
-// 静态导入所有内置供应商图标
-import openaiIcon from '@/assets/icons/providers/openai.svg'
-import azureIcon from '@/assets/icons/providers/azure.svg'
-import anthropicIcon from '@/assets/icons/providers/anthropic.svg'
-import googleIcon from '@/assets/icons/providers/google.svg'
-import deepseekIcon from '@/assets/icons/providers/deepseek.svg'
-import zhipuIcon from '@/assets/icons/providers/zhipu.svg'
-import qwenIcon from '@/assets/icons/providers/qwen.svg'
-import doubaoIcon from '@/assets/icons/providers/doubao.svg'
-import baiduIcon from '@/assets/icons/providers/baidu.svg'
-import groqIcon from '@/assets/icons/providers/groq.svg'
-import ollamaIcon from '@/assets/icons/providers/ollama.svg'
-import defaultIcon from '@/assets/icons/providers/openai.svg'
+// 静态导入所有内置供应商图标（使用 ?url 后缀确保作为 URL 导入）
+import openaiIcon from '@/assets/icons/providers/openai.svg?url'
+import azureIcon from '@/assets/icons/providers/azure.svg?url'
+import anthropicIcon from '@/assets/icons/providers/anthropic.svg?url'
+import googleIcon from '@/assets/icons/providers/google.svg?url'
+import deepseekIcon from '@/assets/icons/providers/deepseek.svg?url'
+import zhipuIcon from '@/assets/icons/providers/zhipu.svg?url'
+import qwenIcon from '@/assets/icons/providers/qwen.svg?url'
+import doubaoIcon from '@/assets/icons/providers/doubao.svg?url'
+import baiduIcon from '@/assets/icons/providers/baidu.svg?url'
+import groqIcon from '@/assets/icons/providers/groq.svg?url'
+import ollamaIcon from '@/assets/icons/providers/ollama.svg?url'
+import defaultIcon from '@/assets/icons/providers/openai.svg?url'
 
 interface Props {
   /**
