@@ -65,26 +65,18 @@ const handleTitleBarDoubleClick = async () => {
 
 <template>
   <div
-    class="flex h-8 items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2 dark:bg-[#1e1e2e]"
+    :class="cn('flex items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2 dark:bg-[#1e1e2e]', isMac ? 'h-[46px]' : 'h-10')"
     style="--wails-draggable: drag"
   >
-    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮（单独居中对齐，避免受 tabs 的贴底布局影响） -->
+    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮 -->
     <div
-      :class="
-        cn(
-          'flex h-full shrink-0 items-start gap-2 pt-0.5',
-          // macOS 下视觉基线略靠下，这里把左侧控制区整体下移一点
-          isMac && 'translate-y-[3px]'
-        )
-      "
+      class="flex h-full shrink-0 items-center gap-4"
     >
-      <!-- macOS窗口控制按钮占位区域（Wails会自动渲染在这个位置） -->
-      <!-- macOS需要约70px，Windows不需要占位 -->
-      <div :class="cn('shrink-0', isMac ? 'w-[70px]' : 'w-2')" />
+      <div :class="cn('shrink-0', isMac ? 'w-[80px]' : 'w-2')" />
 
       <!-- 侧边栏展开/收起按钮 -->
       <button
-        class="flex size-6 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10"
+        :class="cn('flex size-6 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac && 'mt-2')"
         style="--wails-draggable: no-drag"
         @click="handleToggleSidebar"
       >
@@ -100,8 +92,8 @@ const handleTitleBarDoubleClick = async () => {
         :class="
           cn(
             // 标签页高度略小于标题栏，顶部留出一点背景色
-            'group relative flex h-7 items-center justify-between gap-2 rounded-t-xl px-4',
-            'transition-colors duration-150',
+            'group relative flex items-center justify-between gap-2 rounded-t-xl px-4',
+            'transition-colors duration-150 h-10',
             navigationStore.activeTabId === tab.id
               ? 'bg-background text-foreground'
               : 'bg-[#dee8fa] text-muted-foreground hover:bg-[#ccddf5] dark:bg-[#1e1e2e] dark:hover:bg-white/10'
@@ -143,9 +135,9 @@ const handleTitleBarDoubleClick = async () => {
         </div>
       </button>
 
-      <!-- + 按钮应紧挨最后一个标签页 -->
+      <!-- + 按钮应紧挨最后一个标签页，与标签页垂直居中对齐 -->
       <button
-        class="flex size-7 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10"
+        :class="cn('flex size-7 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac ? 'mb-1.5' : 'mb-1')"
         style="--wails-draggable: no-drag"
         @click="handleAddAssistantTab"
       >

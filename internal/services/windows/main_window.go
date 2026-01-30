@@ -12,9 +12,9 @@ func NewMainWindow(app *application.App) *application.WebviewWindow {
 		Width:     1064,
 		Height:    628,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 32,
+			InvisibleTitleBarHeight: 46,
 			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHidden,
+			TitleBar:                application.MacTitleBarHiddenInset,
 		},
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              "/",
