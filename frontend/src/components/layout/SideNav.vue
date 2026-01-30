@@ -6,6 +6,7 @@
  * - AI助手：总是新建标签页
  * - 知识库、多问、设置：已有则切换，否则新建
  */
+import type { FunctionalComponent, SVGAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNavigationStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
@@ -23,7 +24,7 @@ const navigationStore = useNavigationStore()
 interface NavItem {
   key: NavModule
   labelKey: string
-  icon: string
+  icon: FunctionalComponent<SVGAttributes>
 }
 
 /**
@@ -63,7 +64,7 @@ const bottomNavItems: NavItem[] = [
  * 点击时自动创建对应模块的新标签页
  */
 const handleNavClick = (module: NavModule) => {
-  navigationStore.navigateToModule(module, t)
+  navigationStore.navigateToModule(module)
 }
 </script>
 
@@ -83,7 +84,7 @@ const handleNavClick = (module: NavModule) => {
         :key="item.key"
         :class="
           cn(
-            'mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+            'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
@@ -93,7 +94,17 @@ const handleNavClick = (module: NavModule) => {
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
         @click="handleNavClick(item.key)"
       >
-        <img :src="item.icon" alt="" class="size-4 shrink-0" />
+        <component
+          :is="item.icon"
+          :class="
+            cn(
+              'size-4 shrink-0 transition-opacity',
+              navigationStore.activeModule === item.key
+                ? 'opacity-100'
+                : 'opacity-70 group-hover:opacity-100'
+            )
+          "
+        />
         <span v-if="!navigationStore.sidebarCollapsed">{{
           t(item.labelKey)
         }}</span>
@@ -107,7 +118,7 @@ const handleNavClick = (module: NavModule) => {
         :key="item.key"
         :class="
           cn(
-            'mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+            'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
@@ -117,7 +128,17 @@ const handleNavClick = (module: NavModule) => {
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
         @click="handleNavClick(item.key)"
       >
-        <img :src="item.icon" alt="" class="size-4 shrink-0" />
+        <component
+          :is="item.icon"
+          :class="
+            cn(
+              'size-4 shrink-0 transition-opacity',
+              navigationStore.activeModule === item.key
+                ? 'opacity-100'
+                : 'opacity-70 group-hover:opacity-100'
+            )
+          "
+        />
         <span v-if="!navigationStore.sidebarCollapsed">{{
           t(item.labelKey)
         }}</span>

@@ -14,8 +14,10 @@ export type NavModule = 'assistant' | 'knowledge' | 'multiask' | 'settings'
  */
 export interface Tab {
   id: string
-  /** 标签页标题 */
-  title: string
+  /** 标签页标题（自定义标题时使用） */
+  title?: string
+  /** 标签页标题的翻译键（用于动态翻译） */
+  titleKey?: string
   /** 标签页图标URL */
   icon?: string
   /** 关联的模块 */
@@ -80,7 +82,7 @@ export const useNavigationStore = defineStore('navigation', () => {
    * - AI助手：总是创建新标签页
    * - 知识库、多问、设置：如果已存在则切换，否则创建
    */
-  const navigateToModule = (module: NavModule, t: (key: string) => string) => {
+  const navigateToModule = (module: NavModule) => {
     activeModule.value = module
 
     // 检查是否为单标签模块
@@ -98,7 +100,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     const id = createTabId()
     const newTab: Tab = {
       id,
-      title: t(moduleLabels[module]),
+      titleKey: moduleLabels[module],
       module,
       icon: DefaultTabIcon,
     }

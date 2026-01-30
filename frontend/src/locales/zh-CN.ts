@@ -26,5 +26,30 @@ export default {
     refreshWindows: '刷新窗口列表',
     hideSettings: '隐藏设置窗口',
     windowStatus: '窗口状态',
+    // 设置菜单
+    menu: {
+      modelService: '模型服务',
+      generalSettings: '常规设置',
+      snapSettings: '吸附设置',
+      tools: '功能工具',
+      about: '关于我们',
+    },
+    // 常规设置
+    general: {
+      title: '常规设置',
+      language: '语言',
+      theme: '主题颜色',
+    },
+    // 语言选项
+    languages: {
+      zhCN: '中文',
+      enUS: 'English',
+    },
+    // 主题选项
+    themes: {
+      light: '浅色',
+      dark: '深色',
+      system: '跟随系统',
+    },
   },
 }
