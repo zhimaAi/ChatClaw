@@ -64,7 +64,7 @@ const bottomNavItems: NavItem[] = [
  * 点击时自动创建对应模块的新标签页
  */
 const handleNavClick = (module: NavModule) => {
-  navigationStore.navigateToModule(module, t)
+  navigationStore.navigateToModule(module)
 }
 </script>
 

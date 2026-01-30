@@ -47,7 +47,7 @@ const handleToggleSidebar = () => {
  * 新建一个 AI助手 标签页（右侧 + 按钮）
  */
 const handleAddAssistantTab = () => {
-  navigationStore.navigateToModule('assistant', t)
+  navigationStore.navigateToModule('assistant')
 }
 
 /**
@@ -113,7 +113,7 @@ const handleTitleBarDoubleClick = async () => {
             </svg>
           </div>
           <!-- 标签页标题 -->
-          <span class="max-w-[100px] truncate text-sm">{{ tab.title }}</span>
+          <span class="max-w-[100px] truncate text-sm">{{ tab.titleKey ? t(tab.titleKey) : tab.title }}</span>
         </div>
         <!-- 关闭按钮 -->
         <div

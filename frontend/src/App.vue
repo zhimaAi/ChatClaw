@@ -27,7 +27,7 @@ watch(
   () => navigationStore.tabs.length,
   (len) => {
     if (len === 0) {
-      navigationStore.navigateToModule('assistant', t)
+      navigationStore.navigateToModule('assistant')
     }
   },
   { immediate: true }
@@ -45,7 +45,7 @@ watch(
         <!-- 显示当前标签页标题，如果没有标签页则显示提示 -->
         <template v-if="activeTab">
           <h1 class="text-2xl font-semibold text-foreground">
-            {{ activeTab.title }}
+            {{ activeTab.titleKey ? t(activeTab.titleKey) : activeTab.title }}
           </h1>
           <p class="text-muted-foreground">
             {{ t('app.title') }}
