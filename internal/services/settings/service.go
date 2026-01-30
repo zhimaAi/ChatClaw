@@ -96,31 +96,10 @@ func (s *SettingsService) Get(key string) (*Setting, error) {
 	return &it, nil
 }
 
-func (s *SettingsService) GetValue(key string) (string, error) {
-	it, err := s.Get(key)
-	if err != nil {
-		return "", err
-	}
-	return it.Value, nil
-}
-
 func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
-	return s.Set(key, value, "", "", "")
-}
-
-func (s *SettingsService) Set(key string, value string, typ string, category string, description string) (*Setting, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil, errs.New("error.setting_key_required")
-	}
-
-	typ = strings.TrimSpace(typ)
-	if typ == "" {
-		typ = "string"
-	}
-	category = strings.TrimSpace(category)
-	if category == "" {
-		category = "general"
 	}
 
 	db, err := s.db()
@@ -131,56 +110,16 @@ func (s *SettingsService) Set(key string, value string, typ string, category str
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	m := settingModel{
-		Key:      key,
-		Type:     typ,
-		Category: category,
-	}
-	m.Value.String = value
-	m.Value.Valid = true
-	m.Description.String = description
-	m.Description.Valid = true
-
-	_, err = db.NewInsert().
-		Model(&m).
-		Column("key", "value", "type", "category", "description", "created_at", "updated_at").
-		On("CONFLICT (key) DO UPDATE").
-		Set("value = EXCLUDED.value").
-		Set("type = EXCLUDED.type").
-		Set("category = EXCLUDED.category").
-		Set("description = EXCLUDED.description").
-		Set("updated_at = EXCLUDED.updated_at").
+	// 只更新 value 字段，不改变其他元数据
+	_, err = db.NewUpdate().
+		Model((*settingModel)(nil)).
+		Set("value = ?", value).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("key = ?", key).
 		Exec(ctx)
 	if err != nil {
 		return nil, errs.Wrap("error.setting_write_failed", err)
 	}
+
 	return s.Get(key)
-}
-
-func (s *SettingsService) Delete(key string) error {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return errs.New("error.setting_key_required")
-	}
-
-	db, err := s.db()
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	res, err := db.NewDelete().
-		Model((*settingModel)(nil)).
-		Where("key = ?", key).
-		Exec(ctx)
-	if err != nil {
-		return errs.Wrap("error.setting_write_failed", err)
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return errs.Newf("error.setting_not_found", map[string]any{"Key": key})
-	}
-	return nil
 }

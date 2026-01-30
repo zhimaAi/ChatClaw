@@ -4,11 +4,25 @@
  * 可在主窗口和独立设置窗口中复用
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
-import { useSettingsStore } from './stores/settings'
+import { useSettingsStore, type SettingsMenuItem } from './stores/settings'
 
+const { t } = useI18n()
 const settingsStore = useSettingsStore()
+
+// 菜单项对应的翻译 key
+const menuLabelKeys: Record<SettingsMenuItem, string> = {
+  modelService: 'settings.menu.modelService',
+  generalSettings: 'settings.menu.generalSettings',
+  snapSettings: 'settings.menu.snapSettings',
+  tools: 'settings.menu.tools',
+  about: 'settings.menu.about',
+}
+
+// 获取当前菜单的翻译文本
+const activeMenuLabel = computed(() => t(menuLabelKeys[settingsStore.activeMenu]))
 
 // 根据当前菜单返回对应的内容组件
 const currentComponent = computed(() => {
@@ -35,7 +49,7 @@ const currentComponent = computed(() => {
         v-else
         class="flex w-[530px] items-center justify-center rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm"
       >
-        {{ settingsStore.activeMenu }}
+        {{ activeMenuLabel }}
       </div>
     </main>
   </div>

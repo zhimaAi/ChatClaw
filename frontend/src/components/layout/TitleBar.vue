@@ -16,9 +16,10 @@ const { t } = useI18n()
 
 const isMac = computed(() => System.IsMac())
 
-type StopPropagationEvent = {
-  stopPropagation: () => void
-}
+/**
+ * 关闭按钮事件类型（支持点击和键盘事件）
+ */
+type CloseButtonEvent = MouseEvent | KeyboardEvent
 
 /**
  * 处理标签页点击
@@ -30,7 +31,7 @@ const handleTabClick = (tabId: string) => {
 /**
  * 处理标签页关闭
  */
-const handleTabClose = (event: StopPropagationEvent, tabId: string) => {
+const handleTabClose = (event: CloseButtonEvent, tabId: string) => {
   event.stopPropagation()
   navigationStore.closeTab(tabId)
 }

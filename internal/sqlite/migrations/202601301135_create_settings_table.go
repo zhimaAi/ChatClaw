@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS settings (
     type TEXT DEFAULT 'string',
     category TEXT DEFAULT 'general',
     description TEXT,
-	created_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
 );
 

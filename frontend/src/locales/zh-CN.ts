@@ -42,7 +42,7 @@ export default {
     },
     // 语言选项
     languages: {
-      zhCN: '中文字',
+      zhCN: '中文',
       enUS: 'English',
     },
     // 主题选项
