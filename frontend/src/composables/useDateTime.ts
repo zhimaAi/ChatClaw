@@ -7,9 +7,7 @@ export type FormatUtcDateTimeOptions = {
 }
 
 function parseUtcStringLikeSQLite(input: string): Date | null {
-  const m = input.match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/,
-  )
+  const m = input.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/)
   if (!m) return null
 
   const year = Number(m[1])
@@ -48,7 +46,7 @@ function toDate(input: string | number | Date): Date {
  */
 export function formatUtcDateTime(
   input: string | number | Date,
-  opts: FormatUtcDateTimeOptions = {},
+  opts: FormatUtcDateTimeOptions = {}
 ): string {
   const date = toDate(input)
   if (Number.isNaN(date.getTime())) return ''
@@ -84,4 +82,3 @@ export function useDateTime() {
     formatUtcDateTime,
   }
 }
-

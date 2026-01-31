@@ -10,4 +10,3 @@
     <p class="text-muted-foreground">待开发...</p>
   </div>
 </template>
-
