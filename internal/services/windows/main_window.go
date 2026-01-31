@@ -11,8 +11,9 @@ func NewMainWindow(app *application.App) *application.WebviewWindow {
 		MinHeight: 628,
 		Width:     1064,
 		Height:    628,
+		Frameless: true,
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 46,
+			InvisibleTitleBarHeight: 40,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},
