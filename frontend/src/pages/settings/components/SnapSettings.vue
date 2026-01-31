@@ -107,21 +107,25 @@ const boolSettingsMap: Record<string, { value: boolean }> = {
   ...snapAppRefs,
 }
 
+// 吸附应用 key 的固定顺序（用于从“多个为 true”的异常状态中恢复）
+const snapKeyOrder = [
+  'snap_wechat',
+  'snap_wecom',
+  'snap_qq',
+  'snap_dingtalk',
+  'snap_feishu',
+  'snap_douyin',
+] as const
+
 // 加载设置
 const loadSettings = async () => {
   try {
     const settings = await SettingsService.List(Category.CategorySnap)
-    let hasActiveSnapApp = false
-
     settings.forEach((setting) => {
       // 处理布尔类型设置
       const boolRef = boolSettingsMap[setting.key]
       if (boolRef) {
         boolRef.value = setting.value === 'true'
-        // 检查是否有活跃的吸附应用
-        if (setting.key in snapAppRefs && setting.value === 'true') {
-          hasActiveSnapApp = true
-        }
         return
       }
       // 处理其他类型设置
@@ -130,6 +134,24 @@ const loadSettings = async () => {
       }
     })
 
+    // 互斥修复：如果异常地出现多个吸附应用同时为 true，保留一个，其余写回 false
+    const activeSnapKeys = snapKeyOrder.filter((k) => snapAppRefs[k].value)
+    if (activeSnapKeys.length > 1) {
+      const keepKey = activeSnapKeys[0]
+      const keysToDisable = activeSnapKeys.slice(1)
+      for (const k of keysToDisable) {
+        snapAppRefs[k].value = false
+        try {
+          await updateSetting(k, 'false')
+        } catch {
+          // best-effort：失败时保持 UI 已纠正，避免继续处于“多开关同时开”的状态
+        }
+      }
+      // 确保保留的 key 仍然为 true（UI 可能被外部状态影响）
+      snapAppRefs[keepKey].value = true
+    }
+
+    const hasActiveSnapApp = snapKeyOrder.some((k) => snapAppRefs[k].value)
     // 如果有活跃的吸附应用，显示 winsnap 子窗口
     if (hasActiveSnapApp) {
       try {
@@ -149,37 +171,64 @@ const updateSetting = async (key: string, value: string) => {
     await SettingsService.SetValue(key, value)
   } catch (error) {
     console.error(`Failed to update setting ${key}:`, error)
+    throw error
   }
 }
 
 // 处理 AI 发送按钮开关变化
 const handleAiSendButtonChange = async (val: boolean) => {
+  const prev = showAiSendButton.value
   showAiSendButton.value = val
-  await updateSetting('show_ai_send_button', String(val))
+  try {
+    await updateSetting('show_ai_send_button', String(val))
+  } catch {
+    showAiSendButton.value = prev
+  }
 }
 
 // 处理 AI 编辑按钮开关变化
 const handleAiEditButtonChange = async (val: boolean) => {
+  const prev = showAiEditButton.value
   showAiEditButton.value = val
-  await updateSetting('show_ai_edit_button', String(val))
+  try {
+    await updateSetting('show_ai_edit_button', String(val))
+  } catch {
+    showAiEditButton.value = prev
+  }
 }
 
 // 处理吸附应用开关变化（互斥逻辑）
 const handleSnapAppChange = async (key: string, refValue: { value: boolean }, val: boolean) => {
   if (val) {
-    // 开启时：先关闭其他所有开关，再开启当前开关
-    // 使用 Promise.all 确保所有设置保存完成
-    const closePromises: Promise<void>[] = []
+    // 开启时：先关闭其他所有开关，再开启当前开关（并支持失败回滚）
+    const prevSnapState: Record<string, boolean> = {}
+    for (const [k, r] of Object.entries(snapAppRefs)) {
+      prevSnapState[k] = r.value
+    }
+
+    // UI 先做互斥纠正
     for (const [appKey, appRef] of Object.entries(snapAppRefs)) {
-      if (appKey !== key && appRef.value) {
+      if (appKey !== key) {
         appRef.value = false
-        closePromises.push(updateSetting(appKey, 'false'))
       }
     }
-    await Promise.all(closePromises)
-
     refValue.value = true
-    await updateSetting(key, 'true')
+
+    try {
+      // 顺序写入，避免并发写导致状态抖动
+      for (const [appKey, appRef] of Object.entries(snapAppRefs)) {
+        if (appKey !== key && prevSnapState[appKey] && !appRef.value) {
+          await updateSetting(appKey, 'false')
+        }
+      }
+      await updateSetting(key, 'true')
+    } catch {
+      // 回滚 UI
+      for (const [k, r] of Object.entries(snapAppRefs)) {
+        r.value = prevSnapState[k] ?? false
+      }
+      return
+    }
 
     // 显示 winsnap 子窗口
     try {
@@ -188,9 +237,14 @@ const handleSnapAppChange = async (key: string, refValue: { value: boolean }, va
       console.error('Failed to show winsnap window:', error)
     }
   } else {
-    // 关闭时：关闭当前开关并关闭子窗口
+    const prev = refValue.value
     refValue.value = false
-    await updateSetting(key, 'false')
+    try {
+      await updateSetting(key, 'false')
+    } catch {
+      refValue.value = prev
+      return
+    }
 
     // 关闭 winsnap 子窗口
     try {
@@ -204,8 +258,13 @@ const handleSnapAppChange = async (key: string, refValue: { value: boolean }, va
 // 处理发送按键模式变化
 const handleSendKeyChange = async (value: AcceptableValue) => {
   if (typeof value === 'string') {
+    const prev = sendKeyStrategy.value
     sendKeyStrategy.value = value
-    await updateSetting('send_key_strategy', value)
+    try {
+      await updateSetting('send_key_strategy', value)
+    } catch {
+      sendKeyStrategy.value = prev
+    }
   }
 }
 

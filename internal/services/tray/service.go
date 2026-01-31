@@ -22,7 +22,6 @@ func NewTrayService(app *application.App, systray *application.SystemTray) *Tray
 	return &TrayService{
 		app:     app,
 		systray: systray,
-		// 默认值与 migration 保持一致：开启托盘 + 关闭最小化到托盘
 		trayIconEnabled:       true,
 		minimizeToTrayEnabled: true,
 	}
@@ -67,6 +66,14 @@ func (s *TrayService) InitFromSettings() {
 	// 从 settings 内存缓存读取（不走 DB）
 	trayVisible := settings.GetBool("show_tray_icon", true)
 	minimizeEnabled := settings.GetBool("minimize_to_tray_on_close", true)
+
+	// 安全兜底：没有托盘图标时不允许“关闭时最小化到托盘”（否则用户可能无法找回窗口）。
+	if !trayVisible && minimizeEnabled {
+		minimizeEnabled = false
+		if s.app != nil {
+			s.app.Logger.Warn("tray icon disabled in settings; forcing minimize-to-tray=false to avoid unrecoverable state")
+		}
+	}
 
 	s.mu.Lock()
 	s.trayIconEnabled = trayVisible

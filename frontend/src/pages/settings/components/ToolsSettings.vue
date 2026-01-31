@@ -39,6 +39,17 @@ const loadSettings = async () => {
         boolRef.value = setting.value === 'true'
       }
     })
+
+    // 安全兜底：没有托盘图标时，不允许启用“关闭时最小化到托盘”（否则可能无法找回窗口）
+    if (!showTrayIcon.value && minimizeToTrayOnClose.value) {
+      minimizeToTrayOnClose.value = false
+      await updateSetting('minimize_to_tray_on_close', 'false')
+      try {
+        await TrayService.SetMinimizeToTrayEnabled(false)
+      } catch (error) {
+        console.error('Failed to sync minimize-to-tray cache on load:', error)
+      }
+    }
   } catch (error) {
     console.error('Failed to load tools settings:', error)
   }
@@ -50,45 +61,91 @@ const updateSetting = async (key: string, value: string) => {
     await SettingsService.SetValue(key, value)
   } catch (error) {
     console.error(`Failed to update setting ${key}:`, error)
+    throw error
   }
 }
 
 // 处理托盘图标开关变化
 const handleTrayIconChange = async (val: boolean) => {
-  showTrayIcon.value = val
-  void updateSetting('show_tray_icon', String(val))
+  const prevShowTrayIcon = showTrayIcon.value
+  const prevMinimizeToTray = minimizeToTrayOnClose.value
 
-  // 立即更新托盘图标可见性
+  // 安全联动：关闭托盘图标时，强制关闭“关闭时最小化到托盘”
+  showTrayIcon.value = val
+  if (!val && minimizeToTrayOnClose.value) {
+    minimizeToTrayOnClose.value = false
+  }
+
   try {
-    await TrayService.SetVisible(val)
-  } catch (error) {
-    console.error('Failed to update tray visibility:', error)
+    await updateSetting('show_tray_icon', String(val))
+
+    if (!val && prevMinimizeToTray) {
+      await updateSetting('minimize_to_tray_on_close', 'false')
+      try {
+        await TrayService.SetMinimizeToTrayEnabled(false)
+      } catch (error) {
+        console.error('Failed to sync minimize-to-tray cache:', error)
+      }
+    }
+
+    // 立即更新托盘图标可见性（后端也会做兜底，避免不可恢复状态）
+    try {
+      await TrayService.SetVisible(val)
+    } catch (error) {
+      console.error('Failed to update tray visibility:', error)
+    }
+  } catch {
+    // 回滚 UI
+    showTrayIcon.value = prevShowTrayIcon
+    minimizeToTrayOnClose.value = prevMinimizeToTray
   }
 }
 
 // 处理最小化到托盘开关变化
 const handleMinimizeToTrayChange = async (val: boolean) => {
-  minimizeToTrayOnClose.value = val
-  void updateSetting('minimize_to_tray_on_close', String(val))
+  const prev = minimizeToTrayOnClose.value
 
-  // 同步更新后端内存缓存，避免窗口关闭时查库
+  // 没有托盘图标时不允许启用（避免窗口隐藏后无法恢复）
+  if (!showTrayIcon.value && val) {
+    minimizeToTrayOnClose.value = false
+    return
+  }
+
+  minimizeToTrayOnClose.value = val
   try {
-    await TrayService.SetMinimizeToTrayEnabled(val)
-  } catch (error) {
-    console.error('Failed to update minimize-to-tray setting:', error)
+    await updateSetting('minimize_to_tray_on_close', String(val))
+
+    // 同步更新后端内存缓存，避免窗口关闭时查库
+    try {
+      await TrayService.SetMinimizeToTrayEnabled(val)
+    } catch (error) {
+      console.error('Failed to update minimize-to-tray setting:', error)
+    }
+  } catch {
+    minimizeToTrayOnClose.value = prev
   }
 }
 
 // 处理悬浮窗开关变化
 const handleFloatingWindowChange = async (val: boolean) => {
+  const prev = showFloatingWindow.value
   showFloatingWindow.value = val
-  await updateSetting('show_floating_window', String(val))
+  try {
+    await updateSetting('show_floating_window', String(val))
+  } catch {
+    showFloatingWindow.value = prev
+  }
 }
 
 // 处理划词搜索开关变化
 const handleSelectionSearchChange = async (val: boolean) => {
+  const prev = enableSelectionSearch.value
   enableSelectionSearch.value = val
-  await updateSetting('enable_selection_search', String(val))
+  try {
+    await updateSetting('enable_selection_search', String(val))
+  } catch {
+    enableSelectionSearch.value = prev
+  }
 }
 
 // 页面加载时获取设置

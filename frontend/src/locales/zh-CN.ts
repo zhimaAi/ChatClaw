@@ -48,8 +48,8 @@ export default {
       showAiEditButton: 'AI回复显示编辑内容按钮',
       appsTitle: '吸附应用',
       sendKeyOptions: {
-        enter: '按enter键发送',
-        ctrlEnter: '按Ctrl+Enter键发送',
+        enter: '按 Enter 键发送',
+        ctrlEnter: '按 Ctrl+Enter 键发送',
       },
       apps: {
         wechat: '微信',

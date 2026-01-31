@@ -15,5 +15,7 @@
   "error.window_already_registered": "窗口「{{.Name}}」已注册",
   "error.window_not_registered": "窗口「{{.Name}}」未注册",
   "error.browser_url_required": "缺少 URL",
+  "error.browser_invalid_url": "URL 不合法",
+  "error.browser_unsupported_url_scheme": "不支持的 URL 协议",
   "error.browser_open_failed": "打开浏览器失败"
 }

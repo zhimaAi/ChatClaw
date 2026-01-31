@@ -15,5 +15,7 @@
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
   "error.browser_url_required": "URL is required",
+  "error.browser_invalid_url": "invalid URL",
+  "error.browser_unsupported_url_scheme": "unsupported URL scheme",
   "error.browser_open_failed": "failed to open browser"
 }
