@@ -32,8 +32,8 @@ const updateMaximiseState = async () => {
 /**
  * 最小化窗口
  */
-const handleMinimise = () => {
-  void Window.Minimise()
+const handleMinimise = async () => {
+  await Window.Minimise()
 }
 
 /**
@@ -51,8 +51,8 @@ const handleMaximise = async () => {
 /**
  * 关闭窗口
  */
-const handleClose = () => {
-  void Window.Close()
+const handleClose = async () => {
+  await Window.Close()
 }
 
 // 监听窗口大小变化以更新最大化状态

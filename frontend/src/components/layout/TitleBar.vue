@@ -56,9 +56,18 @@ const handleAddAssistantTab = () => {
 /**
  * macOS：双击标题栏区域触发窗口“缩放”（等同于绿灯按钮行为）
  */
-const handleTitleBarDoubleClick = () => {
-  if (!isMac.value) return
-  void Window.Zoom()
+const handleTitleBarDoubleClick = async () => {
+  if (isMac.value) {
+    void Window.Zoom()
+  } else {
+    // Windows: 切换最大化状态
+    const isMaximised = await Window.IsMaximised()
+    if (isMaximised) {
+      await Window.UnMaximise()
+    } else {
+      await Window.Maximise()
+    }
+  }
 }
 </script>
 
