@@ -7,10 +7,15 @@
   "error.sqlite_not_initialized": "database is not initialized",
   "error.setting_key_required": "setting key is required",
   "error.setting_not_found": "setting '{{.Key}}' not found",
+  "error.setting_cache_not_initialized": "settings cache is not initialized",
   "error.setting_read_failed": "failed to read settings",
   "error.setting_write_failed": "failed to write settings",
   "error.window_name_required": "window name is required",
   "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
   "error.window_already_registered": "window '{{.Name}}' already registered",
-  "error.window_not_registered": "window '{{.Name}}' not registered"
+  "error.window_not_registered": "window '{{.Name}}' not registered",
+  "error.browser_url_required": "URL is required",
+  "error.browser_invalid_url": "invalid URL",
+  "error.browser_unsupported_url_scheme": "unsupported URL scheme",
+  "error.browser_open_failed": "failed to open browser"
 }

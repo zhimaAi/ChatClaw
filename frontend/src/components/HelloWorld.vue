@@ -2,8 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {Events} from "@wailsio/runtime";
-import { GreetService } from "../../bindings/willchat/internal/services/greet";
-import { WindowService } from "../../bindings/willchat/internal/services/windows";
+import { GreetService } from "@bindings/willchat/internal/services/greet";
+import { WindowService } from "@bindings/willchat/internal/services/windows";
 
 defineProps<{ msg: string }>()
 

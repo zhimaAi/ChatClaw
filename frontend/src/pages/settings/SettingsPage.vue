@@ -8,7 +8,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
-import { useSettingsStore, type SettingsMenuItem } from './stores/settings'
+import SnapSettings from './components/SnapSettings.vue'
+import ToolsSettings from './components/ToolsSettings.vue'
+import AboutSettings from './components/AboutSettings.vue'
+import { useSettingsStore, type SettingsMenuItem } from '@/stores'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
@@ -26,9 +29,9 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
 const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: null,
   generalSettings: GeneralSettings,
-  snapSettings: null,
-  tools: null,
-  about: null,
+  snapSettings: SnapSettings,
+  tools: ToolsSettings,
+  about: AboutSettings,
 }
 
 // 获取当前菜单的翻译文本

@@ -40,6 +40,42 @@ export default {
       language: 'Language',
       theme: 'Theme Color',
     },
+    // Snap settings
+    snap: {
+      title: 'Settings',
+      showAiSendButton: 'Show "Send to Chat" Button for AI Reply',
+      sendKeyStrategy: 'Send Message Key Mode',
+      showAiEditButton: 'Show "Edit Content" Button for AI Reply',
+      appsTitle: 'Snap Apps',
+      sendKeyOptions: {
+        enter: 'Press Enter to send',
+        ctrlEnter: 'Press Ctrl+Enter to send',
+      },
+      apps: {
+        wechat: 'WeChat',
+        wecom: 'WeCom',
+        qq: 'QQ',
+        dingtalk: 'DingTalk',
+        feishu: 'Feishu',
+        douyin: 'Douyin',
+      },
+    },
+    // Tools settings
+    tools: {
+      tray: {
+        title: 'System Tray',
+        showIcon: 'Show Tray Icon',
+        minimizeOnClose: 'Minimize to Tray on Close',
+      },
+      floatingWindow: {
+        title: 'Floating Window',
+        show: 'Show Floating Window',
+      },
+      selectionSearch: {
+        title: 'Selection Search',
+        enable: 'Selection Search',
+      },
+    },
     // Language options
     languages: {
       zhCN: 'Chinese',
@@ -50,6 +86,14 @@ export default {
       light: 'Light',
       dark: 'Dark',
       system: 'System',
+    },
+    // About Us
+    about: {
+      title: 'About Us',
+      appName: 'WillChat',
+      copyright: '© 2026 WillChat Sesame Network Technology  All rights reserved',
+      officialWebsite: 'Official Website',
+      view: 'View',
     },
   },
 }

@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MainLayout } from '@/components/layout'
 import { useNavigationStore } from '@/stores'
-import SettingsPage from '@/settings/SettingsPage.vue'
+import SettingsPage from '@/pages/settings/SettingsPage.vue'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()

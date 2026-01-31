@@ -41,7 +41,9 @@ func doInit(app *application.App) error {
 	}
 
 	dbPath = path
-	app.Logger.Info("sqlite path", "path", dbPath)
+	if app != nil {
+		app.Logger.Info("sqlite path", "path", dbPath)
+	}
 
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -77,7 +79,9 @@ func doInit(app *application.App) error {
 		sqlDB.Close()
 		return err
 	}
-	app.Logger.Info("sqlite-vec loaded", "version", vecVersion)
+	if app != nil {
+		app.Logger.Info("sqlite-vec loaded", "version", vecVersion)
+	}
 
 	bunDB := bun.NewDB(sqlDB, sqlitedialect.New())
 

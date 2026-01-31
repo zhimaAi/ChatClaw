@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"willchat/internal/bootstrap"
+	"willchat/internal/services/settings"
 	"willchat/internal/sqlite"
 )
 
@@ -14,7 +15,12 @@ import (
 var assets embed.FS
 
 //go:embed build/sysicon.png
-var icon []byte
+var iconPNG []byte
+
+// Windows tray icons are most reliable with .ico
+//
+//go:embed build/windows/icon.ico
+var iconICO []byte
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
@@ -23,10 +29,14 @@ func init() {
 }
 
 func main() {
+	appIcon := iconPNG
+	if runtime.GOOS == "windows" && len(iconICO) > 0 {
+		appIcon = iconICO
+	}
+
 	app, err := bootstrap.NewApp(bootstrap.Options{
 		Assets: assets,
-		Icon:   icon,
-		// Locale 为空时自动检测系统语言
+		Icon:   appIcon,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -34,6 +44,9 @@ func main() {
 
 	if err := sqlite.Init(app); err != nil {
 		log.Fatal("sqlite init failed:", err)
+	}
+	if err := settings.InitCache(app); err != nil {
+		log.Fatal("settings cache init failed:", err)
 	}
 	defer sqlite.Close(app)
 

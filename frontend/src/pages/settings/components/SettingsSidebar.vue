@@ -2,7 +2,7 @@
 import type { FunctionalComponent, SVGAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
-import { useSettingsStore, type SettingsMenuItem } from '../stores/settings'
+import { useSettingsStore, type SettingsMenuItem } from '@/stores'
 
 // 导入图标（作为 Vue 组件）
 import ModelServiceIcon from '@/assets/icons/model-service.svg'

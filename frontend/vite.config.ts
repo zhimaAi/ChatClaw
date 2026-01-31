@@ -11,13 +11,14 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@bindings": path.resolve(__dirname, "./bindings"),
     },
   },
   build: {
     rollupOptions: {
       input: {
         main: "index.html",
-        settings: "settings.html",
+        winsnap: "winsnap.html",
       },
     },
   },

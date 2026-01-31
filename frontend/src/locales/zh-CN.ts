@@ -40,6 +40,42 @@ export default {
       language: '语言',
       theme: '主题颜色',
     },
+    // 吸附设置
+    snap: {
+      title: '设置',
+      showAiSendButton: 'AI回复显示发送到聊天按钮',
+      sendKeyStrategy: '发送消息按键模式',
+      showAiEditButton: 'AI回复显示编辑内容按钮',
+      appsTitle: '吸附应用',
+      sendKeyOptions: {
+        enter: '按 Enter 键发送',
+        ctrlEnter: '按 Ctrl+Enter 键发送',
+      },
+      apps: {
+        wechat: '微信',
+        wecom: '企业微信',
+        qq: 'QQ',
+        dingtalk: '钉钉',
+        feishu: '飞书',
+        douyin: '抖音',
+      },
+    },
+    // 功能工具设置
+    tools: {
+      tray: {
+        title: '托盘',
+        showIcon: '显示托盘图标',
+        minimizeOnClose: '关闭时最小化到托盘',
+      },
+      floatingWindow: {
+        title: '悬浮窗',
+        show: '显示悬浮窗',
+      },
+      selectionSearch: {
+        title: '划词搜索',
+        enable: '划词搜索',
+      },
+    },
     // 语言选项
     languages: {
       zhCN: '中文',
@@ -50,6 +86,14 @@ export default {
       light: '浅色',
       dark: '深色',
       system: '跟随系统',
+    },
+    // 关于我们
+    about: {
+      title: '关于我们',
+      appName: 'WillChat',
+      copyright: '© 2026 WillChat Sesame Network Technology  版权所有',
+      officialWebsite: '官方网站',
+      view: '查看',
     },
   },
 }

@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR IGNORE INTO settings (key, value, type, category, description, created_at, updated_at) VALUES
-  ('language', 'zh-CN', 'string', 'general', 'The language of the application', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('language', 'zh-CN', 'string', 'general', '语言', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT OR IGNORE INTO settings (key, value, type, category, description, created_at, updated_at) VALUES
-  ('theme', 'light', 'string', 'general', 'The theme of the application', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('theme', 'light', 'string', 'general', '主题', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 `
 			if _, err := db.ExecContext(ctx, sql); err != nil {
 				return err

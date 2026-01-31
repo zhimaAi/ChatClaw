@@ -7,10 +7,15 @@
   "error.sqlite_not_initialized": "数据库尚未初始化",
   "error.setting_key_required": "缺少设置项 key",
   "error.setting_not_found": "未找到设置项「{{.Key}}」",
+  "error.setting_cache_not_initialized": "设置缓存尚未初始化",
   "error.setting_read_failed": "读取设置失败",
   "error.setting_write_failed": "写入设置失败",
   "error.window_name_required": "缺少窗口名称",
   "error.window_create_options_required": "窗口「{{.Name}}」缺少 CreateOptions",
   "error.window_already_registered": "窗口「{{.Name}}」已注册",
-  "error.window_not_registered": "窗口「{{.Name}}」未注册"
+  "error.window_not_registered": "窗口「{{.Name}}」未注册",
+  "error.browser_url_required": "缺少 URL",
+  "error.browser_invalid_url": "URL 不合法",
+  "error.browser_unsupported_url_scheme": "不支持的 URL 协议",
+  "error.browser_open_failed": "打开浏览器失败"
 }

@@ -30,7 +30,7 @@ Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 4. **条件类名**：用 `cn()` 函数合并，如 `cn('text-sm', disabled && 'opacity-50')`
 5. **添加 UI 组件**：运行 `npx shadcn-vue@latest add [组件名]`
 6. **翻译文本**：用 `const { t } = useI18n()`，key 格式 `模块.功能`
-7. **调用后端**：从 `@/../bindings/...` 导入，必须处理错误
+7. **调用后端**：从 `@bindings/...` 导入，必须处理错误
 
 ## 禁止
 
@@ -71,5 +71,5 @@ defineProps<{
 ## 多窗口
 
 - 主窗口入口：`src/main.ts` + `index.html`
-- 设置窗口入口：`src/settings/main.ts` + `settings.html`
+- 子窗口入口：`src/winsnap/main.ts` + `winsnap.html`
 - 新窗口需要在 `vite.config.ts` 的 `rollupOptions.input` 添加入口
