@@ -14,29 +14,18 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed build/sysicon.png
-var iconPNG []byte
-
-// Windows tray icons are most reliable with .ico
-//
-//go:embed build/windows/icon.ico
-var iconICO []byte
+//go:embed build/appicon.png
+var icon []byte
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
-
 	// application.RegisterEvent[string]("time")
 }
 
 func main() {
-	appIcon := iconPNG
-	if runtime.GOOS == "windows" && len(iconICO) > 0 {
-		appIcon = iconICO
-	}
-
 	app, err := bootstrap.NewApp(bootstrap.Options{
 		Assets: assets,
-		Icon:   appIcon,
+		Icon:   icon,
 	})
 	if err != nil {
 		log.Fatal(err)
