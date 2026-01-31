@@ -50,6 +50,14 @@ type ProviderWithModels struct {
 	ModelGroups []ModelGroup `json:"model_groups"`
 }
 
+// UpdateProviderInput 更新供应商的输入参数
+type UpdateProviderInput struct {
+	Enabled     *bool   `json:"enabled"`
+	APIKey      *string `json:"api_key"`
+	APIEndpoint *string `json:"api_endpoint"`
+	ExtraConfig *string `json:"extra_config"`
+}
+
 // providerModel 数据库模型
 type providerModel struct {
 	bun.BaseModel `bun:"table:providers,alias:p"`

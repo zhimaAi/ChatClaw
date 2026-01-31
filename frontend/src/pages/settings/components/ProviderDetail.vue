@@ -227,7 +227,7 @@ const handleApiEndpointBlur = async () => {
 // 处理 API Version 保存（Azure 专用，失焦时）
 const handleApiVersionBlur = async () => {
   if (!props.providerWithModels) return
-  
+
   const currentConfig = parseExtraConfig(props.providerWithModels.provider.extra_config)
   if (localApiVersion.value === (currentConfig.api_version || '')) return
 
@@ -246,8 +246,11 @@ const handleApiVersionBlur = async () => {
     }
   } catch (error) {
     console.error('Failed to update API version:', error)
-    const currentConfig = parseExtraConfig(props.providerWithModels.provider.extra_config)
-    localApiVersion.value = currentConfig.api_version || ''
+    // 回滚本地状态（需要检查 props 是否仍然有效）
+    if (props.providerWithModels) {
+      const fallbackConfig = parseExtraConfig(props.providerWithModels.provider.extra_config)
+      localApiVersion.value = fallbackConfig.api_version || ''
+    }
   } finally {
     isSaving.value = false
   }

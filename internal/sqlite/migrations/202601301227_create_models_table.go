@@ -2,13 +2,47 @@ package migrations
 
 import (
 	"context"
-	"fmt"
-	"strings"
+	"time"
 
 	"willchat/internal/define"
 
 	"github.com/uptrace/bun"
 )
+
+// migrationProvider 迁移专用的供应商模型
+type migrationProvider struct {
+	bun.BaseModel `bun:"table:providers"`
+
+	ID          int64     `bun:"id,pk,autoincrement"`
+	ProviderID  string    `bun:"provider_id,notnull"`
+	Name        string    `bun:"name,notnull"`
+	Type        string    `bun:"type,notnull"`
+	Icon        string    `bun:"icon,notnull"`
+	IsBuiltin   bool      `bun:"is_builtin,notnull"`
+	Enabled     bool      `bun:"enabled,notnull"`
+	SortOrder   int       `bun:"sort_order,notnull"`
+	APIEndpoint string    `bun:"api_endpoint,notnull"`
+	APIKey      string    `bun:"api_key,notnull"`
+	ExtraConfig string    `bun:"extra_config,notnull"`
+	CreatedAt   time.Time `bun:"created_at,notnull"`
+	UpdatedAt   time.Time `bun:"updated_at,notnull"`
+}
+
+// migrationModel 迁移专用的模型模型
+type migrationModel struct {
+	bun.BaseModel `bun:"table:models"`
+
+	ID         int64     `bun:"id,pk,autoincrement"`
+	ProviderID string    `bun:"provider_id,notnull"`
+	ModelID    string    `bun:"model_id,notnull"`
+	Name       string    `bun:"name,notnull"`
+	Type       string    `bun:"type,notnull"`
+	IsBuiltin  bool      `bun:"is_builtin,notnull"`
+	Enabled    bool      `bun:"enabled,notnull"`
+	SortOrder  int       `bun:"sort_order,notnull"`
+	CreatedAt  time.Time `bun:"created_at,notnull"`
+	UpdatedAt  time.Time `bun:"updated_at,notnull"`
+}
 
 func init() {
 	Migrations.MustRegister(
@@ -59,32 +93,49 @@ create table if not exists models (
 				return err
 			}
 
-			// 初始化内置供应商（使用共享配置）
+			// 初始化内置供应商（使用 bun 批量插入，避免 SQL 注入风险）
 			if len(define.BuiltinProviders) > 0 {
-				var values []string
+				now := time.Now().UTC()
+				providers := make([]migrationProvider, 0, len(define.BuiltinProviders))
 				for _, p := range define.BuiltinProviders {
-					values = append(values, fmt.Sprintf(
-						"('%s', '%s', '%s', '%s', true, %d, '%s')",
-						p.ProviderID, p.Name, p.Type, p.Icon, p.SortOrder, p.APIEndpoint,
-					))
+					providers = append(providers, migrationProvider{
+						ProviderID:  p.ProviderID,
+						Name:        p.Name,
+						Type:        p.Type,
+						Icon:        p.Icon,
+						IsBuiltin:   true,
+						Enabled:     false,
+						SortOrder:   p.SortOrder,
+						APIEndpoint: p.APIEndpoint,
+						APIKey:      "",
+						ExtraConfig: "{}",
+						CreatedAt:   now,
+						UpdatedAt:   now,
+					})
 				}
-				insertProviders := `insert into providers (provider_id, name, type, icon, is_builtin, sort_order, api_endpoint) values ` + strings.Join(values, ",\n")
-				if _, err := db.ExecContext(ctx, insertProviders); err != nil {
+				if _, err := db.NewInsert().Model(&providers).Exec(ctx); err != nil {
 					return err
 				}
 			}
 
-			// 初始化内置模型（使用共享配置）
+			// 初始化内置模型（使用 bun 批量插入，避免 SQL 注入风险）
 			if len(define.BuiltinModels) > 0 {
-				var values []string
+				now := time.Now().UTC()
+				models := make([]migrationModel, 0, len(define.BuiltinModels))
 				for _, m := range define.BuiltinModels {
-					values = append(values, fmt.Sprintf(
-						"('%s', '%s', '%s', '%s', true, %d)",
-						m.ProviderID, m.ModelID, m.Name, m.Type, m.SortOrder,
-					))
+					models = append(models, migrationModel{
+						ProviderID: m.ProviderID,
+						ModelID:    m.ModelID,
+						Name:       m.Name,
+						Type:       m.Type,
+						IsBuiltin:  true,
+						Enabled:    true,
+						SortOrder:  m.SortOrder,
+						CreatedAt:  now,
+						UpdatedAt:  now,
+					})
 				}
-				insertModels := `insert into models (provider_id, model_id, name, type, is_builtin, sort_order) values ` + strings.Join(values, ",\n")
-				if _, err := db.ExecContext(ctx, insertModels); err != nil {
+				if _, err := db.NewInsert().Model(&models).Exec(ctx); err != nil {
 					return err
 				}
 			}

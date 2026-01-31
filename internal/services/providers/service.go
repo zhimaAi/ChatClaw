@@ -140,14 +140,6 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	}, nil
 }
 
-// UpdateProviderInput 更新供应商的输入参数
-type UpdateProviderInput struct {
-	Enabled     *bool   `json:"enabled"`
-	APIKey      *string `json:"api_key"`
-	APIEndpoint *string `json:"api_endpoint"`
-	ExtraConfig *string `json:"extra_config"`
-}
-
 // UpdateProvider 更新供应商信息
 func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProviderInput) (*Provider, error) {
 	providerID = strings.TrimSpace(providerID)
