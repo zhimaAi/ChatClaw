@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { SettingsService } from '@/../bindings/willchat/internal/services/settings'
+import { AgentsService } from '@bindings/willchat/internal/services/agents'
 
 // Azure extra_config 类型
 interface AzureExtraConfig {
@@ -174,6 +175,34 @@ const isUsedByGlobalEmbedding = async (providerId: string): Promise<boolean> => 
   }
 }
 
+// 检查 provider 是否被助手用作默认模型
+const isUsedByAgentDefaultModel = async (providerId: string): Promise<string | null> => {
+  try {
+    const agents = await AgentsService.ListAgents()
+    const agent = agents.find(
+      (a) => a.default_llm_provider_id === providerId && a.default_llm_model_id
+    )
+    return agent?.name ?? null
+  } catch (error) {
+    console.error('Failed to check agent default models:', error)
+    return null
+  }
+}
+
+// 检查模型是否被助手用作默认模型
+const isModelUsedByAgent = async (providerId: string, modelId: string): Promise<string | null> => {
+  try {
+    const agents = await AgentsService.ListAgents()
+    const agent = agents.find(
+      (a) => a.default_llm_provider_id === providerId && a.default_llm_model_id === modelId
+    )
+    return agent?.name ?? null
+  } catch (error) {
+    console.error('Failed to check agent default models:', error)
+    return null
+  }
+}
+
 // 获取模型组的翻译标题
 const getModelGroupTitle = (type: string) => {
   switch (type) {
@@ -198,11 +227,22 @@ const handleToggle = async (checked: boolean) => {
     return
   }
 
-  // 如果要关闭，且该 provider 正被用作全局嵌入模型，则禁止关闭并提示
+  // 如果要关闭，需要检查是否被使用
   if (!checked) {
     const pid = props.providerWithModels.provider.provider_id
+
+    // 检查是否被全局嵌入模型使用
     if (await isUsedByGlobalEmbedding(pid)) {
       toast.error(t('settings.modelService.disableBlockedByEmbedding'))
+      // 保持开启
+      localEnabled.value = true
+      return
+    }
+
+    // 检查是否被助手默认模型使用
+    const agentName = await isUsedByAgentDefaultModel(pid)
+    if (agentName) {
+      toast.error(t('settings.modelService.disableBlockedByAgent', { name: agentName }))
       // 保持开启
       localEnabled.value = true
       return
@@ -451,10 +491,18 @@ const confirmDeleteModel = async () => {
 
   isDeleting.value = true
   try {
-    await ProvidersService.DeleteModel(
-      props.providerWithModels.provider.provider_id,
-      deletingModel.value.model_id
-    )
+    const providerId = props.providerWithModels.provider.provider_id
+    const modelId = deletingModel.value.model_id
+
+    // 检查模型是否被助手用作默认模型
+    const agentName = await isModelUsedByAgent(providerId, modelId)
+    if (agentName) {
+      toast.error(t('settings.modelService.deleteBlockedByAgent', { name: agentName }))
+      deleteDialogOpen.value = false
+      return
+    }
+
+    await ProvidersService.DeleteModel(providerId, modelId)
     toast.success(t('settings.modelService.modelDeleted'))
     deleteDialogOpen.value = false
     // 触发刷新模型列表

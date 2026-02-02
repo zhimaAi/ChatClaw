@@ -97,6 +97,8 @@ export default {
       enabled: '已启用',
       disableBlockedByEmbedding:
         '该供应商正在被用作全局嵌入模型，请先在“嵌入模型设置”中切换后再关闭',
+      disableBlockedByAgent: '该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭',
+      deleteBlockedByAgent: '该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除',
       apiKey: 'API 密钥',
       apiKeyPlaceholder: '请输入 API 密钥',
       apiKeyRequired: '请先填写 API 密钥',

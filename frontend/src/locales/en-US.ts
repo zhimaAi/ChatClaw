@@ -105,6 +105,10 @@ export default {
       enabled: 'Enabled',
       disableBlockedByEmbedding:
         'This provider is used as the global embedding model. Please change it in "Embedding settings" before disabling.',
+      disableBlockedByAgent:
+        'This provider is used as the default model by agent "{name}". Please change the agent settings before disabling.',
+      deleteBlockedByAgent:
+        'This model is used as the default model by agent "{name}". Please change the agent settings before deleting.',
       apiKey: 'API Key',
       apiKeyPlaceholder: 'Enter API Key',
       apiKeyRequired: 'Please enter API Key first',
