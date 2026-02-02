@@ -66,10 +66,9 @@ type CreateModelInput struct {
 }
 
 // UpdateModelInput 更新模型的输入参数
+// 注意：model_id 和 type 创建后不允许修改
 type UpdateModelInput struct {
-	ModelID *string `json:"model_id"`
 	Name    *string `json:"name"`
-	Type    *string `json:"type"`
 	Enabled *bool   `json:"enabled"`
 }
 

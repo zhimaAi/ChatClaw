@@ -612,8 +612,11 @@ const confirmDeleteModel = async () => {
                       >
                         <ModelIcon class="size-5 shrink-0 text-muted-foreground" />
                         <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{ model.name }}</span>
-                        <!-- 编辑和删除按钮 -->
-                        <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <!-- 编辑和删除按钮（仅对非内置模型显示） -->
+                        <div
+                          v-if="!model.is_builtin"
+                          class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
                           <button
                             class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                             :title="t('settings.modelService.editModel')"

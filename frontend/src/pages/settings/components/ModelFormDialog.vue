@@ -150,7 +150,7 @@ defineExpose({ resetSaving })
             v-model="formModelId"
             :placeholder="t('settings.modelService.modelIdPlaceholder')"
             :disabled="isSaving || isEdit"
-            maxlength="30"
+            maxlength="40"
           />
         </div>
 
@@ -164,7 +164,7 @@ defineExpose({ resetSaving })
             v-model="formName"
             :placeholder="t('settings.modelService.modelNamePlaceholder')"
             :disabled="isSaving"
-            maxlength="30"
+            maxlength="40"
           />
         </div>
       </div>

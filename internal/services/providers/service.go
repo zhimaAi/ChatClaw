@@ -391,9 +391,15 @@ func (s *ProvidersService) checkClaude(ctx context.Context, input CheckAPIKeyInp
 
 // checkGemini 使用 Gemini SDK 检测
 func (s *ProvidersService) checkGemini(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	config := &genai.ClientConfig{
 		APIKey: input.APIKey,
-	})
+	}
+	if input.APIEndpoint != "" {
+		config.HTTPOptions = genai.HTTPOptions{
+			BaseURL: input.APIEndpoint,
+		}
+	}
+	client, err := genai.NewClient(ctx, config)
 	if err != nil {
 		return &CheckAPIKeyResult{
 			Success: false,
@@ -440,7 +446,7 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if input.ModelID == "" {
 		return nil, errs.New("error.model_id_required")
 	}
-	if len([]rune(input.ModelID)) > 30 {
+	if len([]rune(input.ModelID)) > 40 {
 		return nil, errs.New("error.model_id_too_long")
 	}
 
@@ -448,7 +454,7 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if input.Name == "" {
 		return nil, errs.New("error.model_name_required")
 	}
-	if len([]rune(input.Name)) > 30 {
+	if len([]rune(input.Name)) > 40 {
 		return nil, errs.New("error.model_name_too_long")
 	}
 
@@ -543,9 +549,6 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 		Where("model_id = ?", modelID).
 		Set("updated_at = ?", time.Now().UTC())
 
-	// 注意：不允许修改 model_id 和 type，因为它们是模型的基本属性
-	// input.ModelID 和 input.Type 字段被忽略
-
 	if input.Name != nil {
 		newName := strings.TrimSpace(*input.Name)
 		if newName == "" {
@@ -631,18 +634,33 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	result, err := db.NewDelete().
+	// 先检查模型是否存在以及是否为内置模型
+	var m modelModel
+	err = db.NewSelect().
+		Model(&m).
+		Where("provider_id = ?", providerID).
+		Where("model_id = ?", modelID).
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errs.Newf("error.model_not_found", map[string]any{"ModelID": modelID})
+		}
+		return errs.Wrap("error.model_read_failed", err)
+	}
+
+	// 禁止删除内置模型
+	if m.IsBuiltin {
+		return errs.New("error.cannot_delete_builtin_model")
+	}
+
+	_, err = db.NewDelete().
 		Model((*modelModel)(nil)).
 		Where("provider_id = ?", providerID).
 		Where("model_id = ?", modelID).
 		Exec(ctx)
 	if err != nil {
 		return errs.Wrap("error.model_delete_failed", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return errs.Newf("error.model_not_found", map[string]any{"ModelID": modelID})
 	}
 
 	return nil
