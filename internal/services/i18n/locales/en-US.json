@@ -43,6 +43,7 @@
   "error.library_create_failed": "failed to create library",
   "error.library_name_required": "library name is required",
   "error.library_name_too_long": "library name cannot exceed 128 characters",
+  "error.library_name_duplicate": "library name '{{.Name}}' already exists",
   "error.library_embedding_required": "embedding model config is required",
   "error.library_rerank_required": "rerank model config is required",
   "error.library_id_required": "library ID is required",

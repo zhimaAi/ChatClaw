@@ -68,6 +68,27 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		return nil, errs.New("error.library_name_too_long")
 	}
 
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// 检查名称是否已存在
+	var nameCount int
+	if err := db.NewSelect().
+		Table("library").
+		ColumnExpr("COUNT(1)").
+		Where("name = ?", name).
+		Scan(ctx, &nameCount); err != nil {
+		return nil, errs.Wrap("error.library_create_failed", err)
+	}
+	if nameCount > 0 {
+		return nil, errs.Newf("error.library_name_duplicate", map[string]any{"Name": name})
+	}
+
 	// 全局嵌入配置（来自 settings 缓存）
 	embeddingProviderID, ok := settings.GetValue("embedding_provider_id")
 	if !ok || strings.TrimSpace(embeddingProviderID) == "" {
@@ -101,14 +122,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	if input.MatchThreshold != nil && *input.MatchThreshold >= 0 && *input.MatchThreshold <= 1 {
 		matchThreshold = *input.MatchThreshold
 	}
-
-	db, err := s.db()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 
 	// embedding 配置为全局 settings（不落库到 library 表），但创建前必须校验：
 	// 1) provider 已启用
@@ -227,6 +240,19 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		}
 		if len([]rune(name)) > 128 {
 			return nil, errs.New("error.library_name_too_long")
+		}
+		// 检查名称是否与其他知识库重复（排除当前 ID）
+		var nameCount int
+		if err := db.NewSelect().
+			Table("library").
+			ColumnExpr("COUNT(1)").
+			Where("name = ?", name).
+			Where("id != ?", id).
+			Scan(ctx, &nameCount); err != nil {
+			return nil, errs.Wrap("error.library_update_failed", err)
+		}
+		if nameCount > 0 {
+			return nil, errs.Newf("error.library_name_duplicate", map[string]any{"Name": name})
 		}
 		q = q.Set("name = ?", name)
 	}
