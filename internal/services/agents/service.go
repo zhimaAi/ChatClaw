@@ -221,10 +221,10 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 		}
 	}
 
+	// BeforeUpdate hook 会自动设置 updated_at
 	q := db.NewUpdate().
 		Model((*agentModel)(nil)).
-		Where("id = ?", id).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("id = ?", id)
 
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"time"
 
+	"willchat/internal/sqlite"
+
 	"github.com/uptrace/bun"
 )
 
@@ -20,20 +22,21 @@ type settingModel struct {
 	UpdatedAt   time.Time      `bun:"updated_at" json:"updated_at"`
 }
 
-// BeforeAppendModel 让 Bun 自动维护 created_at / updated_at
-func (m *settingModel) BeforeAppendModel(ctx context.Context, query bun.Query) error {
-	_ = ctx
-	now := time.Now().UTC()
+// BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
+var _ bun.BeforeInsertHook = (*settingModel)(nil)
 
-	switch query.(type) {
-	case *bun.InsertQuery:
-		if m.CreatedAt.IsZero() {
-			m.CreatedAt = now
-		}
-		m.UpdatedAt = now
-	case *bun.UpdateQuery:
-		m.UpdatedAt = now
-	}
+func (*settingModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	now := sqlite.NowUTC()
+	query.Value("created_at", "?", now)
+	query.Value("updated_at", "?", now)
+	return nil
+}
+
+// BeforeUpdate 在 UPDATE 时自动设置 updated_at（字符串格式）
+var _ bun.BeforeUpdateHook = (*settingModel)(nil)
+
+func (*settingModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) error {
+	query.Set("updated_at = ?", sqlite.NowUTC())
 	return nil
 }
 

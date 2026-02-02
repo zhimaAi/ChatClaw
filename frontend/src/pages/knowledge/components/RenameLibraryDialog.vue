@@ -16,7 +16,7 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 
 import type { Library } from '@bindings/willchat/internal/services/library'
-import { LibraryService } from '@bindings/willchat/internal/services/library'
+import { LibraryService, UpdateLibraryInput } from '@bindings/willchat/internal/services/library'
 
 const props = defineProps<{
   open: boolean
@@ -49,9 +49,9 @@ const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
   saving.value = true
   try {
-    const updated = await LibraryService.UpdateLibrary(props.library.id, {
+    const updated = await LibraryService.UpdateLibrary(props.library.id, new UpdateLibraryInput({
       name: name.value.trim(),
-    })
+    }))
     if (!updated) throw new Error(t('knowledge.rename.failed'))
     emit('updated', updated)
     toast.success(t('knowledge.rename.success'))
