@@ -3,6 +3,12 @@ export default {
     title: 'WillChat',
     theme: 'Theme',
   },
+  winsnap: {
+    title: 'WillChat',
+    assistantName: 'Soul Kitchen Assistant',
+    cancelSnap: 'Cancel Snap',
+    placeholder: 'Type your question',
+  },
   nav: {
     assistant: 'AI Assistant',
     knowledge: 'Knowledge Base',

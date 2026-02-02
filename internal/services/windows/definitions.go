@@ -11,13 +11,16 @@ func DefaultDefinitions() []WindowDefinition {
 				return application.WebviewWindowOptions{
 					Name:   WindowWinsnap,
 					Title:  "WinSnap",
-					Width:  600,
-					Height: 400,
+					Width:  400,
+					Height: 720,
 					Hidden: true,
-					URL:    "/winsnap.html",
+					// Use custom titlebar inside the webview.
+					Frameless: true,
+					URL:       "/winsnap.html",
 				}
 			},
-			FocusOnShow: true,
+			// Side window should not steal focus when shown.
+			FocusOnShow: false,
 		},
 	}
 }

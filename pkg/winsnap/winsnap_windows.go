@@ -17,19 +17,18 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var (
-)
+var ()
 
 func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
 		return nil, errors.New("winsnap: Window is nil")
 	}
-	
+
 	selfHWND := uintptr(opts.Window.NativeWindow())
 	if selfHWND == 0 {
 		return nil, errors.New("winsnap: native window handle is 0")
 	}
-	
+
 	targetName := normalizeProcessName(opts.TargetProcessName)
 	if targetName == "" {
 		return nil, errors.New("winsnap: TargetProcessName is empty")
@@ -73,12 +72,12 @@ type follower struct {
 	gap    int
 	app    *application.App
 
-	mu         sync.Mutex
-	hook       uintptr
-	tid        uint32
-	ready      chan struct{}
-	closed     bool
-	selfWidth  int32 // 缓存自己的宽度
+	mu        sync.Mutex
+	hook      uintptr
+	tid       uint32
+	ready     chan struct{}
+	closed    bool
+	selfWidth int32 // 缓存自己的宽度
 }
 
 func (f *follower) Stop() error {
@@ -216,15 +215,16 @@ func (f *follower) syncToTarget() error {
 
 	x := targetFrame.Right + int32(f.gap) - selfOffsetX
 	y := targetFrame.Top - selfOffsetY
-	
+
 	// 使用目标窗口的高度作为自己的高度，保持固定宽度
 	targetHeight := targetFrame.Bottom - targetFrame.Top
 	width := f.selfWidth
 	if width <= 0 {
 		width = selfWin.Right - selfWin.Left
 	}
-	
-	return setWindowPosWithSize(f.self, x, y, width, targetHeight)
+
+	// Keep the winsnap window above other apps to avoid being covered.
+	return setWindowPosWithSizeTopMost(f.self, x, y, width, targetHeight)
 }
 
 func normalizeProcessName(name string) string {
@@ -276,6 +276,10 @@ func isTopLevelCandidate(hwnd windows.HWND) bool {
 	if !isWindowVisible(hwnd) {
 		return false
 	}
+	// Treat minimized windows as "not displayed".
+	if isWindowIconic(hwnd) {
+		return false
+	}
 	// Exclude owned windows (tooltips, dialogs, etc.)
 	if getWindowOwner(hwnd) != 0 {
 		return false
@@ -298,7 +302,12 @@ const (
 
 	gwOwner = 4
 
+	// Special HWND values for SetWindowPos
+	// https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
+	hwndTopMost = ^uintptr(0) // (HWND)-1
+
 	swpNoSize     = 0x0001
+	swpNoMove     = 0x0002
 	swpNoZOrder   = 0x0004
 	swpNoActivate = 0x0010
 
@@ -335,6 +344,7 @@ var (
 	procGetWindowThreadPID   = modUser32.NewProc("GetWindowThreadProcessId")
 	procIsWindowVisible      = modUser32.NewProc("IsWindowVisible")
 	procIsWindow             = modUser32.NewProc("IsWindow")
+	procIsIconic             = modUser32.NewProc("IsIconic")
 	procGetWindow            = modUser32.NewProc("GetWindow")
 	procGetWindowTextLengthW = modUser32.NewProc("GetWindowTextLengthW")
 	procGetWindowRect        = modUser32.NewProc("GetWindowRect")
@@ -363,6 +373,11 @@ func isWindowVisible(hwnd windows.HWND) bool {
 
 func isWindow(hwnd windows.HWND) bool {
 	r1, _, _ := procIsWindow.Call(uintptr(hwnd))
+	return r1 != 0
+}
+
+func isWindowIconic(hwnd windows.HWND) bool {
+	r1, _, _ := procIsIconic.Call(uintptr(hwnd))
 	return r1 != 0
 }
 
@@ -428,6 +443,26 @@ func setWindowPosWithSize(hwnd windows.HWND, x, y, width, height int32) error {
 	r1, _, errNo := procSetWindowPos.Call(
 		uintptr(hwnd),
 		0,
+		uintptr(x),
+		uintptr(y),
+		uintptr(width),
+		uintptr(height),
+		flags,
+	)
+	if r1 == 0 {
+		if errNo != nil && errNo != syscall.Errno(0) {
+			return errNo
+		}
+		return syscall.EINVAL
+	}
+	return nil
+}
+
+func setWindowPosWithSizeTopMost(hwnd windows.HWND, x, y, width, height int32) error {
+	flags := uintptr(swpNoActivate)
+	r1, _, errNo := procSetWindowPos.Call(
+		uintptr(hwnd),
+		hwndTopMost,
 		uintptr(x),
 		uintptr(y),
 		uintptr(width),

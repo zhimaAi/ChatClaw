@@ -14,6 +14,7 @@
   "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
+  "error.window_service_required": "window service is required",
 
   "error.provider_id_required": "provider ID is required",
   "error.provider_not_found": "provider '{{.ProviderID}}' not found",

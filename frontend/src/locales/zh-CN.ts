@@ -3,6 +3,12 @@ export default {
     title: 'WillChat',
     theme: '主题',
   },
+  winsnap: {
+    title: 'WillChat',
+    assistantName: '灵魂厨房助手',
+    cancelSnap: '取消吸附',
+    placeholder: '请输入问题',
+  },
   nav: {
     assistant: 'AI助手',
     knowledge: '知识库',

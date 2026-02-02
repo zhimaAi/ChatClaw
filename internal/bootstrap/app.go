@@ -64,6 +64,13 @@ func NewApp(opts Options) (*application.App, error) {
 	}
 	app.RegisterService(application.NewService(windowService))
 
+	// 创建吸附（winsnap）服务
+	snapService, err := windows.NewSnapService(app, windowService)
+	if err != nil {
+		return nil, fmt.Errorf("init snap service: %w", err)
+	}
+	app.RegisterService(application.NewService(snapService))
+
 	// 创建系统托盘
 	systrayMenu := app.NewMenu()
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
@@ -81,6 +88,8 @@ func NewApp(opts Options) (*application.App, error) {
 	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		trayService.InitFromSettings()
+		// 根据 settings 中的开关状态启动/停止吸附功能
+		_, _ = snapService.SyncFromSettings()
 	})
 
 	// 监听主窗口关闭事件，实现"关闭时最小化"
