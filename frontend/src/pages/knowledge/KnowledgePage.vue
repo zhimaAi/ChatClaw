@@ -192,14 +192,11 @@ onMounted(() => {
 
         <div
           v-else-if="activeTab === 'personal' && libraries.length === 0"
-          class="mx-2 mt-2 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+          class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
         >
-          <div class="font-medium text-foreground">{{ t('knowledge.empty.title') }}</div>
-          <div class="mt-1">{{ t('knowledge.empty.desc') }}</div>
-          <Button class="mt-3" size="sm" @click="handleCreateClick">
-            <Plus class="mr-1.5 size-4" />
-            {{ t('knowledge.create.title') }}
-          </Button>
+          <div class="text-center text-sm text-muted-foreground">
+            {{ t('knowledge.empty.title') }}
+          </div>
         </div>
 
         <div v-else class="flex flex-col gap-1">
