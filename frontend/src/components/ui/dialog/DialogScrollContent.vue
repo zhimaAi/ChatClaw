@@ -16,7 +16,12 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
+type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full'
+
+const props = withDefaults(
+  defineProps<DialogContentProps & { class?: HTMLAttributes['class']; size?: DialogSize }>(),
+  { size: 'md' }
+)
 const emits = defineEmits<DialogContentEmits>()
 
 const delegatedProps = reactiveOmit(props, 'class')
@@ -40,7 +45,8 @@ const sizeClassMap: Record<DialogSize, string> = {
       <DialogContent
         :class="
           cn(
-            'relative z-50 grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
+            'relative z-50 my-8 grid gap-4 rounded-lg border border-border bg-background p-6 shadow-lg duration-200',
+            sizeClassMap[props.size],
             props.class
           )
         "
