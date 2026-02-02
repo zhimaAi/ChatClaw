@@ -287,6 +287,7 @@ export default {
       namePlaceholder: 'Enter knowledge base name',
       selectPlaceholder: 'Select',
       rerankModel: 'Rerank model',
+      noRerank: 'No reranking',
       advanced: 'Advanced settings',
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',

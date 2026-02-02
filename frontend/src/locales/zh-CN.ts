@@ -285,6 +285,7 @@ export default {
       namePlaceholder: '请输入知识库名称',
       selectPlaceholder: '请选择',
       rerankModel: '重排模型',
+      noRerank: '不使用重排',
       advanced: '高级设置',
       advancedHide: '收起高级设置',
       defaultMark: '默认',

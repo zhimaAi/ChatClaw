@@ -59,26 +59,19 @@ const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
 const matchThreshold = ref<string>('0.5')
-const rerankKey = ref<string>('') // `${providerId}::${modelId}`
+const RERANK_NONE = '__none__'
+const rerankKey = ref<string>(RERANK_NONE) // `${providerId}::${modelId}` or RERANK_NONE
 
 const currentRerankLabel = computed(() => {
+  if (!rerankKey.value || rerankKey.value === RERANK_NONE) return t('knowledge.create.noRerank')
   const [pid, mid] = rerankKey.value.split('::')
-  if (!pid || !mid) return ''
+  if (!pid || !mid) return t('knowledge.create.noRerank')
   const group = rerankGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || ''
+  return model?.name || t('knowledge.create.noRerank')
 })
 
 const close = () => emit('update:open', false)
-
-const ensureDefaultRerank = () => {
-  if (rerankKey.value) return
-  const firstGroup = rerankGroups.value[0]
-  const firstModel = firstGroup?.models?.[0]
-  if (firstGroup && firstModel) {
-    rerankKey.value = `${firstGroup.provider.provider_id}::${firstModel.model_id}`
-  }
-}
 
 const loadRerankGroups = async () => {
   loadingProviders.value = true
@@ -124,16 +117,13 @@ watch(
     if (props.library?.rerank_provider_id && props.library?.rerank_model_id) {
       rerankKey.value = `${props.library.rerank_provider_id}::${props.library.rerank_model_id}`
     } else {
-      rerankKey.value = ''
+      rerankKey.value = RERANK_NONE
     }
-    ensureDefaultRerank()
   }
 )
 
 const isValid = computed(() => {
   if (!props.library) return false
-  const [pid, mid] = rerankKey.value.split('::')
-  if (!pid || !mid) return false
   const cs = Number.parseInt(chunkSize.value, 10)
   const co = Number.parseInt(chunkOverlap.value, 10)
   const mt = Number.parseFloat(matchThreshold.value)
@@ -153,12 +143,13 @@ const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
   saving.value = true
   try {
-    const [pid, mid] = rerankKey.value.split('::')
+    const isNone = !rerankKey.value || rerankKey.value === RERANK_NONE
+    const [pid, mid] = isNone ? ['', ''] : rerankKey.value.split('::')
     const updated = await LibraryService.UpdateLibrary(
       props.library.id,
       new UpdateLibraryInput({
-        rerank_provider_id: pid,
-        rerank_model_id: mid,
+        rerank_provider_id: pid || '',
+        rerank_model_id: mid || '',
         top_k: topK.value[0] ?? 20,
         chunk_size: Number.parseInt(chunkSize.value, 10),
         chunk_overlap: Number.parseInt(chunkOverlap.value, 10),
@@ -215,14 +206,15 @@ const handleSave = async () => {
           />
           <Select
             v-model="rerankKey"
-            :disabled="loadingProviders || saving || rerankGroups.length === 0"
+            :disabled="loadingProviders || saving"
           >
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                <template v-if="currentRerankLabel">{{ currentRerankLabel }}</template>
+                {{ currentRerankLabel }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem :value="RERANK_NONE">{{ t('knowledge.create.noRerank') }}</SelectItem>
               <SelectGroup v-for="g in rerankGroups" :key="g.provider.provider_id">
                 <SelectLabel>{{ g.provider.name }}</SelectLabel>
                 <SelectItem
