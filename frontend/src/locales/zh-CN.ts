@@ -89,6 +89,7 @@ export default {
     },
     // 模型服务
     modelService: {
+      enabled: '已启用',
       apiKey: 'API 密钥',
       apiKeyPlaceholder: '请输入 API 密钥',
       apiKeyRequired: '请先填写 API 密钥',

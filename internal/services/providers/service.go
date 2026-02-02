@@ -13,14 +13,14 @@ import (
 	"willchat/internal/sqlite"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
+	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
+	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"google.golang.org/genai"
-
-	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 )
 
 // ProvidersService 供应商服务（暴露给前端调用）
@@ -414,13 +414,11 @@ func (s *ProvidersService) checkGemini(ctx context.Context, input CheckAPIKeyInp
 	return testChatModel(ctx, chatModel), nil
 }
 
-// checkOllama 使用 Ollama（兼容 OpenAI API）检测
+// checkOllama 使用 Ollama SDK 检测
 func (s *ProvidersService) checkOllama(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
-	// Ollama 使用 OpenAI 兼容接口，不需要 API Key
-	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:  "ollama", // Ollama 不需要真实的 API Key，但字段不能为空
-		Model:   modelID,
+	chatModel, err := ollama.NewChatModel(ctx, &ollama.ChatModelConfig{
 		BaseURL: input.APIEndpoint,
+		Model:   modelID,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{

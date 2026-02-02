@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { cn } from '@/lib/utils'
+import { useI18n } from 'vue-i18n'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import type { Provider } from '@/../bindings/willchat/internal/services/providers'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   providers: Provider[]
@@ -43,7 +46,13 @@ const handleSelect = (providerId: string) => {
         @click="handleSelect(provider.provider_id)"
       >
         <ProviderIcon :icon="provider.icon" :size="24" />
-        <span class="truncate text-sm">{{ provider.name }}</span>
+        <span class="flex-1 truncate text-sm">{{ provider.name }}</span>
+        <span
+          v-if="provider.enabled"
+          class="shrink-0 rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-600 dark:bg-green-500/20 dark:text-green-400"
+        >
+          {{ t('settings.modelService.enabled') }}
+        </span>
       </button>
     </template>
   </div>

@@ -97,6 +97,7 @@ export default {
     },
     // Model service
     modelService: {
+      enabled: 'Enabled',
       apiKey: 'API Key',
       apiKeyPlaceholder: 'Enter API Key',
       apiKeyRequired: 'Please enter API Key first',
