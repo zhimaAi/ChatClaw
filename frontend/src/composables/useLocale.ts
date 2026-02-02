@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type Locale } from '../locales'
-import { Service as I18nService } from '../../bindings/willchat/internal/services/i18n'
+import { Service as I18nService } from '@bindings/willchat/internal/services/i18n'
 
 const DEFAULT_LOCALE: Locale = 'zh-CN'
 

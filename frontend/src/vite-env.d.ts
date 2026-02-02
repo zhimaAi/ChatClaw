@@ -21,6 +21,12 @@ declare module '*.svg' {
   export default component
 }
 
+// SVG 作为 URL 导入（使用 ?url 后缀）
+declare module '*.svg?url' {
+  const src: string
+  export default src
+}
+
 // 图片资源
 declare module '*.png' {
   const src: string

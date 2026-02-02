@@ -22,6 +22,15 @@ export default tseslint.config(
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
+      // Frontend runs in browser (Wails webview)
+      globals: {
+        console: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        MouseEvent: 'readonly',
+        KeyboardEvent: 'readonly',
+      },
     },
     rules: {
       'prettier/prettier': 'warn',

@@ -2,13 +2,11 @@ package settings
 
 import (
 	"context"
-	"database/sql"
-	"errors"
+	"sort"
 	"strings"
 	"time"
 
 	"willchat/internal/errs"
-	"willchat/internal/sqlite"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -43,39 +41,36 @@ func NewSettingsService(app *application.App) *SettingsService {
 }
 
 func (s *SettingsService) db() (*bun.DB, error) {
-	db := sqlite.DB()
-	if db == nil {
-		return nil, errs.New("error.sqlite_not_initialized")
-	}
-	return db, nil
+	return dbForWrite()
 }
 
 func (s *SettingsService) List(category Category) ([]Setting, error) {
-	db, err := s.db()
-	if err != nil {
-		return nil, err
+	// 读取只走缓存
+	if !cacheLoaded() {
+		return nil, errs.New("error.setting_cache_not_initialized")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	cat := Category(strings.TrimSpace(string(category)))
+	keys := listCachedKeys(cat)
 
-	cat := strings.TrimSpace(string(category))
-
-	models := make([]settingModel, 0)
-	q := db.NewSelect().
-		Model(&models).
-		OrderExpr("category ASC, key ASC")
-	if cat != "" {
-		q = q.Where("category = ?", cat)
-	}
-	if err := q.Scan(ctx); err != nil {
-		return nil, errs.Wrap("error.setting_read_failed", err)
+	out := make([]Setting, 0, len(keys))
+	for _, k := range keys {
+		v, _ := getCachedValue(k)
+		c, _ := getCachedCategory(k)
+		out = append(out, Setting{
+			Key:      k,
+			Value:    v,
+			Category: c,
+		})
 	}
 
-	out := make([]Setting, 0, len(models))
-	for i := range models {
-		out = append(out, models[i].toDTO())
-	}
+	// 保持原先的排序语义：category ASC, key ASC
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Category == out[j].Category {
+			return out[i].Key < out[j].Key
+		}
+		return out[i].Category < out[j].Category
+	})
 	return out, nil
 }
 
@@ -85,24 +80,21 @@ func (s *SettingsService) Get(key string) (*Setting, error) {
 		return nil, errs.New("error.setting_key_required")
 	}
 
-	db, err := s.db()
-	if err != nil {
-		return nil, err
+	// 读取只走缓存
+	if !cacheLoaded() {
+		return nil, errs.New("error.setting_cache_not_initialized")
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	var m settingModel
-	err = db.NewSelect().Model(&m).Where("key = ?", key).Limit(1).Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errs.Newf("error.setting_not_found", map[string]any{"Key": key})
-		}
-		return nil, errs.Wrap("error.setting_read_failed", err)
+	v, ok := getCachedValue(key)
+	if !ok {
+		return nil, errs.Newf("error.setting_not_found", map[string]any{"Key": key})
 	}
-	it := m.toDTO()
-	return &it, nil
+	cat, _ := getCachedCategory(key)
+	out := &Setting{
+		Key:      key,
+		Value:    v,
+		Category: cat,
+	}
+	return out, nil
 }
 
 func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
@@ -111,7 +103,8 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 		return nil, errs.New("error.setting_key_required")
 	}
 
-	db, err := s.db()
+	// 写入：先写 DB，再更新缓存
+	db, err := dbForWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -135,5 +128,6 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 		return nil, errs.Newf("error.setting_not_found", map[string]any{"Key": key})
 	}
 
+	setCachedValue(key, value)
 	return s.Get(key)
 }

@@ -6,19 +6,18 @@ import "github.com/wailsapp/wails/v3/pkg/application"
 func DefaultDefinitions() []WindowDefinition {
 	return []WindowDefinition{
 		{
-			Name: WindowSettings,
+			Name: WindowWinsnap,
 			CreateOptions: func() application.WebviewWindowOptions {
 				return application.WebviewWindowOptions{
-					Name:   WindowSettings,
-					Title:  "Settings",
+					Name:   WindowWinsnap,
+					Title:  "WinSnap",
 					Width:  600,
 					Height: 400,
 					Hidden: true,
-					URL: "/settings.html",
+					URL:    "/winsnap.html",
 				}
 			},
 			FocusOnShow: true,
 		},
 	}
 }
-

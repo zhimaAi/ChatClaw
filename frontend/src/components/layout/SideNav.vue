@@ -73,7 +73,7 @@ const handleNavClick = (module: NavModule) => {
     :class="
       cn(
         'flex shrink-0 flex-col items-center justify-between overflow-hidden border-r border-solid border-border bg-background py-3 transition-all duration-200',
-        navigationStore.sidebarCollapsed ? 'w-[52px]' : 'w-[180px]'
+        navigationStore.sidebarCollapsed ? 'w-13' : 'w-44'
       )
     "
   >

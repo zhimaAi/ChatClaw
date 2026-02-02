@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
  * 标题栏组件
- * 包含侧边栏折叠按钮和多标签页
+ * 包含侧边栏折叠按钮、多标签页和窗口控制按钮
+ * - macOS: 自定义红黄绿按钮在左侧，高度 40px
+ * - Windows: 自定义窗口控制按钮在右侧，高度 40px
  */
 import { computed } from 'vue'
 import { System, Window } from '@wailsio/runtime'
@@ -10,6 +12,7 @@ import { useNavigationStore } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconSidebarToggle from '@/assets/icons/sidebar-toggle.svg'
 import IconAddNewTab from '@/assets/icons/add-new-tab.svg'
+import WindowControlButtons from './WindowControlButtons.vue'
 
 const navigationStore = useNavigationStore()
 const { t } = useI18n()
@@ -53,26 +56,34 @@ const handleAddAssistantTab = () => {
 /**
  * macOS：双击标题栏区域触发窗口“缩放”（等同于绿灯按钮行为）
  */
-const handleTitleBarDoubleClick = () => {
-  if (!isMac.value) return
-  void Window.Zoom()
+const handleTitleBarDoubleClick = async () => {
+  if (isMac.value) {
+    void Window.Zoom()
+  } else {
+    // Windows: 切换最大化状态
+    const isMaximised = await Window.IsMaximised()
+    if (isMaximised) {
+      await Window.UnMaximise()
+    } else {
+      await Window.Maximise()
+    }
+  }
 }
 </script>
 
 <template>
   <div
-    :class="cn('flex items-end gap-2 overflow-hidden bg-[#dee8fa] pr-2 dark:bg-[#1e1e2e]', isMac ? 'h-[46px]' : 'h-10')"
+    class="flex h-10 items-center overflow-hidden bg-titlebar"
     style="--wails-draggable: drag"
   >
-    <!-- 左侧：macOS 窗口控制按钮区域 + 侧边栏折叠按钮 -->
-    <div
-      class="flex h-full shrink-0 items-center gap-4"
-    >
-      <div :class="cn('shrink-0', isMac ? 'w-[80px]' : 'w-2')" />
+    <!-- 左侧区域 -->
+    <div class="flex h-full shrink-0 items-center gap-4 pl-3">
+      <!-- macOS: 自定义红黄绿按钮 -->
+      <WindowControlButtons v-if="isMac" position="left" />
 
       <!-- 侧边栏展开/收起按钮 -->
       <button
-        :class="cn('flex size-6 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac && 'mt-2')"
+        class="flex size-6 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-titlebar-hover hover:text-foreground"
         style="--wails-draggable: no-drag"
         @click="handleToggleSidebar"
       >
@@ -81,18 +92,17 @@ const handleTitleBarDoubleClick = () => {
     </div>
 
     <!-- 标签页列表 -->
-    <div class="z-2 flex shrink-0 items-end gap-1 self-stretch">
+    <div class="z-2 ml-2 flex shrink-0 items-center gap-1 self-stretch">
       <button
         v-for="tab in navigationStore.tabs"
         :key="tab.id"
         :class="
           cn(
-            // 标签页高度略小于标题栏，顶部留出一点背景色
-            'group relative flex items-center justify-between gap-2 rounded-t-xl px-4',
-            'transition-colors duration-150 h-10',
+            'group relative flex h-8 items-center justify-between gap-2 rounded-lg px-3',
+            'transition-colors duration-150',
             navigationStore.activeTabId === tab.id
-              ? 'bg-background text-foreground'
-              : 'bg-[#dee8fa] text-muted-foreground hover:bg-[#ccddf5] dark:bg-[#1e1e2e] dark:hover:bg-white/10'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-titlebar-hover'
           )
         "
         style="--wails-draggable: no-drag"
@@ -133,7 +143,7 @@ const handleTitleBarDoubleClick = () => {
 
       <!-- + 按钮应紧挨最后一个标签页，与标签页垂直居中对齐 -->
       <button
-        :class="cn('flex size-7 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-[#ccddf5] hover:text-foreground dark:hover:bg-white/10', isMac ? 'mb-1.5' : 'mb-1')"
+        class="flex size-7 shrink-0 items-center justify-center rounded text-foreground/70 hover:bg-titlebar-hover hover:text-foreground"
         style="--wails-draggable: no-drag"
         @click="handleAddAssistantTab"
       >
@@ -147,5 +157,8 @@ const handleTitleBarDoubleClick = () => {
       style="--wails-draggable: drag"
       @dblclick="handleTitleBarDoubleClick"
     />
+
+    <!-- Windows 窗口控制按钮（右侧） -->
+    <WindowControlButtons v-if="!isMac" position="right" />
   </div>
 </template>

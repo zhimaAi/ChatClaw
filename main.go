@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"willchat/internal/bootstrap"
+	"willchat/internal/services/settings"
 	"willchat/internal/sqlite"
 )
 
@@ -18,7 +19,6 @@ var icon []byte
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
-
 	// application.RegisterEvent[string]("time")
 }
 
@@ -26,7 +26,6 @@ func main() {
 	app, err := bootstrap.NewApp(bootstrap.Options{
 		Assets: assets,
 		Icon:   icon,
-		// Locale 为空时自动检测系统语言
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -34,6 +33,9 @@ func main() {
 
 	if err := sqlite.Init(app); err != nil {
 		log.Fatal("sqlite init failed:", err)
+	}
+	if err := settings.InitCache(app); err != nil {
+		log.Fatal("settings cache init failed:", err)
 	}
 	defer sqlite.Close(app)
 
