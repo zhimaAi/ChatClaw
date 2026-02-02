@@ -536,7 +536,7 @@ const handleDelete = async () => {
                         {{ t('assistant.actions.cancel') }}
                       </AlertDialogCancel>
                       <AlertDialogAction
-                        class="bg-destructive text-destructive-foreground"
+                        class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         :disabled="saving"
                         @click="handleDelete"
                       >
