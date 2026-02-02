@@ -8,11 +8,9 @@ const props = withDefaults(
     class?: string
     variant?: 'default' | 'success' | 'error'
     duration?: number
-    open?: boolean
   }>(),
   {
     variant: 'default',
-    open: true,
   }
 )
 
@@ -46,8 +44,7 @@ const variantClasses = computed(() => {
         $props.class
       )
     "
-    :duration="duration"
-    :open="open"
+    :duration="props.duration"
     @update:open="emit('update:open', $event)"
   >
     <slot />

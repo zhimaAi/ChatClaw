@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 
-export const TOAST_DURATION = 3000
+export const TOAST_DURATION = 2000
 const TOAST_LIMIT = 5
 
 export interface ToastProps {
