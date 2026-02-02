@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Eye, EyeOff, LoaderCircle, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import ModelIcon from '@/assets/icons/model.svg'
 import { Switch } from '@/components/ui/switch'
@@ -47,34 +48,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-// 提取 Wails 错误消息
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  
-  // 先获取 message 字段
-  if (error instanceof Error) {
-    msg = error.message
-  } else if (typeof error === 'string') {
-    msg = error
-  } else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else {
-    msg = String(error)
-  }
-  
-  // 如果 message 是 JSON 字符串，尝试解析并提取内部的 message
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // 解析失败，返回原始消息
-    }
-  }
-  
-  return msg
-}
 
 // 本地表单状态
 const localEnabled = ref(false)

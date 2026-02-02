@@ -26,7 +26,7 @@
   "error.model_id_too_long": "模型ID不能超过40个字符",
   "error.model_name_required": "缺少模型名称",
   "error.model_name_too_long": "模型名称不能超过40个字符",
-  "error.model_type_invalid": "模型类型无效，必须是 llm 或 embedding",
+  "error.model_type_invalid": "模型类型无效，必须是 llm、embedding 或 rerank",
   "error.model_check_failed": "检查模型失败",
   "error.model_already_exists": "该模型ID在此供应商下已存在",
   "error.model_sort_order_failed": "获取模型排序失败",

@@ -31,7 +31,7 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "qwen", Name: "通义千问", Type: "openai", Icon: "qwen", SortOrder: 8, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 9, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
 	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 10, APIEndpoint: "https://qianfan.baidubce.com/v2"},
-	{ProviderID: "ollama", Name: "Ollama", Type: "openai", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434/v1"},
+	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
 // BuiltinModels 内置模型列表

@@ -5,6 +5,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import FieldLabel from './FieldLabel.vue'
 import OrangeWarning from './OrangeWarning.vue'
 import {
@@ -50,24 +51,6 @@ const currentLabel = computed(() => {
 })
 
 const close = () => emit('update:open', false)
-
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  if (error instanceof Error) msg = error.message
-  else if (typeof error === 'string') msg = error
-  else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else msg = String(error)
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // ignore
-    }
-  }
-  return msg
-}
 
 const loadGroups = async () => {
   loading.value = true

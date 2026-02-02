@@ -9,7 +9,7 @@ const props = defineProps<{
 }>()
 
 const open = ref(false)
-const rootEl = ref<HTMLElement | null>(null)
+const rootEl = ref<globalThis.HTMLElement | null>(null)
 
 const close = () => {
   open.value = false
@@ -19,9 +19,9 @@ const toggle = () => {
   open.value = !open.value
 }
 
-const onDocPointerDown = (e: PointerEvent) => {
+const onDocPointerDown = (e: globalThis.PointerEvent) => {
   if (!open.value) return
-  const target = e.target as Node | null
+  const target = e.target as globalThis.Node | null
   if (!target) return
   if (rootEl.value && !rootEl.value.contains(target)) {
     close()

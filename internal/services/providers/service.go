@@ -554,7 +554,7 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 		if newName == "" {
 			return nil, errs.New("error.model_name_required")
 		}
-		if len([]rune(newName)) > 30 {
+		if len([]rune(newName)) > 40 {
 			return nil, errs.New("error.model_name_too_long")
 		}
 		q = q.Set("name = ?", newName)

@@ -92,7 +92,7 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	rerankModelID := strings.TrimSpace(input.RerankModelID)
 
 	// 默认值（与 migrations 中的 DEFAULT 保持一致）
-	topK := 10
+	topK := 20
 	chunkSize := 1024
 	chunkOverlap := 100
 	matchThreshold := 0.5

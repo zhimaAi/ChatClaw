@@ -26,7 +26,7 @@
   "error.model_id_too_long": "model ID cannot exceed 40 characters",
   "error.model_name_required": "model name is required",
   "error.model_name_too_long": "model name cannot exceed 40 characters",
-  "error.model_type_invalid": "model type is invalid, must be llm or embedding",
+  "error.model_type_invalid": "model type is invalid, must be llm, embedding, or rerank",
   "error.model_check_failed": "failed to check model",
   "error.model_already_exists": "model ID already exists for this provider",
   "error.model_sort_order_failed": "failed to get model sort order",

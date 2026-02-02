@@ -25,8 +25,13 @@ import FieldLabel from './FieldLabel.vue'
 import SliderWithMarks from './SliderWithMarks.vue'
 import OrangeWarning from './OrangeWarning.vue'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 
-import type { Provider, ProviderWithModels, Model } from '@bindings/willchat/internal/services/providers'
+import type {
+  Provider,
+  ProviderWithModels,
+  Model,
+} from '@bindings/willchat/internal/services/providers'
 import { ProvidersService } from '@bindings/willchat/internal/services/providers'
 
 import type { Library } from '@bindings/willchat/internal/services/library'
@@ -65,24 +70,6 @@ const currentRerankLabel = computed(() => {
 })
 
 const close = () => emit('update:open', false)
-
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  if (error instanceof Error) msg = error.message
-  else if (typeof error === 'string') msg = error
-  else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else msg = String(error)
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // ignore
-    }
-  }
-  return msg
-}
 
 const ensureDefaultRerank = () => {
   if (rerankKey.value) return
@@ -220,8 +207,14 @@ const handleSave = async () => {
 
         <!-- rerank -->
         <div class="flex flex-col gap-1.5">
-          <FieldLabel :label="t('knowledge.create.rerankModel')" :help="t('knowledge.help.rerankModel')" />
-          <Select v-model="rerankKey" :disabled="loadingProviders || saving || rerankGroups.length === 0">
+          <FieldLabel
+            :label="t('knowledge.create.rerankModel')"
+            :help="t('knowledge.help.rerankModel')"
+          />
+          <Select
+            v-model="rerankKey"
+            :disabled="loadingProviders || saving || rerankGroups.length === 0"
+          >
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
                 {{ currentRerankLabel }}
@@ -243,16 +236,32 @@ const handleSave = async () => {
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <FieldLabel :label="t('knowledge.create.chunkSize')" :help="t('knowledge.help.chunkSize')" />
+          <FieldLabel
+            :label="t('knowledge.create.chunkSize')"
+            :help="t('knowledge.help.chunkSize')"
+          />
           <Input v-model="chunkSize" type="number" min="1" step="1" :disabled="saving" />
         </div>
         <div class="flex flex-col gap-1.5">
-          <FieldLabel :label="t('knowledge.create.chunkOverlap')" :help="t('knowledge.help.chunkOverlap')" />
+          <FieldLabel
+            :label="t('knowledge.create.chunkOverlap')"
+            :help="t('knowledge.help.chunkOverlap')"
+          />
           <Input v-model="chunkOverlap" type="number" min="0" step="1" :disabled="saving" />
         </div>
         <div class="flex flex-col gap-1.5">
-          <FieldLabel :label="t('knowledge.create.matchThreshold')" :help="t('knowledge.help.matchThreshold')" />
-          <Input v-model="matchThreshold" type="number" min="0" max="1" step="0.01" :disabled="saving" />
+          <FieldLabel
+            :label="t('knowledge.create.matchThreshold')"
+            :help="t('knowledge.help.matchThreshold')"
+          />
+          <Input
+            v-model="matchThreshold"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            :disabled="saving"
+          />
         </div>
 
         <OrangeWarning :text="t('knowledge.create.advancedWarning')" />
@@ -270,4 +279,3 @@ const handleSave = async () => {
     </DialogContent>
   </Dialog>
 </template>
-

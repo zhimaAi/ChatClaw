@@ -23,7 +23,7 @@ create table if not exists library (
 	rerank_provider_id varchar(64) not null,
 	rerank_model_id varchar(128) not null,
 	
-	top_k integer not null default 10,
+	top_k integer not null default 20,
 	chunk_size integer not null default 1024,
 	chunk_overlap integer not null default 100,
 	match_threshold float not null default 0.5,

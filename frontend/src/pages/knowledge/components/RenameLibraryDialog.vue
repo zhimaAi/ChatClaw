@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import FieldLabel from './FieldLabel.vue'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 
 import type { Library } from '@bindings/willchat/internal/services/library'
 import { LibraryService, UpdateLibraryInput } from '@bindings/willchat/internal/services/library'
@@ -32,24 +33,6 @@ const name = ref('')
 const saving = ref(false)
 
 const close = () => emit('update:open', false)
-
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  if (error instanceof Error) msg = error.message
-  else if (typeof error === 'string') msg = error
-  else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else msg = String(error)
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // ignore
-    }
-  }
-  return msg
-}
 
 watch(
   () => props.open,

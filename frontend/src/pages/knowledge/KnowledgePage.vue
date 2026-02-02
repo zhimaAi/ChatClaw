@@ -5,6 +5,7 @@ import { Plus, MoreHorizontal, Settings } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
@@ -52,25 +53,6 @@ const selectedLibraryId = ref<number | null>(null)
 const selectedLibrary = computed(() =>
   libraries.value.find((l) => l.id === selectedLibraryId.value) || null
 )
-
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  if (error instanceof Error) msg = error.message
-  else if (typeof error === 'string') msg = error
-  else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else msg = String(error)
-
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // ignore
-    }
-  }
-  return msg
-}
 
 const loadLibraries = async () => {
   loading.value = true

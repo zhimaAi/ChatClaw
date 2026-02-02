@@ -6,7 +6,7 @@ import type { Provider } from '@/../bindings/willchat/internal/services/provider
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   providers: Provider[]
   selectedProviderId: string | null
   loading?: boolean
