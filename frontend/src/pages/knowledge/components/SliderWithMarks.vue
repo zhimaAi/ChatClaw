@@ -56,4 +56,3 @@ const positions = computed(() =>
     </div>
   </div>
 </template>
-

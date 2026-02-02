@@ -75,7 +75,11 @@ const handleSave = async () => {
 
       <div class="flex flex-col gap-4 py-4">
         <div class="flex flex-col gap-1.5">
-          <FieldLabel :label="t('knowledge.create.name')" :help="t('knowledge.help.name')" required />
+          <FieldLabel
+            :label="t('knowledge.create.name')"
+            :help="t('knowledge.help.name')"
+            required
+          />
           <Input
             v-model="name"
             :placeholder="t('knowledge.rename.placeholder')"
@@ -97,4 +101,3 @@ const handleSave = async () => {
     </DialogContent>
   </Dialog>
 </template>
-

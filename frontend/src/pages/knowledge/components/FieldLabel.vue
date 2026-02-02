@@ -15,4 +15,3 @@ defineProps<{
     <HelpTip :content="help" class="translate-y-[0.5px]" />
   </label>
 </template>
-

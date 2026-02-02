@@ -8,12 +8,7 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import FieldLabel from './FieldLabel.vue'
 import OrangeWarning from './OrangeWarning.vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -24,7 +19,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-import type { Provider, ProviderWithModels, Model } from '@bindings/willchat/internal/services/providers'
+import type {
+  Provider,
+  ProviderWithModels,
+  Model,
+} from '@bindings/willchat/internal/services/providers'
 import { ProvidersService } from '@bindings/willchat/internal/services/providers'
 import { SettingsService } from '@bindings/willchat/internal/services/settings'
 
@@ -214,4 +213,3 @@ const handleSave = async () => {
     </DialogContent>
   </Dialog>
 </template>
-

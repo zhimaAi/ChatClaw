@@ -45,7 +45,12 @@ onBeforeUnmount(() => {
   >
     <button
       type="button"
-      :class="cn('inline-flex items-center justify-center text-muted-foreground hover:text-foreground', props.class)"
+      :class="
+        cn(
+          'inline-flex items-center justify-center text-muted-foreground hover:text-foreground',
+          props.class
+        )
+      "
       :aria-label="content"
       @click.stop="toggle"
     >
@@ -60,4 +65,3 @@ onBeforeUnmount(() => {
     </div>
   </span>
 </template>
-

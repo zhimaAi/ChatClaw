@@ -8,12 +8,7 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import FieldLabel from './FieldLabel.vue'
 import OrangeWarning from './OrangeWarning.vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -208,10 +203,7 @@ const handleSubmit = async () => {
         <!-- 请求文档分片数量 -->
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
-            <FieldLabel
-              :label="t('knowledge.create.topK')"
-              :help="t('knowledge.help.topK')"
-            />
+            <FieldLabel :label="t('knowledge.create.topK')" :help="t('knowledge.help.topK')" />
             <div class="text-sm text-muted-foreground tabular-nums">
               {{ topK[0] ?? 20 }}
             </div>
@@ -232,7 +224,10 @@ const handleSubmit = async () => {
         </div>
 
         <!-- 高级设置 -->
-        <div v-if="advanced" class="mt-1 flex flex-col gap-4 rounded-lg border border-border bg-muted/20 p-4">
+        <div
+          v-if="advanced"
+          class="mt-1 flex flex-col gap-4 rounded-lg border border-border bg-muted/20 p-4"
+        >
           <div class="text-base font-semibold text-foreground">
             {{ t('knowledge.create.advanced') }}
           </div>
@@ -242,7 +237,10 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.rerankModel')"
               :help="t('knowledge.help.rerankModel')"
             />
-            <Select v-model="rerankKey" :disabled="loadingProviders || isSubmitting || rerankGroups.length === 0">
+            <Select
+              v-model="rerankKey"
+              :disabled="loadingProviders || isSubmitting || rerankGroups.length === 0"
+            >
               <SelectTrigger class="w-full">
                 <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
                   {{ currentRerankLabel }}
@@ -282,7 +280,14 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.matchThreshold')"
               :help="t('knowledge.help.matchThreshold')"
             />
-            <Input v-model="matchThreshold" type="number" min="0" max="1" step="0.01" :disabled="isSubmitting" />
+            <Input
+              v-model="matchThreshold"
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+              :disabled="isSubmitting"
+            />
           </div>
 
           <OrangeWarning :text="t('knowledge.create.advancedWarning')" />
@@ -296,7 +301,9 @@ const handleSubmit = async () => {
           :disabled="isSubmitting"
           @click="advanced = !advanced"
         >
-          <span>{{ advanced ? t('knowledge.create.advancedHide') : t('knowledge.create.advanced') }}</span>
+          <span>{{
+            advanced ? t('knowledge.create.advancedHide') : t('knowledge.create.advanced')
+          }}</span>
           <ChevronUp v-if="advanced" class="size-4" />
           <ChevronDown v-else class="size-4" />
         </button>
@@ -314,4 +321,3 @@ const handleSubmit = async () => {
     </DialogContent>
   </Dialog>
 </template>
-

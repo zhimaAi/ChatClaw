@@ -134,7 +134,8 @@ export default {
       modelUpdated: 'Model updated successfully',
       modelDeleted: 'Model deleted successfully',
       deleteConfirmTitle: 'Confirm Delete',
-      deleteConfirmMessage: 'Are you sure you want to delete the model "{name}"? This action cannot be undone.',
+      deleteConfirmMessage:
+        'Are you sure you want to delete the model "{name}"? This action cannot be undone.',
       confirmDelete: 'Delete',
       deleting: 'Deleting...',
     },
@@ -144,8 +145,10 @@ export default {
       name: 'A name to distinguish different knowledge bases.',
       topK: 'Maximum number of chunks returned/used for reranking per retrieval.',
       rerankModel: 'Model used to rerank retrieved chunks.',
-      chunkSize: 'Chunk size (in characters). Larger chunks keep more context but reduce granularity.',
-      chunkOverlap: 'Overlap size (in characters) between adjacent chunks to reduce information loss.',
+      chunkSize:
+        'Chunk size (in characters). Larger chunks keep more context but reduce granularity.',
+      chunkOverlap:
+        'Overlap size (in characters) between adjacent chunks to reduce information loss.',
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',

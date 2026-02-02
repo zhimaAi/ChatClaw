@@ -50,8 +50,8 @@ const libraries = ref<Library[]>([])
 const loading = ref(false)
 const selectedLibraryId = ref<number | null>(null)
 
-const selectedLibrary = computed(() =>
-  libraries.value.find((l) => l.id === selectedLibraryId.value) || null
+const selectedLibrary = computed(
+  () => libraries.value.find((l) => l.id === selectedLibraryId.value) || null
 )
 
 const loadLibraries = async () => {
@@ -81,7 +81,7 @@ const handleEmbeddingSettingsClick = () => {
 const handleCreated = (lib: Library) => {
   // 立即插入列表（减少一次刷新等待），并选中
   libraries.value = [...libraries.value, lib].sort(
-    (a, b) => (b.sort_order - a.sort_order) || (b.id - a.id)
+    (a, b) => b.sort_order - a.sort_order || b.id - a.id
   )
   selectedLibraryId.value = lib.id
   toast.success(t('knowledge.create.success'))
@@ -155,9 +155,7 @@ onMounted(() => {
             type="button"
             disabled
             :class="
-              cn(
-                'h-8 rounded-md px-3 text-sm text-muted-foreground opacity-50 cursor-not-allowed'
-              )
+              cn('h-8 rounded-md px-3 text-sm text-muted-foreground opacity-50 cursor-not-allowed')
             "
             :title="t('knowledge.tabs.teamDisabledTip')"
           >
@@ -276,7 +274,8 @@ onMounted(() => {
             <div class="flex flex-col gap-1">
               <div class="text-xs">{{ t('knowledge.detail.embedding') }}</div>
               <div class="text-foreground">
-                {{ selectedLibrary.embedding_provider_id }} / {{ selectedLibrary.embedding_model_id }}
+                {{ selectedLibrary.embedding_provider_id }} /
+                {{ selectedLibrary.embedding_model_id }}
               </div>
             </div>
             <div class="flex flex-col gap-1">

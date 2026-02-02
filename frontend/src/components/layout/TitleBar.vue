@@ -72,10 +72,7 @@ const handleTitleBarDoubleClick = async () => {
 </script>
 
 <template>
-  <div
-    class="flex h-10 items-center overflow-hidden bg-titlebar"
-    style="--wails-draggable: drag"
-  >
+  <div class="flex h-10 items-center overflow-hidden bg-titlebar" style="--wails-draggable: drag">
     <!-- 左侧区域 -->
     <div class="flex h-full shrink-0 items-center gap-4 pl-3">
       <!-- macOS: 自定义红黄绿按钮 -->
@@ -119,7 +116,9 @@ const handleTitleBarDoubleClick = async () => {
             </svg>
           </div>
           <!-- 标签页标题 -->
-          <span class="max-w-[100px] truncate text-sm">{{ tab.titleKey ? t(tab.titleKey) : tab.title }}</span>
+          <span class="max-w-[100px] truncate text-sm">{{
+            tab.titleKey ? t(tab.titleKey) : tab.title
+          }}</span>
         </div>
         <!-- 关闭按钮 -->
         <div

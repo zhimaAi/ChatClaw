@@ -19,7 +19,13 @@ import type {
   ProviderWithModels,
   Model,
 } from '@/../bindings/willchat/internal/services/providers'
-import { ProvidersService, UpdateProviderInput, CheckAPIKeyInput, CreateModelInput, UpdateModelInput } from '@/../bindings/willchat/internal/services/providers'
+import {
+  ProvidersService,
+  UpdateProviderInput,
+  CheckAPIKeyInput,
+  CreateModelInput,
+  UpdateModelInput,
+} from '@/../bindings/willchat/internal/services/providers'
 import ModelFormDialog from './ModelFormDialog.vue'
 import {
   AlertDialog,
@@ -67,8 +73,8 @@ const isAzure = computed(() => props.providerWithModels?.provider.provider_id ==
 const isOllama = computed(() => props.providerWithModels?.provider.provider_id === 'ollama')
 
 // 检测按钮是否禁用
-const isCheckDisabled = computed(() => 
-  isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
+const isCheckDisabled = computed(
+  () => isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
 )
 
 // 解析 extra_config
@@ -105,17 +111,17 @@ watch(
 // 表单验证
 const isFormValid = computed(() => {
   if (!props.providerWithModels) return false
-  
+
   // Ollama 不需要 API Key
   if (isOllama.value) {
     return true
   }
-  
+
   // 必须填写 API Key
   if (!localApiKey.value.trim()) {
     return false
   }
-  
+
   // Azure 需要额外验证
   if (isAzure.value) {
     // Azure 必须填写 API 地址和 API 版本
@@ -126,20 +132,20 @@ const isFormValid = computed(() => {
       return false
     }
   }
-  
+
   return true
 })
 
 // 获取验证提示信息
 const validationMessage = computed(() => {
   if (!props.providerWithModels) return ''
-  
+
   if (isOllama.value) return ''
-  
+
   if (!localApiKey.value.trim()) {
     return t('settings.modelService.apiKeyRequired')
   }
-  
+
   if (isAzure.value) {
     if (!localApiEndpoint.value.trim()) {
       return t('settings.modelService.apiEndpointRequired')
@@ -148,7 +154,7 @@ const validationMessage = computed(() => {
       return t('settings.modelService.apiVersionRequired')
     }
   }
-  
+
   return ''
 })
 
@@ -465,10 +471,7 @@ const confirmDeleteModel = async () => {
           </div>
           <div class="flex items-center gap-2">
             <!-- 验证提示 -->
-            <span
-              v-if="!localEnabled && validationMessage"
-              class="text-xs text-muted-foreground"
-            >
+            <span v-if="!localEnabled && validationMessage" class="text-xs text-muted-foreground">
               {{ validationMessage }}
             </span>
             <Switch
@@ -535,7 +538,12 @@ const confirmDeleteModel = async () => {
                 :disabled="isSaving"
                 @blur="handleApiEndpointBlur"
               />
-              <Button variant="outline" class="min-w-[72px]" :disabled="isSaving" @click="handleResetEndpoint">
+              <Button
+                variant="outline"
+                class="min-w-[72px]"
+                :disabled="isSaving"
+                @click="handleResetEndpoint"
+              >
                 {{ t('settings.modelService.reset') }}
               </Button>
             </div>
@@ -566,14 +574,8 @@ const confirmDeleteModel = async () => {
 
           <!-- 模型列表 -->
           <div class="flex flex-col gap-1.5">
-            <div
-              class="overflow-hidden rounded-md border border-border dark:border-white/10"
-            >
-              <Accordion
-                type="multiple"
-                :default-value="defaultAccordionValue"
-                class="w-full"
-              >
+            <div class="overflow-hidden rounded-md border border-border dark:border-white/10">
+              <Accordion type="multiple" :default-value="defaultAccordionValue" class="w-full">
                 <AccordionItem
                   v-for="group in providerWithModels.model_groups"
                   :key="group.type"
@@ -591,7 +593,9 @@ const confirmDeleteModel = async () => {
                         class="group flex items-center gap-2 px-4 py-2 hover:bg-accent/50"
                       >
                         <ModelIcon class="size-5 shrink-0 text-muted-foreground" />
-                        <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{ model.name }}</span>
+                        <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{
+                          model.name
+                        }}</span>
                         <!-- 编辑和删除按钮（仅对非内置模型显示） -->
                         <div
                           v-if="!model.is_builtin"
@@ -656,7 +660,11 @@ const confirmDeleteModel = async () => {
             :disabled="isDeleting"
             @click.prevent="confirmDeleteModel"
           >
-            {{ isDeleting ? t('settings.modelService.deleting') : t('settings.modelService.confirmDelete') }}
+            {{
+              isDeleting
+                ? t('settings.modelService.deleting')
+                : t('settings.modelService.confirmDelete')
+            }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
