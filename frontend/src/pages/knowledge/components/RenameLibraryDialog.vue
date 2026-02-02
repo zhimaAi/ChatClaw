@@ -49,10 +49,9 @@ const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
   saving.value = true
   try {
-    const updated = await LibraryService.UpdateLibrary(
-      props.library.id,
-      new UpdateLibraryInput({ name: name.value.trim() })
-    )
+    const updated = await LibraryService.UpdateLibrary(props.library.id, new UpdateLibraryInput({
+      name: name.value.trim(),
+    }))
     if (!updated) throw new Error(t('knowledge.rename.failed'))
     emit('updated', updated)
     toast.success(t('knowledge.rename.success'))
@@ -68,7 +67,7 @@ const handleSave = async () => {
 
 <template>
   <Dialog :open="open" @update:open="close">
-    <DialogContent class="sm:max-w-[460px]">
+    <DialogContent size="md">
       <DialogHeader>
         <DialogTitle>{{ t('knowledge.rename.title') }}</DialogTitle>
       </DialogHeader>

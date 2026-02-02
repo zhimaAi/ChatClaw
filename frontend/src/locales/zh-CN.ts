@@ -12,6 +12,11 @@ export default {
   tabs: {
     newTab: '新标签页',
   },
+  tab: {
+    close: '关闭标签页',
+    closeOthers: '关闭其他标签页',
+    closeAll: '关闭所有标签页',
+  },
   hello: {
     inputPlaceholder: '请在下方输入你的名字 👇',
     greetButton: '打招呼',
@@ -90,7 +95,10 @@ export default {
     // 模型服务
     modelService: {
       enabled: '已启用',
-      disableBlockedByEmbedding: '该供应商正在被用作全局嵌入模型，请先在“嵌入模型设置”中切换后再关闭',
+      disableBlockedByEmbedding:
+        '该供应商正在被用作全局嵌入模型，请先在“嵌入模型设置”中切换后再关闭',
+      disableBlockedByAgent: '该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭',
+      deleteBlockedByAgent: '该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除',
       apiKey: 'API 密钥',
       apiKeyPlaceholder: '请输入 API 密钥',
       apiKeyRequired: '请先填写 API 密钥',
@@ -138,6 +146,78 @@ export default {
       copyright: '© 2026 武汉芝麻小客服网络科技有限公司 版权所有',
       officialWebsite: '官方网站',
       view: '查看',
+    },
+  },
+  assistant: {
+    icon: {
+      hint: '点击替换，建议尺寸为100*100px，大小不超过100kb',
+      pickTitle: '选择图标文件',
+      filterImages: '图片文件',
+    },
+    modes: {
+      personal: '个人',
+      team: '团队',
+    },
+    empty: '暂无助手',
+    create: {
+      title: '创建助手',
+    },
+    fields: {
+      name: '名称',
+      namePlaceholder: '请输入',
+      prompt: '提示词',
+      promptPlaceholder: '在此输入您的提示词',
+    },
+    actions: {
+      cancel: '取消',
+      create: '创建',
+      save: '保存',
+      settings: '助手设置',
+    },
+    placeholders: {
+      noAgentSelected: '请选择一个助手',
+      chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
+    },
+    errors: {
+      loadFailed: '加载助手列表失败',
+      createFailed: '创建助手失败',
+      updateFailed: '更新助手失败',
+      deleteFailed: '删除助手失败',
+      defaultModelIncomplete: '默认模型信息不完整',
+    },
+    toasts: {
+      created: '助手创建成功',
+      updated: '助手更新成功',
+      deleted: '助手已删除',
+    },
+    settings: {
+      title: '助手设置',
+      tabs: {
+        model: '模型设置',
+        prompt: '提示词设置',
+        delete: '删除助手',
+      },
+      model: {
+        defaultModel: '默认模型',
+        defaultModelHint: '当前助手默认模型',
+        noDefaultModel: '未设置',
+        clear: '清空',
+        change: '修改',
+        temperature: '模型温度',
+        temperatureHint: '控制回复的随机性',
+        topP: 'Top-P',
+        topPHint: '控制采样范围',
+        contextCount: '上下文数',
+        maxTokens: '最大 Token 数',
+        unlimited: '不限',
+      },
+      delete: {
+        title: '删除助手',
+        hint: '删除助手后，将清理所有的对话记录，操作不可逆',
+        action: '删除',
+        confirmTitle: '确认删除',
+        confirmDesc: '确定要删除助手「{name}」吗？此操作无法撤销。',
+      },
     },
   },
   knowledge: {
@@ -205,6 +285,7 @@ export default {
       namePlaceholder: '请输入知识库名称',
       selectPlaceholder: '请选择',
       rerankModel: '重排模型',
+      noRerank: '不使用重排',
       advanced: '高级设置',
       advancedHide: '收起高级设置',
       defaultMark: '默认',

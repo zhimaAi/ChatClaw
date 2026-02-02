@@ -153,15 +153,15 @@ onMounted(() => {
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
     <!-- 左侧：知识库列表 -->
-    <aside class="flex w-[260px] shrink-0 flex-col border-r border-border">
+    <aside class="flex w-sidebar shrink-0 flex-col border-r border-border">
       <div class="flex items-center justify-between gap-2 px-3 py-3">
         <!-- tabs -->
-        <div class="flex items-center rounded-lg border border-border bg-muted/30 p-0.5">
+        <div class="inline-flex rounded-md bg-muted p-1">
           <button
             type="button"
             :class="
               cn(
-                'h-8 rounded-md px-3 text-sm transition-colors',
+                'rounded px-3 py-1 text-sm transition-colors',
                 activeTab === 'personal'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -175,7 +175,7 @@ onMounted(() => {
             type="button"
             disabled
             :class="
-              cn('h-8 rounded-md px-3 text-sm text-muted-foreground opacity-50 cursor-not-allowed')
+              cn('rounded px-3 py-1 text-sm transition-colors', 'cursor-not-allowed opacity-50')
             "
             :title="t('knowledge.tabs.teamDisabledTip')"
           >
@@ -226,7 +226,7 @@ onMounted(() => {
             type="button"
             :class="
               cn(
-                'group flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors',
+                'group flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
                 selectedLibraryId === lib.id
                   ? 'bg-accent text-accent-foreground'
                   : 'text-foreground hover:bg-accent/50'

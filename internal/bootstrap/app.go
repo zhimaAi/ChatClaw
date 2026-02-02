@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
+	"willchat/internal/services/agents"
 	"willchat/internal/define"
 	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
@@ -67,6 +68,9 @@ func NewApp(opts Options) (*application.App, error) {
 	app.RegisterService(application.NewService(providers.NewProvidersService(app)))
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
+
+	// 注册助手服务
+	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
 
 	// 注册应用服务
 	app.RegisterService(application.NewService(appservice.NewAppService(app)))

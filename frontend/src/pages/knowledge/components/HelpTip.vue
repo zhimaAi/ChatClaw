@@ -59,7 +59,7 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
-      class="absolute left-full top-1/2 z-50 ml-2 w-[260px] -translate-y-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+      class="absolute left-full top-1/2 z-50 ml-2 w-sidebar -translate-y-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
     >
       {{ content }}
     </div>

@@ -19,6 +19,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// DateTimeFormat 统一的时间格式（无时区）
+const DateTimeFormat = "2006-01-02 15:04:05"
+
 var (
 	once   sync.Once
 	db     *bun.DB
@@ -27,6 +30,11 @@ var (
 
 func Path() string { return dbPath }
 func DB() *bun.DB  { return db }
+
+// NowUTC 返回当前 UTC 时间字符串，格式为 "2006-01-02 15:04:05"
+func NowUTC() string {
+	return time.Now().UTC().Format(DateTimeFormat)
+}
 
 func Init(app *application.App) error {
 	var initErr error

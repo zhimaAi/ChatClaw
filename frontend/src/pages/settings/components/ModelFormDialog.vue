@@ -108,7 +108,7 @@ defineExpose({ resetSaving })
 
 <template>
   <Dialog :open="open" @update:open="handleClose">
-    <DialogContent class="sm:max-w-[425px]">
+    <DialogContent size="sm">
       <DialogHeader>
         <DialogTitle>{{ dialogTitle }}</DialogTitle>
         <DialogDescription>
