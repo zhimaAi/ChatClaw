@@ -106,6 +106,7 @@ export default {
       reset: '重置',
       llmModels: '大语言模型',
       embeddingModels: '嵌入模型',
+      rerankModels: '重排序模型',
       noModels: '暂无模型',
       loadingProviders: '加载中...',
       loadFailed: '加载失败',

@@ -30,7 +30,7 @@ type Model struct {
 	ProviderID string    `json:"provider_id"`
 	ModelID    string    `json:"model_id"`
 	Name       string    `json:"name"`
-	Type       string    `json:"type"` // llm, embedding
+	Type       string    `json:"type"` // llm, embedding, rerank
 	IsBuiltin  bool      `json:"is_builtin"`
 	Enabled    bool      `json:"enabled"`
 	SortOrder  int       `json:"sort_order"`
@@ -62,7 +62,7 @@ type UpdateProviderInput struct {
 type CreateModelInput struct {
 	ModelID string `json:"model_id"`
 	Name    string `json:"name"`
-	Type    string `json:"type"` // llm, embedding
+	Type    string `json:"type"` // llm, embedding, rerank
 }
 
 // UpdateModelInput 更新模型的输入参数

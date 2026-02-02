@@ -181,9 +181,16 @@ const validationMessage = computed(() => {
 
 // 获取模型组的翻译标题
 const getModelGroupTitle = (type: string) => {
-  return type === 'llm'
-    ? t('settings.modelService.llmModels')
-    : t('settings.modelService.embeddingModels')
+  switch (type) {
+    case 'llm':
+      return t('settings.modelService.llmModels')
+    case 'embedding':
+      return t('settings.modelService.embeddingModels')
+    case 'rerank':
+      return t('settings.modelService.rerankModels')
+    default:
+      return type
+  }
 }
 
 // 处理开关切换

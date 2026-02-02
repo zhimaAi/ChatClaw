@@ -114,6 +114,7 @@ export default {
       reset: 'Reset',
       llmModels: 'LLM Models',
       embeddingModels: 'Embedding Models',
+      rerankModels: 'Rerank Models',
       noModels: 'No models',
       loadingProviders: 'Loading...',
       loadFailed: 'Failed to load',

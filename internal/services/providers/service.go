@@ -130,8 +130,8 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		groupMap[dto.Type] = append(groupMap[dto.Type], dto)
 	}
 
-	// 转换为有序的分组列表（llm 在前，embedding 在后）
-	typeOrder := []string{"llm", "embedding"}
+	// 转换为有序的分组列表（llm 在前，embedding 次之，rerank 在后）
+	typeOrder := []string{"llm", "embedding", "rerank"}
 	groups := make([]ModelGroup, 0)
 	for _, t := range typeOrder {
 		if ms, ok := groupMap[t]; ok {
@@ -459,7 +459,7 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	}
 
 	input.Type = strings.TrimSpace(input.Type)
-	if input.Type != "llm" && input.Type != "embedding" {
+	if input.Type != "llm" && input.Type != "embedding" && input.Type != "rerank" {
 		return nil, errs.New("error.model_type_invalid")
 	}
 

@@ -136,6 +136,9 @@ defineExpose({ resetSaving })
               <SelectItem value="embedding">
                 {{ t('settings.modelService.embeddingModels') }}
               </SelectItem>
+              <SelectItem value="rerank">
+                {{ t('settings.modelService.rerankModels') }}
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
