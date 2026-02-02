@@ -13,6 +13,7 @@ require (
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
 	github.com/ncruces/go-sqlite3 v0.20.3
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/tetratelabs/wazero v1.8.2
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.22
@@ -105,7 +106,6 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
-	github.com/tetratelabs/wazero v1.8.2 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
