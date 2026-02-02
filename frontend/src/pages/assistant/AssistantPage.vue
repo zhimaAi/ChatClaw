@@ -140,10 +140,10 @@ onMounted(() => {
           :key="a.id"
           :class="
             cn(
-              'group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors',
+              'group flex h-11 w-full items-center gap-2 rounded px-2 text-left outline-none transition-colors',
               a.id === activeAgentId
-                ? 'bg-accent text-accent-foreground'
-                : 'hover:bg-accent/50 text-foreground'
+                ? 'bg-zinc-100 text-foreground dark:bg-accent'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             )
           "
           @click="activeAgentId = a.id"
