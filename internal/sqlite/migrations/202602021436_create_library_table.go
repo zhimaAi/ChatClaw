@@ -16,10 +16,7 @@ create table if not exists library (
 	updated_at datetime not null default current_timestamp,
 	
 	name varchar(128) not null,
-	
-	embedding_provider_id varchar(64) not null,
-	embedding_model_id varchar(128) not null,
-	embedding_dimension integer not null default 1536,
+		
 	rerank_provider_id varchar(64) not null,
 	rerank_model_id varchar(128) not null,
 	
