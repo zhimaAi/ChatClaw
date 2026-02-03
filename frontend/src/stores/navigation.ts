@@ -23,6 +23,8 @@ export interface Tab {
   icon?: string
   /** 关联的模块 */
   module: NavModule
+  /** AI助手标签页的选中助手ID（仅 assistant 模块使用） */
+  agentId?: number | null
 }
 
 /**
@@ -186,6 +188,24 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * 更新标签页的选中助手ID（仅 assistant 模块使用）
+   */
+  const updateTabAgentId = (tabId: string, agentId: number | null) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab && tab.module === 'assistant') {
+      tab.agentId = agentId
+    }
+  }
+
+  /**
+   * 获取标签页的选中助手ID
+   */
+  const getTabAgentId = (tabId: string): number | null => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    return tab?.agentId ?? null
+  }
+
+  /**
    * 刷新所有 assistant 标签页的默认图标（用于主题切换时更新图标颜色）
    * 只更新使用默认 logo 图标的标签页（通过检测 data:image/svg+xml 前缀）
    */
@@ -219,6 +239,8 @@ export const useNavigationStore = defineStore('navigation', () => {
     closeAllTabs,
     setActiveTab,
     updateTabIcon,
+    updateTabAgentId,
+    getTabAgentId,
     refreshAssistantDefaultIcons,
   }
 })

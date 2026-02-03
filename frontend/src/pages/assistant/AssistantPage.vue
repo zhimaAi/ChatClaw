@@ -120,9 +120,23 @@ const loadAgents = async () => {
   try {
     const list = await AgentsService.ListAgents()
     agents.value = list
-    if (activeAgentId.value == null && list.length > 0) {
+
+    // 尝试恢复当前标签页的选中状态
+    const currentTabId = navigationStore.activeTabId
+    if (currentTabId) {
+      const savedAgentId = navigationStore.getTabAgentId(currentTabId)
+      // 检查保存的 agentId 是否仍然有效（助手可能已被删除）
+      if (savedAgentId !== null && list.some((a) => a.id === savedAgentId)) {
+        activeAgentId.value = savedAgentId
+      } else if (list.length > 0) {
+        // 没有保存的状态或已失效，选中第一个助手
+        activeAgentId.value = list[0].id
+        navigationStore.updateTabAgentId(currentTabId, list[0].id)
+      }
+    } else if (list.length > 0) {
       activeAgentId.value = list[0].id
     }
+
     // 初始化时更新标签页图标
     updateCurrentTabIcon()
   } catch (error: unknown) {
@@ -290,10 +304,15 @@ const updateCurrentTabIcon = () => {
   navigationStore.updateTabIcon(currentTabId, icon)
 }
 
-// Watch for active agent changes to update selected model and tab icon
-watch(activeAgentId, () => {
+// Watch for active agent changes to update selected model, tab icon, and save to tab state
+watch(activeAgentId, (newAgentId) => {
   selectDefaultModel()
   updateCurrentTabIcon()
+  // 保存选中状态到当前标签页
+  const currentTabId = navigationStore.activeTabId
+  if (currentTabId) {
+    navigationStore.updateTabAgentId(currentTabId, newAgentId)
+  }
 })
 
 // Watch for models loaded
@@ -301,13 +320,25 @@ watch(providersWithModels, () => {
   selectDefaultModel()
 })
 
-// Watch for tab changes - when switching to this assistant tab, update the icon
-// This handles the case when a new tab is created via the + button
+// Watch for tab changes - restore agent selection and update icon
 watch(
   () => navigationStore.activeTabId,
-  () => {
-    // Only update if the current tab is an assistant module
-    if (navigationStore.activeTab?.module === 'assistant') {
+  (newTabId) => {
+    // Only process if the current tab is an assistant module
+    if (navigationStore.activeTab?.module === 'assistant' && newTabId) {
+      // 恢复该标签页的选中助手
+      const savedAgentId = navigationStore.getTabAgentId(newTabId)
+      if (savedAgentId !== null && agents.value.some((a) => a.id === savedAgentId)) {
+        // 有保存的状态且助手仍存在，恢复选中
+        if (activeAgentId.value !== savedAgentId) {
+          activeAgentId.value = savedAgentId
+        }
+      } else if (agents.value.length > 0) {
+        // 新标签页或保存的助手已被删除，选中第一个
+        activeAgentId.value = agents.value[0].id
+        navigationStore.updateTabAgentId(newTabId, agents.value[0].id)
+      }
+      // 更新图标
       updateCurrentTabIcon()
     }
   }
