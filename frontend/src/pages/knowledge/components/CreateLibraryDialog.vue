@@ -9,7 +9,23 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import FieldLabel from './FieldLabel.vue'
 import OrangeWarning from './OrangeWarning.vue'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import SliderWithMarks from './SliderWithMarks.vue'
+
+import type {
+  Provider,
+  ProviderWithModels,
+  Model,
+} from '@bindings/willchat/internal/services/providers'
+import { ProvidersService } from '@bindings/willchat/internal/services/providers'
 
 import type { Library } from '@bindings/willchat/internal/services/library'
 import { LibraryService, CreateLibraryInput } from '@bindings/willchat/internal/services/library'
@@ -28,10 +44,17 @@ const { t } = useI18n()
 
 const advanced = ref(false)
 const isSubmitting = ref(false)
+const loadingProviders = ref(false)
 const loadingEmbedding = ref(false)
 const embeddingReady = ref(false)
 
 const name = ref('')
+
+type Group = { provider: Provider; models: Model[] }
+const rerankGroups = ref<Group[]>([])
+
+const RERANK_NONE = '__none__'
+const rerankKey = ref<string>(RERANK_NONE) // `${providerId}::${modelId}` or RERANK_NONE
 
 // advanced fields（用字符串承接输入，提交时再转 number）
 // shadcn Slider 使用 number[] 承载（支持 range）
@@ -46,11 +69,21 @@ const resetForm = () => {
   advanced.value = false
   isSubmitting.value = false
   name.value = ''
+  rerankKey.value = RERANK_NONE
   topK.value = [20]
   chunkSize.value = '1024'
   chunkOverlap.value = '100'
   matchThreshold.value = '0.5'
 }
+
+const currentRerankLabel = computed(() => {
+  if (!rerankKey.value || rerankKey.value === RERANK_NONE) return t('knowledge.create.noRerank')
+  const [pid, mid] = rerankKey.value.split('::')
+  if (!pid || !mid) return t('knowledge.create.noRerank')
+  const group = rerankGroups.value.find((g) => g.provider.provider_id === pid)
+  const model = group?.models.find((m) => m.model_id === mid)
+  return model?.name || t('knowledge.create.noRerank')
+})
 
 const isFormValid = computed(() => {
   return name.value.trim() !== ''
@@ -76,11 +109,46 @@ const loadEmbeddingReady = async () => {
   }
 }
 
+const loadProviders = async () => {
+  loadingProviders.value = true
+  try {
+    const providers = (await ProvidersService.ListProviders()) || []
+    const details = await Promise.all(
+      providers.map(async (p) => {
+        try {
+          const detail = await ProvidersService.GetProviderWithModels(p.provider_id)
+          return { provider: p, detail }
+        } catch (error: unknown) {
+          // 单个 provider 加载失败不影响其他，仅记录警告
+          console.warn(`Failed to load provider ${p.provider_id}:`, error)
+          return { provider: p, detail: null as ProviderWithModels | null }
+        }
+      })
+    )
+
+    const out: Group[] = []
+    for (const item of details) {
+      const group = item.detail?.model_groups?.find((g) => g.type === 'rerank')
+      const models = group?.models || []
+      if (models.length > 0) {
+        out.push({ provider: item.provider, models })
+      }
+    }
+    rerankGroups.value = out
+  } catch (error) {
+    console.error('Failed to load providers:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.providersLoadFailed'))
+  } finally {
+    loadingProviders.value = false
+  }
+}
+
 watch(
   () => props.open,
   (open) => {
     if (open) {
       resetForm()
+      void loadProviders()
       void loadEmbeddingReady()
     }
   }
@@ -105,8 +173,13 @@ const handleSubmit = async () => {
       return Number.isFinite(n) ? n : undefined
     }
 
+    const isNone = !rerankKey.value || rerankKey.value === RERANK_NONE
+    const [rerankProviderId, rerankModelId] = isNone ? ['', ''] : rerankKey.value.split('::')
+
     const input = new CreateLibraryInput({
       name: name.value.trim(),
+      rerank_provider_id: rerankProviderId || '',
+      rerank_model_id: rerankModelId || '',
       top_k: topK.value[0] ?? 20,
       chunk_size: toInt(chunkSize.value) ?? 1024,
       chunk_overlap: toInt(chunkOverlap.value) ?? 100,
@@ -147,7 +220,7 @@ const handleSubmit = async () => {
             v-model="name"
             :placeholder="t('knowledge.create.namePlaceholder')"
             maxlength="128"
-            :disabled="isSubmitting"
+            :disabled="loadingProviders || isSubmitting"
           />
         </div>
 
@@ -164,7 +237,7 @@ const handleSubmit = async () => {
             :min="1"
             :max="50"
             :step="1"
-            :disabled="isSubmitting"
+            :disabled="loadingProviders || isSubmitting"
             :marks="[
               { value: 1, label: '1' },
               { value: 20, label: t('knowledge.create.defaultMark'), emphasize: true },
@@ -182,6 +255,37 @@ const handleSubmit = async () => {
           <div class="text-base font-semibold text-foreground">
             {{ t('knowledge.create.advanced') }}
           </div>
+          <!-- 重排模型 -->
+          <div class="flex flex-col gap-1.5">
+            <FieldLabel
+              :label="t('knowledge.create.rerankModel')"
+              :help="t('knowledge.help.rerankModel')"
+            />
+            <Select
+              v-model="rerankKey"
+              :disabled="loadingProviders || isSubmitting"
+            >
+              <SelectTrigger class="w-full">
+                <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
+                  {{ currentRerankLabel }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="RERANK_NONE">{{ t('knowledge.create.noRerank') }}</SelectItem>
+                <SelectGroup v-for="g in rerankGroups" :key="g.provider.provider_id">
+                  <SelectLabel>{{ g.provider.name }}</SelectLabel>
+                  <SelectItem
+                    v-for="m in g.models"
+                    :key="`${g.provider.provider_id}::${m.model_id}`"
+                    :value="`${g.provider.provider_id}::${m.model_id}`"
+                  >
+                    {{ m.name }}
+                  </SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div class="flex flex-col gap-1.5">
             <FieldLabel
               :label="t('knowledge.create.chunkSize')"

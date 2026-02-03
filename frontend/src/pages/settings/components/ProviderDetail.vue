@@ -175,21 +175,6 @@ const isUsedByGlobalEmbedding = async (providerId: string): Promise<boolean> => 
   }
 }
 
-const isUsedBySemanticSegment = async (providerId: string): Promise<boolean> => {
-  try {
-    const [p, m] = await Promise.all([
-      SettingsService.Get('semantic_segment_provider_id'),
-      SettingsService.Get('semantic_segment_model_id'),
-    ])
-    const segProviderId = p?.value?.trim() || ''
-    const segModelId = m?.value?.trim() || ''
-    return segProviderId === providerId && segModelId !== ''
-  } catch (error) {
-    console.error('Failed to read semantic segment settings:', error)
-    return false
-  }
-}
-
 // 检查 provider 是否被助手用作默认模型
 const isUsedByAgentDefaultModel = async (providerId: string): Promise<string | null> => {
   try {
@@ -249,14 +234,6 @@ const handleToggle = async (checked: boolean) => {
     // 检查是否被全局嵌入模型使用
     if (await isUsedByGlobalEmbedding(pid)) {
       toast.error(t('settings.modelService.disableBlockedByEmbedding'))
-      // 保持开启
-      localEnabled.value = true
-      return
-    }
-
-    // 检查是否被语义分段模型使用
-    if (await isUsedBySemanticSegment(pid)) {
-      toast.error(t('settings.modelService.disableBlockedBySemanticSegment'))
       // 保持开启
       localEnabled.value = true
       return

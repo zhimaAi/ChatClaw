@@ -39,10 +39,15 @@ CREATE INDEX idx_docs_library_id ON documents(library_id);
 CREATE UNIQUE INDEX idx_docs_library_hash ON documents(library_id, content_hash);
 
 CREATE VIRTUAL TABLE doc_fts USING fts5(
-    content,
+    -- 预分词后的 token 文本（由 Go 写入；用空格分隔）
+    tokens,
+	-- 用于过滤的元信息（不参与倒排索引）
+	library_id UNINDEXED,
+	document_id UNINDEXED,
+	level UNINDEXED,
     -- contentless FTS: 只存索引，不保存内容副本；查询用 rowid 回表 document_nodes 拿 content/元信息
     content='',
-    tokenize='jieba'
+    tokenize='unicode61'
 );
 
 CREATE VIRTUAL TABLE doc_vec USING vec0(
@@ -59,6 +64,7 @@ CREATE TABLE IF NOT EXISTS document_nodes (
 	document_id integer not null,
 	
 	content text not null,  -- 可能是原始块，也可能是 AI 生成的摘要
+	content_tokens text not null default '',  -- 预分词后的 token 文本（用于 FTS）
 	level integer not null default 0,  -- 0: 原始块, 1: 一级摘要, 2: 总括摘要
 	parent_id integer,  -- RAPTOR 向上追溯
 	chunk_order integer not null default 0  -- 同一层级内的顺序
@@ -71,18 +77,22 @@ CREATE INDEX idx_nodes_doc_level_order ON document_nodes(document_id, level, chu
 
 -- 当 document_nodes 插入新行时，同步更新索引
 CREATE TRIGGER doc_nodes_ai AFTER INSERT ON document_nodes BEGIN
-  INSERT INTO doc_fts(rowid, content) VALUES (new.id, new.content);
+  INSERT INTO doc_fts(rowid, tokens, library_id, document_id, level)
+    VALUES (new.id, new.content_tokens, new.library_id, new.document_id, new.level);
 END;
 
 -- 当 document_nodes 删除行时，同步删除索引
 CREATE TRIGGER doc_nodes_ad AFTER DELETE ON document_nodes BEGIN
-  INSERT INTO doc_fts(doc_fts, rowid, content) VALUES('delete', old.id, old.content);
+  INSERT INTO doc_fts(doc_fts, rowid, tokens, library_id, document_id, level)
+    VALUES('delete', old.id, old.content_tokens, old.library_id, old.document_id, old.level);
 END;
 
 -- 当内容修改时，更新索引
 CREATE TRIGGER doc_nodes_au AFTER UPDATE ON document_nodes BEGIN
-  INSERT INTO doc_fts(doc_fts, rowid, content) VALUES('delete', old.id, old.content);
-  INSERT INTO doc_fts(rowid, content) VALUES (new.id, new.content);
+  INSERT INTO doc_fts(doc_fts, rowid, tokens, library_id, document_id, level)
+    VALUES('delete', old.id, old.content_tokens, old.library_id, old.document_id, old.level);
+  INSERT INTO doc_fts(rowid, tokens, library_id, document_id, level)
+    VALUES (new.id, new.content_tokens, new.library_id, new.document_id, new.level);
 END;
 `
 

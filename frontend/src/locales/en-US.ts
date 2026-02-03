@@ -104,9 +104,7 @@ export default {
     modelService: {
       enabled: 'Enabled',
       disableBlockedByEmbedding:
-        'This provider is used as the global embedding model. Please change it in "Indexing model settings" before disabling.',
-      disableBlockedBySemanticSegment:
-        'This provider is used as the semantic segmentation model. Please change it in "Indexing model settings" before disabling.',
+        'This provider is used as the global embedding model. Please change it in "Embedding settings" before disabling.',
       disableBlockedByAgent:
         'This provider is used as the default model by agent "{name}". Please change the agent settings before disabling.',
       deleteBlockedByAgent:
@@ -228,7 +226,8 @@ export default {
   knowledge: {
     help: {
       name: 'A name to distinguish different knowledge bases.',
-      topK: 'Maximum number of chunks returned per retrieval.',
+      topK: 'Maximum number of chunks returned/used for reranking per retrieval.',
+      rerankModel: 'Model used to rerank retrieved chunks.',
       chunkSize:
         'Chunk size (in characters). Larger chunks keep more context but reduce granularity.',
       chunkOverlap:
@@ -236,7 +235,6 @@ export default {
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
-      semanticSegmentModel: 'Model used for semantic segmentation (optional).',
     },
     tabs: {
       personal: 'Personal',
@@ -281,12 +279,15 @@ export default {
     },
     detail: {
       embedding: 'Embedding',
+      rerank: 'Rerank',
     },
     create: {
       title: 'Add Knowledge Base',
       name: 'Name',
       namePlaceholder: 'Enter knowledge base name',
       selectPlaceholder: 'Select',
+      rerankModel: 'Rerank model',
+      noRerank: 'No reranking',
       advanced: 'Advanced settings',
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',
@@ -301,13 +302,11 @@ export default {
       failed: 'Failed to create knowledge base',
     },
     embeddingSettings: {
-      title: 'Indexing model settings',
+      title: 'Embedding settings',
       warning: 'After changing the embedding model, all knowledge bases must be re-learned.',
       embeddingModel: 'Embedding model',
-      semanticSegmentModel: 'Semantic segmentation model',
-      noSemanticSegment: 'No semantic segmentation',
       embeddingDimension: 'Embedding dimension',
-      required: 'Please select an embedding model in Indexing model settings first',
+      required: 'Please select an embedding model in Embedding settings first',
       save: 'Save',
       saved: 'Saved',
       saveFailed: 'Failed to save',

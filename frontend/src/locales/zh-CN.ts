@@ -96,9 +96,7 @@ export default {
     modelService: {
       enabled: '已启用',
       disableBlockedByEmbedding:
-        '该供应商正在被用作全局嵌入模型，请先在“索引模型设置”中切换后再关闭',
-      disableBlockedBySemanticSegment:
-        '该供应商正在被用作语义分段模型，请先在“索引模型设置”中切换后再关闭',
+        '该供应商正在被用作全局嵌入模型，请先在“嵌入模型设置”中切换后再关闭',
       disableBlockedByAgent: '该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭',
       deleteBlockedByAgent: '该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除',
       apiKey: 'API 密钥',
@@ -225,13 +223,13 @@ export default {
   knowledge: {
     help: {
       name: '知识库名称，用于区分不同的知识库。',
-      topK: '每次检索时，最多返回的文档分片数量。',
+      topK: '每次检索时，最多返回/参与重排的文档分片数量。',
+      rerankModel: '用于对召回的分片进行重排序的模型。',
       chunkSize: '分片大小（字符数）。分片越大，上下文越完整，但召回粒度更粗。',
       chunkOverlap: '相邻分片的重叠大小（字符数），用于减少跨分片断句导致的信息丢失。',
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
-      semanticSegmentModel: '用于按语义进行分段的模型（可选）。',
     },
     tabs: {
       personal: '个人',
@@ -279,12 +277,15 @@ export default {
     },
     detail: {
       embedding: '嵌入模型',
+      rerank: '重排序模型',
     },
     create: {
       title: '添加知识库',
       name: '名称',
       namePlaceholder: '请输入知识库名称',
       selectPlaceholder: '请选择',
+      rerankModel: '重排模型',
+      noRerank: '不使用重排',
       advanced: '高级设置',
       advancedHide: '收起高级设置',
       defaultMark: '默认',
@@ -299,13 +300,11 @@ export default {
       failed: '知识库创建失败',
     },
     embeddingSettings: {
-      title: '索引模型设置',
+      title: '嵌入模型设置',
       warning: '修改嵌入模型后，全部知识库需重新学习。',
       embeddingModel: '嵌入模型',
-      semanticSegmentModel: '语义分段模型',
-      noSemanticSegment: '不使用语义分段',
       embeddingDimension: '嵌入维度',
-      required: '请先在索引模型设置中选择嵌入模型',
+      required: '请先在嵌入模型设置中选择嵌入模型',
       save: '保存',
       saved: '已保存',
       saveFailed: '保存失败',
