@@ -9,9 +9,11 @@ defineProps<{
 
 <template>
   <RekaToastViewport
-    :class="cn(
-      'fixed top-10 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:flex-col sm:max-w-[420px]',
-      $props.class
-    )"
+    :class="
+      cn(
+        'fixed top-10 right-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:flex-col sm:max-w-[420px]',
+        $props.class
+      )
+    "
   />
 </template>

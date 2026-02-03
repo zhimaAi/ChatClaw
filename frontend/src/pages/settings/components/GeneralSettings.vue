@@ -67,11 +67,7 @@ const handleThemeChange = (value: AcceptableValue) => {
           <SelectValue>{{ currentLanguageLabel }}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem
-            v-for="option in languageOptions"
-            :key="option.value"
-            :value="option.value"
-          >
+          <SelectItem v-for="option in languageOptions" :key="option.value" :value="option.value">
             {{ t(option.label) }}
           </SelectItem>
         </SelectContent>
@@ -85,11 +81,7 @@ const handleThemeChange = (value: AcceptableValue) => {
           <SelectValue>{{ currentThemeLabel }}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem
-            v-for="option in themeOptions"
-            :key="option.value"
-            :value="option.value"
-          >
+          <SelectItem v-for="option in themeOptions" :key="option.value" :value="option.value">
             {{ t(option.label) }}
           </SelectItem>
         </SelectContent>

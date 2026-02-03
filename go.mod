@@ -11,7 +11,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
-	github.com/ncruces/go-sqlite3 v0.20.3
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/tetratelabs/wazero v1.8.2
 	github.com/uptrace/bun v1.2.16
@@ -93,7 +93,6 @@ require (
 	github.com/meguminnnnnnnnn/go-openai v0.1.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect

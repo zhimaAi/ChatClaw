@@ -31,7 +31,7 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "qwen", Name: "通义千问", Type: "openai", Icon: "qwen", SortOrder: 8, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 9, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
 	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 10, APIEndpoint: "https://qianfan.baidubce.com/v2"},
-	{ProviderID: "ollama", Name: "Ollama", Type: "openai", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434/v1"},
+	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
 // BuiltinModels 内置模型列表
@@ -80,6 +80,7 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "qwen", ModelID: "qwen-flash", Name: "通义千问 Flash", Type: "llm", SortOrder: 102},
 	{ProviderID: "qwen", ModelID: "qwen-long", Name: "通义千问 Long", Type: "llm", SortOrder: 103},
 	{ProviderID: "qwen", ModelID: "text-embedding-v3", Name: "Text Embedding V3", Type: "embedding", SortOrder: 100},
+	{ProviderID: "qwen", ModelID: "qwen3-rerank", Name: "Qwen3 Rerank", Type: "rerank", SortOrder: 100},
 
 	// 百度文心
 	{ProviderID: "baidu", ModelID: "ernie-5.0-thinking-latest", Name: "ERNIE 5.0", Type: "llm", SortOrder: 100},

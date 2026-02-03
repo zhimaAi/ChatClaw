@@ -9,39 +9,41 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const dateTimeFormat = "2006-01-02 15:04:05"
+
 // migrationProvider 迁移专用的供应商模型
 type migrationProvider struct {
 	bun.BaseModel `bun:"table:providers"`
 
-	ID          int64     `bun:"id,pk,autoincrement"`
-	ProviderID  string    `bun:"provider_id,notnull"`
-	Name        string    `bun:"name,notnull"`
-	Type        string    `bun:"type,notnull"`
-	Icon        string    `bun:"icon,notnull"`
-	IsBuiltin   bool      `bun:"is_builtin,notnull"`
-	Enabled     bool      `bun:"enabled,notnull"`
-	SortOrder   int       `bun:"sort_order,notnull"`
-	APIEndpoint string    `bun:"api_endpoint,notnull"`
-	APIKey      string    `bun:"api_key,notnull"`
-	ExtraConfig string    `bun:"extra_config,notnull"`
-	CreatedAt   time.Time `bun:"created_at,notnull"`
-	UpdatedAt   time.Time `bun:"updated_at,notnull"`
+	ID          int64  `bun:"id,pk,autoincrement"`
+	ProviderID  string `bun:"provider_id,notnull"`
+	Name        string `bun:"name,notnull"`
+	Type        string `bun:"type,notnull"`
+	Icon        string `bun:"icon,notnull"`
+	IsBuiltin   bool   `bun:"is_builtin,notnull"`
+	Enabled     bool   `bun:"enabled,notnull"`
+	SortOrder   int    `bun:"sort_order,notnull"`
+	APIEndpoint string `bun:"api_endpoint,notnull"`
+	APIKey      string `bun:"api_key,notnull"`
+	ExtraConfig string `bun:"extra_config,notnull"`
+	CreatedAt   string `bun:"created_at,notnull"`
+	UpdatedAt   string `bun:"updated_at,notnull"`
 }
 
 // migrationModel 迁移专用的模型模型
 type migrationModel struct {
 	bun.BaseModel `bun:"table:models"`
 
-	ID         int64     `bun:"id,pk,autoincrement"`
-	ProviderID string    `bun:"provider_id,notnull"`
-	ModelID    string    `bun:"model_id,notnull"`
-	Name       string    `bun:"name,notnull"`
-	Type       string    `bun:"type,notnull"`
-	IsBuiltin  bool      `bun:"is_builtin,notnull"`
-	Enabled    bool      `bun:"enabled,notnull"`
-	SortOrder  int       `bun:"sort_order,notnull"`
-	CreatedAt  time.Time `bun:"created_at,notnull"`
-	UpdatedAt  time.Time `bun:"updated_at,notnull"`
+	ID         int64  `bun:"id,pk,autoincrement"`
+	ProviderID string `bun:"provider_id,notnull"`
+	ModelID    string `bun:"model_id,notnull"`
+	Name       string `bun:"name,notnull"`
+	Type       string `bun:"type,notnull"`
+	IsBuiltin  bool   `bun:"is_builtin,notnull"`
+	Enabled    bool   `bun:"enabled,notnull"`
+	SortOrder  int    `bun:"sort_order,notnull"`
+	CreatedAt  string `bun:"created_at,notnull"`
+	UpdatedAt  string `bun:"updated_at,notnull"`
 }
 
 func init() {
@@ -95,7 +97,7 @@ create table if not exists models (
 
 			// 初始化内置供应商（使用 bun 批量插入，避免 SQL 注入风险）
 			if len(define.BuiltinProviders) > 0 {
-				now := time.Now().UTC()
+				now := time.Now().UTC().Format(dateTimeFormat)
 				providers := make([]migrationProvider, 0, len(define.BuiltinProviders))
 				for _, p := range define.BuiltinProviders {
 					providers = append(providers, migrationProvider{
@@ -120,7 +122,7 @@ create table if not exists models (
 
 			// 初始化内置模型（使用 bun 批量插入，避免 SQL 注入风险）
 			if len(define.BuiltinModels) > 0 {
-				now := time.Now().UTC()
+				now := time.Now().UTC().Format(dateTimeFormat)
 				models := make([]migrationModel, 0, len(define.BuiltinModels))
 				for _, m := range define.BuiltinModels {
 					models = append(models, migrationModel{

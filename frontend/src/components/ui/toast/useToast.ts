@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 
-export const TOAST_DURATION = 3000
+export const TOAST_DURATION_DEFAULT = 2000
+export const TOAST_DURATION_ERROR = 4000
 const TOAST_LIMIT = 5
 
 export interface ToastProps {
@@ -22,10 +23,12 @@ function genId() {
 
 function addToast(props: Omit<ToastProps, 'id'>) {
   const id = genId()
+  // 根据 variant 设置不同的默认 duration
+  const defaultDuration = props.variant === 'error' ? TOAST_DURATION_ERROR : TOAST_DURATION_DEFAULT
   const newToast: ToastProps = {
     id,
     variant: 'default',
-    duration: TOAST_DURATION,
+    duration: defaultDuration,
     ...props,
   }
 
@@ -48,7 +51,10 @@ export function useToast() {
 
 // 便捷方法
 export const toast = {
-  success: (message: string) => addToast({ title: message, variant: 'success' }),
-  error: (message: string) => addToast({ title: message, variant: 'error' }),
-  default: (message: string) => addToast({ title: message, variant: 'default' }),
+  success: (message: string) =>
+    addToast({ title: message, variant: 'success', duration: TOAST_DURATION_DEFAULT }),
+  error: (message: string) =>
+    addToast({ title: message, variant: 'error', duration: TOAST_DURATION_ERROR }),
+  default: (message: string) =>
+    addToast({ title: message, variant: 'default', duration: TOAST_DURATION_DEFAULT }),
 }

@@ -1,0 +1,113 @@
+package library
+
+import (
+	"context"
+	"time"
+
+	"willchat/internal/sqlite"
+
+	"github.com/uptrace/bun"
+)
+
+// Library 知识库 DTO（暴露给前端）
+type Library struct {
+	ID int64 `json:"id"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	Name string `json:"name"`
+
+	RerankProviderID string `json:"rerank_provider_id"`
+	RerankModelID    string `json:"rerank_model_id"`
+
+	TopK           int     `json:"top_k"`
+	ChunkSize      int     `json:"chunk_size"`
+	ChunkOverlap   int     `json:"chunk_overlap"`
+	MatchThreshold float64 `json:"match_threshold"`
+	SortOrder      int     `json:"sort_order"`
+}
+
+// CreateLibraryInput 创建知识库的输入参数
+// 说明：带默认值的字段前端可不填（后端会用默认值兜底）。
+type CreateLibraryInput struct {
+	Name string `json:"name"`
+
+	RerankProviderID string `json:"rerank_provider_id"`
+	RerankModelID    string `json:"rerank_model_id"`
+
+	TopK           *int     `json:"top_k"`
+	ChunkSize      *int     `json:"chunk_size"`
+	ChunkOverlap   *int     `json:"chunk_overlap"`
+	MatchThreshold *float64 `json:"match_threshold"`
+}
+
+// UpdateLibraryInput 更新知识库的输入参数
+type UpdateLibraryInput struct {
+	Name *string `json:"name"`
+
+	RerankProviderID *string `json:"rerank_provider_id"`
+	RerankModelID    *string `json:"rerank_model_id"`
+
+	TopK           *int     `json:"top_k"`
+	ChunkSize      *int     `json:"chunk_size"`
+	ChunkOverlap   *int     `json:"chunk_overlap"`
+	MatchThreshold *float64 `json:"match_threshold"`
+}
+
+// libraryModel 数据库模型
+type libraryModel struct {
+	bun.BaseModel `bun:"table:library,alias:l"`
+
+	ID        int64     `bun:"id,pk,autoincrement"`
+	CreatedAt time.Time `bun:"created_at,notnull"`
+	UpdatedAt time.Time `bun:"updated_at,notnull"`
+
+	Name string `bun:"name,notnull"`
+
+	RerankProviderID string `bun:"rerank_provider_id,notnull"`
+	RerankModelID    string `bun:"rerank_model_id,notnull"`
+
+	TopK           int     `bun:"top_k,notnull"`
+	ChunkSize      int     `bun:"chunk_size,notnull"`
+	ChunkOverlap   int     `bun:"chunk_overlap,notnull"`
+	MatchThreshold float64 `bun:"match_threshold,notnull"`
+	SortOrder      int     `bun:"sort_order,notnull"`
+}
+
+// BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
+var _ bun.BeforeInsertHook = (*libraryModel)(nil)
+
+func (*libraryModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	now := sqlite.NowUTC()
+	query.Value("created_at", "?", now)
+	query.Value("updated_at", "?", now)
+	return nil
+}
+
+// BeforeUpdate 在 UPDATE 时自动设置 updated_at（字符串格式）
+var _ bun.BeforeUpdateHook = (*libraryModel)(nil)
+
+func (*libraryModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) error {
+	query.Set("updated_at = ?", sqlite.NowUTC())
+	return nil
+}
+
+func (m *libraryModel) toDTO() Library {
+	return Library{
+		ID:        m.ID,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+
+		Name: m.Name,
+
+		RerankProviderID: m.RerankProviderID,
+		RerankModelID:    m.RerankModelID,
+
+		TopK:           m.TopK,
+		ChunkSize:      m.ChunkSize,
+		ChunkOverlap:   m.ChunkOverlap,
+		MatchThreshold: m.MatchThreshold,
+		SortOrder:      m.SortOrder,
+	}
+}

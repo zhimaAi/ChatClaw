@@ -6,7 +6,7 @@ import type { Provider } from '@/../bindings/willchat/internal/services/provider
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   providers: Provider[]
   selectedProviderId: string | null
   loading?: boolean
@@ -49,7 +49,7 @@ const handleSelect = (providerId: string) => {
         <span class="flex-1 truncate text-sm">{{ provider.name }}</span>
         <span
           v-if="provider.enabled"
-          class="shrink-0 rounded bg-green-500/15 px-1.5 py-0.5 text-xs text-green-600 dark:bg-green-500/20 dark:text-green-400"
+          class="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
         >
           {{ t('settings.modelService.enabled') }}
         </span>

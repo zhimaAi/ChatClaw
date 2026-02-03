@@ -112,11 +112,10 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 只更新 value 字段，不改变其他元数据
+	// 只更新 value 字段（BeforeUpdate hook 会自动设置 updated_at）
 	result, err := db.NewUpdate().
 		Model((*settingModel)(nil)).
 		Set("value = ?", value).
-		Set("updated_at = ?", time.Now().UTC()).
 		Where("key = ?", key).
 		Exec(ctx)
 	if err != nil {

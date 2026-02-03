@@ -143,6 +143,26 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * 关闭其他标签页（保留指定标签页）
+   */
+  const closeOtherTabs = (tabId: string) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (!tab) return
+
+    tabs.value = [tab]
+    activeTabId.value = tabId
+    activeModule.value = tab.module
+  }
+
+  /**
+   * 关闭所有标签页
+   */
+  const closeAllTabs = () => {
+    tabs.value = []
+    activeTabId.value = null
+  }
+
+  /**
    * 切换标签页
    */
   const setActiveTab = (tabId: string) => {
@@ -165,6 +185,8 @@ export const useNavigationStore = defineStore('navigation', () => {
     navigateToModule,
     addTab,
     closeTab,
+    closeOtherTabs,
+    closeAllTabs,
     setActiveTab,
   }
 })

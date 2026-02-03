@@ -45,9 +45,9 @@ async function handleOpenWebsite() {
     <div class="flex items-center gap-5 border-b border-border p-4 dark:border-white/10">
       <!-- Logo -->
       <div
-        class="flex size-[62px] shrink-0 items-center justify-center rounded-[14px] border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
+        class="flex size-icon-box shrink-0 items-center justify-center rounded-icon-box border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
       >
-        <LogoIcon class="size-[44px]" />
+        <LogoIcon class="size-icon-lg" />
       </div>
 
       <!-- 应用名称和版权信息 -->

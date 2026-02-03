@@ -35,7 +35,7 @@ const handleMenuClick = (menuId: SettingsMenuItem) => {
 
 <template>
   <nav
-    class="flex h-full w-[182px] flex-col gap-0.5 border-r border-border bg-background py-2 dark:border-white/10 dark:bg-background/50"
+    class="flex h-full w-settings-sidebar flex-col gap-0.5 border-r border-border bg-background py-2 dark:border-white/10 dark:bg-background/50"
   >
     <button
       v-for="item in menuItems"

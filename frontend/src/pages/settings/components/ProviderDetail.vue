@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Eye, EyeOff, LoaderCircle, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import ModelIcon from '@/assets/icons/model.svg'
 import { Switch } from '@/components/ui/switch'
@@ -18,7 +19,13 @@ import type {
   ProviderWithModels,
   Model,
 } from '@/../bindings/willchat/internal/services/providers'
-import { ProvidersService, UpdateProviderInput, CheckAPIKeyInput, CreateModelInput, UpdateModelInput } from '@/../bindings/willchat/internal/services/providers'
+import {
+  ProvidersService,
+  UpdateProviderInput,
+  CheckAPIKeyInput,
+  CreateModelInput,
+  UpdateModelInput,
+} from '@/../bindings/willchat/internal/services/providers'
 import ModelFormDialog from './ModelFormDialog.vue'
 import {
   AlertDialog,
@@ -30,6 +37,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { SettingsService } from '@/../bindings/willchat/internal/services/settings'
+import { AgentsService } from '@bindings/willchat/internal/services/agents'
 
 // Azure extra_config 类型
 interface AzureExtraConfig {
@@ -47,34 +56,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-// 提取 Wails 错误消息
-const getErrorMessage = (error: unknown): string => {
-  let msg = ''
-  
-  // 先获取 message 字段
-  if (error instanceof Error) {
-    msg = error.message
-  } else if (typeof error === 'string') {
-    msg = error
-  } else if (typeof error === 'object' && error !== null && 'message' in error) {
-    msg = String((error as { message: unknown }).message)
-  } else {
-    msg = String(error)
-  }
-  
-  // 如果 message 是 JSON 字符串，尝试解析并提取内部的 message
-  if (msg.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(msg)
-      if (parsed.message) return parsed.message
-    } catch {
-      // 解析失败，返回原始消息
-    }
-  }
-  
-  return msg
-}
 
 // 本地表单状态
 const localEnabled = ref(false)
@@ -94,8 +75,8 @@ const isAzure = computed(() => props.providerWithModels?.provider.provider_id ==
 const isOllama = computed(() => props.providerWithModels?.provider.provider_id === 'ollama')
 
 // 检测按钮是否禁用
-const isCheckDisabled = computed(() => 
-  isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
+const isCheckDisabled = computed(
+  () => isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
 )
 
 // 解析 extra_config
@@ -132,17 +113,17 @@ watch(
 // 表单验证
 const isFormValid = computed(() => {
   if (!props.providerWithModels) return false
-  
+
   // Ollama 不需要 API Key
   if (isOllama.value) {
     return true
   }
-  
+
   // 必须填写 API Key
   if (!localApiKey.value.trim()) {
     return false
   }
-  
+
   // Azure 需要额外验证
   if (isAzure.value) {
     // Azure 必须填写 API 地址和 API 版本
@@ -153,20 +134,20 @@ const isFormValid = computed(() => {
       return false
     }
   }
-  
+
   return true
 })
 
 // 获取验证提示信息
 const validationMessage = computed(() => {
   if (!props.providerWithModels) return ''
-  
+
   if (isOllama.value) return ''
-  
+
   if (!localApiKey.value.trim()) {
     return t('settings.modelService.apiKeyRequired')
   }
-  
+
   if (isAzure.value) {
     if (!localApiEndpoint.value.trim()) {
       return t('settings.modelService.apiEndpointRequired')
@@ -175,25 +156,97 @@ const validationMessage = computed(() => {
       return t('settings.modelService.apiVersionRequired')
     }
   }
-  
+
   return ''
 })
 
+const isUsedByGlobalEmbedding = async (providerId: string): Promise<boolean> => {
+  try {
+    const [p, m] = await Promise.all([
+      SettingsService.Get('embedding_provider_id'),
+      SettingsService.Get('embedding_model_id'),
+    ])
+    const embeddingProviderId = p?.value?.trim() || ''
+    const embeddingModelId = m?.value?.trim() || ''
+    return embeddingProviderId === providerId && embeddingModelId !== ''
+  } catch (error) {
+    console.error('Failed to read embedding settings:', error)
+    return false
+  }
+}
+
+// 检查 provider 是否被助手用作默认模型
+const isUsedByAgentDefaultModel = async (providerId: string): Promise<string | null> => {
+  try {
+    const agents = await AgentsService.ListAgents()
+    const agent = agents.find(
+      (a) => a.default_llm_provider_id === providerId && a.default_llm_model_id
+    )
+    return agent?.name ?? null
+  } catch (error) {
+    console.error('Failed to check agent default models:', error)
+    return null
+  }
+}
+
+// 检查模型是否被助手用作默认模型
+const isModelUsedByAgent = async (providerId: string, modelId: string): Promise<string | null> => {
+  try {
+    const agents = await AgentsService.ListAgents()
+    const agent = agents.find(
+      (a) => a.default_llm_provider_id === providerId && a.default_llm_model_id === modelId
+    )
+    return agent?.name ?? null
+  } catch (error) {
+    console.error('Failed to check agent default models:', error)
+    return null
+  }
+}
+
 // 获取模型组的翻译标题
 const getModelGroupTitle = (type: string) => {
-  return type === 'llm'
-    ? t('settings.modelService.llmModels')
-    : t('settings.modelService.embeddingModels')
+  switch (type) {
+    case 'llm':
+      return t('settings.modelService.llmModels')
+    case 'embedding':
+      return t('settings.modelService.embeddingModels')
+    case 'rerank':
+      return t('settings.modelService.rerankModels')
+    default:
+      return type
+  }
 }
 
 // 处理开关切换
-const handleToggle = (checked: boolean) => {
+const handleToggle = async (checked: boolean) => {
   if (!props.providerWithModels) return
 
   // 如果要启用，需要验证表单
   if (checked && !isFormValid.value) {
     // 不允许启用，保持关闭状态
     return
+  }
+
+  // 如果要关闭，需要检查是否被使用
+  if (!checked) {
+    const pid = props.providerWithModels.provider.provider_id
+
+    // 检查是否被全局嵌入模型使用
+    if (await isUsedByGlobalEmbedding(pid)) {
+      toast.error(t('settings.modelService.disableBlockedByEmbedding'))
+      // 保持开启
+      localEnabled.value = true
+      return
+    }
+
+    // 检查是否被助手默认模型使用
+    const agentName = await isUsedByAgentDefaultModel(pid)
+    if (agentName) {
+      toast.error(t('settings.modelService.disableBlockedByAgent', { name: agentName }))
+      // 保持开启
+      localEnabled.value = true
+      return
+    }
   }
 
   // 更新本地状态
@@ -217,6 +270,7 @@ const saveEnabled = async (enabled: boolean) => {
     }
   } catch (error) {
     console.error('Failed to update provider:', error)
+    toast.error(getErrorMessage(error))
     // 回滚本地状态
     localEnabled.value = props.providerWithModels.provider.enabled
   } finally {
@@ -437,10 +491,18 @@ const confirmDeleteModel = async () => {
 
   isDeleting.value = true
   try {
-    await ProvidersService.DeleteModel(
-      props.providerWithModels.provider.provider_id,
-      deletingModel.value.model_id
-    )
+    const providerId = props.providerWithModels.provider.provider_id
+    const modelId = deletingModel.value.model_id
+
+    // 检查模型是否被助手用作默认模型
+    const agentName = await isModelUsedByAgent(providerId, modelId)
+    if (agentName) {
+      toast.error(t('settings.modelService.deleteBlockedByAgent', { name: agentName }))
+      deleteDialogOpen.value = false
+      return
+    }
+
+    await ProvidersService.DeleteModel(providerId, modelId)
     toast.success(t('settings.modelService.modelDeleted'))
     deleteDialogOpen.value = false
     // 触发刷新模型列表
@@ -470,7 +532,7 @@ const confirmDeleteModel = async () => {
     </div>
 
     <!-- 详情内容 -->
-    <div v-else class="mx-auto w-full max-w-[530px]">
+    <div v-else class="mx-auto w-full max-w-settings-card">
       <div
         class="rounded-xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
@@ -485,10 +547,7 @@ const confirmDeleteModel = async () => {
           </div>
           <div class="flex items-center gap-2">
             <!-- 验证提示 -->
-            <span
-              v-if="!localEnabled && validationMessage"
-              class="text-xs text-muted-foreground"
-            >
+            <span v-if="!localEnabled && validationMessage" class="text-xs text-muted-foreground">
               {{ validationMessage }}
             </span>
             <Switch
@@ -555,7 +614,12 @@ const confirmDeleteModel = async () => {
                 :disabled="isSaving"
                 @blur="handleApiEndpointBlur"
               />
-              <Button variant="outline" class="min-w-[72px]" :disabled="isSaving" @click="handleResetEndpoint">
+              <Button
+                variant="outline"
+                class="min-w-[72px]"
+                :disabled="isSaving"
+                @click="handleResetEndpoint"
+              >
                 {{ t('settings.modelService.reset') }}
               </Button>
             </div>
@@ -586,14 +650,8 @@ const confirmDeleteModel = async () => {
 
           <!-- 模型列表 -->
           <div class="flex flex-col gap-1.5">
-            <div
-              class="overflow-hidden rounded-md border border-border dark:border-white/10"
-            >
-              <Accordion
-                type="multiple"
-                :default-value="defaultAccordionValue"
-                class="w-full"
-              >
+            <div class="overflow-hidden rounded-md border border-border dark:border-white/10">
+              <Accordion type="multiple" :default-value="defaultAccordionValue" class="w-full">
                 <AccordionItem
                   v-for="group in providerWithModels.model_groups"
                   :key="group.type"
@@ -611,7 +669,9 @@ const confirmDeleteModel = async () => {
                         class="group flex items-center gap-2 px-4 py-2 hover:bg-accent/50"
                       >
                         <ModelIcon class="size-5 shrink-0 text-muted-foreground" />
-                        <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{ model.name }}</span>
+                        <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{
+                          model.name
+                        }}</span>
                         <!-- 编辑和删除按钮（仅对非内置模型显示） -->
                         <div
                           v-if="!model.is_builtin"
@@ -676,7 +736,11 @@ const confirmDeleteModel = async () => {
             :disabled="isDeleting"
             @click.prevent="confirmDeleteModel"
           >
-            {{ isDeleting ? t('settings.modelService.deleting') : t('settings.modelService.confirmDelete') }}
+            {{
+              isDeleting
+                ? t('settings.modelService.deleting')
+                : t('settings.modelService.confirmDelete')
+            }}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
