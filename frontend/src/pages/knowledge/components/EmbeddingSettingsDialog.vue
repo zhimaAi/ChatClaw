@@ -269,6 +269,21 @@ const handleSave = async () => {
 
         <div class="flex flex-col gap-1.5">
           <FieldLabel
+            :label="t('knowledge.embeddingSettings.embeddingDimension')"
+            :help="t('knowledge.help.embeddingDimension')"
+            required
+          />
+          <Input
+            v-model="embeddingDimension"
+            type="number"
+            min="1"
+            step="1"
+            :disabled="loading || saving"
+          />
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <FieldLabel
             :label="t('knowledge.embeddingSettings.semanticSegmentModel')"
             :help="t('knowledge.help.semanticSegmentModel')"
           />
@@ -294,21 +309,6 @@ const handleSave = async () => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <FieldLabel
-            :label="t('knowledge.embeddingSettings.embeddingDimension')"
-            :help="t('knowledge.help.embeddingDimension')"
-            required
-          />
-          <Input
-            v-model="embeddingDimension"
-            type="number"
-            min="1"
-            step="1"
-            :disabled="loading || saving"
-          />
         </div>
       </div>
 

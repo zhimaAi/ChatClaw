@@ -32,6 +32,7 @@ const loadingEmbedding = ref(false)
 const embeddingReady = ref(false)
 
 const name = ref('')
+const NAME_MAX_LEN = 30
 
 // advanced fields（用字符串承接输入，提交时再转 number）
 // shadcn Slider 使用 number[] 承载（支持 range）
@@ -53,7 +54,8 @@ const resetForm = () => {
 }
 
 const isFormValid = computed(() => {
-  return name.value.trim() !== ''
+  const n = name.value.trim()
+  return n !== '' && n.length <= NAME_MAX_LEN
 })
 
 const canSubmit = computed(() => {
@@ -146,7 +148,7 @@ const handleSubmit = async () => {
           <Input
             v-model="name"
             :placeholder="t('knowledge.create.namePlaceholder')"
-            maxlength="128"
+            :maxlength="NAME_MAX_LEN"
             :disabled="isSubmitting"
           />
         </div>
@@ -187,14 +189,28 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.chunkSize')"
               :help="t('knowledge.help.chunkSize')"
             />
-            <Input v-model="chunkSize" type="number" min="1" step="1" :disabled="isSubmitting" />
+            <Input
+              v-model="chunkSize"
+              type="number"
+              min="500"
+              max="5000"
+              step="1"
+              :disabled="isSubmitting"
+            />
           </div>
           <div class="flex flex-col gap-1.5">
             <FieldLabel
               :label="t('knowledge.create.chunkOverlap')"
               :help="t('knowledge.help.chunkOverlap')"
             />
-            <Input v-model="chunkOverlap" type="number" min="0" step="1" :disabled="isSubmitting" />
+            <Input
+              v-model="chunkOverlap"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              :disabled="isSubmitting"
+            />
           </div>
           <div class="flex flex-col gap-1.5">
             <FieldLabel

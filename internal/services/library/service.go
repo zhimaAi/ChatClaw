@@ -64,7 +64,7 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	if name == "" {
 		return nil, errs.New("error.library_name_required")
 	}
-	if len([]rune(name)) > 128 {
+	if len([]rune(name)) > 30 {
 		return nil, errs.New("error.library_name_too_long")
 	}
 
@@ -110,10 +110,16 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	if input.TopK != nil && *input.TopK > 0 {
 		topK = *input.TopK
 	}
-	if input.ChunkSize != nil && *input.ChunkSize > 0 {
+	if input.ChunkSize != nil {
+		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
+			return nil, errs.New("error.library_chunk_size_invalid")
+		}
 		chunkSize = *input.ChunkSize
 	}
-	if input.ChunkOverlap != nil && *input.ChunkOverlap >= 0 {
+	if input.ChunkOverlap != nil {
+		if *input.ChunkOverlap < 0 || *input.ChunkOverlap > 1000 {
+			return nil, errs.New("error.library_chunk_overlap_invalid")
+		}
 		chunkOverlap = *input.ChunkOverlap
 	}
 	if input.MatchThreshold != nil && *input.MatchThreshold >= 0 && *input.MatchThreshold <= 1 {
@@ -208,7 +214,7 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		if name == "" {
 			return nil, errs.New("error.library_name_required")
 		}
-		if len([]rune(name)) > 128 {
+		if len([]rune(name)) > 30 {
 			return nil, errs.New("error.library_name_too_long")
 		}
 		// 检查名称是否与其他知识库重复（排除当前 ID）
@@ -234,13 +240,13 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		q = q.Set("top_k = ?", *input.TopK)
 	}
 	if input.ChunkSize != nil {
-		if *input.ChunkSize <= 0 {
+		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
 			return nil, errs.New("error.library_chunk_size_invalid")
 		}
 		q = q.Set("chunk_size = ?", *input.ChunkSize)
 	}
 	if input.ChunkOverlap != nil {
-		if *input.ChunkOverlap < 0 {
+		if *input.ChunkOverlap < 0 || *input.ChunkOverlap > 1000 {
 			return nil, errs.New("error.library_chunk_overlap_invalid")
 		}
 		q = q.Set("chunk_overlap = ?", *input.ChunkOverlap)

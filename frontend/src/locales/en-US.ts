@@ -227,12 +227,12 @@ export default {
   },
   knowledge: {
     help: {
-      name: 'A name to distinguish different knowledge bases.',
+      name: 'A name to distinguish different knowledge bases (max 30 characters).',
       topK: 'Maximum number of chunks returned per retrieval.',
       chunkSize:
-        'Chunk size (in characters). Larger chunks keep more context but reduce granularity.',
+        'Chunk size (in characters, 500~5000). Larger chunks keep more context but reduce granularity.',
       chunkOverlap:
-        'Overlap size (in characters) between adjacent chunks to reduce information loss.',
+        'Overlap size (in characters, 0~1000) between adjacent chunks to reduce information loss.',
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',

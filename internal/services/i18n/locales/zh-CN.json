@@ -46,7 +46,7 @@
   "error.library_list_failed": "获取知识库列表失败",
   "error.library_create_failed": "创建知识库失败",
   "error.library_name_required": "缺少知识库名称",
-  "error.library_name_too_long": "知识库名称不能超过 128 个字符",
+  "error.library_name_too_long": "知识库名称不能超过 30 个字符",
   "error.library_name_duplicate": "知识库名称「{{.Name}}」已存在",
   "error.library_embedding_required": "缺少嵌入模型配置",
   "error.library_rerank_required": "缺少重排序模型配置",

@@ -64,9 +64,11 @@ const isValid = computed(() => {
   return (
     (topK.value[0] ?? 0) > 0 &&
     Number.isFinite(cs) &&
-    cs > 0 &&
+    cs >= 500 &&
+    cs <= 5000 &&
     Number.isFinite(co) &&
     co >= 0 &&
+    co <= 1000 &&
     Number.isFinite(mt) &&
     mt >= 0 &&
     mt <= 1
@@ -133,14 +135,28 @@ const handleSave = async () => {
             :label="t('knowledge.create.chunkSize')"
             :help="t('knowledge.help.chunkSize')"
           />
-          <Input v-model="chunkSize" type="number" min="1" step="1" :disabled="saving" />
+          <Input
+            v-model="chunkSize"
+            type="number"
+            min="500"
+            max="5000"
+            step="1"
+            :disabled="saving"
+          />
         </div>
         <div class="flex flex-col gap-1.5">
           <FieldLabel
             :label="t('knowledge.create.chunkOverlap')"
             :help="t('knowledge.help.chunkOverlap')"
           />
-          <Input v-model="chunkOverlap" type="number" min="0" step="1" :disabled="saving" />
+          <Input
+            v-model="chunkOverlap"
+            type="number"
+            min="0"
+            max="1000"
+            step="1"
+            :disabled="saving"
+          />
         </div>
         <div class="flex flex-col gap-1.5">
           <FieldLabel
