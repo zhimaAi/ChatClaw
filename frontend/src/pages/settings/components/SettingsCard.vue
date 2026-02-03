@@ -12,7 +12,7 @@ defineProps<{
 
 <template>
   <div
-    class="w-[530px] flex-none rounded-2xl border border-border bg-card shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+    class="w-settings-card flex-none rounded-2xl border border-border bg-card shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
   >
     <!-- 标题区域 -->
     <div

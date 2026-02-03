@@ -215,11 +215,7 @@ onMounted(() => {
             <SelectValue>{{ currentSendKeyLabel }}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem
-              v-for="option in sendKeyOptions"
-              :key="option.value"
-              :value="option.value"
-            >
+            <SelectItem v-for="option in sendKeyOptions" :key="option.value" :value="option.value">
               {{ t(option.label) }}
             </SelectItem>
           </SelectContent>

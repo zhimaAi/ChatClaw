@@ -130,8 +130,8 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		groupMap[dto.Type] = append(groupMap[dto.Type], dto)
 	}
 
-	// 转换为有序的分组列表（llm 在前，embedding 在后）
-	typeOrder := []string{"llm", "embedding"}
+	// 转换为有序的分组列表（llm 在前，embedding 次之，rerank 在后）
+	typeOrder := []string{"llm", "embedding", "rerank"}
 	groups := make([]ModelGroup, 0)
 	for _, t := range typeOrder {
 		if ms, ok := groupMap[t]; ok {
@@ -163,11 +163,56 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 构建更新语句
+	// 禁止关闭正在作为“全局嵌入模型”使用的供应商
+	if input.Enabled != nil && !*input.Enabled {
+		type row struct {
+			Key   string         `bun:"key"`
+			Value sql.NullString `bun:"value"`
+		}
+		rows := make([]row, 0, 2)
+		if err := db.NewSelect().
+			Table("settings").
+			Column("key", "value").
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
+			Scan(ctx, &rows); err != nil {
+			return nil, errs.Wrap("error.setting_read_failed", err)
+		}
+
+		var embeddingProviderID, embeddingModelID string
+		for _, r := range rows {
+			if !r.Value.Valid {
+				continue
+			}
+			switch r.Key {
+			case "embedding_provider_id":
+				embeddingProviderID = strings.TrimSpace(r.Value.String)
+			case "embedding_model_id":
+				embeddingModelID = strings.TrimSpace(r.Value.String)
+			}
+		}
+		if embeddingProviderID != "" && embeddingModelID != "" && embeddingProviderID == providerID {
+			return nil, errs.New("error.cannot_disable_global_embedding_provider")
+		}
+
+		// 禁止关闭其 rerank 模型正被知识库使用的供应商
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("rerank_provider_id = ?", providerID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return nil, errs.Newf("error.cannot_disable_provider_with_rerank_in_use", map[string]any{"LibraryName": libraryName})
+		}
+	}
+
+	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
 	q := db.NewUpdate().
 		Model((*providerModel)(nil)).
-		Where("provider_id = ?", providerID).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("provider_id = ?", providerID)
 
 	if input.Enabled != nil {
 		q = q.Set("enabled = ?", *input.Enabled)
@@ -459,7 +504,7 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	}
 
 	input.Type = strings.TrimSpace(input.Type)
-	if input.Type != "llm" && input.Type != "embedding" {
+	if input.Type != "llm" && input.Type != "embedding" && input.Type != "rerank" {
 		return nil, errs.New("error.model_type_invalid")
 	}
 
@@ -542,19 +587,18 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 构建更新语句
+	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
 	q := db.NewUpdate().
 		Model((*modelModel)(nil)).
 		Where("provider_id = ?", providerID).
-		Where("model_id = ?", modelID).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("model_id = ?", modelID)
 
 	if input.Name != nil {
 		newName := strings.TrimSpace(*input.Name)
 		if newName == "" {
 			return nil, errs.New("error.model_name_required")
 		}
-		if len([]rune(newName)) > 30 {
+		if len([]rune(newName)) > 40 {
 			return nil, errs.New("error.model_name_too_long")
 		}
 		q = q.Set("name = ?", newName)
@@ -652,6 +696,57 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 	// 禁止删除内置模型
 	if m.IsBuiltin {
 		return errs.New("error.cannot_delete_builtin_model")
+	}
+
+	// 禁止删除正在作为“全局嵌入模型”使用的模型
+	{
+		type row struct {
+			Key   string         `bun:"key"`
+			Value sql.NullString `bun:"value"`
+		}
+		rows := make([]row, 0, 2)
+		if err := db.NewSelect().
+			Table("settings").
+			Column("key", "value").
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
+			Scan(ctx, &rows); err != nil {
+			return errs.Wrap("error.setting_read_failed", err)
+		}
+
+		var embeddingProviderID, embeddingModelID string
+		for _, r := range rows {
+			if !r.Value.Valid {
+				continue
+			}
+			switch r.Key {
+			case "embedding_provider_id":
+				embeddingProviderID = strings.TrimSpace(r.Value.String)
+			case "embedding_model_id":
+				embeddingModelID = strings.TrimSpace(r.Value.String)
+			}
+		}
+
+		if embeddingProviderID != "" && embeddingModelID != "" &&
+			providerID == embeddingProviderID && modelID == embeddingModelID {
+			return errs.New("error.cannot_delete_global_embedding_model")
+		}
+	}
+
+	// 禁止删除正在被知识库使用的 rerank 模型
+	if m.Type == "rerank" {
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("rerank_provider_id = ?", providerID).
+			Where("rerank_model_id = ?", modelID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return errs.Newf("error.cannot_delete_rerank_model_in_use", map[string]any{"LibraryName": libraryName})
+		}
 	}
 
 	_, err = db.NewDelete().
