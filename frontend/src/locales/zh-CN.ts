@@ -312,6 +312,11 @@ export default {
     content: {
       searchPlaceholder: '搜索',
       addDocument: '添加文档',
+      selectFile: '选择文件',
+      fileTypes: {
+        documents: '文档文件',
+        all: '所有文件',
+      },
       empty: {
         title: '暂无文档',
         desc: '点击上方按钮添加文档到知识库',

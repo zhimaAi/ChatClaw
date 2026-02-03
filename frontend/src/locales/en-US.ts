@@ -314,6 +314,11 @@ export default {
     content: {
       searchPlaceholder: 'Search',
       addDocument: 'Add Document',
+      selectFile: 'Select File',
+      fileTypes: {
+        documents: 'Document Files',
+        all: 'All Files',
+      },
       empty: {
         title: 'No documents yet',
         desc: 'Click the button above to add documents to the knowledge base',

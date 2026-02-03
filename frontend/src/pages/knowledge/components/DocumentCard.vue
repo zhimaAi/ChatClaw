@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MoreHorizontal, FileText } from 'lucide-vue-next'
+import { MoreHorizontal, FileText, CheckCircle2, Loader2, XCircle } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
 import IconPdf from '@/assets/icons/file-pdf.svg'
+import IconDocumentCover from '@/assets/icons/document-cover.svg'
 
 export type DocumentStatus = 'pending' | 'learning' | 'completed' | 'failed'
 
@@ -39,9 +40,10 @@ const { t } = useI18n()
 
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
+  const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-  return `${month}/${day}`
+  return `${year}/${month}/${day}`
 }
 
 const statusConfig = computed(() => {
@@ -50,25 +52,36 @@ const statusConfig = computed(() => {
     case 'completed':
       return {
         label: t('knowledge.content.status.completed'),
-        class: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+        icon: CheckCircle2,
+        // 深色实心背景 + 白色文字，表示完成
+        class: 'bg-foreground/80 text-background',
+        iconClass: 'text-background',
         show: true,
       }
     case 'learning':
       return {
         label: `${props.document.progress || 0}% ${t('knowledge.content.status.learning')}`,
-        class: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+        icon: null,
+        // 半透明黑底 + 白字，表示进行中
+        class: 'bg-black/50 text-white dark:bg-white/15 dark:text-white/90',
+        iconClass: '',
         show: true,
       }
     case 'failed':
       return {
         label: t('knowledge.content.status.failed'),
-        class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+        icon: XCircle,
+        // 浅背景 + 边框 + 深色文字，表示失败/警告
+        class: 'bg-background/90 text-foreground/70 ring-1 ring-foreground/20',
+        iconClass: 'text-foreground/50',
         show: true,
       }
     default:
       return {
         label: '',
+        icon: null,
         class: '',
+        iconClass: '',
         show: false,
       }
   }
@@ -95,7 +108,7 @@ const FileIcon = computed(() => {
         :style="{ backgroundImage: `url(${document.thumbnailUrl})` }"
       />
       <div v-else class="flex size-full items-center justify-center">
-        <FileText class="size-8 text-muted-foreground/50" />
+        <IconDocumentCover class="size-10 text-muted-foreground/40" />
       </div>
     </div>
 
@@ -103,10 +116,15 @@ const FileIcon = computed(() => {
     <div
       v-if="statusConfig.show"
       :class="cn(
-        'absolute left-[11px] top-[11px] rounded px-1.5 py-0.5 text-xs font-medium',
+        'absolute left-[11px] top-[11px] flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium',
         statusConfig.class
       )"
     >
+      <component
+        :is="statusConfig.icon"
+        v-if="statusConfig.icon"
+        :class="cn('size-3.5', statusConfig.iconClass)"
+      />
       {{ statusConfig.label }}
     </div>
 
@@ -146,9 +164,9 @@ const FileIcon = computed(() => {
     <div class="mx-[7px] mt-auto flex items-center justify-between pb-[7px]">
       <div class="flex items-center gap-1">
         <component :is="FileIcon" class="size-[14px]" />
-        <span class="text-xs text-muted-foreground">{{ document.fileType }}</span>
+        <span class="text-xs text-muted-foreground/70">{{ document.fileType }}</span>
       </div>
-      <span class="text-xs text-muted-foreground">{{ formatDate(document.createdAt) }}</span>
+      <span class="text-xs text-muted-foreground/60">{{ formatDate(document.createdAt) }}</span>
     </div>
   </div>
 </template>

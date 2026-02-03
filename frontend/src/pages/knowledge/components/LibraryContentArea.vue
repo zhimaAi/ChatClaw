@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search, Plus, Upload } from 'lucide-vue-next'
+import { Dialogs } from '@wailsio/runtime'
+import { Search, Upload } from 'lucide-vue-next'
+import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -125,9 +127,31 @@ const filteredDocuments = computed(() => {
   return documents.value.filter((doc) => doc.name.toLowerCase().includes(query))
 })
 
-const handleAddDocument = () => {
-  // TODO: Implement file upload dialog
-  console.log('Add document')
+const handleAddDocument = async () => {
+  try {
+    const result = await Dialogs.OpenFile({
+      Title: t('knowledge.content.selectFile'),
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: true,
+      Filters: [
+        {
+          DisplayName: t('knowledge.content.fileTypes.documents'),
+          Pattern: '*.pdf;*.doc;*.docx;*.txt;*.md',
+        },
+        {
+          DisplayName: t('knowledge.content.fileTypes.all'),
+          Pattern: '*.*',
+        },
+      ],
+    })
+    if (result && result.length > 0) {
+      // TODO: Handle file upload with the selected paths
+      console.log('Selected files:', result)
+    }
+  } catch (error) {
+    console.error('Failed to open file dialog:', error)
+  }
 }
 
 const handleRename = (doc: Document) => {
@@ -152,38 +176,43 @@ const confirmDelete = async () => {
 <template>
   <div class="flex h-full flex-col">
     <!-- 头部区域 -->
-    <div class="flex items-center justify-between border-b border-border px-6 py-4">
-      <h2 class="text-lg font-semibold text-foreground">{{ library.name }}</h2>
-      <div class="flex items-center gap-3">
+    <div class="flex h-10 items-center justify-between px-4">
+      <h2 class="text-sm font-medium text-foreground">{{ library.name }}</h2>
+      <div class="flex items-center gap-1.5">
         <!-- 搜索框 -->
-        <div class="relative w-[200px]">
-          <Search class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div class="relative w-[160px]">
+          <Search class="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             v-model="searchQuery"
             type="text"
             :placeholder="t('knowledge.content.searchPlaceholder')"
-            class="h-9 pl-9"
+            class="h-6 pr-7 text-xs placeholder:text-muted-foreground/40"
           />
         </div>
         <!-- 添加文档按钮 -->
-        <Button size="sm" class="gap-1.5" @click="handleAddDocument">
-          <Plus class="size-4" />
-          {{ t('knowledge.content.addDocument') }}
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-6"
+          :title="t('knowledge.content.addDocument')"
+          @click="handleAddDocument"
+        >
+          <IconUploadFile class="size-4 text-muted-foreground" />
         </Button>
       </div>
     </div>
 
     <!-- 内容区域 -->
-    <div class="flex-1 overflow-auto p-6">
+    <div class="flex-1 overflow-auto p-4">
       <!-- 空状态 -->
       <div
         v-if="filteredDocuments.length === 0"
-        class="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground"
+        class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"
       >
-        <Upload class="size-12 opacity-50" />
+        <Upload class="size-10 opacity-40" />
         <div class="text-center">
           <p class="text-sm">{{ t('knowledge.content.empty.title') }}</p>
-          <p class="mt-1 text-xs">{{ t('knowledge.content.empty.desc') }}</p>
+          <p class="mt-1 text-xs text-muted-foreground/70">{{ t('knowledge.content.empty.desc') }}</p>
         </div>
         <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddDocument">
           <Plus class="size-4" />
