@@ -177,6 +177,24 @@ export default {
     placeholders: {
       noAgentSelected: '请选择一个助手',
       chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
+      inputPlaceholder: '输入消息...',
+      enterToSend: '请输入内容',
+    },
+    sidebar: {
+      collapse: '收起',
+      expand: '展开',
+      newConversation: '新会话',
+    },
+    chat: {
+      selectModel: '选择模型',
+      noModel: '暂无模型',
+      selectKnowledge: '选择知识库',
+      selectImage: '选择图片',
+      send: '发送',
+    },
+    menu: {
+      settings: '助手设置',
+      history: '历史聊天记录',
     },
     errors: {
       loadFailed: '加载助手列表失败',

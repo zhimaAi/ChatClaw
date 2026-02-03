@@ -180,6 +180,24 @@ export default {
     placeholders: {
       noAgentSelected: 'Select an agent',
       chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
+      inputPlaceholder: 'Type a message...',
+      enterToSend: 'Please enter content',
+    },
+    sidebar: {
+      collapse: 'Collapse',
+      expand: 'Expand',
+      newConversation: 'New Conversation',
+    },
+    chat: {
+      selectModel: 'Select model',
+      noModel: 'No model available',
+      selectKnowledge: 'Select knowledge base',
+      selectImage: 'Select image',
+      send: 'Send',
+    },
+    menu: {
+      settings: 'Agent Settings',
+      history: 'Chat History',
     },
     errors: {
       loadFailed: 'Failed to load agents',
