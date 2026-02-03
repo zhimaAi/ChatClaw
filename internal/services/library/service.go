@@ -101,6 +101,14 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	embeddingProviderID = strings.TrimSpace(embeddingProviderID)
 	embeddingModelID = strings.TrimSpace(embeddingModelID)
 
+	// 语义分段模型（可选）
+	semanticSegmentProviderID := strings.TrimSpace(input.SemanticSegmentProviderID)
+	semanticSegmentModelID := strings.TrimSpace(input.SemanticSegmentModelID)
+	// 两者要么都为空（不使用），要么都有值
+	if (semanticSegmentProviderID == "") != (semanticSegmentModelID == "") {
+		return nil, errs.New("error.library_semantic_segment_incomplete")
+	}
+
 	// 默认值（与 migrations 中的 DEFAULT 保持一致）
 	topK := 20
 	chunkSize := 1024
@@ -175,6 +183,9 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	m := &libraryModel{
 		Name: name,
 
+		SemanticSegmentProviderID: semanticSegmentProviderID,
+		SemanticSegmentModelID:    semanticSegmentModelID,
+
 		TopK:           topK,
 		ChunkSize:      chunkSize,
 		ChunkOverlap:   chunkOverlap,
@@ -231,6 +242,22 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 			return nil, errs.Newf("error.library_name_duplicate", map[string]any{"Name": name})
 		}
 		q = q.Set("name = ?", name)
+	}
+
+	if input.SemanticSegmentProviderID != nil || input.SemanticSegmentModelID != nil {
+		sp := ""
+		sm := ""
+		if input.SemanticSegmentProviderID != nil {
+			sp = strings.TrimSpace(*input.SemanticSegmentProviderID)
+		}
+		if input.SemanticSegmentModelID != nil {
+			sm = strings.TrimSpace(*input.SemanticSegmentModelID)
+		}
+		// 两者要么都为空（清空），要么都有值
+		if (sp == "") != (sm == "") {
+			return nil, errs.New("error.library_semantic_segment_incomplete")
+		}
+		q = q.Set("semantic_segment_provider_id = ?", sp).Set("semantic_segment_model_id = ?", sm)
 	}
 
 	if input.TopK != nil {

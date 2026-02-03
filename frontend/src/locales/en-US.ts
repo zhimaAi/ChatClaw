@@ -104,9 +104,7 @@ export default {
     modelService: {
       enabled: 'Enabled',
       disableBlockedByEmbedding:
-        'This provider is used as the global embedding model. Please change it in "Indexing model settings" before disabling.',
-      disableBlockedBySemanticSegment:
-        'This provider is used as the semantic segmentation model. Please change it in "Indexing model settings" before disabling.',
+        'This provider is used as the global embedding model. Please change it in "Embedding model settings" before disabling.',
       disableBlockedByAgent:
         'This provider is used as the default model by agent "{name}". Please change the agent settings before disabling.',
       deleteBlockedByAgent:
@@ -291,6 +289,8 @@ export default {
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',
       topK: 'Requested document chunks',
+      semanticSegmentModel: 'Semantic segmentation model',
+      noSemanticSegment: 'No semantic segmentation',
       chunkSize: 'Chunk size',
       chunkOverlap: 'Overlap size',
       matchThreshold: 'Match threshold',
@@ -301,13 +301,11 @@ export default {
       failed: 'Failed to create knowledge base',
     },
     embeddingSettings: {
-      title: 'Indexing model settings',
+      title: 'Embedding model settings',
       warning: 'After changing the embedding model, all knowledge bases must be re-learned.',
       embeddingModel: 'Embedding model',
-      semanticSegmentModel: 'Semantic segmentation model',
-      noSemanticSegment: 'No semantic segmentation',
       embeddingDimension: 'Embedding dimension',
-      required: 'Please select an embedding model in Indexing model settings first',
+      required: 'Please select an embedding model in Embedding model settings first',
       save: 'Save',
       saved: 'Saved',
       saveFailed: 'Failed to save',

@@ -18,6 +18,9 @@ type Library struct {
 
 	Name string `json:"name"`
 
+	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
+
 	TopK           int     `json:"top_k"`
 	ChunkSize      int     `json:"chunk_size"`
 	ChunkOverlap   int     `json:"chunk_overlap"`
@@ -30,6 +33,9 @@ type Library struct {
 type CreateLibraryInput struct {
 	Name string `json:"name"`
 
+	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
+
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
 	ChunkOverlap   *int     `json:"chunk_overlap"`
@@ -39,6 +45,9 @@ type CreateLibraryInput struct {
 // UpdateLibraryInput 更新知识库的输入参数
 type UpdateLibraryInput struct {
 	Name *string `json:"name"`
+
+	SemanticSegmentProviderID *string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    *string `json:"semantic_segment_model_id"`
 
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
@@ -55,6 +64,9 @@ type libraryModel struct {
 	UpdatedAt time.Time `bun:"updated_at,notnull"`
 
 	Name string `bun:"name,notnull"`
+
+	SemanticSegmentProviderID string `bun:"semantic_segment_provider_id,notnull"`
+	SemanticSegmentModelID    string `bun:"semantic_segment_model_id,notnull"`
 
 	TopK           int     `bun:"top_k,notnull"`
 	ChunkSize      int     `bun:"chunk_size,notnull"`
@@ -88,6 +100,9 @@ func (m *libraryModel) toDTO() Library {
 		UpdatedAt: m.UpdatedAt,
 
 		Name: m.Name,
+
+		SemanticSegmentProviderID: m.SemanticSegmentProviderID,
+		SemanticSegmentModelID:    m.SemanticSegmentModelID,
 
 		TopK:           m.TopK,
 		ChunkSize:      m.ChunkSize,

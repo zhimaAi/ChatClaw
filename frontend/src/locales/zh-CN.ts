@@ -96,9 +96,7 @@ export default {
     modelService: {
       enabled: '已启用',
       disableBlockedByEmbedding:
-        '该供应商正在被用作全局嵌入模型，请先在“索引模型设置”中切换后再关闭',
-      disableBlockedBySemanticSegment:
-        '该供应商正在被用作语义分段模型，请先在“索引模型设置”中切换后再关闭',
+        '该供应商正在被用作全局嵌入模型，请先在"嵌入模型设置"中切换后再关闭',
       disableBlockedByAgent: '该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭',
       deleteBlockedByAgent: '该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除',
       apiKey: 'API 密钥',
@@ -289,6 +287,8 @@ export default {
       advancedHide: '收起高级设置',
       defaultMark: '默认',
       topK: '请求文档分片数量',
+      semanticSegmentModel: '语义分段模型',
+      noSemanticSegment: '不使用语义分段',
       chunkSize: '分片大小',
       chunkOverlap: '重叠大小',
       matchThreshold: '匹配度阈值',
@@ -299,13 +299,11 @@ export default {
       failed: '知识库创建失败',
     },
     embeddingSettings: {
-      title: '索引模型设置',
+      title: '嵌入模型设置',
       warning: '修改嵌入模型后，全部知识库需重新学习。',
       embeddingModel: '嵌入模型',
-      semanticSegmentModel: '语义分段模型',
-      noSemanticSegment: '不使用语义分段',
       embeddingDimension: '嵌入维度',
-      required: '请先在索引模型设置中选择嵌入模型',
+      required: '请先在嵌入模型设置中选择嵌入模型',
       save: '保存',
       saved: '已保存',
       saveFailed: '保存失败',

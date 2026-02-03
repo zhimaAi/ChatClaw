@@ -163,31 +163,22 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 禁止关闭正在作为“全局嵌入模型”使用的供应商
+	// 禁止关闭正在作为"全局嵌入模型"使用的供应商
 	if input.Enabled != nil && !*input.Enabled {
 		type row struct {
 			Key   string         `bun:"key"`
 			Value sql.NullString `bun:"value"`
 		}
-		rows := make([]row, 0, 4)
+		rows := make([]row, 0, 2)
 		if err := db.NewSelect().
 			Table("settings").
 			Column("key", "value").
-			Where(
-				"key IN (?)",
-				bun.In([]string{
-					"embedding_provider_id",
-					"embedding_model_id",
-					"semantic_segment_provider_id",
-					"semantic_segment_model_id",
-				}),
-			).
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
 			Scan(ctx, &rows); err != nil {
 			return nil, errs.Wrap("error.setting_read_failed", err)
 		}
 
 		var embeddingProviderID, embeddingModelID string
-		var semanticSegmentProviderID, semanticSegmentModelID string
 		for _, r := range rows {
 			if !r.Value.Valid {
 				continue
@@ -197,18 +188,24 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 				embeddingProviderID = strings.TrimSpace(r.Value.String)
 			case "embedding_model_id":
 				embeddingModelID = strings.TrimSpace(r.Value.String)
-			case "semantic_segment_provider_id":
-				semanticSegmentProviderID = strings.TrimSpace(r.Value.String)
-			case "semantic_segment_model_id":
-				semanticSegmentModelID = strings.TrimSpace(r.Value.String)
 			}
 		}
 		if embeddingProviderID != "" && embeddingModelID != "" && embeddingProviderID == providerID {
 			return nil, errs.New("error.cannot_disable_global_embedding_provider")
 		}
-		// 禁止关闭正在作为“语义分段模型”使用的供应商（可选配置）
-		if semanticSegmentProviderID != "" && semanticSegmentModelID != "" && semanticSegmentProviderID == providerID {
-			return nil, errs.New("error.cannot_disable_global_semantic_segment_provider")
+
+		// 禁止关闭其语义分段模型正被知识库使用的供应商
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("semantic_segment_provider_id = ?", providerID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
 		}
 	}
 
@@ -703,31 +700,22 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		return errs.New("error.cannot_delete_builtin_model")
 	}
 
-	// 禁止删除正在作为“全局嵌入模型”使用的模型
-	{
+	// 禁止删除正在作为"全局嵌入模型"使用的模型
+	if m.Type == "embedding" {
 		type row struct {
 			Key   string         `bun:"key"`
 			Value sql.NullString `bun:"value"`
 		}
-		rows := make([]row, 0, 4)
+		rows := make([]row, 0, 2)
 		if err := db.NewSelect().
 			Table("settings").
 			Column("key", "value").
-			Where(
-				"key IN (?)",
-				bun.In([]string{
-					"embedding_provider_id",
-					"embedding_model_id",
-					"semantic_segment_provider_id",
-					"semantic_segment_model_id",
-				}),
-			).
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
 			Scan(ctx, &rows); err != nil {
 			return errs.Wrap("error.setting_read_failed", err)
 		}
 
 		var embeddingProviderID, embeddingModelID string
-		var semanticSegmentProviderID, semanticSegmentModelID string
 		for _, r := range rows {
 			if !r.Value.Valid {
 				continue
@@ -737,10 +725,6 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 				embeddingProviderID = strings.TrimSpace(r.Value.String)
 			case "embedding_model_id":
 				embeddingModelID = strings.TrimSpace(r.Value.String)
-			case "semantic_segment_provider_id":
-				semanticSegmentProviderID = strings.TrimSpace(r.Value.String)
-			case "semantic_segment_model_id":
-				semanticSegmentModelID = strings.TrimSpace(r.Value.String)
 			}
 		}
 
@@ -748,11 +732,22 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 			providerID == embeddingProviderID && modelID == embeddingModelID {
 			return errs.New("error.cannot_delete_global_embedding_model")
 		}
+	}
 
-		// 禁止删除正在作为“语义分段模型”使用的模型（可选配置）
-		if semanticSegmentProviderID != "" && semanticSegmentModelID != "" &&
-			providerID == semanticSegmentProviderID && modelID == semanticSegmentModelID {
-			return errs.New("error.cannot_delete_global_semantic_segment_model")
+	// 禁止删除正在被知识库使用的语义分段模型（LLM 类型）
+	if m.Type == "llm" {
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("semantic_segment_provider_id = ?", providerID).
+			Where("semantic_segment_model_id = ?", modelID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return errs.Newf("error.cannot_delete_semantic_segment_model_in_use", map[string]any{"LibraryName": libraryName})
 		}
 	}
 

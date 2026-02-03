@@ -17,6 +17,9 @@ create table if not exists library (
 	
 	name varchar(128) not null,
 	
+	semantic_segment_provider_id varchar(64) not null default '',
+	semantic_segment_model_id varchar(128) not null default '',
+	
 	top_k integer not null default 20,
 	chunk_size integer not null default 1024,
 	chunk_overlap integer not null default 100,
