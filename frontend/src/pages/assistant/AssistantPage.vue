@@ -441,55 +441,58 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- 新会话按钮 -->
-              <Button
-                size="icon"
-                variant="ghost"
-                class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
-                :title="t('assistant.sidebar.newConversation')"
-                @click.stop="handleNewConversation"
-              >
-                <IconNewConversation class="size-4 text-muted-foreground" />
-              </Button>
+              <!-- 操作按钮：收紧加号和设置按钮间距 -->
+              <div class="flex items-center gap-0">
+                <!-- 新会话按钮 -->
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                  :title="t('assistant.sidebar.newConversation')"
+                  @click.stop="handleNewConversation"
+                >
+                  <IconNewConversation class="size-4 text-muted-foreground" />
+                </Button>
 
-              <!-- 设置下拉菜单 -->
-              <DropdownMenu>
-                <DropdownMenuTrigger as-child>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
-                    :title="t('assistant.actions.settings')"
-                    @click.stop
-                  >
-                    <IconSettings class="size-4 opacity-80 group-hover:opacity-100" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" class="w-48">
-                  <DropdownMenuItem @click="openSettings(a)">
-                    {{ t('assistant.menu.settings') }}
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>
-                      {{ t('assistant.menu.history') }}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent class="w-56">
-                      <template v-if="getAllAgentChatHistories(a.id).length > 0">
-                        <DropdownMenuItem
-                          v-for="history in getAllAgentChatHistories(a.id)"
-                          :key="history.id"
-                          @click="handleSelectHistory(history)"
-                        >
-                          <span class="truncate">{{ history.title }}</span>
+                <!-- 设置下拉菜单 -->
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                      :title="t('assistant.actions.settings')"
+                      @click.stop
+                    >
+                      <IconSettings class="size-4 opacity-80 group-hover:opacity-100" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" class="w-48">
+                    <DropdownMenuItem @click="openSettings(a)">
+                      {{ t('assistant.menu.settings') }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        {{ t('assistant.menu.history') }}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent class="w-56">
+                        <template v-if="getAllAgentChatHistories(a.id).length > 0">
+                          <DropdownMenuItem
+                            v-for="history in getAllAgentChatHistories(a.id)"
+                            :key="history.id"
+                            @click="handleSelectHistory(history)"
+                          >
+                            <span class="truncate">{{ history.title }}</span>
+                          </DropdownMenuItem>
+                        </template>
+                        <DropdownMenuItem v-else disabled>
+                          {{ t('assistant.empty') }}
                         </DropdownMenuItem>
-                      </template>
-                      <DropdownMenuItem v-else disabled>
-                        {{ t('assistant.empty') }}
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
             <!-- Chat history list (max 3 items) - only show for active agent -->
