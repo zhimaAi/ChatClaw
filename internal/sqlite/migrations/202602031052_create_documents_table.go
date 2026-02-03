@@ -28,7 +28,7 @@ create table if not exists documents (
 	local_path text,
 	web_url text,
 
-	parsing_status integer not null default 0,
+	parsing_status integer not null default 0,  -- 0=pending, 1=processing, 2=completed, 3=failed
 	parsing_progress integer not null default 0,
 	parsing_error text not null default '',
 
@@ -36,7 +36,7 @@ create table if not exists documents (
 	split_total integer not null default 0
 );
 CREATE INDEX idx_docs_library_id ON documents(library_id);
-CREATE INDEX idx_docs_hash ON documents(content_hash);
+CREATE UNIQUE INDEX idx_docs_library_hash ON documents(library_id, content_hash);
 
 CREATE VIRTUAL TABLE doc_fts USING fts5(
     content,
@@ -67,6 +67,7 @@ CREATE INDEX idx_nodes_library_id ON document_nodes(library_id);
 CREATE INDEX idx_nodes_document_id ON document_nodes(document_id);
 CREATE INDEX idx_nodes_parent_id ON document_nodes(parent_id);
 CREATE INDEX idx_nodes_level ON document_nodes(level);
+CREATE INDEX idx_nodes_doc_level_order ON document_nodes(document_id, level, chunk_order);
 
 -- 当 document_nodes 插入新行时，同步更新索引
 CREATE TRIGGER doc_nodes_ai AFTER INSERT ON document_nodes BEGIN
@@ -91,7 +92,16 @@ END;
 			return nil
 		},
 		func(ctx context.Context, db *bun.DB) error {
-			if _, err := db.ExecContext(ctx, `drop table if exists library`); err != nil {
+			sql := `
+DROP TRIGGER IF EXISTS doc_nodes_au;
+DROP TRIGGER IF EXISTS doc_nodes_ad;
+DROP TRIGGER IF EXISTS doc_nodes_ai;
+DROP TABLE IF EXISTS document_nodes;
+DROP TABLE IF EXISTS doc_vec;
+DROP TABLE IF EXISTS doc_fts;
+DROP TABLE IF EXISTS documents;
+`
+			if _, err := db.ExecContext(ctx, sql); err != nil {
 				return err
 			}
 			return nil
