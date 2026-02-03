@@ -11,8 +11,8 @@ import (
 	"willchat/internal/define"
 	"willchat/internal/sqlite/migrations"
 
-	_ "github.com/asg017/sqlite-vec-go-bindings/ncruces"
-	_ "github.com/ncruces/go-sqlite3/driver"
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/migrate"
@@ -44,6 +44,9 @@ func doInit(app *application.App) error {
 	if app != nil {
 		app.Logger.Info("sqlite path", "path", dbPath)
 	}
+
+	// 启用 sqlite-vec 扩展（CGO 版本需要在 Open 之前调用）
+	sqlite_vec.Auto()
 
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
