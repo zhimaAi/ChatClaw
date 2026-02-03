@@ -59,8 +59,7 @@ func doInit(app *application.App) error {
 		app.Logger.Info("sqlite path", "path", dbPath)
 	}
 
-	// 启用 sqlite-vec 扩展（CGO 版本需要在 Open 之前调用）
-	sqlite_vec.Auto()
+	// sqlite-vec extension is auto-registered via blank import of ncruces bindings.
 
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
