@@ -18,8 +18,8 @@ type Library struct {
 
 	Name string `json:"name"`
 
-	RerankProviderID string `json:"rerank_provider_id"`
-	RerankModelID    string `json:"rerank_model_id"`
+	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
 
 	TopK           int     `json:"top_k"`
 	ChunkSize      int     `json:"chunk_size"`
@@ -33,8 +33,8 @@ type Library struct {
 type CreateLibraryInput struct {
 	Name string `json:"name"`
 
-	RerankProviderID string `json:"rerank_provider_id"`
-	RerankModelID    string `json:"rerank_model_id"`
+	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
 
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
@@ -46,8 +46,8 @@ type CreateLibraryInput struct {
 type UpdateLibraryInput struct {
 	Name *string `json:"name"`
 
-	RerankProviderID *string `json:"rerank_provider_id"`
-	RerankModelID    *string `json:"rerank_model_id"`
+	SemanticSegmentProviderID *string `json:"semantic_segment_provider_id"`
+	SemanticSegmentModelID    *string `json:"semantic_segment_model_id"`
 
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
@@ -65,8 +65,8 @@ type libraryModel struct {
 
 	Name string `bun:"name,notnull"`
 
-	RerankProviderID string `bun:"rerank_provider_id,notnull"`
-	RerankModelID    string `bun:"rerank_model_id,notnull"`
+	SemanticSegmentProviderID string `bun:"semantic_segment_provider_id,notnull"`
+	SemanticSegmentModelID    string `bun:"semantic_segment_model_id,notnull"`
 
 	TopK           int     `bun:"top_k,notnull"`
 	ChunkSize      int     `bun:"chunk_size,notnull"`
@@ -101,8 +101,8 @@ func (m *libraryModel) toDTO() Library {
 
 		Name: m.Name,
 
-		RerankProviderID: m.RerankProviderID,
-		RerankModelID:    m.RerankModelID,
+		SemanticSegmentProviderID: m.SemanticSegmentProviderID,
+		SemanticSegmentModelID:    m.SemanticSegmentModelID,
 
 		TopK:           m.TopK,
 		ChunkSize:      m.ChunkSize,

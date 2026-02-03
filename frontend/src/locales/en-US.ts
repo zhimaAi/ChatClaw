@@ -104,7 +104,7 @@ export default {
     modelService: {
       enabled: 'Enabled',
       disableBlockedByEmbedding:
-        'This provider is used as the global embedding model. Please change it in "Embedding settings" before disabling.',
+        'This provider is used as the global embedding model. Please change it in "Embedding model settings" before disabling.',
       disableBlockedByAgent:
         'This provider is used as the default model by agent "{name}". Please change the agent settings before disabling.',
       deleteBlockedByAgent:
@@ -225,16 +225,16 @@ export default {
   },
   knowledge: {
     help: {
-      name: 'A name to distinguish different knowledge bases.',
-      topK: 'Maximum number of chunks returned/used for reranking per retrieval.',
-      rerankModel: 'Model used to rerank retrieved chunks.',
+      name: 'A name to distinguish different knowledge bases (max 30 characters).',
+      topK: 'Maximum number of chunks returned per retrieval.',
       chunkSize:
-        'Chunk size (in characters). Larger chunks keep more context but reduce granularity.',
+        'Chunk size (in characters, 500~5000). Larger chunks keep more context but reduce granularity.',
       chunkOverlap:
-        'Overlap size (in characters) between adjacent chunks to reduce information loss.',
+        'Overlap size (in characters, 0~1000) between adjacent chunks to reduce information loss.',
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
+      semanticSegmentModel: 'Model used for semantic segmentation (optional).',
     },
     tabs: {
       personal: 'Personal',
@@ -279,19 +279,18 @@ export default {
     },
     detail: {
       embedding: 'Embedding',
-      rerank: 'Rerank',
     },
     create: {
       title: 'Add Knowledge Base',
       name: 'Name',
       namePlaceholder: 'Enter knowledge base name',
       selectPlaceholder: 'Select',
-      rerankModel: 'Rerank model',
-      noRerank: 'No reranking',
       advanced: 'Advanced settings',
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',
       topK: 'Requested document chunks',
+      semanticSegmentModel: 'Semantic segmentation model',
+      noSemanticSegment: 'No semantic segmentation',
       chunkSize: 'Chunk size',
       chunkOverlap: 'Overlap size',
       matchThreshold: 'Match threshold',
@@ -302,14 +301,43 @@ export default {
       failed: 'Failed to create knowledge base',
     },
     embeddingSettings: {
-      title: 'Embedding settings',
+      title: 'Embedding model settings',
       warning: 'After changing the embedding model, all knowledge bases must be re-learned.',
       embeddingModel: 'Embedding model',
       embeddingDimension: 'Embedding dimension',
-      required: 'Please select an embedding model in Embedding settings first',
+      required: 'Please select an embedding model in Embedding model settings first',
       save: 'Save',
       saved: 'Saved',
       saveFailed: 'Failed to save',
+    },
+    content: {
+      searchPlaceholder: 'Search',
+      addDocument: 'Add Document',
+      selectFile: 'Select File',
+      fileTypes: {
+        documents: 'Document Files',
+        all: 'All Files',
+      },
+      empty: {
+        title: 'No documents yet',
+        desc: 'Click the button above to add documents to the knowledge base',
+      },
+      status: {
+        completed: 'Completed',
+        learning: 'Learning',
+        failed: 'Failed',
+        pending: 'Pending',
+      },
+      menu: {
+        rename: 'Rename',
+        delete: 'Delete',
+      },
+      delete: {
+        title: 'Confirm Delete',
+        desc: 'Are you sure you want to delete "{name}"? This action cannot be undone.',
+        cancel: 'Cancel',
+        confirm: 'Delete',
+      },
     },
   },
 }

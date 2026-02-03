@@ -31,6 +31,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const name = ref('')
 const saving = ref(false)
+const NAME_MAX_LEN = 30
 
 const close = () => emit('update:open', false)
 
@@ -43,7 +44,11 @@ watch(
   }
 )
 
-const isValid = computed(() => name.value.trim().length > 0 && !!props.library)
+const isValid = computed(() => {
+  if (!props.library) return false
+  const n = name.value.trim()
+  return n.length > 0 && n.length <= NAME_MAX_LEN
+})
 
 const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
@@ -82,7 +87,7 @@ const handleSave = async () => {
           <Input
             v-model="name"
             :placeholder="t('knowledge.rename.placeholder')"
-            maxlength="128"
+            :maxlength="NAME_MAX_LEN"
             :disabled="saving"
           />
         </div>

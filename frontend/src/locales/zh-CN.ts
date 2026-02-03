@@ -96,7 +96,7 @@ export default {
     modelService: {
       enabled: '已启用',
       disableBlockedByEmbedding:
-        '该供应商正在被用作全局嵌入模型，请先在“嵌入模型设置”中切换后再关闭',
+        '该供应商正在被用作全局嵌入模型，请先在"嵌入模型设置"中切换后再关闭',
       disableBlockedByAgent: '该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭',
       deleteBlockedByAgent: '该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除',
       apiKey: 'API 密钥',
@@ -222,14 +222,14 @@ export default {
   },
   knowledge: {
     help: {
-      name: '知识库名称，用于区分不同的知识库。',
-      topK: '每次检索时，最多返回/参与重排的文档分片数量。',
-      rerankModel: '用于对召回的分片进行重排序的模型。',
-      chunkSize: '分片大小（字符数）。分片越大，上下文越完整，但召回粒度更粗。',
-      chunkOverlap: '相邻分片的重叠大小（字符数），用于减少跨分片断句导致的信息丢失。',
+      name: '知识库名称，用于区分不同的知识库（最多30个字符）。',
+      topK: '每次检索时，最多返回的文档分片数量。',
+      chunkSize: '分片大小（字符数，500~5000）。分片越大，上下文越完整，但召回粒度更粗。',
+      chunkOverlap: '相邻分片的重叠大小（字符数，0~1000），用于减少跨分片断句导致的信息丢失。',
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
+      semanticSegmentModel: '用于按语义进行分段的模型（可选）。',
     },
     tabs: {
       personal: '个人',
@@ -277,19 +277,18 @@ export default {
     },
     detail: {
       embedding: '嵌入模型',
-      rerank: '重排序模型',
     },
     create: {
       title: '添加知识库',
       name: '名称',
       namePlaceholder: '请输入知识库名称',
       selectPlaceholder: '请选择',
-      rerankModel: '重排模型',
-      noRerank: '不使用重排',
       advanced: '高级设置',
       advancedHide: '收起高级设置',
       defaultMark: '默认',
       topK: '请求文档分片数量',
+      semanticSegmentModel: '语义分段模型',
+      noSemanticSegment: '不使用语义分段',
       chunkSize: '分片大小',
       chunkOverlap: '重叠大小',
       matchThreshold: '匹配度阈值',
@@ -308,6 +307,35 @@ export default {
       save: '保存',
       saved: '已保存',
       saveFailed: '保存失败',
+    },
+    content: {
+      searchPlaceholder: '搜索',
+      addDocument: '添加文档',
+      selectFile: '选择文件',
+      fileTypes: {
+        documents: '文档文件',
+        all: '所有文件',
+      },
+      empty: {
+        title: '暂无文档',
+        desc: '点击上方按钮添加文档到知识库',
+      },
+      status: {
+        completed: '学习完成',
+        learning: '学习中',
+        failed: '学习失败',
+        pending: '待学习',
+      },
+      menu: {
+        rename: '重命名',
+        delete: '删除',
+      },
+      delete: {
+        title: '确认删除',
+        desc: '确定要删除文档「{name}」吗？此操作无法撤销。',
+        cancel: '取消',
+        confirm: '删除',
+      },
     },
   },
 }

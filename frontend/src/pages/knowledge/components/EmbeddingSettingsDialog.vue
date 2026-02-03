@@ -36,25 +36,25 @@ const loading = ref(false)
 const saving = ref(false)
 
 type Group = { provider: Provider; models: Model[] }
-const groups = ref<Group[]>([])
+const embeddingGroups = ref<Group[]>([])
 
-const selectedKey = ref<string>('') // `${providerId}::${modelId}`
+const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
 const embeddingDimension = ref<string>('1536')
 
-const currentLabel = computed(() => {
-  const [pid, mid] = selectedKey.value.split('::')
+const embeddingCurrentLabel = computed(() => {
+  const [pid, mid] = embeddingSelectedKey.value.split('::')
   if (!pid || !mid) return ''
-  const provider = groups.value.find((g) => g.provider.provider_id === pid)
+  const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
   const model = provider?.models.find((m) => m.model_id === mid)
   return model?.name || ''
 })
 
 const close = () => emit('update:open', false)
 
-const isSelectionAvailable = computed(() => {
-  const [pid, mid] = selectedKey.value.split('::')
+const isEmbeddingSelectionAvailable = computed(() => {
+  const [pid, mid] = embeddingSelectedKey.value.split('::')
   if (!pid || !mid) return false
-  const provider = groups.value.find((g) => g.provider.provider_id === pid)
+  const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
   return !!provider?.models.some((m) => m.model_id === mid)
 })
 
@@ -62,7 +62,7 @@ const loadGroups = async () => {
   loading.value = true
   try {
     const providers = (await ProvidersService.ListProviders()) || []
-    // 只使用“已启用”的供应商（已启动）
+    // 只使用"已启用"的供应商（已启动）
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
@@ -86,11 +86,11 @@ const loadGroups = async () => {
         out.push({ provider: item.provider, models })
       }
     }
-    groups.value = out
+    embeddingGroups.value = out
   } catch (error) {
     console.error('Failed to load embedding model list:', error)
     toast.error(getErrorMessage(error) || t('knowledge.providersLoadFailed'))
-    groups.value = []
+    embeddingGroups.value = []
   } finally {
     loading.value = false
   }
@@ -108,7 +108,7 @@ const loadCurrentSettings = async () => {
     const dim = d?.value || '1536'
     embeddingDimension.value = dim
     if (providerId && modelId) {
-      selectedKey.value = `${providerId}::${modelId}`
+      embeddingSelectedKey.value = `${providerId}::${modelId}`
     }
   } catch (error) {
     console.error('Failed to load embedding settings:', error)
@@ -117,11 +117,11 @@ const loadCurrentSettings = async () => {
 
 const ensureDefaultSelection = () => {
   // 已有选择且仍可用 -> 保持
-  if (selectedKey.value && isSelectionAvailable.value) return
-  const first = groups.value[0]?.models[0]
-  const pid = groups.value[0]?.provider.provider_id
+  if (embeddingSelectedKey.value && isEmbeddingSelectionAvailable.value) return
+  const first = embeddingGroups.value[0]?.models[0]
+  const pid = embeddingGroups.value[0]?.provider.provider_id
   if (first && pid) {
-    selectedKey.value = `${pid}::${first.model_id}`
+    embeddingSelectedKey.value = `${pid}::${first.model_id}`
   }
 }
 
@@ -129,7 +129,7 @@ watch(
   () => props.open,
   async (open) => {
     if (!open) return
-    selectedKey.value = ''
+    embeddingSelectedKey.value = ''
     embeddingDimension.value = '1536'
     await Promise.all([loadGroups(), loadCurrentSettings()])
     ensureDefaultSelection()
@@ -137,7 +137,7 @@ watch(
 )
 
 const isValid = computed(() => {
-  if (!isSelectionAvailable.value) return false
+  if (!isEmbeddingSelectionAvailable.value) return false
   const dim = Number.parseInt(embeddingDimension.value, 10)
   return Number.isFinite(dim) && dim > 0
 })
@@ -146,8 +146,9 @@ const handleSave = async () => {
   if (!isValid.value || saving.value) return
   saving.value = true
   try {
-    const [providerId, modelId] = selectedKey.value.split('::')
+    const [providerId, modelId] = embeddingSelectedKey.value.split('::')
     const dim = String(Number.parseInt(embeddingDimension.value, 10))
+
     await Promise.all([
       SettingsService.SetValue('embedding_provider_id', providerId),
       SettingsService.SetValue('embedding_model_id', modelId),
@@ -180,14 +181,14 @@ const handleSave = async () => {
             :help="t('knowledge.help.embeddingModel')"
             required
           />
-          <Select v-model="selectedKey" :disabled="loading || saving">
+          <Select v-model="embeddingSelectedKey" :disabled="loading || saving">
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                <template v-if="currentLabel">{{ currentLabel }}</template>
+                <template v-if="embeddingCurrentLabel">{{ embeddingCurrentLabel }}</template>
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectGroup v-for="g in groups" :key="g.provider.provider_id">
+              <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel>{{ g.provider.name }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
