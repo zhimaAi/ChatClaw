@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUp } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
@@ -14,8 +14,10 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import LogoIcon from '@/assets/images/logo.svg'
+import logoSvgRaw from '@/assets/images/logo.svg?raw'
 import CreateAgentDialog from './components/CreateAgentDialog.vue'
 import AgentSettingsDialog from './components/AgentSettingsDialog.vue'
+import { useNavigationStore } from '@/stores'
 import { AgentsService, type Agent } from '@bindings/willchat/internal/services/agents'
 import {
   ProvidersService,
@@ -56,6 +58,20 @@ interface ChatHistory {
 }
 
 const { t } = useI18n()
+const navigationStore = useNavigationStore()
+
+/**
+ * 将 logo SVG 转换为 data URL，用于标签页默认图标
+ * 替换 currentColor 为具体颜色以确保在 img 标签中正常显示
+ */
+const getLogoDataUrl = () => {
+  // 检测当前是否深色模式
+  const isDark = document.documentElement.classList.contains('dark')
+  // 深色模式用浅色图标，浅色模式用深色图标
+  const color = isDark ? '#e5e5e5' : '#404040'
+  const svgWithColor = logoSvgRaw.replace(/currentColor/g, color)
+  return `data:image/svg+xml,${encodeURIComponent(svgWithColor)}`
+}
 
 const mode = ref<ListMode>('personal')
 
@@ -120,6 +136,8 @@ const loadAgents = async () => {
     if (activeAgentId.value == null && list.length > 0) {
       activeAgentId.value = list[0].id
     }
+    // 初始化时更新标签页图标
+    updateCurrentTabIcon()
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadFailed'))
   } finally {
@@ -232,7 +250,10 @@ const openSettings = (agent: Agent) => {
 const handleUpdated = (updated: Agent) => {
   const idx = agents.value.findIndex((a) => a.id === updated.id)
   if (idx >= 0) agents.value[idx] = updated
-  if (activeAgentId.value === updated.id) activeAgentId.value = updated.id
+  // 如果更新的是当前选中的助手，更新标签页图标
+  if (activeAgentId.value === updated.id) {
+    updateCurrentTabIcon()
+  }
 }
 
 const handleDeleted = (id: number) => {
@@ -268,9 +289,24 @@ const handleSelectHistory = (history: ChatHistory) => {
   console.log('Select history:', history)
 }
 
-// Watch for active agent changes to update selected model
+/**
+ * 更新当前标签页的图标为选中助手的图标
+ * 如果助手没有自定义图标，则使用默认的 logo 图标
+ */
+const updateCurrentTabIcon = () => {
+  const currentTabId = navigationStore.activeTabId
+  if (!currentTabId) return
+
+  const agent = activeAgent.value
+  // 如果助手有自定义图标则使用，否则使用 logo 作为默认图标
+  const icon = agent?.icon || getLogoDataUrl()
+  navigationStore.updateTabIcon(currentTabId, icon)
+}
+
+// Watch for active agent changes to update selected model and tab icon
 watch(activeAgentId, () => {
   selectDefaultModel()
+  updateCurrentTabIcon()
 })
 
 // Watch for models loaded

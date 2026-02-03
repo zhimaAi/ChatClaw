@@ -174,6 +174,16 @@ export const useNavigationStore = defineStore('navigation', () => {
     }
   }
 
+  /**
+   * 更新标签页图标
+   */
+  const updateTabIcon = (tabId: string, icon: string | undefined) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab) {
+      tab.icon = icon ?? DefaultTabIcon
+    }
+  }
+
   return {
     activeModule,
     sidebarCollapsed,
@@ -188,5 +198,6 @@ export const useNavigationStore = defineStore('navigation', () => {
     closeOtherTabs,
     closeAllTabs,
     setActiveTab,
+    updateTabIcon,
   }
 })
