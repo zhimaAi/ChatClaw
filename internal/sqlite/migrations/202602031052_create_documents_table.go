@@ -61,10 +61,7 @@ CREATE TABLE IF NOT EXISTS document_nodes (
 	content text not null,  -- 可能是原始块，也可能是 AI 生成的摘要
 	level integer not null default 0,  -- 0: 原始块, 1: 一级摘要, 2: 总括摘要
 	parent_id integer,  -- RAPTOR 向上追溯
-	chunk_order integer not null default 0,  -- 同一层级内的顺序
-
-	fts_id integer not null,
-	vec_id text not null
+	chunk_order integer not null default 0  -- 同一层级内的顺序
 );
 CREATE INDEX idx_nodes_library_id ON document_nodes(library_id);
 CREATE INDEX idx_nodes_document_id ON document_nodes(document_id);
