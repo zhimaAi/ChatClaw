@@ -177,10 +177,10 @@ const confirmDelete = async () => {
   <div class="flex h-full flex-col">
     <!-- 头部区域 -->
     <div class="flex h-10 items-center justify-between px-4">
-      <h2 class="text-sm font-medium text-foreground">{{ library.name }}</h2>
+      <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
       <div class="flex items-center gap-1.5">
         <!-- 搜索框 -->
-        <div class="relative w-[160px]">
+        <div class="relative w-40">
           <Search class="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             v-model="searchQuery"
