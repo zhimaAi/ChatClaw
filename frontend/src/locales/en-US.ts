@@ -180,7 +180,7 @@ export default {
     placeholders: {
       noAgentSelected: 'Select an agent',
       chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
-      inputPlaceholder: 'Type a message...',
+      inputPlaceholder: 'Ask a question...',
       enterToSend: 'Please enter content',
     },
     sidebar: {

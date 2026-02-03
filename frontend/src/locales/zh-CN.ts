@@ -177,7 +177,7 @@ export default {
     placeholders: {
       noAgentSelected: '请选择一个助手',
       chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
-      inputPlaceholder: '输入消息...',
+      inputPlaceholder: '请输入问题',
       enterToSend: '请输入内容',
     },
     sidebar: {

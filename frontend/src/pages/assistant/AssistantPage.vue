@@ -103,6 +103,13 @@ const hasModels = computed(() => {
   )
 })
 
+const sendDisabledTip = computed(() => {
+  if (!hasModels.value) return t('assistant.chat.noModel')
+  if (!selectedModelKey.value) return t('assistant.chat.selectModel')
+  if (chatInput.value.trim() === '') return t('assistant.placeholders.enterToSend')
+  return t('assistant.placeholders.enterToSend')
+})
+
 // Get chat histories for an agent (max 3)
 const getAgentChatHistories = (agentId: number): ChatHistory[] => {
   return (mockChatHistories[agentId] || []).slice(0, 3)
@@ -434,7 +441,7 @@ onMounted(() => {
     </aside>
 
     <!-- 收起/展开按钮 -->
-    <div class="flex items-start pt-3">
+    <div class="flex w-8 shrink-0 items-center justify-center">
       <Button
         size="icon"
         variant="ghost"
@@ -449,125 +456,114 @@ onMounted(() => {
 
     <!-- 右侧：聊天区 -->
     <section class="flex flex-1 flex-col overflow-hidden">
-      <!-- 聊天内容区域 -->
-      <div class="flex flex-1 flex-col items-center justify-center gap-2 overflow-auto">
-        <div class="text-lg font-semibold text-foreground">
-          {{ activeAgent?.name ?? t('assistant.placeholders.noAgentSelected') }}
-        </div>
-        <div class="max-w-dialog-md px-6 text-center text-sm text-muted-foreground">
-          {{ t('assistant.placeholders.chatComingSoon') }}
-        </div>
-      </div>
+      <div class="flex flex-1 items-center justify-center px-6">
+        <div class="flex w-full -translate-y-10 flex-col items-center gap-6">
+          <div class="flex items-center gap-3">
+            <LogoIcon class="size-10 text-foreground" />
+            <div class="text-2xl font-semibold text-foreground">
+              {{ t('app.title') }}
+            </div>
+          </div>
 
-      <!-- 聊天输入区域 -->
-      <div class="border-t border-border p-4">
-        <div
-          class="mx-auto max-w-3xl rounded-xl border border-border bg-card p-3 shadow-sm dark:border-white/10"
-        >
-          <!-- 输入框 -->
-          <textarea
-            v-model="chatInput"
-            :placeholder="t('assistant.placeholders.inputPlaceholder')"
-            class="min-h-[60px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            rows="2"
-            @keydown.enter.exact.prevent="handleSend"
-          />
+          <div
+            class="w-full max-w-[720px] rounded-2xl border border-border bg-background px-5 py-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+          >
+            <textarea
+              v-model="chatInput"
+              :placeholder="t('assistant.placeholders.inputPlaceholder')"
+              class="min-h-[64px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              rows="2"
+              @keydown.enter.exact.prevent="handleSend"
+            />
 
-          <!-- 底部工具栏 -->
-          <div class="mt-2 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <!-- 模型选择 -->
-              <Select
-                v-model="selectedModelKey"
-                :disabled="!hasModels"
-              >
-                <SelectTrigger
-                  class="h-8 w-auto min-w-[140px] max-w-[200px] rounded-md border-0 bg-muted/50 px-2 text-xs hover:bg-muted"
-                >
-                  <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
-                    <ProviderIcon
-                      :icon="selectedModelInfo.providerId"
-                      :size="14"
-                      class="shrink-0 text-foreground"
-                    />
-                    <span class="truncate">{{ selectedModelInfo.modelName }}</span>
-                  </div>
-                  <span v-else class="text-muted-foreground">
-                    {{ t('assistant.chat.noModel') }}
-                  </span>
-                </SelectTrigger>
-                <SelectContent class="max-h-[260px]">
-                  <SelectGroup>
-                    <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
-                    <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
-                      <SelectLabel class="mt-2 text-xs text-muted-foreground">
-                        {{ pw.provider.name }}
-                      </SelectLabel>
-                      <template v-for="g in pw.model_groups" :key="g.type">
-                        <template v-if="g.type === 'llm'">
-                          <SelectItem
-                            v-for="m in g.models"
-                            :key="pw.provider.provider_id + '::' + m.model_id"
-                            :value="pw.provider.provider_id + '::' + m.model_id"
-                          >
-                            {{ m.name }}
-                          </SelectItem>
+            <div class="mt-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <Select v-model="selectedModelKey" :disabled="!hasModels">
+                  <SelectTrigger
+                    class="h-8 w-auto min-w-[160px] max-w-[240px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
+                  >
+                    <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
+                      <ProviderIcon
+                        :icon="selectedModelInfo.providerId"
+                        :size="14"
+                        class="shrink-0 text-foreground"
+                      />
+                      <span class="truncate">{{ selectedModelInfo.modelName }}</span>
+                    </div>
+                    <span v-else class="text-muted-foreground">
+                      {{ t('assistant.chat.noModel') }}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent class="max-h-[260px]">
+                    <SelectGroup>
+                      <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
+                      <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
+                        <SelectLabel class="mt-2 text-xs text-muted-foreground">
+                          {{ pw.provider.name }}
+                        </SelectLabel>
+                        <template v-for="g in pw.model_groups" :key="g.type">
+                          <template v-if="g.type === 'llm'">
+                            <SelectItem
+                              v-for="m in g.models"
+                              :key="pw.provider.provider_id + '::' + m.model_id"
+                              :value="pw.provider.provider_id + '::' + m.model_id"
+                            >
+                              {{ m.name }}
+                            </SelectItem>
+                          </template>
                         </template>
                       </template>
-                    </template>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
 
-              <!-- 选择知识库 -->
-              <Button
-                size="icon"
-                variant="ghost"
-                class="size-8"
-                :title="t('assistant.chat.selectKnowledge')"
-                @click="handleSelectKnowledge"
-              >
-                <IconSelectKnowledge class="size-4 text-muted-foreground" />
-              </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                  :title="t('assistant.chat.selectKnowledge')"
+                  @click="handleSelectKnowledge"
+                >
+                  <IconSelectKnowledge class="size-4 text-muted-foreground" />
+                </Button>
 
-              <!-- 选择图片 -->
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                  :title="t('assistant.chat.selectImage')"
+                  @click="handleSelectImage"
+                >
+                  <IconSelectImage class="size-4 text-muted-foreground" />
+                </Button>
+              </div>
+
+              <TooltipProvider v-if="!canSend">
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <Button
+                      size="icon"
+                      class="size-6 rounded-full bg-muted text-muted-foreground hover:bg-muted"
+                      disabled
+                    >
+                      <IconSendDisabled class="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{{ sendDisabledTip }}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <Button
+                v-else
                 size="icon"
-                variant="ghost"
-                class="size-8"
-                :title="t('assistant.chat.selectImage')"
-                @click="handleSelectImage"
+                class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                :title="t('assistant.chat.send')"
+                @click="handleSend"
               >
-                <IconSelectImage class="size-4 text-muted-foreground" />
+                <IconSendActive class="size-4" />
               </Button>
             </div>
-
-            <!-- 发送按钮 -->
-            <TooltipProvider v-if="!canSend">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <Button
-                    size="icon"
-                    class="size-9 rounded-lg bg-muted text-muted-foreground hover:bg-muted"
-                    disabled
-                  >
-                    <IconSendDisabled class="size-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{{ t('assistant.placeholders.enterToSend') }}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Button
-              v-else
-              size="icon"
-              class="size-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-              :title="t('assistant.chat.send')"
-              @click="handleSend"
-            >
-              <IconSendActive class="size-5" />
-            </Button>
           </div>
         </div>
       </div>
