@@ -26,7 +26,7 @@ create table if not exists documents (
 	source_type text not null,
 	
 	local_path text,
-	web_url text 
+	web_url text,
 
 	parsing_status integer not null default 0,
 	parsing_progress integer not null default 0,
@@ -47,7 +47,7 @@ CREATE VIRTUAL TABLE doc_fts USING fts5(
 
 CREATE VIRTUAL TABLE doc_vec USING vec0(
 	id INTEGER PRIMARY KEY,
-    content FLOAT[1536]
+    content FLOAT[1536]  -- 会根据全局配置的向量重建表,维度是动态的
 );
 
 CREATE TABLE IF NOT EXISTS document_nodes (
@@ -66,6 +66,10 @@ CREATE TABLE IF NOT EXISTS document_nodes (
 	fts_id integer not null,
 	vec_id text not null
 );
+CREATE INDEX idx_nodes_library_id ON document_nodes(library_id);
+CREATE INDEX idx_nodes_document_id ON document_nodes(document_id);
+CREATE INDEX idx_nodes_parent_id ON document_nodes(parent_id);
+CREATE INDEX idx_nodes_level ON document_nodes(level);
 
 -- 当 document_nodes 插入新行时，同步更新索引
 CREATE TRIGGER doc_nodes_ai AFTER INSERT ON document_nodes BEGIN
