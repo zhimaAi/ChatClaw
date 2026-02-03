@@ -176,7 +176,7 @@ const confirmDelete = async () => {
 <template>
   <div class="flex h-full flex-col">
     <!-- 头部区域 -->
-    <div class="flex h-10 items-center justify-between px-4">
+    <div class="flex h-12 items-center justify-between px-4">
       <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
       <div class="flex items-center gap-1.5">
         <!-- 搜索框 -->
