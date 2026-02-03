@@ -59,7 +59,7 @@ const currentComponent = computed(() => menuComponents[settingsStore.activeMenu]
       <!-- 占位内容：当其他菜单页面还没实现时显示 -->
       <div
         v-else
-        class="flex w-[530px] items-center justify-center rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+        class="flex w-settings-card items-center justify-center rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         {{ activeMenuLabel }}
       </div>

@@ -12,6 +12,11 @@ export default {
   tabs: {
     newTab: 'New Tab',
   },
+  tab: {
+    close: 'Close Tab',
+    closeOthers: 'Close Other Tabs',
+    closeAll: 'Close All Tabs',
+  },
   hello: {
     inputPlaceholder: 'Please enter your name below 👇',
     greetButton: 'Greet',
@@ -100,6 +105,10 @@ export default {
       enabled: 'Enabled',
       disableBlockedByEmbedding:
         'This provider is used as the global embedding model. Please change it in "Embedding settings" before disabling.',
+      disableBlockedByAgent:
+        'This provider is used as the default model by agent "{name}". Please change the agent settings before disabling.',
+      deleteBlockedByAgent:
+        'This model is used as the default model by agent "{name}". Please change the agent settings before deleting.',
       apiKey: 'API Key',
       apiKeyPlaceholder: 'Enter API Key',
       apiKeyRequired: 'Please enter API Key first',
@@ -140,6 +149,78 @@ export default {
         'Are you sure you want to delete the model "{name}"? This action cannot be undone.',
       confirmDelete: 'Delete',
       deleting: 'Deleting...',
+    },
+  },
+  assistant: {
+    icon: {
+      hint: 'Click to replace. Recommended 100×100px, <= 100KB',
+      pickTitle: 'Select Icon File',
+      filterImages: 'Images',
+    },
+    modes: {
+      personal: 'Personal',
+      team: 'Team',
+    },
+    empty: 'No agents yet',
+    create: {
+      title: 'Create Agent',
+    },
+    fields: {
+      name: 'Name',
+      namePlaceholder: 'Enter name',
+      prompt: 'Prompt',
+      promptPlaceholder: 'Enter your prompt here',
+    },
+    actions: {
+      cancel: 'Cancel',
+      create: 'Create',
+      save: 'Save',
+      settings: 'Agent Settings',
+    },
+    placeholders: {
+      noAgentSelected: 'Select an agent',
+      chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
+    },
+    errors: {
+      loadFailed: 'Failed to load agents',
+      createFailed: 'Failed to create agent',
+      updateFailed: 'Failed to update agent',
+      deleteFailed: 'Failed to delete agent',
+      defaultModelIncomplete: 'Default model info is incomplete',
+    },
+    toasts: {
+      created: 'Agent created',
+      updated: 'Agent updated',
+      deleted: 'Agent deleted',
+    },
+    settings: {
+      title: 'Agent Settings',
+      tabs: {
+        model: 'Model',
+        prompt: 'Prompt',
+        delete: 'Delete',
+      },
+      model: {
+        defaultModel: 'Default Model',
+        defaultModelHint: 'Current default model for this agent',
+        noDefaultModel: 'Not set',
+        clear: 'Clear',
+        change: 'Change',
+        temperature: 'Temperature',
+        temperatureHint: 'Controls randomness',
+        topP: 'Top-P',
+        topPHint: 'Controls sampling range',
+        contextCount: 'Context Count',
+        maxTokens: 'Max Tokens',
+        unlimited: 'Unlimited',
+      },
+      delete: {
+        title: 'Delete Agent',
+        hint: 'Deleting the agent will remove all related conversations. This cannot be undone.',
+        action: 'Delete',
+        confirmTitle: 'Confirm Delete',
+        confirmDesc: 'Are you sure you want to delete "{name}"? This action cannot be undone.',
+      },
     },
   },
   knowledge: {
@@ -206,6 +287,7 @@ export default {
       namePlaceholder: 'Enter knowledge base name',
       selectPlaceholder: 'Select',
       rerankModel: 'Rerank model',
+      noRerank: 'No reranking',
       advanced: 'Advanced settings',
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',

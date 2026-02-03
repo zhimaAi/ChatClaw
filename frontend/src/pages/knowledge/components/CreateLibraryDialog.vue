@@ -53,7 +53,8 @@ const name = ref('')
 type Group = { provider: Provider; models: Model[] }
 const rerankGroups = ref<Group[]>([])
 
-const rerankKey = ref<string>('') // `${providerId}::${modelId}`
+const RERANK_NONE = '__none__'
+const rerankKey = ref<string>(RERANK_NONE) // `${providerId}::${modelId}` or RERANK_NONE
 
 // advanced fields（用字符串承接输入，提交时再转 number）
 // shadcn Slider 使用 number[] 承载（支持 range）
@@ -68,7 +69,7 @@ const resetForm = () => {
   advanced.value = false
   isSubmitting.value = false
   name.value = ''
-  rerankKey.value = ''
+  rerankKey.value = RERANK_NONE
   topK.value = [20]
   chunkSize.value = '1024'
   chunkOverlap.value = '100'
@@ -76,11 +77,12 @@ const resetForm = () => {
 }
 
 const currentRerankLabel = computed(() => {
+  if (!rerankKey.value || rerankKey.value === RERANK_NONE) return t('knowledge.create.noRerank')
   const [pid, mid] = rerankKey.value.split('::')
-  if (!pid || !mid) return ''
+  if (!pid || !mid) return t('knowledge.create.noRerank')
   const group = rerankGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || ''
+  return model?.name || t('knowledge.create.noRerank')
 })
 
 const isFormValid = computed(() => {
@@ -116,7 +118,9 @@ const loadProviders = async () => {
         try {
           const detail = await ProvidersService.GetProviderWithModels(p.provider_id)
           return { provider: p, detail }
-        } catch {
+        } catch (error: unknown) {
+          // 单个 provider 加载失败不影响其他，仅记录警告
+          console.warn(`Failed to load provider ${p.provider_id}:`, error)
           return { provider: p, detail: null as ProviderWithModels | null }
         }
       })
@@ -169,7 +173,8 @@ const handleSubmit = async () => {
       return Number.isFinite(n) ? n : undefined
     }
 
-    const [rerankProviderId, rerankModelId] = rerankKey.value.split('::')
+    const isNone = !rerankKey.value || rerankKey.value === RERANK_NONE
+    const [rerankProviderId, rerankModelId] = isNone ? ['', ''] : rerankKey.value.split('::')
 
     const input = new CreateLibraryInput({
       name: name.value.trim(),
@@ -198,7 +203,7 @@ const handleSubmit = async () => {
 
 <template>
   <Dialog :open="open" @update:open="close">
-    <DialogContent class="sm:max-w-[560px]">
+    <DialogContent size="lg">
       <DialogHeader>
         <DialogTitle>{{ t('knowledge.create.title') }}</DialogTitle>
       </DialogHeader>
@@ -258,7 +263,7 @@ const handleSubmit = async () => {
             />
             <Select
               v-model="rerankKey"
-              :disabled="loadingProviders || isSubmitting || rerankGroups.length === 0"
+              :disabled="loadingProviders || isSubmitting"
             >
               <SelectTrigger class="w-full">
                 <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
@@ -266,6 +271,7 @@ const handleSubmit = async () => {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
+                <SelectItem :value="RERANK_NONE">{{ t('knowledge.create.noRerank') }}</SelectItem>
                 <SelectGroup v-for="g in rerankGroups" :key="g.provider.provider_id">
                   <SelectLabel>{{ g.provider.name }}</SelectLabel>
                   <SelectItem

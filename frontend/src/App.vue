@@ -5,6 +5,7 @@ import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
+import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 
 const { t } = useI18n()
@@ -19,6 +20,7 @@ const activeTab = computed(() => navigationStore.activeTab)
  * 是否显示设置页面
  */
 const showSettings = computed(() => activeTab.value?.module === 'settings')
+const showAssistant = computed(() => activeTab.value?.module === 'assistant')
 const showKnowledge = computed(() => activeTab.value?.module === 'knowledge')
 
 /**
@@ -44,6 +46,9 @@ watch(
     <SettingsPage v-if="showSettings" />
     <!-- 知识库页面 -->
     <KnowledgePage v-else-if="showKnowledge" />
+
+    <!-- AI助手页面 -->
+    <AssistantPage v-else-if="showAssistant" />
 
     <!-- 主内容区域 - 显示当前模块的占位内容 -->
     <div v-else class="flex h-full w-full items-center justify-center bg-background">

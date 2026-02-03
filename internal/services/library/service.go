@@ -204,10 +204,10 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	// BeforeUpdate hook 会自动设置 updated_at
 	q := db.NewUpdate().
 		Model((*libraryModel)(nil)).
-		Where("id = ?", id).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("id = ?", id)
 
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)

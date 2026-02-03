@@ -126,7 +126,7 @@ onUnmounted(() => {
       :class="
         cn(
           'flex size-3 items-center justify-center rounded-full',
-          'bg-[#ff5f57] hover:bg-[#ff5f57]/80',
+          'bg-mac-close hover:bg-mac-close/80',
           'transition-colors duration-150'
         )
       "
@@ -152,7 +152,7 @@ onUnmounted(() => {
       :class="
         cn(
           'flex size-3 items-center justify-center rounded-full',
-          'bg-[#febc2e] hover:bg-[#febc2e]/80',
+          'bg-mac-minimize hover:bg-mac-minimize/80',
           'transition-colors duration-150'
         )
       "
@@ -173,7 +173,7 @@ onUnmounted(() => {
       :class="
         cn(
           'flex size-3 items-center justify-center rounded-full',
-          'bg-[#28c840] hover:bg-[#28c840]/80',
+          'bg-mac-fullscreen hover:bg-mac-fullscreen/80',
           'transition-colors duration-150'
         )
       "
@@ -277,7 +277,7 @@ onUnmounted(() => {
       :class="
         cn(
           'flex w-11 items-center justify-center',
-          'text-foreground/70 hover:bg-[#e81123] hover:text-white',
+          'text-foreground/70 hover:bg-destructive hover:text-white',
           'transition-colors duration-150'
         )
       "

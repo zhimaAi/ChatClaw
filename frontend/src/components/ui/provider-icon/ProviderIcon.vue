@@ -92,8 +92,8 @@ const useComponent = computed(() => {
 <template>
   <!-- 内置图标：作为 Vue 组件渲染，支持 currentColor -->
   <component
-    :is="iconComponent"
     v-if="useComponent"
+    :is="iconComponent"
     :width="size"
     :height="size"
     :class="cn('inline-block shrink-0 text-foreground', props.class)"

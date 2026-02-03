@@ -209,11 +209,10 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 		}
 	}
 
-	// 构建更新语句
+	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
 	q := db.NewUpdate().
 		Model((*providerModel)(nil)).
-		Where("provider_id = ?", providerID).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("provider_id = ?", providerID)
 
 	if input.Enabled != nil {
 		q = q.Set("enabled = ?", *input.Enabled)
@@ -588,12 +587,11 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 构建更新语句
+	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
 	q := db.NewUpdate().
 		Model((*modelModel)(nil)).
 		Where("provider_id = ?", providerID).
-		Where("model_id = ?", modelID).
-		Set("updated_at = ?", time.Now().UTC())
+		Where("model_id = ?", modelID)
 
 	if input.Name != nil {
 		newName := strings.TrimSpace(*input.Name)
