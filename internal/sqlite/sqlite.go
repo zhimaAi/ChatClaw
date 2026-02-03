@@ -5,18 +5,14 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 
 	"willchat/internal/define"
 	"willchat/internal/sqlite/migrations"
 
-	_ "github.com/asg017/sqlite-vec-go-bindings/ncruces"
-	sqlite3 "github.com/ncruces/go-sqlite3"
-	_ "github.com/ncruces/go-sqlite3/driver"
-	"github.com/tetratelabs/wazero"
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/migrate"
@@ -47,8 +43,6 @@ func Init(app *application.App) error {
 }
 
 func doInit(app *application.App) error {
-	configureSQLiteWasmRuntime(app)
-
 	path, err := resolveDBPath()
 	if err != nil {
 		return err
@@ -59,7 +53,8 @@ func doInit(app *application.App) error {
 		app.Logger.Info("sqlite path", "path", dbPath)
 	}
 
-	// sqlite-vec extension is auto-registered via blank import of ncruces bindings.
+	// Enable sqlite-vec extension (CGO version requires calling before Open)
+	sqlite_vec.Auto()
 
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -120,42 +115,6 @@ func doInit(app *application.App) error {
 	}
 
 	return nil
-}
-
-func configureSQLiteWasmRuntime(app *application.App) {
-	// NOTE:
-	// We use github.com/ncruces/go-sqlite3 which runs SQLite via WebAssembly (wazero).
-	// On some Windows machines the compiler/JIT backend can crash with:
-	//   wasm error: out of bounds memory access
-	// To keep dev/prod startup stable, default to the interpreter on Windows.
-	// You can override via env:
-	//   WILLCHAT_SQLITE_WASM_ENGINE=compiler|interpreter|auto
-	mode := strings.ToLower(strings.TrimSpace(os.Getenv("WILLCHAT_SQLITE_WASM_ENGINE")))
-	if mode == "" {
-		mode = "auto"
-	}
-
-	// Only affect sqlite3 WASM runtime; compileSQLite will still set required core features.
-	switch mode {
-	case "compiler":
-		sqlite3.RuntimeConfig = wazero.NewRuntimeConfigCompiler().WithMemoryLimitPages(4096) // 256MB
-	case "interpreter":
-		sqlite3.RuntimeConfig = wazero.NewRuntimeConfigInterpreter().WithMemoryLimitPages(4096) // 256MB
-	case "auto":
-		if runtime.GOOS == "windows" {
-			sqlite3.RuntimeConfig = wazero.NewRuntimeConfigInterpreter().WithMemoryLimitPages(4096) // 256MB
-		} else {
-			// Use library defaults on non-Windows.
-			sqlite3.RuntimeConfig = nil
-		}
-	default:
-		// Unknown value: fall back to the safe default.
-		sqlite3.RuntimeConfig = wazero.NewRuntimeConfigInterpreter().WithMemoryLimitPages(4096) // 256MB
-	}
-
-	if app != nil {
-		app.Logger.Info("sqlite wasm runtime", "engine", mode, "goos", runtime.GOOS)
-	}
 }
 
 func Close(app *application.App) error {
