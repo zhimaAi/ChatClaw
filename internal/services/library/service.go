@@ -64,7 +64,7 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	if name == "" {
 		return nil, errs.New("error.library_name_required")
 	}
-	if len([]rune(name)) > 128 {
+	if len([]rune(name)) > 30 {
 		return nil, errs.New("error.library_name_too_long")
 	}
 
@@ -101,8 +101,13 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	embeddingProviderID = strings.TrimSpace(embeddingProviderID)
 	embeddingModelID = strings.TrimSpace(embeddingModelID)
 
-	rerankProviderID := strings.TrimSpace(input.RerankProviderID)
-	rerankModelID := strings.TrimSpace(input.RerankModelID)
+	// 语义分段模型（可选）
+	semanticSegmentProviderID := strings.TrimSpace(input.SemanticSegmentProviderID)
+	semanticSegmentModelID := strings.TrimSpace(input.SemanticSegmentModelID)
+	// 两者要么都为空（不使用），要么都有值
+	if (semanticSegmentProviderID == "") != (semanticSegmentModelID == "") {
+		return nil, errs.New("error.library_semantic_segment_incomplete")
+	}
 
 	// 默认值（与 migrations 中的 DEFAULT 保持一致）
 	topK := 20
@@ -113,10 +118,16 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	if input.TopK != nil && *input.TopK > 0 {
 		topK = *input.TopK
 	}
-	if input.ChunkSize != nil && *input.ChunkSize > 0 {
+	if input.ChunkSize != nil {
+		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
+			return nil, errs.New("error.library_chunk_size_invalid")
+		}
 		chunkSize = *input.ChunkSize
 	}
-	if input.ChunkOverlap != nil && *input.ChunkOverlap >= 0 {
+	if input.ChunkOverlap != nil {
+		if *input.ChunkOverlap < 0 || *input.ChunkOverlap > 1000 {
+			return nil, errs.New("error.library_chunk_overlap_invalid")
+		}
 		chunkOverlap = *input.ChunkOverlap
 	}
 	if input.MatchThreshold != nil && *input.MatchThreshold >= 0 && *input.MatchThreshold <= 1 {
@@ -172,8 +183,8 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	m := &libraryModel{
 		Name: name,
 
-		RerankProviderID: rerankProviderID,
-		RerankModelID:    rerankModelID,
+		SemanticSegmentProviderID: semanticSegmentProviderID,
+		SemanticSegmentModelID:    semanticSegmentModelID,
 
 		TopK:           topK,
 		ChunkSize:      chunkSize,
@@ -204,17 +215,17 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// BeforeUpdate hook 会自动设置 updated_at
 	q := db.NewUpdate().
 		Model((*libraryModel)(nil)).
-		Where("id = ?", id)
+		Where("id = ?", id).
+		Set("updated_at = ?", time.Now().UTC())
 
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
 		if name == "" {
 			return nil, errs.New("error.library_name_required")
 		}
-		if len([]rune(name)) > 128 {
+		if len([]rune(name)) > 30 {
 			return nil, errs.New("error.library_name_too_long")
 		}
 		// 检查名称是否与其他知识库重复（排除当前 ID）
@@ -233,20 +244,20 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		q = q.Set("name = ?", name)
 	}
 
-	if input.RerankProviderID != nil || input.RerankModelID != nil {
-		rp := ""
-		rm := ""
-		if input.RerankProviderID != nil {
-			rp = strings.TrimSpace(*input.RerankProviderID)
+	if input.SemanticSegmentProviderID != nil || input.SemanticSegmentModelID != nil {
+		sp := ""
+		sm := ""
+		if input.SemanticSegmentProviderID != nil {
+			sp = strings.TrimSpace(*input.SemanticSegmentProviderID)
 		}
-		if input.RerankModelID != nil {
-			rm = strings.TrimSpace(*input.RerankModelID)
+		if input.SemanticSegmentModelID != nil {
+			sm = strings.TrimSpace(*input.SemanticSegmentModelID)
 		}
 		// 两者要么都为空（清空），要么都有值
-		if (rp == "") != (rm == "") {
-			return nil, errs.New("error.library_rerank_required")
+		if (sp == "") != (sm == "") {
+			return nil, errs.New("error.library_semantic_segment_incomplete")
 		}
-		q = q.Set("rerank_provider_id = ?", rp).Set("rerank_model_id = ?", rm)
+		q = q.Set("semantic_segment_provider_id = ?", sp).Set("semantic_segment_model_id = ?", sm)
 	}
 
 	if input.TopK != nil {
@@ -256,13 +267,13 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		q = q.Set("top_k = ?", *input.TopK)
 	}
 	if input.ChunkSize != nil {
-		if *input.ChunkSize <= 0 {
+		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
 			return nil, errs.New("error.library_chunk_size_invalid")
 		}
 		q = q.Set("chunk_size = ?", *input.ChunkSize)
 	}
 	if input.ChunkOverlap != nil {
-		if *input.ChunkOverlap < 0 {
+		if *input.ChunkOverlap < 0 || *input.ChunkOverlap > 1000 {
 			return nil, errs.New("error.library_chunk_overlap_invalid")
 		}
 		q = q.Set("chunk_overlap = ?", *input.ChunkOverlap)

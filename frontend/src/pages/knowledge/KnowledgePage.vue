@@ -10,6 +10,7 @@ import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
 import EditLibraryDialog from './components/EditLibraryDialog.vue'
+import LibraryContentArea from './components/LibraryContentArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -267,36 +268,38 @@ onMounted(() => {
       </div>
     </aside>
 
-    <!-- 右侧：内容区（暂时占位） -->
-    <main class="flex flex-1 flex-col overflow-auto">
-      <div class="flex h-full w-full items-center justify-center px-8">
+    <!-- 右侧：内容区 -->
+    <main class="flex flex-1 flex-col overflow-hidden bg-background">
+      <!-- 团队知识库暂未开放 -->
+      <div
+        v-if="activeTab !== 'personal'"
+        class="flex h-full items-center justify-center px-8"
+      >
         <div
-          v-if="activeTab !== 'personal'"
           class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           {{ t('knowledge.teamNotReady') }}
         </div>
+      </div>
+
+      <!-- 未选择知识库 -->
+      <div
+        v-else-if="!selectedLibrary"
+        class="flex h-full items-center justify-center px-8"
+      >
         <div
-          v-else-if="!selectedLibrary"
           class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           {{ t('knowledge.selectOne') }}
         </div>
-        <div
-          v-else
-          class="w-full max-w-[720px] rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-        >
-          <div class="text-lg font-semibold text-foreground">{{ selectedLibrary.name }}</div>
-          <div class="mt-2 text-sm text-muted-foreground">
-            <div class="flex flex-col gap-1">
-              <div class="text-xs">{{ t('knowledge.detail.rerank') }}</div>
-              <div class="text-foreground">
-                {{ selectedLibrary.rerank_provider_id }} / {{ selectedLibrary.rerank_model_id }}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
+
+      <!-- 知识库内容管理 -->
+      <LibraryContentArea
+        v-else
+        :key="selectedLibrary.id"
+        :library="selectedLibrary"
+      />
     </main>
 
     <CreateLibraryDialog v-model:open="createDialogOpen" @created="handleCreated" />

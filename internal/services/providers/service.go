@@ -163,7 +163,7 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 禁止关闭正在作为“全局嵌入模型”使用的供应商
+	// 禁止关闭正在作为"全局嵌入模型"使用的供应商
 	if input.Enabled != nil && !*input.Enabled {
 		type row struct {
 			Key   string         `bun:"key"`
@@ -194,25 +194,26 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 			return nil, errs.New("error.cannot_disable_global_embedding_provider")
 		}
 
-		// 禁止关闭其 rerank 模型正被知识库使用的供应商
+		// 禁止关闭其语义分段模型正被知识库使用的供应商
 		var libraryName string
 		if err := db.NewSelect().
 			Table("library").
 			Column("name").
-			Where("rerank_provider_id = ?", providerID).
+			Where("semantic_segment_provider_id = ?", providerID).
 			Limit(1).
 			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, errs.Wrap("error.library_read_failed", err)
 		}
 		if libraryName != "" {
-			return nil, errs.Newf("error.cannot_disable_provider_with_rerank_in_use", map[string]any{"LibraryName": libraryName})
+			return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
 		}
 	}
 
-	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
+	// 构建更新语句
 	q := db.NewUpdate().
 		Model((*providerModel)(nil)).
-		Where("provider_id = ?", providerID)
+		Where("provider_id = ?", providerID).
+		Set("updated_at = ?", time.Now().UTC())
 
 	if input.Enabled != nil {
 		q = q.Set("enabled = ?", *input.Enabled)
@@ -587,11 +588,12 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 构建更新语句（BeforeUpdate hook 会自动设置 updated_at）
+	// 构建更新语句
 	q := db.NewUpdate().
 		Model((*modelModel)(nil)).
 		Where("provider_id = ?", providerID).
-		Where("model_id = ?", modelID)
+		Where("model_id = ?", modelID).
+		Set("updated_at = ?", time.Now().UTC())
 
 	if input.Name != nil {
 		newName := strings.TrimSpace(*input.Name)
@@ -698,8 +700,8 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		return errs.New("error.cannot_delete_builtin_model")
 	}
 
-	// 禁止删除正在作为“全局嵌入模型”使用的模型
-	{
+	// 禁止删除正在作为"全局嵌入模型"使用的模型
+	if m.Type == "embedding" {
 		type row struct {
 			Key   string         `bun:"key"`
 			Value sql.NullString `bun:"value"`
@@ -732,20 +734,20 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		}
 	}
 
-	// 禁止删除正在被知识库使用的 rerank 模型
-	if m.Type == "rerank" {
+	// 禁止删除正在被知识库使用的语义分段模型（LLM 类型）
+	if m.Type == "llm" {
 		var libraryName string
 		if err := db.NewSelect().
 			Table("library").
 			Column("name").
-			Where("rerank_provider_id = ?", providerID).
-			Where("rerank_model_id = ?", modelID).
+			Where("semantic_segment_provider_id = ?", providerID).
+			Where("semantic_segment_model_id = ?", modelID).
 			Limit(1).
 			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return errs.Wrap("error.library_read_failed", err)
 		}
 		if libraryName != "" {
-			return errs.Newf("error.cannot_delete_rerank_model_in_use", map[string]any{"LibraryName": libraryName})
+			return errs.Newf("error.cannot_delete_semantic_segment_model_in_use", map[string]any{"LibraryName": libraryName})
 		}
 	}
 

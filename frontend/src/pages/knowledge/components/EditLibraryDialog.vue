@@ -49,54 +49,61 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-type Group = { provider: Provider; models: Model[] }
-const rerankGroups = ref<Group[]>([])
-
 const saving = ref(false)
 const loadingProviders = ref(false)
+
+// 语义分段模型选择
+type Group = { provider: Provider; models: Model[] }
+const semanticSegmentGroups = ref<Group[]>([])
+const SEMANTIC_SEGMENT_NONE = '__none__'
+const semanticSegmentKey = ref<string>(SEMANTIC_SEGMENT_NONE)
 
 const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
 const matchThreshold = ref<string>('0.5')
-const RERANK_NONE = '__none__'
-const rerankKey = ref<string>(RERANK_NONE) // `${providerId}::${modelId}` or RERANK_NONE
-
-const currentRerankLabel = computed(() => {
-  if (!rerankKey.value || rerankKey.value === RERANK_NONE) return t('knowledge.create.noRerank')
-  const [pid, mid] = rerankKey.value.split('::')
-  if (!pid || !mid) return t('knowledge.create.noRerank')
-  const group = rerankGroups.value.find((g) => g.provider.provider_id === pid)
-  const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || t('knowledge.create.noRerank')
-})
 
 const close = () => emit('update:open', false)
 
-const loadRerankGroups = async () => {
+const currentSemanticSegmentLabel = computed(() => {
+  if (!semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE) {
+    return t('knowledge.create.noSemanticSegment')
+  }
+  const [pid, mid] = semanticSegmentKey.value.split('::')
+  if (!pid || !mid) return t('knowledge.create.noSemanticSegment')
+  const group = semanticSegmentGroups.value.find((g) => g.provider.provider_id === pid)
+  const model = group?.models.find((m) => m.model_id === mid)
+  return model?.name || t('knowledge.create.noSemanticSegment')
+})
+
+const loadProviders = async () => {
   loadingProviders.value = true
   try {
     const providers = (await ProvidersService.ListProviders()) || []
+    const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
-      providers.map(async (p) => {
+      enabledProviders.map(async (p) => {
         try {
           const detail = await ProvidersService.GetProviderWithModels(p.provider_id)
           return { provider: p, detail }
         } catch (error: unknown) {
-          // 单个 provider 加载失败不影响其他，仅记录警告
           console.warn(`Failed to load provider ${p.provider_id}:`, error)
           return { provider: p, detail: null as ProviderWithModels | null }
         }
       })
     )
 
-    const out: Group[] = []
+    const segOut: Group[] = []
     for (const item of details) {
-      const group = item.detail?.model_groups?.find((g) => g.type === 'rerank')
-      const models = group?.models || []
-      if (models.length > 0) out.push({ provider: item.provider, models })
+      const llmGroup = item.detail?.model_groups?.find((g) => g.type === 'llm')
+      const llmModels = (llmGroup?.models || []).filter((m) => m.enabled)
+      if (llmModels.length > 0) {
+        segOut.push({ provider: item.provider, models: llmModels })
+      }
     }
-    rerankGroups.value = out
+    semanticSegmentGroups.value = segOut
+  } catch (error) {
+    console.error('Failed to load providers:', error)
   } finally {
     loadingProviders.value = false
   }
@@ -107,17 +114,19 @@ watch(
   async (open) => {
     if (!open) return
     saving.value = false
-    await loadRerankGroups()
+    await loadProviders()
 
     // init from library
     topK.value = [props.library?.top_k ?? 20]
     chunkSize.value = String(props.library?.chunk_size ?? 1024)
     chunkOverlap.value = String(props.library?.chunk_overlap ?? 100)
     matchThreshold.value = String(props.library?.match_threshold ?? 0.5)
-    if (props.library?.rerank_provider_id && props.library?.rerank_model_id) {
-      rerankKey.value = `${props.library.rerank_provider_id}::${props.library.rerank_model_id}`
+
+    // 初始化语义分段模型
+    if (props.library?.semantic_segment_provider_id && props.library?.semantic_segment_model_id) {
+      semanticSegmentKey.value = `${props.library.semantic_segment_provider_id}::${props.library.semantic_segment_model_id}`
     } else {
-      rerankKey.value = RERANK_NONE
+      semanticSegmentKey.value = SEMANTIC_SEGMENT_NONE
     }
   }
 )
@@ -130,9 +139,11 @@ const isValid = computed(() => {
   return (
     (topK.value[0] ?? 0) > 0 &&
     Number.isFinite(cs) &&
-    cs > 0 &&
+    cs >= 500 &&
+    cs <= 5000 &&
     Number.isFinite(co) &&
     co >= 0 &&
+    co <= 1000 &&
     Number.isFinite(mt) &&
     mt >= 0 &&
     mt <= 1
@@ -143,13 +154,14 @@ const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
   saving.value = true
   try {
-    const isNone = !rerankKey.value || rerankKey.value === RERANK_NONE
-    const [pid, mid] = isNone ? ['', ''] : rerankKey.value.split('::')
+    const isNone = !semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE
+    const [pid, mid] = isNone ? ['', ''] : semanticSegmentKey.value.split('::')
+
     const updated = await LibraryService.UpdateLibrary(
       props.library.id,
       new UpdateLibraryInput({
-        rerank_provider_id: pid || '',
-        rerank_model_id: mid || '',
+        semantic_segment_provider_id: pid || '',
+        semantic_segment_model_id: mid || '',
         top_k: topK.value[0] ?? 20,
         chunk_size: Number.parseInt(chunkSize.value, 10),
         chunk_overlap: Number.parseInt(chunkOverlap.value, 10),
@@ -188,7 +200,7 @@ const handleSave = async () => {
             :min="1"
             :max="50"
             :step="1"
-            :disabled="loadingProviders || saving"
+            :disabled="saving"
             :marks="[
               { value: 1, label: '1' },
               { value: 20, label: t('knowledge.create.defaultMark'), emphasize: true },
@@ -198,24 +210,26 @@ const handleSave = async () => {
           />
         </div>
 
-        <!-- rerank -->
+        <!-- 语义分段模型 -->
         <div class="flex flex-col gap-1.5">
           <FieldLabel
-            :label="t('knowledge.create.rerankModel')"
-            :help="t('knowledge.help.rerankModel')"
+            :label="t('knowledge.create.semanticSegmentModel')"
+            :help="t('knowledge.help.semanticSegmentModel')"
           />
           <Select
-            v-model="rerankKey"
+            v-model="semanticSegmentKey"
             :disabled="loadingProviders || saving"
           >
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                {{ currentRerankLabel }}
+                {{ currentSemanticSegmentLabel }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem :value="RERANK_NONE">{{ t('knowledge.create.noRerank') }}</SelectItem>
-              <SelectGroup v-for="g in rerankGroups" :key="g.provider.provider_id">
+              <SelectItem :value="SEMANTIC_SEGMENT_NONE">
+                {{ t('knowledge.create.noSemanticSegment') }}
+              </SelectItem>
+              <SelectGroup v-for="g in semanticSegmentGroups" :key="g.provider.provider_id">
                 <SelectLabel>{{ g.provider.name }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
@@ -234,14 +248,28 @@ const handleSave = async () => {
             :label="t('knowledge.create.chunkSize')"
             :help="t('knowledge.help.chunkSize')"
           />
-          <Input v-model="chunkSize" type="number" min="1" step="1" :disabled="saving" />
+          <Input
+            v-model="chunkSize"
+            type="number"
+            min="500"
+            max="5000"
+            step="1"
+            :disabled="saving"
+          />
         </div>
         <div class="flex flex-col gap-1.5">
           <FieldLabel
             :label="t('knowledge.create.chunkOverlap')"
             :help="t('knowledge.help.chunkOverlap')"
           />
-          <Input v-model="chunkOverlap" type="number" min="0" step="1" :disabled="saving" />
+          <Input
+            v-model="chunkOverlap"
+            type="number"
+            min="0"
+            max="1000"
+            step="1"
+            :disabled="saving"
+          />
         </div>
         <div class="flex flex-col gap-1.5">
           <FieldLabel

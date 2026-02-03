@@ -44,17 +44,18 @@ const { t } = useI18n()
 
 const advanced = ref(false)
 const isSubmitting = ref(false)
-const loadingProviders = ref(false)
 const loadingEmbedding = ref(false)
+const loadingProviders = ref(false)
 const embeddingReady = ref(false)
 
 const name = ref('')
+const NAME_MAX_LEN = 30
 
+// 语义分段模型选择
 type Group = { provider: Provider; models: Model[] }
-const rerankGroups = ref<Group[]>([])
-
-const RERANK_NONE = '__none__'
-const rerankKey = ref<string>(RERANK_NONE) // `${providerId}::${modelId}` or RERANK_NONE
+const semanticSegmentGroups = ref<Group[]>([])
+const SEMANTIC_SEGMENT_NONE = '__none__'
+const semanticSegmentKey = ref<string>(SEMANTIC_SEGMENT_NONE) // `${providerId}::${modelId}` or NONE
 
 // advanced fields（用字符串承接输入，提交时再转 number）
 // shadcn Slider 使用 number[] 承载（支持 range）
@@ -69,24 +70,39 @@ const resetForm = () => {
   advanced.value = false
   isSubmitting.value = false
   name.value = ''
-  rerankKey.value = RERANK_NONE
+  semanticSegmentKey.value = SEMANTIC_SEGMENT_NONE
   topK.value = [20]
   chunkSize.value = '1024'
   chunkOverlap.value = '100'
   matchThreshold.value = '0.5'
 }
 
-const currentRerankLabel = computed(() => {
-  if (!rerankKey.value || rerankKey.value === RERANK_NONE) return t('knowledge.create.noRerank')
-  const [pid, mid] = rerankKey.value.split('::')
-  if (!pid || !mid) return t('knowledge.create.noRerank')
-  const group = rerankGroups.value.find((g) => g.provider.provider_id === pid)
+const currentSemanticSegmentLabel = computed(() => {
+  if (!semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE) {
+    return t('knowledge.create.noSemanticSegment')
+  }
+  const [pid, mid] = semanticSegmentKey.value.split('::')
+  if (!pid || !mid) return t('knowledge.create.noSemanticSegment')
+  const group = semanticSegmentGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || t('knowledge.create.noRerank')
+  return model?.name || t('knowledge.create.noSemanticSegment')
 })
 
 const isFormValid = computed(() => {
-  return name.value.trim() !== ''
+  const n = name.value.trim()
+  if (n === '' || n.length > NAME_MAX_LEN) return false
+
+  // 高级设置展开时校验范围
+  if (advanced.value) {
+    const cs = Number.parseInt(chunkSize.value, 10)
+    const co = Number.parseInt(chunkOverlap.value, 10)
+    const mt = Number.parseFloat(matchThreshold.value)
+    if (!Number.isFinite(cs) || cs < 500 || cs > 5000) return false
+    if (!Number.isFinite(co) || co < 0 || co > 1000) return false
+    if (!Number.isFinite(mt) || mt < 0 || mt > 1) return false
+  }
+
+  return true
 })
 
 const canSubmit = computed(() => {
@@ -113,28 +129,29 @@ const loadProviders = async () => {
   loadingProviders.value = true
   try {
     const providers = (await ProvidersService.ListProviders()) || []
+    const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
-      providers.map(async (p) => {
+      enabledProviders.map(async (p) => {
         try {
           const detail = await ProvidersService.GetProviderWithModels(p.provider_id)
           return { provider: p, detail }
         } catch (error: unknown) {
-          // 单个 provider 加载失败不影响其他，仅记录警告
           console.warn(`Failed to load provider ${p.provider_id}:`, error)
           return { provider: p, detail: null as ProviderWithModels | null }
         }
       })
     )
 
-    const out: Group[] = []
+    const segOut: Group[] = []
     for (const item of details) {
-      const group = item.detail?.model_groups?.find((g) => g.type === 'rerank')
-      const models = group?.models || []
-      if (models.length > 0) {
-        out.push({ provider: item.provider, models })
+      // 语义分段模型：复用 llm 模型组（仅 enabled）
+      const llmGroup = item.detail?.model_groups?.find((g) => g.type === 'llm')
+      const llmModels = (llmGroup?.models || []).filter((m) => m.enabled)
+      if (llmModels.length > 0) {
+        segOut.push({ provider: item.provider, models: llmModels })
       }
     }
-    rerankGroups.value = out
+    semanticSegmentGroups.value = segOut
   } catch (error) {
     console.error('Failed to load providers:', error)
     toast.error(getErrorMessage(error) || t('knowledge.providersLoadFailed'))
@@ -148,8 +165,8 @@ watch(
   (open) => {
     if (open) {
       resetForm()
-      void loadProviders()
       void loadEmbeddingReady()
+      void loadProviders()
     }
   }
 )
@@ -173,13 +190,13 @@ const handleSubmit = async () => {
       return Number.isFinite(n) ? n : undefined
     }
 
-    const isNone = !rerankKey.value || rerankKey.value === RERANK_NONE
-    const [rerankProviderId, rerankModelId] = isNone ? ['', ''] : rerankKey.value.split('::')
+    const isNone = !semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE
+    const [segProviderId, segModelId] = isNone ? ['', ''] : semanticSegmentKey.value.split('::')
 
     const input = new CreateLibraryInput({
       name: name.value.trim(),
-      rerank_provider_id: rerankProviderId || '',
-      rerank_model_id: rerankModelId || '',
+      semantic_segment_provider_id: segProviderId || '',
+      semantic_segment_model_id: segModelId || '',
       top_k: topK.value[0] ?? 20,
       chunk_size: toInt(chunkSize.value) ?? 1024,
       chunk_overlap: toInt(chunkOverlap.value) ?? 100,
@@ -219,8 +236,8 @@ const handleSubmit = async () => {
           <Input
             v-model="name"
             :placeholder="t('knowledge.create.namePlaceholder')"
-            maxlength="128"
-            :disabled="loadingProviders || isSubmitting"
+            :maxlength="NAME_MAX_LEN"
+            :disabled="isSubmitting"
           />
         </div>
 
@@ -237,7 +254,7 @@ const handleSubmit = async () => {
             :min="1"
             :max="50"
             :step="1"
-            :disabled="loadingProviders || isSubmitting"
+            :disabled="isSubmitting"
             :marks="[
               { value: 1, label: '1' },
               { value: 20, label: t('knowledge.create.defaultMark'), emphasize: true },
@@ -255,24 +272,27 @@ const handleSubmit = async () => {
           <div class="text-base font-semibold text-foreground">
             {{ t('knowledge.create.advanced') }}
           </div>
-          <!-- 重排模型 -->
+
+          <!-- 语义分段模型 -->
           <div class="flex flex-col gap-1.5">
             <FieldLabel
-              :label="t('knowledge.create.rerankModel')"
-              :help="t('knowledge.help.rerankModel')"
+              :label="t('knowledge.create.semanticSegmentModel')"
+              :help="t('knowledge.help.semanticSegmentModel')"
             />
             <Select
-              v-model="rerankKey"
+              v-model="semanticSegmentKey"
               :disabled="loadingProviders || isSubmitting"
             >
               <SelectTrigger class="w-full">
                 <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                  {{ currentRerankLabel }}
+                  {{ currentSemanticSegmentLabel }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem :value="RERANK_NONE">{{ t('knowledge.create.noRerank') }}</SelectItem>
-                <SelectGroup v-for="g in rerankGroups" :key="g.provider.provider_id">
+                <SelectItem :value="SEMANTIC_SEGMENT_NONE">
+                  {{ t('knowledge.create.noSemanticSegment') }}
+                </SelectItem>
+                <SelectGroup v-for="g in semanticSegmentGroups" :key="g.provider.provider_id">
                   <SelectLabel>{{ g.provider.name }}</SelectLabel>
                   <SelectItem
                     v-for="m in g.models"
@@ -291,14 +311,28 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.chunkSize')"
               :help="t('knowledge.help.chunkSize')"
             />
-            <Input v-model="chunkSize" type="number" min="1" step="1" :disabled="isSubmitting" />
+            <Input
+              v-model="chunkSize"
+              type="number"
+              min="500"
+              max="5000"
+              step="1"
+              :disabled="isSubmitting"
+            />
           </div>
           <div class="flex flex-col gap-1.5">
             <FieldLabel
               :label="t('knowledge.create.chunkOverlap')"
               :help="t('knowledge.help.chunkOverlap')"
             />
-            <Input v-model="chunkOverlap" type="number" min="0" step="1" :disabled="isSubmitting" />
+            <Input
+              v-model="chunkOverlap"
+              type="number"
+              min="0"
+              max="1000"
+              step="1"
+              :disabled="isSubmitting"
+            />
           </div>
           <div class="flex flex-col gap-1.5">
             <FieldLabel
