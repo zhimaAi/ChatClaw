@@ -159,9 +159,12 @@ const loadAgents = async () => {
     const list = await AgentsService.ListAgents()
     agents.value = list
 
-    // 默认选中第一个助手
-    if (list.length > 0) {
-      activeAgentId.value = list[0].id
+    // Preserve current selection if possible; otherwise fall back to first agent (or null)
+    const currentId = activeAgentId.value
+    if (currentId != null && list.some((a) => a.id === currentId)) {
+      // keep currentId
+    } else {
+      activeAgentId.value = list.length > 0 ? list[0].id : null
     }
 
     // Update tab icon and title
@@ -505,11 +508,13 @@ watch(providersWithModels, () => {
 // 当前标签页是否激活
 const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 
-// 监听标签页激活状态，激活时刷新模型列表
-// 这样用户在设置页面启用模型后，切换回聊天页面时能看到最新的模型
+// 监听标签页激活状态，激活时刷新模型/助手列表
+// - 模型：用户可能在设置页启用/禁用 provider/model
+// - 助手：其它标签页可能创建/更新/删除了助手
 watch(isTabActive, (active) => {
   if (active) {
     loadModels()
+    loadAgents()
   }
 })
 
@@ -528,7 +533,7 @@ onMounted(() => {
       chatInput.value = text
       // Auto-send after a short delay (if model is selected)
       if (canSend.value) {
-        setTimeout(() => {
+        window.setTimeout(() => {
           handleSend()
         }, 100)
       }
@@ -669,7 +674,7 @@ onUnmounted(() => {
                           </DropdownMenuItem>
                         </template>
                         <DropdownMenuItem v-else disabled>
-                          {{ t('assistant.empty') }}
+                          {{ t('assistant.conversation.empty') }}
                         </DropdownMenuItem>
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
