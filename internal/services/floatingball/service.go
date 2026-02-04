@@ -527,6 +527,8 @@ func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 		}
 		// macOS: ensure hover works even when window is non-activating
 		enableMacHoverTracking(s.win)
+		// windows: ensure true frameless (WS_POPUP) so small 64x64 sizing works
+		enableWindowsPopupStyle(s.win, s)
 		s.scheduleRepositionLocked()
 	})
 
