@@ -4,10 +4,11 @@ package winsnap
 
 /*
 #cgo darwin CFLAGS: -x objective-c -fobjc-arc
-#cgo darwin LDFLAGS: -framework Cocoa -framework ApplicationServices
+#cgo darwin LDFLAGS: -framework Cocoa -framework ApplicationServices -framework CoreGraphics
 
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <CoreGraphics/CGWindow.h>
 #import <os/lock.h>
 
 typedef struct ScreenInfo {
@@ -51,7 +52,8 @@ typedef struct WinsnapFollower {
 } WinsnapFollower;
 
 static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame);
-static int winsnap_get_ax_window_number(AXUIElementRef win);
+// Gets CG window number by matching AX window frame to CGWindowListCopyWindowInfo (macOS has no public kAXWindowNumberAttribute).
+static int winsnap_get_ax_window_number(AXUIElementRef win, pid_t pid);
 static bool winsnap_is_frontmost_pid(pid_t pid);
 static void winsnap_order_above_target(WinsnapFollower *f);
 static void winsnap_register_activation_observer(WinsnapFollower *f);
@@ -224,19 +226,35 @@ static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame) {
 	return true;
 }
 
-static int winsnap_get_ax_window_number(AXUIElementRef win) {
-	if (!win) return 0;
-	CFTypeRef numVal = NULL;
-	if (AXUIElementCopyAttributeValue(win, kAXWindowNumberAttribute, &numVal) != kAXErrorSuccess || !numVal) {
-		return 0;
+static int winsnap_get_ax_window_number(AXUIElementRef win, pid_t pid) {
+	if (!win || pid <= 0) return 0;
+	CGRect axFrame = CGRectZero;
+	if (!winsnap_get_ax_frame(win, &axFrame)) return 0;
+	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+	if (!list) return 0;
+	int result = 0;
+	CFIndex n = CFArrayGetCount(list);
+	for (CFIndex i = 0; i < n; i++) {
+		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
+		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
+		if (!pidRef) continue;
+		pid_t wpid = 0;
+		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
+		if (wpid != pid) continue;
+		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
+		if (!bounds) continue;
+		CGRect cgRect;
+		if (!CGRectMakeWithDictionaryRepresentation(bounds, &cgRect)) continue;
+		// Match AX frame (same coordinate system: top-left origin, Y down).
+		if (fabs(cgRect.origin.x - axFrame.origin.x) < 2.0 && fabs(cgRect.origin.y - axFrame.origin.y) < 2.0 &&
+		    fabs(cgRect.size.width - axFrame.size.width) < 2.0 && fabs(cgRect.size.height - axFrame.size.height) < 2.0) {
+			CFNumberRef numRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
+			if (numRef) CFNumberGetValue(numRef, kCFNumberIntType, &result);
+			break;
+		}
 	}
-	int64_t n = 0;
-	if (CFGetTypeID(numVal) == CFNumberGetTypeID()) {
-		CFNumberGetValue((CFNumberRef)numVal, kCFNumberSInt64Type, &n);
-	}
-	CFRelease(numVal);
-	if (n <= 0) return 0;
-	return (int)n;
+	CFRelease(list);
+	return result;
 }
 
 static bool winsnap_is_frontmost_pid(pid_t pid) {
@@ -300,7 +318,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 
 	CGRect target = CGRectZero;
 	if (!winsnap_get_ax_frame(win, &target)) return;
-	int winNo = winsnap_get_ax_window_number(win);
+	int winNo = winsnap_get_ax_window_number(win, f->pid);
 
 	// Convert AX coordinates to Cocoa coordinates in the callback thread (reduces main-thread workload).
 	// AX: origin at top-left of primary screen, Y grows downward.

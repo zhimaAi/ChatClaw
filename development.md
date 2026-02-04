@@ -90,6 +90,10 @@ Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
 - 参考文档：`https://wails.io/zh-Hans/docs/next/guides/windows-installer/`
 - 安装后将 makensis 安装目录添加到 **Path** 环境变量中（确保命令行可直接执行 `makensis`）
 
+## macOS 划词搜索与吸附功能
+
+在 Mac 上构建/调试划词搜索和吸附功能时，若遇到编译或运行问题，可参考 **[mac-textselection-snap-fix-log.md](./mac-textselection-snap-fix-log.md)**：内含 Mac 构建报错原因分析、吸附功能修复说明，以及划词/吸附的测试检查清单与「已尝试无效方案」记录，便于避免重复踩坑。
+
 ## macOS 多架构打包（production）
 
 ```bash

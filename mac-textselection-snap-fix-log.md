@@ -1,0 +1,126 @@
+# Mac 划词搜索与吸附功能修复/测试日志
+
+本文档记录在 macOS 上运行划词搜索（text selection）和吸附（snap）功能时的报错原因、修复方案及测试检查清单，便于后续不再犯相同错误，或调试时不重复尝试已证明无效的方案。
+
+---
+
+## 一、Mac 构建报错原因分析（2026-02-04）
+
+### 1. 实际导致编译失败的错误（必须修复）
+
+**报错：**
+
+```text
+# willchat/pkg/winsnap
+pkg/winsnap/winsnap_darwin.go:230:41: error: use of undeclared identifier 'kAXWindowNumberAttribute'
+        if (AXUIElementCopyAttributeValue(win, kAXWindowNumberAttribute, &numVal) != kAXErrorSuccess || !numVal) {
+                                               ^
+1 error generated.
+```
+
+**原因：**
+
+- `kAXWindowNumberAttribute` **在 macOS 公开的 Accessibility API 中不存在**。
+- Apple 公开头文件（ApplicationServices/Accessibility）里没有声明该常量；通过 AXUIElement 获取「窗口号」没有公开 API。
+- 社区常见做法：用 **CGWindowListCopyWindowInfo** 拿到带 `kCGWindowNumber` 的窗口列表，再通过 **位置/大小/标题** 与 AX 窗口匹配，从而得到窗口号（用于 `orderWindow:relativeTo:` 等）。
+
+**结论：** 不能依赖 `kAXWindowNumberAttribute`，需改用「AX 窗口 frame + PID + CGWindowList 按 frame 匹配」获取窗口号。
+
+---
+
+### 2. 仅警告、不阻止编译的部分（可后续优化）
+
+**sqlite-vec-go-bindings / CGO：**
+
+- `sqlite3_auto_extension` / `sqlite3_cancel_auto_extension`：在 macOS 上被标记为 deprecated（进程级 auto extension 在 Apple 平台不受支持），仅为警告。
+- `sqlite3_vtab_in` / `sqlite3_vtab_in_first` / `sqlite3_vtab_in_next`：仅在 macOS 13.0+ 可用，当前部署目标为 10.15，产生 `-Wunguarded-availability-new` 警告；建议在 C 代码里用 `__builtin_available` 包裹，或提升部署目标，或联系 sqlite-vec 上游。
+
+**处理建议：** 先保证 Mac 能编译通过（修复 winsnap 的 `kAXWindowNumberAttribute`）；上述 CGO 警告可单独排期处理。
+
+---
+
+## 二、吸附功能（winsnap）修复方案（已实施）
+
+**文件：** `pkg/winsnap/winsnap_darwin.go`
+
+**思路：** 不再使用不存在的 `kAXWindowNumberAttribute`，改为：
+
+1. 用已有 `winsnap_get_ax_frame(win, &axFrame)` 得到 AX 窗口的 frame（与 CG 同坐标系：左上角为原点，Y 向下）。
+2. 用 `CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID)` 获取所有在屏窗口。
+3. 在列表中按 **PID**（`kCGWindowOwnerPID`）过滤出目标进程的窗口，再用 **bounds**（`kCGWindowBounds`，用 `CGRectMakeWithDictionaryRepresentation` 解析）与 AX frame 做匹配（允许约 2 像素误差）。
+4. 匹配到则取该条目的 `kCGWindowNumber`，作为 `orderWindow:NSWindowAbove relativeTo:winNo` 的 `winNo`。
+
+**代码层面：**
+
+- 增加 `#import <CoreGraphics/CGWindow.h>` 和 `-framework CoreGraphics`。
+- `winsnap_get_ax_window_number(AXUIElementRef win)` 改为 `winsnap_get_ax_window_number(AXUIElementRef win, pid_t pid)`，在实现内用上述 CGWindowList + frame 匹配逻辑。
+- 调用处（如 `winsnap_sync_to_target`）传入 `f->pid`。
+
+**注意：** 若同一进程存在位置/大小完全相同的多窗口，理论上可能匹配到错误窗口；实际场景中极少见，可与「按标题再匹配」等作为后续增强。
+
+---
+
+## 三、Mac 划词搜索与吸附功能测试检查清单
+
+在 Mac 上验证划词搜索和吸附时，建议按下面清单逐项打勾，避免重复测试无效方案或遗漏环境差异。
+
+### 3.1 环境与构建
+
+- [ ] **系统版本**：macOS _____（如 13.x / 14.x / 15.x）
+- [ ] **架构**：arm64 / x86_64
+- [ ] **构建命令**：`wails3 build DEV=true` 或 `wails3 task darwin:build` 等 _____
+- [ ] **构建结果**：通过 / 失败（若失败，错误信息记录在下方「本次测试备注」）
+
+### 3.2 划词搜索（Text Selection）
+
+- [ ] 在目标应用（如浏览器、文本编辑器）中选中一段文字，能否正常弹出划词搜索 UI
+- [ ] 弹窗位置、大小是否合理，是否被遮挡或错位
+- [ ] 再次划词时，前一次弹窗是否正确关闭或更新
+- [ ] 若存在「无焦点/不激活主窗口」逻辑，在 Mac 上是否仍符合预期
+
+**已知平台差异（可在此补充）：**
+
+- 例如：剪贴板、鼠标钩子、焦点/激活行为在 macOS 与 Windows 可能不同，需分别验证。
+
+### 3.3 吸附功能（Snap）
+
+- [ ] 选择目标应用并开启吸附后，侧边小窗是否稳定出现在目标窗口右侧并随其移动
+- [ ] 目标窗口置前时，小窗是否保持在目标窗口之上（z-order），不被其它窗口盖住
+- [ ] 多显示器、窗口全屏、窗口移动/缩放时，吸附位置是否仍正确
+- [ ] 关闭目标应用或取消吸附后，小窗是否正常消失或恢复
+
+**已知平台差异（可在此补充）：**
+
+- macOS 无公开的「AX 窗口号」API，需通过 CGWindowList + frame 匹配获取窗口号；若匹配失败，z-order 可能异常，需在此注明现象。
+
+### 3.4 本次测试备注（自由填写）
+
+```text
+日期：
+测试人：
+问题描述：
+已尝试方案（避免重复）：
+结论：
+```
+
+---
+
+## 四、已尝试且无效/不推荐的方案（避免重复踩坑）
+
+| 方案 | 结果 | 说明 |
+|------|------|------|
+| 在 macOS 上直接使用 `kAXWindowNumberAttribute` | 编译失败 | 该常量在公开 SDK 中未声明，不要使用。 |
+| 仅靠 AX API 获取窗口号 | 不可行 | 公开 AX 无「窗口号」属性，需配合 CGWindowList。 |
+| 不传 PID 仅用 AX frame 在全局窗口列表中匹配 | 易错 | 多进程时可能匹配到其它进程同位置窗口，必须用 PID 过滤。 |
+
+---
+
+## 五、后续可优化项（非本次必须）
+
+- 处理 sqlite-vec 在 Mac 上的 CGO 弃用/可用性警告（部署目标或 `__builtin_available`）。
+- 吸附匹配：若遇多窗口同 frame，可增加标题或其它属性二次匹配。
+- 将本日志中的「已尝试且无效方案」与「测试检查清单」随问题迭代更新，便于新同事或后续调试复用。
+
+---
+
+*文档版本：2026-02-04；随 Mac 修复与测试进展更新。*
