@@ -14,6 +14,7 @@
   "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
+  "error.window_service_required": "window service is required",
 
   "error.provider_id_required": "provider ID is required",
   "error.provider_not_found": "provider '{{.ProviderID}}' not found",
@@ -98,5 +99,7 @@
   "error.conversation_create_failed": "failed to create conversation",
   "error.conversation_update_failed": "failed to update conversation",
   "error.conversation_delete_failed": "failed to delete conversation",
-  "error.conversation_name_required": "conversation name is required"
+  "error.conversation_name_required": "conversation name is required",
+  "error.question_required": "question is required",
+  "error.request_id_required": "request ID is required"
 }

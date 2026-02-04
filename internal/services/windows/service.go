@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	WindowWinsnap = "winsnap"
+	WindowWinsnap       = "winsnap"
+	WindowTextSelection = "textselection"
 )
 
 type WindowInfo struct {

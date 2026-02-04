@@ -9,6 +9,10 @@ import (
 
 var (
 	ErrTargetWindowNotFound = errors.New("winsnap: target window not found")
+	ErrNotSupported         = errors.New("winsnap: not supported on this platform")
+	// ErrSelfIsFrontmost is returned when the frontmost application is our own app.
+	// Callers should preserve the current snap state when this error is returned.
+	ErrSelfIsFrontmost = errors.New("winsnap: self is frontmost")
 )
 
 // AttachOptions 吸附窗口的配置选项

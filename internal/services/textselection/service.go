@@ -1,0 +1,600 @@
+package textselection
+
+import (
+	"runtime"
+	"sync"
+	"time"
+
+	"willchat/internal/services/settings"
+	"willchat/internal/services/windows"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
+)
+
+const (
+	// WindowTextSelection is the name of the text selection popup window.
+	WindowTextSelection = "textselection"
+	// SettingKeyTextSelectionEnabled is the settings key for enabling text selection.
+	// Must match the key used in frontend: ToolsSettings.vue
+	SettingKeyTextSelectionEnabled = "enable_selection_search"
+)
+
+// TextSelectionService provides text selection popup functionality.
+// It uses mouse hook mode: detect selection drag -> copy to clipboard -> show popup.
+type TextSelectionService struct {
+	mu sync.RWMutex
+
+	app        *application.App
+	mainWindow *application.WebviewWindow
+	popWindow  *application.WebviewWindow
+	popOptions application.WebviewWindowOptions
+
+	// getSnapState returns current snap state. This is injected at construction
+	// time to avoid exposing SnapService in Wails bindings.
+	getSnapState func() windows.SnapState
+
+	// Currently selected text
+	selectedText string
+	// Popup position and size
+	popX, popY int
+	popWidth   int
+	popHeight  int
+	// Whether popup is currently shown (logical state).
+	popupActive bool
+
+	// Original app PID (used to wake original app and execute copy on button click)
+	originalAppPid int32
+
+	// Auto-hide timer
+	hideTimer *time.Timer
+
+	// Mouse hook watcher
+	mouseHookWatcher *MouseHookWatcher
+
+	// Click outside watcher
+	clickOutsideWatcher *ClickOutsideWatcher
+
+	// Whether the service is enabled
+	enabled bool
+
+	// Last button click time (for debouncing duplicate clicks)
+	lastClickTime time.Time
+}
+
+// New creates a new TextSelectionService.
+func New() *TextSelectionService {
+	return NewWithSnapStateGetter(nil)
+}
+
+// NewWithSnapStateGetter creates a new TextSelectionService with an optional
+// snap state getter. If nil, snap state is treated as stopped.
+func NewWithSnapStateGetter(getter func() windows.SnapState) *TextSelectionService {
+	return &TextSelectionService{
+		popWidth:  140,
+		popHeight: 50,
+		getSnapState: func() windows.SnapState {
+			if getter == nil {
+				return windows.SnapStateStopped
+			}
+			return getter()
+		},
+	}
+}
+
+// Attach is called by bootstrap after creating windows.
+func (s *TextSelectionService) Attach(app *application.App, mainWindow *application.WebviewWindow, popOptions application.WebviewWindowOptions) {
+	s.mu.Lock()
+	s.app = app
+	s.mainWindow = mainWindow
+	s.popOptions = popOptions
+	s.mu.Unlock()
+
+	// Listen for frontend text selection events
+	app.Event.On("text-selection:show", func(e *application.CustomEvent) {
+		data, ok := e.Data.(map[string]any)
+		if !ok {
+			return
+		}
+		text, _ := data["text"].(string)
+		x, _ := data["x"].(float64)
+		y, _ := data["y"].(float64)
+		if text == "" {
+			return
+		}
+		s.Show(text, int(x), int(y))
+	})
+
+	app.Event.On("text-selection:hide", func(_ *application.CustomEvent) {
+		s.Hide()
+	})
+
+	// Listen for click outside events (triggered by hook thread, executed in main thread)
+	app.Event.On("text-selection:click-outside", func(_ *application.CustomEvent) {
+		s.Hide()
+	})
+
+	// Listen for popup button click events
+	app.Event.On("text-selection:button-click", func(_ *application.CustomEvent) {
+		s.handleButtonClick()
+	})
+
+	// Listen for system-level text selection events (triggered by hook thread, executed in main thread)
+	app.Event.On("text-selection:show-at-screen-pos", func(e *application.CustomEvent) {
+		data, ok := e.Data.(map[string]any)
+		if !ok {
+			return
+		}
+		text, _ := data["text"].(string)
+		x, _ := data["x"].(int)
+		y, _ := data["y"].(int)
+		if text == "" {
+			return
+		}
+		s.showAtScreenPosInternal(text, x, y)
+	})
+
+	// Start click outside watcher
+	s.startClickOutsideWatcher()
+}
+
+// SyncFromSettings reads the text selection setting and enables/disables the service.
+func (s *TextSelectionService) SyncFromSettings() (bool, error) {
+	enabled := settings.GetBool(SettingKeyTextSelectionEnabled, false)
+	s.mu.Lock()
+	wasEnabled := s.enabled
+	s.enabled = enabled
+	app := s.app
+	s.mu.Unlock()
+
+	if app != nil {
+		app.Logger.Info("TextSelectionService.SyncFromSettings", "enabled", enabled, "wasEnabled", wasEnabled)
+	}
+
+	if enabled && !wasEnabled {
+		if app != nil {
+			app.Logger.Info("TextSelectionService: starting mouse hook watcher")
+		}
+		s.startWatcher()
+	} else if !enabled && wasEnabled {
+		if app != nil {
+			app.Logger.Info("TextSelectionService: stopping mouse hook watcher")
+		}
+		s.stopWatcher()
+	}
+
+	return enabled, nil
+}
+
+// IsEnabled returns whether the service is enabled.
+func (s *TextSelectionService) IsEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.enabled
+}
+
+// startClickOutsideWatcher starts the click outside watcher.
+func (s *TextSelectionService) startClickOutsideWatcher() {
+	s.clickOutsideWatcher = NewClickOutsideWatcher(func(x, y int32) {
+		// Hide popup when clicked outside
+		// Note: must execute window operations in main thread, so trigger via event
+		if s.app != nil {
+			s.app.Event.Emit("text-selection:click-outside", nil)
+		}
+	})
+	go s.clickOutsideWatcher.Start()
+}
+
+// startWatcher starts the mouse hook watcher.
+func (s *TextSelectionService) startWatcher() {
+	callback := func(text string, x, y int32) {
+		if text == "" {
+			return
+		}
+		s.ShowAtScreenPos(text, int(x), int(y))
+	}
+
+	// Callback when drag starts (hide popup if click is not inside popup)
+	onDragStart := func(mouseX, mouseY int32) {
+		// Check if click is inside popup area
+		s.mu.RLock()
+		popX := s.popX
+		popY := s.popY
+		popW := s.popWidth
+		popH := s.popHeight
+		w := s.popWindow
+		active := s.popupActive
+		s.mu.RUnlock()
+
+		// If popup doesn't exist or is not visible, no need to process
+		if w == nil || !active {
+			return
+		}
+
+		// On macOS coordinates are physical pixels, need to convert popup size to physical pixels
+		popWPx := popW
+		popHPx := popH
+		marginPx := int32(15)
+		if runtime.GOOS == "darwin" {
+			scale := getDPIScale()
+			popWPx = int(float64(popW) * scale)
+			popHPx = int(float64(popH) * scale)
+			marginPx = int32(15 * scale)
+		}
+
+		// Check if click is inside popup area (with some tolerance)
+		inPopup := mouseX >= int32(popX)-marginPx && mouseX <= int32(popX+popWPx)+marginPx &&
+			mouseY >= int32(popY)-marginPx && mouseY <= int32(popY+popHPx)+marginPx
+
+		// If click is inside popup, trigger button click (matching demo project behavior)
+		if inPopup {
+			go s.handleButtonClick()
+			return
+		}
+
+		// Click is outside popup, hide popup
+		if s.app != nil {
+			s.app.Event.Emit("text-selection:hide", nil)
+		}
+	}
+
+	// Use "copy before popup" mode: simulate Ctrl+C -> read clipboard -> show popup
+	s.mu.Lock()
+	s.mouseHookWatcher = NewMouseHookWatcher(callback, onDragStart, nil)
+	s.mu.Unlock()
+
+	go s.mouseHookWatcher.Start()
+}
+
+// stopWatcher stops the mouse hook watcher.
+func (s *TextSelectionService) stopWatcher() {
+	s.mu.Lock()
+	if s.mouseHookWatcher != nil {
+		s.mouseHookWatcher.Stop()
+		s.mouseHookWatcher = nil
+	}
+	s.mu.Unlock()
+}
+
+// Show shows the popup at the specified position (for in-app use, coordinates relative to main window content area).
+func (s *TextSelectionService) Show(text string, clientX, clientY int) {
+	if !s.IsEnabled() {
+		return
+	}
+	s.mu.Lock()
+	s.selectedText = text
+	s.originalAppPid = 0 // In-app selection, reset PID, use existing text
+	app := s.app
+	mainW := s.mainWindow
+
+	// Cancel previous hide timer
+	if s.hideTimer != nil {
+		s.hideTimer.Stop()
+		s.hideTimer = nil
+	}
+	s.mu.Unlock()
+
+	if app == nil || mainW == nil {
+		return
+	}
+
+	// Get main window position (screen coordinates)
+	winX, winY := mainW.Position()
+	_, _ = mainW.Size() // Get but don't use
+
+	var finalX, finalY int
+
+	if runtime.GOOS == "darwin" {
+		// macOS uses the same coordinate system as other apps
+		scale := getDPIScale()
+		popWidthPx := int(float64(s.popWidth) * scale)
+		popHeightPx := int(float64(s.popHeight) * scale)
+		offsetPx := int(10 * scale)
+
+		// macOS window title bar height (points)
+		titleBarHeight := 28
+		titleBarHeightPx := int(float64(titleBarHeight) * scale)
+
+		// Convert DOM clientX/clientY to screen pixel coordinates
+		clientXPx := int(float64(clientX) * scale)
+		clientYPx := int(float64(clientY) * scale)
+
+		// Screen coordinates = window position + title bar height + client area offset
+		screenX := int(float64(winX)*scale) + clientXPx
+		screenY := int(float64(winY)*scale) + titleBarHeightPx + clientYPx
+
+		// Show popup above mouse
+		finalX = screenX - popWidthPx/2
+		finalY = screenY - popHeightPx - offsetPx
+	} else {
+		// Windows: standard screen coordinates (Y increases downward)
+		titleBarHeight := 32 // Windows standard title bar height (pixels)
+
+		screenX := winX + clientX
+		screenY := winY + titleBarHeight + clientY
+
+		finalX = screenX - s.popWidth/2
+		finalY = screenY - s.popHeight - 10
+
+		// Ensure popup doesn't exceed screen bounds
+		if screen := app.Screen.GetPrimary(); screen != nil {
+			wa := screen.WorkArea
+			if finalX < wa.X {
+				finalX = wa.X
+			}
+			if finalX+s.popWidth > wa.X+wa.Width {
+				finalX = wa.X + wa.Width - s.popWidth
+			}
+			if finalY < wa.Y {
+				// If can't fit above, show below
+				finalY = screenY + 10
+			}
+		}
+	}
+
+	// Update popup's recorded position
+	s.mu.Lock()
+	s.popX = finalX
+	s.popY = finalY
+	s.mu.Unlock()
+
+	s.showPopupAt(finalX, finalY)
+}
+
+// ShowAtScreenPos shows the popup at the specified screen position (for system-level monitoring).
+// Note: this method ensures window operations are executed in main thread via event system.
+func (s *TextSelectionService) ShowAtScreenPos(text string, screenX, screenY int) {
+	if !s.IsEnabled() {
+		return
+	}
+	s.mu.Lock()
+	app := s.app
+	s.mu.Unlock()
+
+	if app == nil {
+		return
+	}
+
+	// Execute window operations in main thread via event system
+	app.Event.Emit("text-selection:show-at-screen-pos", map[string]any{
+		"text": text,
+		"x":    screenX,
+		"y":    screenY,
+	})
+}
+
+// showAtScreenPosInternal is the internal method that executes actual show operation in main thread.
+func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, screenY int) {
+	s.mu.Lock()
+	s.selectedText = text
+	s.originalAppPid = -1 // Mark as "other app selection" (not in-app selection)
+	s.popX = screenX
+	s.popY = screenY
+	app := s.app
+
+	// Cancel previous hide timer
+	if s.hideTimer != nil {
+		s.hideTimer.Stop()
+		s.hideTimer = nil
+	}
+	s.mu.Unlock()
+
+	if app == nil {
+		return
+	}
+
+	app.Logger.Info("TextSelectionService.showAtScreenPosInternal", "text", text[:min(len(text), 20)], "screenX", screenX, "screenY", screenY)
+
+	var finalX, finalY int
+
+	if runtime.GOOS == "darwin" {
+		// macOS coordinate handling (matching demo project approach):
+		// - Mouse hook (CGEventTap) returns physical pixels
+		// - Use physical pixels consistently for both SetPosition and click detection
+		// Note: Despite Wails docs saying SetPosition uses logical points,
+		//       the demo project uses physical pixels and it works correctly.
+		scale := getDPIScale()
+
+		// screenX/screenY are in physical pixels
+		// Calculate popup position in pixels
+		popWidthPx := int(float64(s.popWidth) * scale)
+		popHeightPx := int(float64(s.popHeight) * scale)
+		offsetPx := int(10 * scale)
+
+		// Use pixel coordinates directly (same as demo project)
+		finalX = screenX - popWidthPx/2
+		finalY = screenY - popHeightPx - offsetPx
+	} else {
+		// Windows: use logical pixels
+		finalX = screenX - s.popWidth/2
+		// Above mouse = mouseY - height - offset (Y increases downward)
+		finalY = screenY - s.popHeight - 10
+
+		// Ensure popup doesn't exceed screen bounds
+		if screen := app.Screen.GetPrimary(); screen != nil {
+			wa := screen.WorkArea
+			if finalX < wa.X {
+				finalX = wa.X
+			}
+			if finalX+s.popWidth > wa.X+wa.Width {
+				finalX = wa.X + wa.Width - s.popWidth
+			}
+			// Check if exceeds screen top
+			if finalY < wa.Y {
+				// Show below mouse
+				finalY = screenY + 20
+			}
+		}
+	}
+
+	s.showPopupAt(finalX, finalY)
+}
+
+// showPopupAt shows the popup at the specified screen position.
+// On macOS, x/y are in physical pixels. On Windows, they are in logical pixels.
+func (s *TextSelectionService) showPopupAt(x, y int) {
+	s.mu.Lock()
+	s.popX = x
+	s.popY = y
+	s.popupActive = true
+	popW := s.popWidth
+	popH := s.popHeight
+	s.mu.Unlock()
+
+	// Set window position
+	s.ensurePopWindow(x, y)
+
+	// Update click outside watcher's popup area
+	// On macOS, both x/y and click detection use physical pixels
+	if s.clickOutsideWatcher != nil {
+		rectW := popW
+		rectH := popH
+		if runtime.GOOS == "darwin" {
+			// Convert popup size to physical pixels
+			scale := getDPIScale()
+			rectW = int(float64(popW) * scale)
+			rectH = int(float64(popH) * scale)
+		}
+		s.clickOutsideWatcher.SetPopupRect(int32(x), int32(y), int32(rectW), int32(rectH))
+	}
+}
+
+// Hide hides the popup.
+func (s *TextSelectionService) Hide() {
+	s.mu.Lock()
+	if s.hideTimer != nil {
+		s.hideTimer.Stop()
+		s.hideTimer = nil
+	}
+	w := s.popWindow
+	s.popX = -9999
+	s.popY = -9999
+	s.popupActive = false
+	// Don't clear popWindow reference, reuse window
+	s.mu.Unlock()
+
+	if w != nil {
+		// Don't use w.Hide(), because Wails Hide() internally calls Focus, causing WebView2 error
+		// Move window off-screen to "hide" instead
+		w.SetPosition(-9999, -9999)
+	}
+
+	// Clear click outside watcher's popup area
+	if s.clickOutsideWatcher != nil {
+		s.clickOutsideWatcher.ClearPopupRect()
+	}
+}
+
+// handleButtonClick handles button click event.
+// Check snap window state and send text to appropriate target.
+// Includes debounce logic to prevent duplicate triggers within 500ms.
+func (s *TextSelectionService) handleButtonClick() map[string]any {
+	s.mu.Lock()
+	// Debounce: ignore clicks within 500ms of the last click
+	now := time.Now()
+	if now.Sub(s.lastClickTime) < 500*time.Millisecond {
+		s.mu.Unlock()
+		return map[string]any{"error": "debounced"}
+	}
+	s.lastClickTime = now
+
+	text := s.selectedText
+	app := s.app
+	mainWindow := s.mainWindow
+	getSnapState := s.getSnapState
+	s.mu.Unlock()
+
+	if text == "" || app == nil {
+		return map[string]any{"error": "no text selected"}
+	}
+
+	// Emit event with text - frontend (main window) will handle routing
+	// based on snap window state
+	app.Event.Emit("text-selection:action", map[string]any{
+		"text": text,
+	})
+
+	// Only wake main window when snap window is NOT attached.
+	// - attached: user interacts with winsnap; do NOT activate main window.
+	// - hidden/stopped: user interacts with main assistant; activate main window.
+	state := windows.SnapStateStopped
+	if getSnapState != nil {
+		state = getSnapState()
+	}
+	if state != windows.SnapStateAttached {
+		forceActivateWindow(mainWindow)
+	}
+
+	// Delay hide popup
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		s.Hide()
+	}()
+
+	return map[string]any{
+		"text": text,
+	}
+}
+
+// GetSelectedText returns the currently selected text.
+func (s *TextSelectionService) GetSelectedText() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.selectedText
+}
+
+func (s *TextSelectionService) ensurePopWindow(x, y int) {
+	s.mu.Lock()
+	app := s.app
+	w := s.popWindow
+	opts := s.popOptions
+	s.mu.Unlock()
+
+	if app == nil {
+		return
+	}
+
+	// If window doesn't exist, create new window
+	if w == nil {
+		opts.X = x
+		opts.Y = y
+		opts.InitialPosition = application.WindowXY
+		opts.Hidden = true // Create hidden window first
+
+		w = app.Window.NewWithOptions(opts)
+		if w == nil {
+			return
+		}
+
+		// Windows: prevent the popup from taking focus (WebView2 Focus may crash).
+		tryConfigurePopupNoActivate(w)
+
+		s.mu.Lock()
+		s.popWindow = w
+		s.mu.Unlock()
+
+		// Listen for window closing event
+		w.RegisterHook(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+			s.mu.Lock()
+			if s.popWindow == w {
+				s.popWindow = nil
+			}
+			s.mu.Unlock()
+		})
+
+		// macOS special handling: disable window tiling
+		if runtime.GOOS == "darwin" {
+			s.disableMacOSWindowTiling(w)
+		}
+	}
+
+	// Set position and show (need to update position when reusing window)
+	w.SetPosition(x, y)
+	w.Show()
+	forcePopupTopMostNoActivate(w)
+}
+
+// disableMacOSWindowTiling disables window tiling management on macOS.
+func (s *TextSelectionService) disableMacOSWindowTiling(w *application.WebviewWindow) {
+	// macOS-specific implementation in separate file
+}

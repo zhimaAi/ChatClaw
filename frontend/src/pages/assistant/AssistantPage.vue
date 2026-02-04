@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowUp, MoreHorizontal, Pin, PinOff } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
@@ -22,6 +22,7 @@ import AgentSettingsDialog from './components/AgentSettingsDialog.vue'
 import RenameConversationDialog from './components/RenameConversationDialog.vue'
 import { useNavigationStore } from '@/stores'
 import { AgentsService, type Agent } from '@bindings/willchat/internal/services/agents'
+import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
   type Conversation,
@@ -512,9 +513,32 @@ watch(isTabActive, (active) => {
   }
 })
 
+// Listen for text selection events
+let unsubscribeTextSelection: (() => void) | null = null
+
 onMounted(() => {
   loadAgents()
   loadModels()
+
+  // Listen for text selection to send to assistant
+  unsubscribeTextSelection = Events.On('text-selection:send-to-assistant', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const text = payload?.text ?? ''
+    if (text) {
+      chatInput.value = text
+      // Auto-send after a short delay (if model is selected)
+      if (canSend.value) {
+        setTimeout(() => {
+          handleSend()
+        }, 100)
+      }
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeTextSelection?.()
+  unsubscribeTextSelection = null
 })
 </script>
 
