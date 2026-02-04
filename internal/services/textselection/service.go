@@ -57,6 +57,9 @@ type TextSelectionService struct {
 
 	// Whether the service is enabled
 	enabled bool
+
+	// Last button click time (for debouncing duplicate clicks)
+	lastClickTime time.Time
 }
 
 // New creates a new TextSelectionService.
@@ -484,13 +487,22 @@ func (s *TextSelectionService) Hide() {
 
 // handleButtonClick handles button click event.
 // Check snap window state and send text to appropriate target.
+// Includes debounce logic to prevent duplicate triggers within 500ms.
 func (s *TextSelectionService) handleButtonClick() map[string]any {
-	s.mu.RLock()
+	s.mu.Lock()
+	// Debounce: ignore clicks within 500ms of the last click
+	now := time.Now()
+	if now.Sub(s.lastClickTime) < 500*time.Millisecond {
+		s.mu.Unlock()
+		return map[string]any{"error": "debounced"}
+	}
+	s.lastClickTime = now
+
 	text := s.selectedText
 	app := s.app
 	mainWindow := s.mainWindow
 	getSnapState := s.getSnapState
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	if text == "" || app == nil {
 		return map[string]any{"error": "no text selected"}
