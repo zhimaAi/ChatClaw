@@ -16,6 +16,7 @@ import (
 
 	"willchat/internal/define"
 	"willchat/internal/errs"
+	"willchat/internal/services/thumbnail"
 	"willchat/internal/sqlite"
 	"willchat/internal/taskmanager"
 
@@ -128,6 +129,9 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 
 		// 启动异步处理任务
 		s.startProcessingTask(doc)
+
+		// 启动缩略图生成任务
+		s.startThumbnailTask(doc)
 	}
 
 	if len(uploaded) == 0 {
@@ -379,6 +383,66 @@ func (s *DocumentService) startProcessingTask(doc *Document) {
 	tm.Submit(taskKey, runID, func(info *taskmanager.TaskInfo) {
 		s.processDocument(doc.ID, doc.LibraryID, runID, info)
 	})
+}
+
+// startThumbnailTask 启动缩略图生成任务
+func (s *DocumentService) startThumbnailTask(doc *Document) {
+	tm := taskmanager.Get()
+	if tm == nil {
+		return
+	}
+
+	// 使用独立的任务 key，避免与文档处理任务冲突
+	taskKey := fmt.Sprintf("thumb:%d", doc.ID)
+
+	tm.Submit(taskKey, doc.ProcessingRunID, func(info *taskmanager.TaskInfo) {
+		s.generateThumbnail(doc.ID, doc.LibraryID, doc.LocalPath, info)
+	})
+}
+
+// generateThumbnail 生成文档缩略图
+func (s *DocumentService) generateThumbnail(docID, libraryID int64, localPath string, info *taskmanager.TaskInfo) {
+	if info.IsCancelled() {
+		return
+	}
+
+	tm := taskmanager.Get()
+	db, err := s.db()
+	if err != nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// 生成缩略图
+	result := thumbnail.Generate(localPath)
+
+	// 更新数据库
+	thumbIcon := result.DataURI
+	if thumbIcon != "" {
+		_, err = db.NewUpdate().
+			Table("documents").
+			Set("thumb_icon = ?", thumbIcon).
+			Set("updated_at = ?", sqlite.NowUTC()).
+			Where("id = ?", docID).
+			Exec(ctx)
+
+		if err != nil {
+			if s.app != nil {
+				s.app.Logger.Warn("failed to update thumbnail", "docID", docID, "error", err)
+			}
+			return
+		}
+	}
+
+	// 发送事件通知前端
+	if tm != nil {
+		tm.Emit("document:thumbnail", ThumbnailEvent{
+			DocumentID: docID,
+			LibraryID:  libraryID,
+			ThumbIcon:  thumbIcon,
+		})
+	}
 }
 
 // processDocument 处理文档（解析 + 向量化）

@@ -39,6 +39,13 @@ interface ProgressEvent {
   embedding_error: string
 }
 
+// 缩略图事件数据（从后端接收）
+interface ThumbnailEvent {
+  document_id: number
+  library_id: number
+  thumb_icon: string
+}
+
 const props = defineProps<{
   library: Library
 }>()
@@ -91,6 +98,7 @@ const convertDocument = (doc: BackendDocument): Document => {
     status,
     progress,
     errorMessage,
+    thumbIcon: doc.thumb_icon || undefined,
   }
 }
 
@@ -225,8 +233,25 @@ const confirmDelete = async () => {
 
 // 监听文档进度事件
 let unsubscribeProgress: (() => void) | null = null
+let unsubscribeThumbnail: (() => void) | null = null
 
 onMounted(() => {
+  // 监听缩略图更新事件
+  unsubscribeThumbnail = Events.On('document:thumbnail', (event: { data: ThumbnailEvent }) => {
+    const thumbnail = event.data
+    // 只更新当前知识库的文档
+    if (thumbnail.library_id !== props.library?.id) return
+
+    const index = documents.value.findIndex((d) => d.id === thumbnail.document_id)
+    if (index === -1) return
+
+    // 更新文档缩略图
+    documents.value[index] = {
+      ...documents.value[index],
+      thumbIcon: thumbnail.thumb_icon || undefined,
+    }
+  })
+
   unsubscribeProgress = Events.On('document:progress', (event: { data: ProgressEvent }) => {
     const progress = event.data
     // 只更新当前知识库的文档
@@ -268,6 +293,9 @@ onMounted(() => {
 onUnmounted(() => {
   if (unsubscribeProgress) {
     unsubscribeProgress()
+  }
+  if (unsubscribeThumbnail) {
+    unsubscribeThumbnail()
   }
   if (searchTimeout) {
     clearTimeout(searchTimeout)

@@ -74,6 +74,13 @@ type ProgressEvent struct {
 	EmbeddingError    string `json:"embedding_error"`
 }
 
+// ThumbnailEvent 缩略图更新事件数据（发送给前端）
+type ThumbnailEvent struct {
+	DocumentID int64  `json:"document_id"`
+	LibraryID  int64  `json:"library_id"`
+	ThumbIcon  string `json:"thumb_icon"` // base64 data URI or empty
+}
+
 // documentModel 数据库模型
 type documentModel struct {
 	bun.BaseModel `bun:"table:documents,alias:d"`

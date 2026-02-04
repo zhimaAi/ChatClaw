@@ -31,7 +31,7 @@ export interface Document {
   createdAt: string
   status: DocumentStatus
   progress?: number
-  thumbnailUrl?: string
+  thumbIcon?: string // base64 data URI from backend
   errorMessage?: string
 }
 
@@ -151,10 +151,11 @@ const showErrorTip = ref(false)
   >
     <!-- 缩略图区域 -->
     <div class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted">
-      <div
-        v-if="document.thumbnailUrl"
-        class="size-full bg-cover bg-center bg-no-repeat"
-        :style="{ backgroundImage: `url(${document.thumbnailUrl})` }"
+      <img
+        v-if="document.thumbIcon"
+        :src="document.thumbIcon"
+        class="size-full object-contain"
+        alt=""
       />
       <div v-else class="absolute inset-0 flex items-center justify-center">
         <IconDocumentCover class="size-10 translate-y-1 text-muted-foreground/40" />
