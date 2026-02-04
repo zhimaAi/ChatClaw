@@ -24,14 +24,20 @@ create table if not exists documents (
 	
 	extension text not null,
 	mime_type text not null,
-	source_type text not null,
+	source_type text not null, -- local,web
 	
 	local_path text,
 	web_url text,
 
+	processing_run_id text not null default '', -- 当前解析/向量化流水线的运行ID（用于重跑、防止旧任务回写）
+
 	parsing_status integer not null default 0,  -- 0=pending, 1=processing, 2=completed, 3=failed
 	parsing_progress integer not null default 0,
 	parsing_error text not null default '',
+
+	embedding_status integer not null default 0,  -- 0=pending, 1=processing, 2=completed, 3=failed
+	embedding_progress integer not null default 0,
+	embedding_error text not null default '',
 
 	word_total integer not null default 0,
 	split_total integer not null default 0,
