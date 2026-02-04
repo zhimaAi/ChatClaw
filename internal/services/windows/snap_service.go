@@ -310,6 +310,11 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.status.LastError = ""
 	s.touchLocked("")
 	s.mu.Unlock()
+
+	// Immediately sync z-order after attaching to ensure the winsnap window
+	// is visible above the target window. Without this, the winsnap may appear
+	// behind other windows until the target is moved or activated.
+	_ = winsnap.WakeAttachedWindow(w, targetProcess)
 }
 
 func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
