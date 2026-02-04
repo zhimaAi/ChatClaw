@@ -63,6 +63,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+/**
+ * Props - 每个标签页实例都有自己独立的 tabId
+ * 通过 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留
+ */
+const props = defineProps<{
+  tabId: string
+}>()
+
 type ListMode = 'personal' | 'team'
 
 // Chat message interface
@@ -150,19 +158,8 @@ const loadAgents = async () => {
     const list = await AgentsService.ListAgents()
     agents.value = list
 
-    // Try to restore the selected state for current tab
-    const currentTabId = navigationStore.activeTabId
-    if (currentTabId) {
-      const savedAgentId = navigationStore.getTabAgentId(currentTabId)
-      // Check if saved agentId is still valid (agent might have been deleted)
-      if (savedAgentId !== null && list.some((a) => a.id === savedAgentId)) {
-        activeAgentId.value = savedAgentId
-      } else if (list.length > 0) {
-        // No saved state or invalid, select first agent
-        activeAgentId.value = list[0].id
-        navigationStore.updateTabAgentId(currentTabId, list[0].id)
-      }
-    } else if (list.length > 0) {
+    // 默认选中第一个助手
+    if (list.length > 0) {
       activeAgentId.value = list[0].id
     }
 
@@ -477,30 +474,22 @@ const confirmDeleteConversation = async () => {
  * Update current tab's icon and title to match selected agent
  */
 const updateCurrentTab = () => {
-  const currentTabId = navigationStore.activeTabId
-  if (!currentTabId) return
-
   const agent = activeAgent.value
   // Use agent's custom icon or default logo
   const icon = agent?.icon || getLogoDataUrl()
-  navigationStore.updateTabIcon(currentTabId, icon, { isDefault: !agent?.icon })
+  navigationStore.updateTabIcon(props.tabId, icon, { isDefault: !agent?.icon })
   // Use agent name as tab title
-  navigationStore.updateTabTitle(currentTabId, agent?.name)
+  navigationStore.updateTabTitle(props.tabId, agent?.name)
 }
 
 // Watch for active agent changes to update selected model, tab info, and load conversations
-watch(activeAgentId, (newAgentId) => {
+watch(activeAgentId, (newAgentId, oldAgentId) => {
   selectDefaultModel()
   updateCurrentTab()
-  // Save selected state to current tab
-  const currentTabId = navigationStore.activeTabId
-  if (currentTabId) {
-    navigationStore.updateTabAgentId(currentTabId, newAgentId)
-  }
-  // Load conversations for the new agent
-  if (newAgentId) {
+  // 切换助手时加载新助手的会话列表
+  if (newAgentId && oldAgentId !== undefined) {
     loadConversations(newAgentId)
-  } else {
+  } else if (!newAgentId) {
     conversations.value = []
     activeConversationId.value = null
     chatMessages.value = []
@@ -511,30 +500,6 @@ watch(activeAgentId, (newAgentId) => {
 watch(providersWithModels, () => {
   selectDefaultModel()
 })
-
-// Watch for tab changes - restore agent selection and update icon
-watch(
-  () => navigationStore.activeTabId,
-  (newTabId) => {
-    // Only process if the current tab is an assistant module
-    if (navigationStore.activeTab?.module === 'assistant' && newTabId) {
-      // Restore selected agent for this tab
-      const savedAgentId = navigationStore.getTabAgentId(newTabId)
-      if (savedAgentId !== null && agents.value.some((a) => a.id === savedAgentId)) {
-        // Has saved state and agent still exists
-        if (activeAgentId.value !== savedAgentId) {
-          activeAgentId.value = savedAgentId
-        }
-      } else if (agents.value.length > 0) {
-        // New tab or saved agent deleted, select first
-        activeAgentId.value = agents.value[0].id
-        navigationStore.updateTabAgentId(newTabId, agents.value[0].id)
-      }
-      // Update icon and title
-      updateCurrentTab()
-    }
-  }
-)
 
 onMounted(() => {
   loadAgents()
