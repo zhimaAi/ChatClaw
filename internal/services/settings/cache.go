@@ -32,7 +32,7 @@ var globalSettingsCache = &settingsCache{
 }
 
 // InitCache 启动时一次性加载 settings 到内存缓存。
-// 必须在 sqlite.Init(app) 之后、app.Run() 之前调用。
+// 必须在 sqlite.Init() 之后、app.Run() 之前调用。
 func InitCache(app *application.App) error {
 	db := sqlite.DB()
 	if db == nil {
@@ -156,4 +156,3 @@ func dbForWrite() (*bun.DB, error) {
 	}
 	return db, nil
 }
-
