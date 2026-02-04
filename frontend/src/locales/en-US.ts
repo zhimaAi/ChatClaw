@@ -214,6 +214,7 @@ export default {
       unpin: 'Unpin',
     },
     conversation: {
+      empty: 'No chat history',
       rename: {
         title: 'Rename Conversation',
         placeholder: 'Enter a new name',

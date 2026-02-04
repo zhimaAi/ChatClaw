@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, type NavModule } from '@/stores'
@@ -11,6 +11,7 @@ import { SnapService } from '@bindings/willchat/internal/services/windows'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 
 const navigationStore = useNavigationStore()
+const activeTab = computed(() => navigationStore.activeTab)
 
 /**
  * 模块到组件的映射

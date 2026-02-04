@@ -211,6 +211,7 @@ export default {
       unpin: '取消置顶',
     },
     conversation: {
+      empty: '暂无聊天记录',
       rename: {
         title: '重命名会话',
         placeholder: '请输入新的名称',
