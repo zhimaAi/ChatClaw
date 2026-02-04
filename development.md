@@ -83,6 +83,13 @@ wails3 task windows:build ARCH=arm64
 wails3 task windows:package ARCH=arm64
 ```
 
+### Windows 安装包依赖（makensis）
+
+Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
+
+- 参考文档：`https://wails.io/zh-Hans/docs/next/guides/windows-installer/`
+- 安装后将 makensis 安装目录添加到 **Path** 环境变量中（确保命令行可直接执行 `makensis`）
+
 ## macOS 多架构打包（production）
 
 ```bash

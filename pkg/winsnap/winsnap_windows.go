@@ -29,8 +29,8 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		return nil, errors.New("winsnap: native window handle is 0")
 	}
 
-	targetName := normalizeProcessName(opts.TargetProcessName)
-	if targetName == "" {
+	targetNames := expandWindowsTargetNames(opts.TargetProcessName)
+	if len(targetNames) == 0 {
 		return nil, errors.New("winsnap: TargetProcessName is empty")
 	}
 	findTimeout := opts.FindTimeout
@@ -41,13 +41,18 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	deadline := time.Now().Add(findTimeout)
 	var target windows.HWND
 	for {
-		h, err := findMainWindowByProcessName(targetName)
-		if err == nil && h != 0 {
-			target = h
+		for _, name := range targetNames {
+			h, err := findMainWindowByProcessName(name)
+			if err == nil && h != 0 {
+				target = h
+				break
+			}
+		}
+		if target != 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("%w: %s", ErrTargetWindowNotFound, targetName)
+			return nil, fmt.Errorf("%w: %s", ErrTargetWindowNotFound, strings.Join(targetNames, ","))
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
@@ -73,14 +78,12 @@ type follower struct {
 	app    *application.App
 
 	mu        sync.Mutex
-	hook      uintptr
+	hookLoc   uintptr
+	hookFG    uintptr
 	tid       uint32
 	ready     chan struct{}
 	closed    bool
 	selfWidth int32 // 缓存自己的宽度
-	// Configure top-most only once, then keep z-order stable while moving,
-	// so other top-most windows (e.g. selection popup) can stay above.
-	topMostConfigured bool
 }
 
 func (f *follower) Stop() error {
@@ -90,13 +93,18 @@ func (f *follower) Stop() error {
 		return nil
 	}
 	f.closed = true
-	hook := f.hook
+	hookLoc := f.hookLoc
+	hookFG := f.hookFG
 	tid := f.tid
-	f.hook = 0
+	f.hookLoc = 0
+	f.hookFG = 0
 	f.mu.Unlock()
 
-	if hook != 0 {
-		_, _, _ = procUnhookWinEvent.Call(hook)
+	if hookLoc != 0 {
+		_, _, _ = procUnhookWinEvent.Call(hookLoc)
+	}
+	if hookFG != 0 {
+		_, _, _ = procUnhookWinEvent.Call(hookFG)
 	}
 	if tid != 0 {
 		_, _, _ = procPostThreadMessageW.Call(uintptr(tid), uintptr(wmQuit), 0, 0)
@@ -129,7 +137,8 @@ func (f *follower) start() error {
 		}
 
 		cb := syscall.NewCallback(f.winEventProc)
-		hook, _, errNo := procSetWinEventHook.Call(
+		// 1) 监听目标窗口位置变化（移动/缩放）
+		hookLoc, _, errNo := procSetWinEventHook.Call(
 			uintptr(eventObjectLocationChange),
 			uintptr(eventObjectLocationChange),
 			0,
@@ -138,12 +147,26 @@ func (f *follower) start() error {
 			0,
 			uintptr(wineventOutOfContext|wineventSkipOwnProcess),
 		)
+
+		// 2) 监听目标进程前台窗口变化（激活/置前），用于同步 z-order，
+		// 让吸附框始终处于“与目标窗口同层级（紧贴其上方）”。
+		hookFG, _, _ := procSetWinEventHook.Call(
+			uintptr(eventSystemForeground),
+			uintptr(eventSystemForeground),
+			0,
+			cb,
+			uintptr(pid),
+			0,
+			uintptr(wineventOutOfContext|wineventSkipOwnProcess),
+		)
+
 		f.mu.Lock()
-		f.hook = hook
+		f.hookLoc = hookLoc
+		f.hookFG = hookFG
 		f.mu.Unlock()
 		close(f.ready)
 
-		if hook == 0 {
+		if hookLoc == 0 {
 			_ = errNo
 			return
 		}
@@ -167,21 +190,29 @@ func (f *follower) start() error {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.hook == 0 {
+	if f.hookLoc == 0 {
 		return errors.New("winsnap: failed to install WinEvent hook")
 	}
 	return nil
 }
 
 func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idObject, idChild int32, _ uint32, _ uint32) uintptr {
-	if event != eventObjectLocationChange {
-		return 0
-	}
-	if hwnd != f.target {
-		return 0
-	}
-	// We only care about the window object itself.
-	if idObject != objidWindow || idChild != 0 {
+	switch event {
+	case eventObjectLocationChange:
+		if hwnd != f.target {
+			return 0
+		}
+		// We only care about the window object itself.
+		if idObject != objidWindow || idChild != 0 {
+			return 0
+		}
+	case eventSystemForeground:
+		// Foreground event doesn't use object/child the same way; just react
+		// when the foreground window is the target window.
+		if hwnd != f.target {
+			return 0
+		}
+	default:
 		return 0
 	}
 	_ = f.syncToTarget()
@@ -226,22 +257,16 @@ func (f *follower) syncToTarget() error {
 		width = selfWin.Right - selfWin.Left
 	}
 
-	// Keep winsnap in top-most group, but avoid stealing z-order repeatedly.
-	// Otherwise, it may cover other top-most windows (e.g. text selection popup).
-	f.mu.Lock()
-	needTopMost := !f.topMostConfigured
-	f.mu.Unlock()
-
-	if needTopMost {
-		if err := setWindowPosWithSizeTopMost(f.self, x, y, width, targetHeight); err != nil {
-			return err
-		}
-		f.mu.Lock()
-		f.topMostConfigured = true
-		f.mu.Unlock()
-		return nil
+	// 与目标窗口同层级：
+	// - 若目标是 top-most，则吸附框也进入 top-most 组，并紧贴在目标窗口之上
+	// - 若目标不是 top-most，则确保吸附框不在 top-most 组，并紧贴在目标窗口之上
+	if isTopMost(f.target) {
+		// Ensure self is top-most first (no move/size), then place after target.
+		_ = setWindowTopMostNoActivate(f.self)
+		return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
 	}
-	return setWindowPosWithSize(f.self, x, y, width, targetHeight)
+	_ = setWindowNoTopMostNoActivate(f.self)
+	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
 }
 
 func normalizeProcessName(name string) string {
@@ -257,33 +282,111 @@ func normalizeProcessName(name string) string {
 	return n
 }
 
+func expandWindowsTargetNames(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	// Normalize input for alias matching.
+	key := strings.ToLower(strings.TrimSpace(filepath.Base(raw)))
+	key = strings.TrimSuffix(key, ".exe")
+	key = strings.TrimSuffix(key, ".app")
+
+	// Common aliases (Chinese / pinyin / branding).
+	switch key {
+	case "微信", "weixin", "wechat":
+		// Different channels/versions use different exe names.
+		return []string{"Weixin.exe", "WeChat.exe", "WeChatApp.exe", "WeChatAppEx.exe"}
+	case "企业微信", "wecom", "wework", "wxwork", "qiyeweixin":
+		return []string{"WXWork.exe"}
+	case "qq":
+		return []string{"QQ.exe", "QQNT.exe"}
+	case "钉钉", "dingtalk":
+		return []string{"DingTalk.exe"}
+	case "飞书", "feishu", "lark":
+		return []string{"Feishu.exe", "Lark.exe"}
+	case "抖音", "douyin":
+		return []string{"Douyin.exe"}
+	default:
+		return []string{normalizeProcessName(raw)}
+	}
+}
+
 func findMainWindowByProcessName(processName string) (windows.HWND, error) {
 	targetLower := strings.ToLower(processName)
-	var found windows.HWND
+
+	type cand struct {
+		hwnd  windows.HWND
+		score int
+		area  int64
+	}
+	var best cand
+
 	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
 		h := windows.HWND(hwnd)
-		if !isTopLevelCandidate(h) {
+		// Keep this check permissive; some apps (e.g. WeChat) may have empty titles or owned main windows.
+		if !isWindowVisible(h) || isWindowIconic(h) {
 			return 1
 		}
+
 		pid, err := getWindowProcessID(h)
 		if err != nil || pid == 0 {
 			return 1
 		}
 		exe, err := getProcessImageBaseName(pid)
-		if err != nil {
+		if err != nil || strings.ToLower(exe) != targetLower {
 			return 1
 		}
-		if strings.ToLower(exe) != targetLower {
-			return 1
+
+		ex := getExStyle(h)
+		owner := getWindowOwner(h)
+		titleLen := getWindowTextLength(h)
+
+		// Compute a score that prefers "main app window".
+		score := 0
+		if ex&wsExToolWindow != 0 {
+			score -= 200
 		}
-		found = h
-		return 0
+		if ex&wsExNoActivate != 0 {
+			score -= 50
+		}
+		if ex&wsExAppWindow != 0 {
+			score += 30
+		}
+		if owner == 0 {
+			score += 100
+		} else {
+			score -= 20
+		}
+		if titleLen > 0 {
+			score += 20
+		}
+
+		var r rect
+		if err := getWindowRect(h, &r); err == nil {
+			w := int64(r.Right - r.Left)
+			hh := int64(r.Bottom - r.Top)
+			if w > 0 && hh > 0 {
+				area := w * hh
+				// Prefer higher score; tie-break by larger area.
+				if best.hwnd == 0 || score > best.score || (score == best.score && area > best.area) {
+					best = cand{hwnd: h, score: score, area: area}
+				}
+			}
+		} else {
+			// No rect: still allow score-only selection.
+			if best.hwnd == 0 || score > best.score {
+				best = cand{hwnd: h, score: score, area: 0}
+			}
+		}
+		return 1 // continue enumeration
 	})
 	_, _, _ = procEnumWindows.Call(cb, 0)
-	if found == 0 {
+
+	if best.hwnd == 0 {
 		return 0, ErrTargetWindowNotFound
 	}
-	return found, nil
+	return best.hwnd, nil
 }
 
 func isTopLevelCandidate(hwnd windows.HWND) bool {
@@ -297,12 +400,13 @@ func isTopLevelCandidate(hwnd windows.HWND) bool {
 	if isWindowIconic(hwnd) {
 		return false
 	}
-	// Exclude owned windows (tooltips, dialogs, etc.)
-	if getWindowOwner(hwnd) != 0 {
+	ex := getExStyle(hwnd)
+	// Exclude tool windows (tooltips, floating tool palettes, etc.)
+	if ex&wsExToolWindow != 0 {
 		return false
 	}
-	// Prefer windows with titles (main windows usually have a title).
-	if getWindowTextLength(hwnd) == 0 {
+	// Exclude owned windows unless they explicitly opt-in as app windows.
+	if getWindowOwner(hwnd) != 0 && ex&wsExAppWindow == 0 {
 		return false
 	}
 	return true
@@ -311,6 +415,7 @@ func isTopLevelCandidate(hwnd windows.HWND) bool {
 // --- Win32 bindings ---
 
 const (
+	eventSystemForeground     = 0x0003
 	eventObjectLocationChange = 0x800B
 	objidWindow               = 0
 
@@ -321,7 +426,8 @@ const (
 
 	// Special HWND values for SetWindowPos
 	// https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
-	hwndTopMost = ^uintptr(0) // (HWND)-1
+	hwndTopMost   = ^uintptr(0) // (HWND)-1
+	hwndNoTopMost = ^uintptr(1) // (HWND)-2
 
 	swpNoSize     = 0x0001
 	swpNoMove     = 0x0002
@@ -366,6 +472,7 @@ var (
 	procGetWindowTextLengthW = modUser32.NewProc("GetWindowTextLengthW")
 	procGetWindowRect        = modUser32.NewProc("GetWindowRect")
 	procSetWindowPos         = modUser32.NewProc("SetWindowPos")
+	procGetWindowLongPtrW    = modUser32.NewProc("GetWindowLongPtrW")
 	procSetWinEventHook      = modUser32.NewProc("SetWinEventHook")
 	procUnhookWinEvent       = modUser32.NewProc("UnhookWinEvent")
 	procGetMessageW          = modUser32.NewProc("GetMessageW")
@@ -377,6 +484,26 @@ var (
 
 	procDwmGetWindowAttribute = modDwmapi.NewProc("DwmGetWindowAttribute")
 )
+
+// GWL_EXSTYLE = -20 (needs special handling for 64-bit)
+var gwlExStyle = ^uintptr(19) // equivalent to -20 as uintptr
+
+const wsExTopMost = 0x00000008
+
+const (
+	wsExToolWindow = 0x00000080
+	wsExAppWindow  = 0x00040000
+	wsExNoActivate = 0x08000000
+)
+
+func getExStyle(hwnd windows.HWND) uintptr {
+	style, _, _ := procGetWindowLongPtrW.Call(uintptr(hwnd), gwlExStyle)
+	return style
+}
+
+func isTopMost(hwnd windows.HWND) bool {
+	return getExStyle(hwnd)&wsExTopMost != 0
+}
 
 func getCurrentThreadId() uint32 {
 	r1, _, _ := procGetCurrentThreadId.Call()
@@ -475,17 +602,41 @@ func setWindowPosWithSize(hwnd windows.HWND, x, y, width, height int32) error {
 	return nil
 }
 
-func setWindowPosWithSizeTopMost(hwnd windows.HWND, x, y, width, height int32) error {
+func setWindowPosWithSizeAfter(hwnd windows.HWND, insertAfter windows.HWND, x, y, width, height int32) error {
 	flags := uintptr(swpNoActivate)
 	r1, _, errNo := procSetWindowPos.Call(
 		uintptr(hwnd),
-		hwndTopMost,
+		uintptr(insertAfter),
 		uintptr(x),
 		uintptr(y),
 		uintptr(width),
 		uintptr(height),
 		flags,
 	)
+	if r1 == 0 {
+		if errNo != nil && errNo != syscall.Errno(0) {
+			return errNo
+		}
+		return syscall.EINVAL
+	}
+	return nil
+}
+
+func setWindowTopMostNoActivate(hwnd windows.HWND) error {
+	flags := uintptr(swpNoMove | swpNoSize | swpNoActivate)
+	r1, _, errNo := procSetWindowPos.Call(uintptr(hwnd), hwndTopMost, 0, 0, 0, 0, flags)
+	if r1 == 0 {
+		if errNo != nil && errNo != syscall.Errno(0) {
+			return errNo
+		}
+		return syscall.EINVAL
+	}
+	return nil
+}
+
+func setWindowNoTopMostNoActivate(hwnd windows.HWND) error {
+	flags := uintptr(swpNoMove | swpNoSize | swpNoActivate)
+	r1, _, errNo := procSetWindowPos.Call(uintptr(hwnd), hwndNoTopMost, 0, 0, 0, 0, flags)
 	if r1 == 0 {
 		if errNo != nil && errNo != syscall.Errno(0) {
 			return errNo
