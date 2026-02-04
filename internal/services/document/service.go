@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -448,6 +449,13 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 			return
 		}
 		time.Sleep(200 * time.Millisecond) // 模拟耗时
+
+		// 随机模拟解析失败（约 30% 概率）
+		if progress == 50 && rand.Intn(10) < 3 {
+			updateAndEmit(StatusFailed, progress, "模拟解析失败：文档格式不支持", StatusPending, 0, "")
+			return
+		}
+
 		updateAndEmit(StatusProcessing, progress, "", StatusPending, 0, "")
 	}
 
@@ -469,6 +477,13 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 			return
 		}
 		time.Sleep(200 * time.Millisecond) // 模拟耗时
+
+		// 随机模拟向量化失败（约 30% 概率）
+		if progress == 70 && rand.Intn(10) < 3 {
+			updateAndEmit(StatusCompleted, 100, "", StatusFailed, progress, "模拟向量化失败：嵌入模型调用异常")
+			return
+		}
+
 		updateAndEmit(StatusCompleted, 100, "", StatusProcessing, progress, "")
 	}
 
