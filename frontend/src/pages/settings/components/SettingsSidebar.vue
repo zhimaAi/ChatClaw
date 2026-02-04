@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { FunctionalComponent, SVGAttributes } from 'vue'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SvgComponent = any
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { useSettingsStore, type SettingsMenuItem } from '@/stores'
@@ -17,7 +18,7 @@ const settingsStore = useSettingsStore()
 interface MenuItem {
   id: SettingsMenuItem
   labelKey: string
-  icon: FunctionalComponent<SVGAttributes>
+  icon: SvgComponent
 }
 
 const menuItems: MenuItem[] = [

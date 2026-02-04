@@ -5,6 +5,7 @@ import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
+import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
@@ -18,6 +19,11 @@ const activeTab = computed(() => navigationStore.activeTab)
  * 是否显示设置页面
  */
 const showSettings = computed(() => activeTab.value?.module === 'settings')
+
+/**
+ * 是否显示一问多答页面
+ */
+const showMultiask = computed(() => activeTab.value?.module === 'multiask')
 
 /**
  * 默认至少保持 1 个标签页：
@@ -40,6 +46,9 @@ watch(
   <MainLayout>
     <!-- 设置页面 -->
     <SettingsPage v-if="showSettings" />
+
+    <!-- 一问多答页面 -->
+    <MultiaskPage v-else-if="showMultiask" />
 
     <!-- 主内容区域 - 显示当前模块的占位内容 -->
     <div v-else class="flex h-full w-full items-center justify-center bg-background">
