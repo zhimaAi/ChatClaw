@@ -1,27 +1,81 @@
 package taskmanager
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"log/slog"
 	"sync"
+	"time"
 
-	"github.com/panjf2000/ants/v2"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"maragu.dev/goqite"
+	"maragu.dev/goqite/jobs"
 )
 
-// TaskManager 全局任务管理器，基于 ants 封装
-// 提供任务防重复、状态跟踪等能力
-type TaskManager struct {
-	app    *application.App
-	pool   *ants.Pool
-	mu     sync.RWMutex
-	tasks  map[string]*TaskInfo // taskKey -> TaskInfo
-	closed bool
+// 预定义队列名称（可按需扩展）
+const (
+	QueueThumbnail = "thumbnail" // 快任务：缩略图生成
+	QueueDocument  = "document"  // 慢任务：文档解析、向量化
+)
+
+// QueueConfig 单个任务队列的配置
+type QueueConfig struct {
+	Workers      int           // 并发 worker 数量
+	PollInterval time.Duration // 轮询新任务的间隔
 }
 
-// TaskInfo 任务信息
+func (c QueueConfig) withDefaults() QueueConfig {
+	if c.Workers <= 0 {
+		c.Workers = 4
+	}
+	if c.PollInterval <= 0 {
+		c.PollInterval = 100 * time.Millisecond
+	}
+	return c
+}
+
+// Config 任务管理器配置
+type Config struct {
+	Queues map[string]QueueConfig
+}
+
+// TaskManager 基于 goqite 的持久化任务管理器
+type TaskManager struct {
+	app     *application.App
+	db      *sql.DB
+	queues  map[string]*taskQueue
+	mu      sync.RWMutex
+	tasks   map[string]*TaskInfo // taskKey -> TaskInfo（用于取消跟踪）
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	stopped bool
+}
+
+// TaskInfo 任务元数据（用于取消）
 type TaskInfo struct {
 	Key       string // 任务唯一标识
-	RunID     string // 当前运行 ID（用于防止旧任务回写）
+	RunID     string // 运行 ID
 	Cancelled bool   // 是否已取消
+}
+
+// IsCancelled 检查任务是否应该停止
+func (info *TaskInfo) IsCancelled() bool {
+	return info == nil || info.Cancelled
+}
+
+type taskQueue struct {
+	name   string
+	queue  *goqite.Queue
+	runner *jobs.Runner
+}
+
+// JobPayload 序列化的任务数据
+type JobPayload struct {
+	TaskKey string `json:"task_key"`
+	RunID   string `json:"run_id"`
+	Data    []byte `json:"data,omitempty"` // 可选的额外数据
 }
 
 var (
@@ -30,79 +84,191 @@ var (
 )
 
 // Init 初始化全局任务管理器
-// maxWorkers: 最大并发工作协程数
-func Init(app *application.App, maxWorkers int) error {
+// app 用于日志和事件发送，sqlDB 应为 bun.DB 的底层 *sql.DB
+func Init(app *application.App, sqlDB *sql.DB, cfg Config) error {
 	var initErr error
 	once.Do(func() {
-		pool, err := ants.NewPool(maxWorkers,
-			ants.WithPreAlloc(false),        // 不预分配
-			ants.WithNonblocking(false),     // 阻塞模式，任务满时等待
-			ants.WithPanicHandler(func(i interface{}) {
-				// panic 处理，防止程序崩溃
-				if app != nil {
-					app.Logger.Error("task panic", "error", i)
-				}
-			}),
-		)
-		if err != nil {
-			initErr = err
-			return
+		if cfg.Queues == nil || len(cfg.Queues) == 0 {
+			// 提供默认配置
+			cfg.Queues = map[string]QueueConfig{
+				QueueThumbnail: {Workers: 8, PollInterval: 50 * time.Millisecond},
+				QueueDocument:  {Workers: 2, PollInterval: 100 * time.Millisecond},
+			}
 		}
-		instance = &TaskManager{
-			app:   app,
-			pool:  pool,
-			tasks: make(map[string]*TaskInfo),
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		tm := &TaskManager{
+			app:    app,
+			db:     sqlDB,
+			queues: make(map[string]*taskQueue, len(cfg.Queues)),
+			tasks:  make(map[string]*TaskInfo),
+			ctx:    ctx,
+			cancel: cancel,
 		}
+
+		// 创建每个队列及其 job runner
+		for name, qcfg := range cfg.Queues {
+			qcfg = qcfg.withDefaults()
+
+			q := goqite.New(goqite.NewOpts{
+				DB:   sqlDB,
+				Name: name,
+			})
+
+			r := jobs.NewRunner(jobs.NewRunnerOpts{
+				Limit:        qcfg.Workers,
+				Log:          slog.Default(),
+				PollInterval: qcfg.PollInterval,
+				Queue:        q,
+			})
+
+			tm.queues[name] = &taskQueue{
+				name:   name,
+				queue:  q,
+				runner: r,
+			}
+		}
+
+		instance = tm
 	})
 	return initErr
 }
 
-// Get 获取全局任务管理器实例
+// Get 返回全局任务管理器实例
 func Get() *TaskManager {
 	return instance
 }
 
-// Submit 提交任务
-// taskKey: 任务唯一标识（同一 key 的任务不会重复执行）
-// runID: 运行 ID（用于校验任务是否被取消/替换）
-// fn: 任务函数，接收 TaskInfo 用于检查任务状态
-func (tm *TaskManager) Submit(taskKey, runID string, fn func(info *TaskInfo)) bool {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+// RegisterHandler 为指定队列和任务类型注册处理器
+// 应在初始化时、Start() 之前调用
+func (tm *TaskManager) RegisterHandler(queueName, jobType string, handler func(ctx context.Context, info *TaskInfo, data []byte) error) {
+	q, ok := tm.queues[queueName]
+	if !ok {
+		if tm.app != nil {
+			tm.app.Logger.Error("unknown queue for handler registration", "queue", queueName, "jobType", jobType)
+		}
+		return
+	}
 
-	if tm.closed {
+	q.runner.Register(jobType, func(ctx context.Context, msg []byte) error {
+		var payload JobPayload
+		if err := json.Unmarshal(msg, &payload); err != nil {
+			if tm.app != nil {
+				tm.app.Logger.Error("failed to unmarshal job payload", "queue", queueName, "jobType", jobType, "error", err)
+			}
+			return nil // 不重试格式错误的任务
+		}
+
+		// 检查任务是否已取消
+		tm.mu.RLock()
+		info, exists := tm.tasks[payload.TaskKey]
+		tm.mu.RUnlock()
+
+		if !exists {
+			// 任务已被移除（取消/替换），跳过
+			return nil
+		}
+		if info.IsCancelled() {
+			// 任务已取消
+			tm.removeTask(payload.TaskKey, info)
+			return nil
+		}
+		if info.RunID != payload.RunID {
+			// 任务已被新运行替换，跳过旧任务
+			return nil
+		}
+
+		// 执行处理器
+		err := handler(ctx, info, payload.Data)
+
+		// 完成后清理任务记录
+		tm.removeTask(payload.TaskKey, info)
+
+		return err
+	})
+}
+
+// Start 启动所有 job runner，应在注册完所有 handler 后调用
+func (tm *TaskManager) Start() {
+	for _, q := range tm.queues {
+		tq := q // 捕获变量
+		tm.wg.Add(1)
+		go func() {
+			defer tm.wg.Done()
+			tq.runner.Start(tm.ctx)
+		}()
+	}
+}
+
+// Submit 提交任务到指定队列
+// queueName: 预定义的队列常量之一
+// jobType: 已注册的任务类型名称
+// taskKey: 唯一标识；提交相同 key 会取消之前的任务
+// runID: 版本标识，用于检测过期任务
+// data: 可选的负载数据
+func (tm *TaskManager) Submit(queueName, jobType, taskKey, runID string, data []byte) bool {
+	if tm == nil {
 		return false
 	}
 
-	// 检查是否已有同 key 的任务在运行
-	if existing, ok := tm.tasks[taskKey]; ok {
-		// 标记旧任务为取消
-		existing.Cancelled = true
+	q, ok := tm.queues[queueName]
+	if !ok {
+		if tm.app != nil {
+			tm.app.Logger.Error("unknown task queue", "queue", queueName, "taskKey", taskKey)
+		}
+		return false
 	}
 
-	// 创建新任务信息
+	// 注册/替换任务记录
+	tm.mu.Lock()
+	if tm.stopped {
+		tm.mu.Unlock()
+		return false
+	}
+	if existing, ok := tm.tasks[taskKey]; ok {
+		existing.Cancelled = true
+	}
 	info := &TaskInfo{
 		Key:       taskKey,
 		RunID:     runID,
 		Cancelled: false,
 	}
 	tm.tasks[taskKey] = info
+	tm.mu.Unlock()
 
-	// 提交到 ants 协程池
-	err := tm.pool.Submit(func() {
-		defer tm.removeTask(taskKey)
-		fn(info)
-	})
-
+	// 创建任务负载
+	payload := JobPayload{
+		TaskKey: taskKey,
+		RunID:   runID,
+		Data:    data,
+	}
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		delete(tm.tasks, taskKey)
+		if tm.app != nil {
+			tm.app.Logger.Error("failed to marshal job payload", "taskKey", taskKey, "error", err)
+		}
+		return false
+	}
+
+	// 提交到 goqite
+	if err := jobs.Create(tm.ctx, q.queue, jobType, payloadBytes); err != nil {
+		if tm.app != nil {
+			tm.app.Logger.Error("failed to create job", "queue", queueName, "jobType", jobType, "taskKey", taskKey, "error", err)
+		}
+		// 失败时移除任务记录
+		tm.mu.Lock()
+		if cur, ok := tm.tasks[taskKey]; ok && cur == info {
+			delete(tm.tasks, taskKey)
+		}
+		tm.mu.Unlock()
 		return false
 	}
 
 	return true
 }
 
-// Cancel 取消指定任务
+// Cancel 通过 taskKey 将任务标记为已取消
 func (tm *TaskManager) Cancel(taskKey string) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -121,17 +287,12 @@ func (tm *TaskManager) IsTaskRunning(taskKey string) bool {
 	return ok
 }
 
-// GetTaskInfo 获取任务信息
+// GetTaskInfo 返回指定 taskKey 的任务信息
 func (tm *TaskManager) GetTaskInfo(taskKey string) *TaskInfo {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
 	return tm.tasks[taskKey]
-}
-
-// IsCancelled 检查任务是否已被取消
-func (info *TaskInfo) IsCancelled() bool {
-	return info == nil || info.Cancelled
 }
 
 // Emit 发送事件到前端
@@ -141,52 +302,43 @@ func (tm *TaskManager) Emit(eventName string, data any) {
 	}
 }
 
-// removeTask 移除任务记录
-func (tm *TaskManager) removeTask(taskKey string) {
+// removeTask 移除任务记录（仅当仍指向同一 info 时）
+func (tm *TaskManager) removeTask(taskKey string, info *TaskInfo) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	delete(tm.tasks, taskKey)
+	if cur, ok := tm.tasks[taskKey]; ok && cur == info {
+		delete(tm.tasks, taskKey)
+	}
 }
 
-// Running 返回当前正在运行的协程数
-func (tm *TaskManager) Running() int {
-	return tm.pool.Running()
-}
-
-// Cap 返回协程池容量
-func (tm *TaskManager) Cap() int {
-	return tm.pool.Cap()
-}
-
-// Free 返回空闲协程数
-func (tm *TaskManager) Free() int {
-	return tm.pool.Free()
-}
-
-// Tune 动态调整协程池容量
-func (tm *TaskManager) Tune(size int) {
-	tm.pool.Tune(size)
-}
-
-// Stop 停止任务管理器，等待所有任务完成
+// Stop 优雅停止所有 job runner 并等待完成
 func (tm *TaskManager) Stop() {
 	tm.mu.Lock()
-	tm.closed = true
+	if tm.stopped {
+		tm.mu.Unlock()
+		return
+	}
+	tm.stopped = true
 	tm.mu.Unlock()
 
-	tm.pool.Release()
+	tm.cancel()
+	tm.wg.Wait()
 }
 
-// StopNow 立即停止任务管理器，不等待未完成的任务
+// StopNow 立即停止所有 job runner
 func (tm *TaskManager) StopNow() {
 	tm.mu.Lock()
-	tm.closed = true
-	// 取消所有任务
+	if tm.stopped {
+		tm.mu.Unlock()
+		return
+	}
+	tm.stopped = true
 	for _, info := range tm.tasks {
 		info.Cancelled = true
 	}
 	tm.mu.Unlock()
 
-	tm.pool.Release()
+	tm.cancel()
+	tm.wg.Wait()
 }

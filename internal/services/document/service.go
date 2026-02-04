@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,26 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// Job type constants for document tasks.
+const (
+	JobTypeThumbnail = "thumbnail" // Generate document thumbnail
+	JobTypeProcess   = "process"   // Parse and embed document
+)
+
+// ThumbnailJobData holds data for thumbnail generation job.
+type ThumbnailJobData struct {
+	DocID     int64  `json:"doc_id"`
+	LibraryID int64  `json:"library_id"`
+	LocalPath string `json:"local_path"`
+}
+
+// ProcessJobData holds data for document processing job.
+type ProcessJobData struct {
+	DocID     int64  `json:"doc_id"`
+	LibraryID int64  `json:"library_id"`
+	RunID     string `json:"run_id"`
+}
+
 // DocumentService 文档服务（暴露给前端调用）
 type DocumentService struct {
 	app *application.App
@@ -32,6 +53,48 @@ type DocumentService struct {
 
 func NewDocumentService(app *application.App) *DocumentService {
 	return &DocumentService{app: app}
+}
+
+// ServiceStartup 实现 Wails 服务生命周期接口
+// 在应用启动时注册任务处理器并启动任务管理器
+func (s *DocumentService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.registerTaskHandlers()
+	taskmanager.Get().Start()
+	return nil
+}
+
+// registerTaskHandlers registers document-related job handlers with the task manager.
+func (s *DocumentService) registerTaskHandlers() {
+	tm := taskmanager.Get()
+	if tm == nil {
+		return
+	}
+
+	// Register thumbnail generation handler
+	tm.RegisterHandler(taskmanager.QueueThumbnail, JobTypeThumbnail, func(ctx context.Context, info *taskmanager.TaskInfo, data []byte) error {
+		var jobData ThumbnailJobData
+		if err := json.Unmarshal(data, &jobData); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("failed to unmarshal thumbnail job data", "error", err)
+			}
+			return nil // Don't retry malformed jobs
+		}
+		s.generateThumbnail(jobData.DocID, jobData.LibraryID, jobData.LocalPath, info)
+		return nil
+	})
+
+	// Register document processing handler
+	tm.RegisterHandler(taskmanager.QueueDocument, JobTypeProcess, func(ctx context.Context, info *taskmanager.TaskInfo, data []byte) error {
+		var jobData ProcessJobData
+		if err := json.Unmarshal(data, &jobData); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("failed to unmarshal process job data", "error", err)
+			}
+			return nil // Don't retry malformed jobs
+		}
+		s.processDocument(jobData.DocID, jobData.LibraryID, jobData.RunID, info)
+		return nil
+	})
 }
 
 func (s *DocumentService) db() (*bun.DB, error) {
@@ -170,9 +233,9 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 		Scan(ctx)
 	if err == nil {
 		// 存在相同文件，取消旧任务并删除旧记录和文件
-		taskKey := fmt.Sprintf("doc:%d", existingDoc.ID)
 		if tm := taskmanager.Get(); tm != nil {
-			tm.Cancel(taskKey)
+			tm.Cancel(fmt.Sprintf("doc:%d", existingDoc.ID))
+			tm.Cancel(fmt.Sprintf("thumb:%d", existingDoc.ID))
 		}
 		// 删除旧文件
 		if existingDoc.LocalPath != "" {
@@ -311,9 +374,9 @@ func (s *DocumentService) DeleteDocument(id int64) error {
 	}
 
 	// 取消正在进行的任务
-	taskKey := fmt.Sprintf("doc:%d", id)
 	if tm := taskmanager.Get(); tm != nil {
-		tm.Cancel(taskKey)
+		tm.Cancel(fmt.Sprintf("doc:%d", id))
+		tm.Cancel(fmt.Sprintf("thumb:%d", id))
 	}
 
 	// 删除物理文件（即使失败也继续删除数据库记录）
@@ -380,9 +443,13 @@ func (s *DocumentService) startProcessingTask(doc *Document) {
 	taskKey := fmt.Sprintf("doc:%d", doc.ID)
 	runID := doc.ProcessingRunID
 
-	tm.Submit(taskKey, runID, func(info *taskmanager.TaskInfo) {
-		s.processDocument(doc.ID, doc.LibraryID, runID, info)
+	jobData, _ := json.Marshal(ProcessJobData{
+		DocID:     doc.ID,
+		LibraryID: doc.LibraryID,
+		RunID:     runID,
 	})
+
+	tm.Submit(taskmanager.QueueDocument, JobTypeProcess, taskKey, runID, jobData)
 }
 
 // startThumbnailTask 启动缩略图生成任务
@@ -395,9 +462,13 @@ func (s *DocumentService) startThumbnailTask(doc *Document) {
 	// 使用独立的任务 key，避免与文档处理任务冲突
 	taskKey := fmt.Sprintf("thumb:%d", doc.ID)
 
-	tm.Submit(taskKey, doc.ProcessingRunID, func(info *taskmanager.TaskInfo) {
-		s.generateThumbnail(doc.ID, doc.LibraryID, doc.LocalPath, info)
+	jobData, _ := json.Marshal(ThumbnailJobData{
+		DocID:     doc.ID,
+		LibraryID: doc.LibraryID,
+		LocalPath: doc.LocalPath,
 	})
+
+	tm.Submit(taskmanager.QueueThumbnail, JobTypeThumbnail, taskKey, doc.ProcessingRunID, jobData)
 }
 
 // generateThumbnail 生成文档缩略图
