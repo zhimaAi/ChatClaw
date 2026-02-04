@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"willchat/internal/sqlite"
+
 	"github.com/uptrace/bun"
 )
 
@@ -30,7 +32,7 @@ type Model struct {
 	ProviderID string    `json:"provider_id"`
 	ModelID    string    `json:"model_id"`
 	Name       string    `json:"name"`
-	Type       string    `json:"type"` // llm, embedding
+	Type       string    `json:"type"` // llm, embedding, rerank
 	IsBuiltin  bool      `json:"is_builtin"`
 	Enabled    bool      `json:"enabled"`
 	SortOrder  int       `json:"sort_order"`
@@ -62,7 +64,7 @@ type UpdateProviderInput struct {
 type CreateModelInput struct {
 	ModelID string `json:"model_id"`
 	Name    string `json:"name"`
-	Type    string `json:"type"` // llm, embedding
+	Type    string `json:"type"` // llm, embedding, rerank
 }
 
 // UpdateModelInput 更新模型的输入参数
@@ -91,19 +93,21 @@ type providerModel struct {
 	UpdatedAt   time.Time `bun:"updated_at,notnull"`
 }
 
-func (m *providerModel) BeforeAppendModel(ctx context.Context, query bun.Query) error {
-	_ = ctx
-	now := time.Now().UTC()
+// BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
+var _ bun.BeforeInsertHook = (*providerModel)(nil)
 
-	switch query.(type) {
-	case *bun.InsertQuery:
-		if m.CreatedAt.IsZero() {
-			m.CreatedAt = now
-		}
-		m.UpdatedAt = now
-	case *bun.UpdateQuery:
-		m.UpdatedAt = now
-	}
+func (*providerModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	now := sqlite.NowUTC()
+	query.Value("created_at", "?", now)
+	query.Value("updated_at", "?", now)
+	return nil
+}
+
+// BeforeUpdate 在 UPDATE 时自动设置 updated_at（字符串格式）
+var _ bun.BeforeUpdateHook = (*providerModel)(nil)
+
+func (*providerModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) error {
+	query.Set("updated_at = ?", sqlite.NowUTC())
 	return nil
 }
 
@@ -141,19 +145,21 @@ type modelModel struct {
 	UpdatedAt  time.Time `bun:"updated_at,notnull"`
 }
 
-func (m *modelModel) BeforeAppendModel(ctx context.Context, query bun.Query) error {
-	_ = ctx
-	now := time.Now().UTC()
+// BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
+var _ bun.BeforeInsertHook = (*modelModel)(nil)
 
-	switch query.(type) {
-	case *bun.InsertQuery:
-		if m.CreatedAt.IsZero() {
-			m.CreatedAt = now
-		}
-		m.UpdatedAt = now
-	case *bun.UpdateQuery:
-		m.UpdatedAt = now
-	}
+func (*modelModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	now := sqlite.NowUTC()
+	query.Value("created_at", "?", now)
+	query.Value("updated_at", "?", now)
+	return nil
+}
+
+// BeforeUpdate 在 UPDATE 时自动设置 updated_at（字符串格式）
+var _ bun.BeforeUpdateHook = (*modelModel)(nil)
+
+func (*modelModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) error {
+	query.Set("updated_at = ?", sqlite.NowUTC())
 	return nil
 }
 

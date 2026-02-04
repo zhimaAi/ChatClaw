@@ -106,9 +106,7 @@ const handleNavClick = (module: NavModule) => {
             )
           "
         />
-        <span v-if="!navigationStore.sidebarCollapsed">{{
-          t(item.labelKey)
-        }}</span>
+        <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
     </div>
 
@@ -140,9 +138,7 @@ const handleNavClick = (module: NavModule) => {
             )
           "
         />
-        <span v-if="!navigationStore.sidebarCollapsed">{{
-          t(item.labelKey)
-        }}</span>
+        <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
     </div>
   </div>

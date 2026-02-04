@@ -14,6 +14,19 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* 布局尺寸 */
+  --width-sidebar: 16.25rem;          /* 260px - 主侧边栏 */
+  --width-settings-sidebar: 11.375rem; /* 182px - 设置侧边栏 */
+  --width-settings-card: 33.125rem;   /* 530px - 设置卡片 */
+  /* 对话框尺寸 */
+  --width-dialog-sm: 26.5625rem;      /* 425px */
+  --width-dialog-md: 32.5rem;         /* 520px */
+  --width-dialog-lg: 40rem;           /* 640px */
+  --width-dialog-xl: 46.25rem;        /* 740px */
+  /* 图标/Logo 尺寸 */
+  --size-icon-box: 3.875rem;          /* 62px - Logo 容器 */
+  --size-icon-lg: 2.75rem;            /* 44px - Logo 图标 */
+  --radius-icon-box: 0.875rem;        /* 14px - Logo 容器圆角 */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,6 +60,10 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-titlebar: var(--titlebar);
   --color-titlebar-hover: var(--titlebar-hover);
+  /* macOS 窗口控制按钮颜色（系统标准色） */
+  --color-mac-close: var(--mac-close);
+  --color-mac-minimize: var(--mac-minimize);
+  --color-mac-fullscreen: var(--mac-fullscreen);
 }
 
 :root {
@@ -82,12 +99,16 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --titlebar: #dee8fa;
-  --titlebar-hover: #ccddf5;
+  --titlebar: oklch(0.93 0.02 250);
+  --titlebar-hover: oklch(0.89 0.03 250);
+  /* macOS 窗口控制按钮（系统标准色，不随主题变化） */
+  --mac-close: oklch(0.63 0.24 25);
+  --mac-minimize: oklch(0.83 0.16 85);
+  --mac-fullscreen: oklch(0.72 0.19 145);
 }
 
 .dark {
-  --titlebar: #1e1e2e;
+  --titlebar: oklch(0.2 0.02 280);
   --titlebar-hover: oklch(1 0 0 / 10%);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -139,4 +160,13 @@
   code, kbd, pre, samp {
     @apply font-mono;
   }
+}
+
+/* 隐藏滚动条工具类 */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
 }

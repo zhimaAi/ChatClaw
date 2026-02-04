@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import DefaultTabIcon from '@/assets/images/tab-default.png'
+import { getLogoDataUrl } from '@/composables/useLogo'
 
 const createTabId = () => `tab-${crypto.randomUUID()}`
 
@@ -20,8 +21,16 @@ export interface Tab {
   titleKey?: string
   /** 标签页图标URL */
   icon?: string
+  /**
+   * 是否为“默认图标”（可被主题切换时自动刷新）
+   * - true: 默认图标（例如默认 logo）
+   * - false: 自定义图标（不应被覆盖）
+   */
+  iconIsDefault?: boolean
   /** 关联的模块 */
   module: NavModule
+  /** AI助手标签页的选中助手ID（仅 assistant 模块使用） */
+  agentId?: number | null
 }
 
 /**
@@ -103,6 +112,7 @@ export const useNavigationStore = defineStore('navigation', () => {
       titleKey: moduleLabels[module],
       module,
       icon: DefaultTabIcon,
+      iconIsDefault: true,
     }
     tabs.value.push(newTab)
     activeTabId.value = id
@@ -113,7 +123,13 @@ export const useNavigationStore = defineStore('navigation', () => {
    */
   const addTab = (tab: Omit<Tab, 'id'>) => {
     const id = createTabId()
-    const newTab: Tab = { ...tab, icon: tab.icon ?? DefaultTabIcon, id }
+    const icon = tab.icon ?? DefaultTabIcon
+    const newTab: Tab = {
+      ...tab,
+      icon,
+      iconIsDefault: tab.iconIsDefault ?? tab.icon == null,
+      id,
+    }
     tabs.value.push(newTab)
     activeTabId.value = id
     return id
@@ -143,6 +159,26 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * 关闭其他标签页（保留指定标签页）
+   */
+  const closeOtherTabs = (tabId: string) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (!tab) return
+
+    tabs.value = [tab]
+    activeTabId.value = tabId
+    activeModule.value = tab.module
+  }
+
+  /**
+   * 关闭所有标签页
+   */
+  const closeAllTabs = () => {
+    tabs.value = []
+    activeTabId.value = null
+  }
+
+  /**
    * 切换标签页
    */
   const setActiveTab = (tabId: string) => {
@@ -151,6 +187,68 @@ export const useNavigationStore = defineStore('navigation', () => {
       activeTabId.value = tabId
       // 同步切换到标签页对应的模块
       activeModule.value = tab.module
+    }
+  }
+
+  /**
+   * 更新标签页图标
+   */
+  const updateTabIcon = (
+    tabId: string,
+    icon: string | undefined,
+    options?: { isDefault?: boolean }
+  ) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab) {
+      tab.icon = icon ?? DefaultTabIcon
+      tab.iconIsDefault = options?.isDefault ?? icon == null
+    }
+  }
+
+  /**
+   * 更新标签页标题
+   * 设置 title 后会优先显示 title，titleKey 作为回退
+   */
+  const updateTabTitle = (tabId: string, title: string | undefined) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab) {
+      tab.title = title
+    }
+  }
+
+  /**
+   * 更新标签页的选中助手ID（仅 assistant 模块使用）
+   */
+  const updateTabAgentId = (tabId: string, agentId: number | null) => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (tab && tab.module === 'assistant') {
+      tab.agentId = agentId
+    }
+  }
+
+  /**
+   * 获取标签页的选中助手ID
+   */
+  const getTabAgentId = (tabId: string): number | null => {
+    const tab = tabs.value.find((t) => t.id === tabId)
+    return tab?.agentId ?? null
+  }
+
+  /**
+   * 刷新所有 assistant 标签页的默认图标（用于主题切换时更新图标颜色）
+   * 只更新“明确标记为默认图标”的标签页，避免覆盖自定义 SVG dataURL
+   */
+  const refreshAssistantDefaultIcons = () => {
+    const newLogoDataUrl = getLogoDataUrl()
+    for (const tab of tabs.value) {
+      if (tab.module === 'assistant') {
+        // 兼容旧数据：DefaultTabIcon 视为默认图标
+        const isDefault = tab.iconIsDefault === true || tab.icon === DefaultTabIcon
+        if (isDefault) {
+          tab.icon = newLogoDataUrl
+          tab.iconIsDefault = true
+        }
+      }
     }
   }
 
@@ -165,6 +263,13 @@ export const useNavigationStore = defineStore('navigation', () => {
     navigateToModule,
     addTab,
     closeTab,
+    closeOtherTabs,
+    closeAllTabs,
     setActiveTab,
+    updateTabIcon,
+    updateTabTitle,
+    updateTabAgentId,
+    getTabAgentId,
+    refreshAssistantDefaultIcons,
   }
 })

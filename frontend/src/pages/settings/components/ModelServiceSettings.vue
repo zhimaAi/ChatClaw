@@ -74,7 +74,10 @@ const handleProviderUpdate = (updated: Provider) => {
     providers.value[index] = updated
   }
   // 更新详情中的供应商
-  if (providerWithModels.value && providerWithModels.value.provider.provider_id === updated.provider_id) {
+  if (
+    providerWithModels.value &&
+    providerWithModels.value.provider.provider_id === updated.provider_id
+  ) {
     providerWithModels.value = {
       ...providerWithModels.value,
       provider: updated,

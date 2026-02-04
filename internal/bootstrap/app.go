@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"io/fs"
 
+	"willchat/internal/services/agents"
+	"willchat/internal/define"
 	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
+	"willchat/internal/services/library"
 	"willchat/internal/services/multiask"
 	"willchat/internal/services/providers"
 	"willchat/internal/services/settings"
@@ -28,6 +31,9 @@ func NewApp(opts Options) (*application.App, error) {
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
+	// 声明主窗口变量，用于单实例回调
+	var mainWindow *application.WebviewWindow
+
 	// 创建应用实例
 	app := application.New(application.Options{
 		Name:        "WillChat",
@@ -42,6 +48,18 @@ func NewApp(opts Options) (*application.App, error) {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+		// 单实例配置：防止多个应用实例同时运行
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: define.SingleInstanceUniqueID,
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				// 当第二个实例启动时，聚焦主窗口
+				if mainWindow != nil {
+					mainWindow.Restore()
+					mainWindow.Show()
+					mainWindow.Focus()
+				}
+			},
+		},
 	})
 
 	// 注册设置服务
@@ -52,11 +70,17 @@ func NewApp(opts Options) (*application.App, error) {
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 
+	// 注册助手服务
+	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
+
 	// 注册应用服务
 	app.RegisterService(application.NewService(appservice.NewAppService(app)))
 
-	// 创建主窗口（需要先创建，以便传给 multiask 服务）
-	mainWindow := windows.NewMainWindow(app)
+	// 注册知识库服务
+	app.RegisterService(application.NewService(library.NewLibraryService(app)))
+
+	// 创建主窗口
+	mainWindow = windows.NewMainWindow(app)
 
 	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
 	multiaskService := multiask.NewMultiaskService(app, mainWindow)

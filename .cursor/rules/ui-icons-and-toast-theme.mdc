@@ -1,0 +1,37 @@
+---
+description: UI 图标与 Toast 的黑白灰科技风规范（深色模式友好）
+alwaysApply: true
+---
+
+# UI 图标与 Toast 视觉规范
+
+## SVG 图标（必须深色模式友好）
+
+- **禁止写死颜色**：不要在 SVG 里使用 `stroke="#262626"` / `fill="#000"` 这类硬编码。
+- **统一改为 `currentColor`**：用 `stroke="currentColor"` / `fill="currentColor"`，让图标自动跟随文本颜色。
+- **在使用处控制颜色**：在 Vue 模板里用 Tailwind 的语义色（例如 `text-muted-foreground`、`text-foreground/80`、`text-destructive`）控制图标颜色。
+
+示例：
+
+```svg
+<!-- ❌ BAD -->
+<path stroke="#262626" ... />
+
+<!-- ✅ GOOD -->
+<path stroke="currentColor" ... />
+```
+
+## Toast（黑白灰科技风）
+
+- **避免彩色大底与强烈阴影**：success/error 不要使用大面积绿/红背景；不要用 `shadow-lg` 造成“边缘阴影条”。
+- **统一基底**：使用 `bg-popover text-popover-foreground border-border`。
+- **区分状态用“克制提示”**：可用左侧细边框或图标灰阶区分 success/error（不使用彩色）。
+- **阴影策略**：用 `shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10`，与项目卡片一致。
+
+示例（Toast 容器）：
+
+```ts
+// ✅ GOOD（示意）
+'... rounded-lg border p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 bg-popover text-popover-foreground'
+```
+

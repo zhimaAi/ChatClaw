@@ -11,13 +11,16 @@ import (
 	"willchat/internal/define"
 	"willchat/internal/sqlite/migrations"
 
-	_ "github.com/asg017/sqlite-vec-go-bindings/ncruces"
-	_ "github.com/ncruces/go-sqlite3/driver"
+	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/migrate"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// DateTimeFormat 统一的时间格式（无时区）
+const DateTimeFormat = "2006-01-02 15:04:05"
 
 var (
 	once   sync.Once
@@ -27,6 +30,11 @@ var (
 
 func Path() string { return dbPath }
 func DB() *bun.DB  { return db }
+
+// NowUTC 返回当前 UTC 时间字符串，格式为 "2006-01-02 15:04:05"
+func NowUTC() string {
+	return time.Now().UTC().Format(DateTimeFormat)
+}
 
 func Init(app *application.App) error {
 	var initErr error
@@ -44,6 +52,9 @@ func doInit(app *application.App) error {
 	if app != nil {
 		app.Logger.Info("sqlite path", "path", dbPath)
 	}
+
+	// 启用 sqlite-vec 扩展（CGO 版本需要在 Open 之前调用）
+	sqlite_vec.Auto()
 
 	sqlDB, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
