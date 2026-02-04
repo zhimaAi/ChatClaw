@@ -105,10 +105,11 @@ const chatInput = ref('')
 const providersWithModels = ref<ProviderWithModels[]>([])
 const selectedModelKey = ref('')
 
-// Conversations state
-const conversations = ref<Conversation[]>([])
+// Conversations state (cached by agent)
+const conversationsByAgent = ref<Record<number, Conversation[]>>({})
+const conversationsLoadedByAgent = ref<Record<number, boolean>>({})
+const conversationsLoadingByAgent = ref<Record<number, boolean>>({})
 const activeConversationId = ref<number | null>(null)
-const conversationsLoading = ref(false)
 
 // Chat messages (for display)
 const chatMessages = ref<ChatMessage[]>([])
@@ -125,8 +126,10 @@ const activeAgent = computed(() => {
 })
 
 const activeConversation = computed(() => {
+  if (activeAgentId.value == null) return null
   if (activeConversationId.value == null) return null
-  return conversations.value.find((c) => c.id === activeConversationId.value) ?? null
+  const list = conversationsByAgent.value[activeAgentId.value] ?? []
+  return list.find((c) => c.id === activeConversationId.value) ?? null
 })
 
 const canSend = computed(() => {
@@ -143,14 +146,14 @@ const hasModels = computed(() => {
  * Get recent conversations for display under agent (max 3)
  */
 const getAgentConversations = (agentId: number): Conversation[] => {
-  return conversations.value.filter((c) => c.agent_id === agentId).slice(0, 3)
+  return (conversationsByAgent.value[agentId] ?? []).slice(0, 3)
 }
 
 /**
  * Get all conversations for a specific agent (for dropdown menu)
  */
 const getAllAgentConversations = (agentId: number): Conversation[] => {
-  return conversations.value.filter((c) => c.agent_id === agentId)
+  return conversationsByAgent.value[agentId] ?? []
 }
 
 const loadAgents = async () => {
@@ -169,6 +172,11 @@ const loadAgents = async () => {
 
     // Update tab icon and title
     updateCurrentTab()
+
+    // Ensure current agent's conversations are available for sidebar/history UI
+    if (activeAgentId.value != null) {
+      void ensureConversationsLoaded(activeAgentId.value)
+    }
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadFailed'))
   } finally {
@@ -176,30 +184,70 @@ const loadAgents = async () => {
   }
 }
 
-const loadConversations = async (agentId: number, preserveSelection = false) => {
-  conversationsLoading.value = true
+const setAgentLoading = (agentId: number, val: boolean) => {
+  conversationsLoadingByAgent.value = {
+    ...conversationsLoadingByAgent.value,
+    [agentId]: val,
+  }
+}
+
+type LoadConversationsOptions = {
+  preserveSelection?: boolean
+  affectActiveSelection?: boolean
+  force?: boolean
+}
+
+const loadConversations = async (agentId: number, opts: LoadConversationsOptions = {}) => {
+  const preserveSelection = opts.preserveSelection ?? false
+  const affectActiveSelection = opts.affectActiveSelection ?? true
+
+  setAgentLoading(agentId, true)
   const previousConversationId = activeConversationId.value
   try {
     const list = await ConversationsService.ListConversations(agentId)
-    conversations.value = list || []
-    if (preserveSelection && previousConversationId !== null) {
-      // 保持当前选中状态（如果会话仍存在）
-      const stillExists = list?.some((c) => c.id === previousConversationId)
-      if (!stillExists) {
+    const next = list || []
+    conversationsByAgent.value = {
+      ...conversationsByAgent.value,
+      [agentId]: next,
+    }
+    conversationsLoadedByAgent.value = {
+      ...conversationsLoadedByAgent.value,
+      [agentId]: true,
+    }
+
+    // Only adjust active selection when loading the active agent's list
+    if (affectActiveSelection && activeAgentId.value === agentId) {
+      if (preserveSelection && previousConversationId !== null) {
+        // 保持当前选中状态（如果会话仍存在）
+        const stillExists = next.some((c) => c.id === previousConversationId)
+        if (!stillExists) {
+          activeConversationId.value = null
+          chatMessages.value = []
+        }
+      } else {
+        // Don't auto-select any conversation when loading
         activeConversationId.value = null
         chatMessages.value = []
       }
-    } else {
-      // Don't auto-select any conversation when loading
-      activeConversationId.value = null
-      chatMessages.value = []
     }
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadConversationsFailed'))
-    conversations.value = []
+    conversationsByAgent.value = {
+      ...conversationsByAgent.value,
+      [agentId]: [],
+    }
+    conversationsLoadedByAgent.value = {
+      ...conversationsLoadedByAgent.value,
+      [agentId]: true,
+    }
   } finally {
-    conversationsLoading.value = false
+    setAgentLoading(agentId, false)
   }
+}
+
+const ensureConversationsLoaded = async (agentId: number) => {
+  if (conversationsLoadedByAgent.value[agentId]) return
+  await loadConversations(agentId, { affectActiveSelection: false })
 }
 
 const loadModels = async () => {
@@ -328,6 +376,23 @@ const handleDeleted = (id: number) => {
   if (activeAgentId.value === id) {
     activeAgentId.value = agents.value.length > 0 ? agents.value[0].id : null
   }
+
+  // Clear cached conversations for this agent
+  {
+    const next = { ...conversationsByAgent.value }
+    delete next[id]
+    conversationsByAgent.value = next
+  }
+  {
+    const next = { ...conversationsLoadedByAgent.value }
+    delete next[id]
+    conversationsLoadedByAgent.value = next
+  }
+  {
+    const next = { ...conversationsLoadingByAgent.value }
+    delete next[id]
+    conversationsLoadingByAgent.value = next
+  }
 }
 
 const handleNewConversation = () => {
@@ -364,11 +429,21 @@ const handleSend = async () => {
         })
       )
       if (newConversation) {
+        const agentId = newConversation.agent_id
+        const current = conversationsByAgent.value[agentId] ?? []
         // 添加新会话并排序（置顶优先）
-        conversations.value = [newConversation, ...conversations.value].sort((a, b) => {
+        const next = [newConversation, ...current].sort((a, b) => {
           if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1
           return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         })
+        conversationsByAgent.value = {
+          ...conversationsByAgent.value,
+          [agentId]: next,
+        }
+        conversationsLoadedByAgent.value = {
+          ...conversationsLoadedByAgent.value,
+          [agentId]: true,
+        }
         activeConversationId.value = newConversation.id
       }
     } catch (error: unknown) {
@@ -435,7 +510,7 @@ const handleTogglePin = async (conv: Conversation) => {
     // 重新加载列表以获取正确的排序和置顶状态
     // （置顶时其他会话可能被取消置顶）
     if (activeAgentId.value) {
-      await loadConversations(activeAgentId.value, true)
+      await loadConversations(activeAgentId.value, { preserveSelection: true })
     }
   } catch (error) {
     console.error('Failed to toggle pin:', error)
@@ -444,8 +519,10 @@ const handleTogglePin = async (conv: Conversation) => {
 }
 
 const handleConversationUpdated = (updated: Conversation) => {
+  const agentId = updated.agent_id
+  const current = conversationsByAgent.value[agentId] ?? []
   // Update and re-sort (pinned first, then by updated_at desc)
-  conversations.value = conversations.value
+  const next = current
     .map((c) => (c.id === updated.id ? updated : c))
     .sort((a, b) => {
       // Pinned items first
@@ -455,13 +532,26 @@ const handleConversationUpdated = (updated: Conversation) => {
       // Then by updated_at desc
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     })
+  conversationsByAgent.value = {
+    ...conversationsByAgent.value,
+    [agentId]: next,
+  }
+  conversationsLoadedByAgent.value = {
+    ...conversationsLoadedByAgent.value,
+    [agentId]: true,
+  }
 }
 
 const confirmDeleteConversation = async () => {
   if (!actionConversation.value) return
   try {
     await ConversationsService.DeleteConversation(actionConversation.value.id)
-    conversations.value = conversations.value.filter((c) => c.id !== actionConversation.value?.id)
+    const agentId = actionConversation.value.agent_id
+    const current = conversationsByAgent.value[agentId] ?? []
+    conversationsByAgent.value = {
+      ...conversationsByAgent.value,
+      [agentId]: current.filter((c) => c.id !== actionConversation.value?.id),
+    }
     if (activeConversationId.value === actionConversation.value.id) {
       activeConversationId.value = null
       chatMessages.value = []
@@ -494,7 +584,6 @@ watch(activeAgentId, (newAgentId, oldAgentId) => {
   if (newAgentId && oldAgentId !== undefined) {
     loadConversations(newAgentId)
   } else if (!newAgentId) {
-    conversations.value = []
     activeConversationId.value = null
     chatMessages.value = []
   }
@@ -660,7 +749,10 @@ onUnmounted(() => {
                       {{ t('assistant.menu.settings') }}
                     </DropdownMenuItem>
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger>
+                      <DropdownMenuSubTrigger
+                        @mouseenter="ensureConversationsLoaded(a.id)"
+                        @focus="ensureConversationsLoaded(a.id)"
+                      >
                         {{ t('assistant.menu.history') }}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent class="w-56">
