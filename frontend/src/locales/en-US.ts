@@ -264,6 +264,7 @@ export default {
         topP: 'Top-P',
         topPHint: 'Controls sampling range',
         contextCount: 'Context Count',
+        matchThreshold: 'Match threshold',
         maxTokens: 'Max Tokens',
         unlimited: 'Unlimited',
       },

@@ -113,7 +113,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	topK := 20
 	chunkSize := 1024
 	chunkOverlap := 100
-	matchThreshold := 0.5
 
 	if input.TopK != nil && *input.TopK > 0 {
 		topK = *input.TopK
@@ -129,12 +128,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 			return nil, errs.New("error.library_chunk_overlap_invalid")
 		}
 		chunkOverlap = *input.ChunkOverlap
-	}
-	if input.MatchThreshold != nil {
-		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
-			return nil, errs.New("error.library_match_threshold_invalid")
-		}
-		matchThreshold = *input.MatchThreshold
 	}
 
 	// embedding 配置为全局 settings（不落库到 library 表），但创建前必须校验：
@@ -192,7 +185,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		TopK:           topK,
 		ChunkSize:      chunkSize,
 		ChunkOverlap:   chunkOverlap,
-		MatchThreshold: matchThreshold,
 		SortOrder:      sortOrder,
 	}
 
@@ -299,12 +291,6 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 			return nil, errs.New("error.library_chunk_overlap_invalid")
 		}
 		q = q.Set("chunk_overlap = ?", *input.ChunkOverlap)
-	}
-	if input.MatchThreshold != nil {
-		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
-			return nil, errs.New("error.library_match_threshold_invalid")
-		}
-		q = q.Set("match_threshold = ?", *input.MatchThreshold)
 	}
 
 	res, err := q.Exec(ctx)

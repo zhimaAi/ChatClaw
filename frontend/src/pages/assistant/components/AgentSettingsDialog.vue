@@ -66,6 +66,7 @@ const temperature = ref(0.5)
 const topP = ref(1.0)
 const contextCount = ref(50)
 const maxTokens = ref(1000)
+const matchThreshold = ref(0.5)
 
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
@@ -97,6 +98,7 @@ watch(
     topP.value = agent.llm_top_p ?? 1.0
     contextCount.value = agent.context_count ?? 50
     maxTokens.value = agent.llm_max_tokens ?? 1000
+    matchThreshold.value = agent.match_threshold ?? 0.5
 
     modelProviderId.value = agent.default_llm_provider_id ?? ''
     modelId.value = agent.default_llm_model_id ?? ''
@@ -215,6 +217,7 @@ const handleSave = async () => {
       llm_top_p: topP.value,
       context_count: contextCount.value,
       llm_max_tokens: maxTokens.value,
+      match_threshold: matchThreshold.value,
     })
     if (!updated) {
       throw new Error(t('assistant.errors.updateFailed'))
@@ -446,6 +449,20 @@ const handleDelete = async () => {
                       { value: 200, label: t('assistant.settings.model.unlimited') },
                     ]"
                     :format-value="() => ''"
+                  />
+                </div>
+
+                <div class="flex items-center justify-between gap-4">
+                  <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.model.matchThreshold') }}
+                  </div>
+                  <Input
+                    v-model.number="matchThreshold"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    class="h-9 w-[160px]"
                   />
                 </div>
 

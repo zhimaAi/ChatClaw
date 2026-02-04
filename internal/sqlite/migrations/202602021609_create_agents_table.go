@@ -25,7 +25,8 @@ create table if not exists agents (
 	llm_temperature float not null default 0.5,
 	llm_top_p float not null default 1.0,
 	context_count int not null default 50,
-	llm_max_tokens int not null default 1000
+	llm_max_tokens int not null default 1000,
+	match_threshold float not null default 0.5
 );			
 `
 			if _, err := db.ExecContext(ctx, sql); err != nil {
