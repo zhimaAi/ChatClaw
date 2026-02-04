@@ -14,17 +14,21 @@ func DefaultDefinitions() []WindowDefinition {
 			CreateOptions: func() application.WebviewWindowOptions {
 				return application.WebviewWindowOptions{
 					Name:   WindowWinsnap,
-					Title:  "WinSnap",
+					Title:  "WillChat",
 					Width:  400,
 					Height: 720,
 					Hidden: true,
-					// Use custom titlebar inside the webview.
-					Frameless: true,
+					// Use native titlebar for proper close/minimize/fullscreen buttons.
+					Frameless: false,
 					// Let z-order follow the attached target window (not global top-most).
 					// - Windows: we insert after the target hwnd (see pkg/winsnap/winsnap_windows.go)
 					// - macOS: we order above the target window number on activation (see pkg/winsnap/winsnap_darwin.go)
 					AlwaysOnTop: runtime.GOOS != "windows" && runtime.GOOS != "darwin",
 					URL:         "/winsnap.html",
+					// Windows specific: hide from taskbar
+					Windows: application.WindowsWindow{
+						HiddenOnTaskbar: true,
+					},
 					Mac: application.MacWindow{
 						// Use normal window level; ordering is handled dynamically to stay above the target window only.
 						WindowLevel: application.MacWindowLevelNormal,

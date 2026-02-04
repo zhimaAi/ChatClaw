@@ -102,6 +102,15 @@ func (s *SnapService) WakeAttached() error {
 	return winsnap.WakeAttachedWindow(w, target)
 }
 
+// NotifySettingsChanged broadcasts a snap settings changed event to all windows.
+// This is intended for cross-window UI refresh (main window settings page, etc.).
+func (s *SnapService) NotifySettingsChanged() {
+	if s.app == nil {
+		return
+	}
+	s.app.Event.Emit("snap:settings-changed", nil)
+}
+
 // SyncFromSettings reads snap toggles from settings cache, then starts/stops
 // snapping loop accordingly.
 func (s *SnapService) SyncFromSettings() (SnapStatus, error) {
@@ -119,13 +128,19 @@ func (s *SnapService) SyncFromSettings() (SnapStatus, error) {
 
 	if !shouldRun {
 		_ = s.stop()
-		return s.GetStatus(), nil
+		status := s.GetStatus()
+		// Emit from backend because winsnap window may close during sync,
+		// and frontend code after SyncFromSettings may never run.
+		s.app.Event.Emit("snap:settings-changed", status)
+		return status, nil
 	}
 
 	if err := s.ensureRunning(); err != nil {
 		return s.GetStatus(), err
 	}
-	return s.GetStatus(), nil
+	status := s.GetStatus()
+	s.app.Event.Emit("snap:settings-changed", status)
+	return status, nil
 }
 
 func (s *SnapService) ensureRunning() error {

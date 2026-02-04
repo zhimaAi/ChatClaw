@@ -352,48 +352,28 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen flex-col overflow-hidden rounded-[12px] bg-background text-foreground">
-    <!-- Custom titlebar (frameless window drag region) -->
-    <div
-      class="relative flex h-[28px] items-center justify-center bg-[rgba(234,234,234,0.80)] backdrop-blur-[15px] shadow-[0px_0.5px_0px_rgba(0,0,0,0.1),0px_1px_0px_rgba(0,0,0,0.1)]"
-      style="--wails-draggable: drag"
-    >
-      <div class="absolute left-3 flex items-center gap-2" style="--wails-draggable: no-drag">
-        <div class="size-[12px] rounded-full border border-black/20 bg-[#ff5f57]" />
-        <div class="size-[12px] rounded-full border border-black/20 bg-[#febc2e]" />
-        <div class="size-[12px] rounded-full border border-black/20 bg-[#28c840]" />
-      </div>
-      <div class="text-center text-[13px] font-semibold text-black/85">{{ t('winsnap.title') }}</div>
-    </div>
-
-    <!-- Header -->
-    <div class="flex h-12 items-center justify-between bg-background px-3">
+  <div class="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+    <!-- Toolbar (compact, below native titlebar) -->
+    <div class="flex h-10 items-center justify-between border-b border-border bg-background px-3">
       <div class="flex items-center gap-1">
-        <div class="text-base font-semibold text-foreground">{{ t('winsnap.assistantName') }}</div>
-        <ChevronDown class="size-4 text-muted-foreground" />
+        <div class="text-sm font-medium text-foreground">{{ t('winsnap.assistantName') }}</div>
+        <ChevronDown class="size-3.5 text-muted-foreground" />
       </div>
 
-      <div class="flex items-center gap-2">
-        <button class="rounded-md p-1 hover:bg-muted" style="--wails-draggable: no-drag" aria-label="add" type="button">
-          <Plus class="size-5 text-muted-foreground" />
+      <div class="flex items-center gap-1.5">
+        <button class="rounded-md p-1 hover:bg-muted" aria-label="add" type="button">
+          <Plus class="size-4 text-muted-foreground" />
+        </button>
+        <button class="rounded-md p-1 hover:bg-muted" aria-label="edit" type="button">
+          <PenLine class="size-4 text-muted-foreground" />
         </button>
         <button
-          class="rounded-md bg-muted p-1 hover:bg-muted/80"
-          style="--wails-draggable: no-drag"
-          aria-label="edit"
-          type="button"
-        >
-          <PenLine class="size-5 text-muted-foreground" />
-        </button>
-
-        <button
-          class="ml-1 inline-flex items-center gap-2 rounded-[10px] bg-background px-3 py-2 shadow-[0px_2px_8px_rgba(0,0,0,0.15)]"
-          style="--wails-draggable: no-drag"
+          class="ml-1 inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-xs hover:bg-muted"
           @click="cancelSnap"
           type="button"
         >
-          <PinOff class="size-4 text-muted-foreground" />
-          <span class="text-sm text-foreground">{{ t('winsnap.cancelSnap') }}</span>
+          <PinOff class="size-3.5 text-muted-foreground" />
+          <span class="text-muted-foreground">{{ t('winsnap.cancelSnap') }}</span>
         </button>
       </div>
     </div>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AcceptableValue } from 'reka-ui'
+import { Events } from '@wailsio/runtime'
 import {
   Select,
   SelectContent,
@@ -112,8 +113,8 @@ const syncSnapFromSettings = async () => {
   }
 }
 
-// 加载设置
-const loadSettings = async () => {
+// Refresh UI from settings (without triggering backend sync to avoid event loop)
+const refreshSettingsUI = async () => {
   try {
     const settings = await SettingsService.List(Category.CategorySnap)
     settings.forEach((setting) => {
@@ -128,11 +129,16 @@ const loadSettings = async () => {
         sendKeyStrategy.value = setting.value
       }
     })
-    // 同步后端吸附服务（根据当前 settings 的多个开关状态决定启动/隐藏/吸附目标）
-    await syncSnapFromSettings()
   } catch (error) {
-    console.error('Failed to load snap settings:', error)
+    console.error('Failed to refresh snap settings UI:', error)
   }
+}
+
+// 加载设置（包括同步后端服务）
+const loadSettings = async () => {
+  await refreshSettingsUI()
+  // 同步后端吸附服务（根据当前 settings 的多个开关状态决定启动/隐藏/吸附目标）
+  await syncSnapFromSettings()
 }
 
 // 更新设置
@@ -193,9 +199,23 @@ const handleSendKeyChange = async (value: AcceptableValue) => {
   }
 }
 
+// Event subscription for snap settings change (broadcast from backend)
+let unsubscribeSnapSettingsChanged: (() => void) | null = null
+
 // 页面加载时获取设置
 onMounted(() => {
   void loadSettings()
+
+  // Listen for snap settings change event broadcast from backend (e.g., when winsnap window cancels snap)
+  // Only refresh UI without calling syncSnapFromSettings to avoid event loop
+  unsubscribeSnapSettingsChanged = Events.On('snap:settings-changed', () => {
+    void refreshSettingsUI()
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeSnapSettingsChanged?.()
+  unsubscribeSnapSettingsChanged = null
 })
 </script>
 

@@ -4,6 +4,7 @@ package textselection
 
 import (
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -262,12 +263,13 @@ func (w *MouseHookWatcher) handlePossibleSelection(mouseX, mouseY int32) {
 	// Read new clipboard content
 	newClipboard := getClipboardText()
 
-	// If clipboard content changed, successfully copied selected text
-	if newClipboard != "" && newClipboard != oldClipboard {
+	// If clipboard content changed and has meaningful text, show popup
+	// Skip if only whitespace (e.g., user selected image/screenshot, not text)
+	newClipboard = strings.TrimSpace(newClipboard)
+	if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
 		if callback != nil {
 			callback(newClipboard, mouseX, mouseY)
 		}
-	} else {
 	}
 }
 

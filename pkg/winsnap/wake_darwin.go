@@ -59,6 +59,14 @@ static void winsnap_activate_current_app(void) {
 	if (!app) return;
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
+
+// Order a specific window to front without activating the entire application.
+// This brings only the specified window to front, not all windows of the app.
+static void winsnap_order_window_front(void *nsWindow) {
+	if (!nsWindow) return;
+	NSWindow *win = (__bridge NSWindow *)nsWindow;
+	[win orderFrontRegardless];
+}
 */
 import "C"
 
@@ -76,9 +84,9 @@ func EnsureWindowVisible(_ *application.WebviewWindow) error {
 
 // WakeAttachedWindow on macOS:
 // 1) Activate the target app so its window comes to front
-// 2) Activate current app again so the user can continue interacting with winsnap
+// 2) Order only the winsnap window to front (not entire app) to avoid activating main window
 // The winsnap window itself is kept at normal level to avoid covering other apps.
-func WakeAttachedWindow(_ *application.WebviewWindow, targetProcessName string) error {
+func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
 	if targetProcessName == "" {
 		return errors.New("winsnap: TargetProcessName is empty")
 	}
@@ -92,7 +100,14 @@ func WakeAttachedWindow(_ *application.WebviewWindow, targetProcessName string) 
 	if pid <= 0 {
 		return ErrTargetWindowNotFound
 	}
+	// Activate target app (e.g., WeChat)
 	C.winsnap_activate_pid(pid)
-	C.winsnap_activate_current_app()
+	// Only order the winsnap window to front, not the entire app (avoid activating main window)
+	if self != nil {
+		nsWindow := self.NativeWindow()
+		if nsWindow != nil {
+			C.winsnap_order_window_front(nsWindow)
+		}
+	}
 	return nil
 }

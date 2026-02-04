@@ -2,6 +2,7 @@ package textselection
 
 import (
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -188,6 +189,8 @@ func (s *TextSelectionService) startClickOutsideWatcher() {
 // startWatcher starts the mouse hook watcher.
 func (s *TextSelectionService) startWatcher() {
 	callback := func(text string, x, y int32) {
+		// Skip if text is empty or only whitespace (e.g., user selected image/screenshot)
+		text = strings.TrimSpace(text)
 		if text == "" {
 			return
 		}

@@ -242,6 +242,7 @@ static void freeMouseHookString(char *str) {
 import "C"
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -424,7 +425,10 @@ func mouseHookDarwinCallback(x, y C.int) {
 		}
 	}
 
-	if newClipboard != "" && newClipboard != oldClipboard {
+	// If clipboard content changed and has meaningful text, show popup
+	// Skip if only whitespace (e.g., user selected image/screenshot, not text)
+	newClipboard = strings.TrimSpace(newClipboard)
+	if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
 		w.mu.Lock()
 		callback := w.callback
 		w.mu.Unlock()
