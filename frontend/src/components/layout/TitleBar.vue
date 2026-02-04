@@ -116,8 +116,8 @@ const handleTitleBarDoubleClick = async () => {
           >
             <div class="flex items-center gap-2">
               <!-- 标签页图标 -->
-              <div v-if="tab.icon" class="size-5 shrink-0 overflow-hidden rounded-md">
-                <img :src="tab.icon" alt="" class="size-full object-cover" />
+              <div v-if="tab.icon" class="flex size-5 shrink-0 items-center justify-center">
+                <img :src="tab.icon" alt="" class="size-full object-contain" />
               </div>
               <div
                 v-else
@@ -136,9 +136,9 @@ const handleTitleBarDoubleClick = async () => {
                   />
                 </svg>
               </div>
-              <!-- 标签页标题 -->
+              <!-- 标签页标题：优先使用自定义标题，否则使用翻译键 -->
               <span class="max-w-[100px] truncate text-sm">{{
-                tab.titleKey ? t(tab.titleKey) : tab.title
+                tab.title?.trim() ? tab.title : tab.titleKey ? t(tab.titleKey) : ''
               }}</span>
             </div>
             <!-- 关闭按钮 -->

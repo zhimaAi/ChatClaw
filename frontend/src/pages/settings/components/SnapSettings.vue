@@ -23,12 +23,9 @@ import DouyinIcon from '@/assets/icons/snap/douyin.svg'
 
 // 后端绑定
 import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
-import { WindowService } from '@bindings/willchat/internal/services/windows'
+import { SnapService } from '@bindings/willchat/internal/services/windows'
 
 const { t } = useI18n()
-
-// 子窗口名称常量
-const WINDOW_WINSNAP = 'winsnap'
 
 // 设置状态
 const showAiSendButton = ref(true)
@@ -43,7 +40,7 @@ const snapDingtalk = ref(false)
 const snapFeishu = ref(false)
 const snapDouyin = ref(false)
 
-// 所有吸附应用的 ref 映射，用于互斥控制
+// 所有吸附应用的 ref 映射（每个开关独立，不互斥）
 const snapAppRefs: Record<string, { value: boolean }> = {
   snap_wechat: snapWechat,
   snap_wecom: snapWecom,
@@ -107,15 +104,13 @@ const boolSettingsMap: Record<string, { value: boolean }> = {
   ...snapAppRefs,
 }
 
-// 吸附应用 key 的固定顺序（用于从“多个为 true”的异常状态中恢复）
-const snapKeyOrder = [
-  'snap_wechat',
-  'snap_wecom',
-  'snap_qq',
-  'snap_dingtalk',
-  'snap_feishu',
-  'snap_douyin',
-] as const
+const syncSnapFromSettings = async () => {
+  try {
+    await SnapService.SyncFromSettings()
+  } catch (error) {
+    console.error('Failed to sync snap service from settings:', error)
+  }
+}
 
 // 加载设置
 const loadSettings = async () => {
@@ -133,33 +128,8 @@ const loadSettings = async () => {
         sendKeyStrategy.value = setting.value
       }
     })
-
-    // 互斥修复：如果异常地出现多个吸附应用同时为 true，保留一个，其余写回 false
-    const activeSnapKeys = snapKeyOrder.filter((k) => snapAppRefs[k].value)
-    if (activeSnapKeys.length > 1) {
-      const keepKey = activeSnapKeys[0]
-      const keysToDisable = activeSnapKeys.slice(1)
-      for (const k of keysToDisable) {
-        snapAppRefs[k].value = false
-        try {
-          await updateSetting(k, 'false')
-        } catch {
-          // best-effort：失败时保持 UI 已纠正，避免继续处于“多开关同时开”的状态
-        }
-      }
-      // 确保保留的 key 仍然为 true（UI 可能被外部状态影响）
-      snapAppRefs[keepKey].value = true
-    }
-
-    const hasActiveSnapApp = snapKeyOrder.some((k) => snapAppRefs[k].value)
-    // 如果有活跃的吸附应用，显示 winsnap 子窗口
-    if (hasActiveSnapApp) {
-      try {
-        await WindowService.Show(WINDOW_WINSNAP)
-      } catch (error) {
-        console.error('Failed to show winsnap window on load:', error)
-      }
-    }
+    // 同步后端吸附服务（根据当前 settings 的多个开关状态决定启动/隐藏/吸附目标）
+    await syncSnapFromSettings()
   } catch (error) {
     console.error('Failed to load snap settings:', error)
   }
@@ -197,62 +167,17 @@ const handleAiEditButtonChange = async (val: boolean) => {
   }
 }
 
-// 处理吸附应用开关变化（互斥逻辑）
+// 处理吸附应用开关变化（每个开关独立，不互斥；所有开关共用一个吸附窗体）
 const handleSnapAppChange = async (key: string, refValue: { value: boolean }, val: boolean) => {
-  if (val) {
-    // 开启时：先关闭其他所有开关，再开启当前开关（并支持失败回滚）
-    const prevSnapState: Record<string, boolean> = {}
-    for (const [k, r] of Object.entries(snapAppRefs)) {
-      prevSnapState[k] = r.value
-    }
-
-    // UI 先做互斥纠正
-    for (const [appKey, appRef] of Object.entries(snapAppRefs)) {
-      if (appKey !== key) {
-        appRef.value = false
-      }
-    }
-    refValue.value = true
-
-    try {
-      // 顺序写入，避免并发写导致状态抖动
-      for (const [appKey, appRef] of Object.entries(snapAppRefs)) {
-        if (appKey !== key && prevSnapState[appKey] && !appRef.value) {
-          await updateSetting(appKey, 'false')
-        }
-      }
-      await updateSetting(key, 'true')
-    } catch {
-      // 回滚 UI
-      for (const [k, r] of Object.entries(snapAppRefs)) {
-        r.value = prevSnapState[k] ?? false
-      }
-      return
-    }
-
-    // 显示 winsnap 子窗口
-    try {
-      await WindowService.Show(WINDOW_WINSNAP)
-    } catch (error) {
-      console.error('Failed to show winsnap window:', error)
-    }
-  } else {
-    const prev = refValue.value
-    refValue.value = false
-    try {
-      await updateSetting(key, 'false')
-    } catch {
-      refValue.value = prev
-      return
-    }
-
-    // 关闭 winsnap 子窗口
-    try {
-      await WindowService.Close(WINDOW_WINSNAP)
-    } catch (error) {
-      console.error('Failed to close winsnap window:', error)
-    }
+  const prev = refValue.value
+  refValue.value = val
+  try {
+    await updateSetting(key, String(val))
+  } catch {
+    refValue.value = prev
+    return
   }
+  await syncSnapFromSettings()
 }
 
 // 处理发送按键模式变化

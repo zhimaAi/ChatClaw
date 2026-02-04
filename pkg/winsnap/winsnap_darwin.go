@@ -1,13 +1,14 @@
-//go:build darwin
+//go:build darwin && cgo
 
 package winsnap
 
 /*
 #cgo darwin CFLAGS: -x objective-c -fobjc-arc
-#cgo darwin LDFLAGS: -framework Cocoa -framework ApplicationServices
+#cgo darwin LDFLAGS: -framework Cocoa -framework ApplicationServices -framework CoreGraphics
 
 #import <Cocoa/Cocoa.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <CoreGraphics/CGWindow.h>
 #import <os/lock.h>
 
 typedef struct ScreenInfo {
@@ -32,21 +33,31 @@ typedef struct WinsnapFollower {
 	// Coalesced target frame updates (AX thread -> main thread)
 	os_unfair_lock lock;
 	CGPoint latestCocoaOrigin; // Pre-computed Cocoa coordinates for our window
+	int latestTargetWindowNumber; // AXWindowNumber of the observed target window
 	uint64_t frameGen;
 	uint64_t appliedGen;
 	bool applyScheduled;
-	
+
 	// Cached coordinate conversion constants (to avoid recomputing on every update)
 	CGFloat axOriginX;
 	CGFloat axOriginY;
 	CGFloat selfWidth;
 	CGFloat selfHeight;
-	
+
 	// Last applied position (for threshold filtering)
 	CGPoint lastAppliedOrigin;
+
+	// Observe target app activation to re-assert z-order (keep above target only when target is frontmost)
+	void *activationObserver; // token returned by NSNotificationCenter (stored as void* for CGO compatibility)
 } WinsnapFollower;
 
 static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame);
+// Gets CG window number by matching AX window frame to CGWindowListCopyWindowInfo (macOS has no public kAXWindowNumberAttribute).
+static int winsnap_get_ax_window_number(AXUIElementRef win, pid_t pid);
+static bool winsnap_is_frontmost_pid(pid_t pid);
+static void winsnap_order_above_target(WinsnapFollower *f);
+static void winsnap_register_activation_observer(WinsnapFollower *f);
+static void winsnap_unregister_activation_observer(WinsnapFollower *f);
 
 static void winsnap_set_err(char **errOut, NSString *msg) {
 	if (!errOut) return;
@@ -87,11 +98,15 @@ static pid_t winsnap_find_pid_by_name(const char *name) {
 		if (!app || app.terminated) continue;
 		NSString *loc = winsnap_trim(app.localizedName);
 		NSString *exe = winsnap_trim(app.executableURL.lastPathComponent);
+		NSString *bid = winsnap_trim(app.bundleIdentifier);
 
 		if (loc.length && [loc caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 		if (exe.length && [exe caseInsensitiveCompare:target] == NSOrderedSame) {
+			return app.processIdentifier;
+		}
+		if (bid.length && [bid caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 	}
@@ -211,6 +226,85 @@ static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame) {
 	return true;
 }
 
+static int winsnap_get_ax_window_number(AXUIElementRef win, pid_t pid) {
+	if (!win || pid <= 0) return 0;
+	CGRect axFrame = CGRectZero;
+	if (!winsnap_get_ax_frame(win, &axFrame)) return 0;
+	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+	if (!list) return 0;
+	int result = 0;
+	CFIndex n = CFArrayGetCount(list);
+	for (CFIndex i = 0; i < n; i++) {
+		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
+		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
+		if (!pidRef) continue;
+		pid_t wpid = 0;
+		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
+		if (wpid != pid) continue;
+		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
+		if (!bounds) continue;
+		CGRect cgRect;
+		if (!CGRectMakeWithDictionaryRepresentation(bounds, &cgRect)) continue;
+		// Match AX frame (same coordinate system: top-left origin, Y down).
+		if (fabs(cgRect.origin.x - axFrame.origin.x) < 2.0 && fabs(cgRect.origin.y - axFrame.origin.y) < 2.0 &&
+		    fabs(cgRect.size.width - axFrame.size.width) < 2.0 && fabs(cgRect.size.height - axFrame.size.height) < 2.0) {
+			CFNumberRef numRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
+			if (numRef) CFNumberGetValue(numRef, kCFNumberIntType, &result);
+			break;
+		}
+	}
+	CFRelease(list);
+	return result;
+}
+
+static bool winsnap_is_frontmost_pid(pid_t pid) {
+	@autoreleasepool {
+		NSRunningApplication *app = [[NSWorkspace sharedWorkspace] frontmostApplication];
+		if (!app) return false;
+		return app.processIdentifier == pid;
+	}
+}
+
+static void winsnap_order_above_target(WinsnapFollower *f) {
+	if (!f || !f->selfWindow) return;
+	if (!winsnap_is_frontmost_pid(f->pid)) return;
+
+	int winNo = 0;
+	os_unfair_lock_lock(&f->lock);
+	winNo = f->latestTargetWindowNumber;
+	os_unfair_lock_unlock(&f->lock);
+	if (winNo <= 0) return;
+
+	NSWindow *selfWin = (__bridge NSWindow *)f->selfWindow;
+	if (!selfWin) return;
+	// Order just above the target window (same "normal" level), without activating.
+	[selfWin orderWindow:NSWindowAbove relativeTo:winNo];
+}
+
+static void winsnap_register_activation_observer(WinsnapFollower *f) {
+	if (!f) return;
+	if (f->activationObserver) return;
+	NSNotificationCenter *nc = [[NSWorkspace sharedWorkspace] notificationCenter];
+	id observer = [nc addObserverForName:NSWorkspaceDidActivateApplicationNotification
+	                              object:nil
+	                               queue:[NSOperationQueue mainQueue]
+	                          usingBlock:^(NSNotification *note) {
+		(void)note;
+		if (!f || f->stopping) return;
+		// When the target app becomes frontmost again, re-assert ordering above its window.
+		winsnap_order_above_target(f);
+	}];
+	f->activationObserver = (__bridge_retained void *)observer;
+}
+
+static void winsnap_unregister_activation_observer(WinsnapFollower *f) {
+	if (!f || !f->activationObserver) return;
+	NSNotificationCenter *nc = [[NSWorkspace sharedWorkspace] notificationCenter];
+	id observer = (__bridge_transfer id)f->activationObserver;
+	[nc removeObserver:observer];
+	f->activationObserver = NULL;
+}
+
 static void winsnap_sync_to_target(WinsnapFollower *f) {
 	if (!f || !f->selfWindow) return;
 	if (!f->appElem) return;
@@ -226,6 +320,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 
 	CGRect target = CGRectZero;
 	if (!winsnap_get_ax_frame(win, &target)) return;
+	int winNo = winsnap_get_ax_window_number(win, f->pid);
 
 	// Convert AX coordinates to Cocoa coordinates in the callback thread (reduces main-thread workload).
 	// AX: origin at top-left of primary screen, Y grows downward.
@@ -243,6 +338,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 	os_unfair_lock_lock(&f->lock);
 	CGFloat dx = fabs(cocoaX - f->lastAppliedOrigin.x);
 	CGFloat dy = fabs(cocoaY - f->lastAppliedOrigin.y);
+	f->latestTargetWindowNumber = winNo;
 	if (dx < 2.0 && dy < 2.0 && fabs(newHeight - f->selfHeight) < 2.0 && f->frameGen > 0) {
 		// Movement too small, skip update.
 		os_unfair_lock_unlock(&f->lock);
@@ -284,6 +380,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 		CGPoint newOrigin = ff->latestCocoaOrigin;
 		CGFloat height = ff->selfHeight;
 		CGFloat width = ff->selfWidth;
+		int targetWinNo = ff->latestTargetWindowNumber;
 		uint64_t gen = ff->frameGen;
 		ff->appliedGen = gen;
 		ff->lastAppliedOrigin = newOrigin;
@@ -292,6 +389,12 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 		// Set both position and size to match target window height
 		NSRect newFrame = NSMakeRect(newOrigin.x, newOrigin.y, width, height);
 		[selfWin setFrame:newFrame display:YES animate:NO];
+
+		// Z-order: keep the winsnap window just above the target window,
+		// but only when the target application is frontmost (so we don't cover other apps).
+		if (targetWinNo > 0 && winsnap_is_frontmost_pid(ff->pid)) {
+			[selfWin orderWindow:NSWindowAbove relativeTo:targetWinNo];
+		}
 
 		// If more updates arrived while applying, schedule another run.
 		bool needResched = false;
@@ -374,13 +477,15 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 	f->runLoop = NULL;
 	f->stopping = false;
 	f->lock = OS_UNFAIR_LOCK_INIT;
-	
+	f->latestTargetWindowNumber = 0;
+	f->activationObserver = NULL;
+
 	// Cache coordinate conversion constants and self window size.
 	NSWindow *selfWin = (__bridge NSWindow *)selfWindow;
 	NSRect selfFrame = [selfWin frame];
 	f->selfWidth = selfFrame.size.width;
 	f->selfHeight = selfFrame.size.height;
-	
+
 	// 优先使用 Wails Screen API 提供的屏幕信息
 	if (screenInfo != NULL && screenInfo->width > 0 && screenInfo->height > 0) {
 		f->axOriginX = (CGFloat)screenInfo->x;
@@ -393,7 +498,7 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 		f->axOriginX = primaryFrame.origin.x;
 		f->axOriginY = primaryFrame.origin.y + primaryFrame.size.height;
 	}
-	
+
 	f->lastAppliedOrigin = CGPointMake(-10000, -10000); // Invalid initial value
 
 	f->appElem = AXUIElementCreateApplication(pid);
@@ -423,6 +528,17 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 	// Initial sync.
 	winsnap_sync_to_target(f);
 
+	// Register activation observer on the main thread (for z-order re-assertion when target app is activated).
+	CFRunLoopRef mainRL = CFRunLoopGetMain();
+	CFRetain(mainRL);
+	CFRunLoopPerformBlock(mainRL, kCFRunLoopCommonModes, ^{
+		winsnap_register_activation_observer(f);
+		// If the target is already frontmost, order above immediately.
+		winsnap_order_above_target(f);
+		CFRelease(mainRL);
+	});
+	CFRunLoopWakeUp(mainRL);
+
 	return f;
 }
 
@@ -438,6 +554,16 @@ static void winsnap_follower_run(WinsnapFollower *f) {
 
 	// Cleanup after runloop exits.
 	f->stopping = true;
+
+	// Remove activation observer on the main thread before freeing.
+	CFRunLoopRef mainRL = CFRunLoopGetMain();
+	CFRetain(mainRL);
+	CFRunLoopPerformBlock(mainRL, kCFRunLoopCommonModes, ^{
+		winsnap_unregister_activation_observer(f);
+		CFRelease(mainRL);
+	});
+	CFRunLoopWakeUp(mainRL);
+
 	if (f->observer) {
 		if (f->appElem) {
 			AXObserverRemoveNotification(f->observer, f->appElem, kAXFocusedWindowChangedNotification);
@@ -495,12 +621,12 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
 		return nil, errors.New("winsnap: Window is nil")
 	}
-	
+
 	selfHWND := uintptr(opts.Window.NativeWindow())
 	if selfHWND == 0 {
 		return nil, errors.New("winsnap: native window handle is 0")
 	}
-	
+
 	targetName := normalizeMacTargetName(opts.TargetProcessName)
 	if targetName == "" {
 		return nil, errors.New("winsnap: TargetProcessName is empty")

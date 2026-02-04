@@ -14,6 +14,7 @@
   "error.window_create_options_required": "窗口「{{.Name}}」缺少 CreateOptions",
   "error.window_already_registered": "窗口「{{.Name}}」已注册",
   "error.window_not_registered": "窗口「{{.Name}}」未注册",
+  "error.window_service_required": "缺少窗口服务",
 
   "error.provider_id_required": "缺少供应商ID",
   "error.provider_not_found": "未找到供应商「{{.ProviderID}}」",
@@ -27,6 +28,7 @@
   "error.model_read_failed": "读取模型信息失败",
   "error.model_id_required": "缺少模型ID",
   "error.model_id_too_long": "模型ID不能超过40个字符",
+  "error.model_id_invalid_chars": "模型ID不允许包含“::”",
   "error.model_name_required": "缺少模型名称",
   "error.model_name_too_long": "模型名称不能超过40个字符",
   "error.model_type_invalid": "模型类型无效，必须是 llm、embedding 或 rerank",
@@ -65,6 +67,9 @@
   "error.browser_invalid_url": "URL 不合法",
   "error.browser_unsupported_url_scheme": "不支持的 URL 协议",
   "error.browser_open_failed": "打开浏览器失败",
+
+  "error.question_required": "缺少问题内容",
+  "error.request_id_required": "缺少请求ID",
 
   "error.agent_id_required": "缺少助手ID",
   "error.agent_not_found": "未找到助手「{{.ID}}」",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MoreHorizontal, FileText, CheckCircle2, Loader2, XCircle } from 'lucide-vue-next'
+import { MoreHorizontal, FileText, CheckCircle2, XCircle } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,

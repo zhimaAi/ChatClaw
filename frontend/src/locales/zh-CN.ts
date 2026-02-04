@@ -3,6 +3,16 @@ export default {
     title: 'WillChat',
     theme: '主题',
   },
+  winsnap: {
+    title: 'WillChat',
+    assistantName: '灵魂厨房助手',
+    cancelSnap: '取消吸附',
+    placeholder: '请输入问题',
+    thinking: '思考中...',
+  },
+  selection: {
+    aiChat: 'AI 对话',
+  },
   nav: {
     assistant: 'AI助手',
     knowledge: '知识库',
@@ -177,9 +187,28 @@ export default {
     placeholders: {
       noAgentSelected: '请选择一个助手',
       chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
+      inputPlaceholder: '请输入问题',
+      enterToSend: '请输入内容',
+    },
+    sidebar: {
+      collapse: '收起',
+      expand: '展开',
+      newConversation: '新会话',
+    },
+    chat: {
+      selectModel: '选择模型',
+      noModel: '暂无模型',
+      selectKnowledge: '选择知识库',
+      selectImage: '选择图片',
+      send: '发送',
+    },
+    menu: {
+      settings: '助手设置',
+      history: '历史聊天记录',
     },
     errors: {
       loadFailed: '加载助手列表失败',
+      loadModelsFailed: '加载模型列表失败',
       createFailed: '创建助手失败',
       updateFailed: '更新助手失败',
       deleteFailed: '删除助手失败',

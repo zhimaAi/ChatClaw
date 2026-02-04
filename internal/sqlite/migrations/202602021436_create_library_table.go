@@ -15,7 +15,7 @@ create table if not exists library (
 	created_at datetime not null default current_timestamp,
 	updated_at datetime not null default current_timestamp,
 	
-	name varchar(128) not null,
+	name varchar(100) not null,
 	
 	semantic_segment_provider_id varchar(64) not null default '',
 	semantic_segment_model_id varchar(128) not null default '',

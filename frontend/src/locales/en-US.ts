@@ -3,6 +3,16 @@ export default {
     title: 'WillChat',
     theme: 'Theme',
   },
+  winsnap: {
+    title: 'WillChat',
+    assistantName: 'Soul Kitchen Assistant',
+    cancelSnap: 'Cancel Snap',
+    placeholder: 'Type your question',
+    thinking: 'Thinking...',
+  },
+  selection: {
+    aiChat: 'AI Chat',
+  },
   nav: {
     assistant: 'AI Assistant',
     knowledge: 'Knowledge Base',
@@ -180,9 +190,28 @@ export default {
     placeholders: {
       noAgentSelected: 'Select an agent',
       chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
+      inputPlaceholder: 'Ask a question...',
+      enterToSend: 'Please enter content',
+    },
+    sidebar: {
+      collapse: 'Collapse',
+      expand: 'Expand',
+      newConversation: 'New Conversation',
+    },
+    chat: {
+      selectModel: 'Select model',
+      noModel: 'No model available',
+      selectKnowledge: 'Select knowledge base',
+      selectImage: 'Select image',
+      send: 'Send',
+    },
+    menu: {
+      settings: 'Agent Settings',
+      history: 'Chat History',
     },
     errors: {
       loadFailed: 'Failed to load agents',
+      loadModelsFailed: 'Failed to load models',
       createFailed: 'Failed to create agent',
       updateFailed: 'Failed to update agent',
       deleteFailed: 'Failed to delete agent',

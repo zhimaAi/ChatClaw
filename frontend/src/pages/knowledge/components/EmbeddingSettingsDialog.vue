@@ -147,6 +147,7 @@ const handleSave = async () => {
   saving.value = true
   try {
     const [providerId, modelId] = embeddingSelectedKey.value.split('::')
+    if (!providerId || !modelId) throw new Error(t('knowledge.embeddingSettings.required'))
     const dim = String(Number.parseInt(embeddingDimension.value, 10))
 
     await Promise.all([

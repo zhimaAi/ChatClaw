@@ -14,6 +14,7 @@
   "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
+  "error.window_service_required": "window service is required",
 
   "error.provider_id_required": "provider ID is required",
   "error.provider_not_found": "provider '{{.ProviderID}}' not found",
@@ -27,6 +28,7 @@
   "error.model_read_failed": "failed to read model",
   "error.model_id_required": "model ID is required",
   "error.model_id_too_long": "model ID cannot exceed 40 characters",
+  "error.model_id_invalid_chars": "model ID cannot contain '::'",
   "error.model_name_required": "model name is required",
   "error.model_name_too_long": "model name cannot exceed 40 characters",
   "error.model_type_invalid": "model type is invalid, must be llm, embedding, or rerank",
@@ -102,5 +104,7 @@
   "error.document_file_not_found": "original file not found",
   "error.document_file_type_not_supported": "unsupported file type '{{.Ext}}'",
   "error.document_already_exists": "this file already exists in the library",
-  "error.document_dir_failed": "failed to get documents directory"
+  "error.document_dir_failed": "failed to get documents directory",
+  "error.question_required": "question is required",
+  "error.request_id_required": "request ID is required"
 }

@@ -28,6 +28,13 @@ type ProvidersService struct {
 	app *application.App
 }
 
+func validateModelID(modelID string) error {
+	if strings.Contains(modelID, "::") {
+		return errs.New("error.model_id_invalid_chars")
+	}
+	return nil
+}
+
 func NewProvidersService(app *application.App) *ProvidersService {
 	return &ProvidersService{app: app}
 }
@@ -495,6 +502,9 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if len([]rune(input.ModelID)) > 40 {
 		return nil, errs.New("error.model_id_too_long")
 	}
+	if err := validateModelID(input.ModelID); err != nil {
+		return nil, err
+	}
 
 	input.Name = strings.TrimSpace(input.Name)
 	if input.Name == "" {
@@ -578,6 +588,9 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
 		return nil, errs.New("error.model_id_required")
+	}
+	if err := validateModelID(modelID); err != nil {
+		return nil, err
 	}
 
 	db, err := s.db()

@@ -51,10 +51,13 @@ function addToast(props: Omit<ToastProps, 'id'>) {
 
   // 设置备份计时器，确保 toast 一定会消失
   // 时间比 duration 稍长，给 reka-ui 足够的时间正常处理
-  const timer = setTimeout(() => {
-    dismissToast(id)
-  }, duration + FALLBACK_EXTRA_DELAY)
-  toastTimers.set(id, timer)
+  // duration <= 0: 视为“不自动关闭”，不设置备份计时器
+  if (duration > 0) {
+    const timer = setTimeout(() => {
+      dismissToast(id)
+    }, duration + FALLBACK_EXTRA_DELAY)
+    toastTimers.set(id, timer)
+  }
 
   return id
 }

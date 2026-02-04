@@ -8,6 +8,7 @@ import SettingsItem from './SettingsItem.vue'
 // 后端绑定
 import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
 import { TrayService } from '@bindings/willchat/internal/services/tray'
+import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 
 const { t } = useI18n()
 
@@ -143,6 +144,8 @@ const handleSelectionSearchChange = async (val: boolean) => {
   enableSelectionSearch.value = val
   try {
     await updateSetting('enable_selection_search', String(val))
+    // Sync with backend text selection service
+    await TextSelectionService.SyncFromSettings()
   } catch {
     enableSelectionSearch.value = prev
   }

@@ -130,7 +130,10 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		}
 		chunkOverlap = *input.ChunkOverlap
 	}
-	if input.MatchThreshold != nil && *input.MatchThreshold >= 0 && *input.MatchThreshold <= 1 {
+	if input.MatchThreshold != nil {
+		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
+			return nil, errs.New("error.library_match_threshold_invalid")
+		}
 		matchThreshold = *input.MatchThreshold
 	}
 
@@ -245,8 +248,27 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 	}
 
 	if input.SemanticSegmentProviderID != nil || input.SemanticSegmentModelID != nil {
-		sp := ""
-		sm := ""
+		// 允许“只更新其中一个字段”的局部更新：先读当前值再合并更新
+		type row struct {
+			SemanticSegmentProviderID string `bun:"semantic_segment_provider_id"`
+			SemanticSegmentModelID    string `bun:"semantic_segment_model_id"`
+		}
+		var cur row
+		if err := db.NewSelect().
+			Table("library").
+			Column("semantic_segment_provider_id", "semantic_segment_model_id").
+			Where("id = ?", id).
+			Limit(1).
+			Scan(ctx, &cur); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errs.Newf("error.library_not_found", map[string]any{"ID": id})
+			}
+			return nil, errs.Wrap("error.library_read_failed", err)
+		}
+
+		sp := strings.TrimSpace(cur.SemanticSegmentProviderID)
+		sm := strings.TrimSpace(cur.SemanticSegmentModelID)
+
 		if input.SemanticSegmentProviderID != nil {
 			sp = strings.TrimSpace(*input.SemanticSegmentProviderID)
 		}
