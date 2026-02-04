@@ -26,6 +26,7 @@ const activePointerId = ref<number | null>(null)
 const capturedPointerId = ref<number | null>(null)
 const pointerStartX = ref(0)
 const pointerStartY = ref(0)
+const isDragging = ref(false)
 
 const onEnter = () => {
   hovered.value = true
@@ -44,6 +45,7 @@ const onPointerDown = (e: PointerEvent) => {
   capturedPointerId.value = null
   pointerStartX.value = e.clientX
   pointerStartY.value = e.clientY
+  isDragging.value = true
   void FloatingBallService.SetDragging(true)
 }
 
@@ -71,12 +73,14 @@ const onPointerUp = (e: PointerEvent) => {
   }
   activePointerId.value = null
   capturedPointerId.value = null
+  isDragging.value = false
   void FloatingBallService.SetDragging(false)
 }
 const onPointerCancel = () => {
   logDrag('pointercancel', {})
   activePointerId.value = null
   capturedPointerId.value = null
+  isDragging.value = false
   void FloatingBallService.SetDragging(false)
 }
 
@@ -100,7 +104,10 @@ const setActive = (active: boolean) => {
   if (!active) {
     activePointerId.value = null
     capturedPointerId.value = null
-    void FloatingBallService.SetDragging(false)
+    if (isDragging.value) {
+      isDragging.value = false
+      void FloatingBallService.SetDragging(false)
+    }
   }
   // 如果应用重新激活且鼠标仍在悬浮球上，触发展开
   if (active && hovered.value) {

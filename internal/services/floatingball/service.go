@@ -60,6 +60,8 @@ type FloatingBallService struct {
 	dragStartX int
 	dragStartY int
 	dragMoved  bool
+	dragEndX   int
+	dragEndY   int
 
 	// remember last position/state to avoid re-centering on every Show/SetVisible call
 	hasLastState bool
@@ -86,6 +88,51 @@ func (s *FloatingBallService) debugLog(msg string, fields map[string]any) {
 		args = append(args, k, v)
 	}
 	s.app.Logger.Info("[floatingball] "+msg, args...)
+}
+
+// safeRelativePositionLocked returns a best-effort position relative to current Screen.WorkArea.
+// Across platforms / multi-monitor setups, coordinate spaces can vary. We normalise values into the plausible
+// WorkArea-relative range to avoid false edge-snaps.
+func (s *FloatingBallService) safeRelativePositionLocked() (int, int) {
+	if s.win == nil {
+		return 0, 0
+	}
+	x, y := s.win.RelativePosition()
+	work, ok := s.workAreaLocked()
+	if !ok {
+		return x, y
+	}
+
+	// 1) If values look like absolute coordinates, subtract WorkArea origin
+	if x > work.Width+ballSize || x < -(ballSize*2) {
+		x2 := x - work.X
+		if x2 <= work.Width+ballSize && x2 >= -(ballSize*2) {
+			x = x2
+		}
+	}
+	if y > work.Height+ballSize || y < -(ballSize*2) {
+		y2 := y - work.Y
+		if y2 <= work.Height+ballSize && y2 >= -(ballSize*2) {
+			y = y2
+		}
+	}
+
+	// 2) DPI/scale mismatch fallback: if still out-of-range but halving makes it plausible, halve it.
+	// (e.g. macOS retina can sometimes report 2x coordinates depending on codepath)
+	if x > work.Width+ballSize && x/2 <= work.Width+ballSize {
+		x = x / 2
+	}
+	if x < -(ballSize*2) && x/2 >= -(ballSize*2) {
+		x = x / 2
+	}
+	if y > work.Height+ballSize && y/2 <= work.Height+ballSize {
+		y = y / 2
+	}
+	if y < -(ballSize*2) && y/2 >= -(ballSize*2) {
+		y = y / 2
+	}
+
+	return x, y
 }
 
 func NewFloatingBallService(app *application.App, mainWindow *application.WebviewWindow) *FloatingBallService {
@@ -129,7 +176,7 @@ func (s *FloatingBallService) SetVisible(visible bool) error {
 		s.stopTimersLocked()
 		// remember current state (if window exists)
 		if s.win != nil {
-			x, y := s.win.RelativePosition()
+			x, y := s.safeRelativePositionLocked()
 			s.hasLastState = true
 			s.lastRelX, s.lastRelY = x, y
 			s.lastDock = s.dock
@@ -193,6 +240,12 @@ func (s *FloatingBallService) Hover(entered bool) {
 		s.rehideTimer = nil
 	}
 
+	// Dragging: ignore hover enter/leave side effects, otherwise mouseleave during drag
+	// may schedule a re-hide that teleports the window back to the docked edge.
+	if s.dragging {
+		return
+	}
+
 	if entered {
 		s.expandLocked()
 		return
@@ -220,6 +273,11 @@ func (s *FloatingBallService) SetDragging(dragging bool) {
 
 	prev := s.dragging
 	s.dragging = dragging
+	// Idempotent: ignore redundant calls (e.g. blur/visibility handlers calling SetDragging(false) again)
+	if prev == dragging {
+		s.debugLog("SetDragging:noop", map[string]any{"prev": prev, "now": dragging})
+		return
+	}
 	if s.win == nil || !s.visible {
 		s.debugLog("SetDragging(no_window)", map[string]any{
 			"prev": prev, "now": dragging, "visible": s.visible,
@@ -227,7 +285,7 @@ func (s *FloatingBallService) SetDragging(dragging bool) {
 		return
 	}
 
-	relX, relY := s.win.RelativePosition()
+	relX, relY := s.safeRelativePositionLocked()
 	b := s.win.Bounds()
 	s.debugLog("SetDragging", map[string]any{
 		"prev": prev, "now": dragging,
@@ -237,6 +295,7 @@ func (s *FloatingBallService) SetDragging(dragging bool) {
 	})
 
 	if dragging {
+		s.dragEndX, s.dragEndY = 0, 0
 		// 记录拖拽起点，用于区分“点击”和“真实拖动”
 		s.dragStartX, s.dragStartY = relX, relY
 		s.dragMoved = false
@@ -249,13 +308,24 @@ func (s *FloatingBallService) SetDragging(dragging bool) {
 			s.idleDockTimer.Stop()
 			s.idleDockTimer = nil
 		}
+		if s.rehideTimer != nil {
+			s.rehideTimer.Stop()
+			s.rehideTimer = nil
+		}
 		return
+	}
+
+	// 拖拽结束：防止之前的 mouseleave 触发 rehide 把窗口拉回边缘
+	if s.rehideTimer != nil {
+		s.rehideTimer.Stop()
+		s.rehideTimer = nil
 	}
 
 	// 拖拽结束：用“起点 vs 当前点”的位置差来判定是否真实拖动，
 	// 避免由于 ignoreMoveUntil/平台事件顺序导致 dragMoved 没被置位，从而跳过 snap，
 	// 进而 dock 状态残留（会让窗口被误判为仍贴边，最终强制贴回边缘）。
-	relX2, relY2 := s.win.RelativePosition()
+	relX2, relY2 := s.safeRelativePositionLocked()
+	s.dragEndX, s.dragEndY = relX2, relY2
 	if abs(relX2-s.dragStartX) <= 2 && abs(relY2-s.dragStartY) <= 2 {
 		s.dragMoved = false
 		s.debugLog("drag_end_snap:skip_no_move", map[string]any{
@@ -265,6 +335,10 @@ func (s *FloatingBallService) SetDragging(dragging bool) {
 		return
 	}
 	s.dragMoved = true
+	// Real drag: immediately detach from any previous dock to avoid flicker.
+	// Otherwise, during the 60ms delay, other logic (blur/rehide) may see dock=right and
+	// collapse/teleport it to the edge, and then snap will move it back ("flash").
+	s.dock = DockNone
 
 	// 拖拽结束：稍作延迟等待系统最终位置稳定，然后立刻判断贴边/对齐（不在这里缩小）
 	time.AfterFunc(60*time.Millisecond, func() {
@@ -280,6 +354,20 @@ func (s *FloatingBallService) dragEndSnap() {
 		return
 	}
 	s.debugLog("drag_end_snap:run", map[string]any{})
+	if s.dragEndX != 0 || s.dragEndY != 0 {
+		s.snapAfterMoveAtLocked(s.dragEndX, s.dragEndY)
+		// If app is inactive and we ended up docked, collapse immediately (no flicker).
+		if !s.appActive && s.dock != DockNone {
+			work, ok := s.workAreaLocked()
+			if ok {
+				y := clamp(s.dragEndY, 0, work.Height-ballSize)
+				s.collapseToYLocked(y)
+			} else {
+				s.collapseToYLocked(s.dragEndY)
+			}
+		}
+		return
+	}
 	s.snapAfterMoveLocked()
 }
 
@@ -295,6 +383,11 @@ func (s *FloatingBallService) SetAppActive(active bool) {
 
 	// 失去焦点：如果已经贴边，则立即缩小为把手，且关闭所有待执行的展开/回缩
 	if !active {
+		// Dragging: do not collapse during/around drag end, otherwise it may look like
+		// the window "teleports" back to the docked edge.
+		if s.dragging {
+			return
+		}
 		if s.rehideTimer != nil {
 			s.rehideTimer.Stop()
 			s.rehideTimer = nil
@@ -434,8 +527,14 @@ func (s *FloatingBallService) snapAfterMoveLocked() {
 		return
 	}
 
-	// 使用 RelativePosition（相对 WorkArea），避免 macOS 绝对坐标系差异导致定位错误
-	relX, relY := s.win.RelativePosition()
+	relX, relY := s.safeRelativePositionLocked()
+	s.snapAfterMoveAtLocked(relX, relY)
+}
+
+func (s *FloatingBallService) snapAfterMoveAtLocked(relX, relY int) {
+	if s.win == nil || !s.visible {
+		return
+	}
 	bounds := s.win.Bounds()
 	width := bounds.Width
 	height := bounds.Height
@@ -635,7 +734,7 @@ func (s *FloatingBallService) scheduleIdleDockLocked() {
 		if !ok {
 			return
 		}
-		relX, relY := s.win.RelativePosition()
+		relX, relY := s.safeRelativePositionLocked()
 		b := s.win.Bounds()
 		width := b.Width
 		height := b.Height
