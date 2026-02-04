@@ -1,6 +1,10 @@
 package windows
 
-import "github.com/wailsapp/wails/v3/pkg/application"
+import (
+	"runtime"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
 
 // DefaultDefinitions 返回子窗口定义
 func DefaultDefinitions() []WindowDefinition {
@@ -16,11 +20,14 @@ func DefaultDefinitions() []WindowDefinition {
 					Hidden: true,
 					// Use custom titlebar inside the webview.
 					Frameless: true,
-					// Keep the attached window above other apps on macOS too.
-					AlwaysOnTop: true,
+					// Let z-order follow the attached target window (not global top-most).
+					// - Windows: we insert after the target hwnd (see pkg/winsnap/winsnap_windows.go)
+					// - macOS: we order above the target window number on activation (see pkg/winsnap/winsnap_darwin.go)
+					AlwaysOnTop: runtime.GOOS != "windows" && runtime.GOOS != "darwin",
 					URL:         "/winsnap.html",
 					Mac: application.MacWindow{
-						WindowLevel: application.MacWindowLevelFloating,
+						// Use normal window level; ordering is handled dynamically to stay above the target window only.
+						WindowLevel: application.MacWindowLevelNormal,
 						CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
 							application.MacWindowCollectionBehaviorTransient |
 							application.MacWindowCollectionBehaviorIgnoresCycle,

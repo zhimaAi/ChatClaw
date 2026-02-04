@@ -88,6 +88,20 @@ func (s *SnapService) GetStatus() SnapStatus {
 	return s.status
 }
 
+// WakeAttached brings the attached target window and the winsnap window to the front.
+// This is useful when winsnap is attached but both windows are behind other apps.
+func (s *SnapService) WakeAttached() error {
+	s.mu.Lock()
+	w := s.win
+	target := s.currentTarget
+	s.mu.Unlock()
+
+	if w == nil || target == "" {
+		return nil
+	}
+	return winsnap.WakeAttachedWindow(w, target)
+}
+
 // SyncFromSettings reads snap toggles from settings cache, then starts/stops
 // snapping loop accordingly.
 func (s *SnapService) SyncFromSettings() (SnapStatus, error) {
@@ -390,7 +404,9 @@ func snapTargetsForKey(key string) []string {
 	case "windows":
 		switch key {
 		case "snap_wechat":
-			return []string{"WeChat.exe"}
+			// WeChat process name differs across versions/channels.
+			// NOTE: Windows matching is based on process image name (exe). "Weixin.exe" is used by some channels.
+			return []string{"Weixin.exe", "WeChat.exe", "WeChatApp.exe", "WeChatAppEx.exe"}
 		case "snap_wecom":
 			return []string{"WXWork.exe"}
 		case "snap_qq":
@@ -408,17 +424,18 @@ func snapTargetsForKey(key string) []string {
 		// macOS / others: use app localized names where possible.
 		switch key {
 		case "snap_wechat":
-			return []string{"微信", "WeChat"}
+			// macOS: localized name / executable / common aliases / bundle id.
+			return []string{"微信", "Weixin", "weixin", "WeChat", "wechat", "com.tencent.xinWeChat"}
 		case "snap_wecom":
-			return []string{"企业微信", "WeCom", "WeWork", "WXWork"}
+			return []string{"企业微信", "WeCom", "wecom", "WeWork", "wework", "WXWork", "wxwork", "qiyeweixin", "com.tencent.WeWorkMac"}
 		case "snap_qq":
-			return []string{"QQ"}
+			return []string{"QQ", "qq", "com.tencent.qq"}
 		case "snap_dingtalk":
-			return []string{"钉钉", "DingTalk"}
+			return []string{"钉钉", "DingTalk", "dingtalk", "com.alibaba.DingTalkMac"}
 		case "snap_feishu":
-			return []string{"飞书", "Feishu", "Lark"}
+			return []string{"飞书", "Feishu", "feishu", "Lark", "lark", "com.bytedance.feishu", "com.bytedance.Lark"}
 		case "snap_douyin":
-			return []string{"抖音", "Douyin"}
+			return []string{"抖音", "Douyin", "douyin"}
 		default:
 			return nil
 		}

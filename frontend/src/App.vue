@@ -59,6 +59,8 @@ onMounted(() => {
 
       if (status.state === 'attached') {
         // Snap window is attached, send text to snap window
+        // Also wake winsnap + target to the front so the user can see it.
+        void SnapService.WakeAttached()
         Events.Emit('text-selection:send-to-snap', { text })
       } else {
         // Snap window is not attached (stopped or hidden)

@@ -20,11 +20,12 @@ func TopMostVisibleProcessName(targetProcessNames []string) (processName string,
 
 	targets := make(map[string]struct{}, len(targetProcessNames))
 	for _, raw := range targetProcessNames {
-		n := normalizeProcessName(raw)
-		if n == "" {
-			continue
+		for _, n := range expandWindowsTargetNames(raw) {
+			if n == "" {
+				continue
+			}
+			targets[strings.ToLower(n)] = struct{}{}
 		}
-		targets[strings.ToLower(n)] = struct{}{}
 	}
 	if len(targets) == 0 {
 		return "", false, nil

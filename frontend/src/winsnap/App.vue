@@ -270,6 +270,7 @@ const processStreamEvent = (requestId: string, eventName: string, data: any) => 
 let unsubscribeWinsnapChat: (() => void) | null = null
 let unsubscribeTextSelection: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
+let onPointerDown: ((e: PointerEvent) => void) | null = null
 onMounted(() => {
   // Listen for text selection action to set input text
   unsubscribeTextSelection = Events.On('text-selection:send-to-snap', (event: any) => {
@@ -324,6 +325,13 @@ onMounted(() => {
     void TextSelectionService.ShowAtScreenPos(text, Math.round(e.screenX * scale), Math.round(e.screenY * scale))
   }
   window.addEventListener('mouseup', onMouseUp, true)
+
+  // When interacting with winsnap while it's attached, bring both the target window and winsnap to front.
+  onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return
+    void SnapService.WakeAttached()
+  }
+  window.addEventListener('pointerdown', onPointerDown, true)
 })
 
 onUnmounted(() => {
@@ -334,6 +342,10 @@ onUnmounted(() => {
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null
+  }
+  if (onPointerDown) {
+    window.removeEventListener('pointerdown', onPointerDown, true)
+    onPointerDown = null
   }
   stopTyping()
 })
