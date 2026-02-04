@@ -107,8 +107,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(appservice.NewAppService(app)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
-
-	// 注册文档服务（在 ServiceStartup 中注册任务处理器并启动任务管理器）
+	// 注册文档服务
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
 
 	// ========== 创建窗口 ==========
