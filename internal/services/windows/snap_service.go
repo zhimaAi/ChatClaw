@@ -53,8 +53,9 @@ type SnapService struct {
 	readyOnce sync.Once
 	readyCh   chan struct{}
 
-	ctrl          winsnap.Controller
-	currentTarget string
+	ctrl                 winsnap.Controller
+	currentTarget        string
+	lastWinsnapMinimized bool
 
 	loopCancel context.CancelFunc
 
@@ -188,6 +189,7 @@ func (s *SnapService) stop() error {
 		s.ctrl = nil
 	}
 	s.currentTarget = ""
+	s.lastWinsnapMinimized = false
 	s.status.State = SnapStateStopped
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -228,6 +230,9 @@ func (s *SnapService) step() {
 	s.mu.Lock()
 	enabledTargets := append([]string(nil), s.enabledTargets...)
 	w := s.win
+	wasMinimized := s.lastWinsnapMinimized
+	targetForRestore := s.currentTarget
+	stateForRestore := s.status.State
 	s.mu.Unlock()
 
 	if len(enabledTargets) == 0 {
@@ -244,6 +249,26 @@ func (s *SnapService) step() {
 			s.mu.Unlock()
 		}
 		return
+	}
+
+	// Detect restore from minimised state (Windows Win+D / taskbar restore).
+	// NOTE: w.IsVisible() may stay true even when minimized, so we must use IsIconic.
+	if isMin, _ := winsnap.IsWindowMinimized(w); isMin != wasMinimized {
+		s.mu.Lock()
+		s.lastWinsnapMinimized = isMin
+		s.mu.Unlock()
+		// Only resync on true -> false transitions.
+		if wasMinimized && !isMin && targetForRestore != "" && stateForRestore == SnapStateAttached {
+			go func() {
+				time.Sleep(80 * time.Millisecond) // allow restore layout to settle
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: targetForRestore,
+					Gap:               0,
+					App:               s.app,
+					Window:            w,
+				})
+			}()
+		}
 	}
 
 	target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
@@ -276,6 +301,7 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 		s.ctrl = nil
 	}
 	s.currentTarget = ""
+	s.lastWinsnapMinimized = false
 	s.status.State = SnapStateHidden
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -320,6 +346,7 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.mu.Lock()
 	s.ctrl = c
 	s.currentTarget = targetProcess
+	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
 	s.status.State = SnapStateAttached
 	s.status.TargetProcess = targetProcess
 	s.status.LastError = ""
@@ -352,11 +379,30 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 	})
 	w.OnWindowEvent(events.Common.WindowShow, func(_ *application.WindowEvent) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		if s.win != w {
+			s.mu.Unlock()
 			return
 		}
 		s.readyOnce.Do(func() { close(s.readyCh) })
+		target := s.currentTarget
+		state := s.status.State
+		s.lastWinsnapMinimized = false
+		s.mu.Unlock()
+
+		// When the winsnap window is restored/shown, force a one-shot resync to the
+		// attached target window's position and z-order. Otherwise, the follower
+		// only updates on target move/foreground events, which may not fire on restore.
+		if target != "" && state == SnapStateAttached {
+			go func() {
+				time.Sleep(60 * time.Millisecond) // allow restore layout to settle
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: target,
+					Gap:               0,
+					App:               s.app,
+					Window:            w,
+				})
+			}()
+		}
 	})
 	w.OnWindowEvent(events.Common.WindowClosing, func(_ *application.WindowEvent) {
 		s.mu.Lock()
@@ -367,6 +413,7 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		if s.win == w {
 			s.win = nil
 		}
+		s.lastWinsnapMinimized = false
 		s.readyOnce.Do(func() { close(s.readyCh) })
 		s.mu.Unlock()
 	})
