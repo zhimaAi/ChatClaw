@@ -51,6 +51,14 @@ const repaintKey = ref(0)
 const coverActive = ref(false)
 let coverOffTimer: number | null = null
 
+const isWindowsUA = (() => {
+  try {
+    return /Windows/i.test(navigator.userAgent)
+  } catch {
+    return false
+  }
+})()
+
 const flashCover = (why: string) => {
   // Cover for 1-2 frames to clear WebKit ghosts in transparent + resized windows (macOS).
   if (coverOffTimer != null) {
@@ -289,7 +297,11 @@ watch(
       <div
         :class="[
           'h-full w-full flex items-center justify-center relative z-10',
-          collapsed ? 'rounded-full bg-black/20' : 'rounded-full bg-transparent',
+          collapsed
+            ? isWindowsUA
+              ? 'rounded-full bg-black/45 border border-white/20'
+              : 'rounded-full bg-black/25'
+            : 'rounded-full bg-transparent',
         ]"
         style="--wails-draggable: drag"
       >
