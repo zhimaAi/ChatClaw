@@ -48,7 +48,7 @@ typedef struct WinsnapFollower {
 	CGPoint lastAppliedOrigin;
 
 	// Observe target app activation to re-assert z-order (keep above target only when target is frontmost)
-	id activationObserver; // token returned by NSNotificationCenter
+	void *activationObserver; // token returned by NSNotificationCenter (stored as void* for CGO compatibility)
 } WinsnapFollower;
 
 static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame);
@@ -285,22 +285,24 @@ static void winsnap_register_activation_observer(WinsnapFollower *f) {
 	if (!f) return;
 	if (f->activationObserver) return;
 	NSNotificationCenter *nc = [[NSWorkspace sharedWorkspace] notificationCenter];
-	f->activationObserver = [nc addObserverForName:NSWorkspaceDidActivateApplicationNotification
-	                                        object:nil
-	                                         queue:[NSOperationQueue mainQueue]
-	                                    usingBlock:^(NSNotification *note) {
+	id observer = [nc addObserverForName:NSWorkspaceDidActivateApplicationNotification
+	                              object:nil
+	                               queue:[NSOperationQueue mainQueue]
+	                          usingBlock:^(NSNotification *note) {
 		(void)note;
 		if (!f || f->stopping) return;
 		// When the target app becomes frontmost again, re-assert ordering above its window.
 		winsnap_order_above_target(f);
 	}];
+	f->activationObserver = (__bridge_retained void *)observer;
 }
 
 static void winsnap_unregister_activation_observer(WinsnapFollower *f) {
 	if (!f || !f->activationObserver) return;
 	NSNotificationCenter *nc = [[NSWorkspace sharedWorkspace] notificationCenter];
-	[nc removeObserver:f->activationObserver];
-	f->activationObserver = nil;
+	id observer = (__bridge_transfer id)f->activationObserver;
+	[nc removeObserver:observer];
+	f->activationObserver = NULL;
 }
 
 static void winsnap_sync_to_target(WinsnapFollower *f) {
@@ -476,7 +478,7 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 	f->stopping = false;
 	f->lock = OS_UNFAIR_LOCK_INIT;
 	f->latestTargetWindowNumber = 0;
-	f->activationObserver = nil;
+	f->activationObserver = NULL;
 
 	// Cache coordinate conversion constants and self window size.
 	NSWindow *selfWin = (__bridge NSWindow *)selfWindow;

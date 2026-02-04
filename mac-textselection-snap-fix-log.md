@@ -28,7 +28,29 @@ pkg/winsnap/winsnap_darwin.go:230:41: error: use of undeclared identifier 'kAXWi
 
 ---
 
-### 2. 仅警告、不阻止编译的部分（可后续优化）
+### 2. CGO 结构体大小计算错误（id 类型）
+
+**报错：**
+
+```text
+cgo: pkg/winsnap/winsnap_darwin.go:611:10: struct size calculation error off=8 bytesize=0
+```
+
+**原因：**
+
+- 结构体 `WinsnapFollower` 中有字段 `id activationObserver;`。
+- `id` 是 **Objective-C 特有类型**，CGO 无法识别其大小，因此报 `bytesize=0` 错误。
+
+**解决方案：**
+
+- 将 `id activationObserver;` 改为 `void *activationObserver;`。
+- 赋值时使用 `(__bridge_retained void *)` 桥接（ARC 下保留引用计数）。
+- 释放时使用 `(__bridge_transfer id)` 桥接（将所有权交还 ARC）。
+- 初始化和清空时用 `NULL` 代替 `nil`。
+
+---
+
+### 3. 仅警告、不阻止编译的部分（可后续优化）
 
 **sqlite-vec-go-bindings / CGO：**
 
@@ -112,6 +134,7 @@ pkg/winsnap/winsnap_darwin.go:230:41: error: use of undeclared identifier 'kAXWi
 | 在 macOS 上直接使用 `kAXWindowNumberAttribute` | 编译失败 | 该常量在公开 SDK 中未声明，不要使用。 |
 | 仅靠 AX API 获取窗口号 | 不可行 | 公开 AX 无「窗口号」属性，需配合 CGWindowList。 |
 | 不传 PID 仅用 AX frame 在全局窗口列表中匹配 | 易错 | 多进程时可能匹配到其它进程同位置窗口，必须用 PID 过滤。 |
+| 在 C 结构体中直接使用 `id` 类型 | CGO 编译失败 | CGO 无法识别 Objective-C 的 `id` 类型大小，需改用 `void*` 并桥接。 |
 
 ---
 
