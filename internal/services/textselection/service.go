@@ -394,7 +394,7 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 		scale := getDPIScale()
 
 		// screenX/screenY are in physical pixels
-		// Calculate popup position in pixels (centered above mouse)
+		// Calculate popup position in pixels first
 		popWidthPx := int(float64(s.popWidth) * scale)
 		popHeightPx := int(float64(s.popHeight) * scale)
 		offsetPx := int(10 * scale)
@@ -402,7 +402,13 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 		pixelX := screenX - popWidthPx/2
 		pixelY := screenY - popHeightPx - offsetPx
 
-		// Convert to points for Wails window positioning
+		// Store pixel coordinates for click outside detection
+		s.mu.Lock()
+		s.popX = pixelX
+		s.popY = pixelY
+		s.mu.Unlock()
+
+		// Convert to logical points for Wails SetPosition
 		finalX = int(float64(pixelX) / scale)
 		finalY = int(float64(pixelY) / scale)
 	} else {
@@ -432,34 +438,37 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 }
 
 // showPopupAt shows the popup at the specified screen position (in logical points).
+// On macOS, s.popX/s.popY are pre-set in pixel coordinates by showAtScreenPosInternal.
 func (s *TextSelectionService) showPopupAt(x, y int) {
-	// Update popup's actual display position (in points)
 	s.mu.Lock()
-	s.popX = x
-	s.popY = y
+	// On macOS, popX/popY are already set to pixel coordinates by showAtScreenPosInternal
+	// On Windows, set them here (same as x, y since no DPI scaling needed)
+	if runtime.GOOS != "darwin" {
+		s.popX = x
+		s.popY = y
+	}
 	s.popupActive = true
+	popX := s.popX
+	popY := s.popY
 	popW := s.popWidth
 	popH := s.popHeight
 	s.mu.Unlock()
 
+	// Pass logical points to Wails SetPosition
 	s.ensurePopWindow(x, y)
 
-	// Update click outside watcher's popup area
-	// On macOS, click detection uses physical pixels, so convert all coordinates to pixels
+	// Update click outside watcher's popup area (use pixel coordinates)
 	if s.clickOutsideWatcher != nil {
-		rectX := x
-		rectY := y
 		rectW := popW
 		rectH := popH
 		if runtime.GOOS == "darwin" {
+			// popX, popY are already in physical pixels
+			// Convert popup size to physical pixels
 			scale := getDPIScale()
-			// Convert point coordinates to pixel coordinates
-			rectX = int(float64(x) * scale)
-			rectY = int(float64(y) * scale)
 			rectW = int(float64(popW) * scale)
 			rectH = int(float64(popH) * scale)
 		}
-		s.clickOutsideWatcher.SetPopupRect(int32(rectX), int32(rectY), int32(rectW), int32(rectH))
+		s.clickOutsideWatcher.SetPopupRect(int32(popX), int32(popY), int32(rectW), int32(rectH))
 	}
 }
 

@@ -78,18 +78,27 @@ cgo: pkg/winsnap/winsnap_darwin.go:611:10: struct size calculation error off=8 b
 - 当检测到前台应用是我们自己时，返回 `ErrSelfIsFrontmost` 错误
 - 在 `snap_service.go` 的 `step()` 中处理此错误，保持当前吸附状态不变
 
-### 1.5 划词弹窗坐标检测问题
+### 1.5 划词弹窗位置不准确 & 点击无响应
 
-**问题描述：** Mac 上划词弹窗的 click outside 检测可能失效。
+**问题描述：** 
+1. Mac 上划词弹窗位置不准确（如截图所示）
+2. 点击弹窗没有触发消息给吸附窗体或主窗体
 
-**原因：**
-- `clickOutsideWatcher` 使用物理像素坐标检测点击位置
-- `SetPopupRect` 接收的弹窗尺寸是点坐标（logical points），没有转换为像素坐标
-- 导致检测区域与实际弹窗位置不匹配
+**原因分析：**
+- Wails `SetPosition` 期望**逻辑像素**（点坐标），不是物理像素
+- Mouse hook 返回的是**物理像素**坐标
+- click outside 检测使用**物理像素**坐标
+- 必须分开处理：窗口定位用点坐标，检测用像素坐标
 
-**修复：**
-- 在 `showPopupAt` 中，Mac 上将弹窗位置和尺寸都转换为像素坐标后再设置 click outside rect
-- 同时修正窗口定位：计算像素位置后转换回点坐标用于 Wails `SetPosition`
+**修复方案：**
+1. `showAtScreenPosInternal` 中：
+   - 计算像素坐标 `pixelX, pixelY`（用于 click outside 检测）
+   - 存储到 `s.popX, s.popY`
+   - 转换为点坐标 `finalX, finalY`（除以 scale，用于 Wails SetPosition）
+2. `showPopupAt` 中：
+   - 接收点坐标 `x, y` 传给 `ensurePopWindow`
+   - 使用之前存储的像素坐标 `s.popX, s.popY` 设置 click outside rect
+   - 弹窗尺寸也转为像素坐标
 
 ### 2. 点击划词弹窗没触发程序唤醒
 
