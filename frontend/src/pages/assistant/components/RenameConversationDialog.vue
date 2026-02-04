@@ -35,7 +35,7 @@ const name = ref('')
 const saving = ref(false)
 const NAME_MAX_LEN = 100
 
-const close = () => emit('update:open', false)
+const setOpen = (value: boolean) => emit('update:open', value)
 
 watch(
   () => props.open,
@@ -65,7 +65,7 @@ const handleSave = async () => {
     if (!updated) throw new Error(t('assistant.errors.updateConversationFailed'))
     emit('updated', updated)
     toast.success(t('assistant.conversation.rename.success'))
-    close()
+    setOpen(false)
   } catch (error) {
     console.error('Failed to rename conversation:', error)
     toast.error(getErrorMessage(error) || t('assistant.errors.updateConversationFailed'))
@@ -76,7 +76,7 @@ const handleSave = async () => {
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="close">
+  <Dialog :open="open" @update:open="setOpen">
     <DialogContent size="md">
       <DialogHeader>
         <DialogTitle>{{ t('assistant.conversation.rename.title') }}</DialogTitle>
@@ -96,7 +96,7 @@ const handleSave = async () => {
       </div>
 
       <DialogFooter>
-        <Button variant="outline" :disabled="saving" @click="close">
+        <Button variant="outline" :disabled="saving" @click="setOpen(false)">
           {{ t('assistant.actions.cancel') }}
         </Button>
         <Button :disabled="!isValid || saving" @click="handleSave">
