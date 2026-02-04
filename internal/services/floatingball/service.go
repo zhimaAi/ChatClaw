@@ -857,15 +857,22 @@ func (s *FloatingBallService) expandToYLocked(y int) {
 	}
 	s.collapsed = false
 	s.setSizeLocked(ballSize, ballSize)
+	b := s.win.Bounds()
+	w := b.Width
+	h := b.Height
 
-	y = clamp(y, 0, work.Height-ballSize)
+	y = clamp(y, 0, work.Height-h)
 	x := 0
 	switch s.dock {
 	case DockLeft:
 		x = 0
 	case DockRight:
-		x = work.Width - ballSize
+		x = work.Width - w
 	}
+	s.debugLog("expand", map[string]any{
+		"dock": s.dock, "x": x, "y": y,
+		"boundsW": w, "boundsH": h,
+	})
 	s.setRelativePositionLocked(x, y)
 }
 
@@ -880,20 +887,22 @@ func (s *FloatingBallService) collapseToYLocked(y int) {
 	s.collapsed = true
 	// Windows keeps fixed size (mask). Other platforms resize.
 	s.setSizeLocked(collapsedWidth, ballSize)
+	b := s.win.Bounds()
+	w := b.Width
+	h := b.Height
 
-	y = clamp(y, 0, work.Height-ballSize)
+	y = clamp(y, 0, work.Height-h)
 	x := 0
-	currentWidth := collapsedWidth
-	if isWindowsFixedSize() {
-		currentWidth = ballSize
-	}
 	switch s.dock {
 	case DockLeft:
-		x = -(currentWidth - collapsedVisible)
+		x = -(w - collapsedVisible)
 	case DockRight:
 		x = work.Width - collapsedVisible
 	}
-	s.debugLog("collapse", map[string]any{"dock": s.dock, "x": x, "y": y, "w": currentWidth, "h": ballSize})
+	s.debugLog("collapse", map[string]any{
+		"dock": s.dock, "x": x, "y": y,
+		"boundsW": w, "boundsH": h,
+	})
 	s.setRelativePositionLocked(x, y)
 }
 
