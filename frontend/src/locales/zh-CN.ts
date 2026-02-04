@@ -261,7 +261,7 @@ export default {
         topP: 'Top-P',
         topPHint: '控制采样范围',
         contextCount: '上下文数',
-        matchThreshold: '匹配度阈值',
+        matchThreshold: '知识库匹配度阈值',
         maxTokens: '最大 Token 数',
         unlimited: '不限',
       },

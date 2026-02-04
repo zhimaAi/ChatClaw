@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { AgentsService, type Agent } from '@bindings/willchat/internal/services/agents'
+import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
   type ProviderWithModels,
@@ -68,6 +69,10 @@ const contextCount = ref(50)
 const maxTokens = ref(1000)
 const matchThreshold = ref(0.5)
 
+const enableTemperature = ref(false)
+const enableTopP = ref(false)
+const enableMaxTokens = ref(false)
+
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
 const modelId = ref('')
@@ -99,6 +104,10 @@ watch(
     contextCount.value = agent.context_count ?? 50
     maxTokens.value = agent.llm_max_tokens ?? 1000
     matchThreshold.value = agent.match_threshold ?? 0.5
+
+    enableTemperature.value = agent.enable_llm_temperature ?? false
+    enableTopP.value = agent.enable_llm_top_p ?? false
+    enableMaxTokens.value = agent.enable_llm_max_tokens ?? false
 
     modelProviderId.value = agent.default_llm_provider_id ?? ''
     modelId.value = agent.default_llm_model_id ?? ''
@@ -213,6 +222,9 @@ const handleSave = async () => {
       icon: iconChanged.value ? icon.value : null,
       default_llm_provider_id: wantsModelUpdate ? modelProviderId.value : null,
       default_llm_model_id: wantsModelUpdate ? modelId.value : null,
+      enable_llm_temperature: enableTemperature.value,
+      enable_llm_top_p: enableTopP.value,
+      enable_llm_max_tokens: enableMaxTokens.value,
       llm_temperature: temperature.value,
       llm_top_p: topP.value,
       context_count: contextCount.value,
@@ -378,15 +390,19 @@ const handleDelete = async () => {
                 </div>
 
                 <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between">
-                    <div class="text-sm font-medium text-foreground">
-                      {{ t('assistant.settings.model.temperature') }}
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="text-sm font-medium text-foreground">
+                        {{ t('assistant.settings.model.temperature') }}
+                      </div>
+                      <div class="text-xs text-muted-foreground">
+                        {{ t('assistant.settings.model.temperatureHint') }}
+                      </div>
                     </div>
-                    <div class="text-xs text-muted-foreground">
-                      {{ t('assistant.settings.model.temperatureHint') }}
-                    </div>
+                    <Switch v-model="enableTemperature" />
                   </div>
                   <SliderWithTicks
+                    v-if="enableTemperature"
                     v-model="temperature"
                     :min="0"
                     :max="2"
@@ -403,15 +419,19 @@ const handleDelete = async () => {
                 </div>
 
                 <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between">
-                    <div class="text-sm font-medium text-foreground">
-                      {{ t('assistant.settings.model.topP') }}
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="text-sm font-medium text-foreground">
+                        {{ t('assistant.settings.model.topP') }}
+                      </div>
+                      <div class="text-xs text-muted-foreground">
+                        {{ t('assistant.settings.model.topPHint') }}
+                      </div>
                     </div>
-                    <div class="text-xs text-muted-foreground">
-                      {{ t('assistant.settings.model.topPHint') }}
-                    </div>
+                    <Switch v-model="enableTopP" />
                   </div>
                   <SliderWithTicks
+                    v-if="enableTopP"
                     v-model="topP"
                     :min="0"
                     :max="1"
@@ -454,6 +474,23 @@ const handleDelete = async () => {
 
                 <div class="flex items-center justify-between gap-4">
                   <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.model.maxTokens') }}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Input
+                      v-if="enableMaxTokens"
+                      v-model.number="maxTokens"
+                      type="number"
+                      min="1"
+                      max="200000"
+                      class="h-9 w-[160px]"
+                    />
+                    <Switch v-model="enableMaxTokens" />
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-4">
+                  <div class="text-sm font-medium text-foreground">
                     {{ t('assistant.settings.model.matchThreshold') }}
                   </div>
                   <Input
@@ -462,19 +499,6 @@ const handleDelete = async () => {
                     min="0"
                     max="1"
                     step="0.01"
-                    class="h-9 w-[160px]"
-                  />
-                </div>
-
-                <div class="flex items-center justify-between gap-4">
-                  <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.model.maxTokens') }}
-                  </div>
-                  <Input
-                    v-model.number="maxTokens"
-                    type="number"
-                    min="1"
-                    max="200000"
                     class="h-9 w-[160px]"
                   />
                 </div>

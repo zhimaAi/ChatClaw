@@ -26,6 +26,9 @@ create table if not exists agents (
 	llm_top_p float not null default 1.0,
 	context_count int not null default 50,
 	llm_max_tokens int not null default 1000,
+	enable_llm_temperature boolean not null default false,
+	enable_llm_top_p boolean not null default false,
+	enable_llm_max_tokens boolean not null default false,
 	match_threshold float not null default 0.5
 );			
 `

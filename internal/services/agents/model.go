@@ -23,6 +23,9 @@ type Agent struct {
 	LLMTopP              float64 `json:"llm_top_p"`
 	ContextCount         int     `json:"context_count"`
 	LLMMaxTokens         int     `json:"llm_max_tokens"`
+	EnableLLMTemperature bool    `json:"enable_llm_temperature"`
+	EnableLLMTopP        bool    `json:"enable_llm_top_p"`
+	EnableLLMMaxTokens   bool    `json:"enable_llm_max_tokens"`
 	MatchThreshold       float64 `json:"match_threshold"`
 
 	CreatedAt time.Time `json:"created_at"`
@@ -47,6 +50,9 @@ type UpdateAgentInput struct {
 	LLMTopP        *float64 `json:"llm_top_p"`
 	ContextCount   *int     `json:"context_count"`
 	LLMMaxTokens   *int     `json:"llm_max_tokens"`
+	EnableLLMTemperature *bool `json:"enable_llm_temperature"`
+	EnableLLMTopP        *bool `json:"enable_llm_top_p"`
+	EnableLLMMaxTokens   *bool `json:"enable_llm_max_tokens"`
 	MatchThreshold *float64 `json:"match_threshold"`
 }
 
@@ -67,6 +73,9 @@ type agentModel struct {
 	LLMTopP              float64 `bun:"llm_top_p,notnull"`
 	ContextCount         int     `bun:"context_count,notnull"`
 	LLMMaxTokens         int     `bun:"llm_max_tokens,notnull"`
+	EnableLLMTemperature bool    `bun:"enable_llm_temperature,notnull"`
+	EnableLLMTopP        bool    `bun:"enable_llm_top_p,notnull"`
+	EnableLLMMaxTokens   bool    `bun:"enable_llm_max_tokens,notnull"`
 	MatchThreshold       float64 `bun:"match_threshold,notnull"`
 }
 
@@ -102,6 +111,9 @@ func (m *agentModel) toDTO() Agent {
 		LLMTopP:              m.LLMTopP,
 		ContextCount:         m.ContextCount,
 		LLMMaxTokens:         m.LLMMaxTokens,
+		EnableLLMTemperature: m.EnableLLMTemperature,
+		EnableLLMTopP:        m.EnableLLMTopP,
+		EnableLLMMaxTokens:   m.EnableLLMMaxTokens,
 		MatchThreshold:       m.MatchThreshold,
 
 		CreatedAt: m.CreatedAt,
