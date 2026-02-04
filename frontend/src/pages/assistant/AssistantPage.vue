@@ -79,7 +79,13 @@ const selectedModelKey = ref('')
  * Mock 聊天历史数据
  * TODO: 后续替换为真实的后端 API 调用
  */
-const chatHistories = ref<ChatHistory[]>([])
+const chatHistories = ref<ChatHistory[]>([
+  { id: 1, title: '如何使用 Vue 3 的 Composition API', createdAt: '2026-02-04T10:30:00' },
+  { id: 2, title: '帮我写一个 Python 爬虫脚本', createdAt: '2026-02-04T09:15:00' },
+  { id: 3, title: '解释一下 TypeScript 的泛型用法', createdAt: '2026-02-03T16:45:00' },
+  { id: 4, title: 'React 和 Vue 的区别是什么', createdAt: '2026-02-03T14:20:00' },
+  { id: 5, title: '数据库索引优化建议', createdAt: '2026-02-02T11:00:00' },
+])
 
 const activeAgent = computed(() => {
   if (activeAgentId.value == null) return null
