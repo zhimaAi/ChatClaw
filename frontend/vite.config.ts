@@ -20,6 +20,7 @@ export default defineConfig({
         main: "index.html",
         winsnap: "winsnap.html",
         floatingball: "floatingball.html",
+        selection: "selection.html",
       },
     },
   },

@@ -14,6 +14,7 @@
   "error.window_create_options_required": "window '{{.Name}}' CreateOptions is required",
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
+  "error.window_service_required": "window service is required",
 
   "error.provider_id_required": "provider ID is required",
   "error.provider_not_found": "provider '{{.ProviderID}}' not found",
@@ -89,5 +90,7 @@
   "error.agent_icon_read_failed": "failed to read icon file",
   "error.agent_icon_invalid": "invalid icon file",
   "error.agent_icon_too_large": "icon file is too large (max 100KB)",
-  "error.agent_icon_type_not_allowed": "icon file type is not allowed"
+  "error.agent_icon_type_not_allowed": "icon file type is not allowed",
+  "error.question_required": "question is required",
+  "error.request_id_required": "request ID is required"
 }

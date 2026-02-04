@@ -24,8 +24,8 @@ tasks:
           ARCH: '{{.ARCH}}'
           DEV: '{{.DEV}}'
     vars:
-      # Default to CGO_ENABLED=0 if not explicitly set
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      # Enable CGO by default for sqlite-vec CGO bindings
+      CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'
 
   build:native:
     summary: Builds the application using native Go cross-compilation
@@ -54,7 +54,7 @@ tasks:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-tags fts5 -buildvcs=false -gcflags=all="-l"{{else}}-tags "production fts5" -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui -X willchat/internal/define.Version={{.APP_VERSION}}"{{end}}'
     env:
       GOOS: windows
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'
       GOARCH: '{{.ARCH | default ARCH}}'
 
   build:docker:
