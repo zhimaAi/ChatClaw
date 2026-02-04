@@ -482,13 +482,14 @@ func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 		IgnoreMouseEvents: false,
 
 		Windows: application.WindowsWindow{
+			// NOTE: Don't use WindowMask on Windows. Wails implements WindowMask via UpdateLayeredWindow,
+			// which can visually separate the layered bitmap from the embedded WebView2 surface
+			// (white circle / logo / close button appear as "split windows").
 			HiddenOnTaskbar: true,
-			WindowMask:      floatingBallWindowMask(),
-			// Keep the floating ball non-activating (no focus steal) but still clickable/hoverable.
-			// WS_EX_NOACTIVATE = 0x08000000
-			ExStyle: 0x08000000,
 			// Avoid extra shadow/rounded-corner decorations in frameless mode.
 			DisableFramelessWindowDecorations: true,
+			// When using translucent background, prefer no-backdrop to emulate transparency.
+			BackdropType: application.None,
 		},
 		Mac: application.MacWindow{
 			Backdrop:     application.MacBackdropTransparent,

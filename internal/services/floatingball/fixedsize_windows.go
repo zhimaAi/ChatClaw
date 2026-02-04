@@ -2,5 +2,6 @@
 
 package floatingball
 
-func isWindowsFixedSize() bool { return true }
+// WindowMask is disabled on Windows, so resizing is safe.
+func isWindowsFixedSize() bool { return false }
 
