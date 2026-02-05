@@ -8,7 +8,13 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-func EnsureWindowVisible(_ *application.WebviewWindow) error {
+// EnsureWindowVisible shows the winsnap window on macOS.
+// Since MoveOffscreen uses Hide() on macOS, we need to use Show() to make it visible again.
+func EnsureWindowVisible(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	window.Show()
 	return nil
 }
 

@@ -464,6 +464,8 @@ func (s *TextSelectionService) showPopupAt(x, y int) {
 
 // Hide hides the popup.
 // Safely handles the case when the window has been closed/released.
+// On Windows: moves window off-screen (w.Hide() causes WebView2 Focus error).
+// On macOS: uses w.Hide() for reliable hiding (moving off-screen may still be visible).
 func (s *TextSelectionService) Hide() {
 	s.mu.Lock()
 	if s.hideTimer != nil {
@@ -481,9 +483,15 @@ func (s *TextSelectionService) Hide() {
 		// Check if window is still valid before calling SetPosition
 		nativeHandle := w.NativeWindow()
 		if nativeHandle != nil && uintptr(nativeHandle) != 0 {
-			// Don't use w.Hide(), because Wails Hide() internally calls Focus, causing WebView2 error
-			// Move window off-screen to "hide" instead
-			w.SetPosition(-9999, -9999)
+			if runtime.GOOS == "darwin" {
+				// macOS: use Hide() for reliable hiding
+				// Moving off-screen may still show window edge on some display configurations
+				w.Hide()
+			} else {
+				// Windows: Don't use w.Hide(), because Wails Hide() internally calls Focus,
+				// causing WebView2 error. Move window off-screen to "hide" instead.
+				w.SetPosition(-9999, -9999)
+			}
 		} else {
 			// Window has been closed, clear the reference
 			s.mu.Lock()

@@ -1,6 +1,8 @@
-# Windows 平台窗口焦点处理方案
+# 跨平台窗口焦点与吸附处理方案
 
 ## 背景
+
+### Windows 平台
 
 在 Windows 平台上，Wails v3 使用 WebView2 作为渲染引擎。当调用 `window.Focus()` 方法时，Wails 内部会调用 WebView2 的 `Focus()` 方法。但在某些场景下（如弹窗、工具窗口），这会导致 WebView2 报错：
 
@@ -10,9 +12,19 @@
 
 这是因为 WebView2 的 `Focus()` 方法对窗口状态有特定要求，不是所有窗口都能正常获取焦点。
 
+### macOS 平台
+
+macOS 平台没有 WebView2 的 Focus 问题，但有以下特殊行为需要处理：
+
+1. **窗口可见性检测**：macOS 的 "frontmost" 概念与 Windows 的 z-order 不同，需要使用 `CGWindowListCopyWindowInfo` 检查窗口是否在屏幕上可见
+2. **窗口隐藏**：移动窗口到屏幕外在某些显示器配置下仍可见，应使用 `Hide()` / `Show()` 方法
+3. **窗口层级**：使用 `orderWindow:NSWindowAbove relativeTo:` 精确控制窗口层级关系
+
 ## 核心原则
 
-> **在 Windows 平台上，避免直接调用 Wails 的 `window.Focus()` 方法，改用原生 Windows API。**
+> **Windows 平台**：避免直接调用 Wails 的 `window.Focus()` 方法，改用原生 Windows API。
+>
+> **macOS 平台**：使用 `Hide()` / `Show()` 控制窗口可见性，使用 `orderWindow:relativeTo:` 控制层级。
 
 ## 问题场景
 
@@ -146,11 +158,82 @@ func setWindowPosNoActivate(hwnd windows.HWND, x, y int32) error {
 
 ## 跨平台兼容
 
-| 平台 | Focus 处理 |
-|------|-----------|
-| Windows | 使用原生 API，避免 `w.Focus()` |
-| macOS | 可以使用 `w.Focus()`，配合 `NSRunningApplication.activateWithOptions` |
-| Linux | 可以使用 `w.Focus()` |
+| 平台 | Focus 处理 | 窗口隐藏 | 可见性检测 |
+|------|-----------|---------|-----------|
+| Windows | 使用原生 API，避免 `w.Focus()` | `SetPosition(-9999, -9999)` | 枚举窗口 z-order |
+| macOS | 可以使用 `w.Focus()`，配合 `NSRunningApplication.activateWithOptions` | `w.Hide()` / `w.Show()` | `CGWindowListCopyWindowInfo` |
+| Linux | 可以使用 `w.Focus()` | `SetPosition(-9999, -9999)` | - |
+
+### macOS 划词弹窗特殊处理
+
+macOS 的划词搜索弹窗（text selection popup）需要以下特殊配置：
+
+1. **窗口不激活配置**（`popup_noactivate_darwin.go`）：
+   ```objc
+   // 设置为浮动窗口级别
+   [win setLevel:NSFloatingWindowLevel];
+   
+   // 禁止成为 key window 或 main window，防止抢夺焦点
+   [win setCanBecomeKeyWindow:NO];
+   [win setCanBecomeMainWindow:NO];
+   
+   // 设置窗口行为：可在所有空间显示，不受 Mission Control 管理
+   [win setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
+                              NSWindowCollectionBehaviorStationary |
+                              NSWindowCollectionBehaviorIgnoresCycle];
+   ```
+
+2. **窗口层级控制**（`popup_zorder_darwin.go`）：
+   ```objc
+   // 将弹窗置于最前，不激活应用
+   [win setLevel:NSFloatingWindowLevel];
+   [win orderFrontRegardless];
+   ```
+
+3. **窗口隐藏**：
+   ```go
+   // macOS: 使用 Hide() 可靠隐藏
+   if runtime.GOOS == "darwin" {
+       w.Hide()
+   } else {
+       // Windows: 移动到屏幕外（避免 WebView2 Focus 错误）
+       w.SetPosition(-9999, -9999)
+   }
+   ```
+
+### macOS 吸附窗口特殊处理
+
+macOS 的吸附窗口（winsnap）有以下特殊行为：
+
+1. **窗口可见性检测**：
+   - Windows 使用 `EnumWindows` 按 z-order 遍历，找到最顶层的目标窗口
+   - macOS 使用 `CGWindowListCopyWindowInfo` 检查目标应用是否有可见窗口（不依赖 frontmost）
+   - 这样即使目标窗口被其他窗口遮挡，吸附窗口也不会隐藏
+
+2. **窗口隐藏/显示**：
+   ```go
+   // macOS: 使用 Hide/Show
+   func MoveOffscreen(window *application.WebviewWindow) error {
+       window.Hide()  // 可靠隐藏
+       return nil
+   }
+   
+   func EnsureWindowVisible(window *application.WebviewWindow) error {
+       window.Show()  // 恢复显示
+       return nil
+   }
+   
+   // Windows: 移动到屏幕外
+   func MoveOffscreen(window *application.WebviewWindow) error {
+       return setWindowPosNoSizeNoZ(hwnd, -9999, -9999)
+   }
+   ```
+
+3. **窗口层级控制**：
+   ```objc
+   // macOS: 将 winsnap 窗口放在目标窗口正上方
+   [selfWindow orderWindow:NSWindowAbove relativeTo:targetWindowNumber];
+   ```
 
 **条件编译示例**:
 
@@ -202,23 +285,40 @@ github.com/wailsapp/wails/v3/pkg/application.(*windowsWebviewWindow).focus
 
 ```
 internal/services/textselection/
-├── activate_windows.go      # Windows 激活窗口实现
-├── activate_darwin.go       # macOS 激活窗口实现
-├── activate_other.go        # 其他平台激活窗口实现
-├── popup_noactivate_windows.go  # Windows WndProc Hook
-├── popup_noactivate_other.go    # 其他平台空实现
-├── popup_zorder_windows.go      # Windows 窗口层级控制
-└── popup_zorder_other.go        # 其他平台空实现
+├── activate_windows.go           # Windows 激活窗口实现
+├── activate_darwin.go            # macOS 激活窗口实现
+├── activate_darwin_nocgo.go      # macOS 无 CGO 激活实现
+├── activate_other.go             # 其他平台激活窗口实现
+├── popup_noactivate_windows.go   # Windows WndProc Hook 阻止激活
+├── popup_noactivate_darwin.go    # macOS 弹窗不激活配置 (NSFloatingWindowLevel)
+├── popup_noactivate_darwin_nocgo.go  # macOS 无 CGO 空实现
+├── popup_noactivate_other.go     # 其他平台空实现
+├── popup_zorder_windows.go       # Windows 窗口层级控制
+├── popup_zorder_darwin.go        # macOS 窗口层级控制 (orderFrontRegardless)
+├── popup_zorder_darwin_nocgo.go  # macOS 无 CGO 空实现
+└── popup_zorder_other.go         # 其他平台空实现
 
 pkg/winsnap/
+├── winsnap.go               # 吸附窗口接口定义
 ├── winsnap_windows.go       # Windows 吸附窗口实现
+├── winsnap_darwin.go        # macOS 吸附窗口实现 (AX Observer)
+├── winsnap_darwin_nocgo.go  # macOS 无 CGO 实现
 ├── wake_windows.go          # Windows 唤醒窗口实现
-└── zorder_windows.go        # Windows Z-Order 控制
+├── wake_darwin.go           # macOS 唤醒窗口实现
+├── wake_darwin_nocgo.go     # macOS 无 CGO 唤醒实现
+├── zorder_windows.go        # Windows Z-Order 控制
+├── zorder_darwin.go         # macOS 可见性检测与隐藏
+└── zorder_darwin_nocgo.go   # macOS 无 CGO 实现
 ```
 
 ## 更新日志
 
 | 日期 | 更新内容 |
 |------|---------|
+| 2026-02-05 | macOS: 划词弹窗添加 NSFloatingWindowLevel 和 orderFrontRegardless 支持 |
+| 2026-02-05 | macOS: 划词弹窗 Hide() 使用 window.Hide() 替代移动到屏幕外 |
+| 2026-02-05 | macOS: 修复吸附窗口被遮挡时自动隐藏问题，改用 CGWindowListCopyWindowInfo 检测可见性 |
+| 2026-02-05 | macOS: 修复 MoveOffscreen 使用 Hide()/Show() 替代移动到屏幕外 |
+| 2026-02-05 | macOS: 吸附窗口获取焦点时自动唤醒被吸附窗体并同步层级 |
 | 2026-02-05 | 添加 `WM_SETFOCUS` 消息拦截，修复点击弹窗崩溃问题 |
 | 2026-02-04 | 初始版本，实现 NoActivate Hook 方案 |

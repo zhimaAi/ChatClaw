@@ -3,15 +3,19 @@
 package winsnap
 
 import (
-	"errors"
-
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TopMostVisibleProcessName(_ []string) (string, bool, error) {
-	return "", false, errors.New("winsnap: not supported without cgo on darwin")
+	return "", false, ErrNotSupported
 }
 
-func MoveOffscreen(_ *application.WebviewWindow) error {
-	return errors.New("winsnap: not supported without cgo on darwin")
+// MoveOffscreen hides the winsnap window on macOS.
+// Uses Hide() for reliable hiding instead of moving off-screen.
+func MoveOffscreen(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	window.Hide()
+	return nil
 }
