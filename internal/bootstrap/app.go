@@ -210,5 +210,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		mainWindow.Focus()
 	})
 
-	return app, func() { sqlite.Close() }, nil
+	return app, func() {
+		// Stop task manager before closing database
+		if tm := taskmanager.Get(); tm != nil {
+			tm.StopNow()
+		}
+		sqlite.Close()
+	}, nil
 }
