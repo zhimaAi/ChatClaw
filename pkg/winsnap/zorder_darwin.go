@@ -106,7 +106,20 @@ func MoveOffscreen(window *application.WebviewWindow) error {
 	if window == nil {
 		return errors.New("winsnap: Window is nil")
 	}
-	// Wails macOS coordinates are in screen points; moving far negative is enough.
-	window.SetPosition(-32000, -32000)
+	// Get window size to ensure we move it completely off-screen.
+	// On macOS, Wails coordinates are in screen points (origin at top-left of primary screen).
+	// We need to move left by at least the window width plus some margin.
+	width, height := window.Size()
+	if width <= 0 {
+		width = 2000 // fallback: large enough to ensure hiding
+	}
+	if height <= 0 {
+		height = 2000 // fallback: large enough to ensure hiding
+	}
+	// Move window off-screen by 3x its dimensions to ensure complete hiding
+	// This accounts for any coordinate clamping or edge cases
+	offX := -(width * 3)
+	offY := -(height * 3)
+	window.SetPosition(offX, offY)
 	return nil
 }

@@ -6,8 +6,13 @@ import { Events } from '@wailsio/runtime'
 
 const { t } = useI18n()
 
-// Emit button click event to backend
-const handleButtonClick = () => {
+// Emit button click event to backend using mousedown to avoid focus issues.
+// On Windows, clicking the popup would cause Wails to call Focus() which can
+// fail if the window has special styles. Using mousedown with preventDefault
+// allows us to handle the click without triggering focus-related issues.
+const handleMouseDown = (e: MouseEvent) => {
+  // Prevent default to avoid focus stealing on Windows
+  e.preventDefault()
   try {
     Events.Emit('text-selection:button-click')
   } catch (err) {
@@ -45,7 +50,7 @@ onUnmounted(() => {
     class="flex h-screen w-screen cursor-pointer select-none items-center justify-center"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
-    @click="handleButtonClick"
+    @mousedown="handleMouseDown"
   >
     <div
       class="flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 shadow-lg transition-all hover:shadow-xl"

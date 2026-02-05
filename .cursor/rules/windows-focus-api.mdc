@@ -1,0 +1,79 @@
+# Windows 平台窗口焦点 API 规范
+
+## 核心规则
+
+在 Windows 平台上，**禁止直接调用 Wails 的 `window.Focus()` 方法**，因为会导致 WebView2 报错 "The parameter is incorrect"。
+
+## 正确做法
+
+### 激活/聚焦窗口
+
+使用已封装的 `forceActivateWindow` 函数：
+
+```go
+// ✅ 正确
+forceActivateWindow(mainWindow)
+
+// ❌ 错误 - 会导致 WebView2 崩溃
+mainWindow.Focus()
+```
+
+### 创建弹窗/工具窗口
+
+创建后立即调用 `tryConfigurePopupNoActivate` 阻止激活：
+
+```go
+w := app.Window.NewWithOptions(opts)
+tryConfigurePopupNoActivate(w)  // Hook WndProc 阻止激活消息
+w.Show()
+```
+
+### 隐藏窗口
+
+使用移动到屏幕外代替 `Hide()`：
+
+```go
+// ✅ 正确
+w.SetPosition(-9999, -9999)
+
+// ❌ 错误 - Hide() 内部可能调用 Focus
+w.Hide()
+```
+
+### 移动/调整窗口
+
+使用带 `SWP_NOACTIVATE` 标志的 `SetWindowPos`：
+
+```go
+const swpNoActivate = 0x0010
+flags := uintptr(swpNoSize | swpNoZOrder | swpNoActivate)
+procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
+```
+
+## 已封装的安全函数
+
+| 函数 | 位置 | 用途 |
+|------|------|------|
+| `forceActivateWindow` | `textselection/activate_windows.go` | 激活窗口 |
+| `tryConfigurePopupNoActivate` | `textselection/popup_noactivate_windows.go` | 阻止弹窗激活 |
+| `forcePopupTopMostNoActivate` | `textselection/popup_zorder_windows.go` | 置顶不激活 |
+| `setWindowTopMostNoActivate` | `winsnap/winsnap_windows.go` | 设置 TopMost |
+
+## 跨平台处理
+
+使用 build tags 区分平台：
+
+```go
+//go:build windows
+// Windows: 使用原生 API
+
+//go:build darwin
+// macOS: 可以使用 w.Focus()
+
+//go:build !windows && !darwin
+// 其他: 可以使用 w.Focus()
+```
+
+## 参考文档
+
+详细说明见 `docs/windows-focus-handling.md`
