@@ -61,6 +61,11 @@ func NewDocumentService(app *application.App) *DocumentService {
 func (s *DocumentService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	s.registerTaskHandlers()
 	taskmanager.Get().Start()
+	// Warm up tokenizer in background to avoid first-call latency (e.g. gse dict load).
+	go func() {
+		_ = tokenizer.TokenizeName("warmup.txt")
+		_ = tokenizer.TokenizeContent("warmup content")
+	}()
 	return nil
 }
 
@@ -115,34 +120,6 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 	return filepath.Join(cfgDir, define.AppID, "documents"), nil
 }
 
-// backfillEmptyNameTokens ensures existing rows have name_tokens populated.
-// This fixes searching for documents created before name_tokens was implemented.
-func (s *DocumentService) backfillEmptyNameTokens(ctx context.Context, db *bun.DB, libraryID int64) {
-	models := make([]documentModel, 0)
-	if err := db.NewSelect().
-		Model(&models).
-		Column("id", "original_name", "name_tokens").
-		Where("library_id = ?", libraryID).
-		Where("name_tokens = ''").
-		Scan(ctx); err != nil {
-		return
-	}
-
-	for i := range models {
-		m := models[i]
-		tokens := tokenizer.TokenizeName(m.OriginalName)
-		if strings.TrimSpace(tokens) == "" {
-			continue
-		}
-		// Update name_tokens; FTS trigger will sync doc_name_fts.
-		_, _ = db.NewUpdate().
-			Model(&m).
-			Set("name_tokens = ?", tokens).
-			Where("id = ?", m.ID).
-			Exec(ctx)
-	}
-}
-
 // ListDocuments 获取知识库的文档列表
 // keyword: 可选的搜索关键词（按文件名搜索，使用 FTS）
 func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Document, error) {
@@ -162,9 +139,6 @@ func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Docu
 	keyword = strings.TrimSpace(keyword)
 
 	if keyword != "" {
-		// Best-effort backfill for legacy rows.
-		s.backfillEmptyNameTokens(ctx, db, libraryID)
-
 		// Build FTS match query from keyword
 		matchQuery := tokenizer.BuildMatchQuery(keyword)
 		if matchQuery != "" {
@@ -661,6 +635,17 @@ func (s *DocumentService) generateThumbnail(docID, libraryID int64, localPath st
 
 	ctx := context.Background()
 
+	// Skip stale thumbnail jobs (e.g. after restart or document reprocess)
+	var currentRunID string
+	_ = db.NewSelect().
+		Table("documents").
+		Column("processing_run_id").
+		Where("id = ?", docID).
+		Scan(ctx, &currentRunID)
+	if info != nil && currentRunID != "" && info.RunID != "" && info.RunID != currentRunID {
+		return
+	}
+
 	// 生成缩略图
 	result := thumbnail.Generate(localPath)
 
@@ -757,6 +742,10 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 	var doc documentModel
 	if err := db.NewSelect().Model(&doc).Where("id = ?", docID).Scan(ctx); err != nil {
 		updateAndEmit(StatusFailed, 0, "获取文档信息失败: "+err.Error(), StatusPending, 0, "")
+		return
+	}
+	// Skip stale jobs (e.g. after restart or "relearn" created a new run)
+	if runID != "" && doc.ProcessingRunID != "" && runID != doc.ProcessingRunID {
 		return
 	}
 

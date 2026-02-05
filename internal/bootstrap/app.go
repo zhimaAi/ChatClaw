@@ -5,11 +5,11 @@ import (
 	"io/fs"
 	"time"
 
-	"willchat/internal/services/agents"
-	"willchat/internal/services/conversations"
 	"willchat/internal/define"
+	"willchat/internal/services/agents"
 	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
+	"willchat/internal/services/conversations"
 	"willchat/internal/services/document"
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
@@ -86,8 +86,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 初始化任务管理器（基于 goqite 的持久化消息队列）
 	if err := taskmanager.Init(app, sqlite.DB().DB, taskmanager.Config{
 		Queues: map[string]taskmanager.QueueConfig{
-			taskmanager.QueueThumbnail: {Workers: 8, PollInterval: 50 * time.Millisecond},  // 缩略图：快任务
-			taskmanager.QueueDocument:  {Workers: 2, PollInterval: 100 * time.Millisecond}, // 文档处理：慢任务
+			taskmanager.QueueThumbnail: {Workers: 10, PollInterval: 50 * time.Millisecond}, // 缩略图任务
+			taskmanager.QueueDocument:  {Workers: 3, PollInterval: 100 * time.Millisecond}, // 文档处理任务
 		},
 	}); err != nil {
 		sqlite.Close()
