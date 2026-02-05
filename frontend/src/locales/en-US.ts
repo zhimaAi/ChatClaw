@@ -387,6 +387,7 @@ export default {
       fileMissing: 'File missing',
       menu: {
         rename: 'Rename',
+        relearn: 'Relearn',
         delete: 'Delete',
       },
       upload: {
@@ -402,6 +403,10 @@ export default {
         confirm: 'Save',
         success: 'Renamed',
         failed: 'Failed to rename',
+      },
+      relearn: {
+        success: 'Relearning started',
+        failed: 'Failed to relearn',
       },
       delete: {
         title: 'Confirm Delete',

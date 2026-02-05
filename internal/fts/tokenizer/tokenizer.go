@@ -69,6 +69,18 @@ func TokenizeName(originalName string) string {
 		}
 	}
 
+	// Fallback: split by common filename separators (e.g. "foo_bar-v1" -> ["foo","bar","v1"])
+	for _, token := range splitByNonWord(nameWithoutExt) {
+		token = normalizeToken(token)
+		if token == "" {
+			continue
+		}
+		if _, exists := tokenSet[token]; !exists {
+			tokenSet[token] = struct{}{}
+			result = append(result, token)
+		}
+	}
+
 	// Generate pinyin tokens for Chinese text (if short enough)
 	chineseText := extractChinese(nameWithoutExt)
 	if len([]rune(chineseText)) <= MaxPinyinChars && chineseText != "" {
@@ -157,6 +169,20 @@ func BuildMatchQuery(keyword string) string {
 		queryParts = append(queryParts, escaped+"*")
 	}
 
+	// Fallback: also split by non-word separators to support typical filenames like "foo_bar-v1.pdf"
+	for _, token := range splitByNonWord(keyword) {
+		token = normalizeToken(token)
+		if token == "" {
+			continue
+		}
+		if _, exists := seen[token]; exists {
+			continue
+		}
+		seen[token] = struct{}{}
+		escaped := escapeFTS5Token(token)
+		queryParts = append(queryParts, escaped+"*")
+	}
+
 	// Also try to match pinyin if there's Chinese input
 	chineseText := extractChinese(keyword)
 	if chineseText != "" && len([]rune(chineseText)) <= MaxPinyinChars {
@@ -175,8 +201,20 @@ func BuildMatchQuery(keyword string) string {
 		return ""
 	}
 
-	// Join with space (implicit AND in FTS5)
-	return strings.Join(queryParts, " ")
+	// Join with OR for more flexible matching
+	// FTS5 default is AND which requires all tokens to match
+	return strings.Join(queryParts, " OR ")
+}
+
+// splitByNonWord splits text by any rune that is not a letter, digit, or Han character.
+// This is useful for filenames containing separators like ".", "_", "-", etc.
+func splitByNonWord(text string) []string {
+	return strings.FieldsFunc(text, func(r rune) bool {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Han, r) {
+			return false
+		}
+		return true
+	})
 }
 
 // normalizeToken cleans a token: lowercase, trim whitespace, skip empty/punctuation-only

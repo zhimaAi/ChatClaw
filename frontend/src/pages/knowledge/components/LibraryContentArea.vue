@@ -92,6 +92,7 @@ const convertDocument = (doc: BackendDocument): Document => {
 
   return {
     id: doc.id,
+    contentHash: doc.content_hash,
     name: doc.original_name,
     fileType: doc.extension,
     createdAt: doc.created_at,
@@ -167,8 +168,23 @@ const handleAddDocument = async () => {
         file_paths: result,
       })
 
-      // 重新加载列表（因为重复文件会覆盖旧记录）
-      await loadDocuments()
+      // 直接将上传的文档添加到列表（避免等待全量刷新）
+      for (const doc of uploaded) {
+        const converted = convertDocument(doc as unknown as BackendDocument)
+        // 覆盖上传时会删除旧记录再插入新记录（ID 会变），按 content_hash 去重才是稳定的
+        const hash = (doc as unknown as BackendDocument).content_hash
+        const existingIndex =
+          hash && hash.trim()
+            ? documents.value.findIndex((d) => d.contentHash === hash)
+            : documents.value.findIndex((d) => d.id === (doc as unknown as BackendDocument).id)
+        if (existingIndex >= 0) {
+          // 更新已存在的文档（覆盖上传）
+          documents.value[existingIndex] = converted
+        } else {
+          // 添加新文档到列表顶部
+          documents.value.unshift(converted)
+        }
+      }
 
       toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
     }
@@ -207,6 +223,29 @@ const confirmRename = async (doc: Document | null, newName: string) => {
   } catch (error) {
     console.error('Failed to rename document:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.rename.failed'))
+  }
+}
+
+const handleRelearn = async (doc: Document) => {
+  try {
+    // Call backend to reprocess document
+    await DocumentService.ReprocessDocument(doc.id)
+
+    // Update document status to pending/learning
+    const index = documents.value.findIndex((d) => d.id === doc.id)
+    if (index !== -1) {
+      documents.value[index] = {
+        ...documents.value[index],
+        status: 'pending',
+        progress: 0,
+        errorMessage: '',
+      }
+    }
+
+    toast.success(t('knowledge.content.relearn.success'))
+  } catch (error) {
+    console.error('Failed to relearn document:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.content.relearn.failed'))
   }
 }
 
@@ -367,6 +406,7 @@ onUnmounted(() => {
           :key="doc.id"
           :document="doc"
           @rename="handleRename"
+          @relearn="handleRelearn"
           @delete="handleOpenDelete"
         />
       </div>

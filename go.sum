@@ -91,8 +91,8 @@ github.com/cloudwego/eino v0.7.28 h1:mxMgx/UB0ohQlkllA+jQXZJR5jCapciSsDDWaO2Mrjk
 github.com/cloudwego/eino v0.7.28/go.mod h1:nA8Vacmuqv3pqKBQbTWENBLQ8MmGmPt/WqiyLeB8ohQ=
 github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e h1:zwaPGkiNKot1GOk7qQ76O/avrGWv0lJlUHifv+JETgM=
 github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e/go.mod h1:DBwsPrdNxPeE3HNr5XyjjFreG4ypqCUjN0T2C2JSy6k=
-github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260204064123-1f91f547c77e h1:zeB/zrf7MG8JKtzgHSZI0B3rB45Zq58j0ZvgWXAoF14=
-github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260204064123-1f91f547c77e/go.mod h1:kHC3xkGM/gv3IHpOk33p75BfBaEIYATOs2XmYFKffcs=
+github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e h1:eReMW/0FzTcE3vipBedoPCruwYKjtDq2povAC7r+TqQ=
+github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e/go.mod h1:KVOVct4e2BQ7epDONW2QE1qU5+ccoh91FzJTs9vIJj0=
 github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260204064123-1f91f547c77e h1:fEE1v6TtQvd2SFgxBLwPbGwx39JTy4WNBvOLHnZk+yM=
 github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260204064123-1f91f547c77e/go.mod h1:9R0RQrQSpg1JaNnRtw7+RfRAAv0HgdE348YnrlZ6coo=
 github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260204064123-1f91f547c77e h1:RUxIdpxhK5rclFzjWWi8yH/eEE1y6UwFFWPXSA3mx0U=
@@ -121,8 +121,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denisbrodbeck/machineid v1.0.1 h1:geKr9qtkB876mXguW2X6TU4ZynleN6ezuMSRhl4D7AQ=
 github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
-github.com/dslipak/pdf v0.0.2 h1:djAvcM5neg9Ush+zR6QXB+VMJzR6TdnX766HPIg1JmI=
-github.com/dslipak/pdf v0.0.2/go.mod h1:2L3SnkI9cQwnAS9gfPz2iUoLC0rUZwbucpbKi5R1mUo=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/ebitengine/purego v0.9.1 h1:a/k2f2HQU3Pi399RPW1MOaZyhKJL9w/xFpKAg4q1s0A=
@@ -242,6 +240,8 @@ github.com/leaanthony/go-ansi-parser v1.6.1 h1:xd8bzARK3dErqkPFtoF9F3/HgN8UQk0ed
 github.com/leaanthony/go-ansi-parser v1.6.1/go.mod h1:+vva/2y4alzVmmIEpk9QDhA7vLC5zKDTRwfZGOp3IWU=
 github.com/leaanthony/u v1.1.1 h1:TUFjwDGlNX+WuwVEzDqQwC2lOv0P4uhTQw7CMFdiK7M=
 github.com/leaanthony/u v1.1.1/go.mod h1:9+o6hejoRljvZ3BzdYlVL0JYCwtnAsVuN9pVTQcaRfI=
+github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 h1:QwWKgMY28TAXaDl+ExRDqGQltzXqN/xypdKP86niVn8=
+github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728/go.mod h1:1fEHWurg7pvf5SG6XNE5Q8UZmOwex51Mkx3SLhrW5B4=
 github.com/lmittmann/tint v1.1.2 h1:2CQzrL6rslrsyjqLDwD11bZ5OpLBPU+g3G/r5LSfS8w=
 github.com/lmittmann/tint v1.1.2/go.mod h1:HIS3gSy7qNwGCj+5oRjAutErFBl4BzdQP6cJZ0NfMwE=
 github.com/mailru/easyjson v0.9.0 h1:PrnmzHw7262yW8sTBwxi1PdJA3Iw/EKBa8psRf7d9a4=

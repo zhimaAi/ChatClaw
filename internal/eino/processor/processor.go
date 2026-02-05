@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -48,6 +50,7 @@ type LibraryConfig struct {
 type EmbeddingConfig struct {
 	ProviderID   string
 	ModelID      string
+	Dimension    int // 向量维度
 	ProviderType string
 	APIKey       string
 	APIEndpoint  string
@@ -141,8 +144,8 @@ func (p *Processor) ProcessDocument(
 		onProgress("parsing", 50)
 	}
 
-	// 阶段 2：分割文档（如果启用语义分割，使用全局 embedder）
-	chunks, err := p.splitDocument(ctx, docs, libraryConfig, embedder)
+	// 阶段 2：分割文档（Markdown 优先用 Header Splitter，否则按配置选择语义/递归分割）
+	chunks, err := p.splitDocument(ctx, docs, localPath, libraryConfig, embedder)
 	if err != nil {
 		result.Error = fmt.Errorf("分割失败: %w", err)
 		return result, result.Error
@@ -222,20 +225,22 @@ func (p *Processor) parseDocument(ctx context.Context, localPath string) ([]*sch
 }
 
 // splitDocument 将文档分割成块
-// 如果启用了语义分割（知识库配置了 SemanticSegmentProviderID/ModelID），
-// 则使用语义分割器并传入全局 embedder；否则使用递归分割器
+// 分割器选择优先级：Markdown Header Splitter > Semantic Splitter > Recursive Splitter
 func (p *Processor) splitDocument(
 	ctx context.Context,
 	docs []*schema.Document,
+	localPath string,
 	libraryConfig *LibraryConfig,
 	embedder embedding.Embedder,
 ) ([]*schema.Document, error) {
 	cfg := &splitter.Config{
+		FilePath:     localPath, // 传入文件路径，用于判断是否使用 Markdown 分割器
 		ChunkSize:    libraryConfig.ChunkSize,
 		ChunkOverlap: libraryConfig.ChunkOverlap,
 	}
 
 	// 如果启用了语义分割，使用全局 embedder 进行语义分割
+	// 注意：Markdown 文件会优先使用 Header Splitter，不受此配置影响
 	if libraryConfig.SemanticSegmentProviderID != "" && libraryConfig.SemanticSegmentModelID != "" {
 		cfg.SemanticEmbedder = embedder
 		cfg.SemanticPercentile = 0.9
@@ -305,6 +310,7 @@ func (p *Processor) createEmbedder(ctx context.Context, config *EmbeddingConfig)
 		APIKey:       config.APIKey,
 		APIEndpoint:  config.APIEndpoint,
 		ModelID:      config.ModelID,
+		Dimension:    config.Dimension,
 		ExtraConfig:  config.ExtraConfig,
 	})
 }
@@ -312,11 +318,16 @@ func (p *Processor) createEmbedder(ctx context.Context, config *EmbeddingConfig)
 // embedNodes 为节点生成嵌入向量并存储
 func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embedder embedding.Embedder, onProgress func(int)) error {
 	if len(nodes) == 0 {
+		log.Printf("[Embedding] No nodes to embed")
 		return nil
 	}
 
+	log.Printf("[Embedding] Starting embedding for %d nodes", len(nodes))
+
 	// 批量嵌入以提高效率
-	batchSize := 20
+	// 注意：通义千问等部分 API 限制 batch size 最大为 10
+	batchSize := 10
+	storedCount := 0
 	for i := 0; i < len(nodes); i += batchSize {
 		end := i + batchSize
 		if end > len(nodes) {
@@ -330,11 +341,21 @@ func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embed
 			contents[j] = node.Content
 		}
 
+		log.Printf("[Embedding] Processing batch %d-%d/%d", i+1, end, len(nodes))
+
 		// 生成嵌入
 		vectors, err := embedder.EmbedStrings(ctx, contents)
 		if err != nil {
+			log.Printf("[Embedding] FAILED batch %d-%d: %v", i+1, end, err)
 			return fmt.Errorf("嵌入批次（从 %d 开始）: %w", i, err)
 		}
+
+		log.Printf("[Embedding] Got %d vectors, dimension=%d", len(vectors), func() int {
+			if len(vectors) > 0 {
+				return len(vectors[0])
+			}
+			return 0
+		}())
 
 		// 存储向量
 		for j, node := range batch {
@@ -343,6 +364,7 @@ func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embed
 				if err := p.storeVector(ctx, node.ID, vectors[j]); err != nil {
 					return fmt.Errorf("存储节点 %d 的向量: %w", node.ID, err)
 				}
+				storedCount++
 			}
 		}
 
@@ -353,6 +375,7 @@ func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embed
 		}
 	}
 
+	log.Printf("[Embedding] Completed: stored %d vectors for %d nodes", storedCount, len(nodes))
 	return nil
 }
 
@@ -373,6 +396,14 @@ func (p *Processor) storeVector(ctx context.Context, nodeID int64, vector []floa
 			vecStr, nodeID,
 		).Exec(ctx)
 	}
+
+	// 调试日志：输出向量存储结果
+	if err != nil {
+		log.Printf("[Vector] FAILED to store vector for node %d: %v", nodeID, err)
+	} else {
+		log.Printf("[Vector] SUCCESS stored vector for node %d, dimension=%d", nodeID, len(vector))
+	}
+
 	return err
 }
 
@@ -516,16 +547,16 @@ func GetLibraryConfig(ctx context.Context, db *bun.DB, libraryID int64) (*Librar
 func GetEmbeddingConfig(ctx context.Context, db *bun.DB) (*EmbeddingConfig, error) {
 	config := &EmbeddingConfig{}
 
-	// 从设置中获取嵌入供应商和模型
+	// 从设置中获取嵌入供应商、模型和维度
 	type settingRow struct {
 		Key   string         `bun:"key"`
 		Value sql.NullString `bun:"value"`
 	}
-	rows := make([]settingRow, 0, 2)
+	rows := make([]settingRow, 0, 3)
 	err := db.NewSelect().
 		TableExpr("settings").
 		Column("key", "value").
-		Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
+		Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id", "embedding_dimension"})).
 		Scan(ctx, &rows)
 	if err != nil {
 		return nil, err
@@ -540,6 +571,10 @@ func GetEmbeddingConfig(ctx context.Context, db *bun.DB) (*EmbeddingConfig, erro
 			config.ProviderID = strings.TrimSpace(r.Value.String)
 		case "embedding_model_id":
 			config.ModelID = strings.TrimSpace(r.Value.String)
+		case "embedding_dimension":
+			if dim, err := strconv.Atoi(strings.TrimSpace(r.Value.String)); err == nil && dim > 0 {
+				config.Dimension = dim
+			}
 		}
 	}
 

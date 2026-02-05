@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/cloudwego/eino-ext/components/document/parser/html"
-	"github.com/cloudwego/eino-ext/components/document/parser/pdf"
 	"github.com/cloudwego/eino/components/document/parser"
 
 	csvparser "willchat/internal/eino/parser/csv"
 	docxparser "willchat/internal/eino/parser/docx"
+	pdfparser "willchat/internal/eino/parser/pdf"
 	xlsxparser "willchat/internal/eino/parser/xlsx"
 )
 
@@ -24,8 +24,8 @@ func NewDocumentParser(ctx context.Context) (parser.Parser, error) {
 		return nil, err
 	}
 
-	// 创建 PDF 解析器
-	pdfParser, err := pdf.NewPDFParser(ctx, &pdf.Config{
+	// 创建 PDF 解析器（使用自定义解析器，支持中文）
+	pdfParser, err := pdfparser.NewParser(ctx, &pdfparser.Config{
 		ToPages: false,
 	})
 	if err != nil {

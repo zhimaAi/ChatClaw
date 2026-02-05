@@ -2,7 +2,10 @@ package splitter
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 
+	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic"
 	"github.com/cloudwego/eino/components/document"
@@ -11,6 +14,8 @@ import (
 
 // Config 创建分割器的配置
 type Config struct {
+	// FilePath 文件路径，用于根据扩展名选择合适的分割器
+	FilePath string
 	// ChunkSize 每个分块的目标大小（按字符数计算）
 	ChunkSize int
 	// ChunkOverlap 相邻分块之间的重叠大小（按字符数计算）
@@ -43,8 +48,7 @@ var DefaultSeparators = []string{
 }
 
 // NewSplitter 根据配置创建新的文档分割器
-// 如果提供了 SemanticEmbedder，则创建语义分割器
-// 否则创建递归分割器
+// 优先级：Markdown Header Splitter > Semantic Splitter > Recursive Splitter
 func NewSplitter(ctx context.Context, cfg *Config) (document.Transformer, error) {
 	if cfg == nil {
 		cfg = &Config{
@@ -56,6 +60,14 @@ func NewSplitter(ctx context.Context, cfg *Config) (document.Transformer, error)
 	// 使用字符长度计算（适用于中文）
 	lenFunc := func(s string) int {
 		return len([]rune(s))
+	}
+
+	// 检查是否为 Markdown 文件，使用专门的 Header Splitter
+	if cfg.FilePath != "" {
+		ext := strings.ToLower(filepath.Ext(cfg.FilePath))
+		if ext == ".md" || ext == ".markdown" {
+			return NewMarkdownSplitter(ctx)
+		}
 	}
 
 	// 如果提供了语义嵌入模型，使用语义分割
@@ -111,5 +123,19 @@ func NewSemanticSplitter(ctx context.Context, embedder embedding.Embedder, perce
 	return NewSplitter(ctx, &Config{
 		SemanticEmbedder:   embedder,
 		SemanticPercentile: percentile,
+	})
+}
+
+// NewMarkdownSplitter 创建 Markdown Header 分割器
+// 按标题层级（#, ##, ###）进行结构化分割
+func NewMarkdownSplitter(ctx context.Context) (document.Transformer, error) {
+	return markdown.NewHeaderSplitter(ctx, &markdown.HeaderConfig{
+		Headers: map[string]string{
+			"#":    "h1",
+			"##":   "h2",
+			"###":  "h3",
+			"####": "h4",
+		},
+		TrimHeaders: false, // 保留标题行在内容中
 	})
 }
