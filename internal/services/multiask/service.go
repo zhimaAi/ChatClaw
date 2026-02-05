@@ -340,21 +340,39 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
         ];
     } else if (isQwen) {
         inputSelectors = [
-            // 通义千问的输入框
-            'textarea[class*="chatInput"]',
-            '#chat-input textarea',
-            'textarea[placeholder*="向千问提问"]',
+            // 通义千问/Qwen 的输入框 (2025+ 新版结构 - ProseMirror 富文本编辑器)
+            'div[data-placeholder*="向千问提问"]',
+            'div[data-placeholder*="千问"]',
+            '[class*="ProseMirror"][contenteditable="true"]',
+            'div[contenteditable="true"][data-placeholder]',
+            // 旧版 textarea 模式
+            'textarea[data-testid="chat-input"]',
+            '#chat-input',
+            'textarea#chat-input',
+            '[class*="chat-input"] textarea',
+            '[class*="chatInput"] textarea',
+            'textarea[placeholder*="向千问"]',
+            'textarea[placeholder*="请输入"]',
             'textarea[placeholder*="输入"]',
-            '[class*="ChatInput"] textarea',
+            'div[contenteditable="true"]',
             'textarea',
         ];
         sendButtonSelectors = [
-            // 通义千问的发送按钮
+            // 通义千问/Qwen 的发送按钮 (2025+ 新版结构)
+            'button[data-testid="send-button"]',
+            'button[aria-label*="发送"]',
+            'button[aria-label*="Send"]',
+            // 输入区域附近的按钮
+            '[class*="chatInput"] button',
+            '[class*="chat-input"] button',
+            '[class*="inputFooter"] button',
+            '[class*="InputFooter"] button',
             '[class*="sendBtn"]',
             '[class*="send-btn"]',
-            'button[class*="ChatInputBtn"]',
+            '[class*="SendBtn"]',
+            'button[class*="send"]',
+            'button[class*="Send"]',
             '[class*="operateBtn"]',
-            '[class*="ChatInput"] button',
         ];
     } else if (isClaude) {
         inputSelectors = [
@@ -447,28 +465,82 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
             input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
         } else if (input.contentEditable === 'true' || input.isContentEditable) {
-            // ChatGPT 使用 contenteditable div
+            // contenteditable div (ProseMirror, ChatGPT, Qwen 等富文本编辑器)
             input.focus();
             
-            // 清空现有内容
-            input.textContent = '';
+            // 对于千问 (ProseMirror 编辑器)，需要使用特殊方式注入内容
+            if (isQwen) {
+                console.log('[WillChat] Using ProseMirror-compatible input method for Qwen...');
+                
+                // 方法1: 使用 Selection API + execCommand (兼容性最好)
+                const selection = window.getSelection();
+                const range = document.createRange();
+                
+                // 清空并选中所有内容
+                range.selectNodeContents(input);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                // 使用 execCommand 插入文本（会触发编辑器的内部状态更新）
+                const inserted = document.execCommand('insertText', false, message);
+                
+                if (!inserted) {
+                    console.log('[WillChat] execCommand failed, trying DataTransfer method...');
+                    // 方法2: 使用 DataTransfer 模拟粘贴
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.setData('text/plain', message);
+                    
+                    input.dispatchEvent(new InputEvent('beforeinput', {
+                        bubbles: true,
+                        cancelable: true,
+                        inputType: 'insertText',
+                        data: message,
+                        dataTransfer: dataTransfer
+                    }));
+                    
+                    // 手动设置内容作为 fallback
+                    input.innerHTML = '';
+                    const p = document.createElement('p');
+                    p.textContent = message;
+                    input.appendChild(p);
+                }
+                
+                // 触发 input 事件确保编辑器状态同步
+                input.dispatchEvent(new InputEvent('input', { 
+                    bubbles: true, 
+                    cancelable: true,
+                    inputType: 'insertText',
+                    data: message
+                }));
+                
+                // 移动光标到末尾
+                const newRange = document.createRange();
+                newRange.selectNodeContents(input);
+                newRange.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+                
+            } else {
+                // ChatGPT 等其他编辑器
+                // 清空现有内容
+                input.textContent = '';
+                
+                // 创建文本节点并插入
+                input.appendChild(document.createTextNode(message));
             
-            // 创建文本节点并插入
-            input.appendChild(document.createTextNode(message));
-        
-            
-            // 触发 input 事件
-            input.dispatchEvent(new InputEvent('input', { 
-                bubbles: true, 
-                cancelable: true,
-                inputType: 'insertText',
-                data: message
-            }));
-            
-            // 对于 ChatGPT，还需要触发一些额外的事件
-            if (isChatGPT) {
-                input.dispatchEvent(new Event('beforeinput', { bubbles: true }));
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                // 触发 input 事件
+                input.dispatchEvent(new InputEvent('input', { 
+                    bubbles: true, 
+                    cancelable: true,
+                    inputType: 'insertText',
+                    data: message
+                }));
+                
+                // 对于 ChatGPT，还需要触发一些额外的事件
+                if (isChatGPT) {
+                    input.dispatchEvent(new Event('beforeinput', { bubbles: true }));
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             }
         }
         input.focus();
