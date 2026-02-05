@@ -279,8 +279,10 @@ func buildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	fsBackend, err := localfs.NewLocalBackend(&localfs.LocalBackendConfig{})
 	if err != nil {
 		log.Printf("[chat] failed to create local filesystem backend: %v", err)
-		// Fall back to only using reduction clearing without filesystem
-		reductionMw, err := reduction.NewClearToolResult(ctx, &reduction.ClearToolResultConfig{})
+		// Fall back to only using reduction clearing without filesystem offloading
+		reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{
+			Backend: nil, // No backend means clearing only, no offloading
+		})
 		if err == nil {
 			middlewares = append(middlewares, reductionMw)
 		}
