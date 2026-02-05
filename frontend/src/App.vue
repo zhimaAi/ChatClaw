@@ -21,7 +21,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   knowledge: KnowledgePage,
   settings: SettingsPage,
-  multiask: MultiaskPage, // TODO: 实现多问页面
+  multiask: MultiaskPage,
 }
 
 /**
