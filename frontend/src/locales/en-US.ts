@@ -9,6 +9,19 @@ export default {
     cancelSnap: 'Cancel Snap',
     placeholder: 'Type your question',
     thinking: 'Thinking...',
+    actions: {
+      sendAndTrigger: 'Send and Trigger',
+      sendToEdit: 'Send to Edit Box',
+      copyToClipboard: 'Copy to Clipboard',
+    },
+    toast: {
+      copied: 'Copied to clipboard',
+      sent: 'Sent',
+      pasted: 'Pasted to edit box',
+      sendFailed: 'Failed to send',
+      pasteFailed: 'Failed to paste',
+      noTarget: 'Not attached to any app',
+    },
   },
   selection: {
     aiChat: 'AI Chat',

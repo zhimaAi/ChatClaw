@@ -18,9 +18,10 @@ import (
 type SnapState string
 
 const (
-	SnapStateStopped  SnapState = "stopped"
-	SnapStateAttached SnapState = "attached"
-	SnapStateHidden   SnapState = "hidden"
+	SnapStateStopped    SnapState = "stopped"
+	SnapStateAttached   SnapState = "attached"
+	SnapStateHidden     SnapState = "hidden"
+	SnapStateStandalone SnapState = "standalone" // Window is visible but not attached to any target
 )
 
 type SnapStatus struct {
@@ -119,6 +120,42 @@ func (s *SnapService) NotifySettingsChanged() {
 	s.app.Event.Emit("snap:settings-changed", nil)
 }
 
+// SendTextToTarget sends text to the currently attached target application.
+// If triggerSend is true, it will also simulate the send key (Enter or Ctrl+Enter based on settings).
+func (s *SnapService) SendTextToTarget(text string, triggerSend bool) error {
+	s.mu.Lock()
+	target := s.currentTarget
+	state := s.status.State
+	s.mu.Unlock()
+
+	if state != SnapStateAttached || target == "" {
+		return errs.New("error.no_attached_target")
+	}
+
+	// Get send key strategy from settings
+	sendKeyStrategy := "enter"
+	if v, ok := settings.GetValue("send_key_strategy"); ok && v != "" {
+		sendKeyStrategy = v
+	}
+
+	return winsnap.SendTextToTarget(target, text, triggerSend, sendKeyStrategy)
+}
+
+// PasteTextToTarget pastes text to the currently attached target application's edit box.
+// This does not trigger the send action.
+func (s *SnapService) PasteTextToTarget(text string) error {
+	s.mu.Lock()
+	target := s.currentTarget
+	state := s.status.State
+	s.mu.Unlock()
+
+	if state != SnapStateAttached || target == "" {
+		return errs.New("error.no_attached_target")
+	}
+
+	return winsnap.PasteTextToTarget(target, text)
+}
+
 // SyncFromSettings reads snap toggles from settings cache, then starts/stops
 // snapping loop accordingly.
 func (s *SnapService) SyncFromSettings() (SnapStatus, error) {
@@ -197,15 +234,36 @@ func (s *SnapService) stop() error {
 	}
 	s.currentTarget = ""
 	s.lastWinsnapMinimized = false
-	s.status.State = SnapStateStopped
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
-	s.touchLocked("")
+	w := s.win
 	s.mu.Unlock()
 
-	// Close winsnap window when fully stopped (no toggles enabled).
-	_ = s.winSvc.Close(WindowWinsnap)
+	// Instead of closing the window, move it to a standalone position (centered on screen)
+	// so it can wait for new snap relationships
+	if w != nil {
+		s.moveToStandalone(w)
+		s.mu.Lock()
+		s.status.State = SnapStateStandalone
+		s.touchLocked("")
+		s.mu.Unlock()
+	} else {
+		s.mu.Lock()
+		s.status.State = SnapStateStopped
+		s.touchLocked("")
+		s.mu.Unlock()
+	}
+
 	return nil
+}
+
+// moveToStandalone moves the winsnap window to a standalone position (centered on screen).
+func (s *SnapService) moveToStandalone(w *application.WebviewWindow) {
+	if w == nil {
+		return
+	}
+	// Move window to center of primary screen
+	winsnap.MoveToStandalone(w)
 }
 
 func (s *SnapService) loop(ctx context.Context) {

@@ -157,6 +157,8 @@ const handleAiSendButtonChange = async (val: boolean) => {
   showAiSendButton.value = val
   try {
     await updateSetting('show_ai_send_button', String(val))
+    // Notify other windows (e.g., winsnap) about the settings change
+    await SnapService.NotifySettingsChanged()
   } catch {
     showAiSendButton.value = prev
   }
@@ -168,6 +170,8 @@ const handleAiEditButtonChange = async (val: boolean) => {
   showAiEditButton.value = val
   try {
     await updateSetting('show_ai_edit_button', String(val))
+    // Notify other windows (e.g., winsnap) about the settings change
+    await SnapService.NotifySettingsChanged()
   } catch {
     showAiEditButton.value = prev
   }
@@ -193,6 +197,8 @@ const handleSendKeyChange = async (value: AcceptableValue) => {
     sendKeyStrategy.value = value
     try {
       await updateSetting('send_key_strategy', value)
+      // Notify other windows about the settings change
+      await SnapService.NotifySettingsChanged()
     } catch {
       sendKeyStrategy.value = prev
     }
