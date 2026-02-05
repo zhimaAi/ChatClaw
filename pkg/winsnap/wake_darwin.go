@@ -60,21 +60,26 @@ static void winsnap_activate_current_app(void) {
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
 
-// Order a specific window to front without activating the entire application.
-// This brings only the specified window to front, not all windows of the app.
-// Uses @try/@catch to safely handle cases where the window may have been deallocated.
-static void winsnap_order_window_front(void *nsWindow) {
-	if (!nsWindow) return;
-	@try {
-		NSWindow *win = (__bridge NSWindow *)nsWindow;
-		// Verify the window is still valid and visible before ordering to front
-		if (win && [win isKindOfClass:[NSWindow class]] && [win isVisible]) {
-			[win orderFrontRegardless];
+// Order a window with the given title to front without activating the entire application.
+// Dispatches to main thread asynchronously to ensure thread safety.
+// Uses window title to find the window safely, avoiding stale pointer issues.
+static void winsnap_order_window_front_by_title(const char *title) {
+	if (!title) return;
+	NSString *targetTitle = [NSString stringWithUTF8String:title];
+	if (targetTitle.length == 0) return;
+
+	dispatch_async(dispatch_get_main_queue(), ^{
+		// Find the window by its title on the main thread
+		for (NSWindow *win in [NSApp windows]) {
+			NSString *winTitle = [win title];
+			if (winTitle && [winTitle isEqualToString:targetTitle]) {
+				if ([win isVisible]) {
+					[win orderFrontRegardless];
+				}
+				return;
+			}
 		}
-	} @catch (NSException *exception) {
-		// Window may have been deallocated or is in an invalid state; ignore safely.
-		NSLog(@"winsnap_order_window_front: caught exception %@", exception);
-	}
+	});
 }
 */
 import "C"
@@ -95,7 +100,12 @@ func EnsureWindowVisible(_ *application.WebviewWindow) error {
 // 1) Activate the target app so its window comes to front
 // 2) Order only the winsnap window to front (not entire app) to avoid activating main window
 // The winsnap window itself is kept at normal level to avoid covering other apps.
+//
+// Returns ErrWinsnapWindowInvalid if the winsnap window is nil or has been closed/released.
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
+	if self == nil {
+		return ErrWinsnapWindowInvalid
+	}
 	if targetProcessName == "" {
 		return errors.New("winsnap: TargetProcessName is empty")
 	}
@@ -112,11 +122,14 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 	// Activate target app (e.g., WeChat)
 	C.winsnap_activate_pid(pid)
 	// Only order the winsnap window to front, not the entire app (avoid activating main window)
-	if self != nil {
-		nsWindow := self.NativeWindow()
-		if nsWindow != nil {
-			C.winsnap_order_window_front(nsWindow)
-		}
+	// Use window title to find the window safely, avoiding stale pointer issues.
+	title := self.Title()
+	if title == "" {
+		// Window may have been closed or is in an invalid state
+		return ErrWinsnapWindowInvalid
 	}
+	ctitle := C.CString(title)
+	C.winsnap_order_window_front_by_title(ctitle)
+	C.free(unsafe.Pointer(ctitle))
 	return nil
 }

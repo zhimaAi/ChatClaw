@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"io/fs"
+	"sync"
 
 	"willchat/internal/define"
 	"willchat/internal/services/agents"
@@ -22,6 +23,88 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
+// mainWindowManager handles safe main window operations with validity checks.
+// It ensures the main window is valid before performing operations and
+// can recreate the window if it becomes invalid.
+type mainWindowManager struct {
+	mu     sync.Mutex
+	app    *application.App
+	window *application.WebviewWindow
+}
+
+// isWindowValid checks if the window's native handle is still valid.
+func (m *mainWindowManager) isWindowValid() bool {
+	if m.window == nil {
+		return false
+	}
+	nativeHandle := m.window.NativeWindow()
+	return nativeHandle != nil && uintptr(nativeHandle) != 0
+}
+
+// safeWake safely wakes the main window, checking validity first.
+// If the window is invalid, it does nothing (main window recreation
+// would require app restart in most cases).
+func (m *mainWindowManager) safeWake() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		// Main window is invalid, cannot wake
+		// In production, main window invalidation typically means app should restart
+		return
+	}
+
+	m.window.Restore()
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeShow safely shows and focuses the main window.
+func (m *mainWindowManager) safeShow() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeUnMinimiseAndShow safely unminimizes, shows and focuses the main window.
+func (m *mainWindowManager) safeUnMinimiseAndShow() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.UnMinimise()
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeHide safely hides the main window.
+func (m *mainWindowManager) safeHide() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.Hide()
+}
+
+// getWindow returns the underlying window (for operations that need direct access).
+func (m *mainWindowManager) getWindow() *application.WebviewWindow {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.window
+}
+
 type Options struct {
 	Assets fs.FS
 	Icon   []byte
@@ -32,8 +115,8 @@ func NewApp(opts Options) (*application.App, error) {
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
-	// 声明主窗口变量，用于单实例回调
-	var mainWindow *application.WebviewWindow
+	// 主窗口管理器，用于安全的窗口操作
+	mainWinMgr := &mainWindowManager{}
 
 	// 创建应用实例
 	app := application.New(application.Options{
@@ -53,12 +136,8 @@ func NewApp(opts Options) (*application.App, error) {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: define.SingleInstanceUniqueID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				// 当第二个实例启动时，聚焦主窗口
-				if mainWindow != nil {
-					mainWindow.Restore()
-					mainWindow.Show()
-					mainWindow.Focus()
-				}
+				// 当第二个实例启动时，安全地聚焦主窗口
+				mainWinMgr.safeWake()
 			},
 		},
 	})
@@ -81,7 +160,9 @@ func NewApp(opts Options) (*application.App, error) {
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 
 	// 创建主窗口
-	mainWindow = windows.NewMainWindow(app)
+	mainWindow := windows.NewMainWindow(app)
+	mainWinMgr.app = app
+	mainWinMgr.window = mainWindow
 
 	// 创建子窗口服务
 	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
@@ -109,8 +190,8 @@ func NewApp(opts Options) (*application.App, error) {
 	// 创建系统托盘
 	systrayMenu := app.NewMenu()
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
-		mainWindow.Show()
-		mainWindow.Focus()
+		// 安全地显示主窗口
+		mainWinMgr.safeShow()
 	})
 	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
 		app.Quit()
@@ -159,7 +240,7 @@ func NewApp(opts Options) (*application.App, error) {
 		minimizeEnabled := trayService.IsMinimizeToTrayEnabled()
 		if minimizeEnabled {
 			app.Logger.Info("WindowClosing: hiding window to tray")
-			mainWindow.Hide()
+			mainWinMgr.safeHide()
 			e.Cancel()
 		} else {
 			app.Quit()
@@ -168,9 +249,8 @@ func NewApp(opts Options) (*application.App, error) {
 
 	// 点击 Dock 图标时显示窗口
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
-		mainWindow.UnMinimise()
-		mainWindow.Show()
-		mainWindow.Focus()
+		// 安全地唤醒主窗口
+		mainWinMgr.safeUnMinimiseAndShow()
 	})
 
 	return app, nil

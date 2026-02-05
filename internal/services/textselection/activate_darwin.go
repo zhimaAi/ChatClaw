@@ -31,12 +31,18 @@ import (
 
 // forceActivateWindow on macOS uses NSRunningApplication to bring the app to front.
 // This is more reliable than Wails Focus() which may not work when the app is not frontmost.
+// Safely handles the case when the window has been closed/released.
 func forceActivateWindow(w *application.WebviewWindow) {
 	if w == nil {
 		return
 	}
 	// Activate the current application to bring all its windows to front
 	C.textselection_activate_current_app()
+	// Check if window is still valid before calling Focus
+	// On macOS, NativeWindow() returns nil for closed windows
+	if w.NativeWindow() == nil {
+		return
+	}
 	// Also call Wails Focus to ensure the specific window gets focus
 	w.Focus()
 }

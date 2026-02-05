@@ -72,14 +72,27 @@ func (s *WindowService) register(def WindowDefinition) error {
 
 func (s *WindowService) ensure(name string) (*application.WebviewWindow, error) {
 	s.mu.RLock()
-	if existing := s.windows[name]; existing != nil {
-		s.mu.RUnlock()
-		return existing, nil
-	}
+	existing := s.windows[name]
 	def, ok := s.defs[name]
 	s.mu.RUnlock()
+
 	if !ok {
 		return nil, errs.Newf("error.window_not_registered", map[string]any{"Name": name})
+	}
+
+	// Check if existing window is still valid
+	// On macOS, NativeWindow() returns nil for closed windows
+	// On Windows, NativeWindow() returns 0 for closed windows
+	if existing != nil {
+		nativeHandle := existing.NativeWindow()
+		if nativeHandle != nil && uintptr(nativeHandle) != 0 {
+			// Window is still valid
+			return existing, nil
+		}
+		// Window has been closed or released, need to recreate
+		s.mu.Lock()
+		delete(s.windows, name)
+		s.mu.Unlock()
 	}
 
 	options := def.CreateOptions()
@@ -148,6 +161,18 @@ func (s *WindowService) Show(name string) error {
 	if err != nil {
 		return err
 	}
+
+	// Double-check window is still valid before calling Show/Focus
+	// (ensure() should have recreated it if invalid, but be defensive)
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		// Window became invalid, clear reference and return error
+		s.mu.Lock()
+		delete(s.windows, name)
+		s.mu.Unlock()
+		return errs.Newf("error.window_invalid", map[string]any{"Name": name})
+	}
+
 	w.Show()
 	if def.FocusOnShow {
 		w.Focus()
@@ -168,6 +193,15 @@ func (s *WindowService) Close(name string) error {
 		return nil
 	}
 
+	// Check if window is still valid before calling Close
+	// On macOS, NativeWindow() returns nil for closed windows
+	// On Windows, NativeWindow() returns 0 for closed windows
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		// Window already closed, nothing to do
+		return nil
+	}
+
 	w.Close()
 	return nil
 }
@@ -184,6 +218,17 @@ func (s *WindowService) IsVisible(name string) (bool, error) {
 	if w == nil {
 		return false, nil
 	}
+
+	// Check if window is still valid before calling IsVisible
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		// Window has been closed, clean up reference
+		s.mu.Lock()
+		delete(s.windows, name)
+		s.mu.Unlock()
+		return false, nil
+	}
+
 	return w.IsVisible(), nil
 }
 

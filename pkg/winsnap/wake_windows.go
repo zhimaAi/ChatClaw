@@ -34,11 +34,11 @@ const (
 // so it becomes visible again. Does not activate or steal focus.
 func EnsureWindowVisible(window *application.WebviewWindow) error {
 	if window == nil {
-		return errors.New("winsnap: Window is nil")
+		return ErrWinsnapWindowInvalid
 	}
 	h := uintptr(window.NativeWindow())
 	if h == 0 {
-		return errors.New("winsnap: native window handle is 0")
+		return ErrWinsnapWindowInvalid
 	}
 	procShowWindowWake.Call(h, swRestoreWake)
 	return nil
@@ -48,11 +48,11 @@ func EnsureWindowVisible(window *application.WebviewWindow) error {
 // keeping winsnap ordered directly above the target (same-level behavior).
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
 	if self == nil {
-		return errors.New("winsnap: Window is nil")
+		return ErrWinsnapWindowInvalid
 	}
 	selfH := uintptr(self.NativeWindow())
 	if selfH == 0 {
-		return errors.New("winsnap: native window handle is 0")
+		return ErrWinsnapWindowInvalid
 	}
 
 	targetNames := expandWindowsTargetNames(targetProcessName)

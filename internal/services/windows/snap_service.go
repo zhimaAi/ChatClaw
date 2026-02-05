@@ -91,6 +91,7 @@ func (s *SnapService) GetStatus() SnapStatus {
 
 // WakeAttached brings the attached target window and the winsnap window to the front.
 // This is useful when winsnap is attached but both windows are behind other apps.
+// If the winsnap window is invalid/closed, it will be recreated on the next loop tick.
 func (s *SnapService) WakeAttached() error {
 	s.mu.Lock()
 	w := s.win
@@ -100,7 +101,13 @@ func (s *SnapService) WakeAttached() error {
 	if w == nil || target == "" {
 		return nil
 	}
-	return winsnap.WakeAttachedWindow(w, target)
+	err := winsnap.WakeAttachedWindow(w, target)
+	if err == winsnap.ErrWinsnapWindowInvalid {
+		// Winsnap window became invalid - trigger recreation
+		s.handleWinsnapWindowInvalid(target)
+		return nil // Don't return error, window will be recreated
+	}
+	return err
 }
 
 // NotifySettingsChanged broadcasts a snap settings changed event to all windows.
@@ -325,7 +332,10 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.mu.Unlock()
 
 	// Restore winsnap if it was minimized (e.g. by Win+D); when a target becomes visible again, show the snap window.
-	_ = winsnap.EnsureWindowVisible(w)
+	if err := winsnap.EnsureWindowVisible(w); err == winsnap.ErrWinsnapWindowInvalid {
+		s.handleWinsnapWindowInvalid(targetProcess)
+		return
+	}
 
 	c, err := winsnap.AttachRightOfProcess(winsnap.AttachOptions{
 		TargetProcessName: targetProcess,
@@ -335,6 +345,11 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		Window:            w,
 	})
 	if err != nil {
+		// Check if winsnap window is invalid/closed - need to recreate
+		if err == winsnap.ErrWinsnapWindowInvalid {
+			s.handleWinsnapWindowInvalid(targetProcess)
+			return
+		}
 		// Treat as temporarily hidden; next tick will retry.
 		s.mu.Lock()
 		s.status.LastError = err.Error()
@@ -356,7 +371,10 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	// Immediately sync z-order after attaching to ensure the winsnap window
 	// is visible above the target window. Without this, the winsnap may appear
 	// behind other windows until the target is moved or activated.
-	_ = winsnap.WakeAttachedWindow(w, targetProcess)
+	if err := winsnap.WakeAttachedWindow(w, targetProcess); err == winsnap.ErrWinsnapWindowInvalid {
+		// Winsnap window became invalid after attach - recreate
+		s.handleWinsnapWindowInvalid(targetProcess)
+	}
 }
 
 func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
@@ -417,6 +435,31 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		s.readyOnce.Do(func() { close(s.readyCh) })
 		s.mu.Unlock()
 	})
+}
+
+// handleWinsnapWindowInvalid handles the case when the winsnap window has been closed/released.
+// It clears the current state and triggers recreation of the window on the next loop tick.
+func (s *SnapService) handleWinsnapWindowInvalid(targetProcess string) {
+	s.mu.Lock()
+	// Stop current controller
+	if s.ctrl != nil {
+		_ = s.ctrl.Stop()
+		s.ctrl = nil
+	}
+	// Clear window reference to trigger recreation
+	s.win = nil
+	s.currentTarget = ""
+	s.lastWinsnapMinimized = false
+	s.status.State = SnapStateHidden
+	s.status.TargetProcess = ""
+	s.status.LastError = "winsnap window invalid, will recreate"
+	s.touchLocked("")
+	s.mu.Unlock()
+
+	// Close the window in WindowService to ensure clean state
+	_ = s.winSvc.Close(WindowWinsnap)
+
+	// The next loop tick will detect s.win == nil and call ensureRunning() to recreate
 }
 
 func (s *SnapService) touchLocked(lastErr string) {

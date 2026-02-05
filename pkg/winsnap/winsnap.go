@@ -13,6 +13,9 @@ var (
 	// ErrSelfIsFrontmost is returned when the frontmost application is our own app.
 	// Callers should preserve the current snap state when this error is returned.
 	ErrSelfIsFrontmost = errors.New("winsnap: self is frontmost")
+	// ErrWinsnapWindowInvalid is returned when the winsnap window is nil, closed, or has been released.
+	// Callers should recreate the winsnap window and re-attach when this error is returned.
+	ErrWinsnapWindowInvalid = errors.New("winsnap: winsnap window is invalid or closed")
 )
 
 // AttachOptions 吸附窗口的配置选项

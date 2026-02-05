@@ -21,12 +21,12 @@ var ()
 
 func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
-		return nil, errors.New("winsnap: Window is nil")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	selfHWND := uintptr(opts.Window.NativeWindow())
 	if selfHWND == 0 {
-		return nil, errors.New("winsnap: native window handle is 0")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	targetNames := expandWindowsTargetNames(opts.TargetProcessName)

@@ -463,6 +463,7 @@ func (s *TextSelectionService) showPopupAt(x, y int) {
 }
 
 // Hide hides the popup.
+// Safely handles the case when the window has been closed/released.
 func (s *TextSelectionService) Hide() {
 	s.mu.Lock()
 	if s.hideTimer != nil {
@@ -477,9 +478,20 @@ func (s *TextSelectionService) Hide() {
 	s.mu.Unlock()
 
 	if w != nil {
-		// Don't use w.Hide(), because Wails Hide() internally calls Focus, causing WebView2 error
-		// Move window off-screen to "hide" instead
-		w.SetPosition(-9999, -9999)
+		// Check if window is still valid before calling SetPosition
+		nativeHandle := w.NativeWindow()
+		if nativeHandle != nil && uintptr(nativeHandle) != 0 {
+			// Don't use w.Hide(), because Wails Hide() internally calls Focus, causing WebView2 error
+			// Move window off-screen to "hide" instead
+			w.SetPosition(-9999, -9999)
+		} else {
+			// Window has been closed, clear the reference
+			s.mu.Lock()
+			if s.popWindow == w {
+				s.popWindow = nil
+			}
+			s.mu.Unlock()
+		}
 	}
 
 	// Clear click outside watcher's popup area
@@ -557,8 +569,24 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 		return
 	}
 
-	// If window doesn't exist, create new window
-	if w == nil {
+	// Check if existing window is still valid (native handle not nil/0)
+	// On macOS, NativeWindow() returns nil for closed windows
+	// On Windows, NativeWindow() returns 0 for closed windows
+	needCreate := w == nil
+	if !needCreate {
+		nativeHandle := w.NativeWindow()
+		if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+			// Window has been closed or released, need to recreate
+			needCreate = true
+			s.mu.Lock()
+			s.popWindow = nil
+			s.mu.Unlock()
+			w = nil
+		}
+	}
+
+	// If window doesn't exist or is invalid, create new window
+	if needCreate {
 		opts.X = x
 		opts.Y = y
 		opts.InitialPosition = application.WindowXY
@@ -592,6 +620,18 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 	}
 
 	// Set position and show (need to update position when reusing window)
+	// Double-check window is still valid before operations
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		// Window became invalid between creation and show, clear reference
+		s.mu.Lock()
+		if s.popWindow == w {
+			s.popWindow = nil
+		}
+		s.mu.Unlock()
+		return
+	}
+
 	w.SetPosition(x, y)
 	w.Show()
 	forcePopupTopMostNoActivate(w)

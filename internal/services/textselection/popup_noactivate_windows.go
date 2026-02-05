@@ -26,12 +26,15 @@ const (
 
 // tryConfigurePopupNoActivate makes the popup window non-activating to avoid
 // WebView2 Focus crashes on click (WS_EX_NOACTIVATE).
+// Safely handles the case when the window has been closed/released.
 func tryConfigurePopupNoActivate(w *application.WebviewWindow) {
 	if w == nil {
 		return
 	}
+	// Check if window is still valid by getting its native handle
 	h := uintptr(w.NativeWindow())
 	if h == 0 {
+		// Window has been closed or is invalid
 		return
 	}
 
