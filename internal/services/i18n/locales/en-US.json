@@ -86,11 +86,21 @@
   "error.agent_llm_model_not_found": "default LLM model '{{.ProviderID}}/{{.ModelID}}' not found",
   "error.agent_pick_default_llm_failed": "failed to pick default LLM model",
   "error.agent_no_llm_model_available": "no available LLM model",
+  "error.agent_match_threshold_invalid": "match threshold is invalid",
   "error.agent_icon_path_required": "icon file path is required",
   "error.agent_icon_read_failed": "failed to read icon file",
   "error.agent_icon_invalid": "invalid icon file",
   "error.agent_icon_too_large": "icon file is too large (max 100KB)",
   "error.agent_icon_type_not_allowed": "icon file type is not allowed",
+
+  "error.conversation_id_required": "conversation ID is required",
+  "error.conversation_not_found": "conversation '{{.ID}}' not found",
+  "error.conversation_list_failed": "failed to list conversations",
+  "error.conversation_read_failed": "failed to read conversation",
+  "error.conversation_create_failed": "failed to create conversation",
+  "error.conversation_update_failed": "failed to update conversation",
+  "error.conversation_delete_failed": "failed to delete conversation",
+  "error.conversation_name_required": "conversation name is required",
   "error.question_required": "question is required",
   "error.request_id_required": "request ID is required"
 }

@@ -6,6 +6,14 @@
 import type { Component } from 'vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+/**
+ * Props - 每个标签页实例都有自己独立的 tabId
+ * 通过 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留
+ */
+defineProps<{
+  tabId?: string // 可选，因为设置页面也可能在独立窗口中使用
+}>()
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'

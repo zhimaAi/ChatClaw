@@ -10,21 +10,18 @@ func init() {
 	Migrations.MustRegister(
 		func(ctx context.Context, db *bun.DB) error {
 			sql := `
-create table if not exists library (
+create table if not exists conversations (
 	id integer primary key autoincrement,
 	created_at datetime not null default current_timestamp,
 	updated_at datetime not null default current_timestamp,
-	
-	name varchar(100) not null,
-	
-	semantic_segment_provider_id varchar(64) not null default '',
-	semantic_segment_model_id varchar(128) not null default '',
-	
-	top_k integer not null default 20,
-	chunk_size integer not null default 1024,
-	chunk_overlap integer not null default 100,
-	sort_order integer not null default 0
+
+	agent_id integer not null,
+	name text not null,
+	last_message text not null,
+	is_pinned boolean not null default false
 );
+-- 索引设计：按 agent_id 查询，置顶优先，然后按更新时间倒序
+create index if not exists idx_conversations_agent_id on conversations(agent_id, is_pinned desc, updated_at desc);
 `
 			if _, err := db.ExecContext(ctx, sql); err != nil {
 				return err
@@ -32,7 +29,7 @@ create table if not exists library (
 			return nil
 		},
 		func(ctx context.Context, db *bun.DB) error {
-			if _, err := db.ExecContext(ctx, `drop table if exists library`); err != nil {
+			if _, err := db.ExecContext(ctx, `drop table if exists conversations;`); err != nil {
 				return err
 			}
 			return nil
