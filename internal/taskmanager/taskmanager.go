@@ -160,14 +160,30 @@ func (tm *TaskManager) RegisterHandler(queueName, jobType string, handler func(c
 			return nil // 不重试格式错误的任务
 		}
 
-		// 检查任务是否已取消
+		// 检查任务是否已取消/被替换。
+		// 注意：goqite 的任务是持久化的，应用重启后 tm.tasks 为空；
+		// 此时仍应允许运行队列里的任务，否则会出现“退出后任务不继续”的问题。
 		tm.mu.RLock()
 		info, exists := tm.tasks[payload.TaskKey]
 		tm.mu.RUnlock()
 
 		if !exists {
-			// 任务已被移除（取消/替换），跳过
-			return nil
+			// 重启后的 orphan job：注册一个临时的 task 记录，让任务继续执行
+			tm.mu.Lock()
+			// double-check
+			if cur, ok := tm.tasks[payload.TaskKey]; ok {
+				info = cur
+				exists = true
+			} else {
+				info = &TaskInfo{
+					Key:       payload.TaskKey,
+					RunID:     payload.RunID,
+					Cancelled: false,
+				}
+				tm.tasks[payload.TaskKey] = info
+				exists = true
+			}
+			tm.mu.Unlock()
 		}
 		if info.IsCancelled() {
 			// 任务已取消
