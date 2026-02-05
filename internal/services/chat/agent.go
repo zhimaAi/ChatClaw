@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"willchat/internal/define"
 	"willchat/internal/errs"
 	"willchat/internal/services/tools"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
 	"google.golang.org/genai"
 )
 
@@ -218,9 +218,25 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	// Convert to BaseTool slice
-	baseTools := make([]tool.BaseTool, len(enabledTools))
-	copy(baseTools, enabledTools)
+	// Replace BrowserUse tool with one configured with ExtractChatModel
+	baseTools := make([]tool.BaseTool, 0, len(enabledTools))
+	for _, t := range enabledTools {
+		info, _ := t.Info(ctx)
+		if info != nil && info.Name == tools.ToolIDBrowserUse {
+			// Create BrowserUse tool with ExtractChatModel for intelligent content extraction
+			browserTool, err := tools.NewBrowserUseTool(ctx, &tools.BrowserUseConfig{
+				ExtractChatModel: chatModel,
+			})
+			if err != nil {
+				log.Printf("[chat] failed to create BrowserUse with ExtractChatModel, using default: %v", err)
+				baseTools = append(baseTools, t)
+			} else {
+				baseTools = append(baseTools, browserTool)
+			}
+		} else {
+			baseTools = append(baseTools, t)
+		}
+	}
 
 	// Build instruction with tool calling reliability note
 	instruction := config.Instruction + toolCallingInstruction
@@ -238,6 +254,10 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 		agentConfig.ToolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: baseTools,
+				// Add error-catching middleware to continue ReAct loop on tool errors
+				ToolCallMiddlewares: []compose.ToolMiddleware{
+					errorCatchingToolMiddleware(),
+				},
 			},
 		}
 	}
@@ -300,7 +320,8 @@ func buildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 }
 
 // buildSkillMiddleware creates the skill middleware with a local backend.
-// Skills are stored under <UserConfigDir>/willchat/skills/<skill-name>/SKILL.md.
+// Skills are stored under <UserConfigDir>/claude/skills/<skill-name>/SKILL.md.
+// Using "claude" as base directory for broader compatibility with Claude-style skills.
 func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
@@ -308,7 +329,8 @@ func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 		return adk.AgentMiddleware{}, false
 	}
 
-	skillsDir := filepath.Join(cfgDir, define.AppID, "skills")
+	// Use "claude" instead of app-specific directory for broader skill compatibility
+	skillsDir := filepath.Join(cfgDir, "claude", "skills")
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		log.Printf("[chat] failed to create skills directory %s: %v", skillsDir, err)
 		return adk.AgentMiddleware{}, false
@@ -332,4 +354,41 @@ func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 	}
 
 	return skillMw, true
+}
+
+// errorCatchingToolMiddleware creates a middleware that catches tool execution errors
+// and returns the error message as a tool result, allowing the ReAct loop to continue.
+// This enables the LLM to understand what went wrong and try alternative approaches.
+func errorCatchingToolMiddleware() compose.ToolMiddleware {
+	return compose.ToolMiddleware{
+		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
+			return func(ctx context.Context, input *compose.ToolInput) (*compose.ToolOutput, error) {
+				output, err := next(ctx, input)
+				if err != nil {
+					// Log the error for debugging
+					log.Printf("[chat] tool %q execution error (will continue ReAct loop): %v", input.Name, err)
+					// Return the error message as a tool result instead of failing
+					return &compose.ToolOutput{
+						Result: "Error: " + err.Error(),
+					}, nil
+				}
+				return output, nil
+			}
+		},
+		Streamable: func(next compose.StreamableToolEndpoint) compose.StreamableToolEndpoint {
+			return func(ctx context.Context, input *compose.ToolInput) (*compose.StreamToolOutput, error) {
+				output, err := next(ctx, input)
+				if err != nil {
+					// Log the error for debugging
+					log.Printf("[chat] streaming tool %q execution error (will continue ReAct loop): %v", input.Name, err)
+					// Return the error message as a streaming result
+					errorMsg := "Error: " + err.Error()
+					return &compose.StreamToolOutput{
+						Result: schema.StreamReaderFromArray([]string{errorMsg}),
+					}, nil
+				}
+				return output, nil
+			}
+		},
+	}
 }

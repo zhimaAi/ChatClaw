@@ -10,6 +10,8 @@ export default {
     delete: 'Delete',
     edit: 'Edit',
     copy: 'Copy',
+    detail: 'Details',
+    hide: 'Hide',
   },
   tools: {
     calculator: {

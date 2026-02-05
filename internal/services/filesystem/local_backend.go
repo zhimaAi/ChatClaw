@@ -61,8 +61,9 @@ func (b *LocalBackend) resolvePath(p string) (string, error) {
 		return b.baseDir, nil
 	}
 
-	// Remove leading slash if present
+	// Remove leading slash if present (handles both Unix "/" and Windows "\")
 	cleanPath := strings.TrimPrefix(p, "/")
+	cleanPath = strings.TrimPrefix(cleanPath, "\\")
 	resolved := filepath.Join(b.baseDir, cleanPath)
 
 	// Security check: ensure the resolved path is within baseDir
@@ -75,8 +76,18 @@ func (b *LocalBackend) resolvePath(p string) (string, error) {
 		return "", fmt.Errorf("failed to resolve base path: %w", err)
 	}
 
-	// Check that resolved path is under baseDir
-	if !strings.HasPrefix(absResolved, absBase) {
+	// Normalize paths for comparison (handles Windows case-insensitivity and path separators)
+	// Use filepath.Clean to normalize separators, then compare
+	normalizedResolved := filepath.Clean(absResolved)
+	normalizedBase := filepath.Clean(absBase)
+
+	// Use filepath.Rel to check if resolved path is under baseDir
+	// If Rel returns a path starting with "..", it means resolved is outside baseDir
+	rel, err := filepath.Rel(normalizedBase, normalizedResolved)
+	if err != nil {
+		return "", fmt.Errorf("path escapes base directory: %s", p)
+	}
+	if strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("path escapes base directory: %s", p)
 	}
 
@@ -94,22 +105,50 @@ func (b *LocalBackend) toAPIPath(fsPath string) string {
 }
 
 // LsInfo lists file information under the given path.
+// If the path is a file, returns the file's info.
+// If the path is a directory, returns the list of entries.
+// The output includes detailed information: type, size, modification time.
 func (b *LocalBackend) LsInfo(ctx context.Context, req *filesystem.LsInfoRequest) ([]filesystem.FileInfo, error) {
-	dirPath, err := b.resolvePath(req.Path)
+	targetPath, err := b.resolvePath(req.Path)
 	if err != nil {
 		return nil, err
 	}
 
-	entries, err := os.ReadDir(dirPath)
+	// Check if path exists and determine its type
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("path does not exist: %s", req.Path)
+		}
+		return nil, fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	// If it's a file, return its info directly
+	if !info.IsDir() {
+		return []filesystem.FileInfo{{
+			Path: b.formatFileEntry(targetPath, info),
+		}}, nil
+	}
+
+	// It's a directory, read its entries
+	entries, err := os.ReadDir(targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	var result []filesystem.FileInfo
 	for _, entry := range entries {
-		fullPath := filepath.Join(dirPath, entry.Name())
+		fullPath := filepath.Join(targetPath, entry.Name())
+		entryInfo, err := entry.Info()
+		if err != nil {
+			// If we can't get info, just show the path
+			result = append(result, filesystem.FileInfo{
+				Path: b.toAPIPath(fullPath),
+			})
+			continue
+		}
 		result = append(result, filesystem.FileInfo{
-			Path: b.toAPIPath(fullPath),
+			Path: b.formatFileEntry(fullPath, entryInfo),
 		})
 	}
 
@@ -119,6 +158,54 @@ func (b *LocalBackend) LsInfo(ctx context.Context, req *filesystem.LsInfoRequest
 	}
 
 	return result, nil
+}
+
+// formatFileEntry formats a file entry with detailed information.
+// Format: "[type] path  size  modified_time"
+func (b *LocalBackend) formatFileEntry(fsPath string, info os.FileInfo) string {
+	apiPath := b.toAPIPath(fsPath)
+	
+	// Determine type indicator
+	typeIndicator := "[file]"
+	if info.IsDir() {
+		typeIndicator = "[dir] "
+	} else if info.Mode()&os.ModeSymlink != 0 {
+		typeIndicator = "[link]"
+	}
+
+	// Format size (only for files)
+	sizeStr := ""
+	if !info.IsDir() {
+		sizeStr = formatSize(info.Size())
+	}
+
+	// Format modification time
+	modTime := info.ModTime().Format("2006-01-02 15:04")
+
+	// Build formatted string
+	if sizeStr != "" {
+		return fmt.Sprintf("%s %s  %s  %s", typeIndicator, apiPath, sizeStr, modTime)
+	}
+	return fmt.Sprintf("%s %s  %s", typeIndicator, apiPath, modTime)
+}
+
+// formatSize formats file size in human-readable format.
+func formatSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.1fG", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.1fM", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.1fK", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%dB", bytes)
+	}
 }
 
 // Read reads file content with support for line-based offset and limit.

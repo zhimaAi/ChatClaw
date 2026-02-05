@@ -997,13 +997,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Right side: Chat area -->
-    <section class="flex flex-1 flex-col overflow-hidden">
+    <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <!-- Chat messages area - show when we have messages OR when generating -->
       <ChatMessageList
         v-if="activeConversationId && (chatMessages.length > 0 || isGenerating)"
         :conversation-id="activeConversationId"
         :tab-id="tabId"
-        class="flex-1"
+        class="min-w-0 flex-1 overflow-hidden"
         @edit-message="handleEditMessage"
       />
 

@@ -155,14 +155,14 @@ watch(
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col">
+  <div class="flex min-h-0 min-w-0 flex-col overflow-hidden">
     <!-- Messages container -->
     <div
       ref="scrollContainerRef"
-      class="min-h-0 flex-1 overflow-auto px-6 py-4"
+      class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4"
       @scroll="handleScroll"
     >
-      <div class="mx-auto flex max-w-[800px] flex-col gap-1">
+      <div class="mx-auto flex min-w-0 max-w-[800px] flex-col gap-1">
         <!-- Existing messages -->
         <ChatMessageItem
           v-for="msg in messages"
@@ -183,6 +183,7 @@ watch(
               : chatStore.segmentsByMessage[msg.id]
           "
           :error-key="chatStore.errorKeyByMessage[msg.id]"
+          :error-detail="chatStore.errorDetailByMessage[msg.id]"
           @edit="handleEdit"
         />
 

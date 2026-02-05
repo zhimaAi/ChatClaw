@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check } from 'lucide-vue-next'
+import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -21,6 +21,7 @@ const props = defineProps<{
   toolResults?: Record<string, string> // Map of toolCallId -> result
   segments?: MessageSegment[] // Ordered segments for interleaved display
   errorKey?: string // Specific error key for more informative error messages
+  errorDetail?: string // Actual error message detail for user display
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +32,7 @@ const { t } = useI18n()
 
 const isEditing = ref(false)
 const copied = ref(false)
+const showErrorDetail = ref(false)
 
 // Determine content to display (streaming or final) — used only for non-segment fallback & copy
 const displayContent = computed(() => {
@@ -189,12 +191,12 @@ const handleCancelEdit = () => {
 <template>
   <div
     :class="
-      cn('group flex w-full gap-3', isUser ? 'justify-end' : 'justify-start', isTool && 'hidden')
+      cn('group flex min-w-0 w-full gap-3 overflow-hidden', isUser ? 'justify-end' : 'justify-start', isTool && 'hidden')
     "
   >
     <!-- Message content container -->
     <div
-      :class="cn('flex max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')"
+      :class="cn('flex min-w-0 max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')"
     >
       <!-- Thinking block (for assistant messages) -->
       <ThinkingBlock v-if="showThinking" :content="thinkingContent" :is-streaming="isStreaming" />
@@ -207,7 +209,7 @@ const handleCancelEdit = () => {
             v-if="segment.type === 'content' && segment.content"
             :content="segment.content"
             :is-streaming="!!isStreaming && isLastContentSegment(idx)"
-            class="wrap-break-word"
+            class="min-w-0 wrap-break-word"
           />
           <!-- Tools segment -->
           <ToolCallBlock
@@ -222,16 +224,41 @@ const handleCancelEdit = () => {
           v-if="isStreaming && displaySegments.length === 0"
           content=""
           :is-streaming="true"
-          class="wrap-break-word"
+          class="min-w-0 wrap-break-word"
         />
 
         <!-- Status indicator (after all segments) -->
-        <div v-if="showStatus" class="mt-1 flex items-center gap-1 text-xs opacity-70">
+        <div v-if="showStatus" class="mt-2 text-xs">
           <template v-if="message.status === MessageStatus.ERROR">
-            <span class="text-destructive">{{ t(errorMessageKey) }}</span>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-muted-foreground"
+            >
+              <AlertCircle class="size-3.5 shrink-0" />
+              <span>{{ t(errorMessageKey) }}</span>
+              <button
+                v-if="errorDetail"
+                class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                @click="showErrorDetail = !showErrorDetail"
+              >
+                <span class="text-[10px]">{{ showErrorDetail ? t('common.hide') : t('common.detail') }}</span>
+                <ChevronDown v-if="!showErrorDetail" class="size-3" />
+                <ChevronUp v-else class="size-3" />
+              </button>
+            </div>
+            <!-- Error detail (collapsible) -->
+            <div
+              v-if="errorDetail && showErrorDetail"
+              class="mt-1.5 rounded-md border border-border/30 bg-muted/30 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground/80"
+            >
+              {{ errorDetail }}
+            </div>
           </template>
           <template v-else-if="message.status === MessageStatus.CANCELLED">
-            <span>{{ t('assistant.chat.cancelled') }}</span>
+            <div
+              class="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-muted-foreground"
+            >
+              <span>{{ t('assistant.chat.cancelled') }}</span>
+            </div>
           </template>
         </div>
       </template>
@@ -239,7 +266,7 @@ const handleCancelEdit = () => {
       <!-- User message bubble -->
       <div
         v-else-if="isUser"
-        class="relative text-sm rounded-2xl border border-border/50 bg-muted px-4 py-3 text-foreground"
+        class="relative min-w-0 max-w-full text-sm rounded-2xl border border-border/50 bg-muted px-4 py-3 text-foreground"
       >
         <!-- Edit mode -->
         <MessageEditor

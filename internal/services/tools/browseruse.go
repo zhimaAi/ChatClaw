@@ -7,6 +7,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/tool/browseruse"
 	duckduckgo "github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
@@ -56,10 +57,17 @@ func (w *browserUseWrapper) InvokableRun(ctx context.Context, argumentsInJSON st
 	}
 }
 
+// BrowserUseConfig defines configuration for the browser use tool.
+type BrowserUseConfig struct {
+	// ExtractChatModel is used to intelligently extract content from web pages.
+	// If not set, extract_content action will return raw HTML which can be very large.
+	ExtractChatModel model.BaseChatModel
+}
+
 // NewBrowserUseTool creates a new browser use tool for web browsing automation.
 // It enables the agent to navigate websites, interact with web pages, and perform web searches.
 // The tool runs Chrome in headless mode and is wrapped with cancellation/timeout support.
-func NewBrowserUseTool(ctx context.Context) (tool.BaseTool, error) {
+func NewBrowserUseTool(ctx context.Context, config *BrowserUseConfig) (tool.BaseTool, error) {
 	// Create a DuckDuckGo search client for the browser's web_search action.
 	ddgSearch, err := duckduckgo.NewSearch(ctx, &duckduckgo.Config{
 		MaxResults: 5,
@@ -69,10 +77,17 @@ func NewBrowserUseTool(ctx context.Context) (tool.BaseTool, error) {
 		return nil, err
 	}
 
-	inner, err := browseruse.NewBrowserUseTool(ctx, &browseruse.Config{
+	browserConfig := &browseruse.Config{
 		Headless:      true,
 		DDGSearchTool: ddgSearch,
-	})
+	}
+
+	// Configure ExtractChatModel if provided
+	if config != nil && config.ExtractChatModel != nil {
+		browserConfig.ExtractChatModel = config.ExtractChatModel
+	}
+
+	inner, err := browseruse.NewBrowserUseTool(ctx, browserConfig)
 	if err != nil {
 		return nil, err
 	}

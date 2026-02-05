@@ -586,6 +586,49 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	var finishReason string
 	var inputTokens, outputTokens int
 
+	// Track segments for interleaved content/tool-call display
+	type segment struct {
+		Type        string   `json:"type"`                    // "content" or "tools"
+		Content     string   `json:"content,omitempty"`       // for type="content"
+		ToolCallIDs []string `json:"tool_call_ids,omitempty"` // for type="tools"
+	}
+	var segments []segment
+	var lastSegmentIsContent bool
+	var lastSegmentToolCallIDs map[string]bool // to track which tool calls are in the last segment
+
+	// Helper to add content to segments
+	addContentToSegments := func(content string) {
+		if content == "" {
+			return
+		}
+		if lastSegmentIsContent && len(segments) > 0 {
+			// Append to last content segment
+			segments[len(segments)-1].Content += content
+		} else {
+			// Start new content segment
+			segments = append(segments, segment{Type: "content", Content: content})
+			lastSegmentIsContent = true
+			lastSegmentToolCallIDs = nil
+		}
+	}
+
+	// Helper to add tool call to segments
+	addToolCallToSegments := func(toolCallID string) {
+		if toolCallID == "" {
+			return
+		}
+		if lastSegmentIsContent || len(segments) == 0 {
+			// Start new tools segment
+			segments = append(segments, segment{Type: "tools", ToolCallIDs: []string{toolCallID}})
+			lastSegmentIsContent = false
+			lastSegmentToolCallIDs = map[string]bool{toolCallID: true}
+		} else if !lastSegmentToolCallIDs[toolCallID] {
+			// Add to existing tools segment (if not already there)
+			segments[len(segments)-1].ToolCallIDs = append(segments[len(segments)-1].ToolCallIDs, toolCallID)
+			lastSegmentToolCallIDs[toolCallID] = true
+		}
+	}
+
 	// Track tool call deltas from streaming providers.
 	// Some OpenAI-compatible providers stream tool_calls in multiple chunks where
 	// function.name / function.arguments / id might be temporarily empty.
@@ -681,7 +724,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		// Check for cancellation
 		if ctx.Err() != nil {
 			// Save partial content
-			s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), string(toolCallsJSON), StatusCancelled, "", "cancelled", inputTokens, outputTokens)
+			segmentsJSON, _ := json.Marshal(segments)
+			s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), string(toolCallsJSON), string(segmentsJSON), StatusCancelled, "", "cancelled", inputTokens, outputTokens)
 			emit(EventChatStopped, ChatStoppedEvent{
 				ChatEvent: ChatEvent{
 					ConversationID: conversationID,
@@ -731,6 +775,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					// Handle content
 					if msg.Content != "" {
 						contentBuilder.WriteString(msg.Content)
+						addContentToSegments(msg.Content)
 						emit(EventChatChunk, ChatChunkEvent{
 							ChatEvent: ChatEvent{
 								ConversationID: conversationID,
@@ -775,6 +820,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 							if toolName == "" {
 								continue
 							}
+							// Add tool call to segments
+							addToolCallToSegments(tc.ID)
 							if args != "" && !json.Valid([]byte(args)) {
 								log.Printf("[chat] WARNING tool arguments not valid JSON conv=%d tab=%s req=%s tool=%s call_id=%s args=%q",
 									conversationID, tabID, requestID, toolName, tc.ID, args)
@@ -865,6 +912,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					dbCancel()
 				} else if msg.Content != "" {
 					contentBuilder.WriteString(msg.Content)
+					addContentToSegments(msg.Content)
 					emit(EventChatChunk, ChatChunkEvent{
 						ChatEvent: ChatEvent{
 							ConversationID: conversationID,
@@ -894,7 +942,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 
 	// Check final cancellation
 	if ctx.Err() != nil {
-		s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), string(toolCallsJSON), StatusCancelled, "", "cancelled", inputTokens, outputTokens)
+		segmentsJSONFinal, _ := json.Marshal(segments)
+		s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), string(toolCallsJSON), string(segmentsJSONFinal), StatusCancelled, "", "cancelled", inputTokens, outputTokens)
 		log.Printf("[llm] complete conv=%d tab=%s req=%s status=%s finish=%s input_tokens=%d output_tokens=%d content_len=%d thinking_len=%d",
 			conversationID, tabID, requestID, StatusCancelled, "cancelled", inputTokens, outputTokens, len(contentBuilder.String()), len(thinkingBuilder.String()))
 		emit(EventChatStopped, ChatStoppedEvent{
@@ -916,7 +965,13 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	if len(toolCallsJSON) > 0 {
 		toolCallsStr = string(toolCallsJSON)
 	}
-	s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), toolCallsStr, StatusSuccess, "", finishReason, inputTokens, outputTokens)
+	segmentsStr := "[]"
+	if len(segments) > 0 {
+		if segBytes, err := json.Marshal(segments); err == nil {
+			segmentsStr = string(segBytes)
+		}
+	}
+	s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), toolCallsStr, segmentsStr, StatusSuccess, "", finishReason, inputTokens, outputTokens)
 
 	// LLM completion log
 	log.Printf("[llm] complete conv=%d tab=%s req=%s status=%s finish=%s input_tokens=%d output_tokens=%d content_len=%d thinking_len=%d tool_calls_len=%d",
@@ -1040,7 +1095,7 @@ func (s *ChatService) updateMessageStatus(db *bun.DB, messageID int64, status, e
 }
 
 // updateMessageFinal updates the final message content
-func (s *ChatService) updateMessageFinal(db *bun.DB, messageID int64, content, thinking, toolCalls, status, errorMsg, finishReason string, inputTokens, outputTokens int) {
+func (s *ChatService) updateMessageFinal(db *bun.DB, messageID int64, content, thinking, toolCalls, segmentsJSON, status, errorMsg, finishReason string, inputTokens, outputTokens int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1049,6 +1104,7 @@ func (s *ChatService) updateMessageFinal(db *bun.DB, messageID int64, content, t
 		Set("content = ?", content).
 		Set("thinking_content = ?", thinking).
 		Set("tool_calls = ?", toolCalls).
+		Set("segments = ?", segmentsJSON).
 		Set("status = ?", status).
 		Set("error = ?", errorMsg).
 		Set("finish_reason = ?", finishReason).

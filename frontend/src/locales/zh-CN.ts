@@ -10,6 +10,8 @@ export default {
     delete: '删除',
     edit: '编辑',
     copy: '复制',
+    detail: '详情',
+    hide: '收起',
   },
   tools: {
     calculator: {
@@ -231,7 +233,7 @@ export default {
       cancelled: '已停止',
       thinking: '思考中',
       thinkingInProgress: '正在思考...',
-      toolCalling: '调用中',
+      toolCalling: '执行中',
       toolCompleted: '已完成',
       toolError: '执行失败',
       toolArgs: '参数',

@@ -22,7 +22,7 @@ const previewContent = computed(() => {
 
 <template>
   <div
-    class="flex flex-col gap-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm dark:bg-zinc-900/50"
+    class="flex min-w-0 max-w-full flex-col gap-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm dark:bg-zinc-900/50"
   >
     <!-- Header -->
     <button

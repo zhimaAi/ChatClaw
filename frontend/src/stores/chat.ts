@@ -83,6 +83,9 @@ export const useChatStore = defineStore('chat', () => {
   // Error key by message ID (for specific error messages like "max iterations exceeded")
   const errorKeyByMessage = ref<Record<number, string>>({})
 
+  // Error detail by message ID (actual error message for user to see)
+  const errorDetailByMessage = ref<Record<number, string>>({})
+
   // Persisted segments by message ID (for interleaved display after streaming ends)
   const segmentsByMessage = ref<Record<number, MessageSegment[]>>({})
 
@@ -111,6 +114,66 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const messages = await ChatService.GetMessages(conversationId)
       messagesByConversation.value[conversationId] = messages ?? []
+
+      // Parse and restore segments from backend for each assistant message
+      for (const msg of messages ?? []) {
+        if (msg.role === 'assistant' && msg.segments) {
+          try {
+            const rawSegments = JSON.parse(msg.segments) as Array<{
+              type: string
+              content?: string
+              tool_call_ids?: string[]
+            }>
+            if (Array.isArray(rawSegments) && rawSegments.length > 0) {
+              // Parse tool_calls from the message to build ToolCallInfo map
+              const toolCallMap = new Map<string, ToolCallInfo>()
+              if (msg.tool_calls) {
+                try {
+                  const toolCalls = JSON.parse(msg.tool_calls) as Array<{
+                    ID?: string
+                    id?: string
+                    Function?: { Name?: string; Arguments?: string }
+                    function?: { name?: string; arguments?: string }
+                  }>
+                  for (const tc of toolCalls) {
+                    const id = tc.ID || tc.id || ''
+                    const name = tc.Function?.Name || tc.function?.name || ''
+                    const args = tc.Function?.Arguments || tc.function?.arguments || ''
+                    if (id) {
+                      toolCallMap.set(id, {
+                        toolCallId: id,
+                        toolName: name,
+                        argsJson: args,
+                        status: 'completed',
+                      })
+                    }
+                  }
+                } catch {
+                  // Ignore parse errors for tool_calls
+                }
+              }
+
+              // Convert backend segments to frontend format
+              const frontendSegments: MessageSegment[] = rawSegments.map((seg) => {
+                if (seg.type === 'content') {
+                  return { type: 'content' as const, content: seg.content || '' }
+                } else if (seg.type === 'tools') {
+                  const toolCalls: ToolCallInfo[] = (seg.tool_call_ids || [])
+                    .map((id) => toolCallMap.get(id))
+                    .filter((tc): tc is ToolCallInfo => tc !== undefined)
+                  return { type: 'tools' as const, toolCalls }
+                }
+                // Fallback for unknown segment types
+                return { type: 'content' as const, content: '' }
+              })
+
+              segmentsByMessage.value[msg.id] = frontendSegments
+            }
+          } catch {
+            // Ignore parse errors for segments
+          }
+        }
+      }
     } catch (error: unknown) {
       errorByConversation.value[conversationId] =
         error instanceof Error ? error.message : 'Failed to load messages'
@@ -440,16 +503,6 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // Deep-clone segments for persistence (detach from reactive streaming state)
-  const cloneSegments = (segments: MessageSegment[]): MessageSegment[] => {
-    return segments.map((seg) => {
-      if (seg.type === 'content') {
-        return { type: 'content' as const, content: seg.content }
-      }
-      return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
-    })
-  }
-
   const handleChatComplete = (event: any) => {
     const data = extractEventData(event)
     if (!data) return
@@ -466,17 +519,12 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.SUCCESS,
       } as any)
 
-      // Persist segments for interleaved display after streaming ends
-      if (streaming.segments.length > 0) {
-        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
-      }
-
-      // Refresh messages from backend to get the final persisted state (tokens, tool messages, etc.)
-      void loadMessages(conversation_id)
-
-      // Clear streaming state
+      // Clear streaming state first
       delete streamingByConversation.value[conversation_id]
       delete activeRequestByConversation.value[conversation_id]
+
+      // Refresh messages from backend - segments will be loaded from backend
+      void loadMessages(conversation_id)
     }
   }
 
@@ -495,17 +543,12 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.CANCELLED,
       } as any)
 
-      // Persist segments for interleaved display
-      if (streaming.segments.length > 0) {
-        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
-      }
-
-      // Refresh messages from backend to get the cancelled persisted state
-      void loadMessages(conversation_id)
-
-      // Clear streaming state
+      // Clear streaming state first
       delete streamingByConversation.value[conversation_id]
       delete activeRequestByConversation.value[conversation_id]
+
+      // Refresh messages from backend - segments will be loaded from backend
+      void loadMessages(conversation_id)
     }
   }
 
@@ -513,7 +556,7 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, error_key } = data
+    const { conversation_id, request_id, error_key, error_data } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
@@ -527,6 +570,26 @@ export const useChatStore = defineStore('chat', () => {
         errorKeyByMessage.value[streaming.messageId] = error_key
       }
 
+      // Store error detail from error_data.Error if available
+      if (error_data?.Error) {
+        // Extract the most useful part of the error message
+        const fullError = String(error_data.Error)
+        // Try to extract the actual error message (after "err=")
+        const errMatch = fullError.match(/err=(.+?)(?:\n|$)/)
+        if (errMatch) {
+          errorDetailByMessage.value[streaming.messageId] = errMatch[1].trim()
+        } else {
+          // Fallback: take the first line, strip common prefixes
+          let briefError = fullError.split('\n')[0].trim()
+          // Remove common error prefixes for cleaner display
+          briefError = briefError
+            .replace(/^\[NodeRunError\]\s*/, '')
+            .replace(/^\[LocalFunc\]\s*/, '')
+            .replace(/^failed to \w+ tool \w+:\s*/i, '')
+          errorDetailByMessage.value[streaming.messageId] = briefError || fullError.split('\n')[0]
+        }
+      }
+
       upsertMessage(conversation_id, streaming.messageId, {
         content: streaming.content,
         thinking_content: streaming.thinkingContent,
@@ -534,13 +597,14 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.ERROR,
       } as any)
 
-      // Persist segments for interleaved display
-      // Always persist, even if empty, to prevent fallback logic from hiding content
-      segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
-
-      // On error, do NOT immediately call loadMessages - it would overwrite local state
-      // and potentially clear the content/tool calls that were already displayed.
-      // The user can manually refresh if needed, or the state will sync on next successful operation.
+      // For errors, persist streaming segments locally since we don't call loadMessages.
+      // Deep-clone to detach from reactive streaming state.
+      segmentsByMessage.value[streaming.messageId] = streaming.segments.map((seg) => {
+        if (seg.type === 'content') {
+          return { type: 'content' as const, content: seg.content }
+        }
+        return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
+      })
 
       // Clear streaming state after a tick to let the UI read from segments first
       setTimeout(() => {
@@ -643,6 +707,7 @@ export const useChatStore = defineStore('chat', () => {
     loadingByConversation,
     errorByConversation,
     errorKeyByMessage,
+    errorDetailByMessage,
     segmentsByMessage,
 
     // Getters

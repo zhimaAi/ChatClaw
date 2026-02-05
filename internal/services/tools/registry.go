@@ -35,7 +35,7 @@ func NewToolRegistry() *ToolRegistry {
 	})
 
 	r.Register(ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
-		return NewBrowserUseTool(ctx)
+		return NewBrowserUseTool(ctx, nil)
 	})
 
 	r.Register(ToolIDHTTPGet, func(ctx context.Context) (tool.BaseTool, error) {

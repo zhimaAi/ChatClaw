@@ -259,7 +259,7 @@ const handleClick = (event: MouseEvent) => {
 
 <template>
   <div
-    class="markdown-content prose prose-sm dark:prose-invert max-w-none"
+    class="markdown-content prose prose-sm dark:prose-invert min-w-0 w-full max-w-full"
     @click="handleClick"
     v-html="renderedHtml"
   />
@@ -271,9 +271,12 @@ const handleClick = (event: MouseEvent) => {
   /* Match user message font size (text-sm = 0.875rem = 14px) */
   font-size: 0.875rem;
   line-height: 1.5rem;
-  /* Ensure proper text wrapping */
+  /* Ensure proper text wrapping and prevent overflow */
   word-wrap: break-word;
   overflow-wrap: break-word;
+  word-break: break-word;
+  /* Ensure content doesn't cause horizontal overflow */
+  max-width: 100%;
 }
 
 .markdown-content pre {

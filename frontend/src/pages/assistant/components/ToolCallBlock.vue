@@ -75,7 +75,7 @@ const getQueryFromArgs = (argsJson?: string): string => {
 </script>
 
 <template>
-  <div class="w-full max-w-[560px] flex flex-col gap-2">
+  <div class="min-w-0 w-full max-w-[560px] flex flex-col gap-2">
     <div
       v-for="toolCall in toolCalls"
       :key="toolCall.toolCallId"
