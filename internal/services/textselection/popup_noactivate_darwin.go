@@ -9,8 +9,10 @@ package textselection
 #import <Cocoa/Cocoa.h>
 
 // Configure popup window to not activate when shown.
-// On macOS, we use NSPanel with NSNonactivatingPanelMask style.
-// However, since Wails creates NSWindow, we configure it to behave like a panel.
+// On macOS, we set the window level to floating and configure collection behavior.
+// Note: canBecomeKeyWindow and canBecomeMainWindow are read-only properties,
+// so we cannot set them directly. Instead, we rely on window level and
+// orderFrontRegardless to achieve similar behavior.
 static void textselection_configure_popup_noactivate(void *nsWindow) {
 	if (!nsWindow) return;
 
@@ -19,21 +21,17 @@ static void textselection_configure_popup_noactivate(void *nsWindow) {
 		if (!win || ![win isKindOfClass:[NSWindow class]]) return;
 
 		// Set window level to floating (above normal windows but below modal panels)
+		// This helps the popup stay visible without activating
 		[win setLevel:NSFloatingWindowLevel];
-
-		// Configure window to not become key or main window
-		// This prevents the popup from stealing focus from other apps
-		[win setCanBecomeKeyWindow:NO];
-		[win setCanBecomeMainWindow:NO];
-
-		// Disable window shadow for a cleaner popup appearance (optional)
-		// [win setHasShadow:YES];
 
 		// Set collection behavior to allow the window to be visible in all spaces
 		// and not be managed by Mission Control
 		[win setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces |
 		                           NSWindowCollectionBehaviorStationary |
 		                           NSWindowCollectionBehaviorIgnoresCycle];
+
+		// Disable the window from appearing in the window menu
+		[win setExcludedFromWindowsMenu:YES];
 	});
 }
 */
