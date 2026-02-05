@@ -44,6 +44,7 @@ watch(
  */
 let unsubscribeTextSelection: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
+let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
 
 /**
  * 主题变化监听 - 当主题切换时更新所有 assistant 标签页的默认图标
@@ -115,6 +116,33 @@ onMounted(() => {
     }
   })
   themeObserver.observe(document.documentElement, { attributes: true })
+
+  // Global IME guard:
+  // When the user presses Enter while composing (IME), prevent any keydown.enter handlers
+  // from treating it as a "submit/send" action. We do NOT preventDefault so IME can commit text.
+  onKeyDownCapture = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyEvent = e as any
+    const isComposing = !!anyEvent?.isComposing || anyEvent?.keyCode === 229
+    if (!isComposing) return
+
+    const target = e.target as HTMLElement | null
+    if (!target) return
+
+    const tag = target.tagName?.toLowerCase?.() || ''
+    const isEditable =
+      tag === 'textarea' ||
+      tag === 'input' ||
+      (target as any).isContentEditable === true ||
+      target.getAttribute?.('contenteditable') === 'true'
+
+    if (!isEditable) return
+
+    // Block Vue key modifiers and any other listeners from seeing this Enter.
+    e.stopImmediatePropagation()
+  }
+  window.addEventListener('keydown', onKeyDownCapture, true)
 })
 
 onUnmounted(() => {
@@ -123,6 +151,10 @@ onUnmounted(() => {
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null
+  }
+  if (onKeyDownCapture) {
+    window.removeEventListener('keydown', onKeyDownCapture, true)
+    onKeyDownCapture = null
   }
   themeObserver?.disconnect()
 })

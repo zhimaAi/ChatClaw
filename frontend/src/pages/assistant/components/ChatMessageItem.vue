@@ -46,14 +46,22 @@ const thinkingContent = computed(() => {
   return props.message.thinking_content ?? ''
 })
 
-// Backend tool call format from schema.ToolCall
-interface BackendToolCall {
-  ID: string
-  Function: {
-    Name: string
-    Arguments: string
-  }
-}
+// Backend tool call format (OpenAI-compatible): usually uses lower-case keys.
+type BackendToolCall =
+  | {
+      id: string
+      function: {
+        name: string
+        arguments: string
+      }
+    }
+  | {
+      ID: string
+      Function: {
+        Name: string
+        Arguments: string
+      }
+    }
 
 // Determine tool calls
 const toolCalls = computed(() => {
@@ -66,16 +74,25 @@ const toolCalls = computed(() => {
       const parsed = JSON.parse(props.message.tool_calls)
       // Check if it's backend format (schema.ToolCall) or frontend format (ToolCallInfo)
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // If first item has 'ID' and 'Function', it's backend format
-        if ('ID' in parsed[0] && 'Function' in parsed[0]) {
+        const first = parsed[0] as any
+        // Backend format detection: {id, function:{name,arguments}} or legacy {ID, Function:{...}}
+        const isBackendLower = typeof first?.id === 'string' && typeof first?.function === 'object'
+        const isBackendUpper = 'ID' in first && 'Function' in first
+        if (isBackendLower || isBackendUpper) {
           // Convert backend format to frontend format and merge tool results
-          return (parsed as BackendToolCall[]).map((tc) => ({
-            toolCallId: tc.ID,
-            toolName: tc.Function.Name,
-            argsJson: tc.Function.Arguments,
-            resultJson: props.toolResults?.[tc.ID],
-            status: 'completed' as const,
-          }))
+          return (parsed as BackendToolCall[]).map((tc: any) => {
+            const toolCallId = tc.id ?? tc.ID
+            const fn = tc.function ?? tc.Function
+            const toolName = fn?.name ?? fn?.Name ?? ''
+            const argsJson = fn?.arguments ?? fn?.Arguments ?? ''
+            return {
+              toolCallId,
+              toolName,
+              argsJson,
+              resultJson: props.toolResults?.[toolCallId],
+              status: 'completed' as const,
+            }
+          })
         }
         // Otherwise it's already frontend format, but still merge results
         return (parsed as ToolCallInfo[]).map((tc) => ({
@@ -136,7 +153,11 @@ const handleCancelEdit = () => {
     "
   >
     <!-- Message content container -->
-    <div :class="cn('flex max-w-[85%] flex-col gap-2', isUser && 'items-end')">
+    <div
+      :class="
+        cn('flex max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
+      "
+    >
       <!-- Thinking block (for assistant messages) -->
       <ThinkingBlock v-if="showThinking" :content="thinkingContent" :is-streaming="isStreaming" />
 
@@ -178,12 +199,6 @@ const handleCancelEdit = () => {
               :content="displayContent"
               class="wrap-break-word"
             />
-            <!-- Streaming indicator: caret-like cursor, out of flow to avoid layout jump -->
-            <span
-              v-if="isStreaming"
-              class="pointer-events-none absolute bottom-1 right-1 inline-block h-4 w-px bg-foreground/60 animate-pulse"
-              aria-hidden="true"
-            />
           </template>
 
           <!-- Other roles: plain text -->
@@ -207,6 +222,7 @@ const handleCancelEdit = () => {
         :class="
           cn(
             'flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
+            isAssistant && '-mt-1',
             isUser ? 'justify-end' : 'justify-start'
           )
         "

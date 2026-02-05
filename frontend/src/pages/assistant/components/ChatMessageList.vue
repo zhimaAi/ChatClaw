@@ -49,11 +49,15 @@ const getToolResultsForMessage = (msg: Message): Record<string, string> => {
   }
 
   try {
-    const parsed = JSON.parse(msg.tool_calls) as Array<{ ID?: string; toolCallId?: string }>
+    const parsed = JSON.parse(msg.tool_calls) as Array<{
+      ID?: string
+      id?: string
+      toolCallId?: string
+    }>
     const results: Record<string, string> = {}
 
     for (const tc of parsed) {
-      const toolCallId = tc.ID || tc.toolCallId
+      const toolCallId = tc.ID || tc.id || tc.toolCallId
       if (toolCallId && toolResultsMap.value[toolCallId]) {
         results[toolCallId] = toolResultsMap.value[toolCallId].content
       }
@@ -111,12 +115,37 @@ watch(
   }
 )
 
+// Watch for tool call updates and scroll
+watch(
+  () =>
+    streaming.value?.toolCalls
+      ?.map((tc) => `${tc.toolCallId}:${tc.status}:${tc.resultJson ? 1 : 0}`)
+      .join('|'),
+  () => {
+    scrollToBottom()
+  }
+)
+
+// When a new streaming response starts, force scroll to bottom
+watch(
+  () => streaming.value?.messageId,
+  (newId, oldId) => {
+    if (newId && newId !== oldId) {
+      shouldAutoScroll.value = true
+      scrollToBottom()
+    }
+  }
+)
+
 // Load messages when conversation changes
 watch(
   () => props.conversationId,
-  (newId) => {
+  async (newId) => {
     if (newId > 0) {
-      chatStore.loadMessages(newId)
+      await chatStore.loadMessages(newId)
+      // When opening a conversation, jump to bottom by default.
+      shouldAutoScroll.value = true
+      scrollToBottom()
     }
   },
   { immediate: true }
@@ -133,7 +162,7 @@ watch(
       class="min-h-0 flex-1 overflow-auto px-6 py-4"
       @scroll="handleScroll"
     >
-      <div class="mx-auto flex max-w-[800px] flex-col gap-4">
+      <div class="mx-auto flex max-w-[800px] flex-col gap-1">
         <!-- Existing messages -->
         <ChatMessageItem
           v-for="msg in messages"
@@ -171,6 +200,9 @@ watch(
           :streaming-thinking="streaming.thinkingContent"
           :streaming-tool-calls="streaming.toolCalls"
         />
+
+        <!-- Bottom spacer: keep distance from input box when auto-scrolling -->
+        <div aria-hidden="true" class="h-16 shrink-0" />
       </div>
     </div>
 

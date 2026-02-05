@@ -520,6 +520,19 @@ const handleStop = () => {
   void chatStore.stopGeneration(activeConversationId.value)
 }
 
+const handleChatEnter = (event: KeyboardEvent) => {
+  // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
+  // Some browsers report keyCode=229 during composition.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyEvent = event as any
+  if (anyEvent?.isComposing || anyEvent?.keyCode === 229) {
+    return
+  }
+
+  event.preventDefault()
+  void handleSend()
+}
+
 const handleSelectConversation = (conversation: Conversation) => {
   activeConversationId.value = conversation.id
   // Load messages from backend via chatStore
@@ -1023,7 +1036,7 @@ onUnmounted(() => {
               :placeholder="t('assistant.placeholders.inputPlaceholder')"
               class="min-h-[64px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               rows="2"
-              @keydown.enter.exact.prevent="handleSend"
+              @keydown.enter.exact="handleChatEnter"
             />
 
             <div class="mt-3 flex items-center justify-between">
