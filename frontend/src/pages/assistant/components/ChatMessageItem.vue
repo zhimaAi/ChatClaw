@@ -199,32 +199,27 @@ const handleCancelEdit = () => {
       <template v-if="isAssistant">
         <template v-for="(segment, idx) in displaySegments" :key="idx">
           <!-- Content segment -->
-          <div
-            v-if="segment.type === 'content'"
-            class="relative text-sm bg-transparent px-0 py-0 text-foreground"
-          >
-            <MarkdownRenderer
-              v-if="segment.content"
-              :content="segment.content"
-              :is-streaming="!!isStreaming && isLastContentSegment(idx)"
-              class="wrap-break-word"
-            />
-          </div>
+          <MarkdownRenderer
+            v-if="segment.type === 'content' && segment.content"
+            :content="segment.content"
+            :is-streaming="!!isStreaming && isLastContentSegment(idx)"
+            class="wrap-break-word"
+          />
           <!-- Tools segment -->
           <ToolCallBlock
-            v-else-if="segment.type === 'tools'"
+            v-if="segment.type === 'tools'"
             :tool-calls="segment.toolCalls"
             :is-streaming="isStreaming"
           />
         </template>
 
         <!-- Streaming cursor when no content segments yet (e.g. agent starts with tool calls) -->
-        <div
+        <MarkdownRenderer
           v-if="isStreaming && displaySegments.length === 0"
-          class="relative text-sm bg-transparent px-0 py-0 text-foreground"
-        >
-          <MarkdownRenderer content="" :is-streaming="true" class="wrap-break-word" />
-        </div>
+          content=""
+          :is-streaming="true"
+          class="wrap-break-word"
+        />
 
         <!-- Status indicator (after all segments) -->
         <div v-if="showStatus" class="mt-1 flex items-center gap-1 text-xs opacity-70">
