@@ -385,6 +385,7 @@ export default {
       fileMissing: '原始文件已丢失',
       menu: {
         rename: '重命名',
+        relearn: '重新学习',
         delete: '删除',
       },
       upload: {
@@ -400,6 +401,10 @@ export default {
         confirm: '保存',
         success: '重命名成功',
         failed: '重命名失败',
+      },
+      relearn: {
+        success: '已开始重新学习',
+        failed: '重新学习失败',
       },
       delete: {
         title: '确认删除',

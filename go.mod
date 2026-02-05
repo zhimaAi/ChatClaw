@@ -6,7 +6,7 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/cloudwego/eino v0.7.28
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/document/parser/pdf v0.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/embedding/ollama v0.0.0-20260204064123-1f91f547c77e
@@ -19,6 +19,7 @@ require (
 	github.com/go-ego/gse v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
@@ -72,7 +73,6 @@ require (
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.13 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
-	github.com/dslipak/pdf v0.0.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect

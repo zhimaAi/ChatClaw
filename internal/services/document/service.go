@@ -115,6 +115,34 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 	return filepath.Join(cfgDir, define.AppID, "documents"), nil
 }
 
+// backfillEmptyNameTokens ensures existing rows have name_tokens populated.
+// This fixes searching for documents created before name_tokens was implemented.
+func (s *DocumentService) backfillEmptyNameTokens(ctx context.Context, db *bun.DB, libraryID int64) {
+	models := make([]documentModel, 0)
+	if err := db.NewSelect().
+		Model(&models).
+		Column("id", "original_name", "name_tokens").
+		Where("library_id = ?", libraryID).
+		Where("name_tokens = ''").
+		Scan(ctx); err != nil {
+		return
+	}
+
+	for i := range models {
+		m := models[i]
+		tokens := tokenizer.TokenizeName(m.OriginalName)
+		if strings.TrimSpace(tokens) == "" {
+			continue
+		}
+		// Update name_tokens; FTS trigger will sync doc_name_fts.
+		_, _ = db.NewUpdate().
+			Model(&m).
+			Set("name_tokens = ?", tokens).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+	}
+}
+
 // ListDocuments 获取知识库的文档列表
 // keyword: 可选的搜索关键词（按文件名搜索，使用 FTS）
 func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Document, error) {
@@ -134,15 +162,23 @@ func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Docu
 	keyword = strings.TrimSpace(keyword)
 
 	if keyword != "" {
+		// Best-effort backfill for legacy rows.
+		s.backfillEmptyNameTokens(ctx, db, libraryID)
+
 		// Build FTS match query from keyword
 		matchQuery := tokenizer.BuildMatchQuery(keyword)
 		if matchQuery != "" {
+			// 调试日志
+			if s.app != nil {
+				s.app.Logger.Debug("FTS search", "keyword", keyword, "matchQuery", matchQuery, "libraryID", libraryID)
+			}
 			// Use FTS to search by document name
-			// Query doc_name_fts with MATCH, then join back to documents
+			// NOTE: doc_name_fts is contentless (content=''), so UNINDEXED columns may be NULL at query time.
+			// We only rely on rowid for filtering, and use documents table for library_id constraint.
 			err := db.NewSelect().
 				Model(&models).
 				Where("d.library_id = ?", libraryID).
-				Where("d.id IN (SELECT document_id FROM doc_name_fts WHERE doc_name_fts MATCH ? AND library_id = ?)", matchQuery, libraryID).
+				Where("d.id IN (SELECT rowid FROM doc_name_fts WHERE doc_name_fts MATCH ?)", matchQuery).
 				OrderExpr("d.id DESC").
 				Scan(ctx)
 			if err != nil {
@@ -377,6 +413,92 @@ func (s *DocumentService) RenameDocument(input RenameInput) (*Document, error) {
 	return &dto, nil
 }
 
+// ReprocessDocument 重新学习文档（删除旧节点并重新解析/向量化）
+func (s *DocumentService) ReprocessDocument(id int64) error {
+	if id <= 0 {
+		return errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. 查询文档
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return errs.Wrap("error.document_read_failed", err)
+	}
+
+	// 2. 取消正在进行的任务
+	if tm := taskmanager.Get(); tm != nil {
+		tm.Cancel(fmt.Sprintf("doc:%d", id))
+	}
+
+	// 3. 查询并删除向量（doc_vec 没有外键约束，需要手动删除）
+	var nodeIDs []int64
+	if err := db.NewSelect().
+		Table("document_nodes").
+		Column("id").
+		Where("document_id = ?", id).
+		Scan(ctx, &nodeIDs); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if s.app != nil {
+			s.app.Logger.Warn("query document_nodes failed", "error", err)
+		}
+	}
+	if len(nodeIDs) > 0 {
+		if _, err := db.ExecContext(ctx,
+			"DELETE FROM doc_vec WHERE id IN (?)", bun.In(nodeIDs)); err != nil {
+			if s.app != nil {
+				s.app.Logger.Warn("delete doc_vec failed", "error", err)
+			}
+		}
+	}
+
+	// 4. 删除旧节点（触发器会自动清理 FTS 索引）
+	if _, err := db.NewDelete().Table("document_nodes").Where("document_id = ?", id).Exec(ctx); err != nil {
+		if s.app != nil {
+			s.app.Logger.Warn("delete document_nodes failed", "error", err)
+		}
+	}
+
+	// 5. 生成新的处理运行 ID 并重置状态
+	runID := fmt.Sprintf("%d-%d", id, time.Now().UnixNano())
+	if _, err := db.NewUpdate().Model(&m).
+		Set("processing_run_id = ?", runID).
+		Set("parsing_status = ?", StatusPending).
+		Set("parsing_progress = ?", 0).
+		Set("parsing_error = ?", "").
+		Set("embedding_status = ?", StatusPending).
+		Set("embedding_progress = ?", 0).
+		Set("embedding_error = ?", "").
+		Set("word_total = ?", 0).
+		Set("split_total = ?", 0).
+		Where("id = ?", id).
+		Exec(ctx); err != nil {
+		return errs.Wrap("error.document_update_failed", err)
+	}
+
+	// 6. 启动新的处理任务
+	doc := m.toDTO()
+	doc.ProcessingRunID = runID
+	doc.ParsingStatus = StatusPending
+	doc.ParsingProgress = 0
+	doc.ParsingError = ""
+	doc.EmbeddingStatus = StatusPending
+	doc.EmbeddingProgress = 0
+	doc.EmbeddingError = ""
+	s.startProcessingTask(&doc)
+
+	return nil
+}
+
 // DeleteDocument 删除文档
 func (s *DocumentService) DeleteDocument(id int64) error {
 	if id <= 0 {
@@ -415,7 +537,34 @@ func (s *DocumentService) DeleteDocument(id int64) error {
 		}
 	}
 
-	// 删除数据库记录（CASCADE 会自动删除 document_nodes）
+	// 手动删除 doc_vec（vec0 虚拟表不支持外键 CASCADE）
+	var nodeIDs []int64
+	if err := db.NewSelect().
+		Table("document_nodes").
+		Column("id").
+		Where("document_id = ?", id).
+		Scan(ctx, &nodeIDs); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if s.app != nil {
+			s.app.Logger.Warn("query document_nodes failed", "error", err)
+		}
+	}
+	if len(nodeIDs) > 0 {
+		if _, err := db.ExecContext(ctx,
+			"DELETE FROM doc_vec WHERE id IN (?)", bun.In(nodeIDs)); err != nil {
+			if s.app != nil {
+				s.app.Logger.Warn("delete doc_vec failed", "error", err)
+			}
+		}
+	}
+
+	// 手动删除 document_nodes（确保清理干净）
+	if _, err := db.NewDelete().Table("document_nodes").Where("document_id = ?", id).Exec(ctx); err != nil {
+		if s.app != nil {
+			s.app.Logger.Warn("delete document_nodes failed", "error", err)
+		}
+	}
+
+	// 删除文档记录
 	if _, err := db.NewDelete().Model(&m).Where("id = ?", id).Exec(ctx); err != nil {
 		return errs.Wrap("error.document_delete_failed", err)
 	}

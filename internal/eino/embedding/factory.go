@@ -20,6 +20,8 @@ type ProviderConfig struct {
 	APIEndpoint string
 	// ModelID 嵌入模型的 ID
 	ModelID string
+	// Dimension 向量维度（可选，某些模型支持）
+	Dimension int
 	// ExtraConfig 供应商特定的配置（JSON 格式）
 	ExtraConfig string
 	// Timeout 请求超时时间
@@ -54,6 +56,11 @@ func newOpenAIEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embe
 	}
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
+	}
+	// 设置向量维度（某些模型如 text-embedding-v3、text-embedding-3-large 支持）
+	if cfg.Dimension > 0 {
+		dim := cfg.Dimension
+		config.Dimensions = &dim
 	}
 	return openaiembed.NewEmbedder(ctx, config)
 }
