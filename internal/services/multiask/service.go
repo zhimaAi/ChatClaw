@@ -451,14 +451,11 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             input.focus();
             
             // 清空现有内容
-            input.innerHTML = '';
+            input.textContent = '';
             
             // 创建文本节点并插入
-            const textNode = document.createTextNode(message);
-            input.appendChild(textNode);
-            
-            // 或者使用 innerText
-            input.innerText = message;
+            input.appendChild(document.createTextNode(message));
+        
             
             // 触发 input 事件
             input.dispatchEvent(new InputEvent('input', { 

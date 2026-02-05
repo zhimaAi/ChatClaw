@@ -32,7 +32,7 @@ const emit = defineEmits<{
 }>()
 
 // 长按状态
-const LONG_PRESS_DURATION = 1000 // 长按 1 秒
+const LONG_PRESS_DURATION = 300 // 长按 300ms
 const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const isDraggable = ref(false) // 是否处于可拖拽状态
 const pressedIndex = ref<number | null>(null)

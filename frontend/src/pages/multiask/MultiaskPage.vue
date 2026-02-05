@@ -245,6 +245,11 @@ const isSending = ref(false)
 const chatPanelRefs = ref<Record<string, InstanceType<typeof ChatPanel> | null>>({})
 
 /**
+ * 输入框引用
+ */
+const messageInputRef = ref<InstanceType<typeof MessageInput> | null>(null)
+
+/**
  * 已创建的 WebView 面板 ID
  */
 const createdPanelIds = ref<Set<string>>(new Set())
@@ -504,6 +509,34 @@ const handleSend = async () => {
 }
 
 /**
+ * 聚焦内容输入框（仅在多屏模式显示时）
+ */
+const focusMessageInput = async () => {
+  if (columnCount.value <= 1) return
+  await nextTick()
+  // Delay focus to override WebView auto-focus.
+  messageInputRef.value?.focus?.()
+}
+
+/**
+ * 页面首次进入时，如果输入框存在则自动聚焦
+ */
+onMounted(() => {
+  setTimeout(() => {
+    focusMessageInput()
+  }, 4000)
+})
+
+/**
+ * 分栏切换为多屏时，自动聚焦输入框
+ */
+watch(columnCount, (count) => {
+  if (count > 1) {
+    focusMessageInput()
+  }
+})
+
+/**
  * 监听可见模型变化，管理面板的显示/隐藏/创建
  */
 watch(visibleModels, async (newModels, oldModels) => {
@@ -584,6 +617,7 @@ onUnmounted(() => {
     <div v-if="columnCount > 1" class="shrink-0 bg-background px-4 pb-6">
       <div class="mx-auto max-w-[800px]">
         <MessageInput
+          ref="messageInputRef"
           v-model="userMessage"
           :disabled="isSending"
           :placeholder="t('multiask.inputPlaceholder')"
