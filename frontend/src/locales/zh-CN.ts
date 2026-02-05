@@ -367,6 +367,7 @@ export default {
       addDocument: '添加文档',
       selectFile: '选择文件',
       loadFailed: '加载文档列表失败',
+      noMore: '没有更多了',
       fileTypes: {
         documents: '文档文件',
         all: '所有文件',

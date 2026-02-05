@@ -120,6 +120,67 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 	return filepath.Join(cfgDir, define.AppID, "documents"), nil
 }
 
+// ListDocumentsPage 获取知识库文档分页（cursor 分页）
+// - 排序：id DESC
+// - 每次返回 limit（默认/最大 100）
+// - before_id：仅返回 id < before_id 的记录（用于无限下拉加载更多）
+func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Document, error) {
+	if input.LibraryID <= 0 {
+		return nil, errs.New("error.library_id_required")
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	models := make([]documentModel, 0, limit)
+	keyword := strings.TrimSpace(input.Keyword)
+
+	q := db.NewSelect().
+		Model(&models).
+		Where("d.library_id = ?", input.LibraryID)
+
+	if input.BeforeID > 0 {
+		q = q.Where("d.id < ?", input.BeforeID)
+	}
+
+	if keyword != "" {
+		matchQuery := tokenizer.BuildMatchQuery(keyword)
+		if matchQuery == "" {
+			return []Document{}, nil
+		}
+		q = q.Where("d.id IN (SELECT rowid FROM doc_name_fts WHERE doc_name_fts MATCH ?)", matchQuery)
+	}
+
+	if err := q.OrderExpr("d.id DESC").Limit(limit).Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.document_list_failed", err)
+	}
+
+	out := make([]Document, 0, len(models))
+	for i := range models {
+		doc := models[i].toDTO()
+		if doc.LocalPath != "" {
+			if _, err := os.Stat(doc.LocalPath); os.IsNotExist(err) {
+				doc.FileMissing = true
+			}
+		}
+		out = append(out, doc)
+	}
+	return out, nil
+}
+
 // ListDocuments 获取知识库的文档列表
 // keyword: 可选的搜索关键词（按文件名搜索，使用 FTS）
 func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Document, error) {

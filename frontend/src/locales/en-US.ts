@@ -369,6 +369,7 @@ export default {
       addDocument: 'Add Document',
       selectFile: 'Select File',
       loadFailed: 'Failed to load documents',
+      noMore: 'No more',
       fileTypes: {
         documents: 'Document Files',
         all: 'All Files',

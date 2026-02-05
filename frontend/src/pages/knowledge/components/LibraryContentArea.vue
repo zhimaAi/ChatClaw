@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
 import { Search, Upload, Plus } from 'lucide-vue-next'
@@ -59,6 +59,15 @@ const renameDialogOpen = ref(false)
 const documentToRename = ref<Document | null>(null)
 const documents = ref<Document[]>([])
 const isLoading = ref(false)
+const isLoadingMore = ref(false)
+const hasMore = ref(true)
+const beforeID = ref<number>(0)
+const PAGE_SIZE = 100
+let loadToken = 0
+
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const loadMoreSentinelRef = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
 
 // 状态常量
 const STATUS_PENDING = 0
@@ -104,19 +113,58 @@ const convertDocument = (doc: BackendDocument): Document => {
   }
 }
 
-// 加载文档列表
-const loadDocuments = async () => {
+const resetAndLoad = async () => {
   if (!props.library?.id) return
 
-  isLoading.value = true
+  loadToken += 1
+  documents.value = []
+  beforeID.value = 0
+  hasMore.value = true
+  await loadMore(loadToken)
+}
+
+const loadMore = async (token?: number) => {
+  if (!props.library?.id) return
+  if (!hasMore.value) return
+  if (isLoading.value || isLoadingMore.value) return
+
+  const currentToken = token ?? loadToken
+  const isFirst = documents.value.length === 0
+  if (isFirst) {
+    isLoading.value = true
+  } else {
+    isLoadingMore.value = true
+  }
+
   try {
-    const result = await DocumentService.ListDocuments(props.library.id, searchQuery.value)
-    documents.value = result.map(convertDocument)
+    const result = await DocumentService.ListDocumentsPage({
+      library_id: props.library.id,
+      keyword: searchQuery.value,
+      before_id: beforeID.value,
+      limit: PAGE_SIZE,
+    })
+    if (currentToken !== loadToken) return
+
+    const incoming = result.map(convertDocument)
+    const existingIDs = new Set(documents.value.map((d) => d.id))
+    const merged: Document[] = []
+    for (const doc of incoming) {
+      if (!existingIDs.has(doc.id)) merged.push(doc)
+    }
+
+    if (merged.length > 0) {
+      documents.value.push(...merged)
+      beforeID.value = merged[merged.length - 1].id
+    }
+
+    hasMore.value = result.length >= PAGE_SIZE
   } catch (error) {
     console.error('Failed to load documents:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.loadFailed'))
+    hasMore.value = false
   } finally {
     isLoading.value = false
+    isLoadingMore.value = false
   }
 }
 
@@ -125,7 +173,7 @@ watch(
   () => props.library?.id,
   () => {
     searchQuery.value = ''
-    loadDocuments()
+    resetAndLoad()
   },
   { immediate: true },
 )
@@ -135,7 +183,7 @@ let searchTimeout: ReturnType<typeof setTimeout> | null = null
 watch(searchQuery, () => {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
-    loadDocuments()
+    resetAndLoad()
   }, 300)
 })
 
@@ -168,22 +216,26 @@ const handleAddDocument = async () => {
         file_paths: result,
       })
 
-      // 直接将上传的文档添加到列表（避免等待全量刷新）
-      for (const doc of uploaded) {
-        const converted = convertDocument(doc as unknown as BackendDocument)
-        // 覆盖上传时会删除旧记录再插入新记录（ID 会变），按 content_hash 去重才是稳定的
-        const hash = (doc as unknown as BackendDocument).content_hash
-        const existingIndex =
-          hash && hash.trim()
-            ? documents.value.findIndex((d) => d.contentHash === hash)
-            : documents.value.findIndex((d) => d.id === (doc as unknown as BackendDocument).id)
-        if (existingIndex >= 0) {
-          // 更新已存在的文档（覆盖上传）
-          documents.value[existingIndex] = converted
-        } else {
-          // 添加新文档到列表顶部
-          documents.value.unshift(converted)
+      // 如果在搜索模式下，直接重置并重新加载第一页，保持结果一致
+      if (searchQuery.value.trim()) {
+        await resetAndLoad()
+      } else {
+        // 直接将上传的文档合并到列表顶部（避免等待全量刷新）
+        for (const doc of uploaded) {
+          const converted = convertDocument(doc as unknown as BackendDocument)
+          const hash = (doc as unknown as BackendDocument).content_hash
+          const existingIndex =
+            hash && hash.trim()
+              ? documents.value.findIndex((d) => d.contentHash === hash)
+              : documents.value.findIndex((d) => d.id === (doc as unknown as BackendDocument).id)
+          if (existingIndex >= 0) {
+            documents.value[existingIndex] = converted
+          } else {
+            documents.value.unshift(converted)
+          }
         }
+        // 保持 id DESC
+        documents.value.sort((a, b) => b.id - a.id)
       }
 
       toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
@@ -276,6 +328,32 @@ let unsubscribeProgress: (() => void) | null = null
 let unsubscribeThumbnail: (() => void) | null = null
 
 onMounted(() => {
+  const setupObserver = async () => {
+    await nextTick()
+    if (loadMoreObserver) {
+      loadMoreObserver.disconnect()
+      loadMoreObserver = null
+    }
+    loadMoreObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry?.isIntersecting) return
+        void loadMore()
+      },
+      {
+        root: scrollContainerRef.value,
+        rootMargin: '200px',
+        threshold: 0,
+      }
+    )
+    if (loadMoreSentinelRef.value) {
+      loadMoreObserver.observe(loadMoreSentinelRef.value)
+    }
+  }
+
+  // sentinel 在列表非空时才渲染，所以需要监听 ref 变化
+  watch([scrollContainerRef, loadMoreSentinelRef], setupObserver, { immediate: true })
+
   // 监听缩略图更新事件
   unsubscribeThumbnail = Events.On('document:thumbnail', (event: { data: ThumbnailEvent }) => {
     const thumbnail = event.data
@@ -331,6 +409,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
   if (unsubscribeProgress) {
     unsubscribeProgress()
   }
@@ -373,7 +455,7 @@ onUnmounted(() => {
     </div>
 
     <!-- 内容区域 -->
-    <div class="flex-1 overflow-auto p-4">
+    <div ref="scrollContainerRef" class="flex-1 overflow-auto p-4">
       <!-- 加载中 -->
       <div v-if="isLoading" class="flex h-full items-center justify-center">
         <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
@@ -396,19 +478,32 @@ onUnmounted(() => {
       </div>
 
       <!-- 文档网格 -->
-      <div
-        v-else
-        class="grid auto-rows-max gap-4"
-        style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
-      >
-        <DocumentCard
-          v-for="doc in filteredDocuments"
-          :key="doc.id"
-          :document="doc"
-          @rename="handleRename"
-          @relearn="handleRelearn"
-          @delete="handleOpenDelete"
-        />
+      <div v-else>
+        <div
+          class="grid auto-rows-max gap-4"
+          style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
+        >
+          <DocumentCard
+            v-for="doc in filteredDocuments"
+            :key="doc.id"
+            :document="doc"
+            @rename="handleRename"
+            @relearn="handleRelearn"
+            @delete="handleOpenDelete"
+          />
+        </div>
+
+        <div class="mt-4 flex items-center justify-center">
+          <div v-if="isLoadingMore" class="text-xs text-muted-foreground">
+            {{ t('knowledge.loading') }}
+          </div>
+          <div v-else-if="!hasMore" class="text-xs text-muted-foreground/60">
+            {{ t('knowledge.content.noMore') }}
+          </div>
+        </div>
+
+        <!-- sentinel for infinite scroll -->
+        <div ref="loadMoreSentinelRef" class="h-1 w-full" />
       </div>
     </div>
 
