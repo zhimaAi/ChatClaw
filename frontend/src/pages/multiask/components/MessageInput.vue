@@ -3,7 +3,7 @@
  * 消息输入框组件
  * 仅支持文本输入和发送
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -47,12 +47,23 @@ const handleKeydown = (e: KeyboardEvent) => {
     handleSend()
   }
 }
+
+/**
+ * Expose focus method for parent usage.
+ */
+const inputRef = ref<HTMLTextAreaElement | null>(null)
+const focus = () => {
+  inputRef.value?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <template>
   <div class="flex w-full flex-col gap-4 rounded-2xl border-2 border-border bg-background px-3 py-2.5 shadow-sm">
     <!-- 输入区域 -->
     <textarea
+      ref="inputRef"
       v-model="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
