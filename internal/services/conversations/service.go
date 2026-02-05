@@ -131,10 +131,12 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	}
 
 	m := &conversationModel{
-		AgentID:     input.AgentID,
-		Name:        name,
-		LastMessage: lastMessage,
-		IsPinned:    false,
+		AgentID:       input.AgentID,
+		Name:          name,
+		LastMessage:   lastMessage,
+		IsPinned:      false,
+		LLMProviderID: strings.TrimSpace(input.LLMProviderID),
+		LLMModelID:    strings.TrimSpace(input.LLMModelID),
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -213,6 +215,14 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 
 		if input.IsPinned != nil {
 			q = q.Set("is_pinned = ?", *input.IsPinned)
+		}
+
+		if input.LLMProviderID != nil {
+			q = q.Set("llm_provider_id = ?", strings.TrimSpace(*input.LLMProviderID))
+		}
+
+		if input.LLMModelID != nil {
+			q = q.Set("llm_model_id = ?", strings.TrimSpace(*input.LLMModelID))
 		}
 
 		res, err := q.Exec(ctx)

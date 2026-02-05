@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"willchat/internal/services/agents"
+	"willchat/internal/services/chat"
 	"willchat/internal/services/conversations"
 	"willchat/internal/define"
 	appservice "willchat/internal/services/app"
@@ -106,6 +107,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
 	// 注册会话服务
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
+	// 注册聊天服务
+	app.RegisterService(application.NewService(chat.NewChatService(app)))
 	// 注册应用服务
 	app.RegisterService(application.NewService(appservice.NewAppService(app)))
 	// 注册知识库服务

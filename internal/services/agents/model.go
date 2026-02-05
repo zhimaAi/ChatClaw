@@ -46,14 +46,14 @@ type UpdateAgentInput struct {
 	DefaultLLMProviderID *string `json:"default_llm_provider_id"`
 	DefaultLLMModelID    *string `json:"default_llm_model_id"`
 
-	LLMTemperature *float64 `json:"llm_temperature"`
-	LLMTopP        *float64 `json:"llm_top_p"`
-	ContextCount   *int     `json:"context_count"`
-	LLMMaxTokens   *int     `json:"llm_max_tokens"`
-	EnableLLMTemperature *bool `json:"enable_llm_temperature"`
-	EnableLLMTopP        *bool `json:"enable_llm_top_p"`
-	EnableLLMMaxTokens   *bool `json:"enable_llm_max_tokens"`
-	MatchThreshold *float64 `json:"match_threshold"`
+	LLMTemperature       *float64 `json:"llm_temperature"`
+	LLMTopP              *float64 `json:"llm_top_p"`
+	ContextCount         *int     `json:"context_count"`
+	LLMMaxTokens         *int     `json:"llm_max_tokens"`
+	EnableLLMTemperature *bool    `json:"enable_llm_temperature"`
+	EnableLLMTopP        *bool    `json:"enable_llm_top_p"`
+	EnableLLMMaxTokens   *bool    `json:"enable_llm_max_tokens"`
+	MatchThreshold       *float64 `json:"match_threshold"`
 }
 
 type agentModel struct {
