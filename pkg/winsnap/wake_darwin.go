@@ -60,26 +60,40 @@ static void winsnap_activate_current_app(void) {
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
 
-// Order a window with the given title to front without activating the entire application.
+// Order a window with the given window number to front without activating the entire application.
 // Dispatches to main thread asynchronously to ensure thread safety.
-// Uses window title to find the window safely, avoiding stale pointer issues.
-static void winsnap_order_window_front_by_title(const char *title) {
-	if (!title) return;
-	NSString *targetTitle = [NSString stringWithUTF8String:title];
-	if (targetTitle.length == 0) return;
+// Uses window number to find the window safely, avoiding stale pointer issues.
+// Returns 0 if window not found, 1 if successfully ordered.
+static int winsnap_order_window_front_by_number(int windowNumber) {
+	if (windowNumber <= 0) return 0;
 
-	dispatch_async(dispatch_get_main_queue(), ^{
-		// Find the window by its title on the main thread
+	__block int result = 0;
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		// Find the window by its window number on the main thread
 		for (NSWindow *win in [NSApp windows]) {
-			NSString *winTitle = [win title];
-			if (winTitle && [winTitle isEqualToString:targetTitle]) {
+			if ((int)[win windowNumber] == windowNumber) {
 				if ([win isVisible]) {
 					[win orderFrontRegardless];
+					result = 1;
 				}
 				return;
 			}
 		}
 	});
+	return result;
+}
+
+// Get window number from NSWindow pointer. Returns 0 if invalid.
+static int winsnap_get_window_number(void *nsWindow) {
+	if (!nsWindow) return 0;
+	__block int result = 0;
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		NSWindow *win = (__bridge NSWindow *)nsWindow;
+		if (win && [win isKindOfClass:[NSWindow class]]) {
+			result = (int)[win windowNumber];
+		}
+	});
+	return result;
 }
 */
 import "C"
@@ -106,6 +120,20 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 	if self == nil {
 		return ErrWinsnapWindowInvalid
 	}
+
+	// Get window number from native handle for safe lookups
+	// This avoids using potentially stale NSWindow pointers
+	nativeHandle := self.NativeWindow()
+	if nativeHandle == nil {
+		return ErrWinsnapWindowInvalid
+	}
+
+	windowNumber := int(C.winsnap_get_window_number(nativeHandle))
+	if windowNumber <= 0 {
+		// Window may have been closed or is in an invalid state
+		return ErrWinsnapWindowInvalid
+	}
+
 	if targetProcessName == "" {
 		return errors.New("winsnap: TargetProcessName is empty")
 	}
@@ -114,22 +142,20 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 		return errors.New("winsnap: TargetProcessName is empty")
 	}
 	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
 	pid := C.winsnap_find_pid_by_name_local(cname)
-	C.free(unsafe.Pointer(cname))
 	if pid <= 0 {
 		return ErrTargetWindowNotFound
 	}
 	// Activate target app (e.g., WeChat)
 	C.winsnap_activate_pid(pid)
+
 	// Only order the winsnap window to front, not the entire app (avoid activating main window)
-	// Use window title to find the window safely, avoiding stale pointer issues.
-	title := self.Title()
-	if title == "" {
-		// Window may have been closed or is in an invalid state
+	// Use window number to find the window safely, avoiding stale pointer issues.
+	result := C.winsnap_order_window_front_by_number(C.int(windowNumber))
+	if result == 0 {
+		// Window not found or not visible
 		return ErrWinsnapWindowInvalid
 	}
-	ctitle := C.CString(title)
-	C.winsnap_order_window_front_by_title(ctitle)
-	C.free(unsafe.Pointer(ctitle))
 	return nil
 }
