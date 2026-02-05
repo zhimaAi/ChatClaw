@@ -160,69 +160,84 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 如果要置顶，先获取该会话的 agent_id，然后取消该 agent 下所有其他会话的置顶
-	if input.IsPinned != nil && *input.IsPinned {
-		var agentID int64
-		if err := db.NewSelect().
-			Table("conversations").
-			Column("agent_id").
-			Where("id = ?", id).
-			Limit(1).
-			Scan(ctx, &agentID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, errs.Newf("error.conversation_not_found", map[string]any{"ID": id})
+	// Use transaction to ensure consistency when pinning
+	var result *Conversation
+	txErr := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// 如果要置顶，先获取该会话的 agent_id，然后取消该 agent 下所有其他会话的置顶
+		if input.IsPinned != nil && *input.IsPinned {
+			var agentID int64
+			if err := tx.NewSelect().
+				Table("conversations").
+				Column("agent_id").
+				Where("id = ?", id).
+				Limit(1).
+				Scan(ctx, &agentID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return errs.Newf("error.conversation_not_found", map[string]any{"ID": id})
+				}
+				return errs.Wrap("error.conversation_read_failed", err)
 			}
-			return nil, errs.Wrap("error.conversation_read_failed", err)
+
+			// 取消该 agent 下所有其他会话的置顶
+			if _, err := tx.NewUpdate().
+				Model((*conversationModel)(nil)).
+				Where("agent_id = ?", agentID).
+				Where("id != ?", id).
+				Where("is_pinned = ?", true).
+				Set("is_pinned = ?", false).
+				Exec(ctx); err != nil {
+				return errs.Wrap("error.conversation_update_failed", err)
+			}
 		}
 
-		// 取消该 agent 下所有其他会话的置顶
-		if _, err := db.NewUpdate().
+		q := tx.NewUpdate().
 			Model((*conversationModel)(nil)).
-			Where("agent_id = ?", agentID).
-			Where("id != ?", id).
-			Where("is_pinned = ?", true).
-			Set("is_pinned = ?", false).
-			Exec(ctx); err != nil {
-			return nil, errs.Wrap("error.conversation_update_failed", err)
+			Where("id = ?", id)
+
+		if input.Name != nil {
+			name := strings.TrimSpace(*input.Name)
+			if name == "" {
+				return errs.New("error.conversation_name_required")
+			}
+			// 截取前 100 个字符
+			nameRunes := []rune(name)
+			if len(nameRunes) > 100 {
+				name = string(nameRunes[:100])
+			}
+			q = q.Set("name = ?", name)
 		}
-	}
 
-	q := db.NewUpdate().
-		Model((*conversationModel)(nil)).
-		Where("id = ?", id)
-
-	if input.Name != nil {
-		name := strings.TrimSpace(*input.Name)
-		if name == "" {
-			return nil, errs.New("error.conversation_name_required")
+		if input.LastMessage != nil {
+			q = q.Set("last_message = ?", strings.TrimSpace(*input.LastMessage))
 		}
-		// 截取前 100 个字符
-		nameRunes := []rune(name)
-		if len(nameRunes) > 100 {
-			name = string(nameRunes[:100])
+
+		if input.IsPinned != nil {
+			q = q.Set("is_pinned = ?", *input.IsPinned)
 		}
-		q = q.Set("name = ?", name)
+
+		res, err := q.Exec(ctx)
+		if err != nil {
+			return errs.Wrap("error.conversation_update_failed", err)
+		}
+
+		rowsAffected, _ := res.RowsAffected()
+		if rowsAffected == 0 {
+			return errs.Newf("error.conversation_not_found", map[string]any{"ID": id})
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		return nil, txErr
 	}
 
-	if input.LastMessage != nil {
-		q = q.Set("last_message = ?", strings.TrimSpace(*input.LastMessage))
-	}
-
-	if input.IsPinned != nil {
-		q = q.Set("is_pinned = ?", *input.IsPinned)
-	}
-
-	result, err := q.Exec(ctx)
+	result, err = s.GetConversation(id)
 	if err != nil {
-		return nil, errs.Wrap("error.conversation_update_failed", err)
+		return nil, err
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return nil, errs.Newf("error.conversation_not_found", map[string]any{"ID": id})
-	}
-
-	return s.GetConversation(id)
+	return result, nil
 }
 
 // DeleteConversation 删除会话

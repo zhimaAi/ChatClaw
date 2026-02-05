@@ -10,6 +10,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/google/uuid v1.6.0
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
@@ -20,6 +21,7 @@ require (
 	golang.org/x/sys v0.40.0
 	golang.org/x/text v0.33.0
 	google.golang.org/genai v1.44.0
+	maragu.dev/goqite v0.3.1
 )
 
 require (
@@ -74,7 +76,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
