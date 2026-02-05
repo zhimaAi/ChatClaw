@@ -9,7 +9,11 @@ require (
 	github.com/cloudwego/eino-ext/components/model/gemini v0.1.28
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
+	github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino-ext/components/tool/httprequest v0.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260204064123-1f91f547c77e
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/google/uuid v1.6.0
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
@@ -57,6 +61,9 @@ require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
+	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8 // indirect
+	github.com/chromedp/chromedp v0.13.3 // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.13 // indirect
@@ -73,9 +80,13 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.7.0 // indirect
 	github.com/go-git/go-git/v5 v5.16.4 // indirect
+	github.com/go-json-experiment/json v0.0.0-20251027170946-4849db3c2f7e // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect

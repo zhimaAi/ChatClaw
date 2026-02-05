@@ -8,29 +8,50 @@ import (
 )
 
 // ToolFactory is a function that creates a tool.
-type ToolFactory func(ctx context.Context) (tool.InvokableTool, error)
+// Returns tool.BaseTool to support both InvokableTool and BaseTool implementations.
+type ToolFactory func(ctx context.Context) (tool.BaseTool, error)
 
 // ToolRegistry manages all available tools.
 type ToolRegistry struct {
 	mu        sync.RWMutex
 	factories map[string]ToolFactory
-	cached    map[string]tool.InvokableTool // lazily populated cache
+	cached    map[string]tool.BaseTool // lazily populated cache
 }
 
 // NewToolRegistry creates a new tool registry with default tools.
 func NewToolRegistry() *ToolRegistry {
 	r := &ToolRegistry{
 		factories: make(map[string]ToolFactory),
-		cached:    make(map[string]tool.InvokableTool),
+		cached:    make(map[string]tool.BaseTool),
 	}
 
 	// Register default tools
-	r.Register(ToolIDCalculator, func(ctx context.Context) (tool.InvokableTool, error) {
+	r.Register(ToolIDCalculator, func(ctx context.Context) (tool.BaseTool, error) {
 		return NewCalculatorTool(ctx)
 	})
 
-	r.Register(ToolIDDuckDuckGoSearch, func(ctx context.Context) (tool.InvokableTool, error) {
+	r.Register(ToolIDDuckDuckGoSearch, func(ctx context.Context) (tool.BaseTool, error) {
 		return NewDuckDuckGoTool(ctx, nil)
+	})
+
+	r.Register(ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewBrowserUseTool(ctx)
+	})
+
+	r.Register(ToolIDHTTPGet, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewHTTPGetTool(ctx, nil)
+	})
+
+	r.Register(ToolIDHTTPPost, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewHTTPPostTool(ctx, nil)
+	})
+
+	r.Register(ToolIDSequentialThinking, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewSequentialThinkingTool(ctx)
+	})
+
+	r.Register(ToolIDWikipedia, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewWikipediaTool(ctx, nil)
 	})
 
 	return r
@@ -47,7 +68,7 @@ func (r *ToolRegistry) Register(id string, factory ToolFactory) {
 
 // getOrCreate returns a cached tool instance or creates one via the factory.
 // Must be called with at least a read lock held; promotes to write lock if needed.
-func (r *ToolRegistry) getOrCreate(ctx context.Context, id string) (tool.InvokableTool, error) {
+func (r *ToolRegistry) getOrCreate(ctx context.Context, id string) (tool.BaseTool, error) {
 	// Fast path: already cached (caller holds at least RLock)
 	if t, ok := r.cached[id]; ok {
 		return t, nil
@@ -102,7 +123,7 @@ func (r *ToolRegistry) GetEnabledTools(ctx context.Context, config *ToolsConfig)
 }
 
 // GetTool returns a specific tool by ID (cached).
-func (r *ToolRegistry) GetTool(ctx context.Context, id string) (tool.InvokableTool, error) {
+func (r *ToolRegistry) GetTool(ctx context.Context, id string) (tool.BaseTool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
