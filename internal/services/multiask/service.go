@@ -340,7 +340,9 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
         ];
     } else if (isQwen) {
         inputSelectors = [
-            // 通义千问/Qwen 的输入框 (2025+ 新版结构 - ProseMirror 富文本编辑器)
+            // 通义千问/Qwen 的输入框 (2026+ 新版结构 - Slate.js 富文本编辑器)
+            'div[data-slate-editor="true"]',
+            // 旧版 ProseMirror 结构
             'div[data-placeholder*="向千问提问"]',
             'div[data-placeholder*="千问"]',
             '[class*="ProseMirror"][contenteditable="true"]',
@@ -358,7 +360,10 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             'textarea',
         ];
         sendButtonSelectors = [
-            // 通义千问/Qwen 的发送按钮 (2025+ 新版结构)
+            // 通义千问/Qwen 的发送按钮 (2026+ 新版结构 - operateBtn)
+            'div[class*="operateBtn-"]',
+            '[class*="operateBtn"]',
+            // 旧版发送按钮
             'button[data-testid="send-button"]',
             'button[aria-label*="发送"]',
             'button[aria-label*="Send"]',
@@ -372,7 +377,6 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             '[class*="SendBtn"]',
             'button[class*="send"]',
             'button[class*="Send"]',
-            '[class*="operateBtn"]',
         ];
     } else if (isClaude) {
         inputSelectors = [
@@ -468,58 +472,64 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             // contenteditable div (ProseMirror, ChatGPT, Qwen 等富文本编辑器)
             input.focus();
             
-            // 对于千问 (ProseMirror 编辑器)，需要使用特殊方式注入内容
+            // 对于千问 (Slate.js 编辑器)，需要使用特殊方式注入内容
             if (isQwen) {
-                console.log('[WillChat] Using ProseMirror-compatible input method for Qwen...');
+                console.log('[WillChat] Using Slate.js-compatible input method for Qwen...');
                 
-                // 方法1: 使用 Selection API + execCommand (兼容性最好)
-                const selection = window.getSelection();
-                const range = document.createRange();
+                // 1. 定位容器元素
+                const container = document.querySelector('div[class^="inputContainer-"]');
+                const editor = input; // input 已经是 Slate 编辑器
                 
-                // 清空并选中所有内容
-                range.selectNodeContents(input);
-                selection.removeAllRanges();
-                selection.addRange(range);
+                if (!container) {
+                    console.log('[WillChat] Qwen container not found, using fallback method...');
+                }
                 
-                // 使用 execCommand 插入文本（会触发编辑器的内部状态更新）
-                const inserted = document.execCommand('insertText', false, message);
+                // 2. 模拟全套鼠标点击序列，诱导容器进入 focus 状态
+                const clickEvents = ['mousedown', 'mouseup', 'click'];
+                clickEvents.forEach(type => {
+                    const ev = new MouseEvent(type, {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true,
+                        buttons: 1
+                    });
+                    // 依次对容器和编辑器触发点击
+                    if (container) container.dispatchEvent(ev);
+                    editor.dispatchEvent(ev);
+                });
                 
-                if (!inserted) {
-                    console.log('[WillChat] execCommand failed, trying DataTransfer method...');
-                    // 方法2: 使用 DataTransfer 模拟粘贴
+                // 3. 强制获取焦点
+                editor.focus();
+                
+                // 4. 等待状态机响应后插入文本
+                setTimeout(() => {
+                    // 5. 插入文字：使用 DataTransfer 模拟粘贴
                     const dataTransfer = new DataTransfer();
                     dataTransfer.setData('text/plain', message);
                     
-                    input.dispatchEvent(new InputEvent('beforeinput', {
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        clipboardData: dataTransfer,
                         bubbles: true,
-                        cancelable: true,
-                        inputType: 'insertText',
-                        data: message,
-                        dataTransfer: dataTransfer
+                        cancelable: true
+                    });
+                    
+                    // 尝试触发粘贴，如果粘贴被禁就回退到 insertText
+                    const pasteResult = editor.dispatchEvent(pasteEvent);
+                    if (!pasteResult) {
+                        console.log('[WillChat] Paste blocked, trying execCommand...');
+                        document.execCommand('insertText', false, message);
+                    }
+                    
+                    // 6. 派发 Input 事件激活发送按钮
+                    editor.dispatchEvent(new InputEvent('input', { 
+                        bubbles: true, 
+                        inputType: 'insertText' 
                     }));
                     
-                    // 手动设置内容作为 fallback
-                    input.innerHTML = '';
-                    const p = document.createElement('p');
-                    p.textContent = message;
-                    input.appendChild(p);
-                }
+                    console.log('[WillChat] Qwen message injected successfully');
+                }, 50);
                 
-                // 触发 input 事件确保编辑器状态同步
-                input.dispatchEvent(new InputEvent('input', { 
-                    bubbles: true, 
-                    cancelable: true,
-                    inputType: 'insertText',
-                    data: message
-                }));
-                
-                // 移动光标到末尾
-                const newRange = document.createRange();
-                newRange.selectNodeContents(input);
-                newRange.collapse(false);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-                
+                return; // 异步处理，提前返回
             } else {
                 // ChatGPT 等其他编辑器
                 // 清空现有内容
@@ -597,9 +607,39 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
         
         // 发送消息的函数
         const sendMessage = () => {
-            // 通义千问、豆包、DeepSeek 优先使用 Enter 键发送
-            if (isQwen || isDoubao || isDeepSeek) {
-                console.log('[WillChat] Using Enter key to send (Qwen/Doubao/DeepSeek)...');
+            // 通义千问使用按钮点击发送（Slate.js 编辑器）
+            if (isQwen) {
+                console.log('[WillChat] Using button click to send (Qwen Slate.js)...');
+                
+                // 查找千问的发送按钮（operateBtn div）
+                const qwenSendBtn = document.querySelector('div[class*="operateBtn-"]');
+                if (qwenSendBtn && !qwenSendBtn.classList.contains('disabled')) {
+                    console.log('[WillChat] Clicking Qwen send button...');
+                    qwenSendBtn.click();
+                } else if (sendButton) {
+                    console.log('[WillChat] Qwen operateBtn not found or disabled, trying fallback button...');
+                    sendButton.click();
+                } else {
+                    // 最后尝试 Enter 键
+                    console.log('[WillChat] No send button found, trying Enter key...');
+                    input.focus();
+                    const enterEvent = new KeyboardEvent('keydown', {
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        which: 13,
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    });
+                    input.dispatchEvent(enterEvent);
+                }
+                return;
+            }
+            
+            // 豆包、DeepSeek 优先使用 Enter 键发送
+            if (isDoubao || isDeepSeek) {
+                console.log('[WillChat] Using Enter key to send (Doubao/DeepSeek)...');
                 input.focus();
                 
                 // 模拟 Enter 键按下
