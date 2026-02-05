@@ -19,6 +19,7 @@ import (
 	einoparser "willchat/internal/eino/parser"
 	"willchat/internal/eino/raptor"
 	"willchat/internal/eino/splitter"
+	"willchat/internal/fts/tokenizer"
 )
 
 // DocumentNode 表示数据库中的文档节点
@@ -126,11 +127,22 @@ func (p *Processor) ProcessDocument(
 	result.WordTotal = utf8.RuneCountInString(fullContent)
 
 	if onProgress != nil {
+		onProgress("parsing", 40)
+	}
+
+	// 提前创建 embedder（用于语义分割和后续向量化，同一实例复用）
+	embedder, err := p.createEmbedder(ctx, embeddingConfig)
+	if err != nil {
+		result.Error = fmt.Errorf("创建 embedder 失败: %w", err)
+		return result, result.Error
+	}
+
+	if onProgress != nil {
 		onProgress("parsing", 50)
 	}
 
-	// 阶段 2：分割文档
-	chunks, err := p.splitDocument(ctx, docs, libraryConfig, embeddingConfig, getProviderInfo)
+	// 阶段 2：分割文档（如果启用语义分割，使用全局 embedder）
+	chunks, err := p.splitDocument(ctx, docs, libraryConfig, embedder)
 	if err != nil {
 		result.Error = fmt.Errorf("分割失败: %w", err)
 		return result, result.Error
@@ -153,15 +165,9 @@ func (p *Processor) ProcessDocument(
 		onProgress("parsing", 100)
 	}
 
-	// 阶段 4：嵌入节点
+	// 阶段 4：嵌入节点（复用同一 embedder）
 	if onProgress != nil {
 		onProgress("embedding", 10)
-	}
-
-	embedder, err := p.createEmbedder(ctx, embeddingConfig)
-	if err != nil {
-		result.Error = fmt.Errorf("创建 embedder 失败: %w", err)
-		return result, result.Error
 	}
 
 	if err := p.embedNodes(ctx, nodes, embedder, func(progress int) {
@@ -216,21 +222,25 @@ func (p *Processor) parseDocument(ctx context.Context, localPath string) ([]*sch
 }
 
 // splitDocument 将文档分割成块
+// 如果启用了语义分割（知识库配置了 SemanticSegmentProviderID/ModelID），
+// 则使用语义分割器并传入全局 embedder；否则使用递归分割器
 func (p *Processor) splitDocument(
 	ctx context.Context,
 	docs []*schema.Document,
 	libraryConfig *LibraryConfig,
-	embeddingConfig *EmbeddingConfig,
-	getProviderInfo func(providerID string) (*ProviderInfo, error),
+	embedder embedding.Embedder,
 ) ([]*schema.Document, error) {
 	cfg := &splitter.Config{
 		ChunkSize:    libraryConfig.ChunkSize,
 		ChunkOverlap: libraryConfig.ChunkOverlap,
 	}
 
-	// 如果启用了语义分割并且有嵌入模型
-	// 注意：对于语义分割，我们需要一个 embedder
-	// 为简单起见，默认使用递归分割
+	// 如果启用了语义分割，使用全局 embedder 进行语义分割
+	if libraryConfig.SemanticSegmentProviderID != "" && libraryConfig.SemanticSegmentModelID != "" {
+		cfg.SemanticEmbedder = embedder
+		cfg.SemanticPercentile = 0.9
+		cfg.SemanticMinChunkSize = 100
+	}
 
 	docSplitter, err := splitter.NewSplitter(ctx, cfg)
 	if err != nil {
@@ -241,46 +251,48 @@ func (p *Processor) splitDocument(
 }
 
 // storeNodes 将文档块作为节点存储到数据库
+// 使用事务保证一致性，通过 LastInsertId() 获取插入的 ID
 func (p *Processor) storeNodes(ctx context.Context, docID, libraryID int64, chunks []*schema.Document) ([]*DocumentNode, error) {
 	nodes := make([]*DocumentNode, 0, len(chunks))
 
-	for i, chunk := range chunks {
-		// 为 FTS 对内容进行分词（目前简单地使用空格分隔）
-		tokens := tokenizeContent(chunk.Content)
+	// 使用事务保证所有节点的插入一致性
+	err := p.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		for i, chunk := range chunks {
+			// 为 FTS 对内容进行分词
+			tokens := tokenizeContent(chunk.Content)
 
-		node := &DocumentNode{
-			LibraryID:     libraryID,
-			DocumentID:    docID,
-			Content:       chunk.Content,
-			ContentTokens: tokens,
-			Level:         0,
-			ChunkOrder:    i,
+			node := &DocumentNode{
+				LibraryID:     libraryID,
+				DocumentID:    docID,
+				Content:       chunk.Content,
+				ContentTokens: tokens,
+				Level:         0,
+				ChunkOrder:    i,
+			}
+
+			// 使用原始 SQL 插入并获取 LastInsertId
+			res, err := tx.NewRaw(
+				"INSERT INTO document_nodes (library_id, document_id, content, content_tokens, level, chunk_order) VALUES (?, ?, ?, ?, ?, ?)",
+				node.LibraryID, node.DocumentID, node.Content, node.ContentTokens, node.Level, node.ChunkOrder,
+			).Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("插入节点 %d: %w", i, err)
+			}
+
+			// 使用 LastInsertId 获取插入的 ID
+			lastID, err := res.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("获取节点 %d 的 id: %w", i, err)
+			}
+			node.ID = lastID
+
+			nodes = append(nodes, node)
 		}
+		return nil
+	})
 
-		// 插入节点
-		_, err := p.db.NewInsert().
-			Model(node).
-			TableExpr("document_nodes").
-			Exec(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("插入节点 %d: %w", i, err)
-		}
-
-		// 获取插入的 ID
-		var lastID int64
-		err = p.db.NewSelect().
-			TableExpr("document_nodes").
-			Column("id").
-			Where("document_id = ? AND level = ? AND chunk_order = ?", docID, 0, i).
-			OrderExpr("id DESC").
-			Limit(1).
-			Scan(ctx, &lastID)
-		if err != nil {
-			return nil, fmt.Errorf("获取节点 id: %w", err)
-		}
-		node.ID = lastID
-
-		nodes = append(nodes, node)
+	if err != nil {
+		return nil, err
 	}
 
 	return nodes, nil
@@ -438,10 +450,11 @@ func (p *Processor) buildRaptorTree(
 }
 
 // createRaptorNode 在数据库中创建 RAPTOR 摘要节点
+// 使用 LastInsertId() 获取插入的 ID
 func (p *Processor) createRaptorNode(ctx context.Context, node *raptor.DocumentNode) (int64, error) {
 	tokens := tokenizeContent(node.Content)
 
-	_, err := p.db.NewRaw(
+	res, err := p.db.NewRaw(
 		"INSERT INTO document_nodes (library_id, document_id, content, content_tokens, level, chunk_order) VALUES (?, ?, ?, ?, ?, ?)",
 		node.LibraryID, node.DocumentID, node.Content, tokens, node.Level, node.ChunkOrder,
 	).Exec(ctx)
@@ -449,17 +462,10 @@ func (p *Processor) createRaptorNode(ctx context.Context, node *raptor.DocumentN
 		return 0, err
 	}
 
-	// 获取插入的 ID
-	var lastID int64
-	err = p.db.NewSelect().
-		TableExpr("document_nodes").
-		Column("id").
-		Where("document_id = ? AND level = ? AND chunk_order = ?", node.DocumentID, node.Level, node.ChunkOrder).
-		OrderExpr("id DESC").
-		Limit(1).
-		Scan(ctx, &lastID)
+	// 使用 LastInsertId 获取插入的 ID
+	lastID, err := res.LastInsertId()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("获取 RAPTOR 节点 id: %w", err)
 	}
 
 	return lastID, nil
@@ -486,14 +492,10 @@ func (p *Processor) updateDocumentStats(ctx context.Context, docID int64, wordTo
 	return err
 }
 
-// tokenizeContent 对内容进行简单分词，用于 FTS
-// 这是一个基本实现；对于中文文本，请考虑使用专业的分词器
+// tokenizeContent 对内容进行分词，用于 FTS
+// 使用 gse 进行中文/英文分词
 func tokenizeContent(content string) string {
-	// 简单处理：只返回空格分隔的词
-	// 对于中文，需要专业的分词
-	// 目前直接使用原内容，因为 FTS 会自行处理
-	words := strings.Fields(content)
-	return strings.Join(words, " ")
+	return tokenizer.TokenizeContent(content)
 }
 
 // GetLibraryConfig 从数据库获取知识库配置
