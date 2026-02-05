@@ -188,6 +188,20 @@ export const useChatStore = defineStore('chat', () => {
   ) => {
     if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
 
+    // Optimistic UX: immediately update the edited message and truncate following messages
+    ensureConversationMessages(conversationId)
+    const current = messagesByConversation.value[conversationId]
+    const idx = current.findIndex((m) => m.id === messageId)
+    if (idx >= 0) {
+      const next = [...current]
+      next[idx] = { ...next[idx], content: newContent.trim() } as Message
+      messagesByConversation.value[conversationId] = next.slice(0, idx + 1)
+    }
+
+    // Clear any existing streaming state so UI immediately reflects "new run"
+    delete streamingByConversation.value[conversationId]
+    delete activeRequestByConversation.value[conversationId]
+
     try {
       const result = await ChatService.EditAndResend(
         new EditAndResendInput({
@@ -204,6 +218,8 @@ export const useChatStore = defineStore('chat', () => {
 
       return result
     } catch (error: unknown) {
+      // If failed, reload from backend to restore consistent state
+      void loadMessages(conversationId)
       throw error
     }
   }
@@ -297,6 +313,12 @@ export const useChatStore = defineStore('chat', () => {
     const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json } =
       data
     const streaming = streamingByConversation.value[conversation_id]
+
+    // Guard: ignore empty tool_call_id events (some providers stream partial tool deltas)
+    if (!tool_call_id) {
+      debug('tool event ignored (empty tool_call_id)', { conversation_id, request_id, type, tool_name })
+      return
+    }
 
     if (!streaming) {
       debug('tool event ignored (no streaming)', { conversation_id, request_id, type, tool_call_id })

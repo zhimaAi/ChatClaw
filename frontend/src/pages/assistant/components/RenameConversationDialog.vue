@@ -73,6 +73,15 @@ const handleSave = async () => {
     saving.value = false
   }
 }
+
+const handleEnter = (event: KeyboardEvent) => {
+  // Avoid submitting while IME is composing.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyEvent = event as any
+  if (anyEvent?.isComposing || anyEvent?.keyCode === 229) return
+  event.preventDefault()
+  void handleSave()
+}
 </script>
 
 <template>
@@ -90,7 +99,7 @@ const handleSave = async () => {
             :placeholder="t('assistant.conversation.rename.placeholder')"
             :maxlength="NAME_MAX_LEN"
             :disabled="saving"
-            @keydown.enter.prevent="handleSave"
+            @keydown.enter="handleEnter"
           />
         </div>
       </div>

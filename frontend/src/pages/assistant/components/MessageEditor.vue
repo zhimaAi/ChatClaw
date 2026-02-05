@@ -33,6 +33,10 @@ const handleCancel = () => {
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Enter' && !event.shiftKey) {
+    // Do not submit while IME is composing.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyEvent = event as any
+    if (anyEvent?.isComposing || anyEvent?.keyCode === 229) return
     event.preventDefault()
     handleSave()
   } else if (event.key === 'Escape') {

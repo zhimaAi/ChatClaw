@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -564,6 +565,91 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	var finishReason string
 	var inputTokens, outputTokens int
 
+	// Track tool call deltas from streaming providers.
+	// Some OpenAI-compatible providers stream tool_calls in multiple chunks where
+	// function.name / function.arguments / id might be temporarily empty.
+	type toolCallState struct {
+		id   string
+		name string
+		args string
+	}
+	toolStatesByKey := make(map[string]*toolCallState) // key can be id or idx fallback
+	toolOrder := make([]string, 0)
+
+	updateArgs := func(oldArgs, newArgs string) string {
+		if newArgs == "" {
+			return oldArgs
+		}
+		if oldArgs == "" {
+			return newArgs
+		}
+		// If provider sends snapshots, newArgs should start with oldArgs.
+		if strings.HasPrefix(newArgs, oldArgs) {
+			return newArgs
+		}
+		// If provider sends an older snapshot, ignore.
+		if strings.HasPrefix(oldArgs, newArgs) {
+			return oldArgs
+		}
+		// Otherwise treat as delta chunk.
+		return oldArgs + newArgs
+	}
+
+	buildToolCallsForDB := func() []schema.ToolCall {
+		out := make([]schema.ToolCall, 0, len(toolOrder))
+		seen := make(map[string]struct{})
+		for _, key := range toolOrder {
+			st := toolStatesByKey[key]
+			if st == nil || st.id == "" || st.name == "" {
+				continue
+			}
+			if _, ok := seen[st.id]; ok {
+				continue
+			}
+			seen[st.id] = struct{}{}
+			args := st.args
+			if !json.Valid([]byte(args)) {
+				// Keep history valid for providers that strictly require JSON arguments.
+				args = "{}"
+			}
+			out = append(out, schema.ToolCall{
+				ID: st.id,
+				Function: schema.FunctionCall{
+					Name:      st.name,
+					Arguments: args,
+				},
+			})
+		}
+		return out
+	}
+
+	updateToolStates := func(toolCalls []schema.ToolCall) {
+		for i, tc := range toolCalls {
+			key := tc.ID
+			if key == "" {
+				key = fmt.Sprintf("idx_%d", i)
+			}
+			st, ok := toolStatesByKey[key]
+			if !ok {
+				st = &toolCallState{}
+				toolStatesByKey[key] = st
+				toolOrder = append(toolOrder, key)
+			}
+			if tc.ID != "" {
+				st.id = tc.ID
+			}
+			if tc.Function.Name != "" {
+				st.name = tc.Function.Name
+			}
+			st.args = updateArgs(st.args, tc.Function.Arguments)
+		}
+
+		// Keep toolCallsJSON updated for DB persistence.
+		if calls := buildToolCallsForDB(); len(calls) > 0 {
+			toolCallsJSON, _ = json.Marshal(calls)
+		}
+	}
+
 	iter := runner.Run(ctx, messages)
 	for {
 		event, ok := iter.Next()
@@ -634,11 +720,38 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 
 					// Handle tool calls
 					if len(msg.ToolCalls) > 0 {
-						toolCallsJSON, _ = json.Marshal(msg.ToolCalls)
+						updateToolStates(msg.ToolCalls)
+						// Emit tool call updates only when we have a real call_id.
 						for _, tc := range msg.ToolCalls {
-							if !json.Valid([]byte(tc.Function.Arguments)) {
+							if tc.ID == "" {
+								continue
+							}
+							toolName := tc.Function.Name
+							if toolName == "" {
+								// Try to find name from accumulated state.
+								for _, key := range toolOrder {
+									st := toolStatesByKey[key]
+									if st != nil && st.id == tc.ID && st.name != "" {
+										toolName = st.name
+										break
+									}
+								}
+							}
+							args := tc.Function.Arguments
+							// Use accumulated args if available (more complete than current chunk).
+							for _, key := range toolOrder {
+								st := toolStatesByKey[key]
+								if st != nil && st.id == tc.ID {
+									args = st.args
+									break
+								}
+							}
+							if toolName == "" {
+								continue
+							}
+							if args != "" && !json.Valid([]byte(args)) {
 								log.Printf("[chat] WARNING tool arguments not valid JSON conv=%d tab=%s req=%s tool=%s call_id=%s args=%q",
-									conversationID, tabID, requestID, tc.Function.Name, tc.ID, tc.Function.Arguments)
+									conversationID, tabID, requestID, toolName, tc.ID, args)
 							}
 							emit(EventChatTool, ChatToolEvent{
 								ChatEvent: ChatEvent{
@@ -651,8 +764,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 								},
 								Type:       "call",
 								ToolCallID: tc.ID,
-								ToolName:   tc.Function.Name,
-								ArgsJSON:   tc.Function.Arguments,
+								ToolName:   toolName,
+								ArgsJSON:   args,
 							})
 						}
 					}
@@ -672,8 +785,23 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 				// Non-streaming message
 				msg := msgOutput.Message
 
+				// Some providers output final tool_calls in a non-streaming message; capture them.
+				if len(msg.ToolCalls) > 0 {
+					updateToolStates(msg.ToolCalls)
+				}
+
 				if msg.Role == schema.Tool {
 					// Tool result
+					toolName := msg.Name
+					if toolName == "" && msg.ToolCallID != "" {
+						for _, key := range toolOrder {
+							st := toolStatesByKey[key]
+							if st != nil && st.id == msg.ToolCallID && st.name != "" {
+								toolName = st.name
+								break
+							}
+						}
+					}
 					emit(EventChatTool, ChatToolEvent{
 						ChatEvent: ChatEvent{
 							ConversationID: conversationID,
@@ -685,7 +813,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 						},
 						Type:       "result",
 						ToolCallID: msg.ToolCallID,
-						ToolName:   msg.Name,
+						ToolName:   toolName,
 						ResultJSON: msg.Content,
 					})
 
@@ -696,7 +824,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 						Content:        msg.Content,
 						Status:         StatusSuccess,
 						ToolCallID:     msg.ToolCallID,
-						ToolCallName:   msg.Name,
+						ToolCallName:   toolName,
 						ToolCalls:      "[]",
 					}
 					dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -782,6 +910,16 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		return nil, err
 	}
 
+	// Build tool name map for repairing assistant tool_calls entries.
+	toolNameByCallID := make(map[string]string)
+	for _, m := range models {
+		if m.Role == RoleTool && m.ToolCallID != "" && m.ToolCallName != "" {
+			if _, ok := toolNameByCallID[m.ToolCallID]; !ok {
+				toolNameByCallID[m.ToolCallID] = m.ToolCallName
+			}
+		}
+	}
+
 	messages := make([]*schema.Message, 0, len(models))
 	for _, m := range models {
 		var role schema.RoleType
@@ -811,7 +949,31 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		if m.Role == RoleAssistant && m.ToolCalls != "" && m.ToolCalls != "[]" {
 			var toolCalls []schema.ToolCall
 			if err := json.Unmarshal([]byte(m.ToolCalls), &toolCalls); err == nil {
-				msg.ToolCalls = toolCalls
+				// Repair tool calls for strict OpenAI-compatible providers:
+				// - tool call id must be present if a tool message references it
+				// - function.name should not be empty
+				// - function.arguments must be a valid JSON object string (at least "{}")
+				repaired := make([]schema.ToolCall, 0, len(toolCalls))
+				for _, tc := range toolCalls {
+					if tc.ID == "" {
+						continue
+					}
+					if tc.Function.Name == "" {
+						if name, ok := toolNameByCallID[tc.ID]; ok {
+							tc.Function.Name = name
+						}
+					}
+					if tc.Function.Arguments == "" || !json.Valid([]byte(tc.Function.Arguments)) {
+						tc.Function.Arguments = "{}"
+					}
+					if tc.Function.Name == "" {
+						continue
+					}
+					repaired = append(repaired, tc)
+				}
+				if len(repaired) > 0 {
+					msg.ToolCalls = repaired
+				}
 			}
 		}
 
