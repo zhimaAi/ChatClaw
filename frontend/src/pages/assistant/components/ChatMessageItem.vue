@@ -150,10 +150,14 @@ const isLastContentSegment = (idx: number): boolean => {
 // Error message key mapping
 const errorMessageKey = computed(() => {
   if (props.message.status !== MessageStatus.ERROR) return ''
-  if (props.errorKey === 'error.max_iterations_exceeded') {
-    return 'assistant.chat.errorMaxIterations'
+  switch (props.errorKey) {
+    case 'error.max_iterations_exceeded':
+      return 'assistant.chat.errorMaxIterations'
+    case 'error.chat_stream_failed':
+      return 'assistant.chat.errorStream'
+    default:
+      return 'assistant.chat.error'
   }
-  return 'assistant.chat.error'
 })
 
 const handleCopy = async () => {

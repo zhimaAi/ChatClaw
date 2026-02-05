@@ -17,10 +17,11 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	adkfs "github.com/cloudwego/eino/adk/filesystem"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/skill"
+
+	localfs "willchat/internal/services/filesystem"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -254,13 +255,25 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 func buildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
-	// Shared InMemory backend for filesystem and reduction middlewares
-	fsBackend := adkfs.NewInMemoryBackend()
+	// Create local filesystem backend (rooted at user's home directory)
+	fsBackend, err := localfs.NewLocalBackend(&localfs.LocalBackendConfig{})
+	if err != nil {
+		log.Printf("[chat] failed to create local filesystem backend: %v", err)
+		// Fall back to only using reduction clearing without filesystem
+		reductionMw, err := reduction.NewClearToolResult(ctx, &reduction.ClearToolResultConfig{})
+		if err == nil {
+			middlewares = append(middlewares, reductionMw)
+		}
+		if skillMw, ok := buildSkillMiddleware(ctx); ok {
+			middlewares = append(middlewares, skillMw)
+		}
+		return middlewares
+	}
 
-	// 1. Filesystem middleware — provides file tools; offloading disabled (handled by reduction)
+	// 1. Filesystem middleware — provides file tools using the local filesystem backend
 	filesystemMw, err := fsmw.NewMiddleware(ctx, &fsmw.Config{
-		Backend:                         fsBackend,
-		WithoutLargeToolResultOffloading: true,
+		Backend:                          fsBackend,
+		WithoutLargeToolResultOffloading: true, // Handled by reduction middleware
 	})
 	if err != nil {
 		log.Printf("[chat] failed to create filesystem middleware: %v", err)

@@ -535,16 +535,18 @@ export const useChatStore = defineStore('chat', () => {
       } as any)
 
       // Persist segments for interleaved display
-      if (streaming.segments.length > 0) {
-        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
-      }
+      // Always persist, even if empty, to prevent fallback logic from hiding content
+      segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
 
-      // Refresh messages from backend
-      void loadMessages(conversation_id)
+      // On error, do NOT immediately call loadMessages - it would overwrite local state
+      // and potentially clear the content/tool calls that were already displayed.
+      // The user can manually refresh if needed, or the state will sync on next successful operation.
 
-      // Clear streaming state
-      delete streamingByConversation.value[conversation_id]
-      delete activeRequestByConversation.value[conversation_id]
+      // Clear streaming state after a tick to let the UI read from segments first
+      setTimeout(() => {
+        delete streamingByConversation.value[conversation_id]
+        delete activeRequestByConversation.value[conversation_id]
+      }, 0)
     }
   }
 
