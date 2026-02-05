@@ -606,6 +606,10 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 
 		// Listen for window closing event
 		w.RegisterHook(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+			// Remove window subclass on Windows before window is destroyed
+			if h := w.NativeWindow(); h != nil {
+				removePopupSubclass(uintptr(h))
+			}
 			s.mu.Lock()
 			if s.popWindow == w {
 				s.popWindow = nil

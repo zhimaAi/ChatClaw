@@ -68,5 +68,16 @@ func MoveOffscreen(window *application.WebviewWindow) error {
 	if h == 0 {
 		return errors.New("winsnap: native window handle is 0")
 	}
-	return setWindowPosNoSizeNoZ(windows.HWND(h), -32000, -32000)
+	// Get window size to ensure we move it completely off-screen.
+	// Move by 3x window dimensions to ensure complete hiding.
+	width, height := window.Size()
+	if width <= 0 {
+		width = 2000 // fallback: large enough to ensure hiding
+	}
+	if height <= 0 {
+		height = 2000 // fallback: large enough to ensure hiding
+	}
+	offX := int32(-(width * 3))
+	offY := int32(-(height * 3))
+	return setWindowPosNoSizeNoZ(windows.HWND(h), offX, offY)
 }
