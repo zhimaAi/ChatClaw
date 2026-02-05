@@ -10,6 +10,7 @@ import type { Message } from '@bindings/willchat/internal/services/chat'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolCallBlock from './ToolCallBlock.vue'
 import MessageEditor from './MessageEditor.vue'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 const props = defineProps<{
   message: Message
@@ -17,6 +18,7 @@ const props = defineProps<{
   streamingContent?: string
   streamingThinking?: string
   streamingToolCalls?: ToolCallInfo[]
+  toolResults?: Record<string, string> // Map of toolCallId -> result
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +46,15 @@ const thinkingContent = computed(() => {
   return props.message.thinking_content ?? ''
 })
 
+// Backend tool call format from schema.ToolCall
+interface BackendToolCall {
+  ID: string
+  Function: {
+    Name: string
+    Arguments: string
+  }
+}
+
 // Determine tool calls
 const toolCalls = computed(() => {
   if (props.isStreaming && props.streamingToolCalls) {
@@ -52,7 +63,27 @@ const toolCalls = computed(() => {
   // Parse from message if available
   if (props.message.tool_calls && props.message.tool_calls !== '[]') {
     try {
-      return JSON.parse(props.message.tool_calls) as ToolCallInfo[]
+      const parsed = JSON.parse(props.message.tool_calls)
+      // Check if it's backend format (schema.ToolCall) or frontend format (ToolCallInfo)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // If first item has 'ID' and 'Function', it's backend format
+        if ('ID' in parsed[0] && 'Function' in parsed[0]) {
+          // Convert backend format to frontend format and merge tool results
+          return (parsed as BackendToolCall[]).map((tc) => ({
+            toolCallId: tc.ID,
+            toolName: tc.Function.Name,
+            argsJson: tc.Function.Arguments,
+            resultJson: props.toolResults?.[tc.ID],
+            status: 'completed' as const,
+          }))
+        }
+        // Otherwise it's already frontend format, but still merge results
+        return (parsed as ToolCallInfo[]).map((tc) => ({
+          ...tc,
+          resultJson: tc.resultJson || props.toolResults?.[tc.toolCallId],
+        }))
+      }
+      return []
     } catch {
       return []
     }
@@ -120,10 +151,10 @@ const handleCancelEdit = () => {
       <div
         :class="
           cn(
-            'relative rounded-2xl px-4 py-3 text-sm',
+            'relative text-sm',
             isUser
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-foreground dark:bg-zinc-800'
+              ? 'rounded-2xl border border-border/50 bg-muted px-4 py-3 text-foreground'
+              : 'bg-transparent px-0 py-0 text-foreground'
           )
         "
       >
@@ -137,12 +168,26 @@ const handleCancelEdit = () => {
 
         <!-- Normal display mode -->
         <template v-else>
-          <p class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+          <!-- User messages: plain text -->
+          <p v-if="isUser" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
 
-          <!-- Streaming indicator -->
-          <span v-if="isStreaming && isAssistant" class="ml-1 inline-block">
-            <span class="animate-pulse">▌</span>
-          </span>
+          <!-- Assistant messages: markdown rendered -->
+          <template v-else-if="isAssistant">
+            <MarkdownRenderer
+              v-if="displayContent"
+              :content="displayContent"
+              class="wrap-break-word"
+            />
+            <!-- Streaming indicator: caret-like cursor, out of flow to avoid layout jump -->
+            <span
+              v-if="isStreaming"
+              class="pointer-events-none absolute bottom-1 right-1 inline-block h-4 w-px bg-foreground/60 animate-pulse"
+              aria-hidden="true"
+            />
+          </template>
+
+          <!-- Other roles: plain text -->
+          <p v-else class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
         </template>
 
         <!-- Status indicator -->

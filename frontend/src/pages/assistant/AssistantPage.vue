@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUp, MoreHorizontal, Pin, PinOff } from 'lucide-vue-next'
+import { ArrowUp, MoreHorizontal, Pin, PinOff, Square } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
@@ -515,6 +515,11 @@ const handleSend = async () => {
   }
 }
 
+const handleStop = () => {
+  if (!activeConversationId.value) return
+  void chatStore.stopGeneration(activeConversationId.value)
+}
+
 const handleSelectConversation = (conversation: Conversation) => {
   activeConversationId.value = conversation.id
   // Load messages from backend via chatStore
@@ -980,9 +985,9 @@ onUnmounted(() => {
 
     <!-- Right side: Chat area -->
     <section class="flex flex-1 flex-col overflow-hidden">
-      <!-- Chat messages area -->
+      <!-- Chat messages area - show when we have messages OR when generating -->
       <ChatMessageList
-        v-if="activeConversationId && chatMessages.length > 0"
+        v-if="activeConversationId && (chatMessages.length > 0 || isGenerating)"
         :conversation-id="activeConversationId"
         :tab-id="tabId"
         class="flex-1"
@@ -992,18 +997,18 @@ onUnmounted(() => {
       <!-- Empty state / Input area -->
       <div
         :class="
-          cn('flex px-6', chatMessages.length > 0 ? 'pb-4' : 'flex-1 items-center justify-center')
+          cn('flex px-6', (chatMessages.length > 0 || isGenerating) ? 'pb-4' : 'flex-1 items-center justify-center')
         "
       >
         <div
           :class="
             cn(
               'flex w-full flex-col items-center gap-10',
-              chatMessages.length === 0 && '-translate-y-10'
+              chatMessages.length === 0 && !isGenerating && '-translate-y-10'
             )
           "
         >
-          <div v-if="chatMessages.length === 0" class="flex items-center gap-3">
+          <div v-if="chatMessages.length === 0 && !isGenerating" class="flex items-center gap-3">
             <LogoIcon class="size-10 text-foreground" />
             <div class="text-2xl font-semibold text-foreground">
               {{ t('app.title') }}
@@ -1083,34 +1088,46 @@ onUnmounted(() => {
                 </Button>
               </div>
 
-              <TooltipProvider v-if="!canSend">
-                <Tooltip>
-                  <TooltipTrigger as-child>
-                    <!-- disabled button has pointer-events-none; use wrapper to keep tooltip hover -->
-                    <span class="inline-flex">
-                      <Button
-                        size="icon"
-                        class="size-6 rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
-                        disabled
-                      >
-                        <ArrowUp class="size-4" />
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{{ t('assistant.placeholders.enterToSend') }}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <Button
-                v-else
-                size="icon"
-                class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-                :title="t('assistant.chat.send')"
-                @click="handleSend"
-              >
-                <ArrowUp class="size-4" />
-              </Button>
+              <template v-if="isGenerating">
+                <Button
+                  size="icon"
+                  class="size-6 rounded-full bg-muted-foreground/20 text-foreground hover:bg-muted-foreground/30"
+                  :title="t('assistant.chat.stop')"
+                  @click="handleStop"
+                >
+                  <Square class="size-4" />
+                </Button>
+              </template>
+              <template v-else>
+                <TooltipProvider v-if="!canSend">
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <!-- disabled button has pointer-events-none; use wrapper to keep tooltip hover -->
+                      <span class="inline-flex">
+                        <Button
+                          size="icon"
+                          class="size-6 rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
+                          disabled
+                        >
+                          <ArrowUp class="size-4" />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{{ t('assistant.placeholders.enterToSend') }}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <Button
+                  v-else
+                  size="icon"
+                  class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  :title="t('assistant.chat.send')"
+                  @click="handleSend"
+                >
+                  <ArrowUp class="size-4" />
+                </Button>
+              </template>
             </div>
           </div>
         </div>

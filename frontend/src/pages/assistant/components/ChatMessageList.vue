@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { StopCircle } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { useChatStore, type StreamingMessageState } from '@/stores'
+import { useChatStore } from '@/stores'
 import type { Message } from '@bindings/willchat/internal/services/chat'
 import ChatMessageItem from './ChatMessageItem.vue'
 
@@ -23,7 +21,49 @@ const scrollContainerRef = ref<HTMLElement | null>(null)
 const shouldAutoScroll = ref(true)
 
 // Get messages for this conversation
-const messages = computed(() => chatStore.getMessages(props.conversationId).value)
+const allMessages = computed(() => chatStore.getMessages(props.conversationId).value)
+
+// Build a map of tool results by tool_call_id (from tool messages)
+const toolResultsMap = computed(() => {
+  const map: Record<string, { content: string; toolName: string }> = {}
+  for (const msg of allMessages.value) {
+    if (msg.role === 'tool' && msg.tool_call_id) {
+      map[msg.tool_call_id] = {
+        content: msg.content,
+        toolName: msg.tool_call_name || '',
+      }
+    }
+  }
+  return map
+})
+
+// Filter out tool messages (they'll be displayed inline with assistant messages)
+const messages = computed(() => {
+  return allMessages.value.filter((msg) => msg.role !== 'tool')
+})
+
+// Get tool results for a specific message's tool calls
+const getToolResultsForMessage = (msg: Message): Record<string, string> => {
+  if (msg.role !== 'assistant' || !msg.tool_calls || msg.tool_calls === '[]') {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(msg.tool_calls) as Array<{ ID?: string; toolCallId?: string }>
+    const results: Record<string, string> = {}
+
+    for (const tc of parsed) {
+      const toolCallId = tc.ID || tc.toolCallId
+      if (toolCallId && toolResultsMap.value[toolCallId]) {
+        results[toolCallId] = toolResultsMap.value[toolCallId].content
+      }
+    }
+
+    return results
+  } catch {
+    return {}
+  }
+}
 
 // Get streaming state for this conversation
 const streaming = computed(() => chatStore.getStreaming(props.conversationId).value)
@@ -48,11 +88,6 @@ const handleScroll = () => {
   const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.value
   // Auto-scroll if near bottom (within 100px)
   shouldAutoScroll.value = scrollHeight - scrollTop - clientHeight < 100
-}
-
-// Handle stop generation
-const handleStop = () => {
-  chatStore.stopGeneration(props.conversationId)
 }
 
 // Handle message edit
@@ -91,11 +126,11 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="flex min-h-0 flex-col">
     <!-- Messages container -->
     <div
       ref="scrollContainerRef"
-      class="flex-1 overflow-auto px-6 py-4"
+      class="min-h-0 flex-1 overflow-auto px-6 py-4"
       @scroll="handleScroll"
     >
       <div class="mx-auto flex max-w-[800px] flex-col gap-4">
@@ -104,12 +139,21 @@ watch(
           v-for="msg in messages"
           :key="msg.id"
           :message="msg"
+          :tool-results="getToolResultsForMessage(msg)"
+          :is-streaming="!!(streaming && msg.id === streaming.messageId)"
+          :streaming-content="streaming && msg.id === streaming.messageId ? streaming.content : undefined"
+          :streaming-thinking="
+            streaming && msg.id === streaming.messageId ? streaming.thinkingContent : undefined
+          "
+          :streaming-tool-calls="
+            streaming && msg.id === streaming.messageId ? streaming.toolCalls : undefined
+          "
           @edit="handleEdit"
         />
 
-        <!-- Streaming message (if any) -->
+        <!-- Streaming message fallback (should not happen, but keep UI resilient) -->
         <ChatMessageItem
-          v-if="streaming"
+          v-if="streaming && !messages.some((m) => m.id === streaming.messageId)"
           :message="{
             id: streaming.messageId,
             conversation_id: conversationId,
@@ -130,17 +174,5 @@ watch(
       </div>
     </div>
 
-    <!-- Stop button (shown when generating) -->
-    <div v-if="isGenerating" class="flex justify-center pb-2">
-      <Button
-        variant="outline"
-        size="sm"
-        class="gap-2"
-        @click="handleStop"
-      >
-        <StopCircle class="size-4" />
-        {{ t('assistant.chat.stop') }}
-      </Button>
-    </div>
   </div>
 </template>

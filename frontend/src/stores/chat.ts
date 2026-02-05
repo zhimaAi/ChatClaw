@@ -105,9 +105,58 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const ensureConversationMessages = (conversationId: number) => {
+    if (!messagesByConversation.value[conversationId]) {
+      messagesByConversation.value[conversationId] = []
+    }
+  }
+
+  const appendMessage = (conversationId: number, msg: Message) => {
+    ensureConversationMessages(conversationId)
+    messagesByConversation.value[conversationId] = [...messagesByConversation.value[conversationId], msg]
+  }
+
+  const upsertMessage = (conversationId: number, messageId: number, patch: Partial<Message>) => {
+    ensureConversationMessages(conversationId)
+    const current = messagesByConversation.value[conversationId]
+    const idx = current.findIndex((m) => m.id === messageId)
+    if (idx >= 0) {
+      const next = [...current]
+      next[idx] = { ...next[idx], ...patch } as Message
+      messagesByConversation.value[conversationId] = next
+      return
+    }
+
+    // Insert as new message if not found (fallback)
+    messagesByConversation.value[conversationId] = [...current, { ...(patch as any), id: messageId } as Message]
+  }
+
+  const removeMessage = (conversationId: number, messageId: number) => {
+    ensureConversationMessages(conversationId)
+    messagesByConversation.value[conversationId] = messagesByConversation.value[conversationId].filter(
+      (m) => m.id !== messageId
+    )
+  }
+
   // Send a new message
   const sendMessage = async (conversationId: number, content: string, tabId: string) => {
     if (conversationId <= 0 || !content.trim()) return null
+
+    // Optimistically append user message (backend inserts user msg, but doesn't emit an event for it)
+    const localUserMessageId = -Date.now()
+    appendMessage(conversationId, {
+      id: localUserMessageId,
+      conversation_id: conversationId,
+      role: MessageRole.USER,
+      content: content.trim(),
+      status: MessageStatus.SUCCESS,
+      thinking_content: '',
+      tool_calls: '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
 
     try {
       const result = await ChatService.SendMessage(
@@ -124,6 +173,8 @@ export const useChatStore = defineStore('chat', () => {
 
       return result
     } catch (error: unknown) {
+      // Rollback optimistic message on failure
+      removeMessage(conversationId, localUserMessageId)
       throw error
     }
   }
@@ -192,6 +243,21 @@ export const useChatStore = defineStore('chat', () => {
       toolCalls: [],
       status: MessageStatus.STREAMING,
     }
+
+    // Ensure assistant placeholder exists in message list so streaming updates don't "jump"
+    upsertMessage(conversation_id, message_id, {
+      id: message_id,
+      conversation_id,
+      role: MessageRole.ASSISTANT,
+      content: '',
+      status: MessageStatus.STREAMING,
+      thinking_content: '',
+      tool_calls: '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
   }
 
   const handleChatChunk = (event: any) => {
@@ -203,6 +269,9 @@ export const useChatStore = defineStore('chat', () => {
 
     if (streaming && streaming.requestId === request_id) {
       streaming.content += delta || ''
+      upsertMessage(conversation_id, streaming.messageId, {
+        content: streaming.content,
+      })
     }
   }
 
@@ -215,6 +284,9 @@ export const useChatStore = defineStore('chat', () => {
 
     if (streaming && streaming.requestId === request_id) {
       streaming.thinkingContent += delta || ''
+      upsertMessage(conversation_id, streaming.messageId, {
+        thinking_content: streaming.thinkingContent,
+      } as any)
     }
   }
 
@@ -226,23 +298,76 @@ export const useChatStore = defineStore('chat', () => {
       data
     const streaming = streamingByConversation.value[conversation_id]
 
+    if (!streaming) {
+      debug('tool event ignored (no streaming)', { conversation_id, request_id, type, tool_call_id })
+      return
+    }
+
+    if (streaming.requestId !== request_id) {
+      debug('tool event ignored (request mismatch)', {
+        conversation_id,
+        request_id,
+        active: streaming.requestId,
+        type,
+        tool_call_id,
+      })
+      return
+    }
+
     if (streaming && streaming.requestId === request_id) {
       if (type === 'call') {
-        // New tool call
-        streaming.toolCalls.push({
-          toolCallId: tool_call_id,
-          toolName: tool_name,
-          argsJson: args_json,
-          status: 'calling',
-        })
+        // Tool call (dedupe by tool_call_id; some providers may emit repeated snapshots)
+        const existing = streaming.toolCalls.find((tc) => tc.toolCallId === tool_call_id)
+        if (existing) {
+          existing.toolName = tool_name
+          existing.argsJson = args_json
+          // Don't downgrade completed to calling
+          if (existing.status !== 'completed') {
+            existing.status = 'calling'
+          }
+        } else {
+          streaming.toolCalls.push({
+            toolCallId: tool_call_id,
+            toolName: tool_name,
+            argsJson: args_json,
+            status: 'calling',
+          })
+        }
       } else if (type === 'result') {
-        // Tool result
-        const toolCall = streaming.toolCalls.find((tc) => tc.toolCallId === tool_call_id)
-        if (toolCall) {
-          toolCall.resultJson = result_json
-          toolCall.status = 'completed'
+        // Tool result (result may arrive before call event)
+        const existing = streaming.toolCalls.find((tc) => tc.toolCallId === tool_call_id)
+        if (existing) {
+          existing.toolName = existing.toolName || tool_name
+          existing.resultJson = result_json
+          existing.status = 'completed'
+        } else {
+          // Try best-effort merge by (toolName + argsJson) to avoid duplicates like "calling" + "completed"
+          const mergeCandidate = streaming.toolCalls.find(
+            (tc) =>
+              tc.status === 'calling' &&
+              tc.toolName === tool_name &&
+              // If result includes no args_json, allow merge; otherwise require same args
+              (!args_json || tc.argsJson === args_json)
+          )
+          if (mergeCandidate) {
+            mergeCandidate.toolCallId = tool_call_id || mergeCandidate.toolCallId
+            mergeCandidate.resultJson = result_json
+            mergeCandidate.status = 'completed'
+          } else {
+            streaming.toolCalls.push({
+              toolCallId: tool_call_id,
+              toolName: tool_name,
+              resultJson: result_json,
+              status: 'completed',
+            })
+          }
         }
       }
+
+      // Mirror tool calls into the message so UI can render them consistently
+      upsertMessage(conversation_id, streaming.messageId, {
+        tool_calls: JSON.stringify(streaming.toolCalls),
+      } as any)
     }
   }
 
@@ -254,8 +379,16 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
-      // Refresh messages from backend to get the final state
-      loadMessages(conversation_id)
+      // Finalize message locally first to avoid visible "jump"
+      upsertMessage(conversation_id, streaming.messageId, {
+        content: streaming.content,
+        thinking_content: streaming.thinkingContent,
+        tool_calls: JSON.stringify(streaming.toolCalls),
+        status: MessageStatus.SUCCESS,
+      } as any)
+
+      // Refresh messages from backend to get the final persisted state (tokens, tool messages, etc.)
+      void loadMessages(conversation_id)
 
       // Clear streaming state
       delete streamingByConversation.value[conversation_id]
@@ -271,8 +404,15 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
-      // Refresh messages from backend to get the cancelled state
-      loadMessages(conversation_id)
+      upsertMessage(conversation_id, streaming.messageId, {
+        content: streaming.content,
+        thinking_content: streaming.thinkingContent,
+        tool_calls: JSON.stringify(streaming.toolCalls),
+        status: MessageStatus.CANCELLED,
+      } as any)
+
+      // Refresh messages from backend to get the cancelled persisted state
+      void loadMessages(conversation_id)
 
       // Clear streaming state
       delete streamingByConversation.value[conversation_id]
@@ -293,14 +433,19 @@ export const useChatStore = defineStore('chat', () => {
       // Store error message
       errorByConversation.value[conversation_id] = error_key
 
-      // Refresh messages from backend
-      loadMessages(conversation_id)
+      upsertMessage(conversation_id, streaming.messageId, {
+        content: streaming.content,
+        thinking_content: streaming.thinkingContent,
+        tool_calls: JSON.stringify(streaming.toolCalls),
+        status: MessageStatus.ERROR,
+      } as any)
 
-      // Clear streaming state after a delay
-      setTimeout(() => {
-        delete streamingByConversation.value[conversation_id]
-        delete activeRequestByConversation.value[conversation_id]
-      }, 100)
+      // Refresh messages from backend
+      void loadMessages(conversation_id)
+
+      // Clear streaming state
+      delete streamingByConversation.value[conversation_id]
+      delete activeRequestByConversation.value[conversation_id]
     }
   }
 
@@ -313,18 +458,79 @@ export const useChatStore = defineStore('chat', () => {
 
   // Subscribe to chat events
   let unsubscribers: Array<() => void> = []
+  let subscriptionRefCount = 0
+  const debugEnabled =
+    typeof window !== 'undefined' && window.localStorage?.getItem('debug:chat') === '1'
+
+  const debug = (...args: any[]) => {
+    if (debugEnabled) {
+      // eslint-disable-next-line no-console
+      console.debug('[chat]', ...args)
+    }
+  }
 
   const subscribe = () => {
-    unsubscribers.push(Events.On(ChatEventType.START, handleChatStart))
-    unsubscribers.push(Events.On(ChatEventType.CHUNK, handleChatChunk))
-    unsubscribers.push(Events.On(ChatEventType.THINKING, handleChatThinking))
-    unsubscribers.push(Events.On(ChatEventType.TOOL, handleChatTool))
-    unsubscribers.push(Events.On(ChatEventType.COMPLETE, handleChatComplete))
-    unsubscribers.push(Events.On(ChatEventType.STOPPED, handleChatStopped))
-    unsubscribers.push(Events.On(ChatEventType.ERROR, handleChatError))
+    subscriptionRefCount += 1
+    if (subscriptionRefCount > 1) {
+      debug('subscribe skipped (already subscribed)', { subscriptionRefCount })
+      return
+    }
+
+    debug('subscribe', { subscriptionRefCount })
+    unsubscribers.push(
+      Events.On(ChatEventType.START, (e: any) => {
+        debug(ChatEventType.START, extractEventData(e))
+        handleChatStart(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.CHUNK, (e: any) => {
+        debug(ChatEventType.CHUNK, extractEventData(e))
+        handleChatChunk(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.THINKING, (e: any) => {
+        debug(ChatEventType.THINKING, extractEventData(e))
+        handleChatThinking(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.TOOL, (e: any) => {
+        debug(ChatEventType.TOOL, extractEventData(e))
+        handleChatTool(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.COMPLETE, (e: any) => {
+        debug(ChatEventType.COMPLETE, extractEventData(e))
+        handleChatComplete(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.STOPPED, (e: any) => {
+        debug(ChatEventType.STOPPED, extractEventData(e))
+        handleChatStopped(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.ERROR, (e: any) => {
+        // Always log errors to console
+        // eslint-disable-next-line no-console
+        console.error('[chat] chat:error', extractEventData(e))
+        handleChatError(e)
+      })
+    )
   }
 
   const unsubscribe = () => {
+    subscriptionRefCount = Math.max(0, subscriptionRefCount - 1)
+    if (subscriptionRefCount > 0) {
+      debug('unsubscribe skipped (still in use)', { subscriptionRefCount })
+      return
+    }
+
+    debug('unsubscribe', { subscriptionRefCount })
     unsubscribers.forEach((unsub) => unsub?.())
     unsubscribers = []
   }

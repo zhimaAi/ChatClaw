@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,6 +93,8 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		return nil, errs.New("error.chat_content_required")
 	}
 
+	log.Printf("[chat] SendMessage conv=%d tab=%s content_len=%d", input.ConversationID, input.TabID, len(content))
+
 	// Check if there's already an active generation for this conversation
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
@@ -148,6 +151,8 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 	if content == "" {
 		return nil, errs.New("error.chat_content_required")
 	}
+
+	log.Printf("[chat] EditAndResend conv=%d tab=%s msg=%d content_len=%d", input.ConversationID, input.TabID, input.MessageID, len(content))
 
 	// Stop any existing generation
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
@@ -372,10 +377,39 @@ func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversatio
 	}
 
 	emit := func(eventName string, payload any) {
+		// Debug: print every emitted event (avoid logging full content; log sizes and IDs only)
+		switch v := payload.(type) {
+		case ChatStartEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID)
+		case ChatChunkEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
+		case ChatThinkingEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
+		case ChatToolEvent:
+			argsPreview := v.ArgsJSON
+			if len(argsPreview) > 500 {
+				argsPreview = argsPreview[:500] + "...(truncated)"
+			}
+			resPreview := v.ResultJSON
+			if len(resPreview) > 500 {
+				resPreview = resPreview[:500] + "...(truncated)"
+			}
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d type=%s tool=%s call_id=%s args_len=%d result_len=%d args=%q result=%q",
+				eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Type, v.ToolName, v.ToolCallID, len(v.ArgsJSON), len(v.ResultJSON), argsPreview, resPreview)
+		case ChatCompleteEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d finish=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.FinishReason)
+		case ChatStoppedEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d status=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Status)
+		case ChatErrorEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d key=%s data=%v", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.ErrorKey, v.ErrorData)
+		default:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s payload=%T", eventName, conversationID, tabID, requestID, payload)
+		}
 		s.app.Event.Emit(eventName, payload)
 	}
 
 	emitError := func(errorKey string, errorData any) {
+		log.Printf("[chat] error conv=%d tab=%s req=%s key=%s data=%v", conversationID, tabID, requestID, errorKey, errorData)
 		emit(EventChatError, ChatErrorEvent{
 			ChatEvent: ChatEvent{
 				ConversationID: conversationID,
@@ -421,10 +455,39 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	}
 
 	emit := func(eventName string, payload any) {
+		// Debug: print every emitted event (avoid logging full content; log sizes and IDs only)
+		switch v := payload.(type) {
+		case ChatStartEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID)
+		case ChatChunkEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
+		case ChatThinkingEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
+		case ChatToolEvent:
+			argsPreview := v.ArgsJSON
+			if len(argsPreview) > 500 {
+				argsPreview = argsPreview[:500] + "...(truncated)"
+			}
+			resPreview := v.ResultJSON
+			if len(resPreview) > 500 {
+				resPreview = resPreview[:500] + "...(truncated)"
+			}
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d type=%s tool=%s call_id=%s args_len=%d result_len=%d args=%q result=%q",
+				eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Type, v.ToolName, v.ToolCallID, len(v.ArgsJSON), len(v.ResultJSON), argsPreview, resPreview)
+		case ChatCompleteEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d finish=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.FinishReason)
+		case ChatStoppedEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d status=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Status)
+		case ChatErrorEvent:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d key=%s data=%v", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.ErrorKey, v.ErrorData)
+		default:
+			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s payload=%T", eventName, conversationID, tabID, requestID, payload)
+		}
 		s.app.Event.Emit(eventName, payload)
 	}
 
 	emitError := func(errorKey string, errorData any) {
+		log.Printf("[chat] error conv=%d tab=%s req=%s key=%s data=%v", conversationID, tabID, requestID, errorKey, errorData)
 		emit(EventChatError, ChatErrorEvent{
 			ChatEvent: ChatEvent{
 				ConversationID: conversationID,
@@ -527,6 +590,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		}
 
 		if event.Err != nil {
+			log.Printf("[chat] generation failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, event.Err)
 			emitError("error.chat_generation_failed", map[string]any{"Error": event.Err.Error()})
 			s.updateMessageStatus(db, assistantMsg.ID, StatusError, event.Err.Error(), "")
 			return
@@ -547,6 +611,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 							// Context cancelled
 							break
 						}
+						log.Printf("[chat] stream recv failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, err)
 						emitError("error.chat_stream_failed", map[string]any{"Error": err.Error()})
 						break
 					}
@@ -571,6 +636,10 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					if len(msg.ToolCalls) > 0 {
 						toolCallsJSON, _ = json.Marshal(msg.ToolCalls)
 						for _, tc := range msg.ToolCalls {
+							if !json.Valid([]byte(tc.Function.Arguments)) {
+								log.Printf("[chat] WARNING tool arguments not valid JSON conv=%d tab=%s req=%s tool=%s call_id=%s args=%q",
+									conversationID, tabID, requestID, tc.Function.Name, tc.ID, tc.Function.Arguments)
+							}
 							emit(EventChatTool, ChatToolEvent{
 								ChatEvent: ChatEvent{
 									ConversationID: conversationID,

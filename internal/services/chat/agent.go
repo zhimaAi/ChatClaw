@@ -204,15 +204,21 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 
 	// Convert to BaseTool slice
 	baseTools := make([]tool.BaseTool, len(enabledTools))
-	for i, t := range enabledTools {
-		baseTools[i] = t
-	}
+	copy(baseTools, enabledTools)
 
 	// Create the agent
+	instruction := config.Instruction
+	// Tool calling reliability note:
+	// Some OpenAI-compatible providers require tool call "function.arguments" to be a valid JSON object string.
+	// Adding an explicit instruction reduces the chance of malformed arguments and 400 errors.
+	instruction = instruction + "\n\n" +
+		"工具调用规则（非常重要）：当你调用任何工具时，必须让 tool_calls[].function.arguments 是严格合法的 JSON（对象），" +
+		"例如：{\"query\":\"...\"} 或 {\"expression\":\"1+2\"}。不要输出 key=value、不要输出纯文本、不要输出不带引号的字段。\n"
+
 	agentConfig := &adk.ChatModelAgentConfig{
 		Name:        config.Name,
 		Description: "AI Assistant",
-		Instruction: config.Instruction,
+		Instruction: instruction,
 		Model:       chatModel,
 		MaxIterations: 20,
 	}
