@@ -17,7 +17,7 @@ require (
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.23
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.66
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.67
 	golang.org/x/sys v0.40.0
 	golang.org/x/text v0.33.0
 	google.golang.org/genai v1.44.0
