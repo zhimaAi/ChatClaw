@@ -9,6 +9,19 @@ export default {
     cancelSnap: '取消吸附',
     placeholder: '请输入问题',
     thinking: '思考中...',
+    actions: {
+      sendAndTrigger: '发送并触发发送',
+      sendToEdit: '发送到编辑框',
+      copyToClipboard: '复制到剪贴板',
+    },
+    toast: {
+      copied: '已复制到剪贴板',
+      sent: '已发送',
+      pasted: '已粘贴到编辑框',
+      sendFailed: '发送失败',
+      pasteFailed: '粘贴失败',
+      noTarget: '未吸附到任何应用',
+    },
   },
   selection: {
     aiChat: 'AI 对话',

@@ -13,3 +13,9 @@ func TopMostVisibleProcessName(_ []string) (string, bool, error) {
 func MoveOffscreen(_ *application.WebviewWindow) error {
 	return ErrNotSupported
 }
+
+// MoveToStandalone moves the window to a standalone position.
+// Not supported on this platform.
+func MoveToStandalone(_ *application.WebviewWindow) error {
+	return ErrNotSupported
+}
