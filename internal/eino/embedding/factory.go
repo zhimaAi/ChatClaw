@@ -36,14 +36,30 @@ func NewEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embedder, 
 
 	switch cfg.ProviderType {
 	case "openai":
-		return newOpenAIEmbedder(ctx, cfg)
+		emb, err := newOpenAIEmbedder(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithBatchLimit(emb, 10), nil
 	case "azure":
-		return newAzureEmbedder(ctx, cfg)
+		emb, err := newAzureEmbedder(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithBatchLimit(emb, 10), nil
 	case "ollama":
-		return newOllamaEmbedder(ctx, cfg)
+		emb, err := newOllamaEmbedder(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithBatchLimit(emb, 10), nil
 	default:
 		// 默认使用 OpenAI 兼容 API
-		return newOpenAIEmbedder(ctx, cfg)
+		emb, err := newOpenAIEmbedder(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return WrapWithBatchLimit(emb, 10), nil
 	}
 }
 

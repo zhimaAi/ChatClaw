@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"io/fs"
+	"strings"
 	"time"
 
 	"willchat/internal/define"
@@ -81,6 +82,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	if err := settings.InitCache(app); err != nil {
 		sqlite.Close()
 		return nil, nil, fmt.Errorf("settings cache init: %w", err)
+	}
+
+	// 使用 DB 中持久化的 language 覆盖启动语言（保证重启后语言一致）
+	if lang, ok := settings.GetValue("language"); ok && strings.TrimSpace(lang) != "" {
+		i18n.SetLocale(lang)
 	}
 
 	// 初始化任务管理器（基于 goqite 的持久化消息队列）

@@ -87,6 +87,53 @@ func (b *Builder) BuildTree(ctx context.Context, nodes []*DocumentNode) error {
 		// 计算簇的数量
 		k := b.calculateK(len(currentNodes))
 		if k < 2 {
+			// Fallback: generate a single root summary so we can still produce a top-level node
+			// even when node count is too small for clustering (e.g. only 2 level-1 nodes).
+			summary, err := b.generateSummary(ctx, currentNodes)
+			if err != nil {
+				return fmt.Errorf("生成根摘要失败: %w", err)
+			}
+
+			root := &DocumentNode{
+				LibraryID:  currentNodes[0].LibraryID,
+				DocumentID: currentNodes[0].DocumentID,
+				Content:    summary,
+				Level:      currentLevel + 1,
+				ChunkOrder: 0,
+			}
+			if b.OnNodeCreated != nil {
+				nodeID, err := b.OnNodeCreated(ctx, root)
+				if err != nil {
+					return fmt.Errorf("创建根摘要节点失败: %w", err)
+				}
+				root.ID = nodeID
+			}
+			for _, child := range currentNodes {
+				child.ParentID = &root.ID
+				if b.OnNodeUpdated != nil {
+					if err := b.OnNodeUpdated(ctx, child); err != nil {
+						return fmt.Errorf("更新子节点 parent_id 失败: %w", err)
+					}
+				}
+			}
+			if b.embedder != nil {
+				vecs, err := b.embedder.EmbedStrings(ctx, []string{summary})
+				if err != nil {
+					return fmt.Errorf("嵌入根摘要失败: %w", err)
+				}
+				if len(vecs) > 0 {
+					root.Vector = vecs[0]
+					if b.OnVectorStore != nil {
+						if err := b.OnVectorStore(ctx, root.ID, vecs[0]); err != nil {
+							return fmt.Errorf("存储根摘要向量失败: %w", err)
+						}
+					}
+				}
+			}
+
+			// Move to next level and stop (no further clustering possible)
+			currentLevel++
+			currentNodes = []*DocumentNode{root}
 			break
 		}
 
@@ -166,6 +213,53 @@ func (b *Builder) BuildTree(ctx context.Context, nodes []*DocumentNode) error {
 		// 移动到下一层级
 		currentLevel++
 		currentNodes = summaryNodes
+	}
+
+	// Post-loop fallback:
+	// If we stopped early due to too few nodes for clustering (e.g. got 2 level-1 nodes),
+	// generate a single top summary node for the next level (root).
+	if currentLevel < b.config.MaxLevel && len(currentNodes) > 1 {
+		summary, err := b.generateSummary(ctx, currentNodes)
+		if err != nil {
+			return fmt.Errorf("生成根摘要失败: %w", err)
+		}
+
+		root := &DocumentNode{
+			LibraryID:  currentNodes[0].LibraryID,
+			DocumentID: currentNodes[0].DocumentID,
+			Content:    summary,
+			Level:      currentLevel + 1,
+			ChunkOrder: 0,
+		}
+		if b.OnNodeCreated != nil {
+			nodeID, err := b.OnNodeCreated(ctx, root)
+			if err != nil {
+				return fmt.Errorf("创建根摘要节点失败: %w", err)
+			}
+			root.ID = nodeID
+		}
+		for _, child := range currentNodes {
+			child.ParentID = &root.ID
+			if b.OnNodeUpdated != nil {
+				if err := b.OnNodeUpdated(ctx, child); err != nil {
+					return fmt.Errorf("更新子节点 parent_id 失败: %w", err)
+				}
+			}
+		}
+		if b.embedder != nil {
+			vecs, err := b.embedder.EmbedStrings(ctx, []string{summary})
+			if err != nil {
+				return fmt.Errorf("嵌入根摘要失败: %w", err)
+			}
+			if len(vecs) > 0 {
+				root.Vector = vecs[0]
+				if b.OnVectorStore != nil {
+					if err := b.OnVectorStore(ctx, root.ID, vecs[0]); err != nil {
+						return fmt.Errorf("存储根摘要向量失败: %w", err)
+					}
+				}
+			}
+		}
 	}
 
 	return nil

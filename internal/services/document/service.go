@@ -31,6 +31,7 @@ import (
 const (
 	JobTypeThumbnail = "thumbnail" // Generate document thumbnail
 	JobTypeProcess   = "process"   // Parse and embed document
+	JobTypeReembed   = "reembed"   // Re-embed existing nodes only
 )
 
 // ThumbnailJobData holds data for thumbnail generation job.
@@ -99,6 +100,19 @@ func (s *DocumentService) registerTaskHandlers() {
 			return nil // Don't retry malformed jobs
 		}
 		s.processDocument(jobData.DocID, jobData.LibraryID, jobData.RunID, info)
+		return nil
+	})
+
+	// Register embedding-only handler
+	tm.RegisterHandler(taskmanager.QueueDocument, JobTypeReembed, func(ctx context.Context, info *taskmanager.TaskInfo, data []byte) error {
+		var jobData ProcessJobData
+		if err := json.Unmarshal(data, &jobData); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("failed to unmarshal reembed job data", "error", err)
+			}
+			return nil
+		}
+		s.reembedDocument(jobData.DocID, jobData.LibraryID, jobData.RunID, info)
 		return nil
 	})
 }
@@ -917,4 +931,86 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 
 	// 全部完成
 	updateAndEmit(StatusCompleted, 100, "", StatusCompleted, 100, "")
+}
+
+// reembedDocument 仅对已有节点重新向量化（不重新解析/分段）
+func (s *DocumentService) reembedDocument(docID, libraryID int64, runID string, info *taskmanager.TaskInfo) {
+	if info != nil && info.IsCancelled() {
+		return
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Load document and validate runID to avoid stale jobs
+	var doc documentModel
+	if err := db.NewSelect().Model(&doc).Where("id = ?", docID).Scan(ctx); err != nil {
+		return
+	}
+	if runID != "" && doc.ProcessingRunID != "" && runID != doc.ProcessingRunID {
+		return
+	}
+
+	parsingStatus := doc.ParsingStatus
+	parsingProgress := doc.ParsingProgress
+	parsingError := doc.ParsingError
+
+	emitProgress := func(status int, progress int, errMsg string) {
+		// Update DB
+		_, _ = db.NewUpdate().
+			Table("documents").
+			Set("embedding_status = ?", status).
+			Set("embedding_progress = ?", progress).
+			Set("embedding_error = ?", errMsg).
+			Where("id = ?", docID).
+			Exec(ctx)
+
+		// Emit event
+		if s.app != nil {
+			s.app.Event.Emit("document:progress", ProgressEvent{
+				DocumentID:        docID,
+				LibraryID:         libraryID,
+				ParsingStatus:     parsingStatus,
+				ParsingProgress:   parsingProgress,
+				ParsingError:      parsingError,
+				EmbeddingStatus:   status,
+				EmbeddingProgress: progress,
+				EmbeddingError:    errMsg,
+			})
+		}
+	}
+
+	// Start embedding
+	emitProgress(StatusProcessing, 0, "")
+
+	// Load embedding config (global)
+	embeddingConfig, err := processor.GetEmbeddingConfig(ctx, db)
+	if err != nil {
+		emitProgress(StatusFailed, 0, "获取嵌入模型配置失败: "+err.Error())
+		return
+	}
+
+	// Create processor
+	proc, err := processor.NewProcessor(db)
+	if err != nil {
+		emitProgress(StatusFailed, 0, "创建处理器失败: "+err.Error())
+		return
+	}
+
+	err = proc.ReembedDocumentNodes(ctx, docID, embeddingConfig, func(p int) {
+		if info != nil && info.IsCancelled() {
+			return
+		}
+		emitProgress(StatusProcessing, p, "")
+	})
+	if err != nil {
+		emitProgress(StatusFailed, 0, err.Error())
+		return
+	}
+
+	emitProgress(StatusCompleted, 100, "")
 }

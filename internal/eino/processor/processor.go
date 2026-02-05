@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/cloudwego/eino/components/document/parser"
@@ -78,6 +81,43 @@ type Processor struct {
 	parser parser.Parser
 }
 
+// ReembedDocumentNodes 仅对已有的 document_nodes 重新向量化（不重新解析/分段）
+// 用于全局 embedding 模型/维度切换后的批量重建向量。
+func (p *Processor) ReembedDocumentNodes(
+	ctx context.Context,
+	docID int64,
+	embeddingConfig *EmbeddingConfig,
+	onProgress func(progress int),
+) error {
+	if docID <= 0 {
+		return errors.New("docID required")
+	}
+	if embeddingConfig == nil {
+		return errors.New("embeddingConfig required")
+	}
+
+	embedder, err := p.createEmbedder(ctx, embeddingConfig)
+	if err != nil {
+		return fmt.Errorf("创建 embedder 失败: %w", err)
+	}
+
+	nodes := make([]*DocumentNode, 0, 256)
+	if err := p.db.NewSelect().
+		Model(&nodes).
+		Column("id", "library_id", "document_id", "content", "level", "parent_id", "chunk_order").
+		Where("document_id = ?", docID).
+		OrderExpr("id ASC").
+		Scan(ctx); err != nil {
+		return fmt.Errorf("读取 document_nodes 失败: %w", err)
+	}
+
+	if len(nodes) == 0 {
+		return errors.New("no document nodes")
+	}
+
+	return p.embedNodes(ctx, nodes, embedder, onProgress)
+}
+
 // NewProcessor 创建新的文档处理器
 func NewProcessor(db *bun.DB) (*Processor, error) {
 	ctx := context.Background()
@@ -145,7 +185,42 @@ func (p *Processor) ProcessDocument(
 	}
 
 	// 阶段 2：分割文档（Markdown 优先用 Header Splitter，否则按配置选择语义/递归分割）
+	var splittingDone chan struct{}
+	semanticEnabled := libraryConfig != nil &&
+		libraryConfig.SemanticSegmentProviderID != "" &&
+		libraryConfig.SemanticSegmentModelID != ""
+	if semanticEnabled {
+		ext := strings.ToLower(filepath.Ext(localPath))
+		if ext != ".md" && ext != ".markdown" && onProgress != nil {
+			splittingDone = make(chan struct{})
+			go func() {
+				defer func() {
+					// avoid panic if close happens before start
+					recover()
+				}()
+				ticker := time.NewTicker(900 * time.Millisecond)
+				defer ticker.Stop()
+				pct := 52
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-splittingDone:
+						return
+					case <-ticker.C:
+						if pct < 79 {
+							pct += 2
+							onProgress("parsing", pct)
+						}
+					}
+				}
+			}()
+		}
+	}
 	chunks, err := p.splitDocument(ctx, docs, localPath, libraryConfig, embedder)
+	if splittingDone != nil {
+		close(splittingDone)
+	}
 	if err != nil {
 		result.Error = fmt.Errorf("分割失败: %w", err)
 		return result, result.Error
@@ -155,25 +230,34 @@ func (p *Processor) ProcessDocument(
 		onProgress("parsing", 80)
 	}
 
-	// 阶段 3：存储节点（level=0）
-	nodes, err := p.storeNodes(ctx, docID, libraryConfig.ID, chunks)
-	if err != nil {
-		result.Error = fmt.Errorf("存储节点失败: %w", err)
-		return result, result.Error
+	// 我们将“入库”延迟到所有计算完成后一次性提交：
+	// - 先在内存中生成 level-0 节点与向量
+	// - 可选：构建 RAPTOR 摘要节点（level 1/2）与向量
+	// - 最后用一个事务写入 document_nodes + doc_vec（避免处理中间态）
+	level0 := make([]*raptor.DocumentNode, 0, len(chunks))
+	for i, chunk := range chunks {
+		level0 = append(level0, &raptor.DocumentNode{
+			ID:            int64(i + 1), // temp id
+			LibraryID:     libraryConfig.ID,
+			DocumentID:    docID,
+			Content:       chunk.Content,
+			ContentTokens: tokenizeContent(chunk.Content),
+			Level:         0,
+			ParentID:      nil,
+			ChunkOrder:    i,
+		})
 	}
-
-	result.SplitTotal = len(nodes)
+	result.SplitTotal = len(level0)
 
 	if onProgress != nil {
 		onProgress("parsing", 100)
 	}
 
-	// 阶段 4：嵌入节点（复用同一 embedder）
+	// 阶段 4：嵌入 level-0 节点（内存中）
 	if onProgress != nil {
 		onProgress("embedding", 10)
 	}
-
-	if err := p.embedNodes(ctx, nodes, embedder, func(progress int) {
+	if err := embedRaptorNodes(ctx, level0, embedder, func(progress int) {
 		if onProgress != nil {
 			onProgress("embedding", 10+progress*70/100)
 		}
@@ -186,13 +270,29 @@ func (p *Processor) ProcessDocument(
 		onProgress("embedding", 80)
 	}
 
-	// 阶段 5：构建 RAPTOR 树（如果配置了语义模型）
-	if libraryConfig.SemanticSegmentProviderID != "" && libraryConfig.SemanticSegmentModelID != "" {
-		if err := p.buildRaptorTree(ctx, docID, libraryConfig, nodes, embedder, getProviderInfo); err != nil {
-			// RAPTOR 失败不是致命错误，记录日志并继续
-			// level-0 节点已经嵌入
-			_ = err // 在生产环境中记录此错误
+	// 阶段 5：可选构建 RAPTOR（语义分段开启时）
+	allNodes := level0
+	if semanticEnabled {
+		planned, err := p.buildRaptorPlan(ctx, libraryConfig, allNodes, embedder, getProviderInfo)
+		if err != nil {
+			// 非致命：只保留 level-0
+			_ = err
+		} else {
+			allNodes = planned
 		}
+	}
+
+	// 确保所有节点都有 content_tokens（摘要节点也需要）
+	for _, n := range allNodes {
+		if strings.TrimSpace(n.ContentTokens) == "" {
+			n.ContentTokens = tokenizeContent(n.Content)
+		}
+	}
+
+	// 最终一次性入库（事务）
+	if err := p.persistNodesAndVectors(ctx, docID, allNodes); err != nil {
+		result.Error = fmt.Errorf("入库失败: %w", err)
+		return result, result.Error
 	}
 
 	if onProgress != nil {
@@ -243,8 +343,8 @@ func (p *Processor) splitDocument(
 	// 注意：Markdown 文件会优先使用 Header Splitter，不受此配置影响
 	if libraryConfig.SemanticSegmentProviderID != "" && libraryConfig.SemanticSegmentModelID != "" {
 		cfg.SemanticEmbedder = embedder
-		cfg.SemanticPercentile = 0.9
-		cfg.SemanticMinChunkSize = 100
+		cfg.SemanticPercentile = 0.6
+		cfg.SemanticMinChunkSize = 300
 	}
 
 	docSplitter, err := splitter.NewSplitter(ctx, cfg)
@@ -527,6 +627,160 @@ func (p *Processor) updateDocumentStats(ctx context.Context, docID int64, wordTo
 // 使用 gse 进行中文/英文分词
 func tokenizeContent(content string) string {
 	return tokenizer.TokenizeContent(content)
+}
+
+// embedRaptorNodes embeds contents for raptor nodes (in-memory, no DB writes).
+func embedRaptorNodes(ctx context.Context, nodes []*raptor.DocumentNode, embedder embedding.Embedder, onProgress func(int)) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+	if embedder == nil {
+		return errors.New("embedder is nil")
+	}
+
+	batchSize := 10
+	for i := 0; i < len(nodes); i += batchSize {
+		end := i + batchSize
+		if end > len(nodes) {
+			end = len(nodes)
+		}
+		batch := nodes[i:end]
+
+		contents := make([]string, len(batch))
+		for j, n := range batch {
+			contents[j] = n.Content
+		}
+
+		vecs, err := embedder.EmbedStrings(ctx, contents)
+		if err != nil {
+			return err
+		}
+		for j := range batch {
+			if j < len(vecs) {
+				batch[j].Vector = vecs[j]
+			}
+		}
+
+		if onProgress != nil {
+			onProgress((end * 100) / len(nodes))
+		}
+	}
+	return nil
+}
+
+// buildRaptorPlan builds RAPTOR summary nodes in memory (no DB writes).
+func (p *Processor) buildRaptorPlan(
+	ctx context.Context,
+	libraryConfig *LibraryConfig,
+	level0 []*raptor.DocumentNode,
+	embedder embedding.Embedder,
+	getProviderInfo func(providerID string) (*ProviderInfo, error),
+) ([]*raptor.DocumentNode, error) {
+	// 获取 LLM 的供应商信息
+	providerInfo, err := getProviderInfo(libraryConfig.SemanticSegmentProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("获取供应商信息: %w", err)
+	}
+
+	// 创建 LLM 聊天模型
+	llm, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
+		ProviderType: providerInfo.ProviderType,
+		APIKey:       providerInfo.APIKey,
+		APIEndpoint:  providerInfo.APIEndpoint,
+		ModelID:      libraryConfig.SemanticSegmentModelID,
+		ExtraConfig:  providerInfo.ExtraConfig,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("创建聊天模型: %w", err)
+	}
+
+	builder := raptor.NewBuilder(&raptor.Config{
+		MaxLevel:    2,
+		ClusterSize: 5,
+		MinNodes:    3,
+	}, embedder, llm)
+
+	return builder.BuildTreePlan(ctx, level0)
+}
+
+func (p *Processor) persistNodesAndVectors(ctx context.Context, docID int64, nodes []*raptor.DocumentNode) error {
+	if docID <= 0 {
+		return errors.New("docID required")
+	}
+	if len(nodes) == 0 {
+		return errors.New("no nodes to persist")
+	}
+
+	// stable insert order: level asc, chunk_order asc, temp id asc
+	sorted := make([]*raptor.DocumentNode, len(nodes))
+	copy(sorted, nodes)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].Level != sorted[j].Level {
+			return sorted[i].Level < sorted[j].Level
+		}
+		if sorted[i].ChunkOrder != sorted[j].ChunkOrder {
+			return sorted[i].ChunkOrder < sorted[j].ChunkOrder
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+
+	return p.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// delete old vectors first (doc_vec has no FK cascade)
+		if _, err := tx.NewRaw(
+			"DELETE FROM doc_vec WHERE id IN (SELECT id FROM document_nodes WHERE document_id = ?)",
+			docID,
+		).Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewRaw("DELETE FROM document_nodes WHERE document_id = ?", docID).Exec(ctx); err != nil {
+			return err
+		}
+
+		idMap := make(map[int64]int64, len(sorted)) // tempID -> dbID
+
+		for _, n := range sorted {
+			res, err := tx.NewRaw(
+				"INSERT INTO document_nodes (library_id, document_id, content, content_tokens, level, chunk_order) VALUES (?, ?, ?, ?, ?, ?)",
+				n.LibraryID, n.DocumentID, n.Content, n.ContentTokens, n.Level, n.ChunkOrder,
+			).Exec(ctx)
+			if err != nil {
+				return err
+			}
+			dbID, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			idMap[n.ID] = dbID
+
+			// store vector if exists
+			if len(n.Vector) > 0 {
+				vecStr := formatVector(n.Vector)
+				if _, err := tx.NewRaw("INSERT INTO doc_vec (id, content) VALUES (?, ?)", dbID, vecStr).Exec(ctx); err != nil {
+					// fallback update
+					if _, err2 := tx.NewRaw("UPDATE doc_vec SET content = ? WHERE id = ?", vecStr, dbID).Exec(ctx); err2 != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		// update parent relationships
+		for _, n := range sorted {
+			if n.ParentID == nil {
+				continue
+			}
+			childID, ok1 := idMap[n.ID]
+			parentID, ok2 := idMap[*n.ParentID]
+			if !ok1 || !ok2 {
+				continue
+			}
+			if _, err := tx.NewRaw("UPDATE document_nodes SET parent_id = ? WHERE id = ?", parentID, childID).Exec(ctx); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // GetLibraryConfig 从数据库获取知识库配置

@@ -2,12 +2,18 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"willchat/internal/errs"
+	"willchat/internal/services/document"
+	"willchat/internal/sqlite"
+	"willchat/internal/taskmanager"
 
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -129,4 +135,140 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 
 	setCachedValue(key, value)
 	return s.Get(key)
+}
+
+// UpdateEmbeddingConfig updates global embedding provider/model/dimension and triggers re-embedding for all documents.
+// It rebuilds the vec0 table with the new dimension, then submits embedding-only jobs for every document.
+type UpdateEmbeddingConfigInput struct {
+	ProviderID string `json:"provider_id"`
+	ModelID    string `json:"model_id"`
+	Dimension  int    `json:"dimension"`
+}
+
+func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput) error {
+	providerID := strings.TrimSpace(input.ProviderID)
+	modelID := strings.TrimSpace(input.ModelID)
+	if providerID == "" || modelID == "" {
+		return errs.New("error.setting_key_required")
+	}
+	if input.Dimension <= 0 {
+		return errs.New("error.setting_value_required")
+	}
+
+	// Remember old values to decide whether to trigger rebuild.
+	oldProvider, _ := GetValue("embedding_provider_id")
+	oldModel, _ := GetValue("embedding_model_id")
+	oldDim, _ := GetValue("embedding_dimension")
+
+	db, err := dbForWrite()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Update in a transaction to keep config consistent.
+	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		updates := []struct {
+			Key string
+			Val string
+		}{
+			{Key: "embedding_provider_id", Val: providerID},
+			{Key: "embedding_model_id", Val: modelID},
+			{Key: "embedding_dimension", Val: fmt.Sprintf("%d", input.Dimension)},
+		}
+		for _, u := range updates {
+			result, err := tx.NewUpdate().
+				Model((*settingModel)(nil)).
+				Set("value = ?", u.Val).
+				Where("key = ?", u.Key).
+				Exec(ctx)
+			if err != nil {
+				return errs.Wrap("error.setting_write_failed", err)
+			}
+			rows, _ := result.RowsAffected()
+			if rows == 0 {
+				return errs.Newf("error.setting_not_found", map[string]any{"Key": u.Key})
+			}
+			setCachedValue(u.Key, u.Val)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	changed := oldProvider != providerID || oldModel != modelID || strings.TrimSpace(oldDim) != fmt.Sprintf("%d", input.Dimension)
+	if !changed {
+		return nil
+	}
+
+	// Fire-and-forget: rebuild vector table and submit re-embedding tasks.
+	go s.triggerReembedAllDocuments(input.Dimension)
+	return nil
+}
+
+func (s *SettingsService) triggerReembedAllDocuments(dimension int) {
+	db := sqlite.DB()
+	if db == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// 1) Rebuild vec0 table to match new dimension
+	// Drop will also remove internal vec tables.
+	_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS doc_vec;`)
+	_, err := db.ExecContext(ctx, fmt.Sprintf(
+		`CREATE VIRTUAL TABLE IF NOT EXISTS doc_vec USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
+		dimension,
+	))
+	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Error("rebuild doc_vec failed", "error", err)
+		}
+		return
+	}
+
+	// 2) Submit embedding-only jobs for all documents
+	type row struct {
+		ID        int64 `bun:"id"`
+		LibraryID int64 `bun:"library_id"`
+	}
+	rows := make([]row, 0, 1024)
+	if err := db.NewSelect().
+		Table("documents").
+		Column("id", "library_id").
+		OrderExpr("id DESC").
+		Scan(ctx, &rows); err != nil {
+		if s.app != nil {
+			s.app.Logger.Error("query documents failed", "error", err)
+		}
+		return
+	}
+
+	tm := taskmanager.Get()
+	if tm == nil {
+		return
+	}
+
+	for _, r := range rows {
+		runID := uuid.New().String()
+		// update run id + reset embedding fields
+		_, _ = db.NewUpdate().
+			Table("documents").
+			Set("processing_run_id = ?", runID).
+			Set("embedding_status = ?", document.StatusPending).
+			Set("embedding_progress = ?", 0).
+			Set("embedding_error = ?", "").
+			Where("id = ?", r.ID).
+			Exec(ctx)
+
+		jobData, _ := json.Marshal(document.ProcessJobData{
+			DocID:     r.ID,
+			LibraryID: r.LibraryID,
+			RunID:     runID,
+		})
+		taskKey := fmt.Sprintf("doc:%d", r.ID)
+		tm.Submit(taskmanager.QueueDocument, document.JobTypeReembed, taskKey, runID, jobData)
+	}
 }

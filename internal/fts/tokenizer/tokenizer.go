@@ -67,6 +67,21 @@ func TokenizeName(originalName string) string {
 			tokenSet[token] = struct{}{}
 			result = append(result, token)
 		}
+
+		// Generate pinyin tokens per segmented token (improves partial pinyin search)
+		ch := extractChinese(token)
+		if ch != "" && len([]rune(ch)) <= MaxPinyinChars {
+			for _, pt := range generatePinyinTokens(ch) {
+				if pt == "" {
+					continue
+				}
+				if _, exists := tokenSet[pt]; exists {
+					continue
+				}
+				tokenSet[pt] = struct{}{}
+				result = append(result, pt)
+			}
+		}
 	}
 
 	// Fallback: split by common filename separators (e.g. "foo_bar-v1" -> ["foo","bar","v1"])
@@ -78,6 +93,20 @@ func TokenizeName(originalName string) string {
 		if _, exists := tokenSet[token]; !exists {
 			tokenSet[token] = struct{}{}
 			result = append(result, token)
+		}
+
+		ch := extractChinese(token)
+		if ch != "" && len([]rune(ch)) <= MaxPinyinChars {
+			for _, pt := range generatePinyinTokens(ch) {
+				if pt == "" {
+					continue
+				}
+				if _, exists := tokenSet[pt]; exists {
+					continue
+				}
+				tokenSet[pt] = struct{}{}
+				result = append(result, pt)
+			}
 		}
 	}
 
@@ -167,6 +196,22 @@ func BuildMatchQuery(keyword string) string {
 		// Escape FTS5 special characters and add prefix match
 		escaped := escapeFTS5Token(token)
 		queryParts = append(queryParts, escaped+"*")
+
+		// Also add per-token pinyin when token contains Chinese
+		ch := extractChinese(token)
+		if ch != "" && len([]rune(ch)) <= MaxPinyinChars {
+			for _, pt := range generatePinyinTokens(ch) {
+				if pt == "" {
+					continue
+				}
+				if _, exists := seen[pt]; exists {
+					continue
+				}
+				seen[pt] = struct{}{}
+				escapedPT := escapeFTS5Token(pt)
+				queryParts = append(queryParts, escapedPT+"*")
+			}
+		}
 	}
 
 	// Fallback: also split by non-word separators to support typical filenames like "foo_bar-v1.pdf"

@@ -150,11 +150,11 @@ const handleSave = async () => {
     if (!providerId || !modelId) throw new Error(t('knowledge.embeddingSettings.required'))
     const dim = String(Number.parseInt(embeddingDimension.value, 10))
 
-    await Promise.all([
-      SettingsService.SetValue('embedding_provider_id', providerId),
-      SettingsService.SetValue('embedding_model_id', modelId),
-      SettingsService.SetValue('embedding_dimension', dim),
-    ])
+    await SettingsService.UpdateEmbeddingConfig({
+      provider_id: providerId,
+      model_id: modelId,
+      dimension: Number.parseInt(dim, 10),
+    })
     toast.success(t('knowledge.embeddingSettings.saved'))
     close()
   } catch (error) {
