@@ -61,7 +61,6 @@ const semanticSegmentKey = ref<string>(SEMANTIC_SEGMENT_NONE)
 const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
-const matchThreshold = ref<string>('0.5')
 
 const close = () => emit('update:open', false)
 
@@ -120,7 +119,6 @@ watch(
     topK.value = [props.library?.top_k ?? 20]
     chunkSize.value = String(props.library?.chunk_size ?? 1024)
     chunkOverlap.value = String(props.library?.chunk_overlap ?? 100)
-    matchThreshold.value = String(props.library?.match_threshold ?? 0.5)
 
     // 初始化语义分段模型
     if (props.library?.semantic_segment_provider_id && props.library?.semantic_segment_model_id) {
@@ -135,7 +133,6 @@ const isValid = computed(() => {
   if (!props.library) return false
   const cs = Number.parseInt(chunkSize.value, 10)
   const co = Number.parseInt(chunkOverlap.value, 10)
-  const mt = Number.parseFloat(matchThreshold.value)
   return (
     (topK.value[0] ?? 0) > 0 &&
     Number.isFinite(cs) &&
@@ -143,10 +140,7 @@ const isValid = computed(() => {
     cs <= 5000 &&
     Number.isFinite(co) &&
     co >= 0 &&
-    co <= 1000 &&
-    Number.isFinite(mt) &&
-    mt >= 0 &&
-    mt <= 1
+    co <= 1000
   )
 })
 
@@ -165,7 +159,6 @@ const handleSave = async () => {
         top_k: topK.value[0] ?? 20,
         chunk_size: Number.parseInt(chunkSize.value, 10),
         chunk_overlap: Number.parseInt(chunkOverlap.value, 10),
-        match_threshold: Number.parseFloat(matchThreshold.value),
       })
     )
     if (!updated) throw new Error(t('knowledge.settings.saveFailed'))
@@ -268,20 +261,6 @@ const handleSave = async () => {
             min="0"
             max="1000"
             step="1"
-            :disabled="saving"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <FieldLabel
-            :label="t('knowledge.create.matchThreshold')"
-            :help="t('knowledge.help.matchThreshold')"
-          />
-          <Input
-            v-model="matchThreshold"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
             :disabled="saving"
           />
         </div>

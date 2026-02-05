@@ -4,20 +4,27 @@ import (
 	"fmt"
 	"io/fs"
 	"sync"
+	"time"
 
-	"willchat/internal/define"
 	"willchat/internal/services/agents"
+	"willchat/internal/services/conversations"
+	"willchat/internal/define"
 	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
+	"willchat/internal/services/document"
+	"willchat/internal/services/floatingball"
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
 	"willchat/internal/services/library"
+	"willchat/internal/services/multiask"
 	"willchat/internal/services/providers"
 	"willchat/internal/services/settings"
 	"willchat/internal/services/textselection"
 	"willchat/internal/services/tray"
 	"willchat/internal/services/windows"
 	"willchat/internal/services/winsnapchat"
+	"willchat/internal/sqlite"
+	"willchat/internal/taskmanager"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -111,15 +118,20 @@ type Options struct {
 	Locale string // 语言设置: "zh-CN" 或 "en-US"
 }
 
-func NewApp(opts Options) (*application.App, error) {
+// NewApp 创建并初始化应用
+// 返回 app 实例和 cleanup 函数（用于关闭数据库等资源）
+func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
 	// 主窗口管理器，用于安全的窗口操作
 	mainWinMgr := &mainWindowManager{}
 
+	// 声明悬浮球服务变量，用于回调中恢复悬浮球
+	var floatingBallService *floatingball.FloatingBallService
+
 	// 创建应用实例
-	app := application.New(application.Options{
+	app = application.New(application.Options{
 		Name:        "WillChat",
 		Description: "WillChat Desktop App",
 		Services: []application.Service{
@@ -138,43 +150,85 @@ func NewApp(opts Options) (*application.App, error) {
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				// 当第二个实例启动时，安全地聚焦主窗口
 				mainWinMgr.safeWake()
+				// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
+				if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+					_ = floatingBallService.SetVisible(true)
+				}
 			},
 		},
 	})
 
+	// ========== 初始化基础设施 ==========
+
+	// 初始化数据库
+	if err := sqlite.Init(app); err != nil {
+		return nil, nil, fmt.Errorf("sqlite init: %w", err)
+	}
+
+	// 初始化设置缓存
+	if err := settings.InitCache(app); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("settings cache init: %w", err)
+	}
+
+	// 初始化任务管理器（基于 goqite 的持久化消息队列）
+	if err := taskmanager.Init(app, sqlite.DB().DB, taskmanager.Config{
+		Queues: map[string]taskmanager.QueueConfig{
+			taskmanager.QueueThumbnail: {Workers: 8, PollInterval: 50 * time.Millisecond},  // 缩略图：快任务
+			taskmanager.QueueDocument:  {Workers: 2, PollInterval: 100 * time.Millisecond}, // 文档处理：慢任务
+		},
+	}); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("init task manager: %w", err)
+	}
+
+	// ========== 注册应用服务 ==========
+
 	// 注册设置服务
 	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
-
 	// 注册供应商服务
 	app.RegisterService(application.NewService(providers.NewProvidersService(app)))
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
-
 	// 注册助手服务
 	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
-
+	// 注册会话服务
+	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
 	// 注册应用服务
 	app.RegisterService(application.NewService(appservice.NewAppService(app)))
-
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
+	// 注册文档服务
+	app.RegisterService(application.NewService(document.NewDocumentService(app)))
+
+	// ========== 创建窗口 ==========
 
 	// 创建主窗口
 	mainWindow := windows.NewMainWindow(app)
 	mainWinMgr.app = app
 	mainWinMgr.window = mainWindow
 
+	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
+	multiaskService := multiask.NewMultiaskService(app, mainWindow)
+	app.RegisterService(application.NewService(multiaskService))
+
+	// 创建悬浮球服务（独立 AlwaysOnTop 小窗）
+	floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
+	app.RegisterService(application.NewService(floatingBallService))
+
 	// 创建子窗口服务
 	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
 	if err != nil {
-		return nil, fmt.Errorf("init window service: %w", err)
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("init window service: %w", err)
 	}
 	app.RegisterService(application.NewService(windowService))
 
 	// 创建吸附（winsnap）服务
 	snapService, err := windows.NewSnapService(app, windowService)
 	if err != nil {
-		return nil, fmt.Errorf("init snap service: %w", err)
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("init snap service: %w", err)
 	}
 	app.RegisterService(application.NewService(snapService))
 
@@ -192,6 +246,10 @@ func NewApp(opts Options) (*application.App, error) {
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
 		// 安全地显示主窗口
 		mainWinMgr.safeShow()
+		// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
+		if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+			_ = floatingBallService.SetVisible(true)
+		}
 	})
 	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
 		app.Quit()
@@ -233,6 +291,13 @@ func NewApp(opts Options) (*application.App, error) {
 			},
 		})
 		_, _ = textSelectionService.SyncFromSettings()
+		// 初始化多问服务（需要窗口已创建，在后台进行以避免阻塞）
+		go func() {
+			if err := multiaskService.Initialize("WillChat"); err != nil {
+				app.Logger.Error("Failed to initialize multiask service", "error", err)
+			}
+		}()
+		floatingBallService.InitFromSettings()
 	})
 
 	// 监听主窗口关闭事件，实现"关闭时最小化"
@@ -247,11 +312,36 @@ func NewApp(opts Options) (*application.App, error) {
 		}
 	})
 
+	// 主窗口被唤醒/恢复/聚焦时：若悬浮球开关为开启，则恢复悬浮球
+	restoreFloatingBall := func(reason string) {
+		if floatingBallService == nil {
+			return
+		}
+		if !settings.GetBool("show_floating_window", true) {
+			return
+		}
+		if floatingBallService.IsVisible() {
+			return
+		}
+		_ = floatingBallService.SetVisible(true)
+	}
+	mainWindow.RegisterHook(events.Common.WindowShow, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_show") })
+	mainWindow.RegisterHook(events.Common.WindowRestore, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_restore") })
+	// NOTE: Don't restore on WindowFocus. Closing the floating ball shifts focus back to main window,
+	// which would immediately re-show the floating ball and make it impossible to close.
+
 	// 点击 Dock 图标时显示窗口
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
 		// 安全地唤醒主窗口
 		mainWinMgr.safeUnMinimiseAndShow()
+		restoreFloatingBall("mac_reopen")
 	})
 
-	return app, nil
+	return app, func() {
+		// Stop task manager before closing database
+		if tm := taskmanager.Get(); tm != nil {
+			tm.StopNow()
+		}
+		sqlite.Close()
+	}, nil
 }
