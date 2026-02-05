@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, Loader2 } from 'lucide-vue-next'
+import { Pencil, Copy, Check } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { MessageStatus, MessageRole, type ToolCallInfo } from '@/stores'
+import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
 import type { Message } from '@bindings/willchat/internal/services/chat'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolCallBlock from './ToolCallBlock.vue'
@@ -19,6 +19,8 @@ const props = defineProps<{
   streamingThinking?: string
   streamingToolCalls?: ToolCallInfo[]
   toolResults?: Record<string, string> // Map of toolCallId -> result
+  segments?: MessageSegment[] // Ordered segments for interleaved display
+  errorKey?: string // Specific error key for more informative error messages
 }>()
 
 const emit = defineEmits<{
@@ -30,7 +32,7 @@ const { t } = useI18n()
 const isEditing = ref(false)
 const copied = ref(false)
 
-// Determine content to display (streaming or final)
+// Determine content to display (streaming or final) — used only for non-segment fallback & copy
 const displayContent = computed(() => {
   if (props.isStreaming && props.streamingContent !== undefined) {
     return props.streamingContent
@@ -63,7 +65,7 @@ type BackendToolCall =
       }
     }
 
-// Determine tool calls
+// Determine tool calls (flat list, used for non-segment fallback)
 const toolCalls = computed(() => {
   if (props.isStreaming && props.streamingToolCalls) {
     return props.streamingToolCalls
@@ -113,18 +115,52 @@ const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
 
 const showThinking = computed(() => isAssistant.value && thinkingContent.value)
-const showToolCalls = computed(() => isAssistant.value && toolCalls.value.length > 0)
 const showStatus = computed(
   () =>
-    props.message.status === MessageStatus.ERROR ||
-    props.message.status === MessageStatus.CANCELLED
+    props.message.status === MessageStatus.ERROR || props.message.status === MessageStatus.CANCELLED
 )
+
+// Compute display segments: from props (streaming/persisted) or fallback from message data
+const displaySegments = computed((): MessageSegment[] => {
+  // Priority: provided segments (streaming or persisted)
+  if (props.segments && props.segments.length > 0) {
+    return props.segments
+  }
+  // Fallback: construct from message data (non-interleaved)
+  if (!isAssistant.value) return []
+  const segs: MessageSegment[] = []
+  const content = displayContent.value
+  if (content) {
+    segs.push({ type: 'content', content })
+  }
+  if (toolCalls.value.length > 0) {
+    segs.push({ type: 'tools', toolCalls: toolCalls.value })
+  }
+  return segs
+})
+
+// Check if a given index is the last content segment (for cursor display)
+const isLastContentSegment = (idx: number): boolean => {
+  for (let i = displaySegments.value.length - 1; i >= 0; i--) {
+    if (displaySegments.value[i].type === 'content') return i === idx
+  }
+  return false
+}
+
+// Error message key mapping
+const errorMessageKey = computed(() => {
+  if (props.message.status !== MessageStatus.ERROR) return ''
+  if (props.errorKey === 'error.max_iterations_exceeded') {
+    return 'assistant.chat.errorMaxIterations'
+  }
+  return 'assistant.chat.error'
+})
 
 const handleCopy = async () => {
   try {
     await navigator.clipboard.writeText(displayContent.value)
     copied.value = true
-    setTimeout(() => {
+    window.setTimeout(() => {
       copied.value = false
     }, 2000)
   } catch {
@@ -154,66 +190,72 @@ const handleCancelEdit = () => {
   >
     <!-- Message content container -->
     <div
-      :class="
-        cn('flex max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
-      "
+      :class="cn('flex max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')"
     >
       <!-- Thinking block (for assistant messages) -->
       <ThinkingBlock v-if="showThinking" :content="thinkingContent" :is-streaming="isStreaming" />
 
-      <!-- Tool calls block (for assistant messages) -->
-      <ToolCallBlock
-        v-if="showToolCalls"
-        :tool-calls="toolCalls"
-        :is-streaming="isStreaming"
-      />
-
-      <!-- Message bubble -->
-      <div
-        :class="
-          cn(
-            'relative text-sm',
-            isUser
-              ? 'rounded-2xl border border-border/50 bg-muted px-4 py-3 text-foreground'
-              : 'bg-transparent px-0 py-0 text-foreground'
-          )
-        "
-      >
-        <!-- Edit mode -->
-        <MessageEditor
-          v-if="isEditing && isUser"
-          :initial-content="message.content"
-          @save="handleSaveEdit"
-          @cancel="handleCancelEdit"
-        />
-
-        <!-- Normal display mode -->
-        <template v-else>
-          <!-- User messages: plain text -->
-          <p v-if="isUser" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
-
-          <!-- Assistant messages: markdown rendered -->
-          <template v-else-if="isAssistant">
+      <!-- Assistant messages: interleaved segments (content ↔ tool calls) -->
+      <template v-if="isAssistant">
+        <template v-for="(segment, idx) in displaySegments" :key="idx">
+          <!-- Content segment -->
+          <div
+            v-if="segment.type === 'content'"
+            class="relative text-sm bg-transparent px-0 py-0 text-foreground"
+          >
             <MarkdownRenderer
-              v-if="displayContent"
-              :content="displayContent"
+              v-if="segment.content"
+              :content="segment.content"
+              :is-streaming="!!isStreaming && isLastContentSegment(idx)"
               class="wrap-break-word"
             />
-          </template>
-
-          <!-- Other roles: plain text -->
-          <p v-else class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+          </div>
+          <!-- Tools segment -->
+          <ToolCallBlock
+            v-else-if="segment.type === 'tools'"
+            :tool-calls="segment.toolCalls"
+            :is-streaming="isStreaming"
+          />
         </template>
 
-        <!-- Status indicator -->
-        <div v-if="showStatus" class="mt-2 flex items-center gap-1 text-xs opacity-70">
+        <!-- Streaming cursor when no content segments yet (e.g. agent starts with tool calls) -->
+        <div
+          v-if="isStreaming && displaySegments.length === 0"
+          class="relative text-sm bg-transparent px-0 py-0 text-foreground"
+        >
+          <MarkdownRenderer content="" :is-streaming="true" class="wrap-break-word" />
+        </div>
+
+        <!-- Status indicator (after all segments) -->
+        <div v-if="showStatus" class="mt-1 flex items-center gap-1 text-xs opacity-70">
           <template v-if="message.status === MessageStatus.ERROR">
-            <span class="text-destructive">{{ t('assistant.chat.error') }}</span>
+            <span class="text-destructive">{{ t(errorMessageKey) }}</span>
           </template>
           <template v-else-if="message.status === MessageStatus.CANCELLED">
             <span>{{ t('assistant.chat.cancelled') }}</span>
           </template>
         </div>
+      </template>
+
+      <!-- User message bubble -->
+      <div
+        v-else-if="isUser"
+        class="relative text-sm rounded-2xl border border-border/50 bg-muted px-4 py-3 text-foreground"
+      >
+        <!-- Edit mode -->
+        <MessageEditor
+          v-if="isEditing"
+          :initial-content="message.content"
+          @save="handleSaveEdit"
+          @cancel="handleCancelEdit"
+        />
+        <!-- Normal display mode -->
+        <p v-else class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+      </div>
+
+      <!-- Other roles: plain text -->
+      <div v-else class="relative text-sm bg-transparent px-0 py-0 text-foreground">
+        <p class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
       </div>
 
       <!-- Action buttons (visible on hover) -->

@@ -697,9 +697,14 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		}
 
 		if event.Err != nil {
+			errMsg := event.Err.Error()
+			errorKey := "error.chat_generation_failed"
+			if strings.Contains(errMsg, "exceeds max iterations") {
+				errorKey = "error.max_iterations_exceeded"
+			}
 			log.Printf("[chat] generation failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, event.Err)
-			emitError("error.chat_generation_failed", map[string]any{"Error": event.Err.Error()})
-			s.updateMessageStatus(db, assistantMsg.ID, StatusError, event.Err.Error(), "")
+			emitError(errorKey, map[string]any{"Error": errMsg})
+			s.updateMessageStatus(db, assistantMsg.ID, StatusError, errMsg, "")
 			return
 		}
 

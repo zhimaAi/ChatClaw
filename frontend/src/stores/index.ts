@@ -5,6 +5,7 @@ export {
   MessageRole,
   ChatEventType,
   type ToolCallInfo,
+  type MessageSegment,
   type StreamingMessageState,
 } from './chat'
 export { useNavigationStore, type NavModule, type Tab } from './navigation'

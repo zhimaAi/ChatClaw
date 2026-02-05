@@ -45,6 +45,11 @@ export interface ToolCallInfo {
   status: 'calling' | 'completed' | 'error'
 }
 
+// Message segment for interleaved content/tool-call display (ReAct paradigm)
+export type MessageSegment =
+  | { type: 'content'; content: string }
+  | { type: 'tools'; toolCalls: ToolCallInfo[] }
+
 // Streaming message state (for the currently generating message)
 export interface StreamingMessageState {
   messageId: number
@@ -52,6 +57,7 @@ export interface StreamingMessageState {
   content: string
   thinkingContent: string
   toolCalls: ToolCallInfo[]
+  segments: MessageSegment[] // Ordered segments for interleaved rendering
   status: string
 }
 
@@ -73,6 +79,12 @@ export const useChatStore = defineStore('chat', () => {
 
   // Error state by conversation
   const errorByConversation = ref<Record<number, string | null>>({})
+
+  // Error key by message ID (for specific error messages like "max iterations exceeded")
+  const errorKeyByMessage = ref<Record<number, string>>({})
+
+  // Persisted segments by message ID (for interleaved display after streaming ends)
+  const segmentsByMessage = ref<Record<number, MessageSegment[]>>({})
 
   // Get messages for a conversation
   const getMessages = (conversationId: number) => {
@@ -261,6 +273,7 @@ export const useChatStore = defineStore('chat', () => {
       content: '',
       thinkingContent: '',
       toolCalls: [],
+      segments: [],
       status: MessageStatus.STREAMING,
     }
 
@@ -288,7 +301,19 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
-      streaming.content += delta || ''
+      const chunk = delta || ''
+      streaming.content += chunk
+
+      // Track segments: append to last content segment or start a new one
+      if (chunk) {
+        const lastSeg = streaming.segments[streaming.segments.length - 1]
+        if (lastSeg && lastSeg.type === 'content') {
+          lastSeg.content += chunk
+        } else {
+          streaming.segments.push({ type: 'content', content: chunk })
+        }
+      }
+
       upsertMessage(conversation_id, streaming.messageId, {
         content: streaming.content,
       })
@@ -340,6 +365,16 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
+    // Helper: add a new tool call to segments
+    const addToolCallToSegments = (toolCall: ToolCallInfo) => {
+      const lastSeg = streaming.segments[streaming.segments.length - 1]
+      if (lastSeg && lastSeg.type === 'tools') {
+        lastSeg.toolCalls.push(toolCall)
+      } else {
+        streaming.segments.push({ type: 'tools', toolCalls: [toolCall] })
+      }
+    }
+
     if (streaming && streaming.requestId === request_id) {
       if (type === 'call') {
         // Tool call (dedupe by tool_call_id; some providers may emit repeated snapshots)
@@ -352,17 +387,21 @@ export const useChatStore = defineStore('chat', () => {
             existing.status = 'calling'
           }
         } else {
-          streaming.toolCalls.push({
+          const newToolCall: ToolCallInfo = {
             toolCallId: tool_call_id,
             toolName: tool_name,
             argsJson: args_json,
             status: 'calling',
-          })
+          }
+          streaming.toolCalls.push(newToolCall)
+          // Track in segments (same object reference so updates propagate)
+          addToolCallToSegments(newToolCall)
         }
       } else if (type === 'result') {
         // Tool result (result may arrive before call event)
         const existing = streaming.toolCalls.find((tc) => tc.toolCallId === tool_call_id)
         if (existing) {
+          // Update existing - same object reference in segments, so changes propagate
           existing.toolName = existing.toolName || tool_name
           existing.resultJson = result_json
           existing.status = 'completed'
@@ -376,16 +415,20 @@ export const useChatStore = defineStore('chat', () => {
               (!args_json || tc.argsJson === args_json)
           )
           if (mergeCandidate) {
+            // Update merge candidate - same object reference in segments
             mergeCandidate.toolCallId = tool_call_id || mergeCandidate.toolCallId
             mergeCandidate.resultJson = result_json
             mergeCandidate.status = 'completed'
           } else {
-            streaming.toolCalls.push({
+            const newToolCall: ToolCallInfo = {
               toolCallId: tool_call_id,
               toolName: tool_name,
               resultJson: result_json,
               status: 'completed',
-            })
+            }
+            streaming.toolCalls.push(newToolCall)
+            // Track in segments
+            addToolCallToSegments(newToolCall)
           }
         }
       }
@@ -395,6 +438,16 @@ export const useChatStore = defineStore('chat', () => {
         tool_calls: JSON.stringify(streaming.toolCalls),
       } as any)
     }
+  }
+
+  // Deep-clone segments for persistence (detach from reactive streaming state)
+  const cloneSegments = (segments: MessageSegment[]): MessageSegment[] => {
+    return segments.map((seg) => {
+      if (seg.type === 'content') {
+        return { type: 'content' as const, content: seg.content }
+      }
+      return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
+    })
   }
 
   const handleChatComplete = (event: any) => {
@@ -412,6 +465,11 @@ export const useChatStore = defineStore('chat', () => {
         tool_calls: JSON.stringify(streaming.toolCalls),
         status: MessageStatus.SUCCESS,
       } as any)
+
+      // Persist segments for interleaved display after streaming ends
+      if (streaming.segments.length > 0) {
+        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
+      }
 
       // Refresh messages from backend to get the final persisted state (tokens, tool messages, etc.)
       void loadMessages(conversation_id)
@@ -437,6 +495,11 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.CANCELLED,
       } as any)
 
+      // Persist segments for interleaved display
+      if (streaming.segments.length > 0) {
+        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
+      }
+
       // Refresh messages from backend to get the cancelled persisted state
       void loadMessages(conversation_id)
 
@@ -459,12 +522,22 @@ export const useChatStore = defineStore('chat', () => {
       // Store error message
       errorByConversation.value[conversation_id] = error_key
 
+      // Store error key per message for specific error display
+      if (error_key) {
+        errorKeyByMessage.value[streaming.messageId] = error_key
+      }
+
       upsertMessage(conversation_id, streaming.messageId, {
         content: streaming.content,
         thinking_content: streaming.thinkingContent,
         tool_calls: JSON.stringify(streaming.toolCalls),
         status: MessageStatus.ERROR,
       } as any)
+
+      // Persist segments for interleaved display
+      if (streaming.segments.length > 0) {
+        segmentsByMessage.value[streaming.messageId] = cloneSegments(streaming.segments)
+      }
 
       // Refresh messages from backend
       void loadMessages(conversation_id)
@@ -567,6 +640,8 @@ export const useChatStore = defineStore('chat', () => {
     streamingByConversation,
     loadingByConversation,
     errorByConversation,
+    errorKeyByMessage,
+    segmentsByMessage,
 
     // Getters
     getMessages,

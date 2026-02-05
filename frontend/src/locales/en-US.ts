@@ -228,6 +228,7 @@ export default {
       edit: 'Edit',
       resend: 'Resend',
       error: 'Error occurred',
+      errorMaxIterations: 'Max execution rounds reached, task could not be completed',
       cancelled: 'Stopped',
       thinking: 'Thinking',
       thinkingInProgress: 'Thinking...',

@@ -68,6 +68,7 @@ import 'highlight.js/styles/github-dark.css'
 const props = defineProps<{
   content: string
   allowHtml?: boolean
+  isStreaming?: boolean // Show blinking cursor at end of content
 }>()
 
 // Track copied state for each code block
@@ -199,10 +200,23 @@ const renderedHtml = computed(() => {
   const rawHtml = marked.parse(props.content) as string
 
   // Sanitize HTML to prevent XSS
-  const clean = DOMPurify.sanitize(rawHtml, {
+  let clean = DOMPurify.sanitize(rawHtml, {
     ADD_ATTR: ['target', 'data-code', 'data-index'],
     ADD_TAGS: ['button'],
   })
+
+  // Inject blinking cursor inline at the end of the last block element when streaming
+  if (props.isStreaming) {
+    const cursorHtml = '<span class="streaming-cursor" aria-hidden="true"></span>'
+    // Insert cursor before the last closing block-level tag to keep it inline
+    const lastBlockClose = /(<\/(?:p|li|h[1-6]|td|blockquote|span|em|strong|code|a)>)(\s*)$/i
+    if (lastBlockClose.test(clean)) {
+      clean = clean.replace(lastBlockClose, cursorHtml + '$1$2')
+    } else {
+      // Fallback: append at the end (e.g. empty content or non-standard structure)
+      clean += cursorHtml
+    }
+  }
 
   return clean
 })
@@ -286,5 +300,23 @@ const handleClick = (event: MouseEvent) => {
 
 .code-block-wrapper pre {
   max-width: 100%;
+}
+
+/* Streaming blinking cursor (injected via v-html) */
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background-color: currentColor;
+  opacity: 0.7;
+  animation: streaming-cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes streaming-cursor-blink {
+  to {
+    opacity: 0;
+  }
 }
 </style>

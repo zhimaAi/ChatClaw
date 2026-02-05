@@ -177,6 +177,12 @@ watch(
           :streaming-tool-calls="
             streaming && msg.id === streaming.messageId ? streaming.toolCalls : undefined
           "
+          :segments="
+            streaming && msg.id === streaming.messageId
+              ? streaming.segments
+              : chatStore.segmentsByMessage[msg.id]
+          "
+          :error-key="chatStore.errorKeyByMessage[msg.id]"
           @edit="handleEdit"
         />
 
@@ -199,6 +205,7 @@ watch(
           :streaming-content="streaming.content"
           :streaming-thinking="streaming.thinkingContent"
           :streaming-tool-calls="streaming.toolCalls"
+          :segments="streaming.segments"
         />
 
         <!-- Bottom spacer: keep distance from input box when auto-scrolling -->

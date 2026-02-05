@@ -225,6 +225,7 @@ export default {
       edit: '编辑',
       resend: '重新发送',
       error: '发生错误',
+      errorMaxIterations: '已达到最大执行轮次，任务未能完成',
       cancelled: '已停止',
       thinking: '思考中',
       thinkingInProgress: '正在思考...',
