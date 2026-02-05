@@ -394,6 +394,23 @@ static void winsnap_focus_self_only(int selfWindowNumber) {
 		}
 	});
 }
+
+// Bring the winsnap window to front without stealing focus from target app.
+// This is used when the target app becomes frontmost and we just need winsnap visible.
+static void winsnap_order_front_without_focus(int selfWindowNumber) {
+	if (selfWindowNumber <= 0) return;
+	
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		for (NSWindow *win in [NSApp windows]) {
+			if ((int)[win windowNumber] == selfWindowNumber) {
+				// Use orderFrontRegardless to bring window to front without making it key
+				// This keeps focus on the target app while making winsnap visible
+				[win orderFrontRegardless];
+				return;
+			}
+		}
+	});
+}
 */
 import "C"
 
@@ -433,6 +450,25 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 	// Show and focus the window
 	window.Show()
 	window.Focus()
+	return nil
+}
+
+// BringWinsnapToFront brings the winsnap window to front without stealing focus.
+// This is used when the target app becomes frontmost and we want winsnap visible
+// alongside it, but we don't want to steal focus from the target app.
+func BringWinsnapToFront(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	nativeHandle := window.NativeWindow()
+	if nativeHandle == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	windowNumber := int(C.winsnap_get_window_number(nativeHandle))
+	if windowNumber <= 0 {
+		return ErrWinsnapWindowInvalid
+	}
+	C.winsnap_order_front_without_focus(C.int(windowNumber))
 	return nil
 }
 

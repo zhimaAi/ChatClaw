@@ -8,6 +8,13 @@ package winsnap
 
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
+#include <time.h>
+
+// Helper to get current uptime timestamp in nanoseconds for CGEventSetTimestamp
+// This is required on macOS Sequoia and later for CGEventPost to work reliably
+static uint64_t current_uptime_nsec() {
+	return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+}
 
 // Set clipboard text
 static bool winsnap_set_clipboard_text(const char *text) {
@@ -61,6 +68,7 @@ static void winsnap_simulate_cmd_v() {
 	// Create key down event for V with Cmd modifier
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_ANSI_V, true);
 	CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
+	CGEventSetTimestamp(keyDown, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyDown);
 	CFRelease(keyDown);
 
@@ -69,6 +77,7 @@ static void winsnap_simulate_cmd_v() {
 	// Create key up event for V with Cmd modifier
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_ANSI_V, false);
 	CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
+	CGEventSetTimestamp(keyUp, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyUp);
 	CFRelease(keyUp);
 
@@ -81,12 +90,14 @@ static void winsnap_simulate_enter() {
 	if (!source) return;
 
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, true);
+	CGEventSetTimestamp(keyDown, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyDown);
 	CFRelease(keyDown);
 
 	usleep(10000); // 10ms
 
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, false);
+	CGEventSetTimestamp(keyUp, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyUp);
 	CFRelease(keyUp);
 
@@ -100,6 +111,7 @@ static void winsnap_simulate_cmd_enter() {
 
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, true);
 	CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
+	CGEventSetTimestamp(keyDown, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyDown);
 	CFRelease(keyDown);
 
@@ -107,6 +119,7 @@ static void winsnap_simulate_cmd_enter() {
 
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, false);
 	CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
+	CGEventSetTimestamp(keyUp, current_uptime_nsec()); // Required for macOS Sequoia+
 	CGEventPost(kCGHIDEventTap, keyUp);
 	CFRelease(keyUp);
 

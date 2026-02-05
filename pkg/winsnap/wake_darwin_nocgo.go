@@ -37,3 +37,13 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 	window.Focus()
 	return nil
 }
+
+// BringWinsnapToFront brings the winsnap window to front without stealing focus.
+// Fallback implementation without CGO: just show the window.
+func BringWinsnapToFront(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	window.Show()
+	return nil
+}

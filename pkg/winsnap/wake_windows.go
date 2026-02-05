@@ -50,6 +50,22 @@ func EnsureWindowVisible(window *application.WebviewWindow) error {
 	return nil
 }
 
+// BringWinsnapToFront brings the winsnap window to front without stealing focus.
+// This is used when the target app becomes frontmost and we want winsnap visible
+// alongside it, but we don't want to steal focus from the target app.
+func BringWinsnapToFront(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	h := uintptr(window.NativeWindow())
+	if h == 0 {
+		return ErrWinsnapWindowInvalid
+	}
+	// Use SetWindowPos with SWP_NOACTIVATE to bring window to top without activating it
+	procSetWindowPosWake.Call(h, hwndTopWake, 0, 0, 0, 0, swpNoMoveWake|swpNoSizeWake|swpNoActivateWake)
+	return nil
+}
+
 // WakeAttachedWindow brings the target window and the winsnap window to the front,
 // keeping winsnap ordered directly above the target (same-level behavior).
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {

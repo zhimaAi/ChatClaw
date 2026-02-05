@@ -435,7 +435,14 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess string) {
 	s.mu.Lock()
 	if s.currentTarget == targetProcess && s.ctrl != nil {
+		// Already attached to this target. The darwinFollower's activation observer
+		// (NSWorkspaceDidActivateApplicationNotification) handles z-order when
+		// the target app becomes frontmost. We just need to ensure the winsnap
+		// window is visible (not hidden) so the observer can adjust its z-order.
 		s.mu.Unlock()
+		// Ensure winsnap is visible (in case it was hidden by MoveOffscreen)
+		// This is needed because winsnap_order_above_target checks [selfWin isVisible]
+		_ = winsnap.EnsureWindowVisible(w)
 		return
 	}
 	// Stop current controller (if any) before switching target.

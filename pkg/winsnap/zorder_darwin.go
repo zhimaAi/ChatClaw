@@ -41,6 +41,16 @@ static char* winsnap_get_frontmost_app_name() {
 	}
 }
 
+// Get the frontmost app's PID.
+// Returns 0 if no frontmost app.
+static pid_t winsnap_get_frontmost_app_pid() {
+	@autoreleasepool {
+		NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+		if (!frontApp) return 0;
+		return frontApp.processIdentifier;
+	}
+}
+
 // Check if a given pid has any visible on-screen window (layer 0, reasonable size).
 // This is used to determine if the target app is "visible" even when not frontmost.
 static bool winsnap_pid_has_visible_window(pid_t pid) {
@@ -120,7 +130,6 @@ import "C"
 
 import (
 	"errors"
-	"strings"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -141,26 +150,23 @@ func TopMostVisibleProcessName(targetProcessNames []string) (processName string,
 		return "", false, ErrSelfIsFrontmost
 	}
 
-	// First, check if the frontmost app is one of our target apps
-	// This ensures we attach to the app the user is currently interacting with
-	frontAppNameC := C.winsnap_get_frontmost_app_name()
-	if frontAppNameC != nil {
-		frontAppName := C.GoString(frontAppNameC)
-		C.winsnap_free_cstring(frontAppNameC)
-
-		// Check if frontmost app matches any target
+	// First, check if the frontmost app is one of our target apps by comparing PIDs
+	// This is more reliable than name comparison as it avoids localized name mismatches
+	frontPID := C.winsnap_get_frontmost_app_pid()
+	if frontPID > 0 {
 		for _, raw := range targetProcessNames {
 			n := normalizeMacTargetName(raw)
 			if n == "" {
 				continue
 			}
-			// Case-insensitive comparison
-			if strings.EqualFold(frontAppName, n) {
+			cname := C.CString(n)
+			targetPID := C.winsnap_find_pid_by_name_zorder(cname)
+			C.free(unsafe.Pointer(cname))
+
+			// Check if frontmost app's PID matches this target's PID
+			if targetPID > 0 && targetPID == frontPID {
 				// Verify it has a visible window
-				cname := C.CString(n)
-				pid := C.winsnap_find_pid_by_name_zorder(cname)
-				C.free(unsafe.Pointer(cname))
-				if pid > 0 && C.winsnap_pid_has_visible_window(pid) {
+				if C.winsnap_pid_has_visible_window(targetPID) {
 					return raw, true, nil
 				}
 			}
