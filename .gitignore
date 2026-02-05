@@ -6,3 +6,4 @@ build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 frontend/bindings/**/*
 *.exe
+.idea/

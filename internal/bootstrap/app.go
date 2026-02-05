@@ -14,6 +14,7 @@ import (
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
 	"willchat/internal/services/library"
+	"willchat/internal/services/multiask"
 	"willchat/internal/services/providers"
 	"willchat/internal/services/settings"
 	"willchat/internal/services/textselection"
@@ -118,6 +119,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 创建主窗口
 	mainWindow = windows.NewMainWindow(app)
 
+	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
+	multiaskService := multiask.NewMultiaskService(app, mainWindow)
+	app.RegisterService(application.NewService(multiaskService))
+
 	// 创建子窗口服务
 	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
 	if err != nil {
@@ -189,6 +194,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 			},
 		})
 		_, _ = textSelectionService.SyncFromSettings()
+		// 初始化多问服务（需要窗口已创建，在后台进行以避免阻塞）
+		go func() {
+			if err := multiaskService.Initialize("WillChat"); err != nil {
+				app.Logger.Error("Failed to initialize multiask service", "error", err)
+			}
+		}()
 	})
 
 	// 监听主窗口关闭事件，实现"关闭时最小化"

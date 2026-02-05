@@ -1,4 +1,11 @@
-/// <reference types="vite-svg-loader" />
+/// <reference types="vite/client" />
+
+// Vue 单文件组件类型声明
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue'
+  const component: DefineComponent<object, object, unknown>
+  export default component
+}
 
 // Vite 环境变量类型
 interface ImportMetaEnv {
@@ -16,8 +23,8 @@ interface ImportMeta {
 
 // SVG 作为 Vue 组件导入（配合 vite-svg-loader 的 defaultImport: 'component'）
 declare module '*.svg' {
-  import type { FunctionalComponent, SVGAttributes } from 'vue'
-  const component: FunctionalComponent<SVGAttributes>
+  import type { DefineComponent, SVGAttributes } from 'vue'
+  const component: DefineComponent<SVGAttributes>
   export default component
 }
 
