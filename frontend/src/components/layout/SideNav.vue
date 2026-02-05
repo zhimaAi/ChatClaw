@@ -6,7 +6,8 @@
  * - AI助手：总是新建标签页
  * - 知识库、多问、设置：已有则切换，否则新建
  */
-import type { FunctionalComponent, SVGAttributes } from 'vue'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SvgComponent = any
 import { useI18n } from 'vue-i18n'
 import { useNavigationStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
@@ -24,7 +25,7 @@ const navigationStore = useNavigationStore()
 interface NavItem {
   key: NavModule
   labelKey: string
-  icon: FunctionalComponent<SVGAttributes>
+  icon: SvgComponent
 }
 
 /**
