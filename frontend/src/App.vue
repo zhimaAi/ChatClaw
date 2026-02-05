@@ -9,6 +9,7 @@ import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System } from '@wailsio/runtime'
 import { SnapService } from '@bindings/willchat/internal/services/windows'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
+import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 
 const navigationStore = useNavigationStore()
 const activeTab = computed(() => navigationStore.activeTab)
@@ -20,8 +21,13 @@ const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   knowledge: KnowledgePage,
   settings: SettingsPage,
-  multiask: null, // TODO: 实现多问页面
+  multiask: MultiaskPage,
 }
+
+/**
+ * 是否显示一问多答页面
+ */
+const showMultiask = computed(() => activeTab.value?.module === 'multiask')
 
 /**
  * 默认至少保持 1 个标签页：

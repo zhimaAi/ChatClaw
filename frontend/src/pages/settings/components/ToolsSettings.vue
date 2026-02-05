@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Switch } from '@/components/ui/switch'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
+import { Window } from '@wailsio/runtime'
 
 // 后端绑定
 import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
 import { TrayService } from '@bindings/willchat/internal/services/tray'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
+import { FloatingBallService } from '@bindings/willchat/internal/services/floatingball'
 
 const { t } = useI18n()
 
@@ -18,6 +20,109 @@ const minimizeToTrayOnClose = ref(true)
 
 // 悬浮窗设置状态
 const showFloatingWindow = ref(true)
+
+// 悬浮窗开关：快速连点时仅在“停手”后同步一次（避免频繁桥接/写库导致 UI 吞点击）
+let floatingWindowDesired = showFloatingWindow.value
+let floatingWindowApplied = showFloatingWindow.value
+let suppressFloatingWindowSync = true
+let floatingWindowSyncing = false
+let floatingWindowPending = false
+let floatingWindowDebounceTimer: ReturnType<typeof setTimeout> | null = null
+const floatingClickCount = ref(0)
+
+const debugFloatingToggle = () => {
+  try {
+    return localStorage.getItem('debugFloatingToggle') === '1'
+  } catch {
+    return false
+  }
+}
+
+const logFloating = (...args: any[]) => {
+  if (!debugFloatingToggle()) return
+  // eslint-disable-next-line no-console
+  console.log('[floating-toggle]', new Date().toISOString(), ...args)
+}
+
+const syncFloatingWindowDesired = async () => {
+  if (floatingWindowSyncing) {
+    floatingWindowPending = true
+    logFloating('sync:already_in_flight -> pending', {
+      desired: floatingWindowDesired,
+      applied: floatingWindowApplied,
+      ui: showFloatingWindow.value,
+    })
+    return
+  }
+  floatingWindowSyncing = true
+  floatingWindowPending = false
+  const target = floatingWindowDesired
+  logFloating('sync:start', { target, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  try {
+    await updateSetting('show_floating_window', String(target))
+    try {
+      await FloatingBallService.SetVisible(target)
+    } catch (error) {
+      console.error('Failed to update floating ball visibility:', error)
+    }
+    // macOS：悬浮球窗口 Show() 可能短暂抢占焦点，导致下一次点击仅用于“聚焦窗口”而不触发开关
+    // 这里强制把焦点拉回当前窗口，避免出现“每隔一次点击无效”的现象
+    try {
+      await Window.Focus()
+    } catch (e) {
+      console.error('Failed to refocus window after floating toggle:', e)
+    }
+    floatingWindowApplied = target
+    logFloating('sync:success', { applied: floatingWindowApplied })
+  } catch (error) {
+    console.error('Failed to update show_floating_window setting:', error)
+    // 回滚到上一次成功状态
+    floatingWindowDesired = floatingWindowApplied
+    showFloatingWindow.value = floatingWindowApplied
+    try {
+      await FloatingBallService.SetVisible(floatingWindowApplied)
+    } catch (e) {
+      console.error('Failed to rollback floating ball visibility:', e)
+    }
+    try {
+      await Window.Focus()
+    } catch (e) {
+      console.error('Failed to refocus window after rollback:', e)
+    }
+    logFloating('sync:failed -> rollback', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  } finally {
+    floatingWindowSyncing = false
+    if (floatingWindowPending && floatingWindowDesired !== floatingWindowApplied) {
+      logFloating('sync:pending_flush', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+      void syncFloatingWindowDesired()
+      return
+    }
+    logFloating('sync:end', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  }
+}
+
+const scheduleFloatingWindowSync = (val: boolean) => {
+  floatingWindowDesired = val
+  if (floatingWindowDebounceTimer) {
+    clearTimeout(floatingWindowDebounceTimer)
+  }
+  logFloating('schedule', { val, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  floatingWindowDebounceTimer = setTimeout(() => {
+    floatingWindowDebounceTimer = null
+    logFloating('schedule:fire', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    void syncFloatingWindowDesired()
+  }, 160)
+}
+
+watch(
+  showFloatingWindow,
+  (val) => {
+    if (suppressFloatingWindowSync) return
+    logFloating('watch:model', { val, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    scheduleFloatingWindowSync(val)
+  },
+  { flush: 'sync' }
+)
 
 // 划词搜索设置状态
 const enableSelectionSearch = ref(true)
@@ -40,6 +145,20 @@ const loadSettings = async () => {
         boolRef.value = setting.value === 'true'
       }
     })
+
+    // 同步悬浮球显示状态（仅在不一致时才调用，避免进入页面就触发“重新定位”）
+    try {
+      const currentVisible = await FloatingBallService.IsVisible()
+      if (currentVisible !== showFloatingWindow.value) {
+        await FloatingBallService.SetVisible(showFloatingWindow.value)
+      }
+      floatingWindowDesired = showFloatingWindow.value
+      floatingWindowApplied = showFloatingWindow.value
+      suppressFloatingWindowSync = false
+    } catch (error) {
+      console.error('Failed to sync floating ball visibility on load:', error)
+      suppressFloatingWindowSync = false
+    }
 
     // 安全兜底：没有托盘图标时，不允许启用“关闭时最小化到托盘”（否则可能无法找回窗口）
     if (!showTrayIcon.value && minimizeToTrayOnClose.value) {
@@ -128,14 +247,19 @@ const handleMinimizeToTrayChange = async (val: boolean) => {
 }
 
 // 处理悬浮窗开关变化
-const handleFloatingWindowChange = async (val: boolean) => {
-  const prev = showFloatingWindow.value
-  showFloatingWindow.value = val
-  try {
-    await updateSetting('show_floating_window', String(val))
-  } catch {
-    showFloatingWindow.value = prev
-  }
+const handleFloatingWindowChange = async (_val: boolean) => {
+  // 兼容旧模板写法：实际切换由 v-model 触发，后端同步由 watch 处理
+}
+
+const handleFloatingWindowClickCapture = () => {
+  floatingClickCount.value += 1
+  logFloating('click:capture', {
+    n: floatingClickCount.value,
+    ui_before: showFloatingWindow.value,
+    desired: floatingWindowDesired,
+    applied: floatingWindowApplied,
+    syncing: floatingWindowSyncing,
+  })
 }
 
 // 处理划词搜索开关变化
@@ -179,10 +303,9 @@ onMounted(() => {
     <SettingsCard :title="t('settings.tools.floatingWindow.title')">
       <!-- 显示悬浮窗 -->
       <SettingsItem :label="t('settings.tools.floatingWindow.show')" :bordered="false">
-        <Switch
-          :model-value="showFloatingWindow"
-          @update:model-value="handleFloatingWindowChange"
-        />
+        <div @click.capture="handleFloatingWindowClickCapture">
+          <Switch v-model="showFloatingWindow" />
+        </div>
       </SettingsItem>
     </SettingsCard>
 
