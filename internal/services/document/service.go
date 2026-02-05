@@ -135,9 +135,9 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 }
 
 // ListDocumentsPage 获取知识库文档分页（cursor 分页）
-// - 排序：id DESC
+// - 无关键词时：按 id DESC 排序，支持 before_id 游标分页
+// - 有关键词时：按 FTS5 BM25 相关度降序排列，不使用 before_id（搜索结果一次性返回）
 // - 每次返回 limit（默认/最大 100）
-// - before_id：仅返回 id < before_id 的记录（用于无限下拉加载更多）
 func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Document, error) {
 	if input.LibraryID <= 0 {
 		return nil, errs.New("error.library_id_required")
@@ -162,24 +162,42 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 	models := make([]documentModel, 0, limit)
 	keyword := strings.TrimSpace(input.Keyword)
 
-	q := db.NewSelect().
-		Model(&models).
-		Where("d.library_id = ?", input.LibraryID)
-
-	if input.BeforeID > 0 {
-		q = q.Where("d.id < ?", input.BeforeID)
-	}
-
 	if keyword != "" {
+		// Build FTS match query
 		matchQuery := tokenizer.BuildMatchQuery(keyword)
 		if matchQuery == "" {
 			return []Document{}, nil
 		}
-		q = q.Where("d.id IN (SELECT rowid FROM doc_name_fts WHERE doc_name_fts MATCH ?)", matchQuery)
-	}
 
-	if err := q.OrderExpr("d.id DESC").Limit(limit).Scan(ctx); err != nil {
-		return nil, errs.Wrap("error.document_list_failed", err)
+		// Combine keyword match with library_id filter in FTS MATCH for better performance
+		// FTS5 syntax: (keyword tokens) AND library_id:value
+		ftsMatch := fmt.Sprintf("(%s) AND library_id:%d", matchQuery, input.LibraryID)
+
+		// Query FTS directly with library_id filter, then JOIN for full document data
+		err := db.NewRaw(`
+			SELECT d.*
+			FROM doc_name_fts
+			INNER JOIN documents d ON d.id = doc_name_fts.rowid
+			WHERE doc_name_fts MATCH ?
+			ORDER BY doc_name_fts.rank, d.id DESC
+			LIMIT ?
+		`, ftsMatch, limit).Scan(ctx, &models)
+		if err != nil {
+			return nil, errs.Wrap("error.document_list_failed", err)
+		}
+	} else {
+		// No keyword: use cursor pagination with id DESC
+		q := db.NewSelect().
+			Model(&models).
+			Where("d.library_id = ?", input.LibraryID)
+
+		if input.BeforeID > 0 {
+			q = q.Where("d.id < ?", input.BeforeID)
+		}
+
+		if err := q.OrderExpr("d.id DESC").Limit(limit).Scan(ctx); err != nil {
+			return nil, errs.Wrap("error.document_list_failed", err)
+		}
 	}
 
 	out := make([]Document, 0, len(models))
@@ -196,7 +214,7 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 }
 
 // ListDocuments 获取知识库的文档列表
-// keyword: 可选的搜索关键词（按文件名搜索，使用 FTS）
+// keyword: 可选的搜索关键词（按文件名搜索，使用 FTS，按相关度降序排列）
 func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Document, error) {
 	if libraryID <= 0 {
 		return nil, errs.New("error.library_id_required")
@@ -221,15 +239,17 @@ func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Docu
 			if s.app != nil {
 				s.app.Logger.Debug("FTS search", "keyword", keyword, "matchQuery", matchQuery, "libraryID", libraryID)
 			}
-			// Use FTS to search by document name
-			// NOTE: doc_name_fts is contentless (content=''), so UNINDEXED columns may be NULL at query time.
-			// We only rely on rowid for filtering, and use documents table for library_id constraint.
-			err := db.NewSelect().
-				Model(&models).
-				Where("d.library_id = ?", libraryID).
-				Where("d.id IN (SELECT rowid FROM doc_name_fts WHERE doc_name_fts MATCH ?)", matchQuery).
-				OrderExpr("d.id DESC").
-				Scan(ctx)
+			// Combine keyword match with library_id filter in FTS MATCH for better performance
+			ftsMatch := fmt.Sprintf("(%s) AND library_id:%d", matchQuery, libraryID)
+
+			// Query FTS directly with library_id filter, then JOIN for full document data
+			err := db.NewRaw(`
+				SELECT d.*
+				FROM doc_name_fts
+				INNER JOIN documents d ON d.id = doc_name_fts.rowid
+				WHERE doc_name_fts MATCH ?
+				ORDER BY doc_name_fts.rank, d.id DESC
+			`, ftsMatch).Scan(ctx, &models)
 			if err != nil {
 				return nil, errs.Wrap("error.document_list_failed", err)
 			}

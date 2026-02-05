@@ -50,8 +50,7 @@ CREATE UNIQUE INDEX idx_docs_library_hash ON documents(library_id, content_hash)
 CREATE VIRTUAL TABLE doc_fts USING fts5(
     -- 预分词后的 token 文本（由 Go 写入；用空格分隔）
     tokens,
-	-- 用于过滤的元信息（不参与倒排索引）
-	library_id UNINDEXED,
+	library_id,
 	document_id UNINDEXED,
 	level UNINDEXED,
     -- contentless FTS: 只存索引，不保存内容副本；查询用 rowid 回表 document_nodes 拿 content/元信息
@@ -63,8 +62,7 @@ CREATE VIRTUAL TABLE doc_fts USING fts5(
 CREATE VIRTUAL TABLE doc_name_fts USING fts5(
     -- 预分词后的 token 文本（由 Go 写入；用空格分隔）
     name_tokens,
-	-- 用于过滤的元信息（不参与倒排索引）
-	library_id UNINDEXED,
+	library_id,
 	document_id UNINDEXED,
     content='',
     tokenize='unicode61'

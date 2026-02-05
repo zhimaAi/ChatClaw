@@ -165,7 +165,7 @@ func TokenizeContent(content string) string {
 }
 
 // BuildMatchQuery builds an FTS5 MATCH query string from user input
-// It tokenizes the input and generates prefix-match queries joined by AND (implicit in FTS5)
+// It tokenizes the input and generates prefix-match queries joined by OR
 func BuildMatchQuery(keyword string) string {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
@@ -196,22 +196,6 @@ func BuildMatchQuery(keyword string) string {
 		// Escape FTS5 special characters and add prefix match
 		escaped := escapeFTS5Token(token)
 		queryParts = append(queryParts, escaped+"*")
-
-		// Also add per-token pinyin when token contains Chinese
-		ch := extractChinese(token)
-		if ch != "" && len([]rune(ch)) <= MaxPinyinChars {
-			for _, pt := range generatePinyinTokens(ch) {
-				if pt == "" {
-					continue
-				}
-				if _, exists := seen[pt]; exists {
-					continue
-				}
-				seen[pt] = struct{}{}
-				escapedPT := escapeFTS5Token(pt)
-				queryParts = append(queryParts, escapedPT+"*")
-			}
-		}
 	}
 
 	// Fallback: also split by non-word separators to support typical filenames like "foo_bar-v1.pdf"
@@ -228,26 +212,11 @@ func BuildMatchQuery(keyword string) string {
 		queryParts = append(queryParts, escaped+"*")
 	}
 
-	// Also try to match pinyin if there's Chinese input
-	chineseText := extractChinese(keyword)
-	if chineseText != "" && len([]rune(chineseText)) <= MaxPinyinChars {
-		pinyinTokens := generatePinyinTokens(chineseText)
-		for _, pt := range pinyinTokens {
-			if _, exists := seen[pt]; exists {
-				continue
-			}
-			seen[pt] = struct{}{}
-			escaped := escapeFTS5Token(pt)
-			queryParts = append(queryParts, escaped+"*")
-		}
-	}
-
 	if len(queryParts) == 0 {
 		return ""
 	}
 
 	// Join with OR for more flexible matching
-	// FTS5 default is AND which requires all tokens to match
 	return strings.Join(queryParts, " OR ")
 }
 
