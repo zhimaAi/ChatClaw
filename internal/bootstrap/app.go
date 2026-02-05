@@ -11,6 +11,7 @@ import (
 	appservice "willchat/internal/services/app"
 	"willchat/internal/services/browser"
 	"willchat/internal/services/document"
+	"willchat/internal/services/floatingball"
 	"willchat/internal/services/greet"
 	"willchat/internal/services/i18n"
 	"willchat/internal/services/library"
@@ -42,6 +43,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 声明主窗口变量，用于单实例回调
 	var mainWindow *application.WebviewWindow
+	var floatingBallService *floatingball.FloatingBallService
 
 	// 创建应用实例
 	app = application.New(application.Options{
@@ -66,6 +68,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 					mainWindow.Restore()
 					mainWindow.Show()
 					mainWindow.Focus()
+				}
+				// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
+				if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+					_ = floatingBallService.SetVisible(true)
 				}
 			},
 		},
@@ -123,6 +129,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	multiaskService := multiask.NewMultiaskService(app, mainWindow)
 	app.RegisterService(application.NewService(multiaskService))
 
+	// 创建悬浮球服务（独立 AlwaysOnTop 小窗）
+	floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
+	app.RegisterService(application.NewService(floatingBallService))
+
 	// 创建子窗口服务
 	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
 	if err != nil {
@@ -153,6 +163,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
 		mainWindow.Show()
 		mainWindow.Focus()
+		// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
+		if settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+			_ = floatingBallService.SetVisible(true)
+		}
 	})
 	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
 		app.Quit()
@@ -200,6 +214,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 				app.Logger.Error("Failed to initialize multiask service", "error", err)
 			}
 		}()
+		floatingBallService.InitFromSettings()
 	})
 
 	// 监听主窗口关闭事件，实现"关闭时最小化"
@@ -214,11 +229,30 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		}
 	})
 
+	// 主窗口被唤醒/恢复/聚焦时：若悬浮球开关为开启，则恢复悬浮球
+	restoreFloatingBall := func(reason string) {
+		if floatingBallService == nil {
+			return
+		}
+		if !settings.GetBool("show_floating_window", true) {
+			return
+		}
+		if floatingBallService.IsVisible() {
+			return
+		}
+		_ = floatingBallService.SetVisible(true)
+	}
+	mainWindow.RegisterHook(events.Common.WindowShow, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_show") })
+	mainWindow.RegisterHook(events.Common.WindowRestore, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_restore") })
+	// NOTE: Don't restore on WindowFocus. Closing the floating ball shifts focus back to main window,
+	// which would immediately re-show the floating ball and make it impossible to close.
+
 	// 点击 Dock 图标时显示窗口
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
 		mainWindow.UnMinimise()
 		mainWindow.Show()
 		mainWindow.Focus()
+		restoreFloatingBall("mac_reopen")
 	})
 
 	return app, func() {
