@@ -99,6 +99,9 @@ func newAzureEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embed
 			extraConfig.APIVersion = "2023-05-15"
 		}
 	}
+	if extraConfig.APIVersion == "" {
+		extraConfig.APIVersion = "2023-05-15"
+	}
 
 	config := &openaiembed.EmbeddingConfig{
 		APIKey:     cfg.APIKey,

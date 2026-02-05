@@ -125,13 +125,15 @@ const resetAndLoad = async () => {
   loadToken += 1
   documents.value = []
   beforeID.value = 0
-  hasMore.value = true
+  hasMore.value = true // Always allow the first request to go through
   await loadMore(loadToken)
 }
 
 const loadMore = async (token?: number) => {
   if (!props.library?.id) return
   if (!hasMore.value) return
+  // When searching, backend returns a single page (no cursor). Do not auto-load more.
+  if (searchQuery.value.trim() && documents.value.length > 0) return
   if (isUploading.value) return
   if (isLoading.value || isLoadingMore.value) return
 
@@ -164,7 +166,15 @@ const loadMore = async (token?: number) => {
       beforeID.value = merged[merged.length - 1].id
     }
 
-    hasMore.value = result.length >= PAGE_SIZE
+    if (searchQuery.value.trim()) {
+      hasMore.value = false
+    } else {
+      hasMore.value = result.length >= PAGE_SIZE
+      // If server returned duplicates only, stop to avoid spinning.
+      if (result.length > 0 && merged.length === 0) {
+        hasMore.value = false
+      }
+    }
   } catch (error) {
     console.error('Failed to load documents:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.loadFailed'))

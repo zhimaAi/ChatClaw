@@ -76,6 +76,9 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 			extraConfig.APIVersion = "2023-05-15"
 		}
 	}
+	if extraConfig.APIVersion == "" {
+		extraConfig.APIVersion = "2023-05-15"
+	}
 
 	config := &openai.ChatModelConfig{
 		APIKey:     cfg.APIKey,

@@ -172,15 +172,15 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 	defer cancel()
 
 	// Update in a transaction to keep config consistent.
+	updates := []struct {
+		Key string
+		Val string
+	}{
+		{Key: "embedding_provider_id", Val: providerID},
+		{Key: "embedding_model_id", Val: modelID},
+		{Key: "embedding_dimension", Val: fmt.Sprintf("%d", input.Dimension)},
+	}
 	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		updates := []struct {
-			Key string
-			Val string
-		}{
-			{Key: "embedding_provider_id", Val: providerID},
-			{Key: "embedding_model_id", Val: modelID},
-			{Key: "embedding_dimension", Val: fmt.Sprintf("%d", input.Dimension)},
-		}
 		for _, u := range updates {
 			result, err := tx.NewUpdate().
 				Model((*settingModel)(nil)).
@@ -194,11 +194,15 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 			if rows == 0 {
 				return errs.Newf("error.setting_not_found", map[string]any{"Key": u.Key})
 			}
-			setCachedValue(u.Key, u.Val)
 		}
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	// Update cache after transaction commits.
+	for _, u := range updates {
+		setCachedValue(u.Key, u.Val)
 	}
 
 	changed := oldProvider != providerID || oldModel != modelID || strings.TrimSpace(oldDim) != fmt.Sprintf("%d", input.Dimension)
@@ -224,17 +228,48 @@ func (s *SettingsService) triggerReembedAllDocuments(dimension int) {
 	defer cancel()
 
 	// 1) Rebuild vec0 table to match new dimension
-	// Drop will also remove internal vec tables.
-	_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS doc_vec;`)
+	// Best-effort: create a tmp table first, then swap to reduce downtime.
+	tmpName := fmt.Sprintf("doc_vec_tmp_%d", time.Now().UnixNano())
+	oldName := fmt.Sprintf("doc_vec_old_%d", time.Now().UnixNano())
+
+	_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, tmpName))
+	_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, oldName))
+
 	_, err := db.ExecContext(ctx, fmt.Sprintf(
-		`CREATE VIRTUAL TABLE IF NOT EXISTS doc_vec USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
-		dimension,
+		`CREATE VIRTUAL TABLE "%s" USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
+		tmpName, dimension,
 	))
 	if err != nil {
 		if s.app != nil {
-			s.app.Logger.Error("rebuild doc_vec failed", "error", err)
+			s.app.Logger.Error("create tmp doc_vec failed", "error", err)
 		}
 		return
+	}
+
+	// Try rename-swap first (keeps old table if swap fails).
+	_, errRenameOld := db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE doc_vec RENAME TO "%s";`, oldName))
+	_, errRenameNew := db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO doc_vec;`, tmpName))
+	if errRenameNew != nil {
+		// Rollback: try restoring old table name if we renamed it.
+		if errRenameOld == nil {
+			_, _ = db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO doc_vec;`, oldName))
+		}
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, tmpName))
+
+		// Fallback to drop+create (as last resort).
+		_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS doc_vec;`)
+		_, err2 := db.ExecContext(ctx, fmt.Sprintf(
+			`CREATE VIRTUAL TABLE IF NOT EXISTS doc_vec USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
+			dimension,
+		))
+		if err2 != nil && s.app != nil {
+			s.app.Logger.Error("fallback rebuild doc_vec failed", "error", err2)
+		}
+		return
+	}
+	// Drop old table after swap (ignore errors).
+	if errRenameOld == nil {
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, oldName))
 	}
 
 	// 2) Submit embedding-only jobs for all documents

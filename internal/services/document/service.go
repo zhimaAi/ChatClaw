@@ -929,11 +929,18 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 	}
 
 	if err != nil {
-		// 根据错误类型判断是解析失败还是向量化失败
+		// Classify error by processor phase to update statuses correctly.
 		errMsg := err.Error()
-		if strings.Contains(errMsg, "parse") || strings.Contains(errMsg, "split") || strings.Contains(errMsg, "store nodes") {
-			updateAndEmit(StatusFailed, 0, errMsg, StatusPending, 0, "")
+		var pe *processor.PhaseError
+		if errors.As(err, &pe) {
+			switch pe.Phase {
+			case processor.PhaseParsing, processor.PhaseSplitting:
+				updateAndEmit(StatusFailed, 0, errMsg, StatusPending, 0, "")
+			default:
+				updateAndEmit(StatusCompleted, 100, "", StatusFailed, 0, errMsg)
+			}
 		} else {
+			// Fallback: treat as embedding failure (parsing likely completed if we reached here).
 			updateAndEmit(StatusCompleted, 100, "", StatusFailed, 0, errMsg)
 		}
 		return
@@ -985,13 +992,16 @@ func (s *DocumentService) reembedDocument(docID, libraryID int64, runID string, 
 
 	emitProgress := func(status int, progress int, errMsg string) {
 		// Update DB
-		_, _ = db.NewUpdate().
+		q := db.NewUpdate().
 			Table("documents").
 			Set("embedding_status = ?", status).
 			Set("embedding_progress = ?", progress).
 			Set("embedding_error = ?", errMsg).
-			Where("id = ?", docID).
-			Exec(ctx)
+			Where("id = ?", docID)
+		if runID != "" {
+			q = q.Where("processing_run_id = ?", runID)
+		}
+		_, _ = q.Exec(ctx)
 
 		// Emit event
 		if s.app != nil {

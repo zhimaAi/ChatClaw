@@ -27,6 +27,35 @@ import (
 	"willchat/internal/fts/tokenizer"
 )
 
+// Phase represents a high-level stage of the document pipeline.
+// It is used to classify errors so the caller can update parsing/embedding status correctly.
+type Phase string
+
+const (
+	PhaseParsing   Phase = "parsing"
+	PhaseSplitting Phase = "splitting"
+	PhaseEmbedding Phase = "embedding"
+	PhaseRaptor    Phase = "raptor"
+	PhasePersist   Phase = "persist"
+)
+
+// PhaseError wraps an error with a processing phase.
+// Error() intentionally returns the underlying message (user-facing).
+type PhaseError struct {
+	Phase Phase
+	Err   error
+}
+
+func (e *PhaseError) Error() string { return e.Err.Error() }
+func (e *PhaseError) Unwrap() error { return e.Err }
+
+func wrapPhase(phase Phase, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &PhaseError{Phase: phase, Err: err}
+}
+
 // DocumentNode 表示数据库中的文档节点
 type DocumentNode struct {
 	ID            int64     `bun:"id,pk,autoincrement"`
@@ -154,21 +183,21 @@ func (p *Processor) ProcessDocument(
 
 	docs, err := p.parseDocument(ctx, localPath)
 	if err != nil {
-		result.Error = fmt.Errorf("解析失败: %w", err)
+		result.Error = wrapPhase(PhaseParsing, fmt.Errorf("解析失败: %w", err))
 		return result, result.Error
 	}
 
 	if len(docs) == 0 {
-		result.Error = errors.New("未从文档中提取到内容")
+		result.Error = wrapPhase(PhaseParsing, errors.New("未从文档中提取到内容"))
 		return result, result.Error
 	}
 
 	// 计算字数
-	fullContent := ""
-	for _, doc := range docs {
-		fullContent += doc.Content
+	wordTotal := 0
+	for _, d := range docs {
+		wordTotal += utf8.RuneCountInString(d.Content)
 	}
-	result.WordTotal = utf8.RuneCountInString(fullContent)
+	result.WordTotal = wordTotal
 
 	if onProgress != nil {
 		onProgress("parsing", 40)
@@ -177,7 +206,8 @@ func (p *Processor) ProcessDocument(
 	// 提前创建 embedder（用于语义分割和后续向量化，同一实例复用）
 	embedder, err := p.createEmbedder(ctx, embeddingConfig)
 	if err != nil {
-		result.Error = fmt.Errorf("创建 embedder 失败: %w", err)
+		// This happens before embedding phase starts; treat it as parsing/setup error.
+		result.Error = wrapPhase(PhaseParsing, fmt.Errorf("创建 embedder 失败: %w", err))
 		return result, result.Error
 	}
 
@@ -227,7 +257,7 @@ func (p *Processor) ProcessDocument(
 	}
 	log.Printf("[Split] Completed in %v, got %d chunks", time.Since(splitStart), len(chunks))
 	if err != nil {
-		result.Error = fmt.Errorf("分割失败: %w", err)
+		result.Error = wrapPhase(PhaseSplitting, fmt.Errorf("分割失败: %w", err))
 		return result, result.Error
 	}
 
@@ -269,7 +299,7 @@ func (p *Processor) ProcessDocument(
 			onProgress("embedding", 10+progress*70/100)
 		}
 	}); err != nil {
-		result.Error = fmt.Errorf("嵌入失败: %w", err)
+		result.Error = wrapPhase(PhaseEmbedding, fmt.Errorf("嵌入失败: %w", err))
 		return result, result.Error
 	}
 	log.Printf("[Embedding] Level-0 embedding completed in %v", time.Since(embedStart))
@@ -286,7 +316,7 @@ func (p *Processor) ProcessDocument(
 		planned, err := p.buildRaptorPlan(ctx, libraryConfig, allNodes, embedder, getProviderInfo)
 		if err != nil {
 			log.Printf("[RAPTOR] FAILED: %v", err)
-			result.Error = fmt.Errorf("RAPTOR 构建失败: %w", err)
+			result.Error = wrapPhase(PhaseRaptor, fmt.Errorf("RAPTOR 构建失败: %w", err))
 			return result, result.Error
 		}
 		allNodes = planned
@@ -302,7 +332,7 @@ func (p *Processor) ProcessDocument(
 
 	// 最终一次性入库（事务）
 	if err := p.persistNodesAndVectors(ctx, docID, allNodes); err != nil {
-		result.Error = fmt.Errorf("入库失败: %w", err)
+		result.Error = wrapPhase(PhasePersist, fmt.Errorf("入库失败: %w", err))
 		return result, result.Error
 	}
 
