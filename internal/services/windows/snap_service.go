@@ -90,8 +90,11 @@ func (s *SnapService) GetStatus() SnapStatus {
 	return s.status
 }
 
-// WakeAttached brings the attached target window and the winsnap window to the front.
-// This is useful when winsnap is attached but both windows are behind other apps.
+// WakeAttached brings the attached target window and the winsnap window to the front,
+// then returns keyboard focus to the winsnap window.
+// This is called when user clicks on the winsnap window - we want to:
+// 1. Bring target window to front (so it's not hidden by other apps)
+// 2. Return focus to winsnap so user can continue typing
 // If the winsnap window is invalid/closed, it will be recreated on the next loop tick.
 func (s *SnapService) WakeAttached() error {
 	s.mu.Lock()
@@ -102,7 +105,8 @@ func (s *SnapService) WakeAttached() error {
 	if w == nil || target == "" {
 		return nil
 	}
-	err := winsnap.WakeAttachedWindow(w, target)
+	// Use WakeAttachedWindowWithRefocus to return focus to winsnap after syncing z-order
+	err := winsnap.WakeAttachedWindowWithRefocus(w, target)
 	if err == winsnap.ErrWinsnapWindowInvalid {
 		// Winsnap window became invalid - trigger recreation
 		s.handleWinsnapWindowInvalid(target)
@@ -417,6 +421,8 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 		_ = s.ctrl.Stop()
 		s.ctrl = nil
 	}
+	oldState := s.status.State
+	oldTarget := s.status.TargetProcess
 	s.currentTarget = ""
 	s.lastWinsnapMinimized = false
 	s.status.State = SnapStateHidden
@@ -426,6 +432,14 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 	s.mu.Unlock()
 
 	_ = winsnap.MoveOffscreen(w)
+
+	// Emit state-changed event if state actually changed
+	if oldState != SnapStateHidden || oldTarget != "" {
+		s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+			"state":         string(SnapStateHidden),
+			"targetProcess": "",
+		})
+	}
 }
 
 func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess string) {
@@ -469,6 +483,8 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	}
 
 	s.mu.Lock()
+	oldState := s.status.State
+	oldTarget := s.status.TargetProcess
 	s.ctrl = c
 	s.currentTarget = targetProcess
 	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
@@ -477,6 +493,14 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.status.LastError = ""
 	s.touchLocked("")
 	s.mu.Unlock()
+
+	// Emit state-changed event if state actually changed
+	if oldState != SnapStateAttached || oldTarget != targetProcess {
+		s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+			"state":         string(SnapStateAttached),
+			"targetProcess": targetProcess,
+		})
+	}
 
 	// Immediately sync z-order after attaching to ensure the winsnap window
 	// is visible above the target window. Without this, the winsnap may appear

@@ -17,6 +17,11 @@ func WakeAttachedWindow(_ *application.WebviewWindow, _ string) error {
 	return errors.New("winsnap: wake is not supported on this platform")
 }
 
+// WakeAttachedWindowWithRefocus is not supported on this platform.
+func WakeAttachedWindowWithRefocus(_ *application.WebviewWindow, _ string) error {
+	return errors.New("winsnap: wake is not supported on this platform")
+}
+
 // WakeStandaloneWindow brings the winsnap window to front when it's in standalone state.
 // Fallback implementation: just show and focus the window.
 func WakeStandaloneWindow(window *application.WebviewWindow) error {
