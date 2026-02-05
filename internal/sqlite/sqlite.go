@@ -90,9 +90,6 @@ func doInit(app *application.App) error {
 		sqlDB.Close()
 		return err
 	}
-	if app != nil {
-		app.Logger.Info("sqlite-vec loaded", "version", vecVersion)
-	}
 
 	bunDB := bun.NewDB(sqlDB, sqlitedialect.New())
 
@@ -102,30 +99,21 @@ func doInit(app *application.App) error {
 		bunDB.Close()
 		return err
 	}
-	group, err := migrator.Migrate(ctx)
-	if err != nil {
+	if _, err := migrator.Migrate(ctx); err != nil {
 		bunDB.Close()
 		return err
 	}
 
 	db = bunDB
-
-	if app != nil && group != nil && !group.IsZero() {
-		app.Logger.Info("sqlite migrated", "group", group.String())
-	}
-
 	return nil
 }
 
-func Close(app *application.App) error {
+func Close() error {
 	if db == nil {
 		return nil
 	}
 	err := db.Close()
 	db = nil
-	if err != nil && app != nil {
-		app.Logger.Warn("sqlite close failed", "error", err)
-	}
 	return err
 }
 
@@ -138,5 +126,12 @@ func resolveDBPath() (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
+
+	// 创建 documents 目录
+	docsDir := filepath.Join(dir, "documents")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		return "", err
+	}
+
 	return filepath.Join(dir, define.DefaultSQLiteFileName), nil
 }

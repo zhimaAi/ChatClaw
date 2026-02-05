@@ -12,6 +12,10 @@ export type NavModule = 'assistant' | 'knowledge' | 'multiask' | 'settings'
 
 /**
  * 标签页类型
+ *
+ * 注意：标签页内部状态（如选中的助手、会话、聊天消息等）由各页面组件实例自己维护。
+ * 由于使用 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留。
+ * Tab 对象只保存标签页的元数据（ID、标题、图标、模块类型）。
  */
 export interface Tab {
   id: string
@@ -22,15 +26,13 @@ export interface Tab {
   /** 标签页图标URL */
   icon?: string
   /**
-   * 是否为“默认图标”（可被主题切换时自动刷新）
+   * 是否为"默认图标"（可被主题切换时自动刷新）
    * - true: 默认图标（例如默认 logo）
    * - false: 自定义图标（不应被覆盖）
    */
   iconIsDefault?: boolean
   /** 关联的模块 */
   module: NavModule
-  /** AI助手标签页的选中助手ID（仅 assistant 模块使用） */
-  agentId?: number | null
 }
 
 /**
@@ -217,26 +219,8 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
-   * 更新标签页的选中助手ID（仅 assistant 模块使用）
-   */
-  const updateTabAgentId = (tabId: string, agentId: number | null) => {
-    const tab = tabs.value.find((t) => t.id === tabId)
-    if (tab && tab.module === 'assistant') {
-      tab.agentId = agentId
-    }
-  }
-
-  /**
-   * 获取标签页的选中助手ID
-   */
-  const getTabAgentId = (tabId: string): number | null => {
-    const tab = tabs.value.find((t) => t.id === tabId)
-    return tab?.agentId ?? null
-  }
-
-  /**
    * 刷新所有 assistant 标签页的默认图标（用于主题切换时更新图标颜色）
-   * 只更新“明确标记为默认图标”的标签页，避免覆盖自定义 SVG dataURL
+   * 只更新"明确标记为默认图标"的标签页，避免覆盖自定义 SVG dataURL
    */
   const refreshAssistantDefaultIcons = () => {
     const newLogoDataUrl = getLogoDataUrl()
@@ -268,8 +252,6 @@ export const useNavigationStore = defineStore('navigation', () => {
     setActiveTab,
     updateTabIcon,
     updateTabTitle,
-    updateTabAgentId,
-    getTabAgentId,
     refreshAssistantDefaultIcons,
   }
 })

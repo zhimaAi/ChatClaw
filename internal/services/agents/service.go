@@ -127,6 +127,10 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		LLMTopP:              1.0,
 		ContextCount:         50,
 		LLMMaxTokens:         1000,
+		EnableLLMTemperature: false,
+		EnableLLMTopP:        false,
+		EnableLLMMaxTokens:   false,
+		MatchThreshold:       0.5,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -270,6 +274,21 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	}
 	if input.LLMMaxTokens != nil {
 		q = q.Set("llm_max_tokens = ?", *input.LLMMaxTokens)
+	}
+	if input.EnableLLMTemperature != nil {
+		q = q.Set("enable_llm_temperature = ?", *input.EnableLLMTemperature)
+	}
+	if input.EnableLLMTopP != nil {
+		q = q.Set("enable_llm_top_p = ?", *input.EnableLLMTopP)
+	}
+	if input.EnableLLMMaxTokens != nil {
+		q = q.Set("enable_llm_max_tokens = ?", *input.EnableLLMMaxTokens)
+	}
+	if input.MatchThreshold != nil {
+		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
+			return nil, errs.New("error.agent_match_threshold_invalid")
+		}
+		q = q.Set("match_threshold = ?", *input.MatchThreshold)
 	}
 
 	result, err := q.Exec(ctx)

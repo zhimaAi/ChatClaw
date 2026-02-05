@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"willchat/internal/errs"
 	"willchat/internal/services/settings"
 	"willchat/internal/sqlite"
+	"willchat/internal/taskmanager"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -113,7 +115,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	topK := 20
 	chunkSize := 1024
 	chunkOverlap := 100
-	matchThreshold := 0.5
 
 	if input.TopK != nil && *input.TopK > 0 {
 		topK = *input.TopK
@@ -129,12 +130,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 			return nil, errs.New("error.library_chunk_overlap_invalid")
 		}
 		chunkOverlap = *input.ChunkOverlap
-	}
-	if input.MatchThreshold != nil {
-		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
-			return nil, errs.New("error.library_match_threshold_invalid")
-		}
-		matchThreshold = *input.MatchThreshold
 	}
 
 	// embedding 配置为全局 settings（不落库到 library 表），但创建前必须校验：
@@ -192,7 +187,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		TopK:           topK,
 		ChunkSize:      chunkSize,
 		ChunkOverlap:   chunkOverlap,
-		MatchThreshold: matchThreshold,
 		SortOrder:      sortOrder,
 	}
 
@@ -300,12 +294,6 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		}
 		q = q.Set("chunk_overlap = ?", *input.ChunkOverlap)
 	}
-	if input.MatchThreshold != nil {
-		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
-			return nil, errs.New("error.library_match_threshold_invalid")
-		}
-		q = q.Set("match_threshold = ?", *input.MatchThreshold)
-	}
 
 	res, err := q.Exec(ctx)
 	if err != nil {
@@ -327,7 +315,7 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 	return &dto, nil
 }
 
-// DeleteLibrary 删除知识库
+// DeleteLibrary 删除知识库及其所有关联数据
 func (s *LibraryService) DeleteLibrary(id int64) error {
 	if id <= 0 {
 		return errs.New("error.library_id_required")
@@ -338,9 +326,55 @@ func (s *LibraryService) DeleteLibrary(id int64) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// 1. 查询该知识库下所有文档的 ID 和本地路径
+	type docInfo struct {
+		ID        int64  `bun:"id"`
+		LocalPath string `bun:"local_path"`
+	}
+	var docs []docInfo
+	if err := db.NewSelect().
+		Table("documents").
+		Column("id", "local_path").
+		Where("library_id = ?", id).
+		Scan(ctx, &docs); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return errs.Wrap("error.library_delete_failed", err)
+	}
+
+	// 2. 取消所有正在进行的任务
+	if tm := taskmanager.Get(); tm != nil {
+		for _, doc := range docs {
+			tm.Cancel(fmt.Sprintf("doc:%d", doc.ID))
+			tm.Cancel(fmt.Sprintf("thumb:%d", doc.ID))
+		}
+	}
+
+	// 3. 删除向量表中的数据（doc_vec 没有外键约束，需要手动删除）
+	if len(docs) > 0 {
+		docIDs := make([]int64, len(docs))
+		for i, doc := range docs {
+			docIDs[i] = doc.ID
+		}
+		// 查询 document_nodes 的 ID 用于删除向量
+		var nodeIDs []int64
+		if err := db.NewSelect().
+			Table("document_nodes").
+			Column("id").
+			Where("document_id IN (?)", bun.In(docIDs)).
+			Scan(ctx, &nodeIDs); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			s.app.Logger.Warn("query document_nodes failed", "error", err)
+		}
+		if len(nodeIDs) > 0 {
+			if _, err := db.ExecContext(ctx,
+				"DELETE FROM doc_vec WHERE id IN (?)", bun.In(nodeIDs)); err != nil {
+				s.app.Logger.Warn("delete doc_vec failed", "error", err)
+			}
+		}
+	}
+
+	// 4. 删除知识库（CASCADE 会自动删除 documents、document_nodes，触发器会处理 FTS）
 	res, err := db.NewDelete().Model((*libraryModel)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return errs.Wrap("error.library_delete_failed", err)
@@ -349,5 +383,15 @@ func (s *LibraryService) DeleteLibrary(id int64) error {
 	if affected == 0 {
 		return errs.Newf("error.library_not_found", map[string]any{"ID": id})
 	}
+
+	// 5. 删除物理文件（在数据库删除成功后执行，失败不影响整体结果）
+	for _, doc := range docs {
+		if doc.LocalPath != "" {
+			if err := os.Remove(doc.LocalPath); err != nil && !os.IsNotExist(err) {
+				s.app.Logger.Warn("delete file failed", "path", doc.LocalPath, "error", err)
+			}
+		}
+	}
+
 	return nil
 }

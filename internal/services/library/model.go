@@ -24,7 +24,6 @@ type Library struct {
 	TopK           int     `json:"top_k"`
 	ChunkSize      int     `json:"chunk_size"`
 	ChunkOverlap   int     `json:"chunk_overlap"`
-	MatchThreshold float64 `json:"match_threshold"`
 	SortOrder      int     `json:"sort_order"`
 }
 
@@ -39,7 +38,6 @@ type CreateLibraryInput struct {
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
 	ChunkOverlap   *int     `json:"chunk_overlap"`
-	MatchThreshold *float64 `json:"match_threshold"`
 }
 
 // UpdateLibraryInput 更新知识库的输入参数
@@ -52,7 +50,6 @@ type UpdateLibraryInput struct {
 	TopK           *int     `json:"top_k"`
 	ChunkSize      *int     `json:"chunk_size"`
 	ChunkOverlap   *int     `json:"chunk_overlap"`
-	MatchThreshold *float64 `json:"match_threshold"`
 }
 
 // libraryModel 数据库模型
@@ -71,7 +68,6 @@ type libraryModel struct {
 	TopK           int     `bun:"top_k,notnull"`
 	ChunkSize      int     `bun:"chunk_size,notnull"`
 	ChunkOverlap   int     `bun:"chunk_overlap,notnull"`
-	MatchThreshold float64 `bun:"match_threshold,notnull"`
 	SortOrder      int     `bun:"sort_order,notnull"`
 }
 
@@ -107,7 +103,6 @@ func (m *libraryModel) toDTO() Library {
 		TopK:           m.TopK,
 		ChunkSize:      m.ChunkSize,
 		ChunkOverlap:   m.ChunkOverlap,
-		MatchThreshold: m.MatchThreshold,
 		SortOrder:      m.SortOrder,
 	}
 }

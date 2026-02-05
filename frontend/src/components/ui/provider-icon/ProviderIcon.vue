@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import type { FunctionalComponent, SVGAttributes, HTMLAttributes } from 'vue'
+import type { HTMLAttributes } from 'vue'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SvgComponent = any
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +17,14 @@ import DoubaoIcon from '@/assets/icons/providers/doubao.svg'
 import BaiduIcon from '@/assets/icons/providers/baidu.svg'
 import GrokIcon from '@/assets/icons/providers/grok.svg'
 import OllamaIcon from '@/assets/icons/providers/ollama.svg'
+
+// AI 模型图标（用于多问页面）
+import ChatgptModelIcon from '@/assets/icons/models/chatgpt-icon.svg'
+import ClaudeModelIcon from '@/assets/icons/models/claude-icon.svg'
+import DeepseekModelIcon from '@/assets/icons/models/deepseek-icon.svg'
+import DoubaoModelIcon from '@/assets/icons/models/doubao-icon.svg'
+import GeminiModelIcon from '@/assets/icons/models/gemini-icon.svg'
+import QwenModelIcon from '@/assets/icons/models/qwen-icon.svg'
 
 interface Props {
   /**
@@ -36,7 +46,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // 内置供应商图标映射（Vue 组件）
-const builtinIcons: Record<string, FunctionalComponent<SVGAttributes>> = {
+const builtinIcons: Record<string, SvgComponent> = {
   openai: OpenaiIcon,
   azure: AzureIcon,
   anthropic: AnthropicIcon,
@@ -48,6 +58,13 @@ const builtinIcons: Record<string, FunctionalComponent<SVGAttributes>> = {
   baidu: BaiduIcon,
   grok: GrokIcon,
   ollama: OllamaIcon,
+  // AI 模型图标（用于多问页面，使用 model- 前缀区分）
+  'model-chatgpt': ChatgptModelIcon,
+  'model-claude': ClaudeModelIcon,
+  'model-deepseek': DeepseekModelIcon,
+  'model-doubao': DoubaoModelIcon,
+  'model-gemini': GeminiModelIcon,
+  'model-qwen': QwenModelIcon,
 }
 
 /**
