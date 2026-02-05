@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +24,52 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+var (
+	// Enable LLM request/response previews (may contain user content).
+	debugLLM = os.Getenv("WILLCHAT_DEBUG_LLM") == "1"
+)
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 || s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "...(truncated)"
+}
+
+func summarizeMessagesForLog(messages []*schema.Message, maxMsgs int, maxContent int) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	start := 0
+	if maxMsgs > 0 && len(messages) > maxMsgs {
+		start = len(messages) - maxMsgs
+	}
+	var b strings.Builder
+	for i := start; i < len(messages); i++ {
+		m := messages[i]
+		b.WriteString("[")
+		b.WriteString(string(m.Role))
+		b.WriteString("] ")
+		b.WriteString(truncateRunes(m.Content, maxContent))
+		if m.ToolCallID != "" {
+			b.WriteString(" tool_call_id=")
+			b.WriteString(m.ToolCallID)
+		}
+		if m.Name != "" {
+			b.WriteString(" name=")
+			b.WriteString(m.Name)
+		}
+		if i != len(messages)-1 {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
 
 // activeGeneration tracks an active generation
 type activeGeneration struct {
@@ -378,34 +425,6 @@ func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversatio
 	}
 
 	emit := func(eventName string, payload any) {
-		// Debug: print every emitted event (avoid logging full content; log sizes and IDs only)
-		switch v := payload.(type) {
-		case ChatStartEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID)
-		case ChatChunkEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
-		case ChatThinkingEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
-		case ChatToolEvent:
-			argsPreview := v.ArgsJSON
-			if len(argsPreview) > 500 {
-				argsPreview = argsPreview[:500] + "...(truncated)"
-			}
-			resPreview := v.ResultJSON
-			if len(resPreview) > 500 {
-				resPreview = resPreview[:500] + "...(truncated)"
-			}
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d type=%s tool=%s call_id=%s args_len=%d result_len=%d args=%q result=%q",
-				eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Type, v.ToolName, v.ToolCallID, len(v.ArgsJSON), len(v.ResultJSON), argsPreview, resPreview)
-		case ChatCompleteEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d finish=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.FinishReason)
-		case ChatStoppedEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d status=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Status)
-		case ChatErrorEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d key=%s data=%v", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.ErrorKey, v.ErrorData)
-		default:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s payload=%T", eventName, conversationID, tabID, requestID, payload)
-		}
 		s.app.Event.Emit(eventName, payload)
 	}
 
@@ -456,34 +475,6 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	}
 
 	emit := func(eventName string, payload any) {
-		// Debug: print every emitted event (avoid logging full content; log sizes and IDs only)
-		switch v := payload.(type) {
-		case ChatStartEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID)
-		case ChatChunkEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
-		case ChatThinkingEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d delta_len=%d", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, len(v.Delta))
-		case ChatToolEvent:
-			argsPreview := v.ArgsJSON
-			if len(argsPreview) > 500 {
-				argsPreview = argsPreview[:500] + "...(truncated)"
-			}
-			resPreview := v.ResultJSON
-			if len(resPreview) > 500 {
-				resPreview = resPreview[:500] + "...(truncated)"
-			}
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d type=%s tool=%s call_id=%s args_len=%d result_len=%d args=%q result=%q",
-				eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Type, v.ToolName, v.ToolCallID, len(v.ArgsJSON), len(v.ResultJSON), argsPreview, resPreview)
-		case ChatCompleteEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d finish=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.FinishReason)
-		case ChatStoppedEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d status=%s", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.Status)
-		case ChatErrorEvent:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s seq=%d mid=%d key=%s data=%v", eventName, v.ConversationID, v.TabID, v.RequestID, v.Seq, v.MessageID, v.ErrorKey, v.ErrorData)
-		default:
-			log.Printf("[chat] emit=%s conv=%d tab=%s req=%s payload=%T", eventName, conversationID, tabID, requestID, payload)
-		}
 		s.app.Event.Emit(eventName, payload)
 	}
 
@@ -541,6 +532,13 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		emitError("error.chat_messages_failed", nil)
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")
 		return
+	}
+
+	// LLM request log (summary)
+	log.Printf("[llm] start conv=%d tab=%s req=%s provider_id=%s provider_type=%s model=%s endpoint=%s messages=%d",
+		conversationID, tabID, requestID, providerConfig.ProviderID, providerConfig.Type, agentConfig.ModelID, providerConfig.APIEndpoint, len(messages))
+	if debugLLM {
+		log.Printf("[llm] context conv=%d req=%s\n%s", conversationID, requestID, summarizeMessagesForLog(messages, 12, 160))
 	}
 
 	// Create agent
@@ -753,6 +751,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 								log.Printf("[chat] WARNING tool arguments not valid JSON conv=%d tab=%s req=%s tool=%s call_id=%s args=%q",
 									conversationID, tabID, requestID, toolName, tc.ID, args)
 							}
+							log.Printf("[llm] tool_call conv=%d tab=%s req=%s tool=%s call_id=%s args=%q",
+								conversationID, tabID, requestID, toolName, tc.ID, truncateRunes(args, 300))
 							emit(EventChatTool, ChatToolEvent{
 								ChatEvent: ChatEvent{
 									ConversationID: conversationID,
@@ -802,6 +802,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 							}
 						}
 					}
+					log.Printf("[llm] tool_result conv=%d tab=%s req=%s tool=%s call_id=%s result_len=%d",
+						conversationID, tabID, requestID, toolName, msg.ToolCallID, len(msg.Content))
 					emit(EventChatTool, ChatToolEvent{
 						ChatEvent: ChatEvent{
 							ConversationID: conversationID,
@@ -862,6 +864,8 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	// Check final cancellation
 	if ctx.Err() != nil {
 		s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), string(toolCallsJSON), StatusCancelled, "", "cancelled", inputTokens, outputTokens)
+		log.Printf("[llm] complete conv=%d tab=%s req=%s status=%s finish=%s input_tokens=%d output_tokens=%d content_len=%d thinking_len=%d",
+			conversationID, tabID, requestID, StatusCancelled, "cancelled", inputTokens, outputTokens, len(contentBuilder.String()), len(thinkingBuilder.String()))
 		emit(EventChatStopped, ChatStoppedEvent{
 			ChatEvent: ChatEvent{
 				ConversationID: conversationID,
@@ -882,6 +886,13 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		toolCallsStr = string(toolCallsJSON)
 	}
 	s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), toolCallsStr, StatusSuccess, "", finishReason, inputTokens, outputTokens)
+
+	// LLM completion log
+	log.Printf("[llm] complete conv=%d tab=%s req=%s status=%s finish=%s input_tokens=%d output_tokens=%d content_len=%d thinking_len=%d tool_calls_len=%d",
+		conversationID, tabID, requestID, StatusSuccess, finishReason, inputTokens, outputTokens, len(contentBuilder.String()), len(thinkingBuilder.String()), len(toolCallsStr))
+	if debugLLM {
+		log.Printf("[llm] output conv=%d req=%s\n%s", conversationID, requestID, truncateRunes(contentBuilder.String(), 800))
+	}
 
 	// Emit complete event
 	emit(EventChatComplete, ChatCompleteEvent{
