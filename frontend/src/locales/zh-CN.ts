@@ -205,6 +205,26 @@ export default {
     menu: {
       settings: '助手设置',
       history: '历史聊天记录',
+      rename: '重命名',
+      delete: '删除',
+      pin: '置顶',
+      unpin: '取消置顶',
+    },
+    conversation: {
+      empty: '暂无聊天记录',
+      rename: {
+        title: '重命名会话',
+        placeholder: '请输入新的名称',
+        confirm: '保存',
+        success: '重命名成功',
+      },
+      delete: {
+        title: '确认删除',
+        desc: '确定要删除会话「{name}」吗？此操作无法撤销。',
+        cancel: '取消',
+        confirm: '删除',
+        success: '删除成功',
+      },
     },
     errors: {
       loadFailed: '加载助手列表失败',
@@ -213,6 +233,10 @@ export default {
       updateFailed: '更新助手失败',
       deleteFailed: '删除助手失败',
       defaultModelIncomplete: '默认模型信息不完整',
+      loadConversationsFailed: '加载会话列表失败',
+      createConversationFailed: '创建会话失败',
+      updateConversationFailed: '更新会话失败',
+      deleteConversationFailed: '删除会话失败',
     },
     toasts: {
       created: '助手创建成功',
@@ -237,6 +261,7 @@ export default {
         topP: 'Top-P',
         topPHint: '控制采样范围',
         contextCount: '上下文数',
+        matchThreshold: '知识库匹配度阈值',
         maxTokens: '最大 Token 数',
         unlimited: '不限',
       },

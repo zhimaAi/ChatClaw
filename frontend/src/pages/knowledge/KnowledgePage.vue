@@ -2,6 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings } from 'lucide-vue-next'
+
+/**
+ * Props - 每个标签页实例都有自己独立的 tabId
+ * 通过 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留
+ */
+defineProps<{
+  tabId: string
+}>()
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
-import { useNavigationStore } from '@/stores'
+import { useNavigationStore, type NavModule } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
@@ -11,20 +10,18 @@ import { Events, System } from '@wailsio/runtime'
 import { SnapService } from '@bindings/willchat/internal/services/windows'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 
-const { t } = useI18n()
 const navigationStore = useNavigationStore()
-
-/**
- * 当前激活的标签页
- */
 const activeTab = computed(() => navigationStore.activeTab)
 
 /**
- * 是否显示设置页面
+ * 模块到组件的映射
  */
-const showSettings = computed(() => activeTab.value?.module === 'settings')
-const showAssistant = computed(() => activeTab.value?.module === 'assistant')
-const showKnowledge = computed(() => activeTab.value?.module === 'knowledge')
+const moduleComponents: Record<NavModule, unknown> = {
+  assistant: AssistantPage,
+  knowledge: KnowledgePage,
+  settings: SettingsPage,
+  multiask: null, // TODO: 实现多问页面
+}
 
 /**
  * 默认至少保持 1 个标签页：
@@ -134,35 +131,20 @@ onUnmounted(() => {
 <template>
   <Toaster />
   <MainLayout>
-    <!-- 设置页面 -->
-    <SettingsPage v-if="showSettings" />
-    <!-- 知识库页面 -->
-    <KnowledgePage v-else-if="showKnowledge" />
-
-    <!-- AI助手页面 -->
-    <AssistantPage v-else-if="showAssistant" />
-
-    <!-- 主内容区域 - 显示当前模块的占位内容 -->
-    <div v-else class="flex h-full w-full items-center justify-center bg-background">
-      <div class="flex flex-col items-center gap-4">
-        <!-- 显示当前标签页标题，如果没有标签页则显示提示 -->
-        <template v-if="activeTab">
-          <h1 class="text-2xl font-semibold text-foreground">
-            {{ activeTab.titleKey ? t(activeTab.titleKey) : activeTab.title }}
-          </h1>
-          <p class="text-muted-foreground">
-            {{ t('app.title') }}
-          </p>
-        </template>
-        <template v-else>
-          <h1 class="text-2xl font-semibold text-foreground">
-            {{ t('app.title') }}
-          </h1>
-          <p class="text-muted-foreground">
-            {{ t('nav.assistant') }}
-          </p>
-        </template>
-      </div>
-    </div>
+    <!--
+      标签页状态保留架构：
+      - 为每个打开的标签页渲染独立的组件实例（通过 :key="tab.id" 确保独立）
+      - 使用 v-show 控制显示/隐藏，而不是 v-if 销毁组件
+      - 这样切换标签页时，组件实例不会被销毁，所有状态自然保留
+    -->
+    <template v-for="tab in navigationStore.tabs" :key="tab.id">
+      <component
+        :is="moduleComponents[tab.module]"
+        v-if="moduleComponents[tab.module]"
+        v-show="navigationStore.activeTabId === tab.id"
+        :tab-id="tab.id"
+        class="h-full w-full"
+      />
+    </template>
   </MainLayout>
 </template>
