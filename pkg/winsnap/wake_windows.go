@@ -47,6 +47,17 @@ func EnsureWindowVisible(window *application.WebviewWindow) error {
 // WakeAttachedWindow brings the target window and the winsnap window to the front,
 // keeping winsnap ordered directly above the target (same-level behavior).
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
+	return wakeAttachedWindowInternal(self, targetProcessName)
+}
+
+// WakeAttachedWindowWithRefocus is like WakeAttachedWindow but ensures focus returns to winsnap.
+// On Windows, this behaves the same as WakeAttachedWindow since the final activateHwnd
+// already sets focus to the winsnap window.
+func WakeAttachedWindowWithRefocus(self *application.WebviewWindow, targetProcessName string) error {
+	return wakeAttachedWindowInternal(self, targetProcessName)
+}
+
+func wakeAttachedWindowInternal(self *application.WebviewWindow, targetProcessName string) error {
 	if self == nil {
 		return ErrWinsnapWindowInvalid
 	}

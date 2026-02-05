@@ -56,12 +56,13 @@ static void winsnap_activate_pid(pid_t pid) {
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
 
-// Activate target app and then order winsnap window above it.
+// Activate target app and then order winsnap window above it, then refocus winsnap.
 // This function handles the timing issue where activating the target app
 // changes the z-order, potentially hiding the winsnap window.
 // It activates the target, waits briefly for z-order to stabilize,
-// then ensures winsnap is ordered above the target.
-static int winsnap_wake_and_order_above(pid_t targetPid, int selfWindowNumber, int targetWindowNumber) {
+// ensures winsnap is ordered above the target, then returns focus to winsnap.
+// The refocusWinsnap parameter controls whether to return focus to winsnap window.
+static int winsnap_wake_and_order_above(pid_t targetPid, int selfWindowNumber, int targetWindowNumber, int refocusWinsnap) {
 	if (targetPid <= 0 || selfWindowNumber <= 0) return 0;
 
 	// Activate target app first
@@ -90,6 +91,25 @@ static int winsnap_wake_and_order_above(pid_t targetPid, int selfWindowNumber, i
 			}
 		}
 	});
+
+	// Return focus to winsnap window if requested
+	// This ensures user can continue typing in winsnap after clicking on it
+	if (result && refocusWinsnap) {
+		// Re-activate current app (winsnap) to get keyboard focus back
+		NSRunningApplication *selfApp = [NSRunningApplication currentApplication];
+		if (selfApp) {
+			[selfApp activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+		}
+		// Make winsnap window key window on main thread
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			for (NSWindow *win in [NSApp windows]) {
+				if ((int)[win windowNumber] == selfWindowNumber) {
+					[win makeKeyAndOrderFront:nil];
+					return;
+				}
+			}
+		});
+	}
 
 	return result;
 }
@@ -265,6 +285,18 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 //
 // Returns ErrWinsnapWindowInvalid if the winsnap window is nil or has been closed/released.
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
+	return wakeAttachedWindowInternal(self, targetProcessName, false)
+}
+
+// WakeAttachedWindowWithRefocus is like WakeAttachedWindow but returns focus to the
+// winsnap window after synchronizing z-order. This is used when the user clicks on
+// the winsnap window - we want to bring the target window to front (so it's not hidden
+// by other apps) but then return keyboard focus to winsnap so the user can type.
+func WakeAttachedWindowWithRefocus(self *application.WebviewWindow, targetProcessName string) error {
+	return wakeAttachedWindowInternal(self, targetProcessName, true)
+}
+
+func wakeAttachedWindowInternal(self *application.WebviewWindow, targetProcessName string, refocus bool) error {
 	if self == nil {
 		return ErrWinsnapWindowInvalid
 	}
@@ -301,7 +333,11 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 
 	// Activate target app and order winsnap window above it in one operation
 	// This handles the timing issue where activating target may change z-order
-	result := C.winsnap_wake_and_order_above(pid, C.int(selfWindowNumber), C.int(targetWindowNumber))
+	refocusFlag := C.int(0)
+	if refocus {
+		refocusFlag = 1
+	}
+	result := C.winsnap_wake_and_order_above(pid, C.int(selfWindowNumber), C.int(targetWindowNumber), refocusFlag)
 	if result == 0 {
 		// Window not found or not visible
 		return ErrWinsnapWindowInvalid

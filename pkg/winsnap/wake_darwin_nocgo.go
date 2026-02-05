@@ -22,6 +22,11 @@ func WakeAttachedWindow(_ *application.WebviewWindow, _ string) error {
 	return errors.New("winsnap: wake requires cgo on darwin")
 }
 
+// WakeAttachedWindowWithRefocus is not available without CGO on darwin.
+func WakeAttachedWindowWithRefocus(_ *application.WebviewWindow, _ string) error {
+	return errors.New("winsnap: wake requires cgo on darwin")
+}
+
 // WakeStandaloneWindow brings the winsnap window to front when it's in standalone state.
 // Fallback implementation without CGO: just show and focus the window.
 func WakeStandaloneWindow(window *application.WebviewWindow) error {

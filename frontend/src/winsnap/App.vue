@@ -396,6 +396,7 @@ const processStreamEvent = (requestId: string, eventName: string, data: any) => 
 let unsubscribeWinsnapChat: (() => void) | null = null
 let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeSnapSettings: (() => void) | null = null
+let unsubscribeSnapStateChanged: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onPointerDown: ((e: PointerEvent) => void) | null = null
 onMounted(() => {
@@ -410,6 +411,16 @@ onMounted(() => {
     void loadSettings()
     // Also check snap status when settings change (in case snap app was toggled)
     void checkSnapStatus()
+  })
+
+  // Listen for snap state changes (attached/hidden/standalone)
+  // This updates hasAttachedTarget when state changes
+  unsubscribeSnapStateChanged = Events.On('snap:state-changed', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const state = payload?.state
+    const targetProcess = payload?.targetProcess
+    // Update hasAttachedTarget based on the new state
+    hasAttachedTarget.value = state === 'attached' && !!targetProcess
   })
 
   // Listen for text selection action to set input text
@@ -481,6 +492,8 @@ onUnmounted(() => {
   unsubscribeTextSelection = null
   unsubscribeSnapSettings?.()
   unsubscribeSnapSettings = null
+  unsubscribeSnapStateChanged?.()
+  unsubscribeSnapStateChanged = null
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null
