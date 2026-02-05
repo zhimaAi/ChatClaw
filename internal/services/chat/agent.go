@@ -3,7 +3,12 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"math"
+	"os"
+	"path/filepath"
 
+	"willchat/internal/define"
 	"willchat/internal/errs"
 	"willchat/internal/services/tools"
 
@@ -12,14 +17,19 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
+	adkfs "github.com/cloudwego/eino/adk/filesystem"
+	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	"github.com/cloudwego/eino/adk/middlewares/reduction"
+	"github.com/cloudwego/eino/adk/middlewares/skill"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"google.golang.org/genai"
 )
 
-// defaultMaxIterations is the maximum number of ReAct loop iterations (tool call rounds).
-const defaultMaxIterations = 20
+// unlimitedIterations effectively removes the ReAct loop iteration limit.
+// The eino ADK defaults to 20 when MaxIterations <= 0, so we use math.MaxInt32 instead.
+var unlimitedIterations = math.MaxInt32
 
 // ProviderConfig contains the configuration for a provider
 type ProviderConfig struct {
@@ -193,7 +203,7 @@ const toolCallingInstruction = "\n\n" +
 	"工具调用规则（非常重要）：当你调用任何工具时，必须让 tool_calls[].function.arguments 是严格合法的 JSON（对象），" +
 	"例如：{\"query\":\"...\"} 或 {\"expression\":\"1+2\"}。不要输出 key=value、不要输出纯文本、不要输出不带引号的字段。\n"
 
-// createChatModelAgent creates an ADK ChatModelAgent with tools
+// createChatModelAgent creates an ADK ChatModelAgent with tools and middlewares.
 func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry *tools.ToolRegistry) (adk.Agent, error) {
 	// Create the chat model
 	chatModel, err := createChatModel(ctx, config)
@@ -219,7 +229,7 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 		Description:   "AI Assistant",
 		Instruction:   instruction,
 		Model:         chatModel,
-		MaxIterations: defaultMaxIterations,
+		MaxIterations: unlimitedIterations,
 	}
 
 	// Add tools if any
@@ -231,5 +241,82 @@ func createChatModelAgent(ctx context.Context, config AgentConfig, toolRegistry 
 		}
 	}
 
+	// Build middlewares
+	agentConfig.Middlewares = buildMiddlewares(ctx)
+
 	return adk.NewChatModelAgent(ctx, agentConfig)
+}
+
+// buildMiddlewares creates and returns the agent middleware stack:
+//   - filesystem: provides file operation tools (ls, read_file, write_file, edit_file, glob, grep)
+//   - reduction:  clears old tool results and offloads large results to the filesystem backend
+//   - skill:      provides a skill tool for on-demand skill loading from SKILL.md files
+func buildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
+	var middlewares []adk.AgentMiddleware
+
+	// Shared InMemory backend for filesystem and reduction middlewares
+	fsBackend := adkfs.NewInMemoryBackend()
+
+	// 1. Filesystem middleware — provides file tools; offloading disabled (handled by reduction)
+	filesystemMw, err := fsmw.NewMiddleware(ctx, &fsmw.Config{
+		Backend:                         fsBackend,
+		WithoutLargeToolResultOffloading: true,
+	})
+	if err != nil {
+		log.Printf("[chat] failed to create filesystem middleware: %v", err)
+	} else {
+		middlewares = append(middlewares, filesystemMw)
+	}
+
+	// 2. Reduction middleware — clearing old tool results + offloading large individual results
+	reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{
+		Backend: fsBackend,
+	})
+	if err != nil {
+		log.Printf("[chat] failed to create reduction middleware: %v", err)
+	} else {
+		middlewares = append(middlewares, reductionMw)
+	}
+
+	// 3. Skill middleware — loads skills from local SKILL.md files
+	if skillMw, ok := buildSkillMiddleware(ctx); ok {
+		middlewares = append(middlewares, skillMw)
+	}
+
+	return middlewares
+}
+
+// buildSkillMiddleware creates the skill middleware with a local backend.
+// Skills are stored under <UserConfigDir>/willchat/skills/<skill-name>/SKILL.md.
+func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		log.Printf("[chat] failed to get user config dir for skills: %v", err)
+		return adk.AgentMiddleware{}, false
+	}
+
+	skillsDir := filepath.Join(cfgDir, define.AppID, "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		log.Printf("[chat] failed to create skills directory %s: %v", skillsDir, err)
+		return adk.AgentMiddleware{}, false
+	}
+
+	skillBackend, err := skill.NewLocalBackend(&skill.LocalBackendConfig{
+		BaseDir: skillsDir,
+	})
+	if err != nil {
+		log.Printf("[chat] failed to create skill backend: %v", err)
+		return adk.AgentMiddleware{}, false
+	}
+
+	skillMw, err := skill.New(ctx, &skill.Config{
+		Backend:    skillBackend,
+		UseChinese: true,
+	})
+	if err != nil {
+		log.Printf("[chat] failed to create skill middleware: %v", err)
+		return adk.AgentMiddleware{}, false
+	}
+
+	return skillMw, true
 }

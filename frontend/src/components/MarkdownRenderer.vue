@@ -268,6 +268,9 @@ const handleClick = (event: MouseEvent) => {
 <style>
 /* Additional markdown styles */
 .markdown-content {
+  /* Match user message font size (text-sm = 0.875rem = 14px) */
+  font-size: 0.875rem;
+  line-height: 1.5rem;
   /* Ensure proper text wrapping */
   word-wrap: break-word;
   overflow-wrap: break-word;
