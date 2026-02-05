@@ -72,13 +72,25 @@ const loadSettings = async () => {
 
 // Action handlers for AI response buttons
 const handleSendAndTrigger = async (content: string) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'Button clicked',data:{contentLen:content?.length,hasContent:!!content},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
   if (!content) return
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'Calling SnapService.SendTextToTarget',data:{contentLen:content.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     await SnapService.SendTextToTarget(content, true)
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'SendTextToTarget succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     toast({
       description: t('winsnap.toast.sent'),
     })
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'SendTextToTarget FAILED',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     console.error('Failed to send and trigger:', error)
     toast({
       variant: 'error',
@@ -88,13 +100,25 @@ const handleSendAndTrigger = async (content: string) => {
 }
 
 const handleSendToEdit = async (content: string) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'Button clicked',data:{contentLen:content?.length,hasContent:!!content},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
   if (!content) return
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'Calling SnapService.PasteTextToTarget',data:{contentLen:content.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     await SnapService.PasteTextToTarget(content)
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'PasteTextToTarget succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     toast({
       description: t('winsnap.toast.pasted'),
     })
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'PasteTextToTarget FAILED',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     console.error('Failed to paste to edit:', error)
     toast({
       variant: 'error',

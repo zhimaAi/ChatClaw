@@ -2,6 +2,8 @@ package windows
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"runtime"
 	"sort"
 	"sync"
@@ -14,6 +16,28 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
+
+// #region agent log
+const debugLogPathSnap = `c:\work\GoPro\willchat-client\.cursor\debug.log`
+
+func debugLogSnap(hypothesisId, location, message string, data map[string]interface{}) {
+	entry := map[string]interface{}{
+		"timestamp":    time.Now().UnixMilli(),
+		"sessionId":    "debug-session",
+		"hypothesisId": hypothesisId,
+		"location":     location,
+		"message":      message,
+		"data":         data,
+	}
+	jsonBytes, _ := json.Marshal(entry)
+	f, err := os.OpenFile(debugLogPathSnap, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		f.WriteString(string(jsonBytes) + "\n")
+		f.Close()
+	}
+}
+
+// #endregion
 
 type SnapState string
 
@@ -123,12 +147,32 @@ func (s *SnapService) NotifySettingsChanged() {
 // SendTextToTarget sends text to the currently attached target application.
 // If triggerSend is true, it will also simulate the send key (Enter or Ctrl+Enter based on settings).
 func (s *SnapService) SendTextToTarget(text string, triggerSend bool) error {
+	// #region agent log
+	debugLogSnap("E", "snap_service.go:SendTextToTarget:entry", "Service method called", map[string]interface{}{
+		"textLen":     len(text),
+		"triggerSend": triggerSend,
+	})
+	// #endregion
+
 	s.mu.Lock()
 	target := s.currentTarget
 	state := s.status.State
 	s.mu.Unlock()
 
+	// #region agent log
+	debugLogSnap("E", "snap_service.go:SendTextToTarget:state", "Current snap state", map[string]interface{}{
+		"target": target,
+		"state":  string(state),
+	})
+	// #endregion
+
 	if state != SnapStateAttached || target == "" {
+		// #region agent log
+		debugLogSnap("E", "snap_service.go:SendTextToTarget:error", "No attached target", map[string]interface{}{
+			"state":  string(state),
+			"target": target,
+		})
+		// #endregion
 		return errs.New("error.no_attached_target")
 	}
 
@@ -138,18 +182,49 @@ func (s *SnapService) SendTextToTarget(text string, triggerSend bool) error {
 		sendKeyStrategy = v
 	}
 
-	return winsnap.SendTextToTarget(target, text, triggerSend, sendKeyStrategy)
+	// #region agent log
+	debugLogSnap("E", "snap_service.go:SendTextToTarget:calling", "Calling winsnap.SendTextToTarget", map[string]interface{}{
+		"target":          target,
+		"sendKeyStrategy": sendKeyStrategy,
+	})
+	// #endregion
+
+	err := winsnap.SendTextToTarget(target, text, triggerSend, sendKeyStrategy)
+
+	// #region agent log
+	if err != nil {
+		debugLogSnap("E", "snap_service.go:SendTextToTarget:result", "winsnap returned error", map[string]interface{}{
+			"error": err.Error(),
+		})
+	} else {
+		debugLogSnap("E", "snap_service.go:SendTextToTarget:result", "winsnap returned success", map[string]interface{}{})
+	}
+	// #endregion
+
+	return err
 }
 
 // PasteTextToTarget pastes text to the currently attached target application's edit box.
 // This does not trigger the send action.
 func (s *SnapService) PasteTextToTarget(text string) error {
+	// #region agent log
+	debugLogSnap("E", "snap_service.go:PasteTextToTarget:entry", "Service method called", map[string]interface{}{
+		"textLen": len(text),
+	})
+	// #endregion
+
 	s.mu.Lock()
 	target := s.currentTarget
 	state := s.status.State
 	s.mu.Unlock()
 
 	if state != SnapStateAttached || target == "" {
+		// #region agent log
+		debugLogSnap("E", "snap_service.go:PasteTextToTarget:error", "No attached target", map[string]interface{}{
+			"state":  string(state),
+			"target": target,
+		})
+		// #endregion
 		return errs.New("error.no_attached_target")
 	}
 
