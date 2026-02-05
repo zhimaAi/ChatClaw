@@ -53,6 +53,20 @@ const canSend = computed(() => question.value.trim().length > 0 && !isStreaming.
 const showAiSendButton = ref(true)
 const showAiEditButton = ref(true)
 
+// Track if there's an attached target (for showing send/edit buttons)
+const hasAttachedTarget = ref(false)
+
+// Check snap status and update hasAttachedTarget
+const checkSnapStatus = async () => {
+  try {
+    const status = await SnapService.GetStatus()
+    hasAttachedTarget.value = status.state === 'attached' && !!status.targetProcess
+  } catch (error) {
+    console.error('Failed to check snap status:', error)
+    hasAttachedTarget.value = false
+  }
+}
+
 // Load settings
 const loadSettings = async () => {
   try {
@@ -72,25 +86,10 @@ const loadSettings = async () => {
 
 // Action handlers for AI response buttons
 const handleSendAndTrigger = async (content: string) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'Button clicked',data:{contentLen:content?.length,hasContent:!!content},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   if (!content) return
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'Calling SnapService.SendTextToTarget',data:{contentLen:content.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     await SnapService.SendTextToTarget(content, true)
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'SendTextToTarget succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    toast({
-      description: t('winsnap.toast.sent'),
-    })
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendAndTrigger',message:'SendTextToTarget FAILED',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     console.error('Failed to send and trigger:', error)
     toast({
       variant: 'error',
@@ -100,30 +99,11 @@ const handleSendAndTrigger = async (content: string) => {
 }
 
 const handleSendToEdit = async (content: string) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'Button clicked',data:{contentLen:content?.length,hasContent:!!content},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   if (!content) return
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'Calling SnapService.PasteTextToTarget',data:{contentLen:content.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     await SnapService.PasteTextToTarget(content)
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'PasteTextToTarget succeeded',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    toast({
-      description: t('winsnap.toast.pasted'),
-    })
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f3f27df0-006c-4143-a6d1-96959a80aa98',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'winsnap/App.vue:handleSendToEdit',message:'PasteTextToTarget FAILED',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     console.error('Failed to paste to edit:', error)
-    toast({
-      variant: 'error',
-      description: t('winsnap.toast.pasteFailed'),
-    })
   }
 }
 
@@ -199,13 +179,14 @@ const cancelSnap = async () => {
       if (settingsKey) {
         await SettingsService.SetValue(settingsKey, 'false')
         await SnapService.SyncFromSettings()
+        // Update attached target status
+        hasAttachedTarget.value = false
         return
       }
     }
 
     // Fallback: if no attached target or unknown process, do nothing
     // This maintains program robustness when there's no attached window
-    console.log('No attached target to cancel, or unknown process:', status.targetProcess)
   } catch (error) {
     console.error('Failed to cancel snap:', error)
   }
@@ -421,9 +402,14 @@ onMounted(() => {
   // Load settings on mount
   void loadSettings()
 
+  // Check snap status on mount
+  void checkSnapStatus()
+
   // Listen for settings changes
   unsubscribeSnapSettings = Events.On('snap:settings-changed', () => {
     void loadSettings()
+    // Also check snap status when settings change (in case snap app was toggled)
+    void checkSnapStatus()
   })
 
   // Listen for text selection action to set input text
@@ -575,9 +561,9 @@ onUnmounted(() => {
               v-if="m.role === 'assistant' && m.status === 'done' && (m.display || m.content)"
               class="mt-2 flex items-center gap-2"
             >
-              <!-- Button 1: Send and trigger send key -->
+              <!-- Button 1: Send and trigger send key (only when attached to target) -->
               <button
-                v-if="showAiSendButton"
+                v-if="showAiSendButton && hasAttachedTarget"
                 class="inline-flex items-center justify-center rounded-md border border-border bg-background p-2 hover:bg-muted"
                 style="--wails-draggable: no-drag"
                 type="button"
@@ -586,9 +572,9 @@ onUnmounted(() => {
               >
                 <SendHorizontal class="size-4 text-muted-foreground" />
               </button>
-              <!-- Button 2: Send to edit box -->
+              <!-- Button 2: Send to edit box (only when attached to target) -->
               <button
-                v-if="showAiEditButton"
+                v-if="showAiEditButton && hasAttachedTarget"
                 class="inline-flex items-center justify-center rounded-md border border-border bg-background p-2 hover:bg-muted"
                 style="--wails-draggable: no-drag"
                 type="button"

@@ -126,7 +126,8 @@ import (
 // 2. Activating target window
 // 3. Simulating Cmd+V to paste
 // 4. Optionally simulating Enter or Cmd+Enter to send
-func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendKeyStrategy string) error {
+// noClick and clickOffsetX/Y are ignored on macOS as focus handling is different
+func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendKeyStrategy string, noClick bool, clickOffsetX, clickOffsetY int) error {
 	if targetProcess == "" {
 		return errors.New("winsnap: target process is empty")
 	}
@@ -171,6 +172,7 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 }
 
 // PasteTextToTarget sends text to the target application's edit box without triggering send.
-func PasteTextToTarget(targetProcess string, text string) error {
-	return SendTextToTarget(targetProcess, text, false, "")
+// noClick and clickOffsetX/Y are ignored on macOS as focus handling is different
+func PasteTextToTarget(targetProcess string, text string, noClick bool, clickOffsetX, clickOffsetY int) error {
+	return SendTextToTarget(targetProcess, text, false, "", noClick, clickOffsetX, clickOffsetY)
 }

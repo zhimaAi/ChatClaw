@@ -87,6 +87,14 @@ export default {
         feishu: '飞书',
         douyin: '抖音',
       },
+      clickOffset: {
+        labelX: '距左侧',
+        labelY: '距底部',
+        placeholderX: '居中',
+        hint: '像素，用于定位输入框',
+      },
+      noClickMode: '不点击模式（焦点自动保持的应用）',
+      clickMode: '点击模式（需要点击激活输入框）',
     },
     // 功能工具设置
     tools: {

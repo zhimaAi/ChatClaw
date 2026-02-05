@@ -87,6 +87,14 @@ export default {
         feishu: 'Feishu',
         douyin: 'Douyin',
       },
+      clickOffset: {
+        labelX: 'From Left',
+        labelY: 'From Bottom',
+        placeholderX: 'Center',
+        hint: 'Pixels to locate input box',
+      },
+      noClickMode: 'No-click mode (apps that keep focus)',
+      clickMode: 'Click mode (need to click to activate input)',
     },
     // Tools settings
     tools: {

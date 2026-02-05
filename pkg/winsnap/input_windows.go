@@ -3,38 +3,14 @@
 package winsnap
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
-
-// #region agent log
-const debugLogPath = `c:\work\GoPro\willchat-client\.cursor\debug.log`
-
-func debugLog(hypothesisId, location, message string, data map[string]interface{}) {
-	entry := map[string]interface{}{
-		"timestamp":    time.Now().UnixMilli(),
-		"sessionId":    "debug-session",
-		"hypothesisId": hypothesisId,
-		"location":     location,
-		"message":      message,
-		"data":         data,
-	}
-	jsonBytes, _ := json.Marshal(entry)
-	f, err := os.OpenFile(debugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err == nil {
-		f.WriteString(string(jsonBytes) + "\n")
-		f.Close()
-	}
-}
-
-// #endregion
 
 var (
 	procOpenClipboard     = modUser32.NewProc("OpenClipboard")
@@ -48,13 +24,15 @@ var (
 	procMapVirtualKeyW    = modUser32.NewProc("MapVirtualKeyW")
 	procGetFocusIn        = modUser32.NewProc("GetFocus")
 	procKeybdEvent        = modUser32.NewProc("keybd_event")
-	procGetClassNameW     = modUser32.NewProc("GetClassNameW")
-	procGetWindowTextWIn  = modUser32.NewProc("GetWindowTextW")
-	procGetGUIThreadInfo  = modUser32.NewProc("GetGUIThreadInfo")
-	procEnumChildWindows  = modUser32.NewProc("EnumChildWindows")
+	procGetClassNameW    = modUser32.NewProc("GetClassNameW")
+	procGetWindowTextWIn = modUser32.NewProc("GetWindowTextW")
+	procEnumChildWindows = modUser32.NewProc("EnumChildWindows")
 	procSetFocusIn        = modUser32.NewProc("SetFocus")
 	procSendMessageW      = modUser32.NewProc("SendMessageW")
 	procPostMessageW      = modUser32.NewProc("PostMessageW")
+	procGetWindowRectIn   = modUser32.NewProc("GetWindowRect")
+	procSetCursorPos      = modUser32.NewProc("SetCursorPos")
+	procMouse_event       = modUser32.NewProc("mouse_event")
 )
 
 const (
@@ -99,16 +77,10 @@ type inputUnion struct {
 // 2. Bringing target window to front (without stealing focus from Wails)
 // 3. Simulating Ctrl+V to paste using SendInput
 // 4. Optionally simulating Enter or Ctrl+Enter to send
-func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendKeyStrategy string) error {
-	// #region agent log
-	debugLog("A", "input_windows.go:SendTextToTarget:entry", "Function called", map[string]interface{}{
-		"targetProcess":   targetProcess,
-		"textLen":         len(text),
-		"triggerSend":     triggerSend,
-		"sendKeyStrategy": sendKeyStrategy,
-	})
-	// #endregion
-
+// noClick: if true, skip mouse click (for apps that auto-keep focus on input)
+// clickOffsetX: pixels from left edge for input focus (0 = center)
+// clickOffsetY: pixels from bottom for input focus (0 = use default based on app)
+func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendKeyStrategy string, noClick bool, clickOffsetX, clickOffsetY int) error {
 	if targetProcess == "" {
 		return errors.New("winsnap: target process is empty")
 	}
@@ -122,139 +94,76 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 		return errors.New("winsnap: invalid target process name")
 	}
 
-	// #region agent log
-	debugLog("A", "input_windows.go:SendTextToTarget:findWindow", "Searching for window", map[string]interface{}{
-		"targetNames": targetNames,
-	})
-	// #endregion
-
 	var targetHWND windows.HWND
 	for _, name := range targetNames {
 		h, err := findMainWindowByProcessName(name)
 		if err == nil && h != 0 {
 			targetHWND = h
-			// #region agent log
-			debugLog("A", "input_windows.go:SendTextToTarget:foundWindow", "Window found", map[string]interface{}{
-				"processName": name,
-				"hwnd":        fmt.Sprintf("0x%X", h),
-			})
-			// #endregion
 			break
 		}
 	}
 	if targetHWND == 0 {
-		// #region agent log
-		debugLog("A", "input_windows.go:SendTextToTarget:error", "Target window NOT found", map[string]interface{}{})
-		// #endregion
 		return ErrTargetWindowNotFound
 	}
 
 	// Copy text to clipboard first
 	if err := setClipboardText(text); err != nil {
-		// #region agent log
-		debugLog("A", "input_windows.go:SendTextToTarget:clipboardError", "Clipboard error", map[string]interface{}{
-			"error": err.Error(),
-		})
-		// #endregion
 		return err
 	}
-
-	// Get window info before activation
-	targetClass := getWindowClassName(uintptr(targetHWND))
-	targetTitle := getWindowTitle(uintptr(targetHWND))
-
-	// #region agent log
-	debugLog("B", "input_windows.go:SendTextToTarget:beforeActivate", "About to activate window", map[string]interface{}{
-		"targetHWND":  fmt.Sprintf("0x%X", targetHWND),
-		"targetClass": targetClass,
-		"targetTitle": targetTitle,
-	})
-	// #endregion
 
 	// Use the proven wake method to activate target - same as WakeAttachedWindow
 	activateHwndInput(targetHWND)
 	time.Sleep(250 * time.Millisecond)
 
-	// Check which window has focus after activation
-	foregroundAfter, _, _ := procGetForegroundWindowWake.Call()
+	// Try to find editable child window
+	editHwnd := findEditableChild(uintptr(targetHWND))
 
-	// Get the thread ID of the target window for focus info
-	var targetPid uint32
-	targetTid, _, _ := procGetWindowThreadProcIdWake.Call(uintptr(targetHWND), uintptr(unsafe.Pointer(&targetPid)))
+	// For Qt applications like DingTalk that don't use standard Edit controls,
+	// we need to click on the input area to give it focus.
+	// Key insight: DingTalk loses input focus when window is deactivated
 
-	// Get detailed focus info
-	focusInfo := getFocusedWindowInfo(uint32(targetTid))
+	// Get window class to detect DingTalk or other Qt apps
+	className := getWindowClassName(uintptr(targetHWND))
+	isQtApp := strings.Contains(className, "Qt")
 
-	// #region agent log
-	debugLog("J", "input_windows.go:SendTextToTarget:afterActivate", "Activation and focus result", map[string]interface{}{
-		"foregroundHWND": fmt.Sprintf("0x%X", foregroundAfter),
-		"targetHWND":     fmt.Sprintf("0x%X", targetHWND),
-		"match":          foregroundAfter == uintptr(targetHWND),
-		"targetTid":      targetTid,
-		"focusInfo":      focusInfo,
-	})
-	// #endregion
+	// Skip click if noClick mode is enabled (for apps that auto-keep focus on input)
+	if noClick {
+		// Just a small delay after activation
+		time.Sleep(50 * time.Millisecond)
+	} else if editHwnd == 0 || isQtApp {
+		// If no standard edit control found OR it's a Qt app, click on input area
+		clickInputAreaOfWindow(uintptr(targetHWND), clickOffsetX, clickOffsetY, targetProcess)
+		// Wait for click to register and input to get focus
+		time.Sleep(200 * time.Millisecond)
+	} else {
+		// Try to set focus to the edit control
+		setWindowFocus(editHwnd)
+		time.Sleep(100 * time.Millisecond)
+	}
 
-	// Enumerate child windows to understand the window structure
-	childWindows := enumerateChildWindows(uintptr(targetHWND))
+	// Strategy: Use keybd_event Ctrl+V which works at system level
+	sendCtrlV()
+	time.Sleep(150 * time.Millisecond)
 
-	// #region agent log
-	childInfos := make([]map[string]interface{}, 0)
-	for i, cw := range childWindows {
-		if i < 20 { // Limit to first 20 children
-			childInfos = append(childInfos, map[string]interface{}{
-				"hwnd":      fmt.Sprintf("0x%X", cw.hwnd),
-				"className": cw.className,
-				"title":     cw.title,
-			})
+	// Optionally trigger send
+	if triggerSend {
+		time.Sleep(200 * time.Millisecond)
+		if sendKeyStrategy == "ctrl_enter" {
+			sendCtrlEnter()
+		} else {
+			sendEnter()
 		}
 	}
-	debugLog("J", "input_windows.go:SendTextToTarget:childWindows", "Child windows enumerated", map[string]interface{}{
-		"totalCount": len(childWindows),
-		"children":   childInfos,
-	})
-	// #endregion
-
-	// Try sending WM_PASTE directly to the main window first
-	// #region agent log
-	debugLog("K", "input_windows.go:SendTextToTarget:tryWMPaste", "Trying WM_PASTE to main window", map[string]interface{}{
-		"targetHWND": fmt.Sprintf("0x%X", targetHWND),
-	})
-	// #endregion
-
-	sendWMPaste(uintptr(targetHWND))
-	time.Sleep(200 * time.Millisecond)
-
-	// Check if paste worked by NOT sending any keyboard events for now
-	// This is to isolate the issue - if DingTalk still hides, it's not the keyboard events
-
-	// #region agent log
-	debugLog("K", "input_windows.go:SendTextToTarget:afterWMPaste", "WM_PASTE sent, skipping keyboard events for diagnosis", map[string]interface{}{
-		"triggerSend":     triggerSend,
-		"skippingKeyboard": true,
-	})
-	// #endregion
-
-	// TEMPORARILY DISABLED: keyboard events to diagnose if they cause the crash
-	// if triggerSend {
-	//     time.Sleep(200 * time.Millisecond)
-	//     if sendKeyStrategy == "ctrl_enter" {
-	//         sendCtrlEnter()
-	//     } else {
-	//         sendEnter()
-	//     }
-	// }
-
-	// #region agent log
-	debugLog("C", "input_windows.go:SendTextToTarget:completed", "Function completed (keyboard disabled for diagnosis)", map[string]interface{}{})
-	// #endregion
 
 	return nil
 }
 
 // PasteTextToTarget sends text to the target application's edit box without triggering send.
-func PasteTextToTarget(targetProcess string, text string) error {
-	return SendTextToTarget(targetProcess, text, false, "")
+// noClick: if true, skip mouse click (for apps that auto-keep focus on input)
+// clickOffsetX: pixels from left edge for input focus (0 = center)
+// clickOffsetY: pixels from bottom for input focus (0 = use default based on app)
+func PasteTextToTarget(targetProcess string, text string, noClick bool, clickOffsetX, clickOffsetY int) error {
+	return SendTextToTarget(targetProcess, text, false, "", noClick, clickOffsetX, clickOffsetY)
 }
 
 // rect structure for Windows RECT
@@ -263,19 +172,6 @@ type rectInput struct {
 	top    int32
 	right  int32
 	bottom int32
-}
-
-// GUITHREADINFO structure for GetGUIThreadInfo
-type guiThreadInfo struct {
-	cbSize        uint32
-	flags         uint32
-	hwndActive    uintptr
-	hwndFocus     uintptr
-	hwndCapture   uintptr
-	hwndMenuOwner uintptr
-	hwndMoveSize  uintptr
-	hwndCaret     uintptr
-	rcCaret       rectInput
 }
 
 // getWindowClassName returns the class name of a window
@@ -290,26 +186,6 @@ func getWindowTitle(hwnd uintptr) string {
 	buf := make([]uint16, 256)
 	procGetWindowTextWIn.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), 256)
 	return syscall.UTF16ToString(buf)
-}
-
-// getFocusedWindowInfo gets info about which window has keyboard focus
-func getFocusedWindowInfo(threadId uint32) map[string]interface{} {
-	info := guiThreadInfo{cbSize: uint32(unsafe.Sizeof(guiThreadInfo{}))}
-	ret, _, _ := procGetGUIThreadInfo.Call(uintptr(threadId), uintptr(unsafe.Pointer(&info)))
-
-	result := map[string]interface{}{
-		"success":     ret != 0,
-		"hwndActive":  fmt.Sprintf("0x%X", info.hwndActive),
-		"hwndFocus":   fmt.Sprintf("0x%X", info.hwndFocus),
-		"hwndCapture": fmt.Sprintf("0x%X", info.hwndCapture),
-	}
-
-	if info.hwndFocus != 0 {
-		result["focusClass"] = getWindowClassName(info.hwndFocus)
-		result["focusTitle"] = getWindowTitle(info.hwndFocus)
-	}
-
-	return result
 }
 
 // WM_PASTE constant
@@ -346,6 +222,179 @@ func enumerateChildWindows(parentHwnd uintptr) []childWindowInfo {
 // sendWMPaste sends WM_PASTE message to a window
 func sendWMPaste(hwnd uintptr) {
 	procSendMessageW.Call(hwnd, WM_PASTE, 0, 0)
+}
+
+// findEditableChild tries to find an editable child window (input box)
+// Returns the hwnd of the best candidate, or 0 if not found
+func findEditableChild(parentHwnd uintptr) uintptr {
+	children := enumerateChildWindows(parentHwnd)
+
+	// Priority order for finding input boxes:
+	// 1. Windows with "Edit" in class name
+	// 2. Windows with "RichEdit" in class name
+	// 3. Qt widgets that might be edit controls
+
+	for _, child := range children {
+		className := child.className
+		// Check for standard Edit controls
+		if className == "Edit" || className == "RichEdit" || className == "RichEdit20W" || className == "RichEdit20A" {
+			return child.hwnd
+		}
+	}
+
+	// For Qt applications like DingTalk, look for specific Qt widget classes
+	// Qt edit controls often have class names like "Qt5151..." or contain "QWidget"
+	for _, child := range children {
+		className := child.className
+		// Qt applications may have various widget types
+		// We need to look deeper - Qt embeds its edit controls
+		if strings.Contains(className, "Qt") {
+			// Check children of Qt widgets
+			grandChildren := enumerateChildWindows(child.hwnd)
+			for _, gc := range grandChildren {
+				if gc.className == "Edit" || strings.Contains(gc.className, "Edit") {
+					return gc.hwnd
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
+// setWindowFocus sets keyboard focus to a window
+// This requires the calling thread to be attached to the target thread's input queue
+func setWindowFocus(hwnd uintptr) bool {
+	ret, _, _ := procSetFocusIn.Call(hwnd)
+	return ret != 0
+}
+
+// mouse_event flags
+const (
+	MOUSEEVENTF_LEFTDOWN = 0x0002
+	MOUSEEVENTF_LEFTUP   = 0x0004
+)
+
+// POINT structure for GetCursorPos
+type pointInput struct {
+	x int32
+	y int32
+}
+
+var procGetCursorPos = modUser32.NewProc("GetCursorPos")
+
+// clickAtPosition simulates a mouse click at the given screen coordinates
+// and restores the cursor to its original position afterward
+func clickAtPosition(x, y int32) {
+	// Save original cursor position
+	var origPos pointInput
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&origPos)))
+	
+	// Move cursor to target position
+	procSetCursorPos.Call(uintptr(x), uintptr(y))
+	time.Sleep(50 * time.Millisecond)
+	
+	// Mouse down and up
+	procMouse_event.Call(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+	time.Sleep(20 * time.Millisecond)
+	procMouse_event.Call(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+	
+	// Wait a bit then restore cursor position
+	time.Sleep(50 * time.Millisecond)
+	procSetCursorPos.Call(uintptr(origPos.x), uintptr(origPos.y))
+}
+
+// findChatChildWindow finds the chat content child window (like DingChatWnd or CefBrowserWindow)
+func findChatChildWindow(parentHwnd uintptr) uintptr {
+	children := enumerateChildWindows(parentHwnd)
+	
+	// Priority: DingChatWnd > CefBrowserWindow > Chrome_WidgetWin_1
+	for _, child := range children {
+		if child.className == "DingChatWnd" {
+			return child.hwnd
+		}
+	}
+	for _, child := range children {
+		if child.className == "CefBrowserWindow" {
+			return child.hwnd
+		}
+	}
+	for _, child := range children {
+		if child.className == "Chrome_WidgetWin_1" {
+			return child.hwnd
+		}
+	}
+	
+	return 0
+}
+
+// Default click offset from bottom (pixels) - varies by app
+const defaultClickOffsetY = 120
+
+// getDefaultClickOffsetY returns the default Y offset for a target process
+// Different apps have different input box positions
+func getDefaultClickOffsetY(targetProcess string) int {
+	switch targetProcess {
+	case "Feishu.exe", "Lark.exe":
+		return 50
+	default:
+		return defaultClickOffsetY
+	}
+}
+
+// clickInputAreaOfWindow clicks near the bottom of the window where input box usually is
+// This is useful for Qt applications like DingTalk that don't expose standard Edit controls
+// offsetX: pixels from left edge (0 or negative = center horizontally)
+// offsetY: pixels from bottom (0 = use default based on target process)
+// targetProcess: used to determine default values
+func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess string) bool {
+	// First, try to find the chat child window
+	chatChild := findChatChildWindow(hwnd)
+	targetHwnd := hwnd
+
+	if chatChild != 0 {
+		targetHwnd = chatChild
+	}
+
+	var rect rectInput
+	ret, _, _ := procGetWindowRectIn.Call(targetHwnd, uintptr(unsafe.Pointer(&rect)))
+	if ret == 0 {
+		// If failed to get child rect, try parent
+		ret, _, _ = procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		if ret == 0 {
+			return false
+		}
+	}
+
+	// Use provided offsetY or default based on app
+	clickOffsetY := offsetY
+	if clickOffsetY <= 0 {
+		clickOffsetY = getDefaultClickOffsetY(targetProcess)
+	}
+
+	// Calculate X position: use offsetX from left, or center if offsetX <= 0
+	var x int32
+	if offsetX > 0 {
+		x = rect.left + int32(offsetX)
+		// Make sure we're within the window
+		if x > rect.right-10 {
+			x = (rect.left + rect.right) / 2
+		}
+	} else {
+		// Center horizontally
+		x = (rect.left + rect.right) / 2
+	}
+
+	// Calculate Y position: from bottom
+	y := rect.bottom - int32(clickOffsetY)
+
+	// Make sure we're within the window
+	if y < rect.top+100 {
+		y = (rect.top + rect.bottom) / 2
+	}
+
+	clickAtPosition(x, y)
+	return true
 }
 
 // activateHwndInput activates the target window using the same proven method from wake_windows.go
@@ -446,29 +495,11 @@ func sendKeyboardInput(inputs []inputUnion) uintptr {
 		return 0
 	}
 	inputSize := unsafe.Sizeof(inputs[0])
-
-	// #region agent log
-	debugLog("H", "input_windows.go:sendKeyboardInput", "SendInput params", map[string]interface{}{
-		"inputCount":     len(inputs),
-		"inputSize":      inputSize,
-		"expectedSize":   40, // sizeof(INPUT) on 64-bit Windows should be 40 bytes
-		"firstInputType": inputs[0].inputType,
-		"firstVK":        inputs[0].ki.wVk,
-		"firstScan":      inputs[0].ki.wScan,
-		"firstFlags":     inputs[0].ki.dwFlags,
-	})
-	// #endregion
-	ret, _, lastErr := procSendInput.Call(
+	ret, _, _ := procSendInput.Call(
 		uintptr(len(inputs)),
 		uintptr(unsafe.Pointer(&inputs[0])),
 		inputSize,
 	)
-	// #region agent log
-	debugLog("H", "input_windows.go:sendKeyboardInput:result", "SendInput returned", map[string]interface{}{
-		"ret":     ret,
-		"lastErr": fmt.Sprintf("%v", lastErr),
-	})
-	// #endregion
 	return ret
 }
 
@@ -516,10 +547,6 @@ func keybdEventKeyUp(vk uint16) {
 }
 
 func sendCtrlV() uintptr {
-	// #region agent log
-	debugLog("I", "input_windows.go:sendCtrlV", "Using keybd_event API", map[string]interface{}{})
-	// #endregion
-
 	// Use keybd_event API - more compatible with some applications like DingTalk
 	keybdEventKeyDown(VK_CONTROL)
 	time.Sleep(30 * time.Millisecond)
@@ -532,18 +559,10 @@ func sendCtrlV() uintptr {
 
 	keybdEventKeyUp(VK_CONTROL)
 
-	// #region agent log
-	debugLog("I", "input_windows.go:sendCtrlV:done", "keybd_event completed", map[string]interface{}{})
-	// #endregion
-
 	return 4
 }
 
 func sendEnter() uintptr {
-	// #region agent log
-	debugLog("I", "input_windows.go:sendEnter", "Using keybd_event API", map[string]interface{}{})
-	// #endregion
-
 	keybdEventKeyDown(VK_RETURN)
 	time.Sleep(30 * time.Millisecond)
 
@@ -553,10 +572,6 @@ func sendEnter() uintptr {
 }
 
 func sendCtrlEnter() uintptr {
-	// #region agent log
-	debugLog("I", "input_windows.go:sendCtrlEnter", "Using keybd_event API", map[string]interface{}{})
-	// #endregion
-
 	keybdEventKeyDown(VK_CONTROL)
 	time.Sleep(30 * time.Millisecond)
 
