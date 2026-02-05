@@ -16,3 +16,14 @@ func EnsureWindowVisible(_ *application.WebviewWindow) error {
 func WakeAttachedWindow(_ *application.WebviewWindow, _ string) error {
 	return errors.New("winsnap: wake is not supported on this platform")
 }
+
+// WakeStandaloneWindow brings the winsnap window to front when it's in standalone state.
+// Fallback implementation: just show and focus the window.
+func WakeStandaloneWindow(window *application.WebviewWindow) error {
+	if window == nil {
+		return errors.New("winsnap: window is nil")
+	}
+	window.Show()
+	window.Focus()
+	return nil
+}

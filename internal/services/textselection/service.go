@@ -35,6 +35,10 @@ type TextSelectionService struct {
 	// time to avoid exposing SnapService in Wails bindings.
 	getSnapState func() windows.SnapState
 
+	// wakeSnapWindow wakes the snap window (brings it to front).
+	// Used when snap window is visible (attached or standalone) and user clicks text selection popup.
+	wakeSnapWindow func()
+
 	// Currently selected text
 	selectedText string
 	// Popup position and size
@@ -71,15 +75,22 @@ func New() *TextSelectionService {
 // NewWithSnapStateGetter creates a new TextSelectionService with an optional
 // snap state getter. If nil, snap state is treated as stopped.
 func NewWithSnapStateGetter(getter func() windows.SnapState) *TextSelectionService {
+	return NewWithSnapCallbacks(getter, nil)
+}
+
+// NewWithSnapCallbacks creates a new TextSelectionService with snap state getter
+// and snap window wake callback. Both can be nil.
+func NewWithSnapCallbacks(getState func() windows.SnapState, wakeSnap func()) *TextSelectionService {
 	return &TextSelectionService{
 		popWidth:  140,
 		popHeight: 50,
 		getSnapState: func() windows.SnapState {
-			if getter == nil {
+			if getState == nil {
 				return windows.SnapStateStopped
 			}
-			return getter()
+			return getState()
 		},
+		wakeSnapWindow: wakeSnap,
 	}
 }
 
@@ -511,6 +522,10 @@ func (s *TextSelectionService) Hide() {
 // handleButtonClick handles button click event.
 // Check snap window state and send text to appropriate target.
 // Includes debounce logic to prevent duplicate triggers within 500ms.
+//
+// Routing logic:
+// - If snap window is visible (attached or standalone): wake snap window, send text to snap window.
+// - If snap window is hidden or stopped: wake main window, send text to main window.
 func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.mu.Lock()
 	// Debounce: ignore clicks within 500ms of the last click
@@ -525,26 +540,36 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 	app := s.app
 	mainWindow := s.mainWindow
 	getSnapState := s.getSnapState
+	wakeSnapWindow := s.wakeSnapWindow
 	s.mu.Unlock()
 
 	if text == "" || app == nil {
 		return map[string]any{"error": "no text selected"}
 	}
 
-	// Emit event with text - frontend (main window) will handle routing
-	// based on snap window state
+	// Emit event with text - frontend will handle routing based on snap window state
 	app.Event.Emit("text-selection:action", map[string]any{
 		"text": text,
 	})
 
-	// Only wake main window when snap window is NOT attached.
-	// - attached: user interacts with winsnap; do NOT activate main window.
-	// - hidden/stopped: user interacts with main assistant; activate main window.
+	// Determine which window to wake based on snap window visibility:
+	// - attached/standalone: snap window is visible, wake it
+	// - hidden/stopped: snap window is not visible, wake main window
 	state := windows.SnapStateStopped
 	if getSnapState != nil {
 		state = getSnapState()
 	}
-	if state != windows.SnapStateAttached {
+
+	switch state {
+	case windows.SnapStateAttached, windows.SnapStateStandalone:
+		// Snap window is visible (either attached to target or standalone)
+		// Wake snap window to receive the text
+		if wakeSnapWindow != nil {
+			wakeSnapWindow()
+		}
+	default:
+		// Snap window is hidden or stopped
+		// Wake main window to receive the text
 		forceActivateWindow(mainWindow)
 	}
 

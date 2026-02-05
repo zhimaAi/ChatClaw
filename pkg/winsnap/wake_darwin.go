@@ -234,6 +234,26 @@ func EnsureWindowVisible(window *application.WebviewWindow) error {
 	return nil
 }
 
+// WakeStandaloneWindow brings the winsnap window to front when it's in standalone state
+// (visible but not attached to any target app).
+// On macOS, this uses NSRunningApplication to activate the current app,
+// then focuses the specific window.
+func WakeStandaloneWindow(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	nativeHandle := window.NativeWindow()
+	if nativeHandle == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	// Activate current application (bring to front)
+	C.winsnap_activate_current_app()
+	// Show and focus the window
+	window.Show()
+	window.Focus()
+	return nil
+}
+
 // WakeAttachedWindow on macOS:
 // 1) Activate the target app so its window comes to front
 // 2) Order the winsnap window just above the target window using orderFrontRegardless

@@ -136,3 +136,38 @@ func setWindowPosAfterNoMoveNoSizeNoActivate(hwnd windows.HWND, insertAfter wind
 	}
 	return nil
 }
+
+// WakeStandaloneWindow brings the winsnap window to front when it's in standalone state
+// (visible but not attached to any target app).
+//
+// IMPORTANT: On Windows, we must NOT trigger WM_ACTIVATE or other messages that cause
+// Wails to internally call Focus(), which would crash WebView2 for HiddenOnTaskbar windows.
+// Instead of using SetForegroundWindow (which triggers WM_ACTIVATE), we use:
+// - ShowWindow to ensure visibility
+// - SetWindowPos with HWND_TOPMOST then HWND_NOTOPMOST to bring to front without activation
+// - SWP_NOACTIVATE flag to prevent activation messages
+func WakeStandaloneWindow(window *application.WebviewWindow) error {
+	if window == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	h := uintptr(window.NativeWindow())
+	if h == 0 {
+		return ErrWinsnapWindowInvalid
+	}
+
+	// Show window without activating (use SW_SHOWNOACTIVATE instead of SW_RESTORE)
+	const swShowNoActivate = 4
+	procShowWindowWake.Call(h, swShowNoActivate)
+
+	// Bring to front using SetWindowPos with SWP_NOACTIVATE
+	// First set as TOPMOST, then remove TOPMOST (this brings window to front of normal z-order)
+	const hwndTopMost = ^uintptr(0)    // -1 = HWND_TOPMOST
+	const hwndNoTopMost = ^uintptr(1)  // -2 = HWND_NOTOPMOST
+	flags := uintptr(swpNoMoveWake | swpNoSizeWake | swpNoActivateWake)
+
+	// Set topmost then remove (brings to front without activation)
+	procSetWindowPosWake.Call(h, hwndTopMost, 0, 0, 0, 0, flags)
+	procSetWindowPosWake.Call(h, hwndNoTopMost, 0, 0, 0, 0, flags)
+
+	return nil
+}

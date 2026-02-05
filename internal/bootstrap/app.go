@@ -236,9 +236,16 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(winsnapchat.NewWinsnapChatService(app)))
 
 	// 创建划词弹窗服务
-	textSelectionService := textselection.NewWithSnapStateGetter(func() windows.SnapState {
-		return snapService.GetStatus().State
-	})
+	// - getSnapState: 获取吸附窗体状态（attached/standalone/hidden/stopped）
+	// - wakeSnapWindow: 唤醒吸附窗体（当划词点击时吸附窗体可见则唤醒吸附窗体）
+	textSelectionService := textselection.NewWithSnapCallbacks(
+		func() windows.SnapState {
+			return snapService.GetStatus().State
+		},
+		func() {
+			snapService.WakeWindow()
+		},
+	)
 	app.RegisterService(application.NewService(textSelectionService))
 
 	// 创建系统托盘

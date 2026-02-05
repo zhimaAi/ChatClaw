@@ -111,6 +111,39 @@ func (s *SnapService) WakeAttached() error {
 	return err
 }
 
+// WakeWindow brings the winsnap window to the front, regardless of snap state.
+// This is used by text selection service to wake the snap window when it's visible
+// (either attached or standalone state).
+// - In attached state: wakes both target and winsnap window.
+// - In standalone state: wakes only the winsnap window.
+func (s *SnapService) WakeWindow() {
+	s.mu.Lock()
+	w := s.win
+	target := s.currentTarget
+	state := s.status.State
+	s.mu.Unlock()
+
+	if w == nil {
+		return
+	}
+
+	// Check if window native handle is still valid
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		return
+	}
+
+	if state == SnapStateAttached && target != "" {
+		// Attached state: use WakeAttached to wake both windows
+		_ = winsnap.WakeAttachedWindow(w, target)
+	} else {
+		// Standalone or other state: use platform-specific wake function
+		// This properly activates the app on macOS (using NSRunningApplication)
+		// and brings window to front on Windows
+		_ = winsnap.WakeStandaloneWindow(w)
+	}
+}
+
 // NotifySettingsChanged broadcasts a snap settings changed event to all windows.
 // This is intended for cross-window UI refresh (main window settings page, etc.).
 func (s *SnapService) NotifySettingsChanged() {
@@ -508,7 +541,13 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		if s.win == w {
 			s.win = nil
 		}
+		s.currentTarget = ""
 		s.lastWinsnapMinimized = false
+		// Update state to stopped when window is closed
+		// This is important for text selection routing logic
+		s.status.State = SnapStateStopped
+		s.status.TargetProcess = ""
+		s.touchLocked("")
 		s.readyOnce.Do(func() { close(s.readyCh) })
 		s.mu.Unlock()
 	})

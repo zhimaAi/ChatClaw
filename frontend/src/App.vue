@@ -69,14 +69,14 @@ onMounted(() => {
       // Check snap window state
       const status = await SnapService.GetStatus()
 
-      if (status.state === 'attached') {
-        // Snap window is attached, send text to snap window
-        // Also wake winsnap + target to the front so the user can see it.
-        void SnapService.WakeAttached()
+      // Snap window is visible (attached or standalone): send text to snap window
+      // - attached: snap window is docked to a target app
+      // - standalone: snap window is visible but not docked (e.g., user clicked "cancel snap")
+      if (status.state === 'attached' || status.state === 'standalone') {
+        // Send text to snap window
         Events.Emit('text-selection:send-to-snap', { text })
       } else {
-        // Snap window is not attached (stopped or hidden)
-        // Navigate to AI assistant and send text there
+        // Snap window is hidden or stopped: send to main window assistant
         if (activeTab.value?.module !== 'assistant') {
           navigationStore.navigateToModule('assistant')
         }
