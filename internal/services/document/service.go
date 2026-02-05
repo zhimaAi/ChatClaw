@@ -17,6 +17,7 @@ import (
 	"willchat/internal/define"
 	"willchat/internal/eino/processor"
 	"willchat/internal/errs"
+	"willchat/internal/fts/tokenizer"
 	"willchat/internal/services/thumbnail"
 	"willchat/internal/sqlite"
 	"willchat/internal/taskmanager"
@@ -115,7 +116,7 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 }
 
 // ListDocuments 获取知识库的文档列表
-// keyword: 可选的搜索关键词（按文件名搜索）
+// keyword: 可选的搜索关键词（按文件名搜索，使用 FTS）
 func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Document, error) {
 	if libraryID <= 0 {
 		return nil, errs.New("error.library_id_required")
@@ -130,16 +131,34 @@ func (s *DocumentService) ListDocuments(libraryID int64, keyword string) ([]Docu
 	defer cancel()
 
 	models := make([]documentModel, 0)
-	q := db.NewSelect().Model(&models).Where("library_id = ?", libraryID)
-
-	// 如果有搜索关键词，使用 LIKE 进行简单搜索
 	keyword = strings.TrimSpace(keyword)
-	if keyword != "" {
-		q = q.Where("original_name LIKE ?", "%"+keyword+"%")
-	}
 
-	if err := q.OrderExpr("id DESC").Scan(ctx); err != nil {
-		return nil, errs.Wrap("error.document_list_failed", err)
+	if keyword != "" {
+		// Build FTS match query from keyword
+		matchQuery := tokenizer.BuildMatchQuery(keyword)
+		if matchQuery != "" {
+			// Use FTS to search by document name
+			// Query doc_name_fts with MATCH, then join back to documents
+			err := db.NewSelect().
+				Model(&models).
+				Where("d.library_id = ?", libraryID).
+				Where("d.id IN (SELECT document_id FROM doc_name_fts WHERE doc_name_fts MATCH ? AND library_id = ?)", matchQuery, libraryID).
+				OrderExpr("d.id DESC").
+				Scan(ctx)
+			if err != nil {
+				return nil, errs.Wrap("error.document_list_failed", err)
+			}
+		}
+		// If matchQuery is empty (keyword was all punctuation), return empty result
+	} else {
+		// No keyword, return all documents for this library
+		if err := db.NewSelect().
+			Model(&models).
+			Where("library_id = ?", libraryID).
+			OrderExpr("id DESC").
+			Scan(ctx); err != nil {
+			return nil, errs.Wrap("error.document_list_failed", err)
+		}
 	}
 
 	out := make([]Document, 0, len(models))
@@ -269,7 +288,7 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 	m := &documentModel{
 		LibraryID:       libraryID,
 		OriginalName:    originalName,
-		NameTokens:      "", // TODO: 分词
+		NameTokens:      tokenizer.TokenizeName(originalName),
 		ThumbIcon:       "",
 		FileSize:        srcInfo.Size(),
 		ContentHash:     hash,
@@ -346,8 +365,9 @@ func (s *DocumentService) RenameDocument(input RenameInput) (*Document, error) {
 
 	// 更新数据库
 	m.OriginalName = newName
+	m.NameTokens = tokenizer.TokenizeName(newName)
 	if _, err := db.NewUpdate().Model(&m).
-		Column("original_name", "local_path", "updated_at").
+		Column("original_name", "name_tokens", "local_path", "updated_at").
 		Where("id = ?", input.ID).
 		Exec(ctx); err != nil {
 		return nil, errs.Wrap("error.document_rename_failed", err)
