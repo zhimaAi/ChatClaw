@@ -4,9 +4,11 @@ package winsnap
 
 /*
 #cgo darwin CFLAGS: -x objective-c -fobjc-arc
-#cgo darwin LDFLAGS: -framework Cocoa
+#cgo darwin LDFLAGS: -framework Cocoa -framework ApplicationServices -framework CoreGraphics
 
 #import <Cocoa/Cocoa.h>
+#import <ApplicationServices/ApplicationServices.h>
+#import <CoreGraphics/CGWindow.h>
 
 static NSString *winsnap_trim(NSString *s) {
 	if (!s) return @"";
@@ -60,8 +62,54 @@ static void winsnap_activate_current_app(void) {
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
 
+// Find the main window number of a given pid using CGWindowListCopyWindowInfo.
+// Returns 0 if not found.
+static int winsnap_find_main_window_number_for_pid(pid_t pid) {
+	if (pid <= 0) return 0;
+
+	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+	if (!list) return 0;
+
+	int result = 0;
+	double bestArea = 0.0;
+	CFIndex n = CFArrayGetCount(list);
+	for (CFIndex i = 0; i < n; i++) {
+		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
+		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
+		if (!pidRef) continue;
+		pid_t wpid = 0;
+		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
+		if (wpid != pid) continue;
+
+		// Check window layer - only consider normal windows (layer 0)
+		CFNumberRef layerRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowLayer);
+		if (layerRef) {
+			int layer = 0;
+			CFNumberGetValue(layerRef, kCFNumberIntType, &layer);
+			if (layer != 0) continue; // Skip non-normal windows (menus, tooltips, etc.)
+		}
+
+		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
+		if (!bounds) continue;
+		CGRect cgRect;
+		if (!CGRectMakeWithDictionaryRepresentation(bounds, &cgRect)) continue;
+
+		// Pick the largest window as the "main" window
+		double area = (double)cgRect.size.width * (double)cgRect.size.height;
+		if (area > bestArea) {
+			bestArea = area;
+			CFNumberRef numRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
+			if (numRef) {
+				CFNumberGetValue(numRef, kCFNumberIntType, &result);
+			}
+		}
+	}
+	CFRelease(list);
+	return result;
+}
+
 // Order a window with the given window number to front without activating the entire application.
-// Dispatches to main thread asynchronously to ensure thread safety.
+// Dispatches to main thread synchronously to ensure thread safety.
 // Uses window number to find the window safely, avoiding stale pointer issues.
 // Returns 0 if window not found, 1 if successfully ordered.
 static int winsnap_order_window_front_by_number(int windowNumber) {
@@ -74,6 +122,33 @@ static int winsnap_order_window_front_by_number(int windowNumber) {
 			if ((int)[win windowNumber] == windowNumber) {
 				if ([win isVisible]) {
 					[win orderFrontRegardless];
+					result = 1;
+				}
+				return;
+			}
+		}
+	});
+	return result;
+}
+
+// Order winsnap window above the target window (by window number).
+// This ensures proper z-order relationship between winsnap and target.
+// Returns 0 if window not found, 1 if successfully ordered.
+static int winsnap_order_window_above_target(int selfWindowNumber, int targetWindowNumber) {
+	if (selfWindowNumber <= 0) return 0;
+	if (targetWindowNumber <= 0) {
+		// No target window number, just order front
+		return winsnap_order_window_front_by_number(selfWindowNumber);
+	}
+
+	__block int result = 0;
+	dispatch_sync(dispatch_get_main_queue(), ^{
+		// Find the winsnap window by its window number on the main thread
+		for (NSWindow *win in [NSApp windows]) {
+			if ((int)[win windowNumber] == selfWindowNumber) {
+				if ([win isVisible]) {
+					// Order just above the target window
+					[win orderWindow:NSWindowAbove relativeTo:targetWindowNumber];
 					result = 1;
 				}
 				return;
@@ -112,8 +187,12 @@ func EnsureWindowVisible(_ *application.WebviewWindow) error {
 
 // WakeAttachedWindow on macOS:
 // 1) Activate the target app so its window comes to front
-// 2) Order only the winsnap window to front (not entire app) to avoid activating main window
+// 2) Order the winsnap window just above the target window (not entire app) to avoid activating main window
 // The winsnap window itself is kept at normal level to avoid covering other apps.
+//
+// This function is called when:
+// - User clicks on the winsnap window (via frontend pointerdown event)
+// - Winsnap window gains focus (detected by ErrSelfIsFrontmost in step loop)
 //
 // Returns ErrWinsnapWindowInvalid if the winsnap window is nil or has been closed/released.
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
@@ -128,8 +207,8 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 		return ErrWinsnapWindowInvalid
 	}
 
-	windowNumber := int(C.winsnap_get_window_number(nativeHandle))
-	if windowNumber <= 0 {
+	selfWindowNumber := int(C.winsnap_get_window_number(nativeHandle))
+	if selfWindowNumber <= 0 {
 		// Window may have been closed or is in an invalid state
 		return ErrWinsnapWindowInvalid
 	}
@@ -147,12 +226,17 @@ func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName strin
 	if pid <= 0 {
 		return ErrTargetWindowNotFound
 	}
-	// Activate target app (e.g., WeChat)
+
+	// Activate target app (e.g., WeChat) - this brings the target window to front
 	C.winsnap_activate_pid(pid)
 
-	// Only order the winsnap window to front, not the entire app (avoid activating main window)
+	// Find the main window number of the target app for proper z-ordering
+	targetWindowNumber := int(C.winsnap_find_main_window_number_for_pid(pid))
+
+	// Order the winsnap window just above the target window
+	// This ensures proper z-order: target window visible, winsnap window on top of it
 	// Use window number to find the window safely, avoiding stale pointer issues.
-	result := C.winsnap_order_window_front_by_number(C.int(windowNumber))
+	result := C.winsnap_order_window_above_target(C.int(selfWindowNumber), C.int(targetWindowNumber))
 	if result == 0 {
 		// Window not found or not visible
 		return ErrWinsnapWindowInvalid
