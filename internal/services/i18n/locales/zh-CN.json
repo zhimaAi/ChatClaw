@@ -89,9 +89,19 @@
   "error.agent_llm_model_not_found": "未找到默认模型「{{.ProviderID}}/{{.ModelID}}」",
   "error.agent_pick_default_llm_failed": "选择默认模型失败",
   "error.agent_no_llm_model_available": "没有可用的大语言模型",
+  "error.agent_match_threshold_invalid": "匹配度阈值不合法",
   "error.agent_icon_path_required": "缺少图标文件路径",
   "error.agent_icon_read_failed": "读取图标文件失败",
   "error.agent_icon_invalid": "图标文件不合法",
   "error.agent_icon_too_large": "图标文件过大（需不超过100KB）",
-  "error.agent_icon_type_not_allowed": "不支持的图标文件格式"
+  "error.agent_icon_type_not_allowed": "不支持的图标文件格式",
+
+  "error.conversation_id_required": "缺少会话ID",
+  "error.conversation_not_found": "未找到会话「{{.ID}}」",
+  "error.conversation_list_failed": "获取会话列表失败",
+  "error.conversation_read_failed": "读取会话信息失败",
+  "error.conversation_create_failed": "创建会话失败",
+  "error.conversation_update_failed": "更新会话失败",
+  "error.conversation_delete_failed": "删除会话失败",
+  "error.conversation_name_required": "缺少会话名称"
 }

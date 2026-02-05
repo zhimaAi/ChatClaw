@@ -62,7 +62,6 @@ const semanticSegmentKey = ref<string>(SEMANTIC_SEGMENT_NONE) // `${providerId}:
 const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
-const matchThreshold = ref<string>('0.5')
 
 const close = () => emit('update:open', false)
 
@@ -74,7 +73,6 @@ const resetForm = () => {
   topK.value = [20]
   chunkSize.value = '1024'
   chunkOverlap.value = '100'
-  matchThreshold.value = '0.5'
 }
 
 const currentSemanticSegmentLabel = computed(() => {
@@ -96,10 +94,8 @@ const isFormValid = computed(() => {
   if (advanced.value) {
     const cs = Number.parseInt(chunkSize.value, 10)
     const co = Number.parseInt(chunkOverlap.value, 10)
-    const mt = Number.parseFloat(matchThreshold.value)
     if (!Number.isFinite(cs) || cs < 500 || cs > 5000) return false
     if (!Number.isFinite(co) || co < 0 || co > 1000) return false
-    if (!Number.isFinite(mt) || mt < 0 || mt > 1) return false
   }
 
   return true
@@ -185,11 +181,6 @@ const handleSubmit = async () => {
       const n = Number.parseInt(v, 10)
       return Number.isFinite(n) ? n : undefined
     }
-    const toFloat = (v: string) => {
-      const n = Number.parseFloat(v)
-      return Number.isFinite(n) ? n : undefined
-    }
-
     const isNone = !semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE
     const [segProviderId, segModelId] = isNone ? ['', ''] : semanticSegmentKey.value.split('::')
 
@@ -200,7 +191,6 @@ const handleSubmit = async () => {
       top_k: topK.value[0] ?? 20,
       chunk_size: toInt(chunkSize.value) ?? 1024,
       chunk_overlap: toInt(chunkOverlap.value) ?? 100,
-      match_threshold: toFloat(matchThreshold.value) ?? 0.5,
     })
 
     const lib = await LibraryService.CreateLibrary(input)
@@ -331,20 +321,6 @@ const handleSubmit = async () => {
               min="0"
               max="1000"
               step="1"
-              :disabled="isSubmitting"
-            />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <FieldLabel
-              :label="t('knowledge.create.matchThreshold')"
-              :help="t('knowledge.help.matchThreshold')"
-            />
-            <Input
-              v-model="matchThreshold"
-              type="number"
-              min="0"
-              max="1"
-              step="0.01"
               :disabled="isSubmitting"
             />
           </div>
