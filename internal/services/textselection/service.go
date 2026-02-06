@@ -355,20 +355,8 @@ func (s *TextSelectionService) Show(text string, clientX, clientY int) {
 		finalX = screenX - s.popWidth/2
 		finalY = screenY - s.popHeight - 10
 
-		// Ensure popup doesn't exceed screen bounds
-		if screen := app.Screen.GetPrimary(); screen != nil {
-			wa := screen.WorkArea
-			if finalX < wa.X {
-				finalX = wa.X
-			}
-			if finalX+s.popWidth > wa.X+wa.Width {
-				finalX = wa.X + wa.Width - s.popWidth
-			}
-			if finalY < wa.Y {
-				// If can't fit above, show below
-				finalY = screenY + 10
-			}
-		}
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
 	}
 
 	// Update popup's recorded position
@@ -449,21 +437,8 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 		// Above mouse = mouseY - height - offset (Y increases downward)
 		finalY = screenY - s.popHeight - 10
 
-		// Ensure popup doesn't exceed screen bounds
-		if screen := app.Screen.GetPrimary(); screen != nil {
-			wa := screen.WorkArea
-			if finalX < wa.X {
-				finalX = wa.X
-			}
-			if finalX+s.popWidth > wa.X+wa.Width {
-				finalX = wa.X + wa.Width - s.popWidth
-			}
-			// Check if exceeds screen top
-			if finalY < wa.Y {
-				// Show below mouse
-				finalY = screenY + 20
-			}
-		}
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
 	}
 
 	s.showPopupAt(finalX, finalY)
@@ -532,18 +507,8 @@ func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
 		finalX = screenX - s.popWidth/2
 		finalY = screenY - s.popHeight - 10
 
-		if screen := app.Screen.GetPrimary(); screen != nil {
-			wa := screen.WorkArea
-			if finalX < wa.X {
-				finalX = wa.X
-			}
-			if finalX+s.popWidth > wa.X+wa.Width {
-				finalX = wa.X + wa.Width - s.popWidth
-			}
-			if finalY < wa.Y {
-				finalY = screenY + 20
-			}
-		}
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
 	}
 
 	s.showPopupAt(finalX, finalY)
@@ -682,14 +647,6 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 // On macOS: Clicking the popup activates our app, so we must first re-activate the
 // original app (using the saved PID) before sending Cmd+C.
 func (s *TextSelectionService) copyAndGetSelectedText() string {
-	// Save current clipboard content to detect changes
-	var oldClipboard string
-	if runtime.GOOS == "darwin" {
-		oldClipboard = getClipboardTextDarwin()
-	} else {
-		oldClipboard = getClipboardTextWindows()
-	}
-
 	// On macOS, clicking the popup activates our app.
 	// We need to re-activate the original app before sending Cmd+C.
 	if runtime.GOOS == "darwin" {
@@ -724,12 +681,14 @@ func (s *TextSelectionService) copyAndGetSelectedText() string {
 		}
 
 		newClipboard = strings.TrimSpace(newClipboard)
-		if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
+		// Return clipboard content if not empty, even if it's the same as before.
+		// This allows users to select the same text multiple times.
+		if newClipboard != "" {
 			return newClipboard
 		}
 	}
 
-	// If clipboard didn't change, return empty (no text was selected)
+	// If clipboard is empty after multiple attempts, return empty
 	return ""
 }
 

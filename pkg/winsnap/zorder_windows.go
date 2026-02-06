@@ -83,8 +83,9 @@ func MoveOffscreen(window *application.WebviewWindow) error {
 	return setWindowPosNoSizeNoZ(windows.HWND(h), offX, offY)
 }
 
-// MoveToStandalone moves the window to a standalone position (right side of primary screen).
+// MoveToStandalone moves the window to a standalone position (right side of the screen where the window is located).
 // This is used when the window is no longer attached to any target but should remain visible.
+// Multi-monitor aware: uses the monitor where the window is currently located.
 func MoveToStandalone(window *application.WebviewWindow) error {
 	if window == nil {
 		return errors.New("winsnap: Window is nil")
@@ -95,9 +96,10 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 	}
 
 	// Show window first if hidden (needed to get correct window rect)
-	window.Show()
+	// Use native API with SW_SHOWNOACTIVATE to avoid stealing focus
+	showWindowNoActivate(windows.HWND(h))
 
-	// Get primary monitor work area (physical pixels)
+	// Get monitor work area (physical pixels) for the monitor where the window is located
 	var monitorInfo struct {
 		cbSize    uint32
 		rcMonitor windows.Rect
@@ -106,8 +108,9 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 	}
 	monitorInfo.cbSize = uint32(40) // sizeof(MONITORINFO)
 
-	// Get primary monitor
-	hMonitor, _, _ := procMonitorFromWindow.Call(h, 1) // MONITOR_DEFAULTTOPRIMARY
+	// Get the monitor where the window is currently located (or nearest if off-screen)
+	// MONITOR_DEFAULTTONEAREST = 2
+	hMonitor, _, _ := procMonitorFromWindow.Call(h, 2)
 	if hMonitor != 0 {
 		procGetMonitorInfo.Call(hMonitor, uintptr(unsafe.Pointer(&monitorInfo)))
 	}
@@ -134,7 +137,7 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 	workBottom := int32(monitorInfo.rcWork.Bottom)
 
 	// If we couldn't get monitor info, use reasonable defaults
-	if workRight == 0 {
+	if workRight == 0 && workLeft == 0 {
 		workLeft = 0
 		workRight = 1920
 		workTop = 0
@@ -165,4 +168,23 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 var (
 	procMonitorFromWindow = modUser32.NewProc("MonitorFromWindow")
 	procGetMonitorInfo    = modUser32.NewProc("GetMonitorInfoW")
+	procShowWindowZOrder  = modUser32.NewProc("ShowWindow")
 )
+
+const (
+	swShowNoActivateZOrder = 4 // SW_SHOWNOACTIVATE
+	swRestoreZOrder        = 9 // SW_RESTORE
+)
+
+// showWindowNoActivate shows window without activating it.
+// Uses SW_SHOWNOACTIVATE to avoid stealing focus from other apps.
+func showWindowNoActivate(hwnd windows.HWND) {
+	procShowWindowZOrder.Call(uintptr(hwnd), swShowNoActivateZOrder)
+}
+
+// restoreWindowNoActivate restores a minimized window without activating it.
+// Uses SW_RESTORE first (to restore from minimized state), but this may activate.
+// For best results, only call this when window is minimized.
+func restoreWindowNoActivate(hwnd windows.HWND) {
+	procShowWindowZOrder.Call(uintptr(hwnd), swRestoreZOrder)
+}

@@ -421,14 +421,6 @@ func mouseHookDarwinCallback(x, y C.int) {
 		return
 	}
 
-	// Save old clipboard content
-	oldClipboard := ""
-	cOld := C.mouseHookGetClipboardText()
-	if cOld != nil {
-		oldClipboard = C.GoString(cOld)
-		C.freeMouseHookString(cOld)
-	}
-
 	// Try multiple times to simulate Cmd+C (some apps may need more time to respond)
 	var newClipboard string
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -444,16 +436,18 @@ func mouseHookDarwinCallback(x, y C.int) {
 			newClipboard = C.GoString(cNew)
 			C.freeMouseHookString(cNew)
 
-			if newClipboard != "" && newClipboard != oldClipboard {
+			// If clipboard has content, we can proceed
+			if newClipboard != "" {
 				break
 			}
 		}
 	}
 
-	// If clipboard content changed and has meaningful text, show popup
+	// If clipboard has meaningful text, show popup
 	// Skip if only whitespace (e.g., user selected image/screenshot, not text)
+	// Allow same text selection - user may want to use the same text again
 	newClipboard = strings.TrimSpace(newClipboard)
-	if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
+	if newClipboard != "" {
 		w.mu.Lock()
 		callback := w.callback
 		w.mu.Unlock()
