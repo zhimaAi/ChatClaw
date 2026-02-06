@@ -61,13 +61,28 @@ const handleAddAssistantTab = () => {
 }
 
 /**
- * macOS：双击标题栏区域触发窗口“缩放”（等同于绿灯按钮行为）
+ * Double-click on the title bar drag area to zoom/maximize the window.
+ * macOS: triggers Window.Zoom() (same as green traffic-light button behavior)
+ * Windows: toggles maximize/unmaximize
+ *
+ * Walks up the DOM from event.target to find the nearest element with
+ * an explicit --wails-draggable value:
+ *   - 'no-drag' → click was on an interactive element, bail out
+ *   - 'drag'    → click was on a draggable area, proceed
  */
-const handleTitleBarDoubleClick = async () => {
+const handleTitleBarDoubleClick = async (event: MouseEvent) => {
+  let el = event.target as HTMLElement | null
+  while (el) {
+    const v = el.style.getPropertyValue('--wails-draggable')?.trim()
+    if (v === 'no-drag') return
+    if (v === 'drag') break
+    el = el.parentElement
+  }
+
   if (isMac.value) {
     void Window.Zoom()
   } else {
-    // Windows: 切换最大化状态
+    // Windows: toggle maximise state
     const isMaximised = await Window.IsMaximised()
     if (isMaximised) {
       await Window.UnMaximise()
@@ -79,7 +94,11 @@ const handleTitleBarDoubleClick = async () => {
 </script>
 
 <template>
-  <div class="flex h-10 items-center overflow-hidden bg-titlebar" style="--wails-draggable: drag">
+  <div
+    class="flex h-10 items-center overflow-hidden bg-titlebar"
+    style="--wails-draggable: drag"
+    @dblclick="handleTitleBarDoubleClick"
+  >
     <!-- 左侧区域 -->
     <div class="flex h-full shrink-0 items-center gap-4 pl-3">
       <!-- macOS: 自定义红黄绿按钮 -->
@@ -193,12 +212,8 @@ const handleTitleBarDoubleClick = async () => {
       </button>
     </div>
 
-    <!-- 右侧空白拖拽/双击区域（避免干扰 tabs 的交互） -->
-    <div
-      class="min-w-4 shrink-0 self-stretch"
-      style="--wails-draggable: drag"
-      @dblclick="handleTitleBarDoubleClick"
-    />
+    <!-- 右侧空白拖拽区域 -->
+    <div class="min-w-4 shrink-0 self-stretch" style="--wails-draggable: drag" />
 
     <!-- Windows 窗口控制按钮（右侧） -->
     <WindowControlButtons v-if="!isMac" position="right" />
