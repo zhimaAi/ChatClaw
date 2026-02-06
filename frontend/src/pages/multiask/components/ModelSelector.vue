@@ -59,15 +59,15 @@ const HOVER_DELAY = 300 // 悬浮 300ms 后显示提示
 const handleMouseEnter = (event: MouseEvent, index: number) => {
   // 拖拽中不显示提示
   if (isDragging.value) return
-  
+
   // 获取按钮位置用于定位 tooltip
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   tooltipPosition.value = {
     x: rect.left + rect.width / 2,
-    y: rect.bottom + 4
+    y: rect.bottom + 4,
   }
-  
+
   hoverTimer.value = setTimeout(() => {
     hoveredIndex.value = index
   }, HOVER_DELAY)
@@ -102,12 +102,12 @@ const draggedModel = computed(() => {
 const handleMouseDown = (event: MouseEvent, index: number) => {
   // 防止文本选择
   event.preventDefault()
-  
+
   pressedIndex.value = index
   hasDragged.value = false
   mouseX.value = event.clientX
   mouseY.value = event.clientY
-  
+
   // 开始长按计时
   longPressTimer.value = setTimeout(() => {
     isDraggable.value = true
@@ -119,23 +119,23 @@ const handleMouseDown = (event: MouseEvent, index: number) => {
  */
 const handleMouseMove = (event: MouseEvent) => {
   if (!isDraggable.value || pressedIndex.value === null) return
-  
+
   // 更新鼠标位置
   mouseX.value = event.clientX
   mouseY.value = event.clientY
-  
+
   // 开始拖拽
   if (!isDragging.value) {
     isDragging.value = true
     draggedIndex.value = pressedIndex.value
   }
-  
+
   // 检测鼠标位置对应的目标元素
   if (!containerRef.value) return
-  
+
   const buttons = containerRef.value.querySelectorAll('button')
   let targetIndex: number | null = null
-  
+
   buttons.forEach((btn, index) => {
     const rect = btn.getBoundingClientRect()
     if (
@@ -147,7 +147,7 @@ const handleMouseMove = (event: MouseEvent) => {
       targetIndex = index
     }
   })
-  
+
   if (targetIndex !== null && targetIndex !== draggedIndex.value) {
     hasDragged.value = true
     dragOverIndex.value = targetIndex
@@ -170,7 +170,7 @@ const handleMouseUp = (modelId: string) => {
     // 如果未拖拽，触发点击
     emit('toggle', modelId)
   }
-  
+
   resetState()
 }
 
@@ -244,33 +244,43 @@ onUnmounted(() => {
 <template>
   <div
     ref="containerRef"
-    :class="cn(
-      'relative -mx-2 flex items-center gap-2 overflow-x-auto px-2 py-2 select-none',
-      isDragging && 'cursor-grabbing'
-    )"
+    :class="
+      cn(
+        'relative -mx-2 flex items-center gap-2 overflow-x-auto px-2 py-2 select-none',
+        isDragging && 'cursor-grabbing'
+      )
+    "
   >
     <button
       v-for="(model, index) in models"
       :key="model.id"
       type="button"
-      :class="cn(
-        'relative flex h-[62px] w-[54px] shrink-0 flex-col items-center gap-1 rounded-md p-1 transition-all',
-        isSelected(model.id)
-          ? 'bg-[#f5f5f5]'
-          : 'bg-background hover:bg-muted/50',
-        // 可拖拽状态 - 抓取手型
-        isDraggable && pressedIndex === index && !isDragging && 'cursor-grab ring-2 ring-primary/50',
-        // 拖拽中
-        isDragging && 'cursor-grabbing',
-        // 被拖拽项 - 半透明占位
-        draggedIndex === index && 'opacity-30',
-        // 拖拽目标 - 高亮
-        dragOverIndex === index && draggedIndex !== index && 'scale-110 ring-2 ring-primary',
-        // 默认状态
-        !isDraggable && !isDragging && 'cursor-pointer'
-      )"
+      :class="
+        cn(
+          'relative flex h-[62px] w-[54px] shrink-0 flex-col items-center gap-1 rounded-md p-1 transition-all',
+          isSelected(model.id) ? 'bg-[#f5f5f5]' : 'bg-background hover:bg-muted/50',
+          // 可拖拽状态 - 抓取手型
+          isDraggable &&
+            pressedIndex === index &&
+            !isDragging &&
+            'cursor-grab ring-2 ring-primary/50',
+          // 拖拽中
+          isDragging && 'cursor-grabbing',
+          // 被拖拽项 - 半透明占位
+          draggedIndex === index && 'opacity-30',
+          // 拖拽目标 - 高亮
+          dragOverIndex === index && draggedIndex !== index && 'scale-110 ring-2 ring-primary',
+          // 默认状态
+          !isDraggable && !isDragging && 'cursor-pointer'
+        )
+      "
       @mouseenter="handleMouseEnter($event, index)"
-      @mouseleave="handleMouseLeaveItem(); handleMouseLeave()"
+      @mouseleave="
+        () => {
+          handleMouseLeaveItem()
+          handleMouseLeave()
+        }
+      "
       @mousedown="handleMouseDown($event, index)"
       @mouseup="handleMouseUp(model.id)"
     >
@@ -281,7 +291,9 @@ onUnmounted(() => {
       />
 
       <!-- 模型图标 -->
-      <div class="flex size-8 items-center justify-center rounded-md border border-border bg-background">
+      <div
+        class="flex size-8 items-center justify-center rounded-md border border-border bg-background"
+      >
         <ProviderIcon :icon="model.icon" :size="24" />
       </div>
 
@@ -308,7 +320,9 @@ onUnmounted(() => {
         />
 
         <!-- 模型图标 -->
-        <div class="flex size-8 items-center justify-center rounded-md border border-border bg-background">
+        <div
+          class="flex size-8 items-center justify-center rounded-md border border-border bg-background"
+        >
           <ProviderIcon :icon="draggedModel.icon" :size="24" />
         </div>
 
@@ -328,12 +342,14 @@ onUnmounted(() => {
           :style="{
             left: `${tooltipPosition.x}px`,
             top: `${tooltipPosition.y}px`,
-            transform: 'translateX(-50%)'
+            transform: 'translateX(-50%)',
           }"
         >
           {{ t('multiask.longPressToDrag') }}
           <!-- 小三角箭头 -->
-          <div class="absolute -top-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900" />
+          <div
+            class="absolute -top-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"
+          />
         </div>
       </Transition>
     </Teleport>

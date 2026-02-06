@@ -38,7 +38,7 @@ watch(
       const lastDot = name.lastIndexOf('.')
       newName.value = lastDot > 0 ? name.substring(0, lastDot) : name
     }
-  },
+  }
 )
 
 const handleConfirm = async () => {

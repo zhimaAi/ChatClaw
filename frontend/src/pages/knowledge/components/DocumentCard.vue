@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MoreHorizontal, FileText, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from 'lucide-vue-next'
+import {
+  MoreHorizontal,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  RefreshCw,
+} from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -176,7 +183,7 @@ const updateErrorTipPosition = () => {
   const rect = anchor.getBoundingClientRect()
   const padding = 8
   const desiredWidth = 280
-  const width = Math.max(180, Math.min(desiredWidth, window.innerWidth - padding*2))
+  const width = Math.max(180, Math.min(desiredWidth, window.innerWidth - padding * 2))
 
   let left = rect.left
   if (left + width + padding > window.innerWidth) {
@@ -185,7 +192,7 @@ const updateErrorTipPosition = () => {
   if (left < padding) left = padding
 
   // Prefer showing above; fallback to below if not enough space.
-  const preferTop = rect.top > (200 + padding)
+  const preferTop = rect.top > 200 + padding
   if (preferTop) {
     errorTipStyle.value = {
       position: 'fixed',
@@ -247,7 +254,9 @@ onUnmounted(() => {
     class="group relative flex h-[182px] w-[166px] flex-col rounded-xl border border-border bg-card transition-shadow hover:shadow-md dark:hover:shadow-none dark:hover:ring-1 dark:hover:ring-white/10"
   >
     <!-- 缩略图区域 -->
-    <div class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted">
+    <div
+      class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted"
+    >
       <img
         v-if="document.thumbIcon"
         :src="document.thumbIcon"
@@ -280,8 +289,8 @@ onUnmounted(() => {
     <!-- 状态徽章 -->
     <div
       v-if="statusConfig.show"
-      class="absolute left-[11px] top-[11px]"
       ref="badgeRef"
+      class="absolute left-[11px] top-[11px]"
       @mouseenter="
         () => {
           cancelCloseErrorTip()
@@ -291,10 +300,12 @@ onUnmounted(() => {
       @mouseleave="scheduleCloseErrorTip"
     >
       <div
-        :class="cn(
-          'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium',
-          statusConfig.class
-        )"
+        :class="
+          cn(
+            'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium',
+            statusConfig.class
+          )
+        "
       >
         <component
           :is="statusConfig.icon"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type SvgComponent = any
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,7 @@ import DoubaoIcon from '@/assets/icons/providers/doubao.svg'
 import BaiduIcon from '@/assets/icons/providers/baidu.svg'
 import GrokIcon from '@/assets/icons/providers/grok.svg'
 import OllamaIcon from '@/assets/icons/providers/ollama.svg'
+import ChatwikiIcon from '@/assets/icons/providers/chatwiki.svg'
 
 // AI 模型图标（用于多问页面）
 import ChatgptModelIcon from '@/assets/icons/models/chatgpt-icon.svg'
@@ -58,6 +59,7 @@ const builtinIcons: Record<string, SvgComponent> = {
   baidu: BaiduIcon,
   grok: GrokIcon,
   ollama: OllamaIcon,
+  chatwiki: ChatwikiIcon,
   // AI 模型图标（用于多问页面，使用 model- 前缀区分）
   'model-chatgpt': ChatgptModelIcon,
   'model-claude': ClaudeModelIcon,
@@ -109,8 +111,8 @@ const useComponent = computed(() => {
 <template>
   <!-- 内置图标：作为 Vue 组件渲染，支持 currentColor -->
   <component
-    v-if="useComponent"
     :is="iconComponent"
+    v-if="useComponent"
     :width="size"
     :height="size"
     :class="cn('inline-block shrink-0 text-foreground', props.class)"

@@ -200,12 +200,18 @@ const handleCancelEdit = () => {
 <template>
   <div
     :class="
-      cn('group flex min-w-0 w-full gap-3 overflow-hidden', isUser ? 'justify-end' : 'justify-start', isTool && 'hidden')
+      cn(
+        'group flex min-w-0 w-full gap-3 overflow-hidden',
+        isUser ? 'justify-end' : 'justify-start',
+        isTool && 'hidden'
+      )
     "
   >
     <!-- Message content container -->
     <div
-      :class="cn('flex min-w-0 max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')"
+      :class="
+        cn('flex min-w-0 max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
+      "
     >
       <!-- Thinking block (for assistant messages) -->
       <ThinkingBlock v-if="showThinking" :content="thinkingContent" :is-streaming="isStreaming" />
@@ -249,7 +255,9 @@ const handleCancelEdit = () => {
                 class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground transition-colors"
                 @click="showErrorDetail = !showErrorDetail"
               >
-                <span class="text-[10px]">{{ showErrorDetail ? t('common.hide') : t('common.detail') }}</span>
+                <span class="text-[10px]">{{
+                  showErrorDetail ? t('common.hide') : t('common.detail')
+                }}</span>
                 <ChevronDown v-if="!showErrorDetail" class="size-3" />
                 <ChevronUp v-else class="size-3" />
               </button>

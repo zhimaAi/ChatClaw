@@ -177,7 +177,9 @@ watch(
           :message="msg"
           :tool-results="getToolResultsForMessage(msg)"
           :is-streaming="!!(streaming && msg.id === streaming.messageId)"
-          :streaming-content="streaming && msg.id === streaming.messageId ? streaming.content : undefined"
+          :streaming-content="
+            streaming && msg.id === streaming.messageId ? streaming.content : undefined
+          "
           :streaming-thinking="
             streaming && msg.id === streaming.messageId ? streaming.thinkingContent : undefined
           "
@@ -204,7 +206,7 @@ watch(
         <!-- Streaming message fallback (should not happen, but keep UI resilient) -->
         <ChatMessageItem
           v-if="streaming && !messages.some((m) => m.id === streaming.messageId)"
-          :message="{
+          :message="({
             id: streaming.messageId,
             conversation_id: conversationId,
             role: 'assistant',
@@ -215,7 +217,7 @@ watch(
             output_tokens: 0,
             created_at: null,
             updated_at: null,
-          }"
+          } as Message)"
           :is-streaming="true"
           :streaming-content="streaming.content"
           :streaming-thinking="streaming.thinkingContent"
@@ -234,6 +236,5 @@ watch(
         <div aria-hidden="true" class="h-16 shrink-0" />
       </div>
     </div>
-
   </div>
 </template>

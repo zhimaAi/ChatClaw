@@ -34,9 +34,7 @@ const previewContent = computed(() => {
       <span v-if="isStreaming" class="text-xs opacity-70">
         {{ t('assistant.chat.thinkingInProgress') }}
       </span>
-      <ChevronDown
-        :class="cn('size-4 transition-transform', isExpanded && 'rotate-180')"
-      />
+      <ChevronDown :class="cn('size-4 transition-transform', isExpanded && 'rotate-180')" />
     </button>
 
     <!-- Content -->

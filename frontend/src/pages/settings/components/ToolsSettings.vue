@@ -40,7 +40,7 @@ const debugFloatingToggle = () => {
 
 const logFloating = (...args: any[]) => {
   if (!debugFloatingToggle()) return
-  // eslint-disable-next-line no-console
+
   console.log('[floating-toggle]', new Date().toISOString(), ...args)
 }
 
@@ -57,7 +57,12 @@ const syncFloatingWindowDesired = async () => {
   floatingWindowSyncing = true
   floatingWindowPending = false
   const target = floatingWindowDesired
-  logFloating('sync:start', { target, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  logFloating('sync:start', {
+    target,
+    desired: floatingWindowDesired,
+    applied: floatingWindowApplied,
+    ui: showFloatingWindow.value,
+  })
   try {
     await updateSetting('show_floating_window', String(target))
     try {
@@ -89,15 +94,27 @@ const syncFloatingWindowDesired = async () => {
     } catch (e) {
       console.error('Failed to refocus window after rollback:', e)
     }
-    logFloating('sync:failed -> rollback', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    logFloating('sync:failed -> rollback', {
+      desired: floatingWindowDesired,
+      applied: floatingWindowApplied,
+      ui: showFloatingWindow.value,
+    })
   } finally {
     floatingWindowSyncing = false
     if (floatingWindowPending && floatingWindowDesired !== floatingWindowApplied) {
-      logFloating('sync:pending_flush', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+      logFloating('sync:pending_flush', {
+        desired: floatingWindowDesired,
+        applied: floatingWindowApplied,
+        ui: showFloatingWindow.value,
+      })
       void syncFloatingWindowDesired()
       return
     }
-    logFloating('sync:end', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    logFloating('sync:end', {
+      desired: floatingWindowDesired,
+      applied: floatingWindowApplied,
+      ui: showFloatingWindow.value,
+    })
   }
 }
 
@@ -106,10 +123,19 @@ const scheduleFloatingWindowSync = (val: boolean) => {
   if (floatingWindowDebounceTimer) {
     clearTimeout(floatingWindowDebounceTimer)
   }
-  logFloating('schedule', { val, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+  logFloating('schedule', {
+    val,
+    desired: floatingWindowDesired,
+    applied: floatingWindowApplied,
+    ui: showFloatingWindow.value,
+  })
   floatingWindowDebounceTimer = setTimeout(() => {
     floatingWindowDebounceTimer = null
-    logFloating('schedule:fire', { desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    logFloating('schedule:fire', {
+      desired: floatingWindowDesired,
+      applied: floatingWindowApplied,
+      ui: showFloatingWindow.value,
+    })
     void syncFloatingWindowDesired()
   }, 160)
 }
@@ -118,7 +144,12 @@ watch(
   showFloatingWindow,
   (val) => {
     if (suppressFloatingWindowSync) return
-    logFloating('watch:model', { val, desired: floatingWindowDesired, applied: floatingWindowApplied, ui: showFloatingWindow.value })
+    logFloating('watch:model', {
+      val,
+      desired: floatingWindowDesired,
+      applied: floatingWindowApplied,
+      ui: showFloatingWindow.value,
+    })
     scheduleFloatingWindowSync(val)
   },
   { flush: 'sync' }

@@ -167,6 +167,15 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("sqlite init: %w", err)
 	}
 
+	// ChatWiki: default enabled, auto-generate API key at startup
+	if err := providers.EnsureChatWikiInitialized(); err != nil {
+		app.Logger.Warn("EnsureChatWikiInitialized failed (non-fatal)", "error", err)
+	}
+	// ChatWiki: refresh model cache on every app start (add/update/delete).
+	if err := providers.NewProvidersService(app).SyncChatWikiModels(); err != nil {
+		app.Logger.Warn("SyncChatWikiModels failed (non-fatal)", "error", err)
+	}
+
 	// 初始化设置缓存
 	if err := settings.InitCache(app); err != nil {
 		sqlite.Close()

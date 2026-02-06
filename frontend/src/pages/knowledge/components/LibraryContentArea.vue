@@ -192,7 +192,7 @@ watch(
     searchQuery.value = ''
     resetAndLoad()
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 // 搜索防抖
@@ -480,7 +480,9 @@ onUnmounted(() => {
       <div class="flex items-center gap-1.5">
         <!-- 搜索框 -->
         <div class="relative w-40">
-          <Search class="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
+          <Search
+            class="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50"
+          />
           <Input
             v-model="searchQuery"
             type="text"
@@ -504,13 +506,20 @@ onUnmounted(() => {
     <!-- 上传进度条（大批量上传时避免“卡住”的感觉） -->
     <div v-if="isUploading" class="px-4 pb-2">
       <div class="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{{ t('knowledge.content.upload.uploading', { done: uploadDone, total: uploadTotal }) }}</span>
+        <span>{{
+          t('knowledge.content.upload.uploading', { done: uploadDone, total: uploadTotal })
+        }}</span>
         <span v-if="uploadTotal > 0">{{ Math.floor((uploadDone / uploadTotal) * 100) }}%</span>
       </div>
       <div class="mt-1 h-1 w-full overflow-hidden rounded bg-muted">
         <div
           class="h-full bg-foreground/30 transition-[width]"
-          :style="{ width: uploadTotal > 0 ? `${Math.min(100, Math.floor((uploadDone / uploadTotal) * 100))}%` : '0%' }"
+          :style="{
+            width:
+              uploadTotal > 0
+                ? `${Math.min(100, Math.floor((uploadDone / uploadTotal) * 100))}%`
+                : '0%',
+          }"
         />
       </div>
     </div>
@@ -530,7 +539,9 @@ onUnmounted(() => {
         <Upload class="size-10 opacity-40" />
         <div class="text-center">
           <p class="text-sm">{{ t('knowledge.content.empty.title') }}</p>
-          <p class="mt-1 text-xs text-muted-foreground/70">{{ t('knowledge.content.empty.desc') }}</p>
+          <p class="mt-1 text-xs text-muted-foreground/70">
+            {{ t('knowledge.content.empty.desc') }}
+          </p>
         </div>
         <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddDocument">
           <Plus class="size-4" />

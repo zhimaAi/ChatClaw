@@ -22,6 +22,10 @@ export default {
       name: '网络搜索',
       description: '使用 DuckDuckGo 搜索网络信息',
     },
+    libraryRetriever: {
+      name: '知识库检索',
+      description: '从知识库中检索相关内容',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -180,6 +184,8 @@ export default {
       apiVersion: 'API 版本',
       apiVersionPlaceholder: '例如：2024-02-01',
       apiVersionRequired: '请先填写 API 版本',
+      generateApiKey: '生成密钥',
+      generateApiKeySuccess: 'API 密钥已生成并保存',
       check: '检测',
       checkSuccess: '检测成功',
       checkFailed: '检测失败',
@@ -247,6 +253,8 @@ export default {
     },
     placeholders: {
       noAgentSelected: '请选择一个助手',
+      createAgentFirst: '请先创建助手',
+      selectModelFirst: '请选择模型',
       chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
       inputPlaceholder: '请输入问题',
       enterToSend: '请输入内容',
@@ -261,6 +269,9 @@ export default {
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       selectImage: '选择图片',
+      clearSelected: '清空选中',
+      selectedCount: '已选 {count} 个知识库',
+      noKnowledge: '暂无知识库',
       send: '发送',
       stop: '停止',
       copy: '复制',
@@ -369,8 +380,10 @@ export default {
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
-      semanticSegmentation: '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
-      raptorLLMModel: '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
+      semanticSegmentation:
+        '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
+      raptorLLMModel:
+        '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
     },
     tabs: {
       personal: '个人',

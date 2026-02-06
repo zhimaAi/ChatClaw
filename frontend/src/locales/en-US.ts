@@ -22,6 +22,10 @@ export default {
       name: 'Web Search',
       description: 'Search the web using DuckDuckGo',
     },
+    libraryRetriever: {
+      name: 'Knowledge Search',
+      description: 'Search relevant content from knowledge base',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -190,6 +194,8 @@ export default {
       apiVersion: 'API Version',
       apiVersionPlaceholder: 'e.g., 2024-02-01',
       apiVersionRequired: 'Please enter API Version first',
+      generateApiKey: 'Generate Key',
+      generateApiKeySuccess: 'API key generated and saved',
       check: 'Check',
       checkSuccess: 'Check Passed',
       checkFailed: 'Check Failed',
@@ -250,6 +256,8 @@ export default {
     },
     placeholders: {
       noAgentSelected: 'Select an agent',
+      createAgentFirst: 'Create an agent first',
+      selectModelFirst: 'Select a model first',
       chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
       inputPlaceholder: 'Ask a question...',
       enterToSend: 'Please enter content',
@@ -264,6 +272,9 @@ export default {
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
       selectImage: 'Select image',
+      clearSelected: 'Clear selected',
+      selectedCount: '{count} knowledge base(s) selected',
+      noKnowledge: 'No knowledge base available',
       send: 'Send',
       stop: 'Stop',
       copy: 'Copy',
@@ -374,8 +385,10 @@ export default {
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
-      semanticSegmentation: 'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
-      raptorLLMModel: 'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
+      semanticSegmentation:
+        'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
+      raptorLLMModel:
+        'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
     },
     tabs: {
       personal: 'Personal',

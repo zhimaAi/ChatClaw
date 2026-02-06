@@ -191,7 +191,10 @@ export const useChatStore = defineStore('chat', () => {
 
   const appendMessage = (conversationId: number, msg: Message) => {
     ensureConversationMessages(conversationId)
-    messagesByConversation.value[conversationId] = [...messagesByConversation.value[conversationId], msg]
+    messagesByConversation.value[conversationId] = [
+      ...messagesByConversation.value[conversationId],
+      msg,
+    ]
   }
 
   const upsertMessage = (conversationId: number, messageId: number, patch: Partial<Message>) => {
@@ -206,14 +209,17 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     // Insert as new message if not found (fallback)
-    messagesByConversation.value[conversationId] = [...current, { ...(patch as any), id: messageId } as Message]
+    messagesByConversation.value[conversationId] = [
+      ...current,
+      { ...(patch as any), id: messageId } as Message,
+    ]
   }
 
   const removeMessage = (conversationId: number, messageId: number) => {
     ensureConversationMessages(conversationId)
-    messagesByConversation.value[conversationId] = messagesByConversation.value[conversationId].filter(
-      (m) => m.id !== messageId
-    )
+    messagesByConversation.value[conversationId] = messagesByConversation.value[
+      conversationId
+    ].filter((m) => m.id !== messageId)
   }
 
   // Send a new message
@@ -416,12 +422,22 @@ export const useChatStore = defineStore('chat', () => {
 
     // Guard: ignore empty tool_call_id events (some providers stream partial tool deltas)
     if (!tool_call_id) {
-      debug('tool event ignored (empty tool_call_id)', { conversation_id, request_id, type, tool_name })
+      debug('tool event ignored (empty tool_call_id)', {
+        conversation_id,
+        request_id,
+        type,
+        tool_name,
+      })
       return
     }
 
     if (!streaming) {
-      debug('tool event ignored (no streaming)', { conversation_id, request_id, type, tool_call_id })
+      debug('tool event ignored (no streaming)', {
+        conversation_id,
+        request_id,
+        type,
+        tool_call_id,
+      })
       return
     }
 
@@ -626,7 +642,7 @@ export const useChatStore = defineStore('chat', () => {
   const extractEventData = (event: any) => {
     if (!event) return null
     // Wails events may wrap data in an array
-    return Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    return Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
   }
 
   // Subscribe to chat events
@@ -637,7 +653,6 @@ export const useChatStore = defineStore('chat', () => {
 
   const debug = (...args: any[]) => {
     if (debugEnabled) {
-      // eslint-disable-next-line no-console
       console.debug('[chat]', ...args)
     }
   }
@@ -689,7 +704,7 @@ export const useChatStore = defineStore('chat', () => {
     unsubscribers.push(
       Events.On(ChatEventType.ERROR, (e: any) => {
         // Always log errors to console
-        // eslint-disable-next-line no-console
+
         console.error('[chat] chat:error', extractEventData(e))
         handleChatError(e)
       })

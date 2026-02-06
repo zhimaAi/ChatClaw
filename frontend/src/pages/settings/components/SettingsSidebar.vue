@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SvgComponent = any
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'

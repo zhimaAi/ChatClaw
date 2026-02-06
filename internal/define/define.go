@@ -1,5 +1,7 @@
 package define
 
+import "strings"
+
 // AppID 用于文件系统/配置目录等“标识用途”
 const AppID = "willchat"
 
@@ -22,4 +24,28 @@ func IsDev() bool {
 // IsProd 是否为生产环境
 func IsProd() bool {
 	return Env == "production"
+}
+
+// ChatWikiOpenAPIEndpoint returns the ChatWiki OpenAPI base URL derived from ServerURL.
+//
+// NOTE:
+// We intentionally keep the same mapping as the previous ChatWikiAPIEndpoint defaults by doing
+// a simple URL replacement based on ServerURL.
+func ChatWikiOpenAPIEndpoint() string {
+	base := strings.TrimSuffix(strings.TrimSpace(ServerURL), "/")
+	if base == "" {
+		return ""
+	}
+
+	// Keep backward-compatible mappings:
+	// - dev1 server -> local openapi
+	// - production server -> dev3 openapi
+	switch {
+	case strings.HasPrefix(base, "https://dev1.willchat.chatwiki.com"):
+		return "http://localhost:8080/openapi"
+	case strings.HasPrefix(base, "https://willchat.chatwiki.com"):
+		return "https://dev3.willchat.chatwiki.com/openapi"
+	default:
+		return base + "/openapi"
+	}
 }
