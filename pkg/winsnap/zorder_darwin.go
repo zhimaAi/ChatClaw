@@ -26,6 +26,24 @@ static bool winsnap_is_self_frontmost() {
 	}
 }
 
+// Get window width from NSWindow frame (in points)
+static CGFloat winsnap_get_window_width(void *nsWindowPtr) {
+	if (!nsWindowPtr) return 0;
+	@autoreleasepool {
+		NSWindow *win = (__bridge NSWindow *)nsWindowPtr;
+		return win.frame.size.width;
+	}
+}
+
+// Get window height from NSWindow frame (in points)
+static CGFloat winsnap_get_window_height(void *nsWindowPtr) {
+	if (!nsWindowPtr) return 0;
+	@autoreleasepool {
+		NSWindow *win = (__bridge NSWindow *)nsWindowPtr;
+		return win.frame.size.height;
+	}
+}
+
 // Get the frontmost app's localized name (or executable name if localized name is empty).
 // Returns NULL if no frontmost app or error.
 static char* winsnap_get_frontmost_app_name() {
@@ -218,8 +236,18 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 	// Show window first if hidden
 	window.Show()
 
-	// Get window size
-	width, height := window.Size()
+	// Get window size using native NSWindow frame (more reliable than window.Size())
+	ptr := window.NativeWindow()
+	if ptr == nil {
+		return errors.New("winsnap: native window is nil")
+	}
+
+	var width, height int
+	cWidth := C.winsnap_get_window_width(ptr)
+	cHeight := C.winsnap_get_window_height(ptr)
+	width = int(cWidth)
+	height = int(cHeight)
+
 	if width <= 0 {
 		width = 400
 	}
