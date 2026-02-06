@@ -379,7 +379,7 @@ func setWindowPosAfterNoMoveNoSizeNoActivate(hwnd windows.HWND, insertAfter wind
 // IMPORTANT: On Windows, we must NOT trigger WM_ACTIVATE or other messages that cause
 // Wails to internally call Focus(), which would crash WebView2 for HiddenOnTaskbar windows.
 // Instead of using SetForegroundWindow (which triggers WM_ACTIVATE), we use:
-// - ShowWindow to ensure visibility (SW_RESTORE if minimized, SW_SHOWNOACTIVATE otherwise)
+// - ShowWindow to ensure visibility (SW_RESTORE if minimized, SW_SHOWNOACTIVATE/SW_SHOW otherwise)
 // - SetWindowPos with HWND_TOPMOST then HWND_NOTOPMOST to bring to front without activation
 // - SWP_NOACTIVATE flag to prevent activation messages
 func WakeStandaloneWindow(window *application.WebviewWindow) error {
@@ -391,13 +391,22 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 		return ErrWinsnapWindowInvalid
 	}
 
-	// Check if window is minimized (e.g., by Win+D)
-	// If minimized, we must use SW_RESTORE to bring it back
+	// Check window state and use appropriate ShowWindow command:
+	// - Minimized (iconic): use SW_RESTORE to bring it back
+	// - Hidden (not visible): use SW_SHOW to make it visible
+	// - Normal/visible: use SW_SHOWNOACTIVATE to avoid stealing focus
+	const swShow = 5           // SW_SHOW
+	const swShowNoActivate = 4 // SW_SHOWNOACTIVATE
+
 	if isWindowIconic(windows.HWND(h)) {
+		// Minimized: must use SW_RESTORE to bring it back
 		procShowWindowWake.Call(h, swRestoreWake)
+	} else if !isWindowVisible(windows.HWND(h)) {
+		// Hidden (never shown or explicitly hidden): use SW_SHOW to make it visible
+		// SW_SHOWNOACTIVATE may not work for windows that have never been shown
+		procShowWindowWake.Call(h, swShow)
 	} else {
-		// Show window without activating (use SW_SHOWNOACTIVATE)
-		const swShowNoActivate = 4
+		// Normal visible window: use SW_SHOWNOACTIVATE to avoid stealing focus
 		procShowWindowWake.Call(h, swShowNoActivate)
 	}
 
