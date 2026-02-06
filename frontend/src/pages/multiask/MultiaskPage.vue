@@ -11,8 +11,22 @@ import ColumnToggle from './components/ColumnToggle.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import MessageInput from './components/MessageInput.vue'
 import { MultiaskService } from '../../../bindings/willchat/internal/services/multiask'
+import { useNavigationStore } from '@/stores'
 
 const { t } = useI18n()
+const navigationStore = useNavigationStore()
+
+/**
+ * Props - tab page instance ID
+ */
+const props = defineProps<{
+  tabId: string
+}>()
+
+/**
+ * Whether this tab is currently active (visible)
+ */
+const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 
 /**
  * localStorage 存储键名
@@ -569,6 +583,41 @@ watch(visibleModels, async (newModels, oldModels) => {
     }
   }
 }, { deep: true })
+
+/**
+ * Monitor tab active state to hide/show native WebView panels.
+ * Native WebViews are rendered outside the DOM tree, so v-show cannot hide them.
+ * We need to call backend methods to explicitly hide/show them when switching tabs.
+ */
+watch(isTabActive, async (active, wasActive) => {
+  if (active === wasActive) return
+  
+  if (active) {
+    // Tab is now active - show all visible panels
+    console.log('[MultiaskPage] Tab activated, showing all panels')
+    for (const model of visibleModels.value) {
+      await showPanel(model.id)
+      // Update bounds in case layout changed while hidden
+      const panelRef = chatPanelRefs.value[model.id]
+      if (panelRef?.getBounds) {
+        const bounds = panelRef.getBounds()
+        if (bounds && bounds.width > 0 && bounds.height > 0) {
+          await updatePanelBounds(model.id, bounds)
+        }
+      }
+    }
+  } else {
+    // Tab is now hidden - hide all panels
+    console.log('[MultiaskPage] Tab deactivated, hiding all panels')
+    for (const panelId of createdPanelIds.value) {
+      try {
+        await MultiaskService.HidePanel(panelId)
+      } catch (err) {
+        console.error(`[MultiaskPage] Failed to hide panel ${panelId}:`, err)
+      }
+    }
+  }
+}, { immediate: false })
 
 /**
  * 组件卸载时销毁所有面板
