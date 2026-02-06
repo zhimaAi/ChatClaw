@@ -194,6 +194,8 @@ export default {
       apiVersion: 'API Version',
       apiVersionPlaceholder: 'e.g., 2024-02-01',
       apiVersionRequired: 'Please enter API Version first',
+      generateApiKey: 'Generate Key',
+      generateApiKeySuccess: 'API key generated and saved',
       check: 'Check',
       checkSuccess: 'Check Passed',
       checkFailed: 'Check Failed',
@@ -254,6 +256,8 @@ export default {
     },
     placeholders: {
       noAgentSelected: 'Select an agent',
+      createAgentFirst: 'Create an agent first',
+      selectModelFirst: 'Select a model first',
       chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
       inputPlaceholder: 'Ask a question...',
       enterToSend: 'Please enter content',

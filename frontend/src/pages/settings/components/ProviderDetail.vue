@@ -74,10 +74,40 @@ const isAzure = computed(() => props.providerWithModels?.provider.provider_id ==
 // 判断是否为 Ollama（Ollama 不需要 API Key）
 const isOllama = computed(() => props.providerWithModels?.provider.provider_id === 'ollama')
 
+// 判断是否为 ChatWiki（ChatWiki 支持一键生成密钥）
+const isChatWiki = computed(() => props.providerWithModels?.provider.provider_id === 'chatwiki')
+
 // 检测按钮是否禁用
 const isCheckDisabled = computed(
   () => isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
 )
+
+// 生成 ChatWiki API 密钥
+const isGeneratingKey = ref(false)
+const handleGenerateChatWikiKey = async () => {
+  if (!props.providerWithModels || props.providerWithModels.provider.provider_id !== 'chatwiki')
+    return
+
+  isGeneratingKey.value = true
+  try {
+    const key = await ProvidersService.GenerateChatWikiAPIKey()
+    localApiKey.value = key
+    // Auto-save
+    const updated = await ProvidersService.UpdateProvider(
+      props.providerWithModels.provider.provider_id,
+      new UpdateProviderInput({ api_key: key })
+    )
+    if (updated) {
+      emit('update', updated)
+      toast.success(t('settings.modelService.generateApiKeySuccess'))
+    }
+  } catch (error) {
+    console.error('Failed to generate ChatWiki API key:', error)
+    toast.error(getErrorMessage(error))
+  } finally {
+    isGeneratingKey.value = false
+  }
+}
 
 // 解析 extra_config
 const parseExtraConfig = (configStr: string): AzureExtraConfig => {
@@ -114,8 +144,8 @@ watch(
 const isFormValid = computed(() => {
   if (!props.providerWithModels) return false
 
-  // Ollama 不需要 API Key
-  if (isOllama.value) {
+  // Ollama 不需要 API Key；ChatWiki 应用初始化时自动生成密钥，无需检测
+  if (isOllama.value || isChatWiki.value) {
     return true
   }
 
@@ -142,7 +172,7 @@ const isFormValid = computed(() => {
 const validationMessage = computed(() => {
   if (!props.providerWithModels) return ''
 
-  if (isOllama.value) return ''
+  if (isOllama.value || isChatWiki.value) return ''
 
   if (!localApiKey.value.trim()) {
     return t('settings.modelService.apiKeyRequired')
@@ -227,9 +257,15 @@ const handleToggle = async (checked: boolean) => {
     return
   }
 
-  // 如果要关闭，需要检查是否被使用
+  // 如果要关闭，需要检查是否被使用（ChatWiki 关闭时无需验证）
   if (!checked) {
     const pid = props.providerWithModels.provider.provider_id
+    if (pid === 'chatwiki') {
+      // ChatWiki: allow disable without validation
+      localEnabled.value = checked
+      void saveEnabled(checked)
+      return
+    }
 
     // 检查是否被全局嵌入模型使用
     if (await isUsedByGlobalEmbedding(pid)) {
@@ -586,6 +622,17 @@ const confirmDeleteModel = async () => {
                 </button>
               </div>
               <Button
+                v-if="isChatWiki"
+                variant="outline"
+                :disabled="isGeneratingKey || isSaving"
+                class="min-w-[72px]"
+                @click="handleGenerateChatWikiKey"
+              >
+                <LoaderCircle v-if="isGeneratingKey" class="size-4 animate-spin" />
+                <span v-else>{{ t('settings.modelService.generateApiKey') }}</span>
+              </Button>
+              <Button
+                v-if="!isChatWiki"
                 variant="outline"
                 :disabled="isCheckDisabled"
                 class="min-w-[72px]"
@@ -640,8 +687,8 @@ const confirmDeleteModel = async () => {
             />
           </div>
 
-          <!-- 添加模型按钮 -->
-          <div class="flex">
+          <!-- 添加模型按钮（ChatWiki 模型仅通过接口获取，不支持添加） -->
+          <div v-if="!isChatWiki" class="flex">
             <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddModel">
               <Plus class="size-4" />
               {{ t('settings.modelService.addModel') }}
@@ -672,9 +719,9 @@ const confirmDeleteModel = async () => {
                         <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{
                           model.name
                         }}</span>
-                        <!-- 编辑和删除按钮（仅对非内置模型显示） -->
+                        <!-- 编辑和删除按钮（仅对非内置模型显示，ChatWiki 模型禁止编辑删除） -->
                         <div
-                          v-if="!model.is_builtin"
+                          v-if="!isChatWiki && !model.is_builtin"
                           class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                         >
                           <button

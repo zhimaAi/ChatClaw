@@ -1,7 +1,6 @@
 {
   "systray.show": "Show",
   "systray.quit": "Quit",
-
   "error.app_required": "app is required",
   "error.i18n_required": "i18n service is required",
   "error.sqlite_not_initialized": "database is not initialized",
@@ -15,7 +14,6 @@
   "error.window_already_registered": "window '{{.Name}}' already registered",
   "error.window_not_registered": "window '{{.Name}}' not registered",
   "error.window_service_required": "window service is required",
-
   "error.provider_id_required": "provider ID is required",
   "error.provider_not_found": "provider '{{.ProviderID}}' not found",
   "error.provider_list_failed": "failed to list providers",
@@ -45,6 +43,13 @@
   "error.cannot_delete_rerank_model_in_use": "cannot delete: this rerank model is used by library '{{.LibraryName}}'",
   "error.no_llm_model": "provider '{{.ProviderID}}' has no available LLM model",
   "error.unsupported_provider_type": "unsupported provider type '{{.Type}}'",
+  "error.chatwiki_generate_key_failed": "failed to generate ChatWiki API key",
+  "error.chatwiki_fetch_ip_failed": "failed to fetch public IP",
+  "error.chatwiki_api_endpoint_required": "please configure ChatWiki API endpoint first",
+  "error.chatwiki_api_key_required": "please generate ChatWiki API key first",
+  "error.chatwiki_model_list_failed": "failed to fetch model list ({{.Status}})",
+  "error.chatwiki_model_sync_failed": "failed to sync ChatWiki models to local cache",
+  "error.chatwiki_models_readonly": "ChatWiki models are fetched via API only; add, edit, and delete are not allowed",
   "error.library_list_failed": "failed to list libraries",
   "error.library_create_failed": "failed to create library",
   "error.library_name_required": "library name is required",
@@ -66,7 +71,6 @@
   "error.browser_invalid_url": "invalid URL",
   "error.browser_unsupported_url_scheme": "unsupported URL scheme",
   "error.browser_open_failed": "failed to open browser",
-
   "error.agent_id_required": "agent ID is required",
   "error.agent_not_found": "agent '{{.ID}}' not found",
   "error.agent_list_failed": "failed to list agents",
@@ -92,7 +96,6 @@
   "error.agent_icon_invalid": "invalid icon file",
   "error.agent_icon_too_large": "icon file is too large (max 100KB)",
   "error.agent_icon_type_not_allowed": "icon file type is not allowed",
-
   "error.document_list_failed": "failed to list documents",
   "error.document_upload_failed": "failed to upload document",
   "error.document_rename_failed": "failed to rename document",
@@ -116,7 +119,6 @@
   "error.conversation_name_required": "conversation name is required",
   "error.question_required": "question is required",
   "error.request_id_required": "request ID is required",
-
   "error.chat_conversation_id_required": "conversation ID is required",
   "error.chat_conversation_not_found": "conversation not found",
   "error.chat_conversation_read_failed": "failed to read conversation",
@@ -146,7 +148,6 @@
   "error.chat_generation_failed": "generation failed: {{.Error}}",
   "error.chat_stream_failed": "stream failed: {{.Error}}",
   "error.chat_tool_execution_failed": "tool execution failed: {{.Tool}} - {{.Error}}",
-
   "tools.calculator.name": "Calculator",
   "tools.calculator.description": "Perform mathematical calculations",
   "tools.duckduckgo.name": "Web Search",
