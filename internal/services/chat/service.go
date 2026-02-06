@@ -643,28 +643,44 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	var finishReason string
 	var inputTokens, outputTokens int
 
-	// Track segments for interleaved content/tool-call display
+	// Track segments for interleaved thinking/content/tool-call display
 	type segment struct {
-		Type        string   `json:"type"`                    // "content" or "tools"
-		Content     string   `json:"content,omitempty"`       // for type="content"
+		Type        string   `json:"type"`                    // "thinking", "content" or "tools"
+		Content     string   `json:"content,omitempty"`       // for type="content" or "thinking"
 		ToolCallIDs []string `json:"tool_call_ids,omitempty"` // for type="tools"
 	}
 	var segments []segment
-	var lastSegmentIsContent bool
+	var lastSegmentType string                             // "thinking", "content", or "tools"
 	var lastSegmentToolCallIDs map[string]bool // to track which tool calls are in the last segment
+
+	// Helper to add thinking to segments
+	addThinkingToSegments := func(thinking string) {
+		if thinking == "" {
+			return
+		}
+		if lastSegmentType == "thinking" && len(segments) > 0 {
+			// Append to last thinking segment
+			segments[len(segments)-1].Content += thinking
+		} else {
+			// Start new thinking segment
+			segments = append(segments, segment{Type: "thinking", Content: thinking})
+			lastSegmentType = "thinking"
+			lastSegmentToolCallIDs = nil
+		}
+	}
 
 	// Helper to add content to segments
 	addContentToSegments := func(content string) {
 		if content == "" {
 			return
 		}
-		if lastSegmentIsContent && len(segments) > 0 {
+		if lastSegmentType == "content" && len(segments) > 0 {
 			// Append to last content segment
 			segments[len(segments)-1].Content += content
 		} else {
 			// Start new content segment
 			segments = append(segments, segment{Type: "content", Content: content})
-			lastSegmentIsContent = true
+			lastSegmentType = "content"
 			lastSegmentToolCallIDs = nil
 		}
 	}
@@ -674,10 +690,10 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		if toolCallID == "" {
 			return
 		}
-		if lastSegmentIsContent || len(segments) == 0 {
+		if lastSegmentType != "tools" || len(segments) == 0 {
 			// Start new tools segment
 			segments = append(segments, segment{Type: "tools", ToolCallIDs: []string{toolCallID}})
-			lastSegmentIsContent = false
+			lastSegmentType = "tools"
 			lastSegmentToolCallIDs = map[string]bool{toolCallID: true}
 		} else if !lastSegmentToolCallIDs[toolCallID] {
 			// Add to existing tools segment (if not already there)
@@ -843,6 +859,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					// Handle thinking content (ReasoningContent)
 					if msg.ReasoningContent != "" {
 						thinkingBuilder.WriteString(msg.ReasoningContent)
+						addThinkingToSegments(msg.ReasoningContent)
 						emit(EventChatThinking, ChatThinkingEvent{
 							ChatEvent: ChatEvent{
 								ConversationID: conversationID,

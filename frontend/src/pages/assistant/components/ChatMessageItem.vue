@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -22,10 +22,18 @@ const props = defineProps<{
   segments?: MessageSegment[] // Ordered segments for interleaved display
   errorKey?: string // Specific error key for more informative error messages
   errorDetail?: string // Actual error message detail for user display
+  // Snap mode props
+  mode?: 'main' | 'snap'
+  hasAttachedTarget?: boolean
+  showAiSendButton?: boolean
+  showAiEditButton?: boolean
 }>()
 
 const emit = defineEmits<{
   edit: [messageId: number, newContent: string]
+  snapSendAndTrigger: [content: string]
+  snapSendToEdit: [content: string]
+  snapCopy: [content: string]
 }>()
 
 const { t } = useI18n()
@@ -115,8 +123,8 @@ const toolCalls = computed(() => {
 const isUser = computed(() => props.message.role === MessageRole.USER)
 const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
+const isSnapMode = computed(() => props.mode === 'snap')
 
-const showThinking = computed(() => isAssistant.value && thinkingContent.value)
 const showStatus = computed(
   () =>
     props.message.status === MessageStatus.ERROR || props.message.status === MessageStatus.CANCELLED
@@ -128,13 +136,20 @@ const displaySegments = computed((): MessageSegment[] => {
   if (props.segments && props.segments.length > 0) {
     return props.segments
   }
-  // Fallback: construct from message data (non-interleaved)
+  // Fallback: construct from message data (non-interleaved, with thinking first if exists)
   if (!isAssistant.value) return []
   const segs: MessageSegment[] = []
+  // Add thinking segment if exists
+  const thinking = thinkingContent.value
+  if (thinking) {
+    segs.push({ type: 'thinking', content: thinking })
+  }
+  // Add content segment if exists
   const content = displayContent.value
   if (content) {
     segs.push({ type: 'content', content })
   }
+  // Add tools segment if exists
   if (toolCalls.value.length > 0) {
     segs.push({ type: 'tools', toolCalls: toolCalls.value })
   }
@@ -145,6 +160,14 @@ const displaySegments = computed((): MessageSegment[] => {
 const isLastContentSegment = (idx: number): boolean => {
   for (let i = displaySegments.value.length - 1; i >= 0; i--) {
     if (displaySegments.value[i].type === 'content') return i === idx
+  }
+  return false
+}
+
+// Check if a given index is the last thinking segment (for cursor display)
+const isLastThinkingSegment = (idx: number): boolean => {
+  for (let i = displaySegments.value.length - 1; i >= 0; i--) {
+    if (displaySegments.value[i].type === 'thinking') return i === idx
   }
   return false
 }
@@ -204,12 +227,15 @@ const handleCancelEdit = () => {
         cn('flex min-w-0 max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
       "
     >
-      <!-- Thinking block (for assistant messages) -->
-      <ThinkingBlock v-if="showThinking" :content="thinkingContent" :is-streaming="isStreaming" />
-
-      <!-- Assistant messages: interleaved segments (content ↔ tool calls) -->
+      <!-- Assistant messages: interleaved segments (thinking → content ↔ tool calls) -->
       <template v-if="isAssistant">
         <template v-for="(segment, idx) in displaySegments" :key="idx">
+          <!-- Thinking segment -->
+          <ThinkingBlock
+            v-if="segment.type === 'thinking' && segment.content"
+            :content="segment.content"
+            :is-streaming="!!isStreaming && isLastThinkingSegment(idx)"
+          />
           <!-- Content segment -->
           <MarkdownRenderer
             v-if="segment.type === 'content' && segment.content"
@@ -303,13 +329,37 @@ const handleCancelEdit = () => {
           )
         "
       >
+        <!-- Snap mode: Send and trigger button (assistant messages only) -->
+        <Button
+          v-if="isSnapMode && isAssistant && showAiSendButton && hasAttachedTarget"
+          size="icon"
+          variant="ghost"
+          class="size-6"
+          :title="t('winsnap.actions.sendAndTrigger')"
+          @click="emit('snapSendAndTrigger', displayContent)"
+        >
+          <SendHorizontal class="size-3.5 text-muted-foreground" />
+        </Button>
+
+        <!-- Snap mode: Send to edit button (assistant messages only) -->
+        <Button
+          v-if="isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
+          size="icon"
+          variant="ghost"
+          class="size-6"
+          :title="t('winsnap.actions.sendToEdit')"
+          @click="emit('snapSendToEdit', displayContent)"
+        >
+          <Type class="size-3.5 text-muted-foreground" />
+        </Button>
+
         <!-- Copy button -->
         <Button
           size="icon"
           variant="ghost"
           class="size-6"
           :title="t('assistant.chat.copy')"
-          @click="handleCopy"
+          @click="isSnapMode && isAssistant ? emit('snapCopy', displayContent) : handleCopy()"
         >
           <Check v-if="copied" class="size-3.5 text-green-500" />
           <Copy v-else class="size-3.5 text-muted-foreground" />
