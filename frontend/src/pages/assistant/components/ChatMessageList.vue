@@ -9,6 +9,8 @@ const props = defineProps<{
   conversationId: number
   tabId: string
   mode?: 'main' | 'snap'
+  agentName?: string
+  agentIcon?: string
   hasAttachedTarget?: boolean
   showAiSendButton?: boolean
   showAiEditButton?: boolean
@@ -202,6 +204,8 @@ watch(
           :error-key="chatStore.errorKeyByMessage[msg.id]"
           :error-detail="chatStore.errorDetailByMessage[msg.id]"
           :mode="mode"
+          :agent-name="agentName"
+          :agent-icon="agentIcon"
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
@@ -232,6 +236,8 @@ watch(
           :streaming-tool-calls="streaming.toolCalls"
           :segments="streaming.segments"
           :mode="mode"
+          :agent-name="agentName"
+          :agent-icon="agentIcon"
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
