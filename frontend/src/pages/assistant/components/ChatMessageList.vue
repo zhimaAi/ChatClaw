@@ -26,6 +26,7 @@ const chatStore = useChatStore()
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const shouldAutoScroll = ref(true)
+const isFirstMessage = ref(true) // Track if this is the first message for special handling
 
 // Get messages for this conversation
 const allMessages = computed(() => chatStore.getMessages(props.conversationId).value)
@@ -82,13 +83,34 @@ const streaming = computed(() => chatStore.getStreaming(props.conversationId).va
 // Check if generating
 const isGenerating = computed(() => chatStore.isGenerating(props.conversationId).value)
 
-// Scroll to bottom
-const scrollToBottom = () => {
-  if (scrollContainerRef.value && shouldAutoScroll.value) {
+// Scroll to bottom with retries for first message
+const scrollToBottom = (isFirstMsg = false) => {
+  if (!scrollContainerRef.value || !shouldAutoScroll.value) return
+
+  const performScroll = () => {
+    if (scrollContainerRef.value) {
+      scrollContainerRef.value.scrollTop = scrollContainerRef.value.scrollHeight
+    }
+  }
+
+  if (isFirstMsg) {
+    // For first message, use aggressive retries to ensure content is fully rendered and positioned
     nextTick(() => {
-      if (scrollContainerRef.value) {
-        scrollContainerRef.value.scrollTop = scrollContainerRef.value.scrollHeight
-      }
+      requestAnimationFrame(() => {
+        performScroll()
+        // Multiple retries with increasing delays to catch all rendering phases
+        setTimeout(performScroll, 50)
+        setTimeout(performScroll, 150)
+        setTimeout(performScroll, 300)
+      })
+    })
+  } else {
+    // For subsequent messages, fewer retries
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        performScroll()
+        setTimeout(performScroll, 50)
+      })
     })
   }
 }
@@ -109,8 +131,13 @@ const handleEdit = (messageId: number, newContent: string) => {
 // Watch for new messages and scroll
 watch(
   () => messages.value.length,
-  () => {
-    scrollToBottom()
+  (newLen, oldLen) => {
+    // Detect first message in a new conversation
+    const isFirst = oldLen === 0 && newLen === 1
+    if (isFirst) {
+      isFirstMessage.value = true
+    }
+    scrollToBottom(isFirst)
   }
 )
 
@@ -118,7 +145,15 @@ watch(
 watch(
   () => streaming.value?.content,
   () => {
-    scrollToBottom()
+    // First message needs special handling
+    scrollToBottom(isFirstMessage.value)
+    // After first chunk, no longer treat as first message
+    if (isFirstMessage.value && streaming.value?.content) {
+      // Give it one more retry after first chunk to ensure stability
+      setTimeout(() => {
+        isFirstMessage.value = false
+      }, 150)
+    }
   }
 )
 
@@ -147,11 +182,13 @@ watch(
 // Load messages when conversation changes
 watch(
   () => props.conversationId,
-  async (newId) => {
+  async (newId, oldId) => {
     if (newId > 0) {
       await chatStore.loadMessages(newId)
       // When opening a conversation, jump to bottom by default.
       shouldAutoScroll.value = true
+      // Reset first message flag when switching conversations
+      isFirstMessage.value = newId !== oldId
       scrollToBottom()
     }
   },
@@ -233,7 +270,8 @@ watch(
         />
 
         <!-- Bottom spacer: keep distance from input box when auto-scrolling -->
-        <div aria-hidden="true" class="h-16 shrink-0" />
+        <!-- Use smaller spacing to prevent first message from being pushed out of view -->
+        <div aria-hidden="true" class="h-8 shrink-0" />
       </div>
     </div>
   </div>
