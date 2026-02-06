@@ -258,27 +258,34 @@ static int winsnap_is_target_adjacent(int selfWindowNumber, pid_t targetPid) {
 	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
 	if (!list) return 0;
 	
-	// The window list is ordered by z-order (front to back), index 0 is topmost
+	// The window list is ordered by z-order (front to back), index 0 is topmost.
+	// IMPORTANT: We must compute indices based on the same filtered list; otherwise
+	// we may incorrectly treat a hidden/filtered window as "not between".
+	typedef struct {
+		pid_t pid;
+		int winNum;
+	} WinItem;
+
+	CFIndex n = CFArrayGetCount(list);
+	WinItem *items = (WinItem *)calloc((size_t)n, sizeof(WinItem));
+	if (!items) {
+		CFRelease(list);
+		return 0;
+	}
+
+	int count = 0;
 	int selfIndex = -1;
 	int targetIndex = -1;
-	int hasOtherAppBetween = 0;
-	
-	CFIndex n = CFArrayGetCount(list);
+
 	for (CFIndex i = 0; i < n; i++) {
 		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
-		
-		// Get window number
-		CFNumberRef numRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
-		if (!numRef) continue;
-		int winNum = 0;
-		CFNumberGetValue(numRef, kCFNumberIntType, &winNum);
-		
+
 		// Get window pid
 		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
 		if (!pidRef) continue;
 		pid_t wpid = 0;
 		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
-		
+
 		// Check window layer - only consider normal windows (layer 0)
 		CFNumberRef layerRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowLayer);
 		if (layerRef) {
@@ -286,8 +293,8 @@ static int winsnap_is_target_adjacent(int selfWindowNumber, pid_t targetPid) {
 			CFNumberGetValue(layerRef, kCFNumberIntType, &layer);
 			if (layer != 0) continue; // Skip non-normal windows (menus, tooltips, etc.)
 		}
-		
-		// Check window size - skip tiny windows
+
+		// Check window size - skip tiny windows (tooltips, etc.)
 		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
 		if (bounds) {
 			CGRect cgRect;
@@ -295,90 +302,52 @@ static int winsnap_is_target_adjacent(int selfWindowNumber, pid_t targetPid) {
 				if (cgRect.size.width < 50 || cgRect.size.height < 50) continue;
 			}
 		}
-		
-		// Check if this is our winsnap window
-		if (winNum == selfWindowNumber) {
-			selfIndex = (int)i;
-			continue;
-		}
-		
-		// Check if this is target app's window
-		if (wpid == targetPid) {
-			if (targetIndex < 0) {
-				targetIndex = (int)i; // Take the topmost target window
-			}
-			continue;
-		}
-		
-		// This is another app's window - check if it's between self and target
-		// We'll determine this after we find both indices
-	}
-	
-	CFRelease(list);
-	
-	// If we couldn't find both windows, assume wake is needed
-	if (selfIndex < 0 || targetIndex < 0) return 0;
-	
-	// If target is above or at same level as self, no wake needed
-	if (targetIndex <= selfIndex) return 1;
-	
-	// Target is below self - check if there are other app windows between them
-	// Re-iterate to check for windows between selfIndex and targetIndex
-	list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
-	if (!list) return 0;
-	
-	n = CFArrayGetCount(list);
-	int currentIndex = 0;
-	for (CFIndex i = 0; i < n; i++) {
-		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
-		
-		// Get window pid
-		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
-		if (!pidRef) continue;
-		pid_t wpid = 0;
-		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
-		
-		// Check window layer - only consider normal windows (layer 0)
-		CFNumberRef layerRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowLayer);
-		if (layerRef) {
-			int layer = 0;
-			CFNumberGetValue(layerRef, kCFNumberIntType, &layer);
-			if (layer != 0) continue;
-		}
-		
-		// Check window size - skip tiny windows
-		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
-		if (bounds) {
-			CGRect cgRect;
-			if (CGRectMakeWithDictionaryRepresentation(bounds, &cgRect)) {
-				if (cgRect.size.width < 50 || cgRect.size.height < 50) continue;
-			}
-		}
-		
+
 		// Get window number
 		CFNumberRef numRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowNumber);
 		if (!numRef) continue;
 		int winNum = 0;
 		CFNumberGetValue(numRef, kCFNumberIntType, &winNum);
-		
-		// Skip our own app's windows and target app's windows
-		if (wpid == selfPid || wpid == targetPid) {
-			currentIndex++;
+
+		// Record into filtered list
+		items[count].pid = wpid;
+		items[count].winNum = winNum;
+
+		if (winNum == selfWindowNumber) {
+			selfIndex = count;
+		} else if (wpid == targetPid && targetIndex < 0) {
+			// Take the topmost target window in the filtered list
+			targetIndex = count;
+		}
+		count++;
+	}
+
+	CFRelease(list);
+
+	// If we couldn't find both windows, assume wake is needed
+	if (selfIndex < 0 || targetIndex < 0) {
+		free(items);
+		return 0;
+	}
+
+	// If target is above or at same level as self, no wake needed
+	if (targetIndex <= selfIndex) {
+		free(items);
+		return 1;
+	}
+
+	// Target is below self - check if there are other app windows between them
+	for (int j = selfIndex + 1; j < targetIndex; j++) {
+		pid_t p = items[j].pid;
+		if (p == selfPid || p == targetPid) {
 			continue;
 		}
-		
-		// This is another app's window - check if it's between self and target
-		if (currentIndex > selfIndex && currentIndex < targetIndex) {
-			hasOtherAppBetween = 1;
-			break;
-		}
-		currentIndex++;
+		free(items);
+		return 0; // other app window is between -> wake needed
 	}
-	
-	CFRelease(list);
-	
-	// If no other app windows between self and target, no wake needed
-	return hasOtherAppBetween ? 0 : 1;
+
+	free(items);
+	return 1; // no other app window between -> adjacent
 }
 
 // Just focus the winsnap window without waking the target app.

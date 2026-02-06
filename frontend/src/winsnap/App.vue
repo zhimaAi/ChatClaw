@@ -17,6 +17,7 @@ const { toast } = useToast()
 
 const question = ref('')
 const modelLabel = ref('DeepSeek V3.2 Think')
+const lastSelectionActionId = ref<number>(0)
 
 type ChatRole = 'user' | 'assistant'
 type ChatMessage = {
@@ -442,7 +443,15 @@ onMounted(() => {
   unsubscribeTextSelection = Events.On('text-selection:send-to-snap', (event: any) => {
     const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
     const text = payload?.text ?? ''
+    const id = Number(payload?.id ?? 0)
     if (text) {
+      // Deduplicate (startup fallback may replay the latest action).
+      if (id && id <= lastSelectionActionId.value) {
+        return
+      }
+      if (id) {
+        lastSelectionActionId.value = id
+      }
       question.value = text
       // Auto-send after a short delay
       setTimeout(() => {
@@ -450,6 +459,26 @@ onMounted(() => {
       }, 100)
     }
   })
+
+  // Fallback: pull the latest selection action once on startup.
+  // This avoids missing the first event when the winsnap window is created on-demand.
+  void (async () => {
+    try {
+      const action = await TextSelectionService.GetLastButtonAction()
+      const id = Number((action as any)?.id ?? 0)
+      const text = String((action as any)?.text ?? '')
+      if (!text) return
+      if (id && id <= lastSelectionActionId.value) return
+      if (id) lastSelectionActionId.value = id
+      question.value = text
+      setTimeout(() => {
+        void handleSend()
+      }, 100)
+    } catch (error) {
+      // Best-effort only.
+      console.error('Failed to get last selection action:', error)
+    }
+  })()
 
   // Wails v3 CustomEvent: payload is inside event.data[0] (first argument passed to Emit)
   unsubscribeWinsnapChat = Events.On('winsnap:chat', (event: any) => {

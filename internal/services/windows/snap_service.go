@@ -116,36 +116,67 @@ func (s *SnapService) WakeAttached() error {
 }
 
 // WakeWindow brings the winsnap window to the front, regardless of snap state.
-// This is used by text selection service to wake the snap window when it's visible
-// (either attached or standalone state).
+// This is used by text selection service:
 // - In attached state: wakes both target and winsnap window.
 // - In standalone state: wakes only the winsnap window.
+// - If the winsnap window does not exist (never created / closed), it will be recreated on-demand.
 func (s *SnapService) WakeWindow() {
+	// Ensure the winsnap window exists even when snapping loop is not running.
+	// Product requirement: text selection popup should always interact with winsnap.
 	s.mu.Lock()
 	w := s.win
 	target := s.currentTarget
 	state := s.status.State
 	s.mu.Unlock()
 
-	if w == nil {
+	// If window is nil or invalid, recreate it via WindowService.
+	if w == nil || w.NativeWindow() == nil || uintptr(w.NativeWindow()) == 0 {
+		// Show() will create the window if needed (FocusOnShow is false).
+		_ = s.winSvc.Show(WindowWinsnap)
+		s.mu.Lock()
+		ww, err := s.winSvc.ensure(WindowWinsnap)
+		if err == nil && ww != nil {
+			s.installWindowHooksLocked(ww)
+			w = ww
+			// If the window was not running before, treat it as standalone.
+			if s.status.State == SnapStateStopped || s.status.State == SnapStateHidden {
+				s.status.State = SnapStateStandalone
+				s.status.TargetProcess = ""
+				s.status.LastError = ""
+				s.touchLocked("")
+			}
+			target = s.currentTarget
+			state = s.status.State
+		}
+		s.mu.Unlock()
+	}
+
+	if w == nil || w.NativeWindow() == nil || uintptr(w.NativeWindow()) == 0 {
 		return
 	}
 
-	// Check if window native handle is still valid
-	nativeHandle := w.NativeWindow()
-	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
-		return
+	// If it was hidden (off-screen), bring it back to a usable standalone position.
+	if state == SnapStateHidden || state == SnapStateStopped {
+		s.moveToStandalone(w)
+		s.mu.Lock()
+		// Keep state consistent for downstream routing / UI.
+		s.status.State = SnapStateStandalone
+		s.status.TargetProcess = ""
+		s.touchLocked("")
+		s.mu.Unlock()
+		state = SnapStateStandalone
+		target = ""
 	}
 
 	if state == SnapStateAttached && target != "" {
-		// Attached state: use WakeAttached to wake both windows
+		// Attached state: wake both target and winsnap.
 		_ = winsnap.WakeAttachedWindow(w, target)
-	} else {
-		// Standalone or other state: use platform-specific wake function
-		// This properly activates the app on macOS (using NSRunningApplication)
-		// and brings window to front on Windows
-		_ = winsnap.WakeStandaloneWindow(w)
+		return
 	}
+
+	// Standalone or other state: wake the winsnap window only.
+	// This properly activates the app on macOS (NSRunningApplication) and brings window to front on Windows.
+	_ = winsnap.WakeStandaloneWindow(w)
 }
 
 // NotifySettingsChanged broadcasts a snap settings changed event to all windows.

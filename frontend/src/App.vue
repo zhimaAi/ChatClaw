@@ -7,7 +7,6 @@ import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System } from '@wailsio/runtime'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 
@@ -48,7 +47,6 @@ watch(
  * 处理划词弹窗按钮点击事件
  * 根据吸附窗体状态决定发送文本到哪里
  */
-let unsubscribeTextSelection: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 
 /**
@@ -59,40 +57,6 @@ let themeObserver: InstanceType<typeof window.MutationObserver> | null = null
 let wasDarkMode = document.documentElement.classList.contains('dark')
 
 onMounted(() => {
-  // Text selection event handling
-  unsubscribeTextSelection = Events.On('text-selection:action', async (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
-    const text = payload?.text ?? ''
-    if (!text) return
-
-    try {
-      // Check snap window state
-      const status = await SnapService.GetStatus()
-
-      // Snap window is visible (attached or standalone): send text to snap window
-      // - attached: snap window is docked to a target app
-      // - standalone: snap window is visible but not docked (e.g., user clicked "cancel snap")
-      if (status.state === 'attached' || status.state === 'standalone') {
-        // Send text to snap window
-        Events.Emit('text-selection:send-to-snap', { text })
-      } else {
-        // Snap window is hidden or stopped: send to main window assistant
-        if (activeTab.value?.module !== 'assistant') {
-          navigationStore.navigateToModule('assistant')
-        }
-        // Emit event for assistant page to receive text
-        Events.Emit('text-selection:send-to-assistant', { text })
-      }
-    } catch (error) {
-      console.error('Failed to get snap status:', error)
-      // Fallback: send to assistant
-      if (activeTab.value?.module !== 'assistant') {
-        navigationStore.navigateToModule('assistant')
-      }
-      Events.Emit('text-selection:send-to-assistant', { text })
-    }
-  })
-
   // In-app text selection: global mouseup listener (mouse hook skips our own windows).
   onMouseUp = (e: MouseEvent) => {
     // Only react to left button.
@@ -124,8 +88,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unsubscribeTextSelection?.()
-  unsubscribeTextSelection = null
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null

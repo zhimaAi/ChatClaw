@@ -39,6 +39,12 @@ type TextSelectionService struct {
 	// Used when snap window is visible (attached or standalone) and user clicks text selection popup.
 	wakeSnapWindow func()
 
+	// Last selection action (button click) payload.
+	// Used as a fallback for winsnap window to pull the latest action on startup
+	// (avoids losing the first event when the winsnap window is created on-demand).
+	lastActionID   int64
+	lastActionText string
+
 	// Currently selected text
 	selectedText string
 	// Popup position and size
@@ -519,13 +525,12 @@ func (s *TextSelectionService) Hide() {
 	}
 }
 
-// handleButtonClick handles button click event.
-// Check snap window state and send text to appropriate target.
+// handleButtonClick handles the popup button click event.
 // Includes debounce logic to prevent duplicate triggers within 500ms.
 //
-// Routing logic:
-// - If snap window is visible (attached or standalone): wake snap window, send text to snap window.
-// - If snap window is hidden or stopped: wake main window, send text to main window.
+// Product requirement:
+// - Text selection popup should always interact with winsnap window (never main window).
+// - If winsnap window does not exist, create it and wake it as a standalone window.
 func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.mu.Lock()
 	// Debounce: ignore clicks within 500ms of the last click
@@ -538,40 +543,28 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 
 	text := s.selectedText
 	app := s.app
-	mainWindow := s.mainWindow
-	getSnapState := s.getSnapState
 	wakeSnapWindow := s.wakeSnapWindow
+	// Use Unix milliseconds to keep JS number precision (safe integer).
+	actionID := time.Now().UnixMilli()
+	s.lastActionID = actionID
+	s.lastActionText = text
 	s.mu.Unlock()
 
 	if text == "" || app == nil {
 		return map[string]any{"error": "no text selected"}
 	}
 
-	// Emit event with text - frontend will handle routing based on snap window state
-	app.Event.Emit("text-selection:action", map[string]any{
+	// Product requirement: always interact with winsnap (never main window).
+	// Ensure and wake the winsnap window first (it may be created on-demand).
+	if wakeSnapWindow != nil {
+		wakeSnapWindow()
+	}
+
+	// Send text to winsnap window. Payload contains an id for deduplication.
+	app.Event.Emit("text-selection:send-to-snap", map[string]any{
+		"id":   actionID,
 		"text": text,
 	})
-
-	// Determine which window to wake based on snap window visibility:
-	// - attached/standalone: snap window is visible, wake it
-	// - hidden/stopped: snap window is not visible, wake main window
-	state := windows.SnapStateStopped
-	if getSnapState != nil {
-		state = getSnapState()
-	}
-
-	switch state {
-	case windows.SnapStateAttached, windows.SnapStateStandalone:
-		// Snap window is visible (either attached to target or standalone)
-		// Wake snap window to receive the text
-		if wakeSnapWindow != nil {
-			wakeSnapWindow()
-		}
-	default:
-		// Snap window is hidden or stopped
-		// Wake main window to receive the text
-		forceActivateWindow(mainWindow)
-	}
 
 	// Delay hide popup
 	go func() {
@@ -580,7 +573,19 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 	}()
 
 	return map[string]any{
+		"id":   actionID,
 		"text": text,
+	}
+}
+
+// GetLastButtonAction returns the last button click action payload.
+// This is used by the winsnap window as a fallback on startup to avoid missing the first event.
+func (s *TextSelectionService) GetLastButtonAction() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return map[string]any{
+		"id":   s.lastActionID,
+		"text": s.lastActionText,
 	}
 }
 
