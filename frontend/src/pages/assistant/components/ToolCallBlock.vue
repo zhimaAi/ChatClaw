@@ -109,7 +109,9 @@ const getQueryFromArgs = (argsJson?: string): string => {
         </span>
 
         <ChevronDown
-          :class="cn('size-4 transition-transform', isExpanded(toolCall.toolCallId) && 'rotate-180')"
+          :class="
+            cn('size-4 transition-transform', isExpanded(toolCall.toolCallId) && 'rotate-180')
+          "
         />
       </button>
 
@@ -117,7 +119,9 @@ const getQueryFromArgs = (argsJson?: string): string => {
       <div v-if="isExpanded(toolCall.toolCallId)" class="mt-1 space-y-2 text-xs">
         <!-- Friendly result view for DuckDuckGo -->
         <template
-          v-if="toolCall.toolName === 'duckduckgo_search' && getDuckDuckGoResult(toolCall.resultJson)"
+          v-if="
+            toolCall.toolName === 'duckduckgo_search' && getDuckDuckGoResult(toolCall.resultJson)
+          "
         >
           <div class="space-y-1">
             <div class="font-medium text-muted-foreground">
@@ -160,13 +164,17 @@ const getQueryFromArgs = (argsJson?: string): string => {
             </summary>
             <div class="mt-2 space-y-2">
               <div v-if="toolCall.argsJson" class="space-y-1">
-                <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolArgs') }}</div>
+                <div class="font-medium text-muted-foreground">
+                  {{ t('assistant.chat.toolArgs') }}
+                </div>
                 <pre
                   class="w-full max-w-full overflow-x-auto rounded bg-background/50 p-2 text-xs dark:bg-zinc-950/50"
                 ><code>{{ formatJson(toolCall.argsJson) }}</code></pre>
               </div>
               <div v-if="toolCall.resultJson" class="space-y-1">
-                <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolResult') }}</div>
+                <div class="font-medium text-muted-foreground">
+                  {{ t('assistant.chat.toolResult') }}
+                </div>
                 <pre
                   class="w-full max-w-full max-h-48 overflow-auto rounded bg-background/50 p-2 text-xs dark:bg-zinc-950/50"
                 ><code>{{ formatJson(toolCall.resultJson) }}</code></pre>
@@ -184,7 +192,10 @@ const getQueryFromArgs = (argsJson?: string): string => {
         </div>
 
         <!-- Result -->
-        <div v-if="toolCall.resultJson && toolCall.toolName !== 'duckduckgo_search'" class="space-y-1">
+        <div
+          v-if="toolCall.resultJson && toolCall.toolName !== 'duckduckgo_search'"
+          class="space-y-1"
+        >
           <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolResult') }}</div>
           <pre
             class="w-full max-w-full max-h-48 overflow-auto rounded bg-background/50 p-2 text-xs dark:bg-zinc-950/50"

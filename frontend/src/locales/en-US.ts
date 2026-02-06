@@ -360,8 +360,10 @@ export default {
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
-      semanticSegmentation: 'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
-      raptorLLMModel: 'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
+      semanticSegmentation:
+        'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
+      raptorLLMModel:
+        'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
     },
     tabs: {
       personal: 'Personal',

@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, FileText, Image as ImageIcon, Loader2, Paperclip, PenLine, PinOff, Plus, Send } from 'lucide-vue-next'
+import {
+  ChevronDown,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Paperclip,
+  PenLine,
+  PinOff,
+  Plus,
+  Send,
+} from 'lucide-vue-next'
 import Logo from '@/assets/images/logo.svg'
 import { cn } from '@/lib/utils'
 import { Events, System } from '@wailsio/runtime'
@@ -274,7 +284,7 @@ let onPointerDown: ((e: PointerEvent) => void) | null = null
 onMounted(() => {
   // Listen for text selection action to set input text
   unsubscribeTextSelection = Events.On('text-selection:send-to-snap', (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     const text = payload?.text ?? ''
     if (text) {
       question.value = text
@@ -289,7 +299,7 @@ onMounted(() => {
   unsubscribeWinsnapChat = Events.On('winsnap:chat', (event: any) => {
     // Extract the StreamPayload from event
     // Wails v3 passes arguments as an array in event.data
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
 
     const requestId = payload?.requestId ?? payload?.RequestID
     const eventName = payload?.event ?? payload?.Event
@@ -322,7 +332,11 @@ onMounted(() => {
     if (!text) return
     // macOS: backend mouse hook uses physical pixels; browser events are in CSS pixels (points).
     const scale = System.IsMac() ? window.devicePixelRatio || 1 : 1
-    void TextSelectionService.ShowAtScreenPos(text, Math.round(e.screenX * scale), Math.round(e.screenY * scale))
+    void TextSelectionService.ShowAtScreenPos(
+      text,
+      Math.round(e.screenX * scale),
+      Math.round(e.screenY * scale)
+    )
   }
   window.addEventListener('mouseup', onMouseUp, true)
 
@@ -352,7 +366,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen flex-col overflow-hidden rounded-[12px] bg-background text-foreground">
+  <div
+    class="flex h-screen w-screen flex-col overflow-hidden rounded-[12px] bg-background text-foreground"
+  >
     <!-- Custom titlebar (frameless window drag region) -->
     <div
       class="relative flex h-[28px] items-center justify-center bg-[rgba(234,234,234,0.80)] backdrop-blur-[15px] shadow-[0px_0.5px_0px_rgba(0,0,0,0.1),0px_1px_0px_rgba(0,0,0,0.1)]"
@@ -363,7 +379,9 @@ onUnmounted(() => {
         <div class="size-[12px] rounded-full border border-black/20 bg-[#febc2e]" />
         <div class="size-[12px] rounded-full border border-black/20 bg-[#28c840]" />
       </div>
-      <div class="text-center text-[13px] font-semibold text-black/85">{{ t('winsnap.title') }}</div>
+      <div class="text-center text-[13px] font-semibold text-black/85">
+        {{ t('winsnap.title') }}
+      </div>
     </div>
 
     <!-- Header -->
@@ -374,7 +392,12 @@ onUnmounted(() => {
       </div>
 
       <div class="flex items-center gap-2">
-        <button class="rounded-md p-1 hover:bg-muted" style="--wails-draggable: no-drag" aria-label="add" type="button">
+        <button
+          class="rounded-md p-1 hover:bg-muted"
+          style="--wails-draggable: no-drag"
+          aria-label="add"
+          type="button"
+        >
           <Plus class="size-5 text-muted-foreground" />
         </button>
         <button
@@ -389,8 +412,8 @@ onUnmounted(() => {
         <button
           class="ml-1 inline-flex items-center gap-2 rounded-[10px] bg-background px-3 py-2 shadow-[0px_2px_8px_rgba(0,0,0,0.15)]"
           style="--wails-draggable: no-drag"
-          @click="cancelSnap"
           type="button"
+          @click="cancelSnap"
         >
           <PinOff class="size-4 text-muted-foreground" />
           <span class="text-sm text-foreground">{{ t('winsnap.cancelSnap') }}</span>
@@ -401,10 +424,15 @@ onUnmounted(() => {
     <!-- Main -->
     <div class="flex min-h-0 flex-1 flex-col bg-background">
       <!-- Empty state (Figma: 132-4484) -->
-      <div v-if="messages.length === 0" class="flex flex-1 flex-col items-center justify-center gap-4 px-4">
+      <div
+        v-if="messages.length === 0"
+        class="flex flex-1 flex-col items-center justify-center gap-4 px-4"
+      >
         <div class="flex items-center gap-3">
           <Logo class="size-12" />
-          <div class="text-center text-4xl font-semibold leading-[44px] text-foreground">{{ t('winsnap.title') }}</div>
+          <div class="text-center text-4xl font-semibold leading-[44px] text-foreground">
+            {{ t('winsnap.title') }}
+          </div>
         </div>
       </div>
 
@@ -421,13 +449,18 @@ onUnmounted(() => {
               :class="
                 cn(
                   'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 shadow-sm',
-                  m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+                  m.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-foreground',
                   m.status === 'error' && 'bg-destructive text-primary-foreground'
                 )
               "
             >
               <!-- Loading state -->
-              <div v-if="m.status === 'loading'" class="flex items-center gap-2 text-muted-foreground">
+              <div
+                v-if="m.status === 'loading'"
+                class="flex items-center gap-2 text-muted-foreground"
+              >
                 <Loader2 class="size-4 animate-spin" />
                 <span>{{ t('winsnap.thinking') }}</span>
               </div>
@@ -441,7 +474,9 @@ onUnmounted(() => {
 
     <!-- Composer -->
     <div class="p-3">
-      <div class="rounded-[16px] border-2 border-border bg-background px-3 py-3 shadow-[0px_4px_8px_rgba(0,0,0,0.06)]">
+      <div
+        class="rounded-[16px] border-2 border-border bg-background px-3 py-3 shadow-[0px_4px_8px_rgba(0,0,0,0.06)]"
+      >
         <textarea
           v-model="question"
           class="min-h-[64px] w-full resize-none border-0 bg-transparent p-0 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground"
@@ -488,7 +523,9 @@ onUnmounted(() => {
             :class="
               cn(
                 'inline-flex items-center justify-center rounded-full p-[6px] transition-colors',
-                canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-muted text-muted-foreground'
+                canSend
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                  : 'bg-muted text-muted-foreground'
               )
             "
             style="--wails-draggable: no-drag"

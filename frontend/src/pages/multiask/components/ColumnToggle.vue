@@ -23,21 +23,23 @@ const columnOptions = [
       v-for="option in columnOptions"
       :key="option.value"
       type="button"
-      :class="cn(
-        'flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors',
-        modelValue === option.value
-          ? 'bg-background shadow-sm'
-          : 'hover:bg-accent/50'
-      )"
+      :class="
+        cn(
+          'flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors',
+          modelValue === option.value ? 'bg-background shadow-sm' : 'hover:bg-accent/50'
+        )
+      "
       :title="option.title"
       @click="modelValue = option.value"
     >
       <component
         :is="option.icon"
-        :class="cn(
-          'size-[18px] transition-colors',
-          modelValue === option.value ? 'text-foreground' : 'text-muted-foreground'
-        )"
+        :class="
+          cn(
+            'size-[18px] transition-colors',
+            modelValue === option.value ? 'text-foreground' : 'text-muted-foreground'
+          )
+        "
       />
     </button>
   </div>

@@ -92,18 +92,17 @@ func NewSplitter(ctx context.Context, cfg *Config) (document.Transformer, error)
 	}
 
 	// 默认使用递归分割
-	chunkSize := cfg.ChunkSize
-	if chunkSize <= 0 {
-		chunkSize = 512
+	// Apply defaults if values are not set
+	if cfg.ChunkSize <= 0 {
+		cfg.ChunkSize = 512
 	}
-	chunkOverlap := cfg.ChunkOverlap
-	if chunkOverlap < 0 {
-		chunkOverlap = 50
+	if cfg.ChunkOverlap < 0 {
+		cfg.ChunkOverlap = 50
 	}
 
 	return recursive.NewSplitter(ctx, &recursive.Config{
-		ChunkSize:   chunkSize,
-		OverlapSize: chunkOverlap,
+		ChunkSize:   cfg.ChunkSize,
+		OverlapSize: cfg.ChunkOverlap,
 		Separators:  DefaultSeparators,
 		LenFunc:     lenFunc,
 		KeepType:    recursive.KeepTypeEnd,

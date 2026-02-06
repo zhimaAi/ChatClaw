@@ -30,7 +30,7 @@ const serviceInitialized = ref(false)
  */
 const initService = async () => {
   if (serviceInitialized.value) return true
-  
+
   try {
     console.log('[MultiaskPage] Initializing MultiaskService...')
     await MultiaskService.Initialize('WillChat')
@@ -72,24 +72,96 @@ const isChineseLocale = () => {
  * 中文环境优先的模型（按优先级排序）
  */
 const chineseFirstModels: AIModel[] = [
-  { id: 'deepseek', name: 'deepseek', icon: 'model-deepseek', displayName: 'DeepSeek', url: 'https://chat.deepseek.com/' },
-  { id: 'doubao', name: 'doubao', icon: 'model-doubao', displayName: '豆包', url: 'https://www.doubao.com/chat/' },
-  { id: 'qwen', name: 'qwen', icon: 'model-qwen', displayName: '通义千问', url: 'https://www.qianwen.com/' },
-  { id: 'openai', name: 'chatgpt', icon: 'model-chatgpt', displayName: 'ChatGPT', url: 'https://chatgpt.com/' },
-  { id: 'google', name: 'gemini', icon: 'model-gemini', displayName: 'Gemini', url: 'https://gemini.google.com/' },
-  { id: 'anthropic', name: 'claude', icon: 'model-claude', displayName: 'Claude', url: 'https://claude.ai/' },
+  {
+    id: 'deepseek',
+    name: 'deepseek',
+    icon: 'model-deepseek',
+    displayName: 'DeepSeek',
+    url: 'https://chat.deepseek.com/',
+  },
+  {
+    id: 'doubao',
+    name: 'doubao',
+    icon: 'model-doubao',
+    displayName: '豆包',
+    url: 'https://www.doubao.com/chat/',
+  },
+  {
+    id: 'qwen',
+    name: 'qwen',
+    icon: 'model-qwen',
+    displayName: '通义千问',
+    url: 'https://www.qianwen.com/',
+  },
+  {
+    id: 'openai',
+    name: 'chatgpt',
+    icon: 'model-chatgpt',
+    displayName: 'ChatGPT',
+    url: 'https://chatgpt.com/',
+  },
+  {
+    id: 'google',
+    name: 'gemini',
+    icon: 'model-gemini',
+    displayName: 'Gemini',
+    url: 'https://gemini.google.com/',
+  },
+  {
+    id: 'anthropic',
+    name: 'claude',
+    icon: 'model-claude',
+    displayName: 'Claude',
+    url: 'https://claude.ai/',
+  },
 ]
 
 /**
  * 非中文环境优先的模型（按优先级排序）
  */
 const englishFirstModels: AIModel[] = [
-  { id: 'openai', name: 'chatgpt', icon: 'model-chatgpt', displayName: 'ChatGPT', url: 'https://chatgpt.com/' },
-  { id: 'google', name: 'gemini', icon: 'model-gemini', displayName: 'Gemini', url: 'https://gemini.google.com/' },
-  { id: 'anthropic', name: 'claude', icon: 'model-claude', displayName: 'Claude', url: 'https://claude.ai/' },
-  { id: 'deepseek', name: 'deepseek', icon: 'model-deepseek', displayName: 'DeepSeek', url: 'https://chat.deepseek.com/' },
-  { id: 'doubao', name: 'doubao', icon: 'model-doubao', displayName: '豆包', url: 'https://www.doubao.com/chat/' },
-  { id: 'qwen', name: 'qwen', icon: 'model-qwen', displayName: '通义千问', url: 'https://www.qianwen.com/' },
+  {
+    id: 'openai',
+    name: 'chatgpt',
+    icon: 'model-chatgpt',
+    displayName: 'ChatGPT',
+    url: 'https://chatgpt.com/',
+  },
+  {
+    id: 'google',
+    name: 'gemini',
+    icon: 'model-gemini',
+    displayName: 'Gemini',
+    url: 'https://gemini.google.com/',
+  },
+  {
+    id: 'anthropic',
+    name: 'claude',
+    icon: 'model-claude',
+    displayName: 'Claude',
+    url: 'https://claude.ai/',
+  },
+  {
+    id: 'deepseek',
+    name: 'deepseek',
+    icon: 'model-deepseek',
+    displayName: 'DeepSeek',
+    url: 'https://chat.deepseek.com/',
+  },
+  {
+    id: 'doubao',
+    name: 'doubao',
+    icon: 'model-doubao',
+    displayName: '豆包',
+    url: 'https://www.doubao.com/chat/',
+  },
+  {
+    id: 'qwen',
+    name: 'qwen',
+    icon: 'model-qwen',
+    displayName: '通义千问',
+    url: 'https://www.qianwen.com/',
+  },
 ]
 
 /**
@@ -122,7 +194,7 @@ const loadCustomOrder = (): string[] | null => {
  */
 const saveCustomOrder = (models: AIModel[]) => {
   try {
-    const order = models.map(m => m.id)
+    const order = models.map((m) => m.id)
     localStorage.setItem(STORAGE_KEY_MODEL_ORDER, JSON.stringify(order))
   } catch (err) {
     console.warn('[MultiaskPage] Failed to save custom order:', err)
@@ -134,13 +206,13 @@ const saveCustomOrder = (models: AIModel[]) => {
  */
 const getInitialModels = () => {
   const customOrder = loadCustomOrder()
-  
+
   if (customOrder) {
     // 有自定义排序，按保存的顺序排列
     const defaultModels = getDefaultModels()
-    const modelMap = new Map(defaultModels.map(m => [m.id, m]))
+    const modelMap = new Map(defaultModels.map((m) => [m.id, m]))
     const orderedModels: AIModel[] = []
-    
+
     // 按自定义顺序添加模型
     for (const id of customOrder) {
       const model = modelMap.get(id)
@@ -149,15 +221,15 @@ const getInitialModels = () => {
         modelMap.delete(id)
       }
     }
-    
+
     // 添加新增的模型（不在自定义顺序中的）
     for (const model of modelMap.values()) {
       orderedModels.push(model)
     }
-    
+
     return orderedModels
   }
-  
+
   // 没有自定义排序，按语言环境排序
   return getDefaultModels()
 }
@@ -167,7 +239,7 @@ const getInitialModels = () => {
  */
 const getDefaultSelectedIds = () => {
   const models = getInitialModels()
-  return models.slice(0, MAX_SELECTED_MODELS).map(m => m.id)
+  return models.slice(0, MAX_SELECTED_MODELS).map((m) => m.id)
 }
 
 /**
@@ -180,8 +252,8 @@ const loadSelectedModels = (): string[] | null => {
       const ids = JSON.parse(saved) as string[]
       if (Array.isArray(ids) && ids.length > 0) {
         // 验证保存的 ID 都是有效的模型 ID
-        const validIds = getDefaultModels().map(m => m.id)
-        const filteredIds = ids.filter(id => validIds.includes(id))
+        const validIds = getDefaultModels().map((m) => m.id)
+        const filteredIds = ids.filter((id) => validIds.includes(id))
         if (filteredIds.length > 0) {
           return filteredIds.slice(0, MAX_SELECTED_MODELS)
         }
@@ -258,7 +330,7 @@ const createdPanelIds = ref<Set<string>>(new Set())
  * 获取选中的模型详情
  */
 const selectedModels = computed(() => {
-  return availableModels.value.filter(model => selectedModelIds.value.includes(model.id))
+  return availableModels.value.filter((model) => selectedModelIds.value.includes(model.id))
 })
 
 /**
@@ -269,7 +341,7 @@ const selectedModels = computed(() => {
 const handleReorderModels = async (reorderedModels: AIModel[]) => {
   availableModels.value = reorderedModels
   saveCustomOrder(reorderedModels)
-  
+
   // 等待 DOM 更新后重新计算并更新所有 WebView 位置
   await nextTick()
   await updateAllPanelBounds()
@@ -281,8 +353,8 @@ const handleReorderModels = async (reorderedModels: AIModel[]) => {
  */
 const updateAllPanelBounds = async () => {
   // 等待一小段时间确保 DOM 完全更新
-  await new Promise(resolve => setTimeout(resolve, 50))
-  
+  await new Promise((resolve) => setTimeout(resolve, 50))
+
   for (const model of visibleModels.value) {
     const panelRef = chatPanelRefs.value[model.id]
     if (panelRef?.getBounds) {
@@ -292,7 +364,7 @@ const updateAllPanelBounds = async () => {
       }
     }
   }
-  
+
   console.log('[MultiaskPage] Updated all panel bounds after reorder')
 }
 
@@ -324,10 +396,10 @@ const handleToggleModel = (modelId: string) => {
     }
     selectedModelIds.value.push(modelId)
   }
-  
+
   // 自动调整分屏模式与选中模型数量对应
   columnCount.value = selectedModelIds.value.length
-  
+
   // 保存选中状态到 localStorage
   saveSelectedModels(selectedModelIds.value)
 }
@@ -351,11 +423,14 @@ const setPanelRef = (modelId: string, el: unknown) => {
 /**
  * 创建 WebView 面板
  */
-const createPanel = async (model: AIModel, bounds: { x: number; y: number; width: number; height: number }) => {
+const createPanel = async (
+  model: AIModel,
+  bounds: { x: number; y: number; width: number; height: number }
+) => {
   const panelId = getPanelId(model.id)
-  
+
   console.log(`[MultiaskPage] createPanel called for ${panelId} with bounds:`, bounds)
-  
+
   // 确保服务已初始化
   if (!serviceInitialized.value) {
     const ok = await initService()
@@ -364,7 +439,7 @@ const createPanel = async (model: AIModel, bounds: { x: number; y: number; width
       return
     }
   }
-  
+
   // 如果面板已存在，只更新位置
   if (createdPanelIds.value.has(panelId)) {
     console.log(`[MultiaskPage] Panel ${panelId} already exists, updating bounds`)
@@ -402,7 +477,10 @@ const createPanel = async (model: AIModel, bounds: { x: number; y: number; width
 /**
  * 更新面板位置和大小
  */
-const updatePanelBounds = async (modelId: string, bounds: { x: number; y: number; width: number; height: number }) => {
+const updatePanelBounds = async (
+  modelId: string,
+  bounds: { x: number; y: number; width: number; height: number }
+) => {
   const panelId = getPanelId(modelId)
   if (!createdPanelIds.value.has(panelId)) return
 
@@ -473,14 +551,20 @@ const destroyAllPanels = async () => {
 /**
  * 处理面板挂载完成
  */
-const handlePanelMounted = (model: AIModel, bounds: { x: number; y: number; width: number; height: number }) => {
+const handlePanelMounted = (
+  model: AIModel,
+  bounds: { x: number; y: number; width: number; height: number }
+) => {
   createPanel(model, bounds)
 }
 
 /**
  * 处理面板大小变化
  */
-const handlePanelResize = (model: AIModel, bounds: { x: number; y: number; width: number; height: number }) => {
+const handlePanelResize = (
+  model: AIModel,
+  bounds: { x: number; y: number; width: number; height: number }
+) => {
   updatePanelBounds(model.id, bounds)
 }
 
@@ -539,36 +623,40 @@ watch(columnCount, (count) => {
 /**
  * 监听可见模型变化，管理面板的显示/隐藏/创建
  */
-watch(visibleModels, async (newModels, oldModels) => {
-  const oldIds = new Set((oldModels || []).map(m => m.id))
-  const newIds = new Set(newModels.map(m => m.id))
+watch(
+  visibleModels,
+  async (newModels, oldModels) => {
+    const oldIds = new Set((oldModels || []).map((m) => m.id))
+    const newIds = new Set(newModels.map((m) => m.id))
 
-  // 隐藏不再显示的面板
-  for (const model of oldModels || []) {
-    if (!newIds.has(model.id)) {
-      await hidePanel(model.id)
+    // 隐藏不再显示的面板
+    for (const model of oldModels || []) {
+      if (!newIds.has(model.id)) {
+        await hidePanel(model.id)
+      }
     }
-  }
 
-  // 显示新增的面板（如果已创建）或等待组件挂载后创建
-  await nextTick()
-  for (const model of newModels) {
-    if (!oldIds.has(model.id)) {
-      const panelId = getPanelId(model.id)
-      if (createdPanelIds.value.has(panelId)) {
-        await showPanel(model.id)
-        // 更新位置
-        const panelRef = chatPanelRefs.value[model.id]
-        if (panelRef?.getBounds) {
-          const bounds = panelRef.getBounds()
-          if (bounds) {
-            await updatePanelBounds(model.id, bounds)
+    // 显示新增的面板（如果已创建）或等待组件挂载后创建
+    await nextTick()
+    for (const model of newModels) {
+      if (!oldIds.has(model.id)) {
+        const panelId = getPanelId(model.id)
+        if (createdPanelIds.value.has(panelId)) {
+          await showPanel(model.id)
+          // 更新位置
+          const panelRef = chatPanelRefs.value[model.id]
+          if (panelRef?.getBounds) {
+            const bounds = panelRef.getBounds()
+            if (bounds) {
+              await updatePanelBounds(model.id, bounds)
+            }
           }
         }
       }
     }
-  }
-}, { deep: true })
+  },
+  { deep: true }
+)
 
 /**
  * 组件卸载时销毁所有面板
@@ -581,7 +669,9 @@ onUnmounted(() => {
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background">
     <!-- 顶部模型选择区域 -->
-    <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-2 py-2">
+    <div
+      class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-2 py-2"
+    >
       <!-- 模型选择器 -->
       <ModelSelector
         :models="availableModels"
@@ -599,7 +689,9 @@ onUnmounted(() => {
       <!-- 面板容器 -->
       <div
         class="grid h-full w-full gap-2"
-        :style="{ gridTemplateColumns: `repeat(${Math.min(columnCount, selectedModels.length)}, 1fr)` }"
+        :style="{
+          gridTemplateColumns: `repeat(${Math.min(columnCount, selectedModels.length)}, 1fr)`,
+        }"
       >
         <ChatPanel
           v-for="model in visibleModels"

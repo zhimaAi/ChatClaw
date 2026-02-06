@@ -355,8 +355,10 @@ export default {
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
-      semanticSegmentation: '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
-      raptorLLMModel: '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
+      semanticSegmentation:
+        '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
+      raptorLLMModel:
+        '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
     },
     tabs: {
       personal: '个人',

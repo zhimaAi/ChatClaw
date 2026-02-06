@@ -279,10 +279,7 @@ onMounted(() => {
     <!-- 右侧：内容区 -->
     <main class="flex flex-1 flex-col overflow-hidden bg-background">
       <!-- 团队知识库暂未开放 -->
-      <div
-        v-if="activeTab !== 'personal'"
-        class="flex h-full items-center justify-center px-8"
-      >
+      <div v-if="activeTab !== 'personal'" class="flex h-full items-center justify-center px-8">
         <div
           class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
@@ -291,10 +288,7 @@ onMounted(() => {
       </div>
 
       <!-- 未选择知识库 -->
-      <div
-        v-else-if="!selectedLibrary"
-        class="flex h-full items-center justify-center px-8"
-      >
+      <div v-else-if="!selectedLibrary" class="flex h-full items-center justify-center px-8">
         <div
           class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
@@ -303,11 +297,7 @@ onMounted(() => {
       </div>
 
       <!-- 知识库内容管理 -->
-      <LibraryContentArea
-        v-else
-        :key="selectedLibrary.id"
-        :library="selectedLibrary"
-      />
+      <LibraryContentArea v-else :key="selectedLibrary.id" :library="selectedLibrary" />
     </main>
 
     <CreateLibraryDialog v-model:open="createDialogOpen" @created="handleCreated" />

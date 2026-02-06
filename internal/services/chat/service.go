@@ -364,7 +364,9 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	var convLibraryIDs []int64
 	if conv.LibraryIDs != "" && conv.LibraryIDs != "[]" {
 		if err := json.Unmarshal([]byte(conv.LibraryIDs), &convLibraryIDs); err != nil {
-			log.Printf("[chat] failed to parse library_ids for conversation: %v", err)
+			log.Printf("[chat] failed to parse library_ids for conversation %d: %v", conversationID, err)
+			// Continue with empty library IDs on parse error
+			convLibraryIDs = []int64{}
 		}
 	}
 
@@ -1229,6 +1231,9 @@ func (s *ChatService) createLibraryRetrieverTool(ctx context.Context, db *bun.DB
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create embedder: %w", err)
+	}
+	if embedder == nil {
+		return nil, fmt.Errorf("embedder is nil after creation")
 	}
 
 	// Create retrieval service

@@ -115,6 +115,11 @@ const selectedModelKey = ref('')
 const libraries = ref<Library[]>([])
 const selectedLibraryIds = ref<number[]>([])
 
+// Helper function to clear knowledge base selection
+const clearKnowledgeSelection = () => {
+  selectedLibraryIds.value = []
+}
+
 // Conversations state (cached by agent)
 const conversationsByAgent = ref<Record<number, Conversation[]>>({})
 const conversationsLoadedByAgent = ref<Record<number, boolean>>({})
@@ -240,7 +245,7 @@ const loadConversations = async (agentId: number, opts: LoadConversationsOptions
           }
           activeConversationId.value = null
           // Clear knowledge base selection when conversation no longer exists
-          selectedLibraryIds.value = []
+          clearKnowledgeSelection()
         }
       } else {
         // Don't auto-select any conversation when loading
@@ -249,7 +254,7 @@ const loadConversations = async (agentId: number, opts: LoadConversationsOptions
         }
         activeConversationId.value = null
         // Clear knowledge base selection for new conversation state
-        selectedLibraryIds.value = []
+        clearKnowledgeSelection()
       }
     }
   } catch (error: unknown) {
@@ -304,7 +309,6 @@ const loadLibraries = async () => {
   try {
     const list = await LibraryService.ListLibraries()
     libraries.value = list || []
-    console.log('[KnowledgeSelect] loaded libraries:', libraries.value.map(l => ({ id: l.id, name: l.name })))
   } catch (error: unknown) {
     console.error('Failed to load libraries:', error)
   }
@@ -450,7 +454,7 @@ const handleNewConversation = () => {
   activeConversationId.value = null
   chatInput.value = ''
   // Clear knowledge base selection for new conversation
-  selectedLibraryIds.value = []
+  clearKnowledgeSelection()
 }
 
 const handleNewConversationForAgent = (agentId: number) => {
@@ -557,7 +561,7 @@ const handleStop = () => {
 const handleChatEnter = (event: KeyboardEvent) => {
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
   // Some browsers report keyCode=229 during composition.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const anyEvent = event as any
   if (anyEvent?.isComposing || anyEvent?.keyCode === 229) {
     return
@@ -583,14 +587,13 @@ const handleSelectConversation = (conversation: Conversation) => {
 
 // Handle library selection change from Select component
 const handleLibrarySelectionChange = async () => {
-  console.log('[KnowledgeSelect] selection changed:', { selectedIds: selectedLibraryIds.value })
   // Save to conversation if one is active
   await saveLibraryIdsToConversation()
 }
 
-// Clear all selected libraries
+// Clear all selected libraries (for UI button)
 const clearLibrarySelection = async () => {
-  selectedLibraryIds.value = []
+  clearKnowledgeSelection()
   await saveLibraryIdsToConversation()
 }
 
@@ -613,7 +616,7 @@ const saveLibraryIdsToConversation = async () => {
 // Sync library_ids from current conversation (for multi-tab sync)
 const syncLibraryIdsFromConversation = async () => {
   if (!activeConversationId.value || !activeAgentId.value) {
-    selectedLibraryIds.value = []
+    clearKnowledgeSelection()
     return
   }
 
@@ -735,7 +738,7 @@ const confirmDeleteConversation = async () => {
       chatStore.clearMessages(activeConversationId.value)
       activeConversationId.value = null
       // Clear knowledge base selection when active conversation is deleted
-      selectedLibraryIds.value = []
+      clearKnowledgeSelection()
     }
     toast.success(t('assistant.conversation.delete.success'))
     deleteConversationOpen.value = false
@@ -777,7 +780,7 @@ watch(activeAgentId, (newAgentId, oldAgentId) => {
     }
     activeConversationId.value = null
     // Clear knowledge base selection when no agent is active
-    selectedLibraryIds.value = []
+    clearKnowledgeSelection()
   }
 })
 
@@ -1096,7 +1099,10 @@ onUnmounted(() => {
       <!-- Empty state / Input area -->
       <div
         :class="
-          cn('flex px-6', (chatMessages.length > 0 || isGenerating) ? 'pb-4' : 'flex-1 items-center justify-center')
+          cn(
+            'flex px-6',
+            chatMessages.length > 0 || isGenerating ? 'pb-4' : 'flex-1 items-center justify-center'
+          )
         "
       >
         <div
@@ -1191,7 +1197,9 @@ onUnmounted(() => {
                     >
                       <IconSelectKnowledge
                         class="size-4"
-                        :class="selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'"
+                        :class="
+                          selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'
+                        "
                       />
                     </Button>
                   </SelectTriggerRaw>
@@ -1209,7 +1217,10 @@ onUnmounted(() => {
                         >
                           {{ t('assistant.chat.clearSelected') }}
                         </div>
-                        <SelectSeparator v-if="libraries.length > 0" class="mx-1 my-1 h-px bg-muted" />
+                        <SelectSeparator
+                          v-if="libraries.length > 0"
+                          class="mx-1 my-1 h-px bg-muted"
+                        />
                         <!-- Library list -->
                         <template v-if="libraries.length > 0">
                           <SelectItemRaw
@@ -1218,7 +1229,9 @@ onUnmounted(() => {
                             :value="Number(lib.id)"
                             class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
                           >
-                            <SelectItemIndicator class="absolute left-2 flex size-4 items-center justify-center">
+                            <SelectItemIndicator
+                              class="absolute left-2 flex size-4 items-center justify-center"
+                            >
                               <Check class="size-4 text-primary" />
                             </SelectItemIndicator>
                             <SelectItemText>{{ lib.name }}</SelectItemText>

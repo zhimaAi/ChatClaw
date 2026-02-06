@@ -3,6 +3,7 @@ package conversations
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"time"
 
 	"willchat/internal/sqlite"
@@ -85,7 +86,10 @@ func (m *conversationModel) toDTO() Conversation {
 	// Parse library_ids from JSON string
 	var libraryIDs []int64
 	if m.LibraryIDs != "" && m.LibraryIDs != "[]" {
-		_ = json.Unmarshal([]byte(m.LibraryIDs), &libraryIDs)
+		if err := json.Unmarshal([]byte(m.LibraryIDs), &libraryIDs); err != nil {
+			log.Printf("[conversations] failed to parse library_ids for conversation %d: %v", m.ID, err)
+			libraryIDs = []int64{}
+		}
 	}
 	if libraryIDs == nil {
 		libraryIDs = []int64{}

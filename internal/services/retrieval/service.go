@@ -14,7 +14,10 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// RRF constant for Reciprocal Rank Fusion scoring
+// RRF constant for Reciprocal Rank Fusion scoring.
+// k=60 is a commonly used value that balances the influence of top-ranked results
+// while still giving weight to lower-ranked items. Higher k values give more uniform
+// weighting across ranks, while lower k values emphasize top results more heavily.
 const rrfK = 60
 
 // SearchInput defines input parameters for retrieval
@@ -38,7 +41,7 @@ type SearchResult struct {
 
 // rankedResult is used internally for RRF calculation
 type rankedResult struct {
-	nodeID int
+	nodeID int64
 	rank   int
 	score  float64
 }
@@ -70,10 +73,7 @@ func (s *Service) Search(ctx context.Context, input SearchInput) ([]SearchResult
 	}
 
 	// Fetch more results than needed for better RRF fusion
-	fetchK := input.TopK * 3
-	if fetchK < 30 {
-		fetchK = 30
-	}
+	fetchK := max(input.TopK*3, 30)
 
 	var wg sync.WaitGroup
 	var vecResults []rankedResult
@@ -174,7 +174,7 @@ func (s *Service) vectorSearch(ctx context.Context, libraryIDs []int64, query st
 	results := make([]rankedResult, len(rows))
 	for i, row := range rows {
 		results[i] = rankedResult{
-			nodeID: int(row.ID),
+			nodeID: row.ID,
 			rank:   i + 1,
 		}
 	}
@@ -192,9 +192,15 @@ func (s *Service) fullTextSearch(ctx context.Context, libraryIDs []int64, query 
 
 	// Build library_id filter for FTS5
 	// Format: library_id:1 OR library_id:2 OR ...
+	// Validate library IDs to ensure they are positive
 	var libParts []string
 	for _, id := range libraryIDs {
-		libParts = append(libParts, fmt.Sprintf("library_id:%d", id))
+		if id > 0 {
+			libParts = append(libParts, fmt.Sprintf("library_id:%d", id))
+		}
+	}
+	if len(libParts) == 0 {
+		return nil, nil
 	}
 	libFilter := strings.Join(libParts, " OR ")
 
@@ -227,7 +233,7 @@ func (s *Service) fullTextSearch(ctx context.Context, libraryIDs []int64, query 
 	results := make([]rankedResult, len(rows))
 	for i, row := range rows {
 		results[i] = rankedResult{
-			nodeID: int(row.RowID),
+			nodeID: row.RowID,
 			rank:   i + 1,
 		}
 	}
@@ -237,7 +243,7 @@ func (s *Service) fullTextSearch(ctx context.Context, libraryIDs []int64, query 
 
 // rrfMerge combines results using Reciprocal Rank Fusion
 func (s *Service) rrfMerge(vecResults, ftsResults []rankedResult) []rankedResult {
-	scores := make(map[int]float64)
+	scores := make(map[int64]float64)
 
 	// Add vector search scores
 	for _, r := range vecResults {
@@ -280,8 +286,8 @@ func (s *Service) fetchNodeDetails(ctx context.Context, merged []rankedResult) (
 	nodeIDs := make([]int64, len(merged))
 	scoreMap := make(map[int64]float64)
 	for i, r := range merged {
-		nodeIDs[i] = int64(r.nodeID)
-		scoreMap[int64(r.nodeID)] = r.score
+		nodeIDs[i] = r.nodeID
+		scoreMap[r.nodeID] = r.score
 	}
 
 	// Fetch node details with document name
@@ -314,7 +320,7 @@ func (s *Service) fetchNodeDetails(ctx context.Context, merged []rankedResult) (
 	// Build results in merged order (by score)
 	results := make([]SearchResult, 0, len(merged))
 	for _, m := range merged {
-		row, ok := nodeMap[int64(m.nodeID)]
+		row, ok := nodeMap[m.nodeID]
 		if !ok {
 			continue
 		}
@@ -333,9 +339,18 @@ func (s *Service) fetchNodeDetails(ctx context.Context, merged []rankedResult) (
 
 // formatVector converts a float64 slice to sqlite-vec format string
 func formatVector(vec []float64) string {
-	parts := make([]string, len(vec))
-	for i, v := range vec {
-		parts[i] = fmt.Sprintf("%f", v)
+	if len(vec) == 0 {
+		return "[]"
 	}
-	return "[" + strings.Join(parts, ",") + "]"
+	var b strings.Builder
+	b.Grow(len(vec) * 12) // Pre-allocate approximate space
+	b.WriteByte('[')
+	for i, v := range vec {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(fmt.Sprintf("%f", v))
+	}
+	b.WriteByte(']')
+	return b.String()
 }

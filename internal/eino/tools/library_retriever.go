@@ -10,10 +10,17 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 )
 
+// Retrieval level constants for RAPTOR hierarchical structure
+const (
+	LevelOriginal = 0 // Original document chunks (most detailed)
+	LevelSummary1 = 1 // First-level summary
+	LevelSummary2 = 2 // Summary overview (most general)
+)
+
 // LibraryRetrieverInput defines the input parameters for the library retriever tool.
 type LibraryRetrieverInput struct {
 	Query string `json:"query" jsonschema:"description=Search query keywords or natural language question to find relevant content from the knowledge base"`
-	Level *int   `json:"level,omitempty" jsonschema:"description=Retrieval level (optional). 2=summary overview (most general), 1=first-level summary, 0=original document chunks (most detailed). If not specified, searches all levels. Tip: Start with higher levels for overview, use level=0 for detailed original content"`
+	Level *int   `json:"level,omitempty" jsonschema:"description=Retrieval level (optional). 2=overview, 1=summary, 0=detailed chunks (default: searches all levels)"`
 }
 
 // LibraryRetrieverOutput defines the output of the library retriever tool.
@@ -52,15 +59,7 @@ func DefaultLibraryRetrieverConfig() *LibraryRetrieverConfig {
 // toolDescription provides the description for the library retriever tool
 const toolDescription = `Retrieve relevant document fragments from the associated knowledge base.
 
-Usage suggestions:
-1. First retrieval can omit level parameter to get results from all levels
-2. For overview information, use level=2 (summary overview) or level=1 (first-level summary)
-3. For detailed original content, use level=0 (original document chunks)
-4. If results are not ideal, try:
-   - Adjust keywords (synonyms, more specific/broader expressions)
-   - Change retrieval level
-   - Split complex questions into multiple simple searches
-5. Multiple searches with different keywords can help find more comprehensive results`
+Tips: Try different keywords or adjust level (0=detailed, 1=summary, 2=overview) for better results.`
 
 // NewLibraryRetrieverTool creates a new library retriever tool.
 func NewLibraryRetrieverTool(ctx context.Context, config *LibraryRetrieverConfig) (tool.InvokableTool, error) {
@@ -111,11 +110,11 @@ func NewLibraryRetrieverTool(ctx context.Context, config *LibraryRetrieverConfig
 			// Validate level if provided
 			if input.Level != nil {
 				level := *input.Level
-				if level < 0 || level > 2 {
+				if level < LevelOriginal || level > LevelSummary2 {
 					return &LibraryRetrieverOutput{
 						TotalCount:  0,
-						Message:     fmt.Sprintf("Invalid level value: %d", level),
-						Suggestions: "Level must be 0 (original chunks), 1 (first-level summary), or 2 (overview summary). Try without level parameter to search all levels.",
+						Message:     fmt.Sprintf("Invalid level: %d", level),
+						Suggestions: fmt.Sprintf("Level must be %d (detailed), %d (summary), or %d (overview)", LevelOriginal, LevelSummary1, LevelSummary2),
 					}, nil
 				}
 			}
@@ -140,15 +139,9 @@ func NewLibraryRetrieverTool(ctx context.Context, config *LibraryRetrieverConfig
 
 			// Handle empty results
 			if len(results) == 0 {
-				suggestions := "Tip: Please try different keywords or synonyms. "
+				suggestions := "Try different keywords or synonyms."
 				if input.Level != nil {
-					suggestions += fmt.Sprintf(
-						"You specified level=%d, but some documents may not have content at this level (RAPTOR summarization may not be enabled). "+
-							"Consider removing the level parameter or using level=0 to search original document chunks.",
-						*input.Level,
-					)
-				} else {
-					suggestions += "You can also try using level=0 to search only original document chunks for more detailed content."
+					suggestions = fmt.Sprintf("No results at level=%d. Try level=0 for detailed content or omit level to search all.", *input.Level)
 				}
 
 				return &LibraryRetrieverOutput{
