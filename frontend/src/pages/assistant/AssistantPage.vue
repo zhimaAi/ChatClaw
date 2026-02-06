@@ -649,6 +649,12 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
     agents.value = [created, ...agents.value]
     activeAgentId.value = created.id
     toast.success(t('assistant.toasts.created'))
+
+    // Notify other windows/tabs to refresh agents list
+    Events.Emit('agents:changed', {
+      sourceTabId: props.tabId,
+      action: 'created',
+    })
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.createFailed'))
   } finally {
@@ -678,6 +684,12 @@ const handleUpdated = (updated: Agent) => {
       selectDefaultModel()
     }
   }
+
+  // Notify other windows/tabs to refresh agents list
+  Events.Emit('agents:changed', {
+    sourceTabId: props.tabId,
+    action: 'updated',
+  })
 }
 
 const handleDeleted = (id: number) => {
@@ -702,6 +714,12 @@ const handleDeleted = (id: number) => {
     delete next[id]
     conversationsLoadingByAgent.value = next
   }
+
+  // Notify other windows/tabs to refresh agents list
+  Events.Emit('agents:changed', {
+    sourceTabId: props.tabId,
+    action: 'deleted',
+  })
 }
 
 const handleNewConversation = () => {
@@ -1084,7 +1102,8 @@ watch(selectedModelKey, () => {
 })
 
 // 当前标签页是否激活
-const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
+// For snap mode, always consider it active since it's a standalone window
+const isTabActive = computed(() => isSnapMode.value || navigationStore.activeTabId === props.tabId)
 
 // 监听标签页激活状态，激活时刷新模型/助手列表
 // - 模型：用户可能在设置页启用/禁用 provider/model
@@ -1110,6 +1129,7 @@ watch(isTabActive, (active) => {
 // Listen for text selection events
 let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeConversationsChanged: (() => void) | null = null
+let unsubscribeAgentsChanged: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -1230,6 +1250,17 @@ onMounted(() => {
       void loadConversations(agentId, { preserveSelection: true, force: true })
     }
   })
+
+  // Listen for agent changes from other windows/tabs (e.g., main window <-> snap window)
+  unsubscribeAgentsChanged = Events.On('agents:changed', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    const sourceTabId = String(payload?.sourceTabId ?? '')
+    // Ignore events from self
+    if (sourceTabId && sourceTabId === props.tabId) return
+
+    // Refresh agents list
+    void loadAgents()
+  })
 })
 
 onUnmounted(() => {
@@ -1240,6 +1271,8 @@ onUnmounted(() => {
   unsubscribeTextSelection = null
   unsubscribeConversationsChanged?.()
   unsubscribeConversationsChanged = null
+  unsubscribeAgentsChanged?.()
+  unsubscribeAgentsChanged = null
 
   // Snap mode cleanup
   unsubscribeSnapSettings?.()
