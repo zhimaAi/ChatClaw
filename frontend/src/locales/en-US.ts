@@ -297,6 +297,7 @@ export default {
       toolResult: 'Result',
       toolQuery: 'Query: ',
       rawJson: 'Raw JSON',
+      tokenUsage: 'In {input} · Out {output}',
     },
     menu: {
       settings: 'Agent Settings',
