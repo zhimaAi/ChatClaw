@@ -226,7 +226,7 @@ export default {
       copyFailed: '复制失败',
       edit: '编辑',
       resend: '重新发送',
-      error: '生成过程中出现错误，已保留已生成的内容',
+      error: '生成过程中出现错误',
       errorMaxIterations: '已达到最大执行轮次，任务未能完成',
       errorToolCall: '工具调用过程中出现错误',
       errorStream: 'AI 服务连接中断',

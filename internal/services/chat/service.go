@@ -217,8 +217,12 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 		// Wait for old goroutine to finish (with timeout to avoid deadlock)
 		select {
 		case <-oldGen.done:
+			// Old generation finished cleanly
 		case <-time.After(3 * time.Second):
-			log.Printf("[chat] WARNING: old generation did not finish within timeout conv=%d", input.ConversationID)
+			// Timeout: old goroutine may still be running and could write stale data.
+			// Refuse to start a new generation to avoid data races.
+			log.Printf("[chat] ERROR: old generation did not finish within timeout conv=%d, refusing to start new generation", input.ConversationID)
+			return nil, errs.New("error.chat_previous_generation_not_finished")
 		}
 	}
 
@@ -748,7 +752,18 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 			}
 			log.Printf("[chat] generation failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, event.Err)
 			emitError(errorKey, map[string]any{"Error": errMsg})
-			s.updateMessageStatus(db, assistantMsg.ID, StatusError, errMsg, "")
+			// Save partial content accumulated before the error
+			toolCallsStr := "[]"
+			if len(toolCallsJSON) > 0 {
+				toolCallsStr = string(toolCallsJSON)
+			}
+			segmentsStr := "[]"
+			if len(segments) > 0 {
+				if segBytes, err := json.Marshal(segments); err == nil {
+					segmentsStr = string(segBytes)
+				}
+			}
+			s.updateMessageFinal(db, assistantMsg.ID, contentBuilder.String(), thinkingBuilder.String(), toolCallsStr, segmentsStr, StatusError, errMsg, "", inputTokens, outputTokens)
 			return
 		}
 

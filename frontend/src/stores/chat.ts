@@ -317,6 +317,14 @@ export const useChatStore = defineStore('chat', () => {
 
   // Clear messages for a conversation
   const clearMessages = (conversationId: number) => {
+    // Get message IDs before clearing to clean up auxiliary maps
+    const messages = messagesByConversation.value[conversationId] ?? []
+    for (const msg of messages) {
+      delete segmentsByMessage.value[msg.id]
+      delete errorKeyByMessage.value[msg.id]
+      delete errorDetailByMessage.value[msg.id]
+    }
+
     messagesByConversation.value[conversationId] = []
     delete streamingByConversation.value[conversationId]
     delete activeRequestByConversation.value[conversationId]

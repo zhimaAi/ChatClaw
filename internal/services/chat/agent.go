@@ -21,6 +21,7 @@ import (
 	"github.com/cloudwego/eino/adk/middlewares/skill"
 
 	localfs "willchat/internal/services/filesystem"
+
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -332,7 +333,7 @@ func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 	}
 
 	// Use "claude" instead of app-specific directory for broader skill compatibility
-	skillsDir := filepath.Join(cfgDir, "claude", "skills")
+	skillsDir := filepath.Join(cfgDir, ".claude", "skills")
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		log.Printf("[chat] failed to create skills directory %s: %v", skillsDir, err)
 		return adk.AgentMiddleware{}, false

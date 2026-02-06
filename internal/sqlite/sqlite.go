@@ -127,12 +127,5 @@ func resolveDBPath() (string, error) {
 		return "", err
 	}
 
-	// Also create the skills directory for the skill middleware
-	// Using "claude" as base directory for broader compatibility with Claude-style skills
-	skillsDir := filepath.Join(cfgDir, "claude", "skills")
-	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-		return "", err
-	}
-
 	return filepath.Join(dir, define.DefaultSQLiteFileName), nil
 }

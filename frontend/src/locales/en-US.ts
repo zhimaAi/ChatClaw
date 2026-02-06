@@ -229,7 +229,7 @@ export default {
       copyFailed: 'Failed to copy',
       edit: 'Edit',
       resend: 'Resend',
-      error: 'An error occurred, generated content has been preserved',
+      error: 'An error occurred',
       errorMaxIterations: 'Max execution rounds reached, task could not be completed',
       errorToolCall: 'Tool call failed',
       errorStream: 'AI service connection interrupted',

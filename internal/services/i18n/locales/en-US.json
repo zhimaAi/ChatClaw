@@ -131,6 +131,7 @@
   "error.chat_no_active_generation": "no active generation",
   "error.chat_generation_in_progress": "generation in progress, please stop first",
   "error.chat_generation_in_progress_other_tab": "generation in progress in another tab",
+  "error.chat_previous_generation_not_finished": "previous generation did not finish, please try again",
   "error.chat_agent_not_found": "agent not found",
   "error.chat_agent_read_failed": "failed to read agent",
   "error.chat_agent_create_failed": "failed to create agent",

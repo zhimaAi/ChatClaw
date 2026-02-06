@@ -67,7 +67,7 @@ func (r *ToolRegistry) Register(id string, factory ToolFactory) {
 }
 
 // getOrCreate returns a cached tool instance or creates one via the factory.
-// Must be called with at least a read lock held; promotes to write lock if needed.
+// Must be called with write lock held.
 func (r *ToolRegistry) getOrCreate(ctx context.Context, id string) (tool.BaseTool, error) {
 	// Fast path: already cached (caller holds at least RLock)
 	if t, ok := r.cached[id]; ok {

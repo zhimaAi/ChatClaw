@@ -315,12 +315,17 @@ func (b *LocalBackend) GrepRaw(ctx context.Context, req *filesystem.GrepRequest)
 }
 
 // grepFile searches for pattern in a single file.
+// Pattern is treated as a regular expression; falls back to literal match on invalid regex.
 func grepFile(filePath, pattern string, b *LocalBackend) ([]filesystem.GrepMatch, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+
+	// Try to compile pattern as regex; fall back to literal match if invalid
+	re, regexErr := regexp.Compile(pattern)
+	useLiteral := regexErr != nil
 
 	var matches []filesystem.GrepMatch
 	scanner := bufio.NewScanner(file)
@@ -329,7 +334,15 @@ func grepFile(filePath, pattern string, b *LocalBackend) ([]filesystem.GrepMatch
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		if strings.Contains(line, pattern) {
+
+		var matched bool
+		if useLiteral {
+			matched = strings.Contains(line, pattern)
+		} else {
+			matched = re.MatchString(line)
+		}
+
+		if matched {
 			matches = append(matches, filesystem.GrepMatch{
 				Path:    b.toAPIPath(filePath),
 				Line:    lineNum,
