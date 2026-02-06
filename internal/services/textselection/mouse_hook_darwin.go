@@ -177,8 +177,9 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 				int x = (int)((mouseLoc.x - frame.origin.x) * scale);
 				int y = (int)((screenTopY - mouseLoc.y) * scale);
 
-				// Use callback (copy then show popup mode)
-				mouseHookDarwinCallback(x, y);
+				// Use showPopup callback (lazy copy mode: show popup first, copy on button click)
+				// This avoids polluting the user's clipboard during text selection.
+				mouseHookDarwinShowPopup(x, y, originalAppPid);
 			});
 		}
 			}

@@ -205,8 +205,8 @@ func (s *TextSelectionService) startClickOutsideWatcher() {
 
 // startWatcher starts the mouse hook watcher.
 func (s *TextSelectionService) startWatcher() {
-	callback := func(text string, x, y int32) {
-		// Skip if text is empty or only whitespace (e.g., user selected image/screenshot)
+	// Old callback (copy-then-show mode) - kept for compatibility but not used
+	_ = func(text string, x, y int32) {
 		text = strings.TrimSpace(text)
 		if text == "" {
 			return
@@ -258,9 +258,20 @@ func (s *TextSelectionService) startWatcher() {
 		}
 	}
 
-	// Use "copy before popup" mode: simulate Ctrl+C -> read clipboard -> show popup
+	// New mode: show popup only (no clipboard copy), copy on button click.
+	// This avoids polluting the user's clipboard during text selection.
+	showPopupOnly := func(mouseX, mouseY int32, originalAppPid int32) {
+		s.mu.Lock()
+		s.selectedText = ""        // Clear text - will be fetched on button click
+		s.originalAppPid = originalAppPid // Record original app PID for later copy
+		s.mu.Unlock()
+
+		s.showPopupOnlyAtScreenPos(int(mouseX), int(mouseY))
+	}
+
 	s.mu.Lock()
-	s.mouseHookWatcher = NewMouseHookWatcher(callback, onDragStart, nil)
+	// Use showPopupOnly mode: detect drag -> show popup (no copy) -> copy on button click
+	s.mouseHookWatcher = NewMouseHookWatcher(nil, onDragStart, showPopupOnly)
 	s.mu.Unlock()
 
 	go s.mouseHookWatcher.Start()
@@ -479,6 +490,57 @@ func (s *TextSelectionService) showPopupAt(x, y int) {
 	}
 }
 
+// showPopupOnlyAtScreenPos shows the popup at the specified screen position WITHOUT copying text.
+// Text will be copied when the user clicks the popup button.
+// This is the new "lazy copy" mode that avoids polluting the user's clipboard during selection.
+func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
+	if !s.IsEnabled() {
+		return
+	}
+	s.mu.Lock()
+	app := s.app
+	// Cancel previous hide timer
+	if s.hideTimer != nil {
+		s.hideTimer.Stop()
+		s.hideTimer = nil
+	}
+	s.mu.Unlock()
+
+	if app == nil {
+		return
+	}
+
+	var finalX, finalY int
+
+	if runtime.GOOS == "darwin" {
+		scale := getDPIScale()
+		popWidthPx := int(float64(s.popWidth) * scale)
+		popHeightPx := int(float64(s.popHeight) * scale)
+		offsetPx := int(10 * scale)
+
+		finalX = screenX - popWidthPx/2
+		finalY = screenY - popHeightPx - offsetPx
+	} else {
+		finalX = screenX - s.popWidth/2
+		finalY = screenY - s.popHeight - 10
+
+		if screen := app.Screen.GetPrimary(); screen != nil {
+			wa := screen.WorkArea
+			if finalX < wa.X {
+				finalX = wa.X
+			}
+			if finalX+s.popWidth > wa.X+wa.Width {
+				finalX = wa.X + wa.Width - s.popWidth
+			}
+			if finalY < wa.Y {
+				finalY = screenY + 20
+			}
+		}
+	}
+
+	s.showPopupAt(finalX, finalY)
+}
+
 // Hide hides the popup.
 // Safely handles the case when the window has been closed/released.
 // On Windows: moves window off-screen (w.Hide() causes WebView2 Focus error).
@@ -531,6 +593,7 @@ func (s *TextSelectionService) Hide() {
 // Product requirement:
 // - Text selection popup should always interact with winsnap window (never main window).
 // - If winsnap window does not exist, create it and wake it as a standalone window.
+// - Copy text on button click (lazy copy mode) to avoid polluting clipboard during selection.
 func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.mu.Lock()
 	// Debounce: ignore clicks within 500ms of the last click
@@ -542,17 +605,41 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.lastClickTime = now
 
 	text := s.selectedText
+	originalAppPid := s.originalAppPid
 	app := s.app
 	wakeSnapWindow := s.wakeSnapWindow
+	s.mu.Unlock()
+
+	if app == nil {
+		return map[string]any{"error": "app is nil"}
+	}
+
+	// If text is empty, we're in "lazy copy" mode - need to copy now.
+	// The popup was shown without copying; now we simulate Ctrl+C/Cmd+C to get the selected text.
+	// This works because the popup doesn't steal focus, so the original app still has the selection.
+	if text == "" && originalAppPid != 0 {
+		text = s.copyAndGetSelectedText()
+		if text == "" {
+			// No text could be copied, hide popup and return
+			go s.Hide()
+			return map[string]any{"error": "no text selected"}
+		}
+		// Update selectedText for GetLastButtonAction fallback
+		s.mu.Lock()
+		s.selectedText = text
+		s.mu.Unlock()
+	}
+
+	if text == "" {
+		return map[string]any{"error": "no text selected"}
+	}
+
 	// Use Unix milliseconds to keep JS number precision (safe integer).
 	actionID := time.Now().UnixMilli()
+	s.mu.Lock()
 	s.lastActionID = actionID
 	s.lastActionText = text
 	s.mu.Unlock()
-
-	if text == "" || app == nil {
-		return map[string]any{"error": "no text selected"}
-	}
 
 	// Product requirement: always interact with winsnap (never main window).
 	// Ensure and wake the winsnap window first (it may be created on-demand).
@@ -576,6 +663,46 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 		"id":   actionID,
 		"text": text,
 	}
+}
+
+// copyAndGetSelectedText simulates Ctrl+C/Cmd+C and reads the clipboard.
+// This is used in "lazy copy" mode where we only copy when the user clicks the popup.
+// The popup doesn't steal focus, so the original app still has the text selection.
+func (s *TextSelectionService) copyAndGetSelectedText() string {
+	// Save current clipboard content to detect changes
+	var oldClipboard string
+	if runtime.GOOS == "darwin" {
+		oldClipboard = getClipboardTextDarwin()
+	} else {
+		oldClipboard = getClipboardTextWindows()
+	}
+
+	// Simulate Ctrl+C (Windows) or Cmd+C (macOS)
+	if runtime.GOOS == "darwin" {
+		simulateCmdCDarwin()
+	} else {
+		simulateCtrlCWindows()
+	}
+
+	// Wait for clipboard to update (try multiple times with increasing delays)
+	var newClipboard string
+	for attempt := 1; attempt <= 3; attempt++ {
+		time.Sleep(time.Duration(80*attempt) * time.Millisecond)
+
+		if runtime.GOOS == "darwin" {
+			newClipboard = getClipboardTextDarwin()
+		} else {
+			newClipboard = getClipboardTextWindows()
+		}
+
+		newClipboard = strings.TrimSpace(newClipboard)
+		if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
+			return newClipboard
+		}
+	}
+
+	// If clipboard didn't change, return empty (no text was selected)
+	return ""
 }
 
 // GetLastButtonAction returns the last button click action payload.
