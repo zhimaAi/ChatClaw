@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
 import { Search, Upload, Plus } from 'lucide-vue-next'
@@ -59,6 +59,21 @@ const renameDialogOpen = ref(false)
 const documentToRename = ref<Document | null>(null)
 const documents = ref<Document[]>([])
 const isLoading = ref(false)
+const isLoadingMore = ref(false)
+const hasMore = ref(true)
+const beforeID = ref<number>(0)
+const PAGE_SIZE = 100
+let loadToken = 0
+
+const isUploading = ref(false)
+const uploadTotal = ref(0)
+const uploadDone = ref(0)
+let unsubscribeUploadProgress: (() => void) | null = null
+let unsubscribeUploaded: (() => void) | null = null
+
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const loadMoreSentinelRef = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
 
 // 状态常量
 const STATUS_PENDING = 0
@@ -92,6 +107,7 @@ const convertDocument = (doc: BackendDocument): Document => {
 
   return {
     id: doc.id,
+    contentHash: doc.content_hash,
     name: doc.original_name,
     fileType: doc.extension,
     createdAt: doc.created_at,
@@ -103,19 +119,69 @@ const convertDocument = (doc: BackendDocument): Document => {
   }
 }
 
-// 加载文档列表
-const loadDocuments = async () => {
+const resetAndLoad = async () => {
   if (!props.library?.id) return
 
-  isLoading.value = true
+  loadToken += 1
+  documents.value = []
+  beforeID.value = 0
+  hasMore.value = true // Always allow the first request to go through
+  await loadMore(loadToken)
+}
+
+const loadMore = async (token?: number) => {
+  if (!props.library?.id) return
+  if (!hasMore.value) return
+  // When searching, backend returns a single page (no cursor). Do not auto-load more.
+  if (searchQuery.value.trim() && documents.value.length > 0) return
+  if (isUploading.value) return
+  if (isLoading.value || isLoadingMore.value) return
+
+  const currentToken = token ?? loadToken
+  const isFirst = documents.value.length === 0
+  if (isFirst) {
+    isLoading.value = true
+  } else {
+    isLoadingMore.value = true
+  }
+
   try {
-    const result = await DocumentService.ListDocuments(props.library.id, searchQuery.value)
-    documents.value = result.map(convertDocument)
+    const result = await DocumentService.ListDocumentsPage({
+      library_id: props.library.id,
+      keyword: searchQuery.value,
+      before_id: beforeID.value,
+      limit: PAGE_SIZE,
+    })
+    if (currentToken !== loadToken) return
+
+    const incoming = result.map(convertDocument)
+    const existingIDs = new Set(documents.value.map((d) => d.id))
+    const merged: Document[] = []
+    for (const doc of incoming) {
+      if (!existingIDs.has(doc.id)) merged.push(doc)
+    }
+
+    if (merged.length > 0) {
+      documents.value.push(...merged)
+      beforeID.value = merged[merged.length - 1].id
+    }
+
+    if (searchQuery.value.trim()) {
+      hasMore.value = false
+    } else {
+      hasMore.value = result.length >= PAGE_SIZE
+      // If server returned duplicates only, stop to avoid spinning.
+      if (result.length > 0 && merged.length === 0) {
+        hasMore.value = false
+      }
+    }
   } catch (error) {
     console.error('Failed to load documents:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.loadFailed'))
+    hasMore.value = false
   } finally {
     isLoading.value = false
+    isLoadingMore.value = false
   }
 }
 
@@ -124,7 +190,7 @@ watch(
   () => props.library?.id,
   () => {
     searchQuery.value = ''
-    loadDocuments()
+    resetAndLoad()
   },
   { immediate: true },
 )
@@ -134,7 +200,7 @@ let searchTimeout: ReturnType<typeof setTimeout> | null = null
 watch(searchQuery, () => {
   if (searchTimeout) clearTimeout(searchTimeout)
   searchTimeout = setTimeout(() => {
-    loadDocuments()
+    resetAndLoad()
   }, 300)
 })
 
@@ -161,20 +227,28 @@ const handleAddDocument = async () => {
       ],
     })
     if (result && result.length > 0) {
+      // 立即给用户反馈，避免“卡住”的感觉
+      isUploading.value = true
+      uploadTotal.value = result.length
+      uploadDone.value = 0
+      await nextTick()
+
       // 上传文件
       const uploaded = await DocumentService.UploadDocuments({
         library_id: props.library.id,
         file_paths: result,
       })
 
-      // 重新加载列表（因为重复文件会覆盖旧记录）
-      await loadDocuments()
+      // 上传完成后统一刷新第一页（只渲染 100 条，避免一次性渲染 500 卡片导致卡顿）
+      await resetAndLoad()
 
       toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
     }
   } catch (error) {
     console.error('Failed to upload documents:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
+  } finally {
+    isUploading.value = false
   }
 }
 
@@ -210,6 +284,29 @@ const confirmRename = async (doc: Document | null, newName: string) => {
   }
 }
 
+const handleRelearn = async (doc: Document) => {
+  try {
+    // Call backend to reprocess document
+    await DocumentService.ReprocessDocument(doc.id)
+
+    // Update document status to pending/learning
+    const index = documents.value.findIndex((d) => d.id === doc.id)
+    if (index !== -1) {
+      documents.value[index] = {
+        ...documents.value[index],
+        status: 'pending',
+        progress: 0,
+        errorMessage: '',
+      }
+    }
+
+    toast.success(t('knowledge.content.relearn.success'))
+  } catch (error) {
+    console.error('Failed to relearn document:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.content.relearn.failed'))
+  }
+}
+
 const handleOpenDelete = (doc: Document) => {
   documentToDelete.value = doc
   deleteDialogOpen.value = true
@@ -237,6 +334,32 @@ let unsubscribeProgress: (() => void) | null = null
 let unsubscribeThumbnail: (() => void) | null = null
 
 onMounted(() => {
+  const setupObserver = async () => {
+    await nextTick()
+    if (loadMoreObserver) {
+      loadMoreObserver.disconnect()
+      loadMoreObserver = null
+    }
+    loadMoreObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry?.isIntersecting) return
+        void loadMore()
+      },
+      {
+        root: scrollContainerRef.value,
+        rootMargin: '200px',
+        threshold: 0,
+      }
+    )
+    if (loadMoreSentinelRef.value) {
+      loadMoreObserver.observe(loadMoreSentinelRef.value)
+    }
+  }
+
+  // sentinel 在列表非空时才渲染，所以需要监听 ref 变化
+  watch([scrollContainerRef, loadMoreSentinelRef], setupObserver, { immediate: true })
+
   // 监听缩略图更新事件
   unsubscribeThumbnail = Events.On('document:thumbnail', (event: { data: ThumbnailEvent }) => {
     const thumbnail = event.data
@@ -289,14 +412,59 @@ onMounted(() => {
       errorMessage,
     }
   })
+
+  // 上传进度（用于大批量上传时的即时反馈）
+  unsubscribeUploadProgress = Events.On(
+    'document:upload_progress',
+    (event: { data: { library_id: number; total: number; done: number } }) => {
+      const p = event.data
+      if (p.library_id !== props.library?.id) return
+      uploadTotal.value = p.total
+      uploadDone.value = p.done
+      if (p.total > 0 && p.done > 0 && p.done <= p.total) {
+        isUploading.value = p.done < p.total
+      }
+    }
+  )
+
+  // 单个文档已入库事件（可用于小批量即时显示；大批量仍以 resetAndLoad 为主）
+  unsubscribeUploaded = Events.On('document:uploaded', (event: { data: BackendDocument }) => {
+    const doc = event.data
+    if (!doc || doc.library_id !== props.library?.id) return
+    if (searchQuery.value.trim()) return
+    // 仅在当前列表较少时追加，避免 500 次 DOM 更新
+    if (documents.value.length >= PAGE_SIZE) return
+    const converted = convertDocument(doc)
+    const existingIndex = documents.value.findIndex((d) => d.id === converted.id)
+    if (existingIndex >= 0) {
+      documents.value[existingIndex] = converted
+      return
+    }
+    documents.value.unshift(converted)
+    documents.value.sort((a, b) => b.id - a.id)
+    if (documents.value.length > PAGE_SIZE) {
+      documents.value.length = PAGE_SIZE
+    }
+    beforeID.value = documents.value.length ? documents.value[documents.value.length - 1].id : 0
+  })
 })
 
 onUnmounted(() => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
   if (unsubscribeProgress) {
     unsubscribeProgress()
   }
   if (unsubscribeThumbnail) {
     unsubscribeThumbnail()
+  }
+  if (unsubscribeUploadProgress) {
+    unsubscribeUploadProgress()
+  }
+  if (unsubscribeUploaded) {
+    unsubscribeUploaded()
   }
   if (searchTimeout) {
     clearTimeout(searchTimeout)
@@ -333,8 +501,22 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- 上传进度条（大批量上传时避免“卡住”的感觉） -->
+    <div v-if="isUploading" class="px-4 pb-2">
+      <div class="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{{ t('knowledge.content.upload.uploading', { done: uploadDone, total: uploadTotal }) }}</span>
+        <span v-if="uploadTotal > 0">{{ Math.floor((uploadDone / uploadTotal) * 100) }}%</span>
+      </div>
+      <div class="mt-1 h-1 w-full overflow-hidden rounded bg-muted">
+        <div
+          class="h-full bg-foreground/30 transition-[width]"
+          :style="{ width: uploadTotal > 0 ? `${Math.min(100, Math.floor((uploadDone / uploadTotal) * 100))}%` : '0%' }"
+        />
+      </div>
+    </div>
+
     <!-- 内容区域 -->
-    <div class="flex-1 overflow-auto p-4">
+    <div ref="scrollContainerRef" class="flex-1 overflow-auto p-4">
       <!-- 加载中 -->
       <div v-if="isLoading" class="flex h-full items-center justify-center">
         <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
@@ -357,18 +539,32 @@ onUnmounted(() => {
       </div>
 
       <!-- 文档网格 -->
-      <div
-        v-else
-        class="grid auto-rows-max gap-4"
-        style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
-      >
-        <DocumentCard
-          v-for="doc in filteredDocuments"
-          :key="doc.id"
-          :document="doc"
-          @rename="handleRename"
-          @delete="handleOpenDelete"
-        />
+      <div v-else>
+        <div
+          class="grid auto-rows-max gap-4"
+          style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
+        >
+          <DocumentCard
+            v-for="doc in filteredDocuments"
+            :key="doc.id"
+            :document="doc"
+            @rename="handleRename"
+            @relearn="handleRelearn"
+            @delete="handleOpenDelete"
+          />
+        </div>
+
+        <div class="mt-4 flex items-center justify-center">
+          <div v-if="isLoadingMore" class="text-xs text-muted-foreground">
+            {{ t('knowledge.loading') }}
+          </div>
+          <div v-else-if="!hasMore" class="text-xs text-muted-foreground/60">
+            {{ t('knowledge.content.noMore') }}
+          </div>
+        </div>
+
+        <!-- sentinel for infinite scroll -->
+        <div ref="loadMoreSentinelRef" class="h-1 w-full" />
       </div>
     </div>
 

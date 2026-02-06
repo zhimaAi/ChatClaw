@@ -57,10 +57,27 @@ type UploadInput struct {
 	FilePaths []string `json:"file_paths"`
 }
 
+// UploadProgressEvent 上传进度事件（发送给前端）
+type UploadProgressEvent struct {
+	LibraryID int64 `json:"library_id"`
+	Total     int   `json:"total"`
+	Done      int   `json:"done"`
+}
+
 // RenameInput 重命名文档的输入参数
 type RenameInput struct {
 	ID      int64  `json:"id"`
 	NewName string `json:"new_name"`
+}
+
+// ListDocumentsPageInput 文档分页查询输入参数（cursor 分页）
+// - BeforeID: 返回 id < before_id 的数据（按 id DESC）
+// - Limit: 每次返回条数（建议 100）
+type ListDocumentsPageInput struct {
+	LibraryID int64  `json:"library_id"`
+	Keyword   string `json:"keyword"`
+	BeforeID  int64  `json:"before_id"`
+	Limit     int    `json:"limit"`
 }
 
 // ProgressEvent 进度事件数据（发送给前端）

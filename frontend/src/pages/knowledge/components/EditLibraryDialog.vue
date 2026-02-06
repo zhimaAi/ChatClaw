@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -52,11 +53,14 @@ const { t } = useI18n()
 const saving = ref(false)
 const loadingProviders = ref(false)
 
-// 语义分段模型选择
+// 语义分段开关
+const semanticSegmentationEnabled = ref(false)
+
+// RAPTOR LLM 模型选择
 type Group = { provider: Provider; models: Model[] }
-const semanticSegmentGroups = ref<Group[]>([])
-const SEMANTIC_SEGMENT_NONE = '__none__'
-const semanticSegmentKey = ref<string>(SEMANTIC_SEGMENT_NONE)
+const raptorLLMGroups = ref<Group[]>([])
+const RAPTOR_LLM_NONE = '__none__'
+const raptorLLMKey = ref<string>(RAPTOR_LLM_NONE)
 
 const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
@@ -64,15 +68,15 @@ const chunkOverlap = ref<string>('100')
 
 const close = () => emit('update:open', false)
 
-const currentSemanticSegmentLabel = computed(() => {
-  if (!semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE) {
-    return t('knowledge.create.noSemanticSegment')
+const currentRaptorLLMLabel = computed(() => {
+  if (!raptorLLMKey.value || raptorLLMKey.value === RAPTOR_LLM_NONE) {
+    return t('knowledge.create.noRaptorLLM')
   }
-  const [pid, mid] = semanticSegmentKey.value.split('::')
-  if (!pid || !mid) return t('knowledge.create.noSemanticSegment')
-  const group = semanticSegmentGroups.value.find((g) => g.provider.provider_id === pid)
+  const [pid, mid] = raptorLLMKey.value.split('::')
+  if (!pid || !mid) return t('knowledge.create.noRaptorLLM')
+  const group = raptorLLMGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || t('knowledge.create.noSemanticSegment')
+  return model?.name || t('knowledge.create.noRaptorLLM')
 })
 
 const loadProviders = async () => {
@@ -92,15 +96,15 @@ const loadProviders = async () => {
       })
     )
 
-    const segOut: Group[] = []
+    const llmOut: Group[] = []
     for (const item of details) {
       const llmGroup = item.detail?.model_groups?.find((g) => g.type === 'llm')
       const llmModels = (llmGroup?.models || []).filter((m) => m.enabled)
       if (llmModels.length > 0) {
-        segOut.push({ provider: item.provider, models: llmModels })
+        llmOut.push({ provider: item.provider, models: llmModels })
       }
     }
-    semanticSegmentGroups.value = segOut
+    raptorLLMGroups.value = llmOut
   } catch (error) {
     console.error('Failed to load providers:', error)
   } finally {
@@ -120,11 +124,14 @@ watch(
     chunkSize.value = String(props.library?.chunk_size ?? 1024)
     chunkOverlap.value = String(props.library?.chunk_overlap ?? 100)
 
-    // 初始化语义分段模型
-    if (props.library?.semantic_segment_provider_id && props.library?.semantic_segment_model_id) {
-      semanticSegmentKey.value = `${props.library.semantic_segment_provider_id}::${props.library.semantic_segment_model_id}`
+    // 初始化语义分段开关
+    semanticSegmentationEnabled.value = props.library?.semantic_segmentation_enabled ?? false
+
+    // 初始化 RAPTOR LLM 模型
+    if (props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id) {
+      raptorLLMKey.value = `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
     } else {
-      semanticSegmentKey.value = SEMANTIC_SEGMENT_NONE
+      raptorLLMKey.value = RAPTOR_LLM_NONE
     }
   }
 )
@@ -148,14 +155,15 @@ const handleSave = async () => {
   if (!props.library || !isValid.value || saving.value) return
   saving.value = true
   try {
-    const isNone = !semanticSegmentKey.value || semanticSegmentKey.value === SEMANTIC_SEGMENT_NONE
-    const [pid, mid] = isNone ? ['', ''] : semanticSegmentKey.value.split('::')
+    const isRaptorNone = !raptorLLMKey.value || raptorLLMKey.value === RAPTOR_LLM_NONE
+    const [raptorPid, raptorMid] = isRaptorNone ? ['', ''] : raptorLLMKey.value.split('::')
 
     const updated = await LibraryService.UpdateLibrary(
       props.library.id,
       new UpdateLibraryInput({
-        semantic_segment_provider_id: pid || '',
-        semantic_segment_model_id: mid || '',
+        semantic_segmentation_enabled: semanticSegmentationEnabled.value,
+        raptor_llm_provider_id: raptorPid || '',
+        raptor_llm_model_id: raptorMid || '',
         top_k: topK.value[0] ?? 20,
         chunk_size: Number.parseInt(chunkSize.value, 10),
         chunk_overlap: Number.parseInt(chunkOverlap.value, 10),
@@ -203,26 +211,38 @@ const handleSave = async () => {
           />
         </div>
 
-        <!-- 语义分段模型 -->
+        <!-- 语义分段开关 -->
+        <div class="flex items-center justify-between">
+          <FieldLabel
+            :label="t('knowledge.create.semanticSegmentation')"
+            :help="t('knowledge.help.semanticSegmentation')"
+          />
+          <Switch
+            v-model="semanticSegmentationEnabled"
+            :disabled="saving"
+          />
+        </div>
+
+        <!-- RAPTOR LLM 模型 -->
         <div class="flex flex-col gap-1.5">
           <FieldLabel
-            :label="t('knowledge.create.semanticSegmentModel')"
-            :help="t('knowledge.help.semanticSegmentModel')"
+            :label="t('knowledge.create.raptorLLMModel')"
+            :help="t('knowledge.help.raptorLLMModel')"
           />
           <Select
-            v-model="semanticSegmentKey"
+            v-model="raptorLLMKey"
             :disabled="loadingProviders || saving"
           >
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                {{ currentSemanticSegmentLabel }}
+                {{ currentRaptorLLMLabel }}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem :value="SEMANTIC_SEGMENT_NONE">
-                {{ t('knowledge.create.noSemanticSegment') }}
+              <SelectItem :value="RAPTOR_LLM_NONE">
+                {{ t('knowledge.create.noRaptorLLM') }}
               </SelectItem>
-              <SelectGroup v-for="g in semanticSegmentGroups" :key="g.provider.provider_id">
+              <SelectGroup v-for="g in raptorLLMGroups" :key="g.provider.provider_id">
                 <SelectLabel>{{ g.provider.name }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"

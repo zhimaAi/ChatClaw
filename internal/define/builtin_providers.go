@@ -79,7 +79,7 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "qwen", ModelID: "qwen-plus", Name: "通义千问 Plus", Type: "llm", SortOrder: 101},
 	{ProviderID: "qwen", ModelID: "qwen-flash", Name: "通义千问 Flash", Type: "llm", SortOrder: 102},
 	{ProviderID: "qwen", ModelID: "qwen-long", Name: "通义千问 Long", Type: "llm", SortOrder: 103},
-	{ProviderID: "qwen", ModelID: "text-embedding-v3", Name: "Text Embedding V3", Type: "embedding", SortOrder: 100},
+	{ProviderID: "qwen", ModelID: "text-embedding-v4", Name: "Text Embedding V4", Type: "embedding", SortOrder: 100},
 	{ProviderID: "qwen", ModelID: "qwen3-rerank", Name: "Qwen3 Rerank", Type: "rerank", SortOrder: 100},
 
 	// 百度文心

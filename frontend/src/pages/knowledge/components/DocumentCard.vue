@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MoreHorizontal, FileText, CheckCircle2, XCircle, AlertTriangle } from 'lucide-vue-next'
+import { MoreHorizontal, FileText, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ export type DocumentStatus = 'pending' | 'parsing' | 'learning' | 'completed' | 
 
 export interface Document {
   id: number
+  contentHash?: string
   name: string
   fileType: string
   createdAt: string
@@ -42,6 +43,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'rename', doc: Document): void
+  (e: 'relearn', doc: Document): void
   (e: 'delete', doc: Document): void
 }>()
 
@@ -146,6 +148,98 @@ const FileIcon = computed(() => {
 const showErrorTip = ref(false)
 // 文件丢失提示显示状态
 const showFileMissingTip = ref(false)
+
+const badgeRef = ref<HTMLElement | null>(null)
+const errorTipRef = ref<HTMLElement | null>(null)
+const errorTipStyle = ref<Record<string, string>>({})
+let hideTimer: number | null = null
+let repositionHandler: (() => void) | null = null
+
+const cancelCloseErrorTip = () => {
+  if (hideTimer != null) {
+    window.clearTimeout(hideTimer)
+    hideTimer = null
+  }
+}
+
+const scheduleCloseErrorTip = () => {
+  cancelCloseErrorTip()
+  hideTimer = window.setTimeout(() => {
+    showErrorTip.value = false
+  }, 120)
+}
+
+const updateErrorTipPosition = () => {
+  const anchor = badgeRef.value
+  if (!anchor) return
+
+  const rect = anchor.getBoundingClientRect()
+  const padding = 8
+  const desiredWidth = 280
+  const width = Math.max(180, Math.min(desiredWidth, window.innerWidth - padding*2))
+
+  let left = rect.left
+  if (left + width + padding > window.innerWidth) {
+    left = window.innerWidth - width - padding
+  }
+  if (left < padding) left = padding
+
+  // Prefer showing above; fallback to below if not enough space.
+  const preferTop = rect.top > (200 + padding)
+  if (preferTop) {
+    errorTipStyle.value = {
+      position: 'fixed',
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(rect.top - 6)}px`,
+      width: `${Math.round(width)}px`,
+      transform: 'translateY(-100%)',
+    }
+  } else {
+    errorTipStyle.value = {
+      position: 'fixed',
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(rect.bottom + 6)}px`,
+      width: `${Math.round(width)}px`,
+      transform: 'translateY(0)',
+    }
+  }
+}
+
+const openErrorTip = async () => {
+  if (props.document.status !== 'failed' || !props.document.errorMessage) return
+  showErrorTip.value = true
+  await nextTick()
+  updateErrorTipPosition()
+}
+
+const attachRepositionListeners = () => {
+  if (repositionHandler) return
+  repositionHandler = () => updateErrorTipPosition()
+  window.addEventListener('resize', repositionHandler)
+  window.addEventListener('scroll', repositionHandler, true)
+}
+
+const detachRepositionListeners = () => {
+  if (!repositionHandler) return
+  window.removeEventListener('resize', repositionHandler)
+  window.removeEventListener('scroll', repositionHandler, true)
+  repositionHandler = null
+}
+
+watch(showErrorTip, async (visible) => {
+  if (!visible) {
+    detachRepositionListeners()
+    return
+  }
+  await nextTick()
+  updateErrorTipPosition()
+  attachRepositionListeners()
+})
+
+onUnmounted(() => {
+  cancelCloseErrorTip()
+  detachRepositionListeners()
+})
 </script>
 
 <template>
@@ -187,8 +281,14 @@ const showFileMissingTip = ref(false)
     <div
       v-if="statusConfig.show"
       class="absolute left-[11px] top-[11px]"
-      @mouseenter="document.status === 'failed' && document.errorMessage && (showErrorTip = true)"
-      @mouseleave="showErrorTip = false"
+      ref="badgeRef"
+      @mouseenter="
+        () => {
+          cancelCloseErrorTip()
+          openErrorTip()
+        }
+      "
+      @mouseleave="scheduleCloseErrorTip"
     >
       <div
         :class="cn(
@@ -203,14 +303,21 @@ const showFileMissingTip = ref(false)
         />
         {{ statusConfig.label }}
       </div>
-      <!-- 失败原因浮层提示 -->
+    </div>
+
+    <!-- 失败原因浮层提示：Teleport 到 body，避免被任何 overflow 裁剪/撑出横向滚动条 -->
+    <Teleport to="body">
       <div
         v-if="showErrorTip && document.errorMessage"
-        class="absolute bottom-full left-0 z-50 mb-1 w-max max-w-[300px] whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1.5 text-xs text-popover-foreground shadow-md"
+        ref="errorTipRef"
+        :style="errorTipStyle"
+        class="z-9999 max-h-[200px] overflow-y-auto wrap-break-word rounded-md border border-border bg-popover px-2.5 py-2 text-xs leading-relaxed text-popover-foreground shadow-md"
+        @mouseenter="cancelCloseErrorTip"
+        @mouseleave="scheduleCloseErrorTip"
       >
         {{ document.errorMessage }}
       </div>
-    </div>
+    </Teleport>
 
     <!-- 悬停菜单按钮 -->
     <DropdownMenu>
@@ -224,6 +331,10 @@ const showFileMissingTip = ref(false)
         <DropdownMenuItem class="gap-2" @select="emit('rename', document)">
           <IconRename class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.menu.rename') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem class="gap-2" @select="emit('relearn', document)">
+          <RefreshCw class="size-4 text-muted-foreground" />
+          {{ t('knowledge.content.menu.relearn') }}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
