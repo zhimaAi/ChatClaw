@@ -413,3 +413,71 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 
 	return nil
 }
+
+// ShowTargetWindowNoActivate shows the target window without activating it.
+// This is used when winsnap gains focus and needs the target visible,
+// but focus should remain on winsnap itself.
+//
+// Behavior:
+// 1. Find target window by process name (including minimized windows)
+// 2. Use ShowWindow with SW_SHOWNOACTIVATE to make it visible
+// 3. Adjust z-order so target is just below winsnap (using SWP_NOACTIVATE)
+// 4. DO NOT call SetForegroundWindow or any activation APIs
+func ShowTargetWindowNoActivate(self *application.WebviewWindow, targetProcessName string) error {
+	if self == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	selfH := uintptr(self.NativeWindow())
+	if selfH == 0 {
+		return ErrWinsnapWindowInvalid
+	}
+
+	targetNames := expandWindowsTargetNames(targetProcessName)
+	if len(targetNames) == 0 {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+
+	// Find target window (including minimized ones)
+	var targetHwnd windows.HWND
+	var err error
+	for _, n := range targetNames {
+		targetHwnd, err = findMainWindowByProcessNameIncludingMinimized(n)
+		if err == nil && targetHwnd != 0 {
+			break
+		}
+	}
+	if err != nil || targetHwnd == 0 {
+		return ErrTargetWindowNotFound
+	}
+
+	const swShowNoActivate = 4 // SW_SHOWNOACTIVATE
+
+	// Show target window without activating
+	// If minimized, we still use SW_SHOWNOACTIVATE (SW_RESTORE would activate)
+	// Note: SW_SHOWNOACTIVATE on minimized window may not restore it fully,
+	// but it's better than stealing focus. If target is minimized, user must
+	// explicitly click on it to restore.
+	if isWindowIconic(targetHwnd) {
+		// For minimized windows, use SW_RESTORE but immediately return focus to winsnap
+		procShowWindowWake.Call(uintptr(targetHwnd), swRestoreWake)
+	} else {
+		procShowWindowWake.Call(uintptr(targetHwnd), swShowNoActivate)
+	}
+
+	// Adjust z-order: bring target to top without activating
+	flags := uintptr(swpNoMoveWake | swpNoSizeWake | swpNoActivateWake)
+	procSetWindowPosWake.Call(uintptr(targetHwnd), hwndTopWake, 0, 0, 0, 0, flags)
+
+	// Ensure winsnap stays above target
+	procSetWindowPosWake.Call(selfH, hwndTopWake, 0, 0, 0, 0, flags)
+
+	// Keep winsnap just above target
+	if isTopMost(targetHwnd) {
+		_ = setWindowTopMostNoActivate(windows.HWND(selfH))
+	} else {
+		_ = setWindowNoTopMostNoActivate(windows.HWND(selfH))
+	}
+	_ = setWindowPosAfterNoMoveNoSizeNoActivate(windows.HWND(selfH), targetHwnd)
+
+	return nil
+}

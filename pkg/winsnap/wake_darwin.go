@@ -690,3 +690,49 @@ func wakeAttachedWindowInternal(self *application.WebviewWindow, targetProcessNa
 	}
 	return nil
 }
+
+// ShowTargetWindowNoActivate shows the target window without activating it.
+// This is used when winsnap gains focus and needs the target visible,
+// but focus should remain on winsnap itself.
+//
+// On macOS, this uses Accessibility API (AXRaise) to raise the window without
+// activating the app. The current focus remains unchanged.
+func ShowTargetWindowNoActivate(self *application.WebviewWindow, targetProcessName string) error {
+	if self == nil {
+		return ErrWinsnapWindowInvalid
+	}
+
+	// Get window number from native handle for safe lookups
+	nativeHandle := self.NativeWindow()
+	if nativeHandle == nil {
+		return ErrWinsnapWindowInvalid
+	}
+
+	if targetProcessName == "" {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+	name := normalizeMacTargetName(targetProcessName)
+	if name == "" {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	pid := C.winsnap_find_pid_by_name_local(cname)
+	if pid <= 0 {
+		return ErrTargetWindowNotFound
+	}
+
+	// Bring target to front without activating (using AXRaise)
+	if C.winsnap_bring_target_to_front_no_activate(pid) == 0 {
+		return errors.New("winsnap: failed to bring target to front")
+	}
+
+	// After raising target, ensure winsnap stays above it
+	selfWindowNumber := int(C.winsnap_get_window_number(nativeHandle))
+	targetWindowNumber := int(C.winsnap_find_main_window_number_for_pid(pid))
+	if selfWindowNumber > 0 && targetWindowNumber > 0 {
+		C.winsnap_order_window_above_target(C.int(selfWindowNumber), C.int(targetWindowNumber))
+	}
+
+	return nil
+}

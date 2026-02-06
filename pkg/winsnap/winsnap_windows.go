@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -92,6 +93,9 @@ type follower struct {
 	ready     chan struct{}
 	closed    bool
 	selfWidth int32 // 缓存自己的宽度
+
+	// Throttling for syncToTarget to avoid overwhelming system with EnumWindows calls
+	syncing int32 // atomic flag: 1 = currently syncing, 0 = idle
 }
 
 func (f *follower) Stop() error {
@@ -205,20 +209,22 @@ func (f *follower) start() error {
 }
 
 func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idObject, idChild int32, _ uint32, _ uint32) uintptr {
+	// Note: SetWinEventHook is already configured with pid filter, so we don't need
+	// to call getWindowProcessID here. All events received are from the target process.
 	switch event {
 	case eventObjectLocationChange:
-		if hwnd != f.target {
+		// We only care about the window object itself (not child objects like scrollbars).
+		if idObject != objidWindow || idChild != 0 {
 			return 0
 		}
-		// We only care about the window object itself.
-		if idObject != objidWindow || idChild != 0 {
+		// Skip if the changed window is our own winsnap window
+		if hwnd == f.self {
 			return 0
 		}
 		_ = f.syncToTarget()
 	case eventSystemForeground:
-		// Foreground event doesn't use object/child the same way; just react
-		// when the foreground window is the target window.
-		if hwnd != f.target {
+		// Skip if we are the one becoming foreground
+		if hwnd == f.self {
 			return 0
 		}
 		// When target becomes foreground, we need to ensure our window is also
@@ -240,13 +246,12 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 //   - selfHWND: our own window handle (to exclude from bounds calculation)
 //
 // Returns the combined bounds (left, top, right, bottom) of all visible windows.
+// The winsnap window (selfHWND) is excluded from the bounds calculation.
 func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, found bool) {
-	var selfLeft int32 = 0x7FFFFFFF // max int32
+	// Get self PID to exclude our own windows
+	var selfPID uint32
 	if selfHWND != 0 {
-		var selfRect rect
-		if err := getWindowRect(selfHWND, &selfRect); err == nil {
-			selfLeft = selfRect.Left
-		}
+		selfPID, _ = getWindowProcessID(selfHWND)
 	}
 
 	// Initialize bounds with extreme values
@@ -271,6 +276,11 @@ func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, fo
 			return 1
 		}
 
+		// Skip our own app's windows
+		if selfPID != 0 && winPID == selfPID {
+			return 1
+		}
+
 		// Skip tool windows and non-app windows
 		ex := getExStyle(h)
 		if ex&wsExToolWindow != 0 {
@@ -287,22 +297,14 @@ func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, fo
 			return 1
 		}
 
-		// For right edge: only consider windows whose right edge is to the left of our window
-		// This prevents including windows that are to the right of our snap window
-		useForRight := true
-		if selfHWND != 0 && r.Right >= selfLeft {
-			// This window's right edge is at or past our left edge, don't use it for right bound
-			useForRight = false
-		}
-
-		// Expand bounds
+		// Expand bounds - include ALL windows belonging to target process
 		if r.Left < bounds.Left {
 			bounds.Left = r.Left
 		}
 		if r.Top < bounds.Top {
 			bounds.Top = r.Top
 		}
-		if useForRight && r.Right > bounds.Right {
+		if r.Right > bounds.Right {
 			bounds.Right = r.Right
 		}
 		if r.Bottom > bounds.Bottom {
@@ -313,54 +315,30 @@ func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, fo
 	})
 	_, _, _ = procEnumWindows.Call(cb, 0)
 
-	// If no valid right bound was found (all windows are to our right), use left + minimum width
-	if found && bounds.Right <= bounds.Left {
-		// Fallback: find the rightmost edge regardless of self position
-		bounds.Right = bounds.Left
-		cb2 := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
-			h := windows.HWND(hwnd)
-			if !isWindowVisible(h) || isWindowIconic(h) {
-				return 1
-			}
-			winPID, err := getWindowProcessID(h)
-			if err != nil || winPID != pid {
-				return 1
-			}
-			ex := getExStyle(h)
-			if ex&wsExToolWindow != 0 {
-				return 1
-			}
-			var r rect
-			if err := getWindowRect(h, &r); err != nil {
-				return 1
-			}
-			if r.Right > bounds.Right {
-				bounds.Right = r.Right
-			}
-			return 1
-		})
-		_, _, _ = procEnumWindows.Call(cb2, 0)
-	}
-
 	return bounds, found
 }
 
 func (f *follower) syncToTarget() error {
+	// Throttle: skip if already syncing to avoid overwhelming system
+	if !atomic.CompareAndSwapInt32(&f.syncing, 0, 1) {
+		return nil
+	}
+	defer atomic.StoreInt32(&f.syncing, 0)
+
 	if !isWindow(f.target) {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	// Get combined bounds of all windows belonging to target process
-	targetBounds, found := getProcessWindowsBounds(f.targetPID, f.self)
-	if !found {
-		// Fallback to single window if no bounds found
+	// Use single window bounds for performance in high-frequency callbacks.
+	// Multi-window bounds calculation (EnumWindows) is too expensive to call
+	// on every location change event during window dragging.
+	var targetBounds rect
+	if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
 		var targetWin rect
 		if err := getWindowRect(f.target, &targetWin); err != nil {
 			return err
 		}
-		if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
-			targetBounds = targetWin
-		}
+		targetBounds = targetWin
 	}
 
 	var selfWin, selfFrame rect

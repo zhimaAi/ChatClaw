@@ -52,3 +52,9 @@ func BringWinsnapToFront(window *application.WebviewWindow) error {
 func SyncAttachedZOrderNoActivate(_ *application.WebviewWindow, _ string) error {
 	return errors.New("winsnap: z-order sync requires cgo on darwin")
 }
+
+// ShowTargetWindowNoActivate is not available without CGO on darwin.
+// Returns nil to allow caller to proceed without error.
+func ShowTargetWindowNoActivate(_ *application.WebviewWindow, _ string) error {
+	return nil
+}

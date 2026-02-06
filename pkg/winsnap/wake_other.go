@@ -47,3 +47,9 @@ func BringWinsnapToFront(window *application.WebviewWindow) error {
 func SyncAttachedZOrderNoActivate(_ *application.WebviewWindow, _ string) error {
 	return nil
 }
+
+// ShowTargetWindowNoActivate is not supported on this platform.
+// Returns nil to allow caller to proceed without error.
+func ShowTargetWindowNoActivate(_ *application.WebviewWindow, _ string) error {
+	return nil
+}
