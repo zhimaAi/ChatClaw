@@ -342,13 +342,97 @@ func getDefaultClickOffsetY(targetProcess string) int {
 	}
 }
 
+// getProcessWindowsBoundsForClick calculates the combined bounds of all visible windows
+// belonging to the target process. Used for calculating click position relative to
+// the entire application (e.g., WeCom with sidebar + main window).
+func getProcessWindowsBoundsForClick(targetProcess string) (bounds rectInput, found bool) {
+	targetNames := expandWindowsTargetNames(targetProcess)
+	if len(targetNames) == 0 {
+		return bounds, false
+	}
+
+	// Find target PID first
+	var targetPID uint32
+	for _, name := range targetNames {
+		h, err := findMainWindowByProcessName(name)
+		if err == nil && h != 0 {
+			pid, err := getWindowProcessID(h)
+			if err == nil && pid != 0 {
+				targetPID = pid
+				break
+			}
+		}
+	}
+	if targetPID == 0 {
+		return bounds, false
+	}
+
+	// Initialize bounds with extreme values
+	bounds = rectInput{
+		left:   0x7FFFFFFF, // max int32
+		top:    0x7FFFFFFF,
+		right:  -0x7FFFFFFF, // min int32
+		bottom: -0x7FFFFFFF,
+	}
+
+	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+		h := windows.HWND(hwnd)
+
+		// Skip invisible and minimized windows
+		if !isWindowVisible(h) || isWindowIconic(h) {
+			return 1
+		}
+
+		// Check if window belongs to target process
+		winPID, err := getWindowProcessID(h)
+		if err != nil || winPID != targetPID {
+			return 1
+		}
+
+		// Skip tool windows
+		ex := getExStyle(h)
+		if ex&wsExToolWindow != 0 {
+			return 1
+		}
+
+		var r rect
+		if err := getWindowRect(h, &r); err != nil {
+			return 1
+		}
+
+		// Skip windows with zero or negative size
+		if r.Right <= r.Left || r.Bottom <= r.Top {
+			return 1
+		}
+
+		// Expand bounds
+		if r.Left < bounds.left {
+			bounds.left = r.Left
+		}
+		if r.Top < bounds.top {
+			bounds.top = r.Top
+		}
+		if r.Right > bounds.right {
+			bounds.right = r.Right
+		}
+		if r.Bottom > bounds.bottom {
+			bounds.bottom = r.Bottom
+		}
+		found = true
+		return 1
+	})
+	_, _, _ = procEnumWindows.Call(cb, 0)
+
+	return bounds, found
+}
+
 // clickInputAreaOfWindow clicks near the bottom of the window where input box usually is
 // This is useful for Qt applications like DingTalk that don't expose standard Edit controls
-// offsetX: pixels from left edge (0 or negative = center horizontally)
+// offsetX: pixels from left edge of the ENTIRE application (all windows combined)
 // offsetY: pixels from bottom (0 = use default based on target process)
-// targetProcess: used to determine default values
+// targetProcess: used to determine default values and calculate combined bounds
 func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess string) bool {
-	// First, try to find the chat child window
+	// First, try to find the chat child window for Y coordinate calculation
 	chatChild := findChatChildWindow(hwnd)
 	targetHwnd := hwnd
 
@@ -356,14 +440,23 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 		targetHwnd = chatChild
 	}
 
-	var rect rectInput
-	ret, _, _ := procGetWindowRectIn.Call(targetHwnd, uintptr(unsafe.Pointer(&rect)))
+	// Get the rect of the specific window (for Y coordinate and fallback)
+	var windowRect rectInput
+	ret, _, _ := procGetWindowRectIn.Call(targetHwnd, uintptr(unsafe.Pointer(&windowRect)))
 	if ret == 0 {
 		// If failed to get child rect, try parent
-		ret, _, _ = procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+		ret, _, _ = procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&windowRect)))
 		if ret == 0 {
 			return false
 		}
+	}
+
+	// Get the combined bounds of ALL windows belonging to target process
+	// This is used for X coordinate calculation (distance from left edge)
+	appBounds, hasBounds := getProcessWindowsBoundsForClick(targetProcess)
+	if !hasBounds {
+		// Fallback to single window bounds
+		appBounds = windowRect
 	}
 
 	// Use provided offsetY or default based on app
@@ -372,25 +465,26 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 		clickOffsetY = getDefaultClickOffsetY(targetProcess)
 	}
 
-	// Calculate X position: use offsetX from left, or center if offsetX <= 0
+	// Calculate X position: use offsetX from left edge of ENTIRE application
 	var x int32
 	if offsetX > 0 {
-		x = rect.left + int32(offsetX)
-		// Make sure we're within the window
-		if x > rect.right-10 {
-			x = (rect.left + rect.right) / 2
+		// offsetX is relative to the leftmost edge of all windows
+		x = appBounds.left + int32(offsetX)
+		// Make sure we're within the application bounds
+		if x > appBounds.right-10 {
+			x = (appBounds.left + appBounds.right) / 2
 		}
 	} else {
-		// Center horizontally
-		x = (rect.left + rect.right) / 2
+		// Center horizontally within the entire application
+		x = (appBounds.left + appBounds.right) / 2
 	}
 
-	// Calculate Y position: from bottom
-	y := rect.bottom - int32(clickOffsetY)
+	// Calculate Y position: from bottom of the specific target window
+	y := windowRect.bottom - int32(clickOffsetY)
 
 	// Make sure we're within the window
-	if y < rect.top+100 {
-		y = (rect.top + rect.bottom) / 2
+	if y < windowRect.top+100 {
+		y = (windowRect.top + windowRect.bottom) / 2
 	}
 
 	clickAtPosition(x, y)

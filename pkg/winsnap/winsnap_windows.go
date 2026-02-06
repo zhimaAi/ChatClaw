@@ -57,12 +57,19 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		time.Sleep(250 * time.Millisecond)
 	}
 
+	// 获取目标进程 PID，用于计算多窗口整体边界
+	targetPID, err := getWindowProcessID(target)
+	if err != nil {
+		return nil, fmt.Errorf("winsnap: failed to get target process ID: %w", err)
+	}
+
 	f := &follower{
-		self:   windows.HWND(selfHWND),
-		target: target,
-		gap:    opts.Gap,
-		ready:  make(chan struct{}),
-		app:    opts.App,
+		self:      windows.HWND(selfHWND),
+		target:    target,
+		targetPID: targetPID,
+		gap:       opts.Gap,
+		ready:     make(chan struct{}),
+		app:       opts.App,
 	}
 	if err := f.start(); err != nil {
 		_ = f.Stop()
@@ -72,10 +79,11 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 }
 
 type follower struct {
-	self   windows.HWND
-	target windows.HWND
-	gap    int
-	app    *application.App
+	self      windows.HWND
+	target    windows.HWND
+	targetPID uint32 // 目标进程 PID，用于计算多窗口整体边界
+	gap       int
+	app       *application.App
 
 	mu        sync.Mutex
 	hookLoc   uintptr
@@ -223,18 +231,136 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 	return 0
 }
 
+// getProcessWindowsBounds calculates the combined bounds of all visible windows
+// belonging to the target process. This handles apps like WeCom that have multiple
+// windows (sidebar + main chat window).
+//
+// Parameters:
+//   - pid: target process ID
+//   - selfHWND: our own window handle (to exclude from bounds calculation)
+//
+// Returns the combined bounds (left, top, right, bottom) of all visible windows.
+func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, found bool) {
+	var selfLeft int32 = 0x7FFFFFFF // max int32
+	if selfHWND != 0 {
+		var selfRect rect
+		if err := getWindowRect(selfHWND, &selfRect); err == nil {
+			selfLeft = selfRect.Left
+		}
+	}
+
+	// Initialize bounds with extreme values
+	bounds = rect{
+		Left:   0x7FFFFFFF, // max int32
+		Top:    0x7FFFFFFF,
+		Right:  -0x7FFFFFFF, // min int32
+		Bottom: -0x7FFFFFFF,
+	}
+
+	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+		h := windows.HWND(hwnd)
+
+		// Skip invisible and minimized windows
+		if !isWindowVisible(h) || isWindowIconic(h) {
+			return 1
+		}
+
+		// Check if window belongs to target process
+		winPID, err := getWindowProcessID(h)
+		if err != nil || winPID != pid {
+			return 1
+		}
+
+		// Skip tool windows and non-app windows
+		ex := getExStyle(h)
+		if ex&wsExToolWindow != 0 {
+			return 1
+		}
+
+		var r rect
+		if err := getWindowRect(h, &r); err != nil {
+			return 1
+		}
+
+		// Skip windows with zero or negative size
+		if r.Right <= r.Left || r.Bottom <= r.Top {
+			return 1
+		}
+
+		// For right edge: only consider windows whose right edge is to the left of our window
+		// This prevents including windows that are to the right of our snap window
+		useForRight := true
+		if selfHWND != 0 && r.Right >= selfLeft {
+			// This window's right edge is at or past our left edge, don't use it for right bound
+			useForRight = false
+		}
+
+		// Expand bounds
+		if r.Left < bounds.Left {
+			bounds.Left = r.Left
+		}
+		if r.Top < bounds.Top {
+			bounds.Top = r.Top
+		}
+		if useForRight && r.Right > bounds.Right {
+			bounds.Right = r.Right
+		}
+		if r.Bottom > bounds.Bottom {
+			bounds.Bottom = r.Bottom
+		}
+		found = true
+		return 1
+	})
+	_, _, _ = procEnumWindows.Call(cb, 0)
+
+	// If no valid right bound was found (all windows are to our right), use left + minimum width
+	if found && bounds.Right <= bounds.Left {
+		// Fallback: find the rightmost edge regardless of self position
+		bounds.Right = bounds.Left
+		cb2 := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+			h := windows.HWND(hwnd)
+			if !isWindowVisible(h) || isWindowIconic(h) {
+				return 1
+			}
+			winPID, err := getWindowProcessID(h)
+			if err != nil || winPID != pid {
+				return 1
+			}
+			ex := getExStyle(h)
+			if ex&wsExToolWindow != 0 {
+				return 1
+			}
+			var r rect
+			if err := getWindowRect(h, &r); err != nil {
+				return 1
+			}
+			if r.Right > bounds.Right {
+				bounds.Right = r.Right
+			}
+			return 1
+		})
+		_, _, _ = procEnumWindows.Call(cb2, 0)
+	}
+
+	return bounds, found
+}
+
 func (f *follower) syncToTarget() error {
 	if !isWindow(f.target) {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	var targetWin, targetFrame rect
-	if err := getWindowRect(f.target, &targetWin); err != nil {
-		return err
-	}
-	if err := getExtendedFrameBounds(f.target, &targetFrame); err != nil {
-		// Fallback when DWM call fails.
-		targetFrame = targetWin
+	// Get combined bounds of all windows belonging to target process
+	targetBounds, found := getProcessWindowsBounds(f.targetPID, f.self)
+	if !found {
+		// Fallback to single window if no bounds found
+		var targetWin rect
+		if err := getWindowRect(f.target, &targetWin); err != nil {
+			return err
+		}
+		if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
+			targetBounds = targetWin
+		}
 	}
 
 	var selfWin, selfFrame rect
@@ -251,11 +377,12 @@ func (f *follower) syncToTarget() error {
 	selfOffsetX := selfFrame.Left - selfWin.Left
 	selfOffsetY := selfFrame.Top - selfWin.Top
 
-	x := targetFrame.Right + int32(f.gap) - selfOffsetX
-	y := targetFrame.Top - selfOffsetY
+	// Position at the right edge of combined bounds
+	x := targetBounds.Right + int32(f.gap) - selfOffsetX
+	y := targetBounds.Top - selfOffsetY
 
-	// 使用目标窗口的高度作为自己的高度，保持固定宽度
-	targetHeight := targetFrame.Bottom - targetFrame.Top
+	// Use combined height of target windows
+	targetHeight := targetBounds.Bottom - targetBounds.Top
 	width := f.selfWidth
 	if width <= 0 {
 		width = selfWin.Right - selfWin.Left
@@ -282,12 +409,17 @@ func (f *follower) syncToTargetWithZOrderFix() error {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	var targetWin, targetFrame rect
-	if err := getWindowRect(f.target, &targetWin); err != nil {
-		return err
-	}
-	if err := getExtendedFrameBounds(f.target, &targetFrame); err != nil {
-		targetFrame = targetWin
+	// Get combined bounds of all windows belonging to target process
+	targetBounds, found := getProcessWindowsBounds(f.targetPID, f.self)
+	if !found {
+		// Fallback to single window if no bounds found
+		var targetWin rect
+		if err := getWindowRect(f.target, &targetWin); err != nil {
+			return err
+		}
+		if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
+			targetBounds = targetWin
+		}
 	}
 
 	var selfWin, selfFrame rect
@@ -301,10 +433,12 @@ func (f *follower) syncToTargetWithZOrderFix() error {
 	selfOffsetX := selfFrame.Left - selfWin.Left
 	selfOffsetY := selfFrame.Top - selfWin.Top
 
-	x := targetFrame.Right + int32(f.gap) - selfOffsetX
-	y := targetFrame.Top - selfOffsetY
+	// Position at the right edge of combined bounds
+	x := targetBounds.Right + int32(f.gap) - selfOffsetX
+	y := targetBounds.Top - selfOffsetY
 
-	targetHeight := targetFrame.Bottom - targetFrame.Top
+	// Use combined height of target windows
+	targetHeight := targetBounds.Bottom - targetBounds.Top
 	width := f.selfWidth
 	if width <= 0 {
 		width = selfWin.Right - selfWin.Left
@@ -376,7 +510,9 @@ func findMainWindowByProcessNameIncludingMinimized(processName string) (windows.
 	return findMainWindowByProcessNameEx(processName, true)
 }
 
-// findMainWindowByProcessNameEx finds the main window by process name.
+// findMainWindowByProcessNameEx finds a representative main window by process name.
+// This is used for z-order management and event listening. The actual positioning
+// uses getProcessWindowsBounds to consider all windows.
 // If includeMinimized is true, it will also consider minimized windows.
 func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (windows.HWND, error) {
 	targetLower := strings.ToLower(processName)
