@@ -8,11 +8,28 @@
 import { computed } from 'vue'
 import { System, Window } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
-import { useNavigationStore } from '@/stores'
+import { useNavigationStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconSidebarToggle from '@/assets/icons/sidebar-toggle.svg'
 import IconAddNewTab from '@/assets/icons/add-new-tab.svg'
+import IconKnowledge from '@/assets/icons/knowledge.svg'
+import IconMultiask from '@/assets/icons/multiask.svg'
+import IconSettings from '@/assets/icons/settings.svg'
 import WindowControlButtons from './WindowControlButtons.vue'
+
+/**
+ * Module-to-icon mapping for tab icons (matching side nav icons).
+ * assistant module uses dynamic image icons set by AssistantPage, so not included here.
+ *
+ * Note: SVG imports are typed as `string` by vite/client.d.ts but at runtime
+ * vite-svg-loader (defaultImport: 'component') provides Vue components.
+ * We use Record<string, any> to avoid the type conflict.
+ */
+const moduleTabIcons: Partial<Record<NavModule, any>> = {
+  knowledge: IconKnowledge,
+  multiask: IconMultiask,
+  settings: IconSettings,
+}
 import {
   ContextMenu,
   ContextMenuContent,
@@ -134,8 +151,20 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
             @click="handleTabClick(tab.id)"
           >
             <div class="flex items-center gap-2">
-              <!-- 标签页图标 -->
-              <div v-if="tab.icon" class="flex size-5 shrink-0 items-center justify-center">
+              <!-- 标签页图标：优先使用模块对应的 SVG 图标，其次使用图片 URL，最后 fallback -->
+              <div
+                v-if="moduleTabIcons[tab.module]"
+                class="flex size-5 shrink-0 items-center justify-center"
+              >
+                <component
+                  :is="moduleTabIcons[tab.module]"
+                  class="size-3.5 overflow-visible text-current"
+                />
+              </div>
+              <div
+                v-else-if="tab.icon"
+                class="flex size-5 shrink-0 items-center justify-center"
+              >
                 <img :src="tab.icon" alt="" class="size-full object-contain" />
               </div>
               <div
