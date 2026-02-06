@@ -94,7 +94,10 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 		return errors.New("winsnap: native window handle is 0")
 	}
 
-	// Get primary monitor work area
+	// Show window first if hidden (needed to get correct window rect)
+	window.Show()
+
+	// Get primary monitor work area (physical pixels)
 	var monitorInfo struct {
 		cbSize    uint32
 		rcMonitor windows.Rect
@@ -109,8 +112,14 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 		procGetMonitorInfo.Call(hMonitor, uintptr(unsafe.Pointer(&monitorInfo)))
 	}
 
-	// Get window size
-	width, height := window.Size()
+	// Get window size using GetWindowRect (physical pixels, DPI-aware)
+	// This is more reliable than window.Size() which may return logical pixels
+	var windowRect rect
+	var width, height int32
+	if err := getWindowRect(windows.HWND(h), &windowRect); err == nil {
+		width = windowRect.Right - windowRect.Left
+		height = windowRect.Bottom - windowRect.Top
+	}
 	if width <= 0 {
 		width = 400
 	}
@@ -119,23 +128,36 @@ func MoveToStandalone(window *application.WebviewWindow) error {
 	}
 
 	// Calculate position: right side of screen with some margin
+	workLeft := int32(monitorInfo.rcWork.Left)
 	workRight := int32(monitorInfo.rcWork.Right)
 	workTop := int32(monitorInfo.rcWork.Top)
 	workBottom := int32(monitorInfo.rcWork.Bottom)
 
 	// If we couldn't get monitor info, use reasonable defaults
 	if workRight == 0 {
+		workLeft = 0
 		workRight = 1920
 		workTop = 0
 		workBottom = 1080
 	}
 
-	// Position: right side with 20px margin, vertically centered
-	posX := workRight - int32(width) - 20
-	posY := workTop + (workBottom-workTop-int32(height))/2
+	// Position: right side with 20px margin from right edge, vertically centered
+	posX := workRight - width - 20
+	posY := workTop + (workBottom-workTop-height)/2
 
-	// Show window first if hidden
-	window.Show()
+	// Clamp to work area bounds to prevent window going off-screen
+	if posX < workLeft {
+		posX = workLeft + 20
+	}
+	if posX+width > workRight {
+		posX = workRight - width - 20
+	}
+	if posY < workTop {
+		posY = workTop
+	}
+	if posY+height > workBottom {
+		posY = workBottom - height
+	}
 
 	return setWindowPosNoSizeNoZ(windows.HWND(h), posX, posY)
 }
