@@ -227,33 +227,24 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		return nil, err
 	}
 
-	// Get enabled tools
+	// Re-register BrowserUse factory with ExtractChatModel before fetching tools.
+	// This ensures a single lazy instance is created with the chat model injected,
+	// instead of creating a duplicate browser instance.
+	toolRegistry.Register(tools.ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
+		return tools.NewBrowserUseTool(ctx, &tools.BrowserUseConfig{
+			ExtractChatModel: chatModel,
+		})
+	})
+
+	// Get enabled tools (BrowserUse is now lazy — Chrome won't start until the LLM invokes it)
 	enabledTools, err := toolRegistry.GetAllTools(ctx)
 	if err != nil {
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	// Replace BrowserUse tool with one configured with ExtractChatModel
+	// Combine registry tools with extra tools (e.g., LibraryRetrieverTool)
 	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools))
-	for _, t := range enabledTools {
-		info, _ := t.Info(ctx)
-		if info != nil && info.Name == tools.ToolIDBrowserUse {
-			// Create BrowserUse tool with ExtractChatModel for intelligent content extraction
-			browserTool, err := tools.NewBrowserUseTool(ctx, &tools.BrowserUseConfig{
-				ExtractChatModel: chatModel,
-			})
-			if err != nil {
-				log.Printf("[agent] failed to create BrowserUse with ExtractChatModel, using default: %v", err)
-				baseTools = append(baseTools, t)
-			} else {
-				baseTools = append(baseTools, browserTool)
-			}
-		} else {
-			baseTools = append(baseTools, t)
-		}
-	}
-
-	// Add extra tools (e.g., LibraryRetrieverTool)
+	baseTools = append(baseTools, enabledTools...)
 	baseTools = append(baseTools, extraTools...)
 
 	agentConfig := &adk.ChatModelAgentConfig{
