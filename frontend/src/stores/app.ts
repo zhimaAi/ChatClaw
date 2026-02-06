@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { SettingsService } from '@bindings/willchat/internal/services/settings'
 
 export type Theme = 'light' | 'dark' | 'system'
 
@@ -32,6 +33,10 @@ export const useAppStore = defineStore('app', () => {
     theme.value = newTheme
     localStorage.setItem('theme', newTheme)
     applyTheme(newTheme)
+    // Persist to DB (fire-and-forget)
+    void SettingsService.SetValue('theme', newTheme).catch((e: unknown) => {
+      console.warn('Failed to persist theme to backend settings:', e)
+    })
   }
 
   // 初始化主题
@@ -41,6 +46,20 @@ export const useAppStore = defineStore('app', () => {
       theme.value = savedTheme
     }
     applyTheme(theme.value)
+
+    // Prefer DB value (async) so theme persists across machines/windows
+    void SettingsService.Get('theme')
+      .then((s) => {
+        const v = (s?.value || '').trim() as Theme
+        if (v && ['light', 'dark', 'system'].includes(v) && v !== theme.value) {
+          theme.value = v
+          localStorage.setItem('theme', v)
+          applyTheme(v)
+        }
+      })
+      .catch((e: unknown) => {
+        console.warn('Failed to fetch theme from backend settings:', e)
+      })
 
     // 监听系统主题变化
     if (typeof window !== 'undefined') {

@@ -18,13 +18,14 @@ type Library struct {
 
 	Name string `json:"name"`
 
-	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
-	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
+	SemanticSegmentationEnabled bool   `json:"semantic_segmentation_enabled"`
+	RaptorLLMProviderID         string `json:"raptor_llm_provider_id"`
+	RaptorLLMModelID            string `json:"raptor_llm_model_id"`
 
-	TopK           int     `json:"top_k"`
-	ChunkSize      int     `json:"chunk_size"`
-	ChunkOverlap   int     `json:"chunk_overlap"`
-	SortOrder      int     `json:"sort_order"`
+	TopK         int `json:"top_k"`
+	ChunkSize    int `json:"chunk_size"`
+	ChunkOverlap int `json:"chunk_overlap"`
+	SortOrder    int `json:"sort_order"`
 }
 
 // CreateLibraryInput 创建知识库的输入参数
@@ -32,24 +33,26 @@ type Library struct {
 type CreateLibraryInput struct {
 	Name string `json:"name"`
 
-	SemanticSegmentProviderID string `json:"semantic_segment_provider_id"`
-	SemanticSegmentModelID    string `json:"semantic_segment_model_id"`
+	SemanticSegmentationEnabled *bool  `json:"semantic_segmentation_enabled"`
+	RaptorLLMProviderID         string `json:"raptor_llm_provider_id"`
+	RaptorLLMModelID            string `json:"raptor_llm_model_id"`
 
-	TopK           *int     `json:"top_k"`
-	ChunkSize      *int     `json:"chunk_size"`
-	ChunkOverlap   *int     `json:"chunk_overlap"`
+	TopK         *int `json:"top_k"`
+	ChunkSize    *int `json:"chunk_size"`
+	ChunkOverlap *int `json:"chunk_overlap"`
 }
 
 // UpdateLibraryInput 更新知识库的输入参数
 type UpdateLibraryInput struct {
 	Name *string `json:"name"`
 
-	SemanticSegmentProviderID *string `json:"semantic_segment_provider_id"`
-	SemanticSegmentModelID    *string `json:"semantic_segment_model_id"`
+	SemanticSegmentationEnabled bool    `json:"semantic_segmentation_enabled"`
+	RaptorLLMProviderID         *string `json:"raptor_llm_provider_id"`
+	RaptorLLMModelID            *string `json:"raptor_llm_model_id"`
 
-	TopK           *int     `json:"top_k"`
-	ChunkSize      *int     `json:"chunk_size"`
-	ChunkOverlap   *int     `json:"chunk_overlap"`
+	TopK         *int `json:"top_k"`
+	ChunkSize    *int `json:"chunk_size"`
+	ChunkOverlap *int `json:"chunk_overlap"`
 }
 
 // libraryModel 数据库模型
@@ -62,13 +65,14 @@ type libraryModel struct {
 
 	Name string `bun:"name,notnull"`
 
-	SemanticSegmentProviderID string `bun:"semantic_segment_provider_id,notnull"`
-	SemanticSegmentModelID    string `bun:"semantic_segment_model_id,notnull"`
+	SemanticSegmentationEnabled bool   `bun:"semantic_segmentation_enabled,notnull"`
+	RaptorLLMProviderID         string `bun:"raptor_llm_provider_id,notnull"`
+	RaptorLLMModelID            string `bun:"raptor_llm_model_id,notnull"`
 
-	TopK           int     `bun:"top_k,notnull"`
-	ChunkSize      int     `bun:"chunk_size,notnull"`
-	ChunkOverlap   int     `bun:"chunk_overlap,notnull"`
-	SortOrder      int     `bun:"sort_order,notnull"`
+	TopK         int `bun:"top_k,notnull"`
+	ChunkSize    int `bun:"chunk_size,notnull"`
+	ChunkOverlap int `bun:"chunk_overlap,notnull"`
+	SortOrder    int `bun:"sort_order,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
@@ -97,12 +101,13 @@ func (m *libraryModel) toDTO() Library {
 
 		Name: m.Name,
 
-		SemanticSegmentProviderID: m.SemanticSegmentProviderID,
-		SemanticSegmentModelID:    m.SemanticSegmentModelID,
+		SemanticSegmentationEnabled: m.SemanticSegmentationEnabled,
+		RaptorLLMProviderID:         m.RaptorLLMProviderID,
+		RaptorLLMModelID:            m.RaptorLLMModelID,
 
-		TopK:           m.TopK,
-		ChunkSize:      m.ChunkSize,
-		ChunkOverlap:   m.ChunkOverlap,
-		SortOrder:      m.SortOrder,
+		TopK:         m.TopK,
+		ChunkSize:    m.ChunkSize,
+		ChunkOverlap: m.ChunkOverlap,
+		SortOrder:    m.SortOrder,
 	}
 }

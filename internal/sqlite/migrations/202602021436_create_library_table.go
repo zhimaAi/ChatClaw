@@ -17,8 +17,9 @@ create table if not exists library (
 	
 	name varchar(100) not null,
 	
-	semantic_segment_provider_id varchar(64) not null default '',
-	semantic_segment_model_id varchar(128) not null default '',
+	semantic_segmentation_enabled integer not null default 0,
+	raptor_llm_provider_id varchar(64) not null default '',
+	raptor_llm_model_id varchar(128) not null default '',
 	
 	top_k integer not null default 20,
 	chunk_size integer not null default 1024,

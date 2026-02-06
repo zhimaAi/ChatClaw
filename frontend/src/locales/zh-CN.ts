@@ -303,7 +303,8 @@ export default {
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
-      semanticSegmentModel: '用于按语义进行分段的模型（可选）。',
+      semanticSegmentation: '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
+      raptorLLMModel: '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
     },
     tabs: {
       personal: '个人',
@@ -361,8 +362,9 @@ export default {
       advancedHide: '收起高级设置',
       defaultMark: '默认',
       topK: '请求文档分片数量',
-      semanticSegmentModel: '语义分段模型',
-      noSemanticSegment: '不使用语义分段',
+      semanticSegmentation: '语义分段',
+      raptorLLMModel: '层级摘要模型',
+      noRaptorLLM: '不启用',
       chunkSize: '分片大小',
       chunkOverlap: '重叠大小',
       matchThreshold: '匹配度阈值',
@@ -387,6 +389,7 @@ export default {
       addDocument: '添加文档',
       selectFile: '选择文件',
       loadFailed: '加载文档列表失败',
+      noMore: '没有更多了',
       fileTypes: {
         documents: '文档文件',
         all: '所有文件',
@@ -405,12 +408,14 @@ export default {
       fileMissing: '原始文件已丢失',
       menu: {
         rename: '重命名',
+        relearn: '重新学习',
         delete: '删除',
       },
       upload: {
         success: '文档上传成功',
         failed: '文档上传失败',
         count: '已上传 {count} 个文档',
+        uploading: '正在上传 {done}/{total}',
       },
       rename: {
         title: '重命名文档',
@@ -420,6 +425,10 @@ export default {
         confirm: '保存',
         success: '重命名成功',
         failed: '重命名失败',
+      },
+      relearn: {
+        success: '已开始重新学习',
+        failed: '重新学习失败',
       },
       delete: {
         title: '确认删除',

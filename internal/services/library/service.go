@@ -103,12 +103,18 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	embeddingProviderID = strings.TrimSpace(embeddingProviderID)
 	embeddingModelID = strings.TrimSpace(embeddingModelID)
 
-	// 语义分段模型（可选）
-	semanticSegmentProviderID := strings.TrimSpace(input.SemanticSegmentProviderID)
-	semanticSegmentModelID := strings.TrimSpace(input.SemanticSegmentModelID)
+	// 语义分段开关（默认关闭）
+	semanticSegmentationEnabled := false
+	if input.SemanticSegmentationEnabled != nil {
+		semanticSegmentationEnabled = *input.SemanticSegmentationEnabled
+	}
+
+	// RAPTOR LLM 配置（可选）
+	raptorLLMProviderID := strings.TrimSpace(input.RaptorLLMProviderID)
+	raptorLLMModelID := strings.TrimSpace(input.RaptorLLMModelID)
 	// 两者要么都为空（不使用），要么都有值
-	if (semanticSegmentProviderID == "") != (semanticSegmentModelID == "") {
-		return nil, errs.New("error.library_semantic_segment_incomplete")
+	if (raptorLLMProviderID == "") != (raptorLLMModelID == "") {
+		return nil, errs.New("error.library_raptor_llm_incomplete")
 	}
 
 	// 默认值（与 migrations 中的 DEFAULT 保持一致）
@@ -181,13 +187,14 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	m := &libraryModel{
 		Name: name,
 
-		SemanticSegmentProviderID: semanticSegmentProviderID,
-		SemanticSegmentModelID:    semanticSegmentModelID,
+		SemanticSegmentationEnabled: semanticSegmentationEnabled,
+		RaptorLLMProviderID:         raptorLLMProviderID,
+		RaptorLLMModelID:            raptorLLMModelID,
 
-		TopK:           topK,
-		ChunkSize:      chunkSize,
-		ChunkOverlap:   chunkOverlap,
-		SortOrder:      sortOrder,
+		TopK:         topK,
+		ChunkSize:    chunkSize,
+		ChunkOverlap: chunkOverlap,
+		SortOrder:    sortOrder,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -241,16 +248,19 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		q = q.Set("name = ?", name)
 	}
 
-	if input.SemanticSegmentProviderID != nil || input.SemanticSegmentModelID != nil {
-		// 允许“只更新其中一个字段”的局部更新：先读当前值再合并更新
+	// 语义分段开关总是更新（bool 类型，前端总是传递）
+	q = q.Set("semantic_segmentation_enabled = ?", input.SemanticSegmentationEnabled)
+
+	if input.RaptorLLMProviderID != nil || input.RaptorLLMModelID != nil {
+		// 允许"只更新其中一个字段"的局部更新：先读当前值再合并更新
 		type row struct {
-			SemanticSegmentProviderID string `bun:"semantic_segment_provider_id"`
-			SemanticSegmentModelID    string `bun:"semantic_segment_model_id"`
+			RaptorLLMProviderID string `bun:"raptor_llm_provider_id"`
+			RaptorLLMModelID    string `bun:"raptor_llm_model_id"`
 		}
 		var cur row
 		if err := db.NewSelect().
 			Table("library").
-			Column("semantic_segment_provider_id", "semantic_segment_model_id").
+			Column("raptor_llm_provider_id", "raptor_llm_model_id").
 			Where("id = ?", id).
 			Limit(1).
 			Scan(ctx, &cur); err != nil {
@@ -260,20 +270,20 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 			return nil, errs.Wrap("error.library_read_failed", err)
 		}
 
-		sp := strings.TrimSpace(cur.SemanticSegmentProviderID)
-		sm := strings.TrimSpace(cur.SemanticSegmentModelID)
+		rp := strings.TrimSpace(cur.RaptorLLMProviderID)
+		rm := strings.TrimSpace(cur.RaptorLLMModelID)
 
-		if input.SemanticSegmentProviderID != nil {
-			sp = strings.TrimSpace(*input.SemanticSegmentProviderID)
+		if input.RaptorLLMProviderID != nil {
+			rp = strings.TrimSpace(*input.RaptorLLMProviderID)
 		}
-		if input.SemanticSegmentModelID != nil {
-			sm = strings.TrimSpace(*input.SemanticSegmentModelID)
+		if input.RaptorLLMModelID != nil {
+			rm = strings.TrimSpace(*input.RaptorLLMModelID)
 		}
 		// 两者要么都为空（清空），要么都有值
-		if (sp == "") != (sm == "") {
-			return nil, errs.New("error.library_semantic_segment_incomplete")
+		if (rp == "") != (rm == "") {
+			return nil, errs.New("error.library_raptor_llm_incomplete")
 		}
-		q = q.Set("semantic_segment_provider_id = ?", sp).Set("semantic_segment_model_id = ?", sm)
+		q = q.Set("raptor_llm_provider_id = ?", rp).Set("raptor_llm_model_id = ?", rm)
 	}
 
 	if input.TopK != nil {
