@@ -183,7 +183,9 @@ const handleSubmit = async () => {
       return Number.isFinite(n) ? n : undefined
     }
     const isRaptorNone = !raptorLLMKey.value || raptorLLMKey.value === RAPTOR_LLM_NONE
-    const [raptorProviderId, raptorModelId] = isRaptorNone ? ['', ''] : raptorLLMKey.value.split('::')
+    const [raptorProviderId, raptorModelId] = isRaptorNone
+      ? ['', '']
+      : raptorLLMKey.value.split('::')
 
     const input = new CreateLibraryInput({
       name: name.value.trim(),
@@ -247,10 +249,7 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.semanticSegmentation')"
               :help="t('knowledge.help.semanticSegmentation')"
             />
-            <Switch
-              v-model="semanticSegmentationEnabled"
-              :disabled="isSubmitting"
-            />
+            <Switch v-model="semanticSegmentationEnabled" :disabled="isSubmitting" />
           </div>
 
           <!-- RAPTOR LLM 模型 -->
@@ -259,10 +258,7 @@ const handleSubmit = async () => {
               :label="t('knowledge.create.raptorLLMModel')"
               :help="t('knowledge.help.raptorLLMModel')"
             />
-            <Select
-              v-model="raptorLLMKey"
-              :disabled="loadingProviders || isSubmitting"
-            >
+            <Select v-model="raptorLLMKey" :disabled="loadingProviders || isSubmitting">
               <SelectTrigger class="w-full">
                 <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
                   {{ currentRaptorLLMLabel }}

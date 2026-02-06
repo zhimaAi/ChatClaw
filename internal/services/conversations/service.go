@@ -3,7 +3,9 @@ package conversations
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -29,6 +31,20 @@ func (s *ConversationsService) db() (*bun.DB, error) {
 		return nil, errs.New("error.sqlite_not_initialized")
 	}
 	return db, nil
+}
+
+// serializeLibraryIDs converts library IDs to JSON string for database storage
+func serializeLibraryIDs(ids []int64) string {
+	if len(ids) == 0 {
+		return "[]"
+	}
+	jsonBytes, err := json.Marshal(ids)
+	if err != nil {
+		// This should rarely happen with []int64, but log it for debugging
+		log.Printf("[conversations] failed to serialize library_ids: %v", err)
+		return "[]"
+	}
+	return string(jsonBytes)
 }
 
 // ListConversations 获取指定助手的会话列表（置顶优先，然后按更新时间倒序）
@@ -137,6 +153,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		IsPinned:      false,
 		LLMProviderID: strings.TrimSpace(input.LLMProviderID),
 		LLMModelID:    strings.TrimSpace(input.LLMModelID),
+		LibraryIDs:    serializeLibraryIDs(input.LibraryIDs),
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -223,6 +240,10 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 
 		if input.LLMModelID != nil {
 			q = q.Set("llm_model_id = ?", strings.TrimSpace(*input.LLMModelID))
+		}
+
+		if input.LibraryIDs != nil {
+			q = q.Set("library_ids = ?", serializeLibraryIDs(*input.LibraryIDs))
 		}
 
 		res, err := q.Exec(ctx)

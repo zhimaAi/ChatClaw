@@ -505,7 +505,6 @@ const handleDelete = async () => {
                     <Switch v-model="enableMaxTokens" />
                   </div>
                 </div>
-
               </div>
 
               <!-- 提示词设置 -->
@@ -583,7 +582,11 @@ const handleDelete = async () => {
                     :disabled="saving"
                     :marks="[
                       { value: 1, label: '1' },
-                      { value: 20, label: t('assistant.settings.retrieval.default'), emphasize: true },
+                      {
+                        value: 20,
+                        label: t('assistant.settings.retrieval.default'),
+                        emphasize: true,
+                      },
                       { value: 30, label: '30' },
                       { value: 50, label: '50' },
                     ]"

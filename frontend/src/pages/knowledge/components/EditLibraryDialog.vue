@@ -61,8 +61,10 @@ const raptorLLMGroups = ref<Group[]>([])
 const RAPTOR_LLM_NONE = '__none__'
 const raptorLLMKey = ref<string>(RAPTOR_LLM_NONE)
 
-const chunkSize = ref<string>('1024')
-const chunkOverlap = ref<string>('100')
+// Default chunk settings optimized for better retrieval performance
+// Smaller chunks (512 vs 1024) provide more granular semantic matching
+const chunkSize = ref<string>('512')
+const chunkOverlap = ref<string>('50')
 
 const close = () => emit('update:open', false)
 
@@ -138,12 +140,7 @@ const isValid = computed(() => {
   const cs = Number.parseInt(chunkSize.value, 10)
   const co = Number.parseInt(chunkOverlap.value, 10)
   return (
-    Number.isFinite(cs) &&
-    cs >= 500 &&
-    cs <= 5000 &&
-    Number.isFinite(co) &&
-    co >= 0 &&
-    co <= 1000
+    Number.isFinite(cs) && cs >= 500 && cs <= 5000 && Number.isFinite(co) && co >= 0 && co <= 1000
   )
 })
 
@@ -191,10 +188,7 @@ const handleSave = async () => {
             :label="t('knowledge.create.semanticSegmentation')"
             :help="t('knowledge.help.semanticSegmentation')"
           />
-          <Switch
-            v-model="semanticSegmentationEnabled"
-            :disabled="saving"
-          />
+          <Switch v-model="semanticSegmentationEnabled" :disabled="saving" />
         </div>
 
         <!-- RAPTOR LLM 模型 -->
@@ -203,10 +197,7 @@ const handleSave = async () => {
             :label="t('knowledge.create.raptorLLMModel')"
             :help="t('knowledge.help.raptorLLMModel')"
           />
-          <Select
-            v-model="raptorLLMKey"
-            :disabled="loadingProviders || saving"
-          >
+          <Select v-model="raptorLLMKey" :disabled="loadingProviders || saving">
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
                 {{ currentRaptorLLMLabel }}

@@ -2,6 +2,8 @@ package conversations
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"time"
 
 	"willchat/internal/sqlite"
@@ -13,12 +15,13 @@ import (
 type Conversation struct {
 	ID int64 `json:"id"`
 
-	AgentID       int64  `json:"agent_id"`
-	Name          string `json:"name"`
-	LastMessage   string `json:"last_message"`
-	IsPinned      bool   `json:"is_pinned"`
-	LLMProviderID string `json:"llm_provider_id"`
-	LLMModelID    string `json:"llm_model_id"`
+	AgentID       int64   `json:"agent_id"`
+	Name          string  `json:"name"`
+	LastMessage   string  `json:"last_message"`
+	IsPinned      bool    `json:"is_pinned"`
+	LLMProviderID string  `json:"llm_provider_id"`
+	LLMModelID    string  `json:"llm_model_id"`
+	LibraryIDs    []int64 `json:"library_ids"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -26,20 +29,22 @@ type Conversation struct {
 
 // CreateConversationInput 创建会话的输入参数
 type CreateConversationInput struct {
-	AgentID       int64  `json:"agent_id"`
-	Name          string `json:"name"`
-	LastMessage   string `json:"last_message"`
-	LLMProviderID string `json:"llm_provider_id"`
-	LLMModelID    string `json:"llm_model_id"`
+	AgentID       int64   `json:"agent_id"`
+	Name          string  `json:"name"`
+	LastMessage   string  `json:"last_message"`
+	LLMProviderID string  `json:"llm_provider_id"`
+	LLMModelID    string  `json:"llm_model_id"`
+	LibraryIDs    []int64 `json:"library_ids"`
 }
 
 // UpdateConversationInput 更新会话的输入参数
 type UpdateConversationInput struct {
-	Name          *string `json:"name"`
-	LastMessage   *string `json:"last_message"`
-	IsPinned      *bool   `json:"is_pinned"`
-	LLMProviderID *string `json:"llm_provider_id"`
-	LLMModelID    *string `json:"llm_model_id"`
+	Name          *string  `json:"name"`
+	LastMessage   *string  `json:"last_message"`
+	IsPinned      *bool    `json:"is_pinned"`
+	LLMProviderID *string  `json:"llm_provider_id"`
+	LLMModelID    *string  `json:"llm_model_id"`
+	LibraryIDs    *[]int64 `json:"library_ids"`
 }
 
 // conversationModel 数据库模型
@@ -56,6 +61,7 @@ type conversationModel struct {
 	IsPinned      bool   `bun:"is_pinned,notnull"`
 	LLMProviderID string `bun:"llm_provider_id,notnull"`
 	LLMModelID    string `bun:"llm_model_id,notnull"`
+	LibraryIDs    string `bun:"library_ids,notnull"` // JSON array stored as string
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at
@@ -77,6 +83,18 @@ func (*conversationModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQue
 }
 
 func (m *conversationModel) toDTO() Conversation {
+	// Parse library_ids from JSON string
+	var libraryIDs []int64
+	if m.LibraryIDs != "" && m.LibraryIDs != "[]" {
+		if err := json.Unmarshal([]byte(m.LibraryIDs), &libraryIDs); err != nil {
+			log.Printf("[conversations] failed to parse library_ids for conversation %d: %v", m.ID, err)
+			libraryIDs = []int64{}
+		}
+	}
+	if libraryIDs == nil {
+		libraryIDs = []int64{}
+	}
+
 	return Conversation{
 		ID: m.ID,
 
@@ -86,6 +104,7 @@ func (m *conversationModel) toDTO() Conversation {
 		IsPinned:      m.IsPinned,
 		LLMProviderID: m.LLMProviderID,
 		LLMModelID:    m.LLMModelID,
+		LibraryIDs:    libraryIDs,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

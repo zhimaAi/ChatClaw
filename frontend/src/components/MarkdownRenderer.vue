@@ -115,18 +115,24 @@ const renderer: Partial<import('marked').RendererObject> = {
   },
 
   table({ header, rows }: Tokens.Table) {
-    const headerHtml = header.map(cell => {
-      const align = cell.align ? ` style="text-align: ${cell.align}"` : ''
-      return `<th class="px-4 py-2 font-medium"${align}>${this.parser?.parseInline(cell.tokens) || cell.text}</th>`
-    }).join('')
-    
-    const bodyHtml = rows.map(row => {
-      const cells = row.map(cell => {
+    const headerHtml = header
+      .map((cell) => {
         const align = cell.align ? ` style="text-align: ${cell.align}"` : ''
-        return `<td class="px-4 py-2"${align}>${this.parser?.parseInline(cell.tokens) || cell.text}</td>`
-      }).join('')
-      return `<tr class="border-b border-border">${cells}</tr>`
-    }).join('')
+        return `<th class="px-4 py-2 font-medium"${align}>${this.parser?.parseInline(cell.tokens) || cell.text}</th>`
+      })
+      .join('')
+
+    const bodyHtml = rows
+      .map((row) => {
+        const cells = row
+          .map((cell) => {
+            const align = cell.align ? ` style="text-align: ${cell.align}"` : ''
+            return `<td class="px-4 py-2"${align}>${this.parser?.parseInline(cell.tokens) || cell.text}</td>`
+          })
+          .join('')
+        return `<tr class="border-b border-border">${cells}</tr>`
+      })
+      .join('')
 
     return `
       <div class="my-3 overflow-x-auto">
@@ -146,10 +152,12 @@ const renderer: Partial<import('marked').RendererObject> = {
   list({ items, ordered }: Tokens.List) {
     const tag = ordered ? 'ol' : 'ul'
     const classes = ordered ? 'list-decimal' : 'list-disc'
-    const body = items.map(item => {
-      const content = this.parser?.parse(item.tokens) || item.text
-      return `<li class="pl-1">${content}</li>`
-    }).join('')
+    const body = items
+      .map((item) => {
+        const content = this.parser?.parse(item.tokens) || item.text
+        return `<li class="pl-1">${content}</li>`
+      })
+      .join('')
     return `<${tag} class="my-3 ml-6 space-y-1 ${classes}">${body}</${tag}>`
   },
 

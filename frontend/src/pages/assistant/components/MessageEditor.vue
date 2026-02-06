@@ -34,7 +34,7 @@ const handleCancel = () => {
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     // Do not submit while IME is composing.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const anyEvent = event as any
     if (anyEvent?.isComposing || anyEvent?.keyCode === 229) return
     event.preventDefault()
@@ -64,20 +64,11 @@ onMounted(() => {
       @keydown="handleKeydown"
     />
     <div class="flex items-center justify-end gap-2">
-      <Button
-        size="sm"
-        variant="ghost"
-        class="h-7 px-2 text-xs"
-        @click="handleCancel"
-      >
+      <Button size="sm" variant="ghost" class="h-7 px-2 text-xs" @click="handleCancel">
         <X class="mr-1 size-3" />
         {{ t('common.cancel') }}
       </Button>
-      <Button
-        size="sm"
-        class="h-7 px-2 text-xs"
-        @click="handleSave"
-      >
+      <Button size="sm" class="h-7 px-2 text-xs" @click="handleSave">
         <Check class="mr-1 size-3" />
         {{ t('assistant.chat.resend') }}
       </Button>

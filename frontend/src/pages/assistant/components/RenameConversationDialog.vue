@@ -76,7 +76,7 @@ const handleSave = async () => {
 
 const handleEnter = (event: KeyboardEvent) => {
   // Avoid submitting while IME is composing.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const anyEvent = event as any
   if (anyEvent?.isComposing || anyEvent?.keyCode === 229) return
   event.preventDefault()
@@ -93,7 +93,9 @@ const handleEnter = (event: KeyboardEvent) => {
 
       <div class="flex flex-col gap-4 py-4">
         <div class="flex flex-col gap-1.5">
-          <label class="text-sm font-medium text-foreground">{{ t('assistant.fields.name') }}</label>
+          <label class="text-sm font-medium text-foreground">{{
+            t('assistant.fields.name')
+          }}</label>
           <Input
             v-model="name"
             :placeholder="t('assistant.conversation.rename.placeholder')"

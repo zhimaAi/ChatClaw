@@ -200,7 +200,8 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 }
 
 // NewChatModelAgent creates an ADK ChatModelAgent with tools and middlewares.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry) (adk.Agent, error) {
+// extraTools are additional tools that will be added to the agent (e.g., LibraryRetrieverTool).
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool) (adk.Agent, error) {
 	// Create the chat model
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
@@ -214,7 +215,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	}
 
 	// Replace BrowserUse tool with one configured with ExtractChatModel
-	baseTools := make([]tool.BaseTool, 0, len(enabledTools))
+	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools))
 	for _, t := range enabledTools {
 		info, _ := t.Info(ctx)
 		if info != nil && info.Name == tools.ToolIDBrowserUse {
@@ -232,6 +233,9 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 			baseTools = append(baseTools, t)
 		}
 	}
+
+	// Add extra tools (e.g., LibraryRetrieverTool)
+	baseTools = append(baseTools, extraTools...)
 
 	agentConfig := &adk.ChatModelAgentConfig{
 		Name:          config.Name,

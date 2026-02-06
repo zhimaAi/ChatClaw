@@ -41,7 +41,7 @@ const containerRef = ref<HTMLElement>()
 const getBounds = () => {
   if (!containerRef.value) return null
   const rect = containerRef.value.getBoundingClientRect()
-  
+
   // 在 Wails 中，主 WebView 占据整个窗口客户区域
   // getBoundingClientRect 返回的坐标就是相对于窗口客户区域的
   const bounds = {
@@ -50,7 +50,7 @@ const getBounds = () => {
     width: Math.round(rect.width),
     height: Math.round(rect.height),
   }
-  
+
   console.log(`[ChatPanel] getBounds for ${props.panelId}:`, bounds)
   return bounds
 }
@@ -71,7 +71,7 @@ let resizeObserver: ResizeObserver | null = null
 onMounted(async () => {
   // 等待 DOM 完全渲染
   await nextTick()
-  
+
   // 延迟一小段时间确保布局稳定
   setTimeout(() => {
     const bounds = getBounds()
@@ -110,9 +110,7 @@ defineExpose({
 </script>
 
 <template>
-  <div
-    class="flex h-full flex-col overflow-hidden rounded-md border border-border bg-background"
-  >
+  <div class="flex h-full flex-col overflow-hidden rounded-md border border-border bg-background">
     <!-- 面板标题栏（无底部边框，与 WebView 一体化） -->
     <div class="flex h-10 shrink-0 items-center justify-center px-4">
       <span class="truncate text-sm font-medium text-foreground">
@@ -121,11 +119,7 @@ defineExpose({
     </div>
 
     <!-- WebView 容器区域（由后端渲染 WebView） -->
-    <div
-      ref="containerRef"
-      class="webview-box relative flex-1"
-      :data-panel-id="panelId"
-    >
+    <div ref="containerRef" class="webview-box relative flex-1" :data-panel-id="panelId">
       <!-- 这个区域会被后端的 WebView 覆盖 -->
       <!-- 在 WebView 加载前显示占位内容 -->
       <div class="absolute inset-0 flex items-center justify-center bg-muted/20">
