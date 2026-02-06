@@ -55,6 +55,10 @@ type Config struct {
 	EnableTemp      bool
 	EnableTopP      bool
 	EnableMaxTokens bool
+
+	// Context and retrieval settings
+	ContextCount  int // Maximum number of messages to include in context (0 or >=200 means unlimited)
+	RetrievalTopK int // Maximum number of document chunks to retrieve
 }
 
 // applyOpenAIModelParams applies optional Temperature/TopP/MaxTokens to an openai.ChatModelConfig.
@@ -195,15 +199,6 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 	return ollama.NewChatModel(ctx, cfg)
 }
 
-// ToolCallingInstruction is appended to the system prompt to improve tool call reliability.
-// Bilingual (Chinese + English) to cover a wider range of models.
-const ToolCallingInstruction = "\n\n" +
-	"Tool calling rules (VERY IMPORTANT): When calling any tool, `tool_calls[].function.arguments` " +
-	"MUST be a strictly valid JSON object, e.g. {\"query\":\"...\"} or {\"expression\":\"1+2\"}. " +
-	"Do NOT output key=value, plain text, or unquoted fields.\n" +
-	"工具调用规则（非常重要）：当你调用任何工具时，必须让 tool_calls[].function.arguments 是严格合法的 JSON（对象），" +
-	"例如：{\"query\":\"...\"} 或 {\"expression\":\"1+2\"}。不要输出 key=value、不要输出纯文本、不要输出不带引号的字段。\n"
-
 // NewChatModelAgent creates an ADK ChatModelAgent with tools and middlewares.
 func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry) (adk.Agent, error) {
 	// Create the chat model
@@ -238,13 +233,10 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		}
 	}
 
-	// Build instruction with tool calling reliability note
-	instruction := config.Instruction + ToolCallingInstruction
-
 	agentConfig := &adk.ChatModelAgentConfig{
 		Name:          config.Name,
 		Description:   "AI Assistant",
-		Instruction:   instruction,
+		Instruction:   config.Instruction,
 		Model:         chatModel,
 		MaxIterations: UnlimitedIterations,
 	}
@@ -322,7 +314,7 @@ func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 }
 
 // buildSkillMiddleware creates the skill middleware with a local backend.
-// Skills are stored under <UserConfigDir>/claude/skills/<skill-name>/SKILL.md.
+// Skills are stored under <UserConfigDir>/.agents/skills/<skill-name>/SKILL.md.
 // Using "claude" as base directory for broader compatibility with Claude-style skills.
 func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 	cfgDir, err := os.UserConfigDir()

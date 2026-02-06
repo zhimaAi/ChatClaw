@@ -22,7 +22,6 @@ type Library struct {
 	RaptorLLMProviderID         string `json:"raptor_llm_provider_id"`
 	RaptorLLMModelID            string `json:"raptor_llm_model_id"`
 
-	TopK         int `json:"top_k"`
 	ChunkSize    int `json:"chunk_size"`
 	ChunkOverlap int `json:"chunk_overlap"`
 	SortOrder    int `json:"sort_order"`
@@ -37,7 +36,6 @@ type CreateLibraryInput struct {
 	RaptorLLMProviderID         string `json:"raptor_llm_provider_id"`
 	RaptorLLMModelID            string `json:"raptor_llm_model_id"`
 
-	TopK         *int `json:"top_k"`
 	ChunkSize    *int `json:"chunk_size"`
 	ChunkOverlap *int `json:"chunk_overlap"`
 }
@@ -50,7 +48,6 @@ type UpdateLibraryInput struct {
 	RaptorLLMProviderID         *string `json:"raptor_llm_provider_id"`
 	RaptorLLMModelID            *string `json:"raptor_llm_model_id"`
 
-	TopK         *int `json:"top_k"`
 	ChunkSize    *int `json:"chunk_size"`
 	ChunkOverlap *int `json:"chunk_overlap"`
 }
@@ -69,7 +66,6 @@ type libraryModel struct {
 	RaptorLLMProviderID         string `bun:"raptor_llm_provider_id,notnull"`
 	RaptorLLMModelID            string `bun:"raptor_llm_model_id,notnull"`
 
-	TopK         int `bun:"top_k,notnull"`
 	ChunkSize    int `bun:"chunk_size,notnull"`
 	ChunkOverlap int `bun:"chunk_overlap,notnull"`
 	SortOrder    int `bun:"sort_order,notnull"`
@@ -105,7 +101,6 @@ func (m *libraryModel) toDTO() Library {
 		RaptorLLMProviderID:         m.RaptorLLMProviderID,
 		RaptorLLMModelID:            m.RaptorLLMModelID,
 
-		TopK:         m.TopK,
 		ChunkSize:    m.ChunkSize,
 		ChunkOverlap: m.ChunkOverlap,
 		SortOrder:    m.SortOrder,

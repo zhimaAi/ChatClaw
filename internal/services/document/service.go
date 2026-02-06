@@ -394,7 +394,11 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 			os.Remove(existingDoc.LocalPath)
 		}
 		// 删除旧记录
-		db.NewDelete().Model(&existingDoc).Where("id = ?", existingDoc.ID).Exec(ctx)
+		if _, err := db.NewDelete().Model(&existingDoc).Where("id = ?", existingDoc.ID).Exec(ctx); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("delete existing document failed", "id", existingDoc.ID, "error", err)
+			}
+		}
 	}
 
 	// 生成目标文件名：hash_原始文件名
@@ -753,11 +757,15 @@ func (s *DocumentService) generateThumbnail(docID, libraryID int64, localPath st
 
 	// Skip stale thumbnail jobs (e.g. after restart or document reprocess)
 	var currentRunID string
-	_ = db.NewSelect().
+	if err := db.NewSelect().
 		Table("documents").
 		Column("processing_run_id").
 		Where("id = ?", docID).
-		Scan(ctx, &currentRunID)
+		Scan(ctx, &currentRunID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if s.app != nil {
+			s.app.Logger.Error("query document processing_run_id failed", "docID", docID, "error", err)
+		}
+	}
 	if info != nil && currentRunID != "" && info.RunID != "" && info.RunID != currentRunID {
 		return
 	}
@@ -822,7 +830,7 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 
 	// 辅助函数：更新状态并发送事件
 	updateAndEmit := func(parsingStatus, parsingProgress int, parsingError string, embeddingStatus, embeddingProgress int, embeddingError string) {
-		db.NewUpdate().
+		if _, err := db.NewUpdate().
 			Table("documents").
 			Set("parsing_status = ?", parsingStatus).
 			Set("parsing_progress = ?", parsingProgress).
@@ -833,7 +841,11 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 			Set("updated_at = ?", sqlite.NowUTC()).
 			Where("id = ?", docID).
 			Where("processing_run_id = ?", runID). // 只更新当前运行的任务
-			Exec(ctx)
+			Exec(ctx); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("update document status failed", "docID", docID, "error", err)
+			}
+		}
 
 		if tm != nil {
 			tm.Emit("document:progress", ProgressEvent{
@@ -1001,7 +1013,11 @@ func (s *DocumentService) reembedDocument(docID, libraryID int64, runID string, 
 		if runID != "" {
 			q = q.Where("processing_run_id = ?", runID)
 		}
-		_, _ = q.Exec(ctx)
+		if _, err := q.Exec(ctx); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("update document embedding progress failed", "docID", docID, "error", err)
+			}
+		}
 
 		// Emit event
 		if s.app != nil {

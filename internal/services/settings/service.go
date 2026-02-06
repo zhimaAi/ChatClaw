@@ -297,14 +297,18 @@ func (s *SettingsService) triggerReembedAllDocuments(dimension int) {
 	for _, r := range rows {
 		runID := uuid.New().String()
 		// update run id + reset embedding fields
-		_, _ = db.NewUpdate().
+		if _, err := db.NewUpdate().
 			Table("documents").
 			Set("processing_run_id = ?", runID).
 			Set("embedding_status = ?", document.StatusPending).
 			Set("embedding_progress = ?", 0).
 			Set("embedding_error = ?", "").
 			Where("id = ?", r.ID).
-			Exec(ctx)
+			Exec(ctx); err != nil {
+			if s.app != nil {
+				s.app.Logger.Error("update document for reembed failed", "docID", r.ID, "error", err)
+			}
+		}
 
 		jobData, _ := json.Marshal(document.ProcessJobData{
 			DocID:     r.ID,

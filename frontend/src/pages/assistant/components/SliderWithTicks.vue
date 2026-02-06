@@ -130,9 +130,16 @@ onBeforeUnmount(() => {
 
     <div v-if="ticks.length" class="relative h-4 text-xs text-muted-foreground">
       <div
-        v-for="t in ticks"
+        v-for="(t, index) in ticks"
         :key="t.value"
-        class="absolute -translate-x-1/2"
+        class="absolute whitespace-nowrap"
+        :class="[
+          index === 0
+            ? 'translate-x-0'
+            : index === ticks.length - 1
+              ? '-translate-x-full'
+              : '-translate-x-1/2',
+        ]"
         :style="{ left: `${((t.value - min) / (max - min)) * 100}%` }"
       >
         <span :class="cn(t.value === modelValue && 'text-foreground')">{{ t.label }}</span>

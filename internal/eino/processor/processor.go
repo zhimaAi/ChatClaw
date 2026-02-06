@@ -342,8 +342,8 @@ func (p *Processor) ProcessDocument(
 
 	// 更新文档统计信息
 	if err := p.updateDocumentStats(ctx, docID, result.WordTotal, result.SplitTotal); err != nil {
-		// 非致命错误
-		_ = err
+		// Non-fatal error, log and continue
+		log.Printf("[Processor] WARNING: update document stats failed docID=%d error=%v", docID, err)
 	}
 
 	return result, nil

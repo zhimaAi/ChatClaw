@@ -44,8 +44,9 @@ create table if not exists documents (
 
 	foreign key(library_id) references library(id) on delete cascade
 );
-CREATE INDEX idx_docs_library_id ON documents(library_id);
 CREATE UNIQUE INDEX idx_docs_library_hash ON documents(library_id, content_hash);
+CREATE INDEX idx_docs_library_id ON documents(library_id);
+CREATE INDEX idx_docs_library_id_id ON documents(library_id, id);
 
 CREATE VIRTUAL TABLE doc_fts USING fts5(
     -- 预分词后的 token 文本（由 Go 写入；用空格分隔）

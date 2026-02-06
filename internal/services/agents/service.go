@@ -125,12 +125,13 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		DefaultLLMModelID:    "",
 		LLMTemperature:       0.5,
 		LLMTopP:              1.0,
-		ContextCount:         50,
+		LLMMaxContextCount:   50,
 		LLMMaxTokens:         1000,
-		EnableLLMTemperature: false,
-		EnableLLMTopP:        false,
-		EnableLLMMaxTokens:   false,
-		MatchThreshold:       0.5,
+		EnableLLMTemperature:    false,
+		EnableLLMTopP:           false,
+		EnableLLMMaxTokens:      false,
+		RetrievalMatchThreshold: 0.5,
+		RetrievalTopK:           20,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -269,8 +270,8 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	if input.LLMTopP != nil {
 		q = q.Set("llm_top_p = ?", *input.LLMTopP)
 	}
-	if input.ContextCount != nil {
-		q = q.Set("context_count = ?", *input.ContextCount)
+	if input.LLMMaxContextCount != nil {
+		q = q.Set("llm_max_context_count = ?", *input.LLMMaxContextCount)
 	}
 	if input.LLMMaxTokens != nil {
 		q = q.Set("llm_max_tokens = ?", *input.LLMMaxTokens)
@@ -284,11 +285,17 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	if input.EnableLLMMaxTokens != nil {
 		q = q.Set("enable_llm_max_tokens = ?", *input.EnableLLMMaxTokens)
 	}
-	if input.MatchThreshold != nil {
-		if *input.MatchThreshold < 0 || *input.MatchThreshold > 1 {
-			return nil, errs.New("error.agent_match_threshold_invalid")
+	if input.RetrievalMatchThreshold != nil {
+		if *input.RetrievalMatchThreshold < 0 || *input.RetrievalMatchThreshold > 1 {
+			return nil, errs.New("error.agent_retrieval_match_threshold_invalid")
 		}
-		q = q.Set("match_threshold = ?", *input.MatchThreshold)
+		q = q.Set("retrieval_match_threshold = ?", *input.RetrievalMatchThreshold)
+	}
+	if input.RetrievalTopK != nil {
+		if *input.RetrievalTopK <= 0 {
+			return nil, errs.New("error.agent_retrieval_topk_invalid")
+		}
+		q = q.Set("retrieval_top_k = ?", *input.RetrievalTopK)
 	}
 
 	result, err := q.Exec(ctx)

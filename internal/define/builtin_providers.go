@@ -47,9 +47,9 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "openai", ModelID: "text-embedding-3-small", Name: "Text Embedding 3 Small", Type: "embedding", SortOrder: 101},
 
 	// Anthropic
-	{ProviderID: "anthropic", ModelID: "claude-sonnet-4-5-20250929", Name: "Claude Sonnet 4.5", Type: "llm", SortOrder: 100},
-	{ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20251001", Name: "Claude Haiku 4.5", Type: "llm", SortOrder: 101},
-	{ProviderID: "anthropic", ModelID: "claude-opus-4-5-20251101", Name: "Claude Opus 4.5", Type: "llm", SortOrder: 102},
+	{ProviderID: "anthropic", ModelID: "claude-opus-4-6", Name: "Claude Opus 4.6", Type: "llm", SortOrder: 100},
+	{ProviderID: "anthropic", ModelID: "claude-sonnet-4-5-20250929", Name: "Claude Sonnet 4.5", Type: "llm", SortOrder: 101},
+	{ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20251001", Name: "Claude Haiku 4.5", Type: "llm", SortOrder: 102},
 
 	// Google
 	{ProviderID: "google", ModelID: "gemini-3-pro-preview", Name: "Gemini 3 Pro", Type: "llm", SortOrder: 100},

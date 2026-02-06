@@ -21,9 +21,8 @@ create table if not exists library (
 	raptor_llm_provider_id varchar(64) not null default '',
 	raptor_llm_model_id varchar(128) not null default '',
 	
-	top_k integer not null default 20,
-	chunk_size integer not null default 1024,
-	chunk_overlap integer not null default 100,
+	chunk_size integer not null default 512,
+	chunk_overlap integer not null default 50,
 	sort_order integer not null default 0
 );
 `
