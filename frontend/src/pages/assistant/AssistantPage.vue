@@ -414,9 +414,6 @@ const syncLibraryIdsFromConversation = async () => {
   }
 }
 
-const handleSelectImage = () => {
-  // TODO: Implement image selection
-}
 
 // Handle message editing (resend from that point)
 const handleEditMessage = async (messageId: number, newContent: string) => {
@@ -740,7 +737,7 @@ onUnmounted(() => {
 
     <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded) -->
     <AgentSidebar
-      v-if="!isSnapMode || !sidebarCollapsed"
+      v-if="!sidebarCollapsed"
       :agents="agents"
       :active-agent-id="activeAgentId"
       :active-conversation-id="activeConversationId"
@@ -819,7 +816,6 @@ onUnmounted(() => {
         @update:selected-library-ids="selectedLibraryIds = $event"
         @send="handleSend"
         @stop="handleStop"
-        @select-image="handleSelectImage"
         @library-selection-change="handleLibrarySelectionChange"
         @clear-library-selection="clearLibrarySelection"
         @load-libraries="loadLibrariesFn"

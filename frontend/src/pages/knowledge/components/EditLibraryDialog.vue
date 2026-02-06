@@ -182,6 +182,35 @@ const handleSave = async () => {
       </DialogHeader>
 
       <div class="flex flex-col gap-4 py-4">
+        <div class="flex flex-col gap-1.5">
+          <FieldLabel
+            :label="t('knowledge.create.chunkSize')"
+            :help="t('knowledge.help.chunkSize')"
+          />
+          <Input
+            v-model="chunkSize"
+            type="number"
+            min="500"
+            max="5000"
+            step="1"
+            :disabled="saving"
+          />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <FieldLabel
+            :label="t('knowledge.create.chunkOverlap')"
+            :help="t('knowledge.help.chunkOverlap')"
+          />
+          <Input
+            v-model="chunkOverlap"
+            type="number"
+            min="0"
+            max="1000"
+            step="1"
+            :disabled="saving"
+          />
+        </div>
+
         <!-- 语义分段开关 -->
         <div class="flex items-center justify-between">
           <FieldLabel
@@ -219,35 +248,6 @@ const handleSave = async () => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <FieldLabel
-            :label="t('knowledge.create.chunkSize')"
-            :help="t('knowledge.help.chunkSize')"
-          />
-          <Input
-            v-model="chunkSize"
-            type="number"
-            min="500"
-            max="5000"
-            step="1"
-            :disabled="saving"
-          />
-        </div>
-        <div class="flex flex-col gap-1.5">
-          <FieldLabel
-            :label="t('knowledge.create.chunkOverlap')"
-            :help="t('knowledge.help.chunkOverlap')"
-          />
-          <Input
-            v-model="chunkOverlap"
-            type="number"
-            min="0"
-            max="1000"
-            step="1"
-            :disabled="saving"
-          />
         </div>
 
         <OrangeWarning :text="t('knowledge.create.advancedWarning')" />

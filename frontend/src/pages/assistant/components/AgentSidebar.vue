@@ -196,7 +196,7 @@ const handleListModeChange = (mode: ListMode) => {
                     >
                       {{ t('assistant.menu.history') }}
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent class="w-56">
+                    <DropdownMenuSubContent class="max-h-[300px] w-56 overflow-y-auto">
                       <template v-if="getAllAgentConversations(a.id).length > 0">
                         <DropdownMenuItem
                           v-for="conv in getAllAgentConversations(a.id)"
