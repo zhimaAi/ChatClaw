@@ -136,8 +136,13 @@ const loadModels = async () => {
     const enabled = providers.filter((p) => p.enabled)
     const results: ProviderWithModels[] = []
     for (const p of enabled) {
-      const withModels = await ProvidersService.GetProviderWithModels(p.provider_id)
-      if (withModels) results.push(withModels)
+      try {
+        const withModels = await ProvidersService.GetProviderWithModels(p.provider_id)
+        if (withModels) results.push(withModels)
+      } catch (error: unknown) {
+        // Keep dialog usable even if one provider is down.
+        console.warn(`Failed to load provider models (${p.provider_id}) in dialog:`, error)
+      }
     }
     providersWithModels.value = results
 
