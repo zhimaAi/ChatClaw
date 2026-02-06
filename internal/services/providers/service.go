@@ -653,19 +653,19 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 			return nil, errs.New("error.cannot_disable_global_embedding_provider")
 		}
 
-		// 禁止关闭其语义分段模型正被知识库使用的供应商
-		var libraryName string
-		if err := db.NewSelect().
-			Table("library").
-			Column("name").
-			Where("semantic_segment_provider_id = ?", providerID).
-			Limit(1).
-			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, errs.Wrap("error.library_read_failed", err)
-		}
-		if libraryName != "" {
-			return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
-		}
+	// 禁止关闭其语义分段模型正被知识库使用的供应商
+	var libraryName string
+	if err := db.NewSelect().
+		Table("library").
+		Column("name").
+		Where("raptor_llm_provider_id = ?", providerID).
+		Limit(1).
+		Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, errs.Wrap("error.library_read_failed", err)
+	}
+	if libraryName != "" {
+		return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
+	}
 	}
 
 	// 构建更新语句
@@ -1214,8 +1214,8 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		if err := db.NewSelect().
 			Table("library").
 			Column("name").
-			Where("semantic_segment_provider_id = ?", providerID).
-			Where("semantic_segment_model_id = ?", modelID).
+			Where("raptor_llm_provider_id = ?", providerID).
+			Where("raptor_llm_model_id = ?", modelID).
 			Limit(1).
 			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return errs.Wrap("error.library_read_failed", err)
