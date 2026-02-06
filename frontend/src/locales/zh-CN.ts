@@ -285,6 +285,8 @@ export default {
       cancelled: '已停止',
       thinking: '思考中',
       thinkingInProgress: '正在思考...',
+      thinkingOn: '思考模式已开启',
+      thinkingOff: '思考模式已关闭',
       toolCalling: '执行中',
       toolCompleted: '已完成',
       toolError: '执行失败',

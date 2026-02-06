@@ -59,6 +59,9 @@ type Config struct {
 	// Context and retrieval settings
 	ContextCount  int // Maximum number of messages to include in context (0 or >=200 means unlimited)
 	RetrievalTopK int // Maximum number of document chunks to retrieve
+
+	// Thinking mode (for providers that support it)
+	EnableThinking bool
 }
 
 // applyOpenAIModelParams applies optional Temperature/TopP/MaxTokens to an openai.ChatModelConfig.
@@ -102,6 +105,14 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 	}
 	applyOpenAIModelParams(cfg, config)
 
+	// Add thinking mode support via ExtraFields (for providers like Qwen that support enable_thinking)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
+	}
+
 	return openai.NewChatModel(ctx, cfg)
 }
 
@@ -123,6 +134,14 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 		APIVersion: extraConfig.APIVersion,
 	}
 	applyOpenAIModelParams(cfg, config)
+
+	// Add thinking mode support via ExtraFields (for Azure OpenAI if it supports thinking)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
+	}
 
 	return openai.NewChatModel(ctx, cfg)
 }

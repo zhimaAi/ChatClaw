@@ -343,15 +343,16 @@ type AgentExtras struct {
 func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB, conversationID int64) (einoagent.Config, einoagent.ProviderConfig, AgentExtras, error) {
 	// Get conversation
 	type conversationRow struct {
-		AgentID       int64  `bun:"agent_id"`
-		LLMProviderID string `bun:"llm_provider_id"`
-		LLMModelID    string `bun:"llm_model_id"`
-		LibraryIDs    string `bun:"library_ids"`
+		AgentID        int64  `bun:"agent_id"`
+		LLMProviderID  string `bun:"llm_provider_id"`
+		LLMModelID     string `bun:"llm_model_id"`
+		LibraryIDs     string `bun:"library_ids"`
+		EnableThinking bool   `bun:"enable_thinking"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "enable_thinking").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -451,6 +452,7 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		EnableMaxTokens: agent.EnableLLMMaxTokens,
 		ContextCount:    agent.LLMMaxContextCount,
 		RetrievalTopK:   agent.RetrievalTopK,
+		EnableThinking:  conv.EnableThinking,
 	}
 
 	providerConfig := einoagent.ProviderConfig{
@@ -836,6 +838,22 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 						log.Printf("[chat] stream recv failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, err)
 						emitError("error.chat_stream_failed", map[string]any{"Error": err.Error()})
 						break
+					}
+
+					// Handle thinking content (ReasoningContent)
+					if msg.ReasoningContent != "" {
+						thinkingBuilder.WriteString(msg.ReasoningContent)
+						emit(EventChatThinking, ChatThinkingEvent{
+							ChatEvent: ChatEvent{
+								ConversationID: conversationID,
+								TabID:          tabID,
+								RequestID:      requestID,
+								Seq:            nextSeq(),
+								MessageID:      assistantMsg.ID,
+								Ts:             time.Now().UnixMilli(),
+							},
+							Delta: msg.ReasoningContent,
+						})
 					}
 
 					// Handle content

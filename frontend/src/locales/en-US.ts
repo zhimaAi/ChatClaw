@@ -288,6 +288,8 @@ export default {
       cancelled: 'Stopped',
       thinking: 'Thinking',
       thinkingInProgress: 'Thinking...',
+      thinkingOn: 'Thinking mode enabled',
+      thinkingOff: 'Thinking mode disabled',
       toolCalling: 'Calling',
       toolCompleted: 'Completed',
       toolError: 'Failed',

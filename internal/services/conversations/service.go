@@ -147,13 +147,14 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	}
 
 	m := &conversationModel{
-		AgentID:       input.AgentID,
-		Name:          name,
-		LastMessage:   lastMessage,
-		IsPinned:      false,
-		LLMProviderID: strings.TrimSpace(input.LLMProviderID),
-		LLMModelID:    strings.TrimSpace(input.LLMModelID),
-		LibraryIDs:    serializeLibraryIDs(input.LibraryIDs),
+		AgentID:        input.AgentID,
+		Name:           name,
+		LastMessage:    lastMessage,
+		IsPinned:       false,
+		LLMProviderID:  strings.TrimSpace(input.LLMProviderID),
+		LLMModelID:     strings.TrimSpace(input.LLMModelID),
+		LibraryIDs:     serializeLibraryIDs(input.LibraryIDs),
+		EnableThinking: input.EnableThinking,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -244,6 +245,10 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 
 		if input.LibraryIDs != nil {
 			q = q.Set("library_ids = ?", serializeLibraryIDs(*input.LibraryIDs))
+		}
+
+		if input.EnableThinking != nil {
+			q = q.Set("enable_thinking = ?", *input.EnableThinking)
 		}
 
 		res, err := q.Exec(ctx)
