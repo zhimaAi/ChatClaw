@@ -253,9 +253,6 @@ func (w *MouseHookWatcher) handlePossibleSelection(mouseX, mouseY int32) {
 
 	// Old mode: copy then show popup
 
-	// Save current clipboard content
-	oldClipboard := getClipboardText()
-
 	// Simulate Ctrl+C
 	simulateCtrlC()
 
@@ -265,10 +262,11 @@ func (w *MouseHookWatcher) handlePossibleSelection(mouseX, mouseY int32) {
 	// Read new clipboard content
 	newClipboard := getClipboardText()
 
-	// If clipboard content changed and has meaningful text, show popup
+	// If clipboard has meaningful text, show popup
 	// Skip if only whitespace (e.g., user selected image/screenshot, not text)
+	// Allow same text selection - user may want to use the same text again
 	newClipboard = strings.TrimSpace(newClipboard)
-	if newClipboard != "" && newClipboard != strings.TrimSpace(oldClipboard) {
+	if newClipboard != "" {
 		if callback != nil {
 			callback(newClipboard, mouseX, mouseY)
 		}
