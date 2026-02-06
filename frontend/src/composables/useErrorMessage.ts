@@ -6,6 +6,18 @@ export function getErrorMessage(error: unknown): string {
     msg = String((error as { message: unknown }).message)
   } else msg = String(error)
 
+  // Wails / bindings sometimes return placeholder strings like "<no value>".
+  // Treat these as empty so callers can fall back to i18n messages.
+  const normalized = msg.trim()
+  if (
+    normalized === '' ||
+    normalized === '<no value>' ||
+    normalized === 'undefined' ||
+    normalized === 'null'
+  ) {
+    return ''
+  }
+
   if (msg.startsWith('{')) {
     try {
       const parsed = JSON.parse(msg)

@@ -323,6 +323,7 @@ export default {
     errors: {
       loadFailed: 'Failed to load agents',
       loadModelsFailed: 'Failed to load models',
+      loadModelsPartialFailed: 'Some model lists failed to load; showing available models',
       createFailed: 'Failed to create agent',
       updateFailed: 'Failed to update agent',
       deleteFailed: 'Failed to delete agent',

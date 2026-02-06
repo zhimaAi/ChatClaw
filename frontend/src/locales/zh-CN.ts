@@ -320,6 +320,7 @@ export default {
     errors: {
       loadFailed: '加载助手列表失败',
       loadModelsFailed: '加载模型列表失败',
+      loadModelsPartialFailed: '部分模型列表加载失败，已显示可用模型',
       createFailed: '创建助手失败',
       updateFailed: '更新助手失败',
       deleteFailed: '删除助手失败',

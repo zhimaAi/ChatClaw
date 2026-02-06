@@ -127,6 +127,12 @@ const conversationsLoadingByAgent = ref<Record<number, boolean>>({})
 const conversationsStaleByAgent = ref<Record<number, boolean>>({})
 const activeConversationId = ref<number | null>(null)
 
+const activeConversation = computed<Conversation | null>(() => {
+  if (!activeConversationId.value || !activeAgentId.value) return null
+  const list = conversationsByAgent.value[activeAgentId.value] ?? []
+  return list.find((c) => c.id === activeConversationId.value) ?? null
+})
+
 // Conversation dialogs
 const renameConversationOpen = ref(false)
 const deleteConversationOpen = ref(false)
@@ -153,7 +159,7 @@ const canSend = computed(() => {
   return (
     !!activeAgentId.value &&
     chatInput.value.trim() !== '' &&
-    selectedModelKey.value !== '' &&
+    !!selectedModelInfo.value &&
     !isGenerating.value
   )
 })
@@ -308,11 +314,28 @@ const loadModels = async () => {
   try {
     const providers = await ProvidersService.ListProviders()
     const enabled = providers.filter((p) => p.enabled)
-    // Load all provider models in parallel
-    const results = await Promise.all(
+    // Load provider models in parallel; allow partial failures.
+    const settled = await Promise.allSettled(
       enabled.map((p) => ProvidersService.GetProviderWithModels(p.provider_id))
     )
-    providersWithModels.value = results.filter(Boolean) as ProviderWithModels[]
+    const ok: ProviderWithModels[] = []
+    let failedCount = 0
+    for (const s of settled) {
+      if (s.status === 'fulfilled') {
+        if (s.value) ok.push(s.value)
+      } else {
+        failedCount += 1
+        console.warn('Failed to load provider models:', s.reason)
+      }
+    }
+    providersWithModels.value = ok
+
+    // If some providers failed but we still have models, keep UI usable and show a gentle hint.
+    if (failedCount > 0 && ok.length > 0) {
+      toast.default(t('assistant.errors.loadModelsPartialFailed'))
+    } else if (failedCount > 0 && ok.length === 0) {
+      toast.error(t('assistant.errors.loadModelsFailed'))
+    }
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadModelsFailed'))
   }
@@ -333,6 +356,26 @@ const selectDefaultModel = () => {
   if (!activeAgent.value) {
     selectedModelKey.value = ''
     return
+  }
+
+  // Prefer the active conversation's model if available.
+  {
+    const conv = activeConversation.value
+    if (conv?.llm_provider_id && conv?.llm_model_id) {
+      const key = `${conv.llm_provider_id}::${conv.llm_model_id}`
+      // Verify the model still exists
+      for (const pw of providersWithModels.value) {
+        if (pw.provider.provider_id !== conv.llm_provider_id) continue
+        for (const group of pw.model_groups) {
+          if (group.type !== 'llm') continue
+          const found = group.models.find((m) => m.model_id === conv.llm_model_id)
+          if (found) {
+            selectedModelKey.value = key
+            return
+          }
+        }
+      }
+    }
   }
 
   // Check if agent has a default model configured
@@ -388,6 +431,51 @@ const selectedModelInfo = computed(() => {
   }
   return null
 })
+
+const parseSelectedModelKey = (key: string): { providerId: string; modelId: string } | null => {
+  if (!key) return null
+  const [providerId, modelId] = key.split('::')
+  if (!providerId || !modelId) return null
+  return { providerId, modelId }
+}
+
+const saveModelToConversationIfNeeded = async (opts?: { silent?: boolean }) => {
+  const silent = opts?.silent ?? true
+  if (!activeConversationId.value) return
+
+  const parsed = parseSelectedModelKey(selectedModelKey.value)
+  if (!parsed) return
+
+  // Avoid redundant updates when switching conversations (we already read from DB into selectedModelKey).
+  const current = activeConversation.value
+  if (
+    current &&
+    current.llm_provider_id === parsed.providerId &&
+    current.llm_model_id === parsed.modelId
+  ) {
+    return
+  }
+
+  try {
+    const updated = await ConversationsService.UpdateConversation(
+      activeConversationId.value,
+      new UpdateConversationInput({
+        llm_provider_id: parsed.providerId,
+        llm_model_id: parsed.modelId,
+      })
+    )
+    if (updated) {
+      handleConversationUpdated(updated)
+    }
+  } catch (error: unknown) {
+    // Non-critical: if this fails, backend will continue using the previously saved model.
+    if (!silent) {
+      toast.error(getErrorMessage(error) || t('assistant.errors.updateConversationFailed'))
+    } else {
+      console.warn('Failed to save model to conversation:', error)
+    }
+  }
+}
 
 const handleCreate = async (data: { name: string; prompt: string; icon: string }) => {
   loading.value = true
@@ -545,6 +633,9 @@ const handleSend = async () => {
   // Now send the message via ChatService
   if (activeConversationId.value) {
     try {
+      // Ensure conversation model is synced before sending to backend.
+      // Backend send API only takes conversation_id, so it relies on the saved model in conversation record.
+      await saveModelToConversationIfNeeded({ silent: true })
       await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId)
 
       // Update conversation's last_message
@@ -695,12 +786,12 @@ const handleTogglePin = async (conv: Conversation) => {
   }
 }
 
-const handleConversationUpdated = (updated: Conversation) => {
+function handleConversationUpdated(updated: Conversation) {
   const agentId = updated.agent_id
   const current = conversationsByAgent.value[agentId] ?? []
+  const exists = current.some((c) => c.id === updated.id)
   // Update and re-sort (pinned first, then by updated_at desc)
-  const next = current
-    .map((c) => (c.id === updated.id ? updated : c))
+  const next = (exists ? current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...current])
     .sort((a, b) => {
       // Pinned items first
       if (a.is_pinned !== b.is_pinned) {
@@ -801,6 +892,12 @@ watch(activeAgentId, (newAgentId, oldAgentId) => {
 // Watch for models loaded
 watch(providersWithModels, () => {
   selectDefaultModel()
+})
+
+// Persist model switching to current conversation so backend uses the new model.
+watch(selectedModelKey, () => {
+  // Fire-and-forget; handleSend will also await a sync to avoid race conditions.
+  void saveModelToConversationIfNeeded({ silent: true })
 })
 
 // 当前标签页是否激活
