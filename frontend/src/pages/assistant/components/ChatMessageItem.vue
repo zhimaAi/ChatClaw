@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
 import type { Message } from '@bindings/willchat/internal/services/chat'
+import LogoIcon from '@/assets/images/logo.svg'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolCallBlock from './ToolCallBlock.vue'
 import MessageEditor from './MessageEditor.vue'
@@ -22,6 +23,9 @@ const props = defineProps<{
   segments?: MessageSegment[] // Ordered segments for interleaved display
   errorKey?: string // Specific error key for more informative error messages
   errorDetail?: string // Actual error message detail for user display
+  // Agent info for assistant message header
+  agentName?: string
+  agentIcon?: string
   // Snap mode props
   mode?: 'main' | 'snap'
   hasAttachedTarget?: boolean
@@ -247,6 +251,16 @@ const handleCancelEdit = () => {
     >
       <!-- Assistant messages: interleaved segments (thinking → content ↔ tool calls) -->
       <template v-if="isAssistant">
+        <!-- Agent avatar and name header -->
+        <div class="flex items-center gap-1.5 mb-0.5">
+          <div
+            class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white dark:border-white/15 dark:bg-white/5"
+          >
+            <img v-if="agentIcon" :src="agentIcon" class="size-4 object-contain" />
+            <LogoIcon v-else class="size-4 opacity-90" />
+          </div>
+          <span class="text-xs font-medium text-muted-foreground">{{ agentName || 'Assistant' }}</span>
+        </div>
         <template v-for="(segment, idx) in displaySegments" :key="idx">
           <!-- Thinking segment -->
           <ThinkingBlock
