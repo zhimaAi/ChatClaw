@@ -22,6 +22,10 @@ export default {
       name: '网络搜索',
       description: '使用 DuckDuckGo 搜索网络信息',
     },
+    libraryRetriever: {
+      name: '知识库检索',
+      description: '从知识库中检索相关内容',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -29,6 +33,19 @@ export default {
     cancelSnap: '取消吸附',
     placeholder: '请输入问题',
     thinking: '思考中...',
+    actions: {
+      sendAndTrigger: '发送并触发发送',
+      sendToEdit: '发送到编辑框',
+      copyToClipboard: '复制到剪贴板',
+    },
+    toast: {
+      copied: '已复制到剪贴板',
+      sent: '已发送',
+      pasted: '已粘贴到编辑框',
+      sendFailed: '发送失败',
+      pasteFailed: '粘贴失败',
+      noTarget: '未吸附到任何应用',
+    },
   },
   selection: {
     aiChat: 'AI 对话',
@@ -114,6 +131,14 @@ export default {
         feishu: '飞书',
         douyin: '抖音',
       },
+      clickOffset: {
+        labelX: '距左侧',
+        labelY: '距底部',
+        placeholderX: '居中',
+        hint: '像素，用于定位输入框',
+      },
+      noClickMode: '不点击模式（焦点自动保持的应用）',
+      clickMode: '点击模式（需要点击激活输入框）',
     },
     // 功能工具设置
     tools: {
@@ -244,6 +269,9 @@ export default {
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       selectImage: '选择图片',
+      clearSelected: '清空选中',
+      selectedCount: '已选 {count} 个知识库',
+      noKnowledge: '暂无知识库',
       send: '发送',
       stop: '停止',
       copy: '复制',
@@ -352,8 +380,10 @@ export default {
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
       embeddingModel: '用于将文本转换为向量的嵌入模型。',
       embeddingDimension: '嵌入向量维度需与所选模型的输出一致。',
-      semanticSegmentation: '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
-      raptorLLMModel: '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
+      semanticSegmentation:
+        '启用后，将使用嵌入模型按语义边界进行智能分段，提高分段质量。注意：此功能会增加处理时间并消耗额外的 Token。',
+      raptorLLMModel:
+        '用于生成多层摘要的语言模型。启用后将构建层级摘要树以提升检索效果。注意：此功能会增加处理时间并消耗额外的 Token。',
     },
     tabs: {
       personal: '个人',

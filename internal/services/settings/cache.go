@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -109,6 +110,13 @@ func setCachedValue(key, value string) {
 	globalSettingsCache.values[key] = value
 }
 
+func setCachedValueWithCategory(key, value string, category Category) {
+	globalSettingsCache.mu.Lock()
+	defer globalSettingsCache.mu.Unlock()
+	globalSettingsCache.values[key] = value
+	globalSettingsCache.categories[key] = category
+}
+
 func listCachedKeys(category Category) []string {
 	globalSettingsCache.mu.RLock()
 	defer globalSettingsCache.mu.RUnlock()
@@ -146,6 +154,23 @@ func GetBool(key string, defaultValue bool) bool {
 	default:
 		return defaultValue
 	}
+}
+
+// GetInt 从缓存中读取整数值；缺失/非法时返回 defaultValue
+func GetInt(key string, defaultValue int) int {
+	v, ok := GetValue(key)
+	if !ok {
+		return defaultValue
+	}
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return defaultValue
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultValue
+	}
+	return i
 }
 
 // dbForWrite is a small helper for write paths.

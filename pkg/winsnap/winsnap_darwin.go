@@ -21,7 +21,8 @@ typedef struct ScreenInfo {
 typedef struct WinsnapFollower {
 	pid_t pid;
 	int gap;
-	void *selfWindow; // NSWindow*
+	void *selfWindow; // NSWindow* (used only during initialization)
+	int selfWindowNumber; // Window number for safe lookups after initialization
 
 	AXObserverRef observer;
 	AXUIElementRef appElem;
@@ -50,6 +51,17 @@ typedef struct WinsnapFollower {
 	// Observe target app activation to re-assert z-order (keep above target only when target is frontmost)
 	void *activationObserver; // token returned by NSNotificationCenter (stored as void* for CGO compatibility)
 } WinsnapFollower;
+
+// Helper function to find NSWindow by window number safely
+static NSWindow* winsnap_find_window_by_number(int windowNumber) {
+	if (windowNumber <= 0) return nil;
+	for (NSWindow *win in [NSApp windows]) {
+		if ((int)[win windowNumber] == windowNumber) {
+			return win;
+		}
+	}
+	return nil;
+}
 
 static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame);
 // Gets CG window number by matching AX window frame to CGWindowListCopyWindowInfo (macOS has no public kAXWindowNumberAttribute).
@@ -266,7 +278,9 @@ static bool winsnap_is_frontmost_pid(pid_t pid) {
 }
 
 static void winsnap_order_above_target(WinsnapFollower *f) {
-	if (!f || !f->selfWindow) return;
+	if (!f) return;
+	if (f->stopping) return;
+	if (f->selfWindowNumber <= 0) return;
 	if (!winsnap_is_frontmost_pid(f->pid)) return;
 
 	int winNo = 0;
@@ -275,8 +289,9 @@ static void winsnap_order_above_target(WinsnapFollower *f) {
 	os_unfair_lock_unlock(&f->lock);
 	if (winNo <= 0) return;
 
-	NSWindow *selfWin = (__bridge NSWindow *)f->selfWindow;
-	if (!selfWin) return;
+	// Find window by number safely (avoids stale pointer issues)
+	NSWindow *selfWin = winsnap_find_window_by_number(f->selfWindowNumber);
+	if (!selfWin || ![selfWin isVisible]) return;
 	// Order just above the target window (same "normal" level), without activating.
 	[selfWin orderWindow:NSWindowAbove relativeTo:winNo];
 }
@@ -306,7 +321,9 @@ static void winsnap_unregister_activation_observer(WinsnapFollower *f) {
 }
 
 static void winsnap_sync_to_target(WinsnapFollower *f) {
-	if (!f || !f->selfWindow) return;
+	if (!f) return;
+	if (f->stopping) return;
+	if (f->selfWindowNumber <= 0) return;
 	if (!f->appElem) return;
 
 	AXUIElementRef win = f->observedWindow;
@@ -353,21 +370,26 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 		return;
 	}
 	f->applyScheduled = true;
+	int selfWinNo = f->selfWindowNumber; // Copy for use in block
 	os_unfair_lock_unlock(&f->lock);
 
 	CFRunLoopRef mainRL = CFRunLoopGetMain();
 	CFRetain(mainRL);
 	CFRunLoopPerformBlock(mainRL, kCFRunLoopCommonModes, ^{
 		WinsnapFollower *ff = f;
-		if (!ff || !ff->selfWindow) {
-			os_unfair_lock_lock(&ff->lock);
-			ff->applyScheduled = false;
-			os_unfair_lock_unlock(&ff->lock);
+		if (!ff || ff->stopping) {
+			if (ff) {
+				os_unfair_lock_lock(&ff->lock);
+				ff->applyScheduled = false;
+				os_unfair_lock_unlock(&ff->lock);
+			}
 			CFRelease(mainRL);
 			return;
 		}
-		NSWindow *selfWin = (__bridge NSWindow *)ff->selfWindow;
-		if (!selfWin) {
+
+		// Find window by number safely (avoids stale pointer issues)
+		NSWindow *selfWin = winsnap_find_window_by_number(selfWinNo);
+		if (!selfWin || ![selfWin isVisible]) {
 			os_unfair_lock_lock(&ff->lock);
 			ff->applyScheduled = false;
 			os_unfair_lock_unlock(&ff->lock);
@@ -481,10 +503,12 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 	f->activationObserver = NULL;
 
 	// Cache coordinate conversion constants and self window size.
+	// Also get window number for safe lookups later.
 	NSWindow *selfWin = (__bridge NSWindow *)selfWindow;
 	NSRect selfFrame = [selfWin frame];
 	f->selfWidth = selfFrame.size.width;
 	f->selfHeight = selfFrame.size.height;
+	f->selfWindowNumber = (int)[selfWin windowNumber];
 
 	// 优先使用 Wails Screen API 提供的屏幕信息
 	if (screenInfo != NULL && screenInfo->width > 0 && screenInfo->height > 0) {
@@ -619,12 +643,12 @@ type darwinFollower struct {
 
 func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
-		return nil, errors.New("winsnap: Window is nil")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	selfHWND := uintptr(opts.Window.NativeWindow())
 	if selfHWND == 0 {
-		return nil, errors.New("winsnap: native window handle is 0")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	targetName := normalizeMacTargetName(opts.TargetProcessName)

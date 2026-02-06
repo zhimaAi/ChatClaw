@@ -141,3 +141,25 @@ func (r *ToolRegistry) ListToolIDs() []string {
 	}
 	return ids
 }
+
+// AddTool adds a pre-created tool instance directly to the cache.
+// This is useful for tools that require runtime configuration (e.g., LibraryRetrieverTool).
+// Note: This bypasses the factory mechanism and adds the tool directly.
+func (r *ToolRegistry) AddTool(id string, t tool.BaseTool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cached[id] = t
+	// Also register a factory that returns the cached instance
+	r.factories[id] = func(ctx context.Context) (tool.BaseTool, error) {
+		return t, nil
+	}
+}
+
+// RemoveTool removes a tool from both the cache and factories.
+// This is useful for removing dynamically added tools.
+func (r *ToolRegistry) RemoveTool(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.cached, id)
+	delete(r.factories, id)
+}

@@ -18,9 +18,10 @@ import (
 type SnapState string
 
 const (
-	SnapStateStopped  SnapState = "stopped"
-	SnapStateAttached SnapState = "attached"
-	SnapStateHidden   SnapState = "hidden"
+	SnapStateStopped    SnapState = "stopped"
+	SnapStateAttached   SnapState = "attached"
+	SnapStateHidden     SnapState = "hidden"
+	SnapStateStandalone SnapState = "standalone" // Window is visible but not attached to any target
 )
 
 type SnapStatus struct {
@@ -53,8 +54,10 @@ type SnapService struct {
 	readyOnce sync.Once
 	readyCh   chan struct{}
 
-	ctrl          winsnap.Controller
-	currentTarget string
+	ctrl                 winsnap.Controller
+	currentTarget        string
+	lastAttachedTarget   string // Remembers the last attached target when hidden, for wake restoration
+	lastWinsnapMinimized bool
 
 	loopCancel context.CancelFunc
 
@@ -88,8 +91,12 @@ func (s *SnapService) GetStatus() SnapStatus {
 	return s.status
 }
 
-// WakeAttached brings the attached target window and the winsnap window to the front.
-// This is useful when winsnap is attached but both windows are behind other apps.
+// WakeAttached brings the attached target window and the winsnap window to the front,
+// then returns keyboard focus to the winsnap window.
+// This is called when user clicks on the winsnap window - we want to:
+// 1. Bring target window to front (so it's not hidden by other apps)
+// 2. Return focus to winsnap so user can continue typing
+// If the winsnap window is invalid/closed, it will be recreated on the next loop tick.
 func (s *SnapService) WakeAttached() error {
 	s.mu.Lock()
 	w := s.win
@@ -99,7 +106,168 @@ func (s *SnapService) WakeAttached() error {
 	if w == nil || target == "" {
 		return nil
 	}
-	return winsnap.WakeAttachedWindow(w, target)
+	// Use WakeAttachedWindowWithRefocus to return focus to winsnap after syncing z-order
+	err := winsnap.WakeAttachedWindowWithRefocus(w, target)
+	if err == winsnap.ErrWinsnapWindowInvalid {
+		// Winsnap window became invalid - trigger recreation
+		s.handleWinsnapWindowInvalid(target)
+		return nil // Don't return error, window will be recreated
+	}
+	return err
+}
+
+// WakeWindow brings the winsnap window to the front, regardless of snap state.
+// This is used by text selection service:
+// - In attached state: shows target window (no activate) and wakes winsnap window.
+// - In hidden state with last attached target: shows target, restores attached state, wakes winsnap.
+// - In standalone state: wakes only the winsnap window.
+// - If the winsnap window does not exist (never created / closed), it will be recreated on-demand.
+//
+// IMPORTANT: Focus always stays on winsnap window. Target window is only shown (not activated).
+func (s *SnapService) WakeWindow() {
+	// Ensure the winsnap window exists even when snapping loop is not running.
+	// Product requirement: text selection popup should always interact with winsnap.
+	s.mu.Lock()
+	w := s.win
+	target := s.currentTarget
+	state := s.status.State
+	lastAttached := s.lastAttachedTarget
+	s.mu.Unlock()
+
+	// Determine which target to show (current or last attached)
+	targetToShow := target
+	if targetToShow == "" {
+		targetToShow = lastAttached
+	}
+
+	// If window is nil or invalid, recreate it via WindowService.
+	if w == nil || w.NativeWindow() == nil || uintptr(w.NativeWindow()) == 0 {
+		// Show() will create the window if needed (FocusOnShow is false).
+		_ = s.winSvc.Show(WindowWinsnap)
+		s.mu.Lock()
+		ww, err := s.winSvc.ensure(WindowWinsnap)
+		if err == nil && ww != nil {
+			s.installWindowHooksLocked(ww)
+			w = ww
+			s.win = ww
+		}
+		s.mu.Unlock()
+
+		if w == nil || w.NativeWindow() == nil || uintptr(w.NativeWindow()) == 0 {
+			return
+		}
+
+		// Window recreated: try to restore attachment to last target
+		if targetToShow != "" {
+			// Show target window without activating
+			_ = winsnap.ShowTargetWindowNoActivate(w, targetToShow)
+			// Re-establish attachment
+			s.attachTo(w, targetToShow)
+			// Wake winsnap window (get focus)
+			_ = winsnap.WakeStandaloneWindow(w)
+			return
+		}
+
+		// No target: standalone mode
+		s.moveToStandalone(w)
+		s.mu.Lock()
+		s.status.State = SnapStateStandalone
+		s.status.TargetProcess = ""
+		s.touchLocked("")
+		s.mu.Unlock()
+		_ = winsnap.WakeStandaloneWindow(w)
+		return
+	}
+
+	// Window exists
+
+	// If currently attached, show target window (no activate), focus on winsnap
+	if state == SnapStateAttached && target != "" {
+		_ = winsnap.ShowTargetWindowNoActivate(w, target)
+		_ = winsnap.WakeStandaloneWindow(w)
+		return
+	}
+
+	// If hidden but was previously attached to a target, try to restore attached state.
+	// This handles the case where user minimized everything and then uses text selection popup.
+	if (state == SnapStateHidden || state == SnapStateStopped) && targetToShow != "" {
+		// Show target window without activating
+		err := winsnap.ShowTargetWindowNoActivate(w, targetToShow)
+		if err == nil {
+			// Re-establish attachment
+			s.attachTo(w, targetToShow)
+			// Wake winsnap window (get focus)
+			_ = winsnap.WakeStandaloneWindow(w)
+			return
+		}
+		// If show failed (target not found), fall through to standalone mode.
+	}
+
+	// If it was hidden (off-screen) with no attached target, bring it back to standalone position.
+	if state == SnapStateHidden || state == SnapStateStopped {
+		s.moveToStandalone(w)
+		s.mu.Lock()
+		// Keep state consistent for downstream routing / UI.
+		s.status.State = SnapStateStandalone
+		s.status.TargetProcess = ""
+		s.touchLocked("")
+		s.mu.Unlock()
+	}
+
+	// Standalone or other state: wake the winsnap window only.
+	// This properly activates the app on macOS (NSRunningApplication) and brings window to front on Windows.
+	_ = winsnap.WakeStandaloneWindow(w)
+}
+
+// NotifySettingsChanged broadcasts a snap settings changed event to all windows.
+// This is intended for cross-window UI refresh (main window settings page, etc.).
+func (s *SnapService) NotifySettingsChanged() {
+	if s.app == nil {
+		return
+	}
+	s.app.Event.Emit("snap:settings-changed", nil)
+}
+
+// SendTextToTarget sends text to the currently attached target application.
+// If triggerSend is true, it will also simulate the send key (Enter or Ctrl+Enter based on settings).
+func (s *SnapService) SendTextToTarget(text string, triggerSend bool) error {
+	s.mu.Lock()
+	target := s.currentTarget
+	state := s.status.State
+	s.mu.Unlock()
+
+	if state != SnapStateAttached || target == "" {
+		return errs.New("error.no_attached_target")
+	}
+
+	// Get send key strategy from settings
+	sendKeyStrategy := "enter"
+	if v, ok := settings.GetValue("send_key_strategy"); ok && v != "" {
+		sendKeyStrategy = v
+	}
+
+	// Get click settings for this target (for apps that need click to focus input box)
+	noClick, clickOffsetX, clickOffsetY := getClickSettingsForTarget(target)
+
+	return winsnap.SendTextToTarget(target, text, triggerSend, sendKeyStrategy, noClick, clickOffsetX, clickOffsetY)
+}
+
+// PasteTextToTarget pastes text to the currently attached target application's edit box.
+// This does not trigger the send action.
+func (s *SnapService) PasteTextToTarget(text string) error {
+	s.mu.Lock()
+	target := s.currentTarget
+	state := s.status.State
+	s.mu.Unlock()
+
+	if state != SnapStateAttached || target == "" {
+		return errs.New("error.no_attached_target")
+	}
+
+	// Get click settings for this target
+	noClick, clickOffsetX, clickOffsetY := getClickSettingsForTarget(target)
+
+	return winsnap.PasteTextToTarget(target, text, noClick, clickOffsetX, clickOffsetY)
 }
 
 // SyncFromSettings reads snap toggles from settings cache, then starts/stops
@@ -119,13 +287,19 @@ func (s *SnapService) SyncFromSettings() (SnapStatus, error) {
 
 	if !shouldRun {
 		_ = s.stop()
-		return s.GetStatus(), nil
+		status := s.GetStatus()
+		// Emit from backend because winsnap window may close during sync,
+		// and frontend code after SyncFromSettings may never run.
+		s.app.Event.Emit("snap:settings-changed", status)
+		return status, nil
 	}
 
 	if err := s.ensureRunning(); err != nil {
 		return s.GetStatus(), err
 	}
-	return s.GetStatus(), nil
+	status := s.GetStatus()
+	s.app.Event.Emit("snap:settings-changed", status)
+	return status, nil
 }
 
 func (s *SnapService) ensureRunning() error {
@@ -173,15 +347,37 @@ func (s *SnapService) stop() error {
 		s.ctrl = nil
 	}
 	s.currentTarget = ""
-	s.status.State = SnapStateStopped
+	s.lastWinsnapMinimized = false
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
-	s.touchLocked("")
+	w := s.win
 	s.mu.Unlock()
 
-	// Close winsnap window when fully stopped (no toggles enabled).
-	_ = s.winSvc.Close(WindowWinsnap)
+	// Instead of closing the window, move it to a standalone position (centered on screen)
+	// so it can wait for new snap relationships
+	if w != nil {
+		s.moveToStandalone(w)
+		s.mu.Lock()
+		s.status.State = SnapStateStandalone
+		s.touchLocked("")
+		s.mu.Unlock()
+	} else {
+		s.mu.Lock()
+		s.status.State = SnapStateStopped
+		s.touchLocked("")
+		s.mu.Unlock()
+	}
+
 	return nil
+}
+
+// moveToStandalone moves the winsnap window to a standalone position (centered on screen).
+func (s *SnapService) moveToStandalone(w *application.WebviewWindow) {
+	if w == nil {
+		return
+	}
+	// Move window to center of primary screen
+	winsnap.MoveToStandalone(w)
 }
 
 func (s *SnapService) loop(ctx context.Context) {
@@ -213,6 +409,9 @@ func (s *SnapService) step() {
 	s.mu.Lock()
 	enabledTargets := append([]string(nil), s.enabledTargets...)
 	w := s.win
+	wasMinimized := s.lastWinsnapMinimized
+	targetForRestore := s.currentTarget
+	stateForRestore := s.status.State
 	s.mu.Unlock()
 
 	if len(enabledTargets) == 0 {
@@ -231,11 +430,34 @@ func (s *SnapService) step() {
 		return
 	}
 
+	// Detect restore from minimised state (Windows Win+D / taskbar restore).
+	// NOTE: w.IsVisible() may stay true even when minimized, so we must use IsIconic.
+	if isMin, _ := winsnap.IsWindowMinimized(w); isMin != wasMinimized {
+		s.mu.Lock()
+		s.lastWinsnapMinimized = isMin
+		s.mu.Unlock()
+		// Only resync on true -> false transitions.
+		if wasMinimized && !isMin && targetForRestore != "" && stateForRestore == SnapStateAttached {
+			go func() {
+				time.Sleep(80 * time.Millisecond) // allow restore layout to settle
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: targetForRestore,
+					Gap:               0,
+					App:               s.app,
+					Window:            w,
+				})
+			}()
+		}
+	}
+
 	target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
 	if err != nil {
-		// Check if our own app is frontmost (user interacting with winsnap window)
-		// In this case, preserve current snap state - don't hide or change anything
+		// Check if our own app is frontmost (user interacting with our app's window)
+		// In this case, preserve current snap state - don't hide or change anything.
 		if err == winsnap.ErrSelfIsFrontmost {
+			// Simply preserve current state when our app is frontmost.
+			// Don't do any target obscured checking or z-order manipulation here
+			// to avoid potential crashes when windows are being moved.
 			return
 		}
 		// Other errors: snapping is not supported or failed.
@@ -246,7 +468,19 @@ func (s *SnapService) step() {
 		return
 	}
 
+	// If currently in standalone state, don't hide even if no target is found.
+	// Standalone mode means the winsnap window is intentionally visible without attachment.
+	// This is used when text selection popup wakes the winsnap window on-demand.
 	if !found || target == "" {
+		s.mu.Lock()
+		currentState := s.status.State
+		s.mu.Unlock()
+
+		// In standalone state, keep the window visible - don't hide it
+		if currentState == SnapStateStandalone {
+			return
+		}
+
 		s.hideOffscreen(w)
 		return
 	}
@@ -260,7 +494,17 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 		_ = s.ctrl.Stop()
 		s.ctrl = nil
 	}
+	oldState := s.status.State
+	oldTarget := s.status.TargetProcess
+
+	// Remember the last attached target for wake restoration.
+	// This allows WakeWindow to restore attached state instead of going standalone.
+	if oldState == SnapStateAttached && s.currentTarget != "" {
+		s.lastAttachedTarget = s.currentTarget
+	}
+
 	s.currentTarget = ""
+	s.lastWinsnapMinimized = false
 	s.status.State = SnapStateHidden
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -268,12 +512,27 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 	s.mu.Unlock()
 
 	_ = winsnap.MoveOffscreen(w)
+
+	// Emit state-changed event if state actually changed
+	if oldState != SnapStateHidden || oldTarget != "" {
+		s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+			"state":         string(SnapStateHidden),
+			"targetProcess": "",
+		})
+	}
 }
 
 func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess string) {
 	s.mu.Lock()
 	if s.currentTarget == targetProcess && s.ctrl != nil {
+		// Already attached to this target. The darwinFollower's activation observer
+		// (NSWorkspaceDidActivateApplicationNotification) handles z-order when
+		// the target app becomes frontmost. We just need to ensure the winsnap
+		// window is visible (not hidden) so the observer can adjust its z-order.
 		s.mu.Unlock()
+		// Ensure winsnap is visible (in case it was hidden by MoveOffscreen)
+		// This is needed because winsnap_order_above_target checks [selfWin isVisible]
+		_ = winsnap.EnsureWindowVisible(w)
 		return
 	}
 	// Stop current controller (if any) before switching target.
@@ -284,7 +543,10 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.mu.Unlock()
 
 	// Restore winsnap if it was minimized (e.g. by Win+D); when a target becomes visible again, show the snap window.
-	_ = winsnap.EnsureWindowVisible(w)
+	if err := winsnap.EnsureWindowVisible(w); err == winsnap.ErrWinsnapWindowInvalid {
+		s.handleWinsnapWindowInvalid(targetProcess)
+		return
+	}
 
 	c, err := winsnap.AttachRightOfProcess(winsnap.AttachOptions{
 		TargetProcessName: targetProcess,
@@ -294,6 +556,11 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		Window:            w,
 	})
 	if err != nil {
+		// Check if winsnap window is invalid/closed - need to recreate
+		if err == winsnap.ErrWinsnapWindowInvalid {
+			s.handleWinsnapWindowInvalid(targetProcess)
+			return
+		}
 		// Treat as temporarily hidden; next tick will retry.
 		s.mu.Lock()
 		s.status.LastError = err.Error()
@@ -303,18 +570,38 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	}
 
 	s.mu.Lock()
+	oldState := s.status.State
+	oldTarget := s.status.TargetProcess
 	s.ctrl = c
 	s.currentTarget = targetProcess
+	s.lastAttachedTarget = "" // Clear: now actively attached, no need to remember
+	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
 	s.status.State = SnapStateAttached
 	s.status.TargetProcess = targetProcess
 	s.status.LastError = ""
 	s.touchLocked("")
 	s.mu.Unlock()
 
+	// Emit state-changed event if state actually changed
+	if oldState != SnapStateAttached || oldTarget != targetProcess {
+		s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+			"state":         string(SnapStateAttached),
+			"targetProcess": targetProcess,
+		})
+	}
+
 	// Immediately sync z-order after attaching to ensure the winsnap window
 	// is visible above the target window. Without this, the winsnap may appear
 	// behind other windows until the target is moved or activated.
-	_ = winsnap.WakeAttachedWindow(w, targetProcess)
+	// IMPORTANT: Do NOT activate the target app here. Attaching can happen in the background
+	// (e.g. when a target window is visible but not currently focused). Activating would steal
+	// focus from the user's current app, which is not desired on macOS.
+	//
+	// We only adjust z-order when the target app is already frontmost.
+	if err := winsnap.SyncAttachedZOrderNoActivate(w, targetProcess); err == winsnap.ErrWinsnapWindowInvalid {
+		// Winsnap window became invalid after attach - recreate
+		s.handleWinsnapWindowInvalid(targetProcess)
+	}
 }
 
 func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
@@ -337,11 +624,30 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 	})
 	w.OnWindowEvent(events.Common.WindowShow, func(_ *application.WindowEvent) {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		if s.win != w {
+			s.mu.Unlock()
 			return
 		}
 		s.readyOnce.Do(func() { close(s.readyCh) })
+		target := s.currentTarget
+		state := s.status.State
+		s.lastWinsnapMinimized = false
+		s.mu.Unlock()
+
+		// When the winsnap window is restored/shown, force a one-shot resync to the
+		// attached target window's position and z-order. Otherwise, the follower
+		// only updates on target move/foreground events, which may not fire on restore.
+		if target != "" && state == SnapStateAttached {
+			go func() {
+				time.Sleep(60 * time.Millisecond) // allow restore layout to settle
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: target,
+					Gap:               0,
+					App:               s.app,
+					Window:            w,
+				})
+			}()
+		}
 	})
 	w.OnWindowEvent(events.Common.WindowClosing, func(_ *application.WindowEvent) {
 		s.mu.Lock()
@@ -352,9 +658,45 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		if s.win == w {
 			s.win = nil
 		}
+		// Save current target to lastAttachedTarget for restoration when window is reopened
+		if s.currentTarget != "" {
+			s.lastAttachedTarget = s.currentTarget
+		}
+		s.currentTarget = ""
+		s.lastWinsnapMinimized = false
+		// Update state to stopped when window is closed
+		// This is important for text selection routing logic
+		s.status.State = SnapStateStopped
+		s.status.TargetProcess = ""
+		s.touchLocked("")
 		s.readyOnce.Do(func() { close(s.readyCh) })
 		s.mu.Unlock()
 	})
+}
+
+// handleWinsnapWindowInvalid handles the case when the winsnap window has been closed/released.
+// It clears the current state and triggers recreation of the window on the next loop tick.
+func (s *SnapService) handleWinsnapWindowInvalid(targetProcess string) {
+	s.mu.Lock()
+	// Stop current controller
+	if s.ctrl != nil {
+		_ = s.ctrl.Stop()
+		s.ctrl = nil
+	}
+	// Clear window reference to trigger recreation
+	s.win = nil
+	s.currentTarget = ""
+	s.lastWinsnapMinimized = false
+	s.status.State = SnapStateHidden
+	s.status.TargetProcess = ""
+	s.status.LastError = "winsnap window invalid, will recreate"
+	s.touchLocked("")
+	s.mu.Unlock()
+
+	// Close the window in WindowService to ensure clean state
+	_ = s.winSvc.Close(WindowWinsnap)
+
+	// The next loop tick will detect s.win == nil and call ensureRunning() to recreate
 }
 
 func (s *SnapService) touchLocked(lastErr string) {
@@ -452,5 +794,51 @@ func snapTargetsForKey(key string) []string {
 		default:
 			return nil
 		}
+	}
+}
+
+// snapKeyForTarget returns the settings key (e.g., "snap_dingtalk") for a given target process name
+func snapKeyForTarget(targetProcess string) string {
+	keys := []string{"snap_wechat", "snap_wecom", "snap_qq", "snap_dingtalk", "snap_feishu", "snap_douyin"}
+	for _, key := range keys {
+		targets := snapTargetsForKey(key)
+		for _, t := range targets {
+			if t == targetProcess {
+				return key
+			}
+		}
+	}
+	return ""
+}
+
+// getClickSettingsForTarget returns the configured click settings for a target process
+// Returns noClick (skip mouse click), offsetX, offsetY
+func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, offsetY int) {
+	key := snapKeyForTarget(targetProcess)
+	if key == "" {
+		return false, 0, 0
+	}
+	// Setting key format: snap_[app]_no_click, snap_[app]_click_offset_x/y
+	noClick = settings.GetBool(key+"_no_click", false)
+	offsetX = settings.GetInt(key+"_click_offset_x", 0)
+	offsetY = settings.GetInt(key+"_click_offset_y", 0)
+	// If not configured (0 or empty), fall back to per-app defaults to match frontend UX.
+	// This is important on macOS where the click implementation otherwise falls back to a generic value.
+	if offsetY <= 0 {
+		offsetY = defaultClickOffsetYForKey(key)
+	}
+	return noClick, offsetX, offsetY
+}
+
+// defaultClickOffsetYForKey returns the default click Y offset (pixels from bottom)
+// used to focus the input box in the target app.
+//
+// Keep this consistent with frontend defaults in SnapSettings.vue.
+func defaultClickOffsetYForKey(key string) int {
+	switch key {
+	case "snap_feishu":
+		return 50
+	default:
+		return 120
 	}
 }

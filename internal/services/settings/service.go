@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -134,11 +135,49 @@ func (s *SettingsService) SetValue(key string, value string) (*Setting, error) {
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return nil, errs.Newf("error.setting_not_found", map[string]any{"Key": key})
+		// Setting doesn't exist, create it with default category based on key prefix
+		category := inferCategoryFromKey(key)
+		model := &settingModel{
+			Key:      key,
+			Value:    toNullString(value),
+			Type:     "string",
+			Category: string(category),
+		}
+		_, err = db.NewInsert().Model(model).Exec(ctx)
+		if err != nil {
+			return nil, errs.Wrap("error.setting_write_failed", err)
+		}
+		// Update cache with category info
+		setCachedValueWithCategory(key, value, category)
+		return &Setting{
+			Key:      key,
+			Value:    value,
+			Type:     "string",
+			Category: category,
+		}, nil
 	}
 
 	setCachedValue(key, value)
 	return s.Get(key)
+}
+
+// inferCategoryFromKey determines the category based on the key prefix
+func inferCategoryFromKey(key string) Category {
+	if strings.HasPrefix(key, "snap_") {
+		return CategorySnap
+	}
+	if strings.HasPrefix(key, "tools_") || strings.HasPrefix(key, "tray_") || strings.HasPrefix(key, "float_") || strings.HasPrefix(key, "selection_") {
+		return CategoryTools
+	}
+	return CategoryGeneral
+}
+
+// toNullString converts a string to sql.NullString
+func toNullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: s, Valid: true}
 }
 
 // UpdateEmbeddingConfig updates global embedding provider/model/dimension and triggers re-embedding for all documents.

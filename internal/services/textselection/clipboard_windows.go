@@ -249,26 +249,60 @@ func GetCursorPos() (x, y int32) {
 	return pt.X, pt.Y
 }
 
+// Cached DPI scale to avoid expensive GDI calls in high-frequency callbacks
+var (
+	cachedDPIScale     float64 = 0
+	cachedDPIScaleMu   sync.RWMutex
+	dpiScaleInitOnce   sync.Once
+)
+
 // getDPIScale gets the system DPI scale factor.
+// Uses cached value to avoid expensive GDI calls in mouse hook callbacks.
 func getDPIScale() float64 {
+	// Initialize cache on first call
+	dpiScaleInitOnce.Do(func() {
+		refreshDPIScaleInternal()
+	})
+
+	cachedDPIScaleMu.RLock()
+	scale := cachedDPIScale
+	cachedDPIScaleMu.RUnlock()
+
+	if scale > 0 {
+		return scale
+	}
+	return 1.0
+}
+
+// RefreshDPIScale updates the cached DPI scale value.
+// Call this when display settings might have changed.
+func RefreshDPIScale() {
+	refreshDPIScaleInternal()
+}
+
+func refreshDPIScaleInternal() {
+	scale := 1.0
+
 	// Try using GetDpiForSystem (Windows 10 1607+)
 	if procGetDpiForSystem.Find() == nil {
 		dpi, _, _ := procGetDpiForSystem.Call()
 		if dpi > 0 {
-			return float64(dpi) / 96.0
+			scale = float64(dpi) / 96.0
+		}
+	} else {
+		// Fallback: use GetDeviceCaps
+		const logPixelsX = 88
+		hdc, _, _ := procGetDC.Call(0)
+		if hdc != 0 {
+			dpi, _, _ := procGetDeviceCaps.Call(hdc, logPixelsX)
+			procReleaseDC.Call(0, hdc)
+			if dpi > 0 {
+				scale = float64(dpi) / 96.0
+			}
 		}
 	}
 
-	// Fallback: use GetDeviceCaps
-	const logPixelsX = 88
-	hdc, _, _ := procGetDC.Call(0)
-	if hdc != 0 {
-		dpi, _, _ := procGetDeviceCaps.Call(hdc, logPixelsX)
-		procReleaseDC.Call(0, hdc)
-		if dpi > 0 {
-			return float64(dpi) / 96.0
-		}
-	}
-
-	return 1.0
+	cachedDPIScaleMu.Lock()
+	cachedDPIScale = scale
+	cachedDPIScaleMu.Unlock()
 }

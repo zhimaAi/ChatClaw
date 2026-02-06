@@ -170,7 +170,9 @@ watch(
           :message="msg"
           :tool-results="getToolResultsForMessage(msg)"
           :is-streaming="!!(streaming && msg.id === streaming.messageId)"
-          :streaming-content="streaming && msg.id === streaming.messageId ? streaming.content : undefined"
+          :streaming-content="
+            streaming && msg.id === streaming.messageId ? streaming.content : undefined
+          "
           :streaming-thinking="
             streaming && msg.id === streaming.messageId ? streaming.thinkingContent : undefined
           "
@@ -213,6 +215,5 @@ watch(
         <div aria-hidden="true" class="h-16 shrink-0" />
       </div>
     </div>
-
   </div>
 </template>

@@ -89,6 +89,16 @@ import (
 	"unsafe"
 )
 
+// DPI scale caching for macOS - similar to Windows implementation
+// On macOS, backingScaleFactor is typically 1.0 (normal) or 2.0 (Retina),
+// and may differ between screens in multi-monitor setups.
+// We cache the main screen's value to avoid frequent CGO calls in high-frequency contexts.
+var (
+	cachedDPIScaleDarwin   float64 = 0
+	cachedDPIScaleMuDarwin sync.RWMutex
+	dpiScaleInitOnceDarwin sync.Once
+)
+
 // ClipboardWatcher macOS clipboard watcher.
 type ClipboardWatcher struct {
 	mu              sync.Mutex
@@ -184,8 +194,39 @@ func GetCursorPos() (x, y int32) {
 }
 
 // getDPIScale gets the scale factor on macOS (Retina display).
+// Uses cached value to avoid expensive CGO calls in high-frequency contexts.
+// The cache is initialized once on first call and can be refreshed via RefreshDPIScale().
 func getDPIScale() float64 {
-	return float64(C.getScreenScale())
+	dpiScaleInitOnceDarwin.Do(func() {
+		refreshDPIScaleInternalDarwin()
+	})
+
+	cachedDPIScaleMuDarwin.RLock()
+	scale := cachedDPIScaleDarwin
+	cachedDPIScaleMuDarwin.RUnlock()
+
+	if scale > 0 {
+		return scale
+	}
+	return 1.0 // Default fallback
+}
+
+// RefreshDPIScale refreshes the cached DPI scale value.
+// Call this when display configuration changes (e.g., monitor hotplug).
+func RefreshDPIScale() {
+	refreshDPIScaleInternalDarwin()
+}
+
+// refreshDPIScaleInternalDarwin performs the actual DPI scale calculation.
+func refreshDPIScaleInternalDarwin() {
+	scale := float64(C.getScreenScale())
+	if scale <= 0 {
+		scale = 1.0
+	}
+
+	cachedDPIScaleMuDarwin.Lock()
+	cachedDPIScaleDarwin = scale
+	cachedDPIScaleMuDarwin.Unlock()
 }
 
 // cgo helper - avoid unused import

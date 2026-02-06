@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"sync"
 	"time"
 
 	"willchat/internal/define"
@@ -31,6 +32,88 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
+// mainWindowManager handles safe main window operations with validity checks.
+// It ensures the main window is valid before performing operations and
+// can recreate the window if it becomes invalid.
+type mainWindowManager struct {
+	mu     sync.Mutex
+	app    *application.App
+	window *application.WebviewWindow
+}
+
+// isWindowValid checks if the window's native handle is still valid.
+func (m *mainWindowManager) isWindowValid() bool {
+	if m.window == nil {
+		return false
+	}
+	nativeHandle := m.window.NativeWindow()
+	return nativeHandle != nil && uintptr(nativeHandle) != 0
+}
+
+// safeWake safely wakes the main window, checking validity first.
+// If the window is invalid, it does nothing (main window recreation
+// would require app restart in most cases).
+func (m *mainWindowManager) safeWake() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		// Main window is invalid, cannot wake
+		// In production, main window invalidation typically means app should restart
+		return
+	}
+
+	m.window.Restore()
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeShow safely shows and focuses the main window.
+func (m *mainWindowManager) safeShow() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeUnMinimiseAndShow safely unminimizes, shows and focuses the main window.
+func (m *mainWindowManager) safeUnMinimiseAndShow() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.UnMinimise()
+	m.window.Show()
+	m.window.Focus()
+}
+
+// safeHide safely hides the main window.
+func (m *mainWindowManager) safeHide() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.isWindowValid() {
+		return
+	}
+
+	m.window.Hide()
+}
+
+// getWindow returns the underlying window (for operations that need direct access).
+func (m *mainWindowManager) getWindow() *application.WebviewWindow {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.window
+}
+
 type Options struct {
 	Assets fs.FS
 	Icon   []byte
@@ -43,8 +126,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
-	// 声明主窗口变量，用于单实例回调
-	var mainWindow *application.WebviewWindow
+	// 主窗口管理器，用于安全的窗口操作
+	mainWinMgr := &mainWindowManager{}
+
+	// 声明悬浮球服务变量，用于回调中恢复悬浮球
 	var floatingBallService *floatingball.FloatingBallService
 
 	// 创建应用实例
@@ -65,12 +150,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: define.SingleInstanceUniqueID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				// 当第二个实例启动时，聚焦主窗口
-				if mainWindow != nil {
-					mainWindow.Restore()
-					mainWindow.Show()
-					mainWindow.Focus()
-				}
+				// 当第二个实例启动时，安全地聚焦主窗口
+				mainWinMgr.safeWake()
 				// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
 				if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
 					_ = floatingBallService.SetVisible(true)
@@ -131,8 +212,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
 	// 注册聊天服务
 	app.RegisterService(application.NewService(chat.NewChatService(app)))
-	// 注册应用服务
-	app.RegisterService(application.NewService(appservice.NewAppService(app)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
@@ -141,11 +220,16 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// ========== 创建窗口 ==========
 
 	// 创建主窗口
-	mainWindow = windows.NewMainWindow(app)
+	mainWindow := windows.NewMainWindow(app)
+	mainWinMgr.app = app
+	mainWinMgr.window = mainWindow
 
 	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
 	multiaskService := multiask.NewMultiaskService(app, mainWindow)
 	app.RegisterService(application.NewService(multiaskService))
+
+	// 注册应用服务（传入主窗口引用，用于 ShowMainWindow API）
+	app.RegisterService(application.NewService(appservice.NewAppService(app, mainWindow)))
 
 	// 创建悬浮球服务（独立 AlwaysOnTop 小窗）
 	floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
@@ -171,18 +255,25 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(winsnapchat.NewWinsnapChatService(app)))
 
 	// 创建划词弹窗服务
-	textSelectionService := textselection.NewWithSnapStateGetter(func() windows.SnapState {
-		return snapService.GetStatus().State
-	})
+	// - getSnapState: 获取吸附窗体状态（attached/standalone/hidden/stopped）
+	// - wakeSnapWindow: 唤醒吸附窗体（当划词点击时吸附窗体可见则唤醒吸附窗体）
+	textSelectionService := textselection.NewWithSnapCallbacks(
+		func() windows.SnapState {
+			return snapService.GetStatus().State
+		},
+		func() {
+			snapService.WakeWindow()
+		},
+	)
 	app.RegisterService(application.NewService(textSelectionService))
 
 	// 创建系统托盘
 	systrayMenu := app.NewMenu()
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
-		mainWindow.Show()
-		mainWindow.Focus()
+		// 安全地显示主窗口
+		mainWinMgr.safeShow()
 		// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
-		if settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+		if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
 			_ = floatingBallService.SetVisible(true)
 		}
 	})
@@ -240,7 +331,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		minimizeEnabled := trayService.IsMinimizeToTrayEnabled()
 		if minimizeEnabled {
 			app.Logger.Info("WindowClosing: hiding window to tray")
-			mainWindow.Hide()
+			mainWinMgr.safeHide()
 			e.Cancel()
 		} else {
 			app.Quit()
@@ -267,9 +358,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 点击 Dock 图标时显示窗口
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
-		mainWindow.UnMinimise()
-		mainWindow.Show()
-		mainWindow.Focus()
+		// 安全地唤醒主窗口
+		mainWinMgr.safeUnMinimiseAndShow()
 		restoreFloatingBall("mac_reopen")
 	})
 

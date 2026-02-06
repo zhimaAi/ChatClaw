@@ -60,7 +60,9 @@ defineExpose({ focus })
 </script>
 
 <template>
-  <div class="flex w-full flex-col gap-4 rounded-2xl border-2 border-border bg-background px-3 py-2.5 shadow-sm">
+  <div
+    class="flex w-full flex-col gap-4 rounded-2xl border-2 border-border bg-background px-3 py-2.5 shadow-sm"
+  >
     <!-- 输入区域 -->
     <textarea
       ref="inputRef"
@@ -77,12 +79,14 @@ defineExpose({ focus })
       <!-- 发送按钮 -->
       <button
         type="button"
-        :class="cn(
-          'flex size-8 items-center justify-center rounded-full p-[5px] transition-colors',
-          canSend
-            ? 'cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90'
-            : 'cursor-not-allowed bg-[#d8dde5] text-white'
-        )"
+        :class="
+          cn(
+            'flex size-8 items-center justify-center rounded-full p-[5px] transition-colors',
+            canSend
+              ? 'cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'cursor-not-allowed bg-[#d8dde5] text-white'
+          )
+        "
         :disabled="!canSend"
         @click="handleSend"
       >

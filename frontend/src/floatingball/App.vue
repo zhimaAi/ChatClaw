@@ -13,7 +13,7 @@ const debugDrag = () => {
 }
 const logDrag = (...args: any[]) => {
   if (!debugDrag()) return
-  // eslint-disable-next-line no-console
+
   console.log('[floatingball-drag]', new Date().toISOString(), ...args)
 }
 
@@ -26,7 +26,7 @@ const debugHover = () => {
 }
 const logHover = (...args: any[]) => {
   if (!debugHover()) return
-  // eslint-disable-next-line no-console
+
   console.log('[floatingball-hover]', new Date().toISOString(), ...args)
 }
 
@@ -39,7 +39,7 @@ const debugRender = () => {
 }
 const logRender = (...args: any[]) => {
   if (!debugRender()) return
-  // eslint-disable-next-line no-console
+
   console.log('[floatingball-render]', new Date().toISOString(), ...args)
 }
 
@@ -219,7 +219,11 @@ onMounted(() => {
   }
   ;(window as any).__floatingballNativeHover = nativeHoverHandler
 
-  logRender('mounted', { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio })
+  logRender('mounted', {
+    w: window.innerWidth,
+    h: window.innerHeight,
+    dpr: window.devicePixelRatio,
+  })
 })
 
 onUnmounted(() => {
@@ -249,7 +253,7 @@ watch(
         }
       }, 120)
     }
-  },
+  }
 )
 </script>
 
@@ -257,66 +261,65 @@ watch(
   <div class="h-full w-full bg-transparent select-none overflow-hidden">
     <div :key="repaintKey" class="h-full w-full">
       <div
-      class="relative h-full w-full"
-      @pointerenter="onEnter"
-      @pointerleave="onLeave"
-      @pointerover="onEnter"
-      @pointerdown.capture="onPointerDown"
-      @pointermove.capture="onPointerMove"
-      @pointerup.capture="onPointerUp"
-      @pointercancel.capture="onPointerCancel"
-      @dblclick.stop="onDblClick"
-    >
-      <!-- Paint layer: tiny alpha to force proper redraw on transparent resize (macOS WebKit can leave ghosts) -->
-      <div
-        class="absolute inset-0 rounded-full pointer-events-none z-30"
-        style="background: rgba(0, 0, 0, 0.0001)"
-        aria-hidden="true"
-      />
-      <!-- Cover layer: briefly shown to force clear; only affects mac ghosting -->
-      <div
-        v-show="coverActive"
-        class="absolute inset-0 rounded-full pointer-events-none z-60"
-        :style="{ background: collapsed ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)' }"
-        aria-hidden="true"
-      />
-
-      <!-- Close button (show on hover) -->
-      <button
-        v-show="hovered && !collapsed && appActive"
-        class="absolute right-2 top-2 z-40 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-5"
-        style="--wails-draggable: no-drag"
-        @click.stop="onClose"
-        aria-label="close floating ball"
-        title="Close"
+        class="relative h-full w-full"
+        @pointerenter="onEnter"
+        @pointerleave="onLeave"
+        @pointerover="onEnter"
+        @pointerdown.capture="onPointerDown"
+        @pointermove.capture="onPointerMove"
+        @pointerup.capture="onPointerUp"
+        @pointercancel.capture="onPointerCancel"
+        @dblclick.stop="onDblClick"
       >
-        ×
-      </button>
-
-      <!-- Ball (draggable) -->
-      <div
-        :class="[
-          'h-full w-full flex items-center justify-center relative z-10',
-          collapsed
-            ? isWindowsUA
-              ? 'rounded-full bg-black/45 border border-white/20'
-              : 'rounded-full bg-black/25'
-            : 'rounded-full bg-transparent',
-        ]"
-        style="--wails-draggable: drag"
-      >
-        <img
-          :src="logoUrl"
-          :key="collapsed ? 'collapsed' : 'expanded'"
-          :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
-          class="block"
-          style="transform: translateZ(0); backface-visibility: hidden"
-          alt="WillChat"
-          draggable="false"
+        <!-- Paint layer: tiny alpha to force proper redraw on transparent resize (macOS WebKit can leave ghosts) -->
+        <div
+          class="absolute inset-0 rounded-full pointer-events-none z-30"
+          style="background: rgba(0, 0, 0, 0.0001)"
+          aria-hidden="true"
         />
-      </div>
+        <!-- Cover layer: briefly shown to force clear; only affects mac ghosting -->
+        <div
+          v-show="coverActive"
+          class="absolute inset-0 rounded-full pointer-events-none z-60"
+          :style="{ background: collapsed ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)' }"
+          aria-hidden="true"
+        />
+
+        <!-- Close button (show on hover) -->
+        <button
+          v-show="hovered && !collapsed && appActive"
+          class="absolute right-2 top-2 z-40 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-5"
+          style="--wails-draggable: no-drag"
+          aria-label="close floating ball"
+          title="Close"
+          @click.stop="onClose"
+        >
+          ×
+        </button>
+
+        <!-- Ball (draggable) -->
+        <div
+          :class="[
+            'h-full w-full flex items-center justify-center relative z-10',
+            collapsed
+              ? isWindowsUA
+                ? 'rounded-full bg-black/45 border border-white/20'
+                : 'rounded-full bg-black/25'
+              : 'rounded-full bg-transparent',
+          ]"
+          style="--wails-draggable: drag"
+        >
+          <img
+            :key="collapsed ? 'collapsed' : 'expanded'"
+            :src="logoUrl"
+            :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
+            class="block"
+            style="transform: translateZ(0); backface-visibility: hidden"
+            alt="WillChat"
+            draggable="false"
+          />
+        </div>
       </div>
     </div>
   </div>
 </template>
-

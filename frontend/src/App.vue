@@ -7,10 +7,9 @@ import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System } from '@wailsio/runtime'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
-
+import { SnapService } from '@bindings/willchat/internal/services/windows'
 const navigationStore = useNavigationStore()
 const activeTab = computed(() => navigationStore.activeTab)
 
@@ -62,7 +61,7 @@ let wasDarkMode = document.documentElement.classList.contains('dark')
 onMounted(() => {
   // Text selection event handling
   unsubscribeTextSelection = Events.On('text-selection:action', async (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     const text = payload?.text ?? ''
     if (!text) return
 
@@ -104,7 +103,11 @@ onMounted(() => {
     // Best-effort: use screen coordinates so popup works for both main & other windows.
     // macOS: backend mouse hook uses physical pixels; browser events are in CSS pixels (points).
     const scale = System.IsMac() ? window.devicePixelRatio || 1 : 1
-    void TextSelectionService.ShowAtScreenPos(text, Math.round(e.screenX * scale), Math.round(e.screenY * scale))
+    void TextSelectionService.ShowAtScreenPos(
+      text,
+      Math.round(e.screenX * scale),
+      Math.round(e.screenY * scale)
+    )
   }
   window.addEventListener('mouseup', onMouseUp, true)
 
@@ -128,7 +131,7 @@ onMounted(() => {
   // from treating it as a "submit/send" action. We do NOT preventDefault so IME can commit text.
   onKeyDownCapture = (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const anyEvent = e as any
     const isComposing = !!anyEvent?.isComposing || anyEvent?.keyCode === 229
     if (!isComposing) return
@@ -152,8 +155,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  unsubscribeTextSelection?.()
-  unsubscribeTextSelection = null
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null

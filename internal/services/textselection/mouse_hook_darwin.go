@@ -22,6 +22,7 @@ static int dragDistanceThreshold = 5;
 extern void mouseHookDarwinCallback(int x, int y);
 extern void mouseHookDarwinShowPopup(int x, int y, int originalAppPid);
 extern void mouseHookDarwinDragStartCallback(int x, int y);
+extern void mouseHookDarwinDragStartCallbackWithPid(int x, int y, int frontAppPid);
 extern void mouseHookDarwinLogCallback(int distanceInt, int thresholdSq, int passed);
 extern void mouseHookDarwinMouseDownCallback(int x, int y);
 extern void mouseHookDarwinTapDisabledCallback(int reason);
@@ -119,9 +120,21 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 				mouseHookDarwinMouseDownCallback(mouseX, mouseY);
 			});
 
-			// Notify drag start with mouse position
+			// IMPORTANT: Before notifying drag start, record the current frontmost app.
+			// This is needed for lazy-copy mode: when user clicks the popup, we need to
+			// copy from the original app BEFORE our app gets activated by the click.
+			// We record the PID here (in the event tap callback, before the click is processed)
+			// so that onDragStart can use it to copy text from the correct app.
+			NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+			NSRunningApplication *selfApp = [NSRunningApplication currentApplication];
+			pid_t frontAppPid = 0;
+			if (![frontApp.bundleIdentifier isEqualToString:selfApp.bundleIdentifier]) {
+				frontAppPid = frontApp.processIdentifier;
+			}
+
+			// Notify drag start with mouse position and frontmost app PID
 			dispatch_async(dispatch_get_main_queue(), ^{
-				mouseHookDarwinDragStartCallback(mouseX, mouseY);
+				mouseHookDarwinDragStartCallbackWithPid(mouseX, mouseY, frontAppPid);
 			});
 			break;
 		}
@@ -177,8 +190,9 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 				int x = (int)((mouseLoc.x - frame.origin.x) * scale);
 				int y = (int)((screenTopY - mouseLoc.y) * scale);
 
-				// Use callback (copy then show popup mode)
-				mouseHookDarwinCallback(x, y);
+				// Use showPopup callback (lazy copy mode: show popup first, copy on button click)
+				// This avoids polluting the user's clipboard during text selection.
+				mouseHookDarwinShowPopup(x, y, originalAppPid);
 			});
 		}
 			}
@@ -242,19 +256,21 @@ static void freeMouseHookString(char *str) {
 import "C"
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
 
 // MouseHookWatcher macOS global mouse hook.
 type MouseHookWatcher struct {
-	mu                sync.Mutex
-	callback          func(text string, x, y int32)          // Old callback (with text), kept for compatibility
-	showPopupCallback func(x, y int32, originalAppPid int32) // New callback: only show popup, record original app
-	onDragStart       func(x, y int32)                       // Callback when drag starts
-	closed            bool
-	ready             chan struct{}
-	stopCh            chan struct{}
+	mu                  sync.Mutex
+	callback            func(text string, x, y int32)          // Old callback (with text), kept for compatibility
+	showPopupCallback   func(x, y int32, originalAppPid int32) // New callback: only show popup, record original app
+	onDragStart         func(x, y int32)                       // Callback when drag starts (legacy, no PID)
+	onDragStartWithPid  func(x, y int32, frontAppPid int32)    // Callback when drag starts (with frontmost app PID)
+	closed              bool
+	ready               chan struct{}
+	stopCh              chan struct{}
 }
 
 var (
@@ -266,14 +282,14 @@ var (
 // showPopupCallback: new design - only show popup, don't copy. Copy on button click.
 func NewMouseHookWatcher(
 	callback func(text string, x, y int32),
-	onDragStart func(x, y int32),
+	onDragStartWithPid func(x, y int32, frontAppPid int32),
 	showPopupCallback func(x, y int32, originalAppPid int32),
 ) *MouseHookWatcher {
 	return &MouseHookWatcher{
-		callback:          callback,
-		onDragStart:       onDragStart,
-		showPopupCallback: showPopupCallback,
-		ready:             make(chan struct{}),
+		callback:           callback,
+		onDragStartWithPid: onDragStartWithPid,
+		showPopupCallback:  showPopupCallback,
+		ready:              make(chan struct{}),
 	}
 }
 
@@ -329,6 +345,12 @@ func (w *MouseHookWatcher) run() {
 
 //export mouseHookDarwinDragStartCallback
 func mouseHookDarwinDragStartCallback(x, y C.int) {
+	// Legacy callback without PID, delegate to the new one with PID=0
+	mouseHookDarwinDragStartCallbackWithPid(x, y, 0)
+}
+
+//export mouseHookDarwinDragStartCallbackWithPid
+func mouseHookDarwinDragStartCallbackWithPid(x, y, frontAppPid C.int) {
 	mouseHookDarwinInstanceMu.Lock()
 	w := mouseHookDarwinInstance
 	mouseHookDarwinInstanceMu.Unlock()
@@ -339,9 +361,13 @@ func mouseHookDarwinDragStartCallback(x, y C.int) {
 
 	w.mu.Lock()
 	onDragStart := w.onDragStart
+	onDragStartWithPid := w.onDragStartWithPid
 	w.mu.Unlock()
 
-	if onDragStart != nil {
+	// Prefer the new callback with PID if available
+	if onDragStartWithPid != nil {
+		onDragStartWithPid(int32(x), int32(y), int32(frontAppPid))
+	} else if onDragStart != nil {
 		onDragStart(int32(x), int32(y))
 	}
 }
@@ -395,14 +421,6 @@ func mouseHookDarwinCallback(x, y C.int) {
 		return
 	}
 
-	// Save old clipboard content
-	oldClipboard := ""
-	cOld := C.mouseHookGetClipboardText()
-	if cOld != nil {
-		oldClipboard = C.GoString(cOld)
-		C.freeMouseHookString(cOld)
-	}
-
 	// Try multiple times to simulate Cmd+C (some apps may need more time to respond)
 	var newClipboard string
 	for attempt := 1; attempt <= 3; attempt++ {
@@ -418,13 +436,18 @@ func mouseHookDarwinCallback(x, y C.int) {
 			newClipboard = C.GoString(cNew)
 			C.freeMouseHookString(cNew)
 
-			if newClipboard != "" && newClipboard != oldClipboard {
+			// If clipboard has content, we can proceed
+			if newClipboard != "" {
 				break
 			}
 		}
 	}
 
-	if newClipboard != "" && newClipboard != oldClipboard {
+	// If clipboard has meaningful text, show popup
+	// Skip if only whitespace (e.g., user selected image/screenshot, not text)
+	// Allow same text selection - user may want to use the same text again
+	newClipboard = strings.TrimSpace(newClipboard)
+	if newClipboard != "" {
 		w.mu.Lock()
 		callback := w.callback
 		w.mu.Unlock()

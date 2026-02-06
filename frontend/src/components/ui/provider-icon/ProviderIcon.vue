@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type SvgComponent = any
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
@@ -111,8 +111,8 @@ const useComponent = computed(() => {
 <template>
   <!-- 内置图标：作为 Vue 组件渲染，支持 currentColor -->
   <component
-    v-if="useComponent"
     :is="iconComponent"
+    v-if="useComponent"
     :width="size"
     :height="size"
     :class="cn('inline-block shrink-0 text-foreground', props.class)"

@@ -2,6 +2,7 @@ package textselection
 
 import (
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,6 +34,16 @@ type TextSelectionService struct {
 	// getSnapState returns current snap state. This is injected at construction
 	// time to avoid exposing SnapService in Wails bindings.
 	getSnapState func() windows.SnapState
+
+	// wakeSnapWindow wakes the snap window (brings it to front).
+	// Used when snap window is visible (attached or standalone) and user clicks text selection popup.
+	wakeSnapWindow func()
+
+	// Last selection action (button click) payload.
+	// Used as a fallback for winsnap window to pull the latest action on startup
+	// (avoids losing the first event when the winsnap window is created on-demand).
+	lastActionID   int64
+	lastActionText string
 
 	// Currently selected text
 	selectedText string
@@ -70,15 +81,22 @@ func New() *TextSelectionService {
 // NewWithSnapStateGetter creates a new TextSelectionService with an optional
 // snap state getter. If nil, snap state is treated as stopped.
 func NewWithSnapStateGetter(getter func() windows.SnapState) *TextSelectionService {
+	return NewWithSnapCallbacks(getter, nil)
+}
+
+// NewWithSnapCallbacks creates a new TextSelectionService with snap state getter
+// and snap window wake callback. Both can be nil.
+func NewWithSnapCallbacks(getState func() windows.SnapState, wakeSnap func()) *TextSelectionService {
 	return &TextSelectionService{
 		popWidth:  140,
 		popHeight: 50,
 		getSnapState: func() windows.SnapState {
-			if getter == nil {
+			if getState == nil {
 				return windows.SnapStateStopped
 			}
-			return getter()
+			return getState()
 		},
+		wakeSnapWindow: wakeSnap,
 	}
 }
 
@@ -187,7 +205,9 @@ func (s *TextSelectionService) startClickOutsideWatcher() {
 
 // startWatcher starts the mouse hook watcher.
 func (s *TextSelectionService) startWatcher() {
-	callback := func(text string, x, y int32) {
+	// Old callback (copy-then-show mode) - kept for compatibility but not used
+	_ = func(text string, x, y int32) {
+		text = strings.TrimSpace(text)
 		if text == "" {
 			return
 		}
@@ -195,7 +215,8 @@ func (s *TextSelectionService) startWatcher() {
 	}
 
 	// Callback when drag starts (hide popup if click is not inside popup)
-	onDragStart := func(mouseX, mouseY int32) {
+	// frontAppPid: the PID of the frontmost app at the moment of mouseDown (before our app gets activated)
+	onDragStartWithPid := func(mouseX, mouseY int32, frontAppPid int32) {
 		// Check if click is inside popup area
 		s.mu.RLock()
 		popX := s.popX
@@ -228,6 +249,13 @@ func (s *TextSelectionService) startWatcher() {
 
 		// If click is inside popup, trigger button click (matching demo project behavior)
 		if inPopup {
+			// On macOS, save the frontmost app PID before our app gets activated by the click.
+			// This is critical for lazy-copy mode: we need to re-activate this app to copy text.
+			if runtime.GOOS == "darwin" && frontAppPid > 0 {
+				s.mu.Lock()
+				s.originalAppPid = frontAppPid
+				s.mu.Unlock()
+			}
 			go s.handleButtonClick()
 			return
 		}
@@ -238,9 +266,20 @@ func (s *TextSelectionService) startWatcher() {
 		}
 	}
 
-	// Use "copy before popup" mode: simulate Ctrl+C -> read clipboard -> show popup
+	// New mode: show popup only (no clipboard copy), copy on button click.
+	// This avoids polluting the user's clipboard during text selection.
+	showPopupOnly := func(mouseX, mouseY int32, originalAppPid int32) {
+		s.mu.Lock()
+		s.selectedText = ""        // Clear text - will be fetched on button click
+		s.originalAppPid = originalAppPid // Record original app PID for later copy
+		s.mu.Unlock()
+
+		s.showPopupOnlyAtScreenPos(int(mouseX), int(mouseY))
+	}
+
 	s.mu.Lock()
-	s.mouseHookWatcher = NewMouseHookWatcher(callback, onDragStart, nil)
+	// Use showPopupOnly mode: detect drag -> show popup (no copy) -> copy on button click
+	s.mouseHookWatcher = NewMouseHookWatcher(nil, onDragStartWithPid, showPopupOnly)
 	s.mu.Unlock()
 
 	go s.mouseHookWatcher.Start()
@@ -316,20 +355,8 @@ func (s *TextSelectionService) Show(text string, clientX, clientY int) {
 		finalX = screenX - s.popWidth/2
 		finalY = screenY - s.popHeight - 10
 
-		// Ensure popup doesn't exceed screen bounds
-		if screen := app.Screen.GetPrimary(); screen != nil {
-			wa := screen.WorkArea
-			if finalX < wa.X {
-				finalX = wa.X
-			}
-			if finalX+s.popWidth > wa.X+wa.Width {
-				finalX = wa.X + wa.Width - s.popWidth
-			}
-			if finalY < wa.Y {
-				// If can't fit above, show below
-				finalY = screenY + 10
-			}
-		}
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
 	}
 
 	// Update popup's recorded position
@@ -410,21 +437,8 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 		// Above mouse = mouseY - height - offset (Y increases downward)
 		finalY = screenY - s.popHeight - 10
 
-		// Ensure popup doesn't exceed screen bounds
-		if screen := app.Screen.GetPrimary(); screen != nil {
-			wa := screen.WorkArea
-			if finalX < wa.X {
-				finalX = wa.X
-			}
-			if finalX+s.popWidth > wa.X+wa.Width {
-				finalX = wa.X + wa.Width - s.popWidth
-			}
-			// Check if exceeds screen top
-			if finalY < wa.Y {
-				// Show below mouse
-				finalY = screenY + 20
-			}
-		}
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
 	}
 
 	s.showPopupAt(finalX, finalY)
@@ -459,7 +473,51 @@ func (s *TextSelectionService) showPopupAt(x, y int) {
 	}
 }
 
+// showPopupOnlyAtScreenPos shows the popup at the specified screen position WITHOUT copying text.
+// Text will be copied when the user clicks the popup button.
+// This is the new "lazy copy" mode that avoids polluting the user's clipboard during selection.
+func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
+	if !s.IsEnabled() {
+		return
+	}
+	s.mu.Lock()
+	app := s.app
+	// Cancel previous hide timer
+	if s.hideTimer != nil {
+		s.hideTimer.Stop()
+		s.hideTimer = nil
+	}
+	s.mu.Unlock()
+
+	if app == nil {
+		return
+	}
+
+	var finalX, finalY int
+
+	if runtime.GOOS == "darwin" {
+		scale := getDPIScale()
+		popWidthPx := int(float64(s.popWidth) * scale)
+		popHeightPx := int(float64(s.popHeight) * scale)
+		offsetPx := int(10 * scale)
+
+		finalX = screenX - popWidthPx/2
+		finalY = screenY - popHeightPx - offsetPx
+	} else {
+		finalX = screenX - s.popWidth/2
+		finalY = screenY - s.popHeight - 10
+
+		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
+		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
+	}
+
+	s.showPopupAt(finalX, finalY)
+}
+
 // Hide hides the popup.
+// Safely handles the case when the window has been closed/released.
+// On Windows: moves window off-screen (w.Hide() causes WebView2 Focus error).
+// On macOS: uses w.Hide() for reliable hiding (moving off-screen may still be visible).
 func (s *TextSelectionService) Hide() {
 	s.mu.Lock()
 	if s.hideTimer != nil {
@@ -474,9 +532,26 @@ func (s *TextSelectionService) Hide() {
 	s.mu.Unlock()
 
 	if w != nil {
-		// Don't use w.Hide(), because Wails Hide() internally calls Focus, causing WebView2 error
-		// Move window off-screen to "hide" instead
-		w.SetPosition(-9999, -9999)
+		// Check if window is still valid before calling SetPosition
+		nativeHandle := w.NativeWindow()
+		if nativeHandle != nil && uintptr(nativeHandle) != 0 {
+			if runtime.GOOS == "darwin" {
+				// macOS: use Hide() for reliable hiding
+				// Moving off-screen may still show window edge on some display configurations
+				w.Hide()
+			} else {
+				// Windows: Don't use w.Hide(), because Wails Hide() internally calls Focus,
+				// causing WebView2 error. Move window off-screen to "hide" instead.
+				w.SetPosition(-9999, -9999)
+			}
+		} else {
+			// Window has been closed, clear the reference
+			s.mu.Lock()
+			if s.popWindow == w {
+				s.popWindow = nil
+			}
+			s.mu.Unlock()
+		}
 	}
 
 	// Clear click outside watcher's popup area
@@ -485,9 +560,13 @@ func (s *TextSelectionService) Hide() {
 	}
 }
 
-// handleButtonClick handles button click event.
-// Check snap window state and send text to appropriate target.
+// handleButtonClick handles the popup button click event.
 // Includes debounce logic to prevent duplicate triggers within 500ms.
+//
+// Product requirement:
+// - Text selection popup should always interact with winsnap window (never main window).
+// - If winsnap window does not exist, create it and wake it as a standalone window.
+// - Copy text on button click (lazy copy mode) to avoid polluting clipboard during selection.
 func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.mu.Lock()
 	// Debounce: ignore clicks within 500ms of the last click
@@ -499,31 +578,53 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 	s.lastClickTime = now
 
 	text := s.selectedText
+	originalAppPid := s.originalAppPid
 	app := s.app
-	mainWindow := s.mainWindow
-	getSnapState := s.getSnapState
+	wakeSnapWindow := s.wakeSnapWindow
 	s.mu.Unlock()
 
-	if text == "" || app == nil {
+	if app == nil {
+		return map[string]any{"error": "app is nil"}
+	}
+
+	// If text is empty, we're in "lazy copy" mode - need to copy now.
+	// The popup was shown without copying; now we simulate Ctrl+C/Cmd+C to get the selected text.
+	// This works because the popup doesn't steal focus, so the original app still has the selection.
+	if text == "" && originalAppPid != 0 {
+		text = s.copyAndGetSelectedText()
+		if text == "" {
+			// No text could be copied, hide popup and return
+			go s.Hide()
+			return map[string]any{"error": "no text selected"}
+		}
+		// Update selectedText for GetLastButtonAction fallback
+		s.mu.Lock()
+		s.selectedText = text
+		s.mu.Unlock()
+	}
+
+	if text == "" {
 		return map[string]any{"error": "no text selected"}
 	}
 
-	// Emit event with text - frontend (main window) will handle routing
-	// based on snap window state
-	app.Event.Emit("text-selection:action", map[string]any{
+	// Use Unix milliseconds to keep JS number precision (safe integer).
+	actionID := time.Now().UnixMilli()
+	s.mu.Lock()
+	s.lastActionID = actionID
+	s.lastActionText = text
+	s.mu.Unlock()
+
+	// Product requirement: always interact with winsnap (never main window).
+	// Ensure and wake the winsnap window first (it may be created on-demand).
+	if wakeSnapWindow != nil {
+		wakeSnapWindow()
+	}
+
+	// Send text to winsnap window. Payload contains an id for deduplication.
+	app.Event.Emit("text-selection:send-to-snap", map[string]any{
+		"id":   actionID,
 		"text": text,
 	})
-
-	// Only wake main window when snap window is NOT attached.
-	// - attached: user interacts with winsnap; do NOT activate main window.
-	// - hidden/stopped: user interacts with main assistant; activate main window.
-	state := windows.SnapStateStopped
-	if getSnapState != nil {
-		state = getSnapState()
-	}
-	if state != windows.SnapStateAttached {
-		forceActivateWindow(mainWindow)
-	}
 
 	// Delay hide popup
 	go func() {
@@ -532,7 +633,73 @@ func (s *TextSelectionService) handleButtonClick() map[string]any {
 	}()
 
 	return map[string]any{
+		"id":   actionID,
 		"text": text,
+	}
+}
+
+// copyAndGetSelectedText simulates Ctrl+C/Cmd+C and reads the clipboard.
+// This is used in "lazy copy" mode where we only copy when the user clicks the popup.
+//
+// On Windows: The popup doesn't steal focus (WS_EX_NOACTIVATE), so the original app
+// still has the selection and receives the Ctrl+C.
+//
+// On macOS: Clicking the popup activates our app, so we must first re-activate the
+// original app (using the saved PID) before sending Cmd+C.
+func (s *TextSelectionService) copyAndGetSelectedText() string {
+	// On macOS, clicking the popup activates our app.
+	// We need to re-activate the original app before sending Cmd+C.
+	if runtime.GOOS == "darwin" {
+		s.mu.RLock()
+		pid := s.originalAppPid
+		s.mu.RUnlock()
+
+		if pid > 0 {
+			// Re-activate the original app so it receives Cmd+C
+			activateAppByPidDarwin(pid)
+			// Wait for activation to complete
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	// Simulate Ctrl+C (Windows) or Cmd+C (macOS)
+	if runtime.GOOS == "darwin" {
+		simulateCmdCDarwin()
+	} else {
+		simulateCtrlCWindows()
+	}
+
+	// Wait for clipboard to update (try multiple times with increasing delays)
+	var newClipboard string
+	for attempt := 1; attempt <= 3; attempt++ {
+		time.Sleep(time.Duration(80*attempt) * time.Millisecond)
+
+		if runtime.GOOS == "darwin" {
+			newClipboard = getClipboardTextDarwin()
+		} else {
+			newClipboard = getClipboardTextWindows()
+		}
+
+		newClipboard = strings.TrimSpace(newClipboard)
+		// Return clipboard content if not empty, even if it's the same as before.
+		// This allows users to select the same text multiple times.
+		if newClipboard != "" {
+			return newClipboard
+		}
+	}
+
+	// If clipboard is empty after multiple attempts, return empty
+	return ""
+}
+
+// GetLastButtonAction returns the last button click action payload.
+// This is used by the winsnap window as a fallback on startup to avoid missing the first event.
+func (s *TextSelectionService) GetLastButtonAction() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return map[string]any{
+		"id":   s.lastActionID,
+		"text": s.lastActionText,
 	}
 }
 
@@ -554,8 +721,24 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 		return
 	}
 
-	// If window doesn't exist, create new window
-	if w == nil {
+	// Check if existing window is still valid (native handle not nil/0)
+	// On macOS, NativeWindow() returns nil for closed windows
+	// On Windows, NativeWindow() returns 0 for closed windows
+	needCreate := w == nil
+	if !needCreate {
+		nativeHandle := w.NativeWindow()
+		if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+			// Window has been closed or released, need to recreate
+			needCreate = true
+			s.mu.Lock()
+			s.popWindow = nil
+			s.mu.Unlock()
+			w = nil
+		}
+	}
+
+	// If window doesn't exist or is invalid, create new window
+	if needCreate {
 		opts.X = x
 		opts.Y = y
 		opts.InitialPosition = application.WindowXY
@@ -575,6 +758,10 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 
 		// Listen for window closing event
 		w.RegisterHook(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+			// Remove window subclass on Windows before window is destroyed
+			if h := w.NativeWindow(); h != nil {
+				removePopupSubclass(uintptr(h))
+			}
 			s.mu.Lock()
 			if s.popWindow == w {
 				s.popWindow = nil
@@ -589,6 +776,18 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 	}
 
 	// Set position and show (need to update position when reusing window)
+	// Double-check window is still valid before operations
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		// Window became invalid between creation and show, clear reference
+		s.mu.Lock()
+		if s.popWindow == w {
+			s.popWindow = nil
+		}
+		s.mu.Unlock()
+		return
+	}
+
 	w.SetPosition(x, y)
 	w.Show()
 	forcePopupTopMostNoActivate(w)

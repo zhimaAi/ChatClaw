@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -21,12 +22,12 @@ var ()
 
 func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
-		return nil, errors.New("winsnap: Window is nil")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	selfHWND := uintptr(opts.Window.NativeWindow())
 	if selfHWND == 0 {
-		return nil, errors.New("winsnap: native window handle is 0")
+		return nil, ErrWinsnapWindowInvalid
 	}
 
 	targetNames := expandWindowsTargetNames(opts.TargetProcessName)
@@ -57,12 +58,19 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		time.Sleep(250 * time.Millisecond)
 	}
 
+	// 获取目标进程 PID，用于计算多窗口整体边界
+	targetPID, err := getWindowProcessID(target)
+	if err != nil {
+		return nil, fmt.Errorf("winsnap: failed to get target process ID: %w", err)
+	}
+
 	f := &follower{
-		self:   windows.HWND(selfHWND),
-		target: target,
-		gap:    opts.Gap,
-		ready:  make(chan struct{}),
-		app:    opts.App,
+		self:      windows.HWND(selfHWND),
+		target:    target,
+		targetPID: targetPID,
+		gap:       opts.Gap,
+		ready:     make(chan struct{}),
+		app:       opts.App,
 	}
 	if err := f.start(); err != nil {
 		_ = f.Stop()
@@ -72,10 +80,11 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 }
 
 type follower struct {
-	self   windows.HWND
-	target windows.HWND
-	gap    int
-	app    *application.App
+	self      windows.HWND
+	target    windows.HWND
+	targetPID uint32 // 目标进程 PID，用于计算多窗口整体边界
+	gap       int
+	app       *application.App
 
 	mu        sync.Mutex
 	hookLoc   uintptr
@@ -84,6 +93,9 @@ type follower struct {
 	ready     chan struct{}
 	closed    bool
 	selfWidth int32 // 缓存自己的宽度
+
+	// Throttling for syncToTarget to avoid overwhelming system with EnumWindows calls
+	syncing int32 // atomic flag: 1 = currently syncing, 0 = idle
 }
 
 func (f *follower) Stop() error {
@@ -197,40 +209,136 @@ func (f *follower) start() error {
 }
 
 func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idObject, idChild int32, _ uint32, _ uint32) uintptr {
+	// Note: SetWinEventHook is already configured with pid filter, so we don't need
+	// to call getWindowProcessID here. All events received are from the target process.
 	switch event {
 	case eventObjectLocationChange:
-		if hwnd != f.target {
-			return 0
-		}
-		// We only care about the window object itself.
+		// We only care about the window object itself (not child objects like scrollbars).
 		if idObject != objidWindow || idChild != 0 {
 			return 0
 		}
-	case eventSystemForeground:
-		// Foreground event doesn't use object/child the same way; just react
-		// when the foreground window is the target window.
-		if hwnd != f.target {
+		// Skip if the changed window is our own winsnap window
+		if hwnd == f.self {
 			return 0
 		}
+		_ = f.syncToTarget()
+	case eventSystemForeground:
+		// Skip if we are the one becoming foreground
+		if hwnd == f.self {
+			return 0
+		}
+		// When target becomes foreground, we need to ensure our window is also
+		// brought to the top, placed right after the target in z-order.
+		// Use syncToTargetWithZOrderFix to handle this case.
+		_ = f.syncToTargetWithZOrderFix()
 	default:
 		return 0
 	}
-	_ = f.syncToTarget()
 	return 0
 }
 
+// getProcessWindowsBounds calculates the combined bounds of all visible windows
+// belonging to the target process. This handles apps like WeCom that have multiple
+// windows (sidebar + main chat window).
+//
+// Parameters:
+//   - pid: target process ID
+//   - selfHWND: our own window handle (to exclude from bounds calculation)
+//
+// Returns the combined bounds (left, top, right, bottom) of all visible windows.
+// The winsnap window (selfHWND) is excluded from the bounds calculation.
+func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, found bool) {
+	// Get self PID to exclude our own windows
+	var selfPID uint32
+	if selfHWND != 0 {
+		selfPID, _ = getWindowProcessID(selfHWND)
+	}
+
+	// Initialize bounds with extreme values
+	bounds = rect{
+		Left:   0x7FFFFFFF, // max int32
+		Top:    0x7FFFFFFF,
+		Right:  -0x7FFFFFFF, // min int32
+		Bottom: -0x7FFFFFFF,
+	}
+
+	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+		h := windows.HWND(hwnd)
+
+		// Skip invisible and minimized windows
+		if !isWindowVisible(h) || isWindowIconic(h) {
+			return 1
+		}
+
+		// Check if window belongs to target process
+		winPID, err := getWindowProcessID(h)
+		if err != nil || winPID != pid {
+			return 1
+		}
+
+		// Skip our own app's windows
+		if selfPID != 0 && winPID == selfPID {
+			return 1
+		}
+
+		// Skip tool windows and non-app windows
+		ex := getExStyle(h)
+		if ex&wsExToolWindow != 0 {
+			return 1
+		}
+
+		var r rect
+		if err := getWindowRect(h, &r); err != nil {
+			return 1
+		}
+
+		// Skip windows with zero or negative size
+		if r.Right <= r.Left || r.Bottom <= r.Top {
+			return 1
+		}
+
+		// Expand bounds - include ALL windows belonging to target process
+		if r.Left < bounds.Left {
+			bounds.Left = r.Left
+		}
+		if r.Top < bounds.Top {
+			bounds.Top = r.Top
+		}
+		if r.Right > bounds.Right {
+			bounds.Right = r.Right
+		}
+		if r.Bottom > bounds.Bottom {
+			bounds.Bottom = r.Bottom
+		}
+		found = true
+		return 1
+	})
+	_, _, _ = procEnumWindows.Call(cb, 0)
+
+	return bounds, found
+}
+
 func (f *follower) syncToTarget() error {
+	// Throttle: skip if already syncing to avoid overwhelming system
+	if !atomic.CompareAndSwapInt32(&f.syncing, 0, 1) {
+		return nil
+	}
+	defer atomic.StoreInt32(&f.syncing, 0)
+
 	if !isWindow(f.target) {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	var targetWin, targetFrame rect
-	if err := getWindowRect(f.target, &targetWin); err != nil {
-		return err
-	}
-	if err := getExtendedFrameBounds(f.target, &targetFrame); err != nil {
-		// Fallback when DWM call fails.
-		targetFrame = targetWin
+	// Use single window bounds for performance in high-frequency callbacks.
+	// Multi-window bounds calculation (EnumWindows) is too expensive to call
+	// on every location change event during window dragging.
+	var targetBounds rect
+	if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
+		var targetWin rect
+		if err := getWindowRect(f.target, &targetWin); err != nil {
+			return err
+		}
+		targetBounds = targetWin
 	}
 
 	var selfWin, selfFrame rect
@@ -247,11 +355,12 @@ func (f *follower) syncToTarget() error {
 	selfOffsetX := selfFrame.Left - selfWin.Left
 	selfOffsetY := selfFrame.Top - selfWin.Top
 
-	x := targetFrame.Right + int32(f.gap) - selfOffsetX
-	y := targetFrame.Top - selfOffsetY
+	// Position at the right edge of combined bounds
+	x := targetBounds.Right + int32(f.gap) - selfOffsetX
+	y := targetBounds.Top - selfOffsetY
 
-	// 使用目标窗口的高度作为自己的高度，保持固定宽度
-	targetHeight := targetFrame.Bottom - targetFrame.Top
+	// Use combined height of target windows
+	targetHeight := targetBounds.Bottom - targetBounds.Top
 	width := f.selfWidth
 	if width <= 0 {
 		width = selfWin.Right - selfWin.Left
@@ -266,6 +375,63 @@ func (f *follower) syncToTarget() error {
 		return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
 	}
 	_ = setWindowNoTopMostNoActivate(f.self)
+	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
+}
+
+// syncToTargetWithZOrderFix is called when the target window becomes foreground.
+// It ensures our winsnap window is brought to the top along with the target.
+// This is needed because SetWindowPos with insertAfter=target may not bring our
+// window above other windows that were previously above us.
+func (f *follower) syncToTargetWithZOrderFix() error {
+	if !isWindow(f.target) {
+		return errors.New("winsnap: target window is not valid")
+	}
+
+	// Get combined bounds of all windows belonging to target process
+	targetBounds, found := getProcessWindowsBounds(f.targetPID, f.self)
+	if !found {
+		// Fallback to single window if no bounds found
+		var targetWin rect
+		if err := getWindowRect(f.target, &targetWin); err != nil {
+			return err
+		}
+		if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
+			targetBounds = targetWin
+		}
+	}
+
+	var selfWin, selfFrame rect
+	if err := getWindowRect(f.self, &selfWin); err != nil {
+		return err
+	}
+	if err := getExtendedFrameBounds(f.self, &selfFrame); err != nil {
+		selfFrame = selfWin
+	}
+
+	selfOffsetX := selfFrame.Left - selfWin.Left
+	selfOffsetY := selfFrame.Top - selfWin.Top
+
+	// Position at the right edge of combined bounds
+	x := targetBounds.Right + int32(f.gap) - selfOffsetX
+	y := targetBounds.Top - selfOffsetY
+
+	// Use combined height of target windows
+	targetHeight := targetBounds.Bottom - targetBounds.Top
+	width := f.selfWidth
+	if width <= 0 {
+		width = selfWin.Right - selfWin.Left
+	}
+
+	// When target becomes foreground, we need to ensure winsnap is also visible.
+	// First, bring our window to HWND_TOP (above all non-topmost windows),
+	// then position it properly after the target.
+	if isTopMost(f.target) {
+		_ = setWindowTopMostNoActivate(f.self)
+	} else {
+		_ = setWindowNoTopMostNoActivate(f.self)
+		// Explicitly bring to top first before positioning after target
+		_ = bringWindowToTopNoActivate(f.self)
+	}
 	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
 }
 
@@ -313,19 +479,40 @@ func expandWindowsTargetNames(raw string) []string {
 }
 
 func findMainWindowByProcessName(processName string) (windows.HWND, error) {
+	return findMainWindowByProcessNameEx(processName, false)
+}
+
+// findMainWindowByProcessNameIncludingMinimized finds the main window even if it's minimized.
+// This is used for wake operations where we need to restore minimized windows.
+func findMainWindowByProcessNameIncludingMinimized(processName string) (windows.HWND, error) {
+	return findMainWindowByProcessNameEx(processName, true)
+}
+
+// findMainWindowByProcessNameEx finds a representative main window by process name.
+// This is used for z-order management and event listening. The actual positioning
+// uses getProcessWindowsBounds to consider all windows.
+// If includeMinimized is true, it will also consider minimized windows.
+func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (windows.HWND, error) {
 	targetLower := strings.ToLower(processName)
 
 	type cand struct {
-		hwnd  windows.HWND
-		score int
-		area  int64
+		hwnd      windows.HWND
+		score     int
+		area      int64
+		minimized bool
 	}
 	var best cand
 
 	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
 		h := windows.HWND(hwnd)
+		isMinimized := isWindowIconic(h)
+
 		// Keep this check permissive; some apps (e.g. WeChat) may have empty titles or owned main windows.
-		if !isWindowVisible(h) || isWindowIconic(h) {
+		// For wake operations, we also consider minimized windows.
+		if !isWindowVisible(h) {
+			return 1
+		}
+		if isMinimized && !includeMinimized {
 			return 1
 		}
 
@@ -361,6 +548,10 @@ func findMainWindowByProcessName(processName string) (windows.HWND, error) {
 		if titleLen > 0 {
 			score += 20
 		}
+		// Prefer non-minimized windows over minimized ones
+		if isMinimized {
+			score -= 10
+		}
 
 		var r rect
 		if err := getWindowRect(h, &r); err == nil {
@@ -370,13 +561,13 @@ func findMainWindowByProcessName(processName string) (windows.HWND, error) {
 				area := w * hh
 				// Prefer higher score; tie-break by larger area.
 				if best.hwnd == 0 || score > best.score || (score == best.score && area > best.area) {
-					best = cand{hwnd: h, score: score, area: area}
+					best = cand{hwnd: h, score: score, area: area, minimized: isMinimized}
 				}
 			}
 		} else {
 			// No rect: still allow score-only selection.
 			if best.hwnd == 0 || score > best.score {
-				best = cand{hwnd: h, score: score, area: 0}
+				best = cand{hwnd: h, score: score, area: 0, minimized: isMinimized}
 			}
 		}
 		return 1 // continue enumeration
@@ -426,6 +617,7 @@ const (
 
 	// Special HWND values for SetWindowPos
 	// https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
+	hwndTop       = uintptr(0)  // (HWND)0 - Places the window at the top of the Z order
 	hwndTopMost   = ^uintptr(0) // (HWND)-1
 	hwndNoTopMost = ^uintptr(1) // (HWND)-2
 
@@ -637,6 +829,21 @@ func setWindowTopMostNoActivate(hwnd windows.HWND) error {
 func setWindowNoTopMostNoActivate(hwnd windows.HWND) error {
 	flags := uintptr(swpNoMove | swpNoSize | swpNoActivate)
 	r1, _, errNo := procSetWindowPos.Call(uintptr(hwnd), hwndNoTopMost, 0, 0, 0, 0, flags)
+	if r1 == 0 {
+		if errNo != nil && errNo != syscall.Errno(0) {
+			return errNo
+		}
+		return syscall.EINVAL
+	}
+	return nil
+}
+
+// bringWindowToTopNoActivate brings the window to the top of the z-order
+// without activating it. This is useful when the target window becomes foreground
+// and we need to ensure our window is also visible above other windows.
+func bringWindowToTopNoActivate(hwnd windows.HWND) error {
+	flags := uintptr(swpNoMove | swpNoSize | swpNoActivate)
+	r1, _, errNo := procSetWindowPos.Call(uintptr(hwnd), hwndTop, 0, 0, 0, 0, flags)
 	if r1 == 0 {
 		if errNo != nil && errNo != syscall.Errno(0) {
 			return errNo

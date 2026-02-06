@@ -22,6 +22,10 @@ export default {
       name: 'Web Search',
       description: 'Search the web using DuckDuckGo',
     },
+    libraryRetriever: {
+      name: 'Knowledge Search',
+      description: 'Search relevant content from knowledge base',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -29,6 +33,19 @@ export default {
     cancelSnap: 'Cancel Snap',
     placeholder: 'Type your question',
     thinking: 'Thinking...',
+    actions: {
+      sendAndTrigger: 'Send and Trigger',
+      sendToEdit: 'Send to Edit Box',
+      copyToClipboard: 'Copy to Clipboard',
+    },
+    toast: {
+      copied: 'Copied to clipboard',
+      sent: 'Sent',
+      pasted: 'Pasted to edit box',
+      sendFailed: 'Failed to send',
+      pasteFailed: 'Failed to paste',
+      noTarget: 'Not attached to any app',
+    },
   },
   selection: {
     aiChat: 'AI Chat',
@@ -114,6 +131,14 @@ export default {
         feishu: 'Feishu',
         douyin: 'Douyin',
       },
+      clickOffset: {
+        labelX: 'From Left',
+        labelY: 'From Bottom',
+        placeholderX: 'Center',
+        hint: 'Pixels to locate input box',
+      },
+      noClickMode: 'No-click mode (apps that keep focus)',
+      clickMode: 'Click mode (need to click to activate input)',
     },
     // Tools settings
     tools: {
@@ -247,6 +272,9 @@ export default {
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
       selectImage: 'Select image',
+      clearSelected: 'Clear selected',
+      selectedCount: '{count} knowledge base(s) selected',
+      noKnowledge: 'No knowledge base available',
       send: 'Send',
       stop: 'Stop',
       copy: 'Copy',
@@ -357,8 +385,10 @@ export default {
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
-      semanticSegmentation: 'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
-      raptorLLMModel: 'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
+      semanticSegmentation:
+        'When enabled, uses embedding model to intelligently segment by semantic boundaries, improving chunking quality. Note: This increases processing time and consumes extra tokens.',
+      raptorLLMModel:
+        'Language model for generating multi-level summaries. Builds a hierarchical summary tree to improve retrieval. Note: This increases processing time and consumes extra tokens.',
     },
     tabs: {
       personal: 'Personal',
