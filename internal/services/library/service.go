@@ -118,13 +118,9 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 	}
 
 	// 默认值（与 migrations 中的 DEFAULT 保持一致）
-	topK := 20
 	chunkSize := 1024
 	chunkOverlap := 100
 
-	if input.TopK != nil && *input.TopK > 0 {
-		topK = *input.TopK
-	}
 	if input.ChunkSize != nil {
 		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
 			return nil, errs.New("error.library_chunk_size_invalid")
@@ -191,7 +187,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		RaptorLLMProviderID:         raptorLLMProviderID,
 		RaptorLLMModelID:            raptorLLMModelID,
 
-		TopK:         topK,
 		ChunkSize:    chunkSize,
 		ChunkOverlap: chunkOverlap,
 		SortOrder:    sortOrder,
@@ -286,12 +281,6 @@ func (s *LibraryService) UpdateLibrary(id int64, input UpdateLibraryInput) (*Lib
 		q = q.Set("raptor_llm_provider_id = ?", rp).Set("raptor_llm_model_id = ?", rm)
 	}
 
-	if input.TopK != nil {
-		if *input.TopK <= 0 {
-			return nil, errs.New("error.library_topk_invalid")
-		}
-		q = q.Set("top_k = ?", *input.TopK)
-	}
 	if input.ChunkSize != nil {
 		if *input.ChunkSize < 500 || *input.ChunkSize > 5000 {
 			return nil, errs.New("error.library_chunk_size_invalid")

@@ -361,13 +361,16 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		EnableLLMTemperature bool    `bun:"enable_llm_temperature"`
 		EnableLLMTopP        bool    `bun:"enable_llm_top_p"`
 		EnableLLMMaxTokens   bool    `bun:"enable_llm_max_tokens"`
+		LLMMaxContextCount   int     `bun:"llm_max_context_count"`
+		RetrievalTopK        int     `bun:"retrieval_top_k"`
 	}
 	var agent agentRow
 	if err := db.NewSelect().
 		Table("agents").
 		Column("name", "prompt", "default_llm_provider_id", "default_llm_model_id",
 			"llm_temperature", "llm_top_p", "llm_max_tokens",
-			"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens").
+			"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens",
+			"llm_max_context_count", "retrieval_top_k").
 		Where("id = ?", conv.AgentID).
 		Scan(ctx, &agent); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -424,6 +427,8 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		EnableTemp:      agent.EnableLLMTemperature,
 		EnableTopP:      agent.EnableLLMTopP,
 		EnableMaxTokens: agent.EnableLLMMaxTokens,
+		ContextCount:    agent.LLMMaxContextCount,
+		RetrievalTopK:   agent.RetrievalTopK,
 	}
 
 	providerConfig := einoagent.ProviderConfig{
@@ -555,7 +560,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	})
 
 	// Load existing messages for context
-	messages, err := s.loadMessagesForContext(ctx, db, conversationID)
+	messages, err := s.loadMessagesForContext(ctx, db, conversationID, agentConfig.ContextCount)
 	if err != nil {
 		emitError("error.chat_messages_failed", nil)
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")
@@ -1012,15 +1017,35 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 }
 
 // loadMessagesForContext loads messages for agent context
-func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64) ([]*schema.Message, error) {
+// contextCount: maximum number of messages to include (0 or >=200 means unlimited)
+func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int) ([]*schema.Message, error) {
 	var models []messageModel
-	if err := db.NewSelect().
+
+	// Determine if we need to limit context
+	needLimit := contextCount > 0 && contextCount < 200
+
+	q := db.NewSelect().
 		Model(&models).
 		Where("conversation_id = ?", conversationID).
-		Where("status IN (?)", bun.In([]string{StatusSuccess, StatusCancelled})).
-		OrderExpr("created_at ASC, id ASC").
-		Scan(ctx); err != nil {
+		Where("status IN (?)", bun.In([]string{StatusSuccess, StatusCancelled}))
+
+	if needLimit {
+		// Get the latest N messages: order DESC with limit, then reverse in memory
+		q = q.OrderExpr("created_at DESC, id DESC").Limit(contextCount)
+	} else {
+		// No limit: get all messages in chronological order
+		q = q.OrderExpr("created_at ASC, id ASC")
+	}
+
+	if err := q.Scan(ctx); err != nil {
 		return nil, err
+	}
+
+	// If we limited and ordered DESC, reverse to get chronological order
+	if needLimit {
+		for i, j := 0, len(models)-1; i < j; i, j = i+1, j-1 {
+			models[i], models[j] = models[j], models[i]
+		}
 	}
 
 	// Build tool name map for repairing assistant tool_calls entries.

@@ -8,6 +8,7 @@ import LogoIcon from '@/assets/images/logo.svg'
 import { Dialogs } from '@wailsio/runtime'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import SliderWithTicks from './SliderWithTicks.vue'
+import SliderWithMarks from '@/pages/knowledge/components/SliderWithMarks.vue'
 import {
   Select,
   SelectContent,
@@ -37,7 +38,7 @@ import {
   type ProviderWithModels,
 } from '@bindings/willchat/internal/services/providers'
 
-type TabKey = 'model' | 'prompt' | 'delete'
+type TabKey = 'model' | 'prompt' | 'retrieval' | 'delete'
 
 const props = defineProps<{
   open: boolean
@@ -67,7 +68,8 @@ const temperature = ref(0.5)
 const topP = ref(1.0)
 const contextCount = ref(50)
 const maxTokens = ref(1000)
-const matchThreshold = ref(0.5)
+const retrievalMatchThreshold = ref(0.5)
+const retrievalTopK = ref<number[]>([20])
 
 const enableTemperature = ref(false)
 const enableTopP = ref(false)
@@ -101,9 +103,10 @@ watch(
 
     temperature.value = agent.llm_temperature ?? 0.5
     topP.value = agent.llm_top_p ?? 1.0
-    contextCount.value = agent.context_count ?? 50
+    contextCount.value = agent.llm_max_context_count ?? 50
     maxTokens.value = agent.llm_max_tokens ?? 1000
-    matchThreshold.value = agent.match_threshold ?? 0.5
+    retrievalMatchThreshold.value = agent.retrieval_match_threshold ?? 0.5
+    retrievalTopK.value = [agent.retrieval_top_k ?? 20]
 
     enableTemperature.value = agent.enable_llm_temperature ?? false
     enableTopP.value = agent.enable_llm_top_p ?? false
@@ -227,9 +230,10 @@ const handleSave = async () => {
       enable_llm_max_tokens: enableMaxTokens.value,
       llm_temperature: temperature.value,
       llm_top_p: topP.value,
-      context_count: contextCount.value,
+      llm_max_context_count: contextCount.value,
       llm_max_tokens: maxTokens.value,
-      match_threshold: matchThreshold.value,
+      retrieval_match_threshold: retrievalMatchThreshold.value,
+      retrieval_top_k: retrievalTopK.value[0] ?? 20,
     })
     if (!updated) {
       throw new Error(t('assistant.errors.updateFailed'))
@@ -302,6 +306,19 @@ const handleDelete = async () => {
                 @click="tab = 'prompt'"
               >
                 {{ t('assistant.settings.tabs.prompt') }}
+              </button>
+              <button
+                :class="
+                  cn(
+                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                    tab === 'retrieval'
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )
+                "
+                @click="tab = 'retrieval'"
+              >
+                {{ t('assistant.settings.tabs.retrieval') }}
               </button>
               <button
                 :class="
@@ -489,19 +506,6 @@ const handleDelete = async () => {
                   </div>
                 </div>
 
-                <div class="flex items-center justify-between gap-4">
-                  <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.model.matchThreshold') }}
-                  </div>
-                  <Input
-                    v-model.number="matchThreshold"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    class="h-9 w-[160px]"
-                  />
-                </div>
               </div>
 
               <!-- 提示词设置 -->
@@ -542,6 +546,47 @@ const handleDelete = async () => {
                     :placeholder="t('assistant.fields.promptPlaceholder')"
                     maxlength="1000"
                     class="min-h-[160px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              </div>
+
+              <!-- 知识库检索设置 -->
+              <div v-else-if="tab === 'retrieval'" class="flex flex-col gap-5">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.retrieval.matchThreshold') }}
+                  </div>
+                  <Input
+                    v-model.number="retrievalMatchThreshold"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    class="h-9 w-[160px]"
+                  />
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <div class="text-sm font-medium text-foreground">
+                      {{ t('assistant.settings.retrieval.topK') }}
+                    </div>
+                    <div class="text-sm text-muted-foreground tabular-nums">
+                      {{ retrievalTopK[0] ?? 20 }}
+                    </div>
+                  </div>
+                  <SliderWithMarks
+                    v-model="retrievalTopK"
+                    :min="1"
+                    :max="50"
+                    :step="1"
+                    :disabled="saving"
+                    :marks="[
+                      { value: 1, label: '1' },
+                      { value: 20, label: t('assistant.settings.retrieval.default'), emphasize: true },
+                      { value: 30, label: '30' },
+                      { value: 50, label: '50' },
+                    ]"
                   />
                 </div>
               </div>

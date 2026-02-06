@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import SliderWithMarks from './SliderWithMarks.vue'
 
 import type {
   Provider,
@@ -62,8 +61,6 @@ const RAPTOR_LLM_NONE = '__none__'
 const raptorLLMKey = ref<string>(RAPTOR_LLM_NONE) // `${providerId}::${modelId}` or NONE
 
 // advanced fields（用字符串承接输入，提交时再转 number）
-// shadcn Slider 使用 number[] 承载（支持 range）
-const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
 
@@ -75,7 +72,6 @@ const resetForm = () => {
   name.value = ''
   semanticSegmentationEnabled.value = false
   raptorLLMKey.value = RAPTOR_LLM_NONE
-  topK.value = [20]
   chunkSize.value = '1024'
   chunkOverlap.value = '100'
 }
@@ -194,7 +190,6 @@ const handleSubmit = async () => {
       semantic_segmentation_enabled: semanticSegmentationEnabled.value,
       raptor_llm_provider_id: raptorProviderId || '',
       raptor_llm_model_id: raptorModelId || '',
-      top_k: topK.value[0] ?? 20,
       chunk_size: toInt(chunkSize.value) ?? 1024,
       chunk_overlap: toInt(chunkOverlap.value) ?? 100,
     })
@@ -234,29 +229,6 @@ const handleSubmit = async () => {
             :placeholder="t('knowledge.create.namePlaceholder')"
             :maxlength="NAME_MAX_LEN"
             :disabled="isSubmitting"
-          />
-        </div>
-
-        <!-- 请求文档分片数量 -->
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center justify-between">
-            <FieldLabel :label="t('knowledge.create.topK')" :help="t('knowledge.help.topK')" />
-            <div class="text-sm text-muted-foreground tabular-nums">
-              {{ topK[0] ?? 20 }}
-            </div>
-          </div>
-          <SliderWithMarks
-            v-model="topK"
-            :min="1"
-            :max="50"
-            :step="1"
-            :disabled="isSubmitting"
-            :marks="[
-              { value: 1, label: '1' },
-              { value: 20, label: t('knowledge.create.defaultMark'), emphasize: true },
-              { value: 30, label: '30' },
-              { value: 50, label: '50' },
-            ]"
           />
         </div>
 

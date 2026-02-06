@@ -312,6 +312,7 @@ export default {
       tabs: {
         model: 'Model',
         prompt: 'Prompt',
+        retrieval: 'Retrieval',
         delete: 'Delete',
       },
       model: {
@@ -325,9 +326,13 @@ export default {
         topP: 'Top-P',
         topPHint: 'Controls sampling range',
         contextCount: 'Context Count',
-        matchThreshold: 'Knowledge base match threshold',
         maxTokens: 'Max Tokens',
         unlimited: 'Unlimited',
+      },
+      retrieval: {
+        matchThreshold: 'Match Threshold',
+        topK: 'Chunk Count',
+        default: 'Default',
       },
       delete: {
         title: 'Delete Agent',
@@ -341,7 +346,6 @@ export default {
   knowledge: {
     help: {
       name: 'A name to distinguish different knowledge bases (max 30 characters).',
-      topK: 'Maximum number of chunks returned per retrieval.',
       chunkSize:
         'Chunk size (in characters, 500~5000). Larger chunks keep more context but reduce granularity.',
       chunkOverlap:
@@ -404,7 +408,6 @@ export default {
       advanced: 'Advanced settings',
       advancedHide: 'Hide advanced settings',
       defaultMark: 'Default',
-      topK: 'Requested document chunks',
       semanticSegmentation: 'Semantic Segmentation',
       raptorLLMModel: 'Hierarchical Summary Model',
       noRaptorLLM: 'Disabled',

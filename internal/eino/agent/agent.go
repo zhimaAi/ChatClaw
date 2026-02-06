@@ -55,6 +55,10 @@ type Config struct {
 	EnableTemp      bool
 	EnableTopP      bool
 	EnableMaxTokens bool
+
+	// Context and retrieval settings
+	ContextCount  int // Maximum number of messages to include in context (0 or >=200 means unlimited)
+	RetrievalTopK int // Maximum number of document chunks to retrieve
 }
 
 // applyOpenAIModelParams applies optional Temperature/TopP/MaxTokens to an openai.ChatModelConfig.

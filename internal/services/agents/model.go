@@ -21,12 +21,13 @@ type Agent struct {
 	DefaultLLMModelID    string  `json:"default_llm_model_id"`
 	LLMTemperature       float64 `json:"llm_temperature"`
 	LLMTopP              float64 `json:"llm_top_p"`
-	ContextCount         int     `json:"context_count"`
+	LLMMaxContextCount   int     `json:"llm_max_context_count"`
 	LLMMaxTokens         int     `json:"llm_max_tokens"`
-	EnableLLMTemperature bool    `json:"enable_llm_temperature"`
-	EnableLLMTopP        bool    `json:"enable_llm_top_p"`
-	EnableLLMMaxTokens   bool    `json:"enable_llm_max_tokens"`
-	MatchThreshold       float64 `json:"match_threshold"`
+	EnableLLMTemperature      bool    `json:"enable_llm_temperature"`
+	EnableLLMTopP             bool    `json:"enable_llm_top_p"`
+	EnableLLMMaxTokens        bool    `json:"enable_llm_max_tokens"`
+	RetrievalMatchThreshold   float64 `json:"retrieval_match_threshold"`
+	RetrievalTopK             int     `json:"retrieval_top_k"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -48,12 +49,13 @@ type UpdateAgentInput struct {
 
 	LLMTemperature       *float64 `json:"llm_temperature"`
 	LLMTopP              *float64 `json:"llm_top_p"`
-	ContextCount         *int     `json:"context_count"`
+	LLMMaxContextCount   *int     `json:"llm_max_context_count"`
 	LLMMaxTokens         *int     `json:"llm_max_tokens"`
-	EnableLLMTemperature *bool    `json:"enable_llm_temperature"`
-	EnableLLMTopP        *bool    `json:"enable_llm_top_p"`
-	EnableLLMMaxTokens   *bool    `json:"enable_llm_max_tokens"`
-	MatchThreshold       *float64 `json:"match_threshold"`
+	EnableLLMTemperature    *bool    `json:"enable_llm_temperature"`
+	EnableLLMTopP           *bool    `json:"enable_llm_top_p"`
+	EnableLLMMaxTokens      *bool    `json:"enable_llm_max_tokens"`
+	RetrievalMatchThreshold *float64 `json:"retrieval_match_threshold"`
+	RetrievalTopK           *int     `json:"retrieval_top_k"`
 }
 
 type agentModel struct {
@@ -71,12 +73,13 @@ type agentModel struct {
 	DefaultLLMModelID    string  `bun:"default_llm_model_id,notnull"`
 	LLMTemperature       float64 `bun:"llm_temperature,notnull"`
 	LLMTopP              float64 `bun:"llm_top_p,notnull"`
-	ContextCount         int     `bun:"context_count,notnull"`
+	LLMMaxContextCount   int     `bun:"llm_max_context_count,notnull"`
 	LLMMaxTokens         int     `bun:"llm_max_tokens,notnull"`
-	EnableLLMTemperature bool    `bun:"enable_llm_temperature,notnull"`
-	EnableLLMTopP        bool    `bun:"enable_llm_top_p,notnull"`
-	EnableLLMMaxTokens   bool    `bun:"enable_llm_max_tokens,notnull"`
-	MatchThreshold       float64 `bun:"match_threshold,notnull"`
+	EnableLLMTemperature    bool    `bun:"enable_llm_temperature,notnull"`
+	EnableLLMTopP           bool    `bun:"enable_llm_top_p,notnull"`
+	EnableLLMMaxTokens      bool    `bun:"enable_llm_max_tokens,notnull"`
+	RetrievalMatchThreshold float64 `bun:"retrieval_match_threshold,notnull"`
+	RetrievalTopK           int     `bun:"retrieval_top_k,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
@@ -109,12 +112,13 @@ func (m *agentModel) toDTO() Agent {
 		DefaultLLMModelID:    m.DefaultLLMModelID,
 		LLMTemperature:       m.LLMTemperature,
 		LLMTopP:              m.LLMTopP,
-		ContextCount:         m.ContextCount,
+		LLMMaxContextCount:   m.LLMMaxContextCount,
 		LLMMaxTokens:         m.LLMMaxTokens,
-		EnableLLMTemperature: m.EnableLLMTemperature,
-		EnableLLMTopP:        m.EnableLLMTopP,
-		EnableLLMMaxTokens:   m.EnableLLMMaxTokens,
-		MatchThreshold:       m.MatchThreshold,
+		EnableLLMTemperature:    m.EnableLLMTemperature,
+		EnableLLMTopP:           m.EnableLLMTopP,
+		EnableLLMMaxTokens:      m.EnableLLMMaxTokens,
+		RetrievalMatchThreshold: m.RetrievalMatchThreshold,
+		RetrievalTopK:           m.RetrievalTopK,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

@@ -309,6 +309,7 @@ export default {
       tabs: {
         model: '模型设置',
         prompt: '提示词设置',
+        retrieval: '知识库检索',
         delete: '删除助手',
       },
       model: {
@@ -322,9 +323,13 @@ export default {
         topP: 'Top-P',
         topPHint: '控制采样范围',
         contextCount: '上下文数',
-        matchThreshold: '知识库匹配度阈值',
         maxTokens: '最大 Token 数',
         unlimited: '不限',
+      },
+      retrieval: {
+        matchThreshold: '匹配度阈值',
+        topK: '检索分片数',
+        default: '默认',
       },
       delete: {
         title: '删除助手',
@@ -338,7 +343,6 @@ export default {
   knowledge: {
     help: {
       name: '知识库名称，用于区分不同的知识库（最多30个字符）。',
-      topK: '每次检索时，最多返回的文档分片数量。',
       chunkSize: '分片大小（字符数，500~5000）。分片越大，上下文越完整，但召回粒度更粗。',
       chunkOverlap: '相邻分片的重叠大小（字符数，0~1000），用于减少跨分片断句导致的信息丢失。',
       matchThreshold: '相似度低于该阈值的结果将被过滤（0~1）。',
@@ -402,7 +406,6 @@ export default {
       advanced: '高级设置',
       advancedHide: '收起高级设置',
       defaultMark: '默认',
-      topK: '请求文档分片数量',
       semanticSegmentation: '语义分段',
       raptorLLMModel: '层级摘要模型',
       noRaptorLLM: '不启用',

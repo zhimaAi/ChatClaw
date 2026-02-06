@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/select'
 
 import FieldLabel from './FieldLabel.vue'
-import SliderWithMarks from './SliderWithMarks.vue'
 import OrangeWarning from './OrangeWarning.vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -62,7 +61,6 @@ const raptorLLMGroups = ref<Group[]>([])
 const RAPTOR_LLM_NONE = '__none__'
 const raptorLLMKey = ref<string>(RAPTOR_LLM_NONE)
 
-const topK = ref<number[]>([20])
 const chunkSize = ref<string>('1024')
 const chunkOverlap = ref<string>('100')
 
@@ -120,7 +118,6 @@ watch(
     await loadProviders()
 
     // init from library
-    topK.value = [props.library?.top_k ?? 20]
     chunkSize.value = String(props.library?.chunk_size ?? 1024)
     chunkOverlap.value = String(props.library?.chunk_overlap ?? 100)
 
@@ -141,7 +138,6 @@ const isValid = computed(() => {
   const cs = Number.parseInt(chunkSize.value, 10)
   const co = Number.parseInt(chunkOverlap.value, 10)
   return (
-    (topK.value[0] ?? 0) > 0 &&
     Number.isFinite(cs) &&
     cs >= 500 &&
     cs <= 5000 &&
@@ -164,7 +160,6 @@ const handleSave = async () => {
         semantic_segmentation_enabled: semanticSegmentationEnabled.value,
         raptor_llm_provider_id: raptorPid || '',
         raptor_llm_model_id: raptorMid || '',
-        top_k: topK.value[0] ?? 20,
         chunk_size: Number.parseInt(chunkSize.value, 10),
         chunk_overlap: Number.parseInt(chunkOverlap.value, 10),
       })
@@ -190,27 +185,6 @@ const handleSave = async () => {
       </DialogHeader>
 
       <div class="flex flex-col gap-4 py-4">
-        <!-- topK -->
-        <div class="flex flex-col gap-1.5">
-          <div class="flex items-center justify-between">
-            <FieldLabel :label="t('knowledge.create.topK')" :help="t('knowledge.help.topK')" />
-            <div class="text-sm text-muted-foreground tabular-nums">{{ topK[0] ?? 20 }}</div>
-          </div>
-          <SliderWithMarks
-            v-model="topK"
-            :min="1"
-            :max="50"
-            :step="1"
-            :disabled="saving"
-            :marks="[
-              { value: 1, label: '1' },
-              { value: 20, label: t('knowledge.create.defaultMark'), emphasize: true },
-              { value: 30, label: '30' },
-              { value: 50, label: '50' },
-            ]"
-          />
-        </div>
-
         <!-- 语义分段开关 -->
         <div class="flex items-center justify-between">
           <FieldLabel
