@@ -8,10 +8,17 @@ import ChatMessageItem from './ChatMessageItem.vue'
 const props = defineProps<{
   conversationId: number
   tabId: string
+  mode?: 'main' | 'snap'
+  hasAttachedTarget?: boolean
+  showAiSendButton?: boolean
+  showAiEditButton?: boolean
 }>()
 
 const emit = defineEmits<{
   editMessage: [messageId: number, newContent: string]
+  snapSendAndTrigger: [content: string]
+  snapSendToEdit: [content: string]
+  snapCopy: [content: string]
 }>()
 
 const { t } = useI18n()
@@ -186,13 +193,20 @@ watch(
           "
           :error-key="chatStore.errorKeyByMessage[msg.id]"
           :error-detail="chatStore.errorDetailByMessage[msg.id]"
+          :mode="mode"
+          :has-attached-target="hasAttachedTarget"
+          :show-ai-send-button="showAiSendButton"
+          :show-ai-edit-button="showAiEditButton"
           @edit="handleEdit"
+          @snap-send-and-trigger="(content) => emit('snapSendAndTrigger', content)"
+          @snap-send-to-edit="(content) => emit('snapSendToEdit', content)"
+          @snap-copy="(content) => emit('snapCopy', content)"
         />
 
         <!-- Streaming message fallback (should not happen, but keep UI resilient) -->
         <ChatMessageItem
           v-if="streaming && !messages.some((m) => m.id === streaming.messageId)"
-          :message="{
+          :message="({
             id: streaming.messageId,
             conversation_id: conversationId,
             role: 'assistant',
@@ -203,12 +217,19 @@ watch(
             output_tokens: 0,
             created_at: null,
             updated_at: null,
-          }"
+          } as Message)"
           :is-streaming="true"
           :streaming-content="streaming.content"
           :streaming-thinking="streaming.thinkingContent"
           :streaming-tool-calls="streaming.toolCalls"
           :segments="streaming.segments"
+          :mode="mode"
+          :has-attached-target="hasAttachedTarget"
+          :show-ai-send-button="showAiSendButton"
+          :show-ai-edit-button="showAiEditButton"
+          @snap-send-and-trigger="(content) => emit('snapSendAndTrigger', content)"
+          @snap-send-to-edit="(content) => emit('snapSendToEdit', content)"
+          @snap-copy="(content) => emit('snapCopy', content)"
         />
 
         <!-- Bottom spacer: keep distance from input box when auto-scrolling -->

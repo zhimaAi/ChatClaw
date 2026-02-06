@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUp, Check, MoreHorizontal, Pin, PinOff, Square } from 'lucide-vue-next'
+import { ArrowUp, Check, Copy, MoreHorizontal, Pin, PinOff, Plus, SendHorizontal, Square, Type } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
@@ -34,6 +34,10 @@ import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/willchat/internal/services/providers'
+import { SnapService } from '@bindings/willchat/internal/services/windows'
+import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
+import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
+import { Clipboard } from '@wailsio/runtime'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,10 +84,20 @@ import {
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
  * 通过 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留
+ * mode: 'main' 主窗体模式（默认），'snap' 吸附窗体模式
  */
-const props = defineProps<{
-  tabId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    tabId: string
+    mode?: 'main' | 'snap'
+  }>(),
+  {
+    mode: 'main',
+  }
+)
+
+// Computed for mode checks
+const isSnapMode = computed(() => props.mode === 'snap')
 
 type ListMode = 'personal' | 'team'
 
@@ -91,7 +105,7 @@ const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const chatStore = useChatStore()
 
-const mode = ref<ListMode>('personal')
+const listMode = ref<ListMode>('personal')
 
 const agents = ref<Agent[]>([])
 const activeAgentId = ref<number | null>(null)
@@ -101,8 +115,148 @@ const settingsOpen = ref(false)
 const settingsAgent = ref<Agent | null>(null)
 const loading = ref(false)
 
-// Sidebar collapse state
+// Sidebar collapse state - default collapsed in snap mode
 const sidebarCollapsed = ref(false)
+
+// ==================== Snap mode specific state ====================
+// Track if there's an attached target (for snap mode)
+const hasAttachedTarget = ref(false)
+
+// Settings for button visibility (snap mode)
+const showAiSendButton = ref(true)
+const showAiEditButton = ref(true)
+
+// Map from target process name to settings key
+const processToSettingsKey: Record<string, string> = {
+  // Windows
+  'Weixin.exe': 'snap_wechat',
+  'WeChat.exe': 'snap_wechat',
+  'WeChatApp.exe': 'snap_wechat',
+  'WeChatAppEx.exe': 'snap_wechat',
+  'WXWork.exe': 'snap_wecom',
+  'QQ.exe': 'snap_qq',
+  'QQNT.exe': 'snap_qq',
+  'DingTalk.exe': 'snap_dingtalk',
+  'Feishu.exe': 'snap_feishu',
+  'Lark.exe': 'snap_feishu',
+  'Douyin.exe': 'snap_douyin',
+  // macOS
+  '微信': 'snap_wechat',
+  'Weixin': 'snap_wechat',
+  'weixin': 'snap_wechat',
+  'WeChat': 'snap_wechat',
+  'wechat': 'snap_wechat',
+  'com.tencent.xinWeChat': 'snap_wechat',
+  '企业微信': 'snap_wecom',
+  'WeCom': 'snap_wecom',
+  'wecom': 'snap_wecom',
+  'WeWork': 'snap_wecom',
+  'wework': 'snap_wecom',
+  'WXWork': 'snap_wecom',
+  'wxwork': 'snap_wecom',
+  'qiyeweixin': 'snap_wecom',
+  'com.tencent.WeWorkMac': 'snap_wecom',
+  'QQ': 'snap_qq',
+  'qq': 'snap_qq',
+  'com.tencent.qq': 'snap_qq',
+  '钉钉': 'snap_dingtalk',
+  'DingTalk': 'snap_dingtalk',
+  'dingtalk': 'snap_dingtalk',
+  'com.alibaba.DingTalkMac': 'snap_dingtalk',
+  '飞书': 'snap_feishu',
+  'Feishu': 'snap_feishu',
+  'feishu': 'snap_feishu',
+  'Lark': 'snap_feishu',
+  'lark': 'snap_feishu',
+  'com.bytedance.feishu': 'snap_feishu',
+  'com.bytedance.Lark': 'snap_feishu',
+  '抖音': 'snap_douyin',
+  'Douyin': 'snap_douyin',
+  'douyin': 'snap_douyin',
+}
+
+// Check snap status and update hasAttachedTarget
+const checkSnapStatus = async () => {
+  if (!isSnapMode.value) return
+  try {
+    const status = await SnapService.GetStatus()
+    hasAttachedTarget.value = status.state === 'attached' && !!status.targetProcess
+  } catch (error) {
+    console.error('Failed to check snap status:', error)
+    hasAttachedTarget.value = false
+  }
+}
+
+// Load snap settings
+const loadSnapSettings = async () => {
+  if (!isSnapMode.value) return
+  try {
+    const settings = await SettingsService.List(Category.CategorySnap)
+    settings.forEach((setting) => {
+      if (setting.key === 'show_ai_send_button') {
+        showAiSendButton.value = setting.value === 'true'
+      }
+      if (setting.key === 'show_ai_edit_button') {
+        showAiEditButton.value = setting.value === 'true'
+      }
+    })
+  } catch (error) {
+    console.error('Failed to load snap settings:', error)
+  }
+}
+
+// Cancel snap (disable the attached app's toggle)
+const cancelSnap = async () => {
+  try {
+    const status = await SnapService.GetStatus()
+    if (status.state === 'attached' && status.targetProcess) {
+      const settingsKey = processToSettingsKey[status.targetProcess]
+      if (settingsKey) {
+        await SettingsService.SetValue(settingsKey, 'false')
+        await SnapService.SyncFromSettings()
+        hasAttachedTarget.value = false
+      }
+    }
+  } catch (error) {
+    console.error('Failed to cancel snap:', error)
+  }
+}
+
+// Action handlers for AI response buttons (snap mode)
+const handleSendAndTrigger = async (content: string) => {
+  if (!content) return
+  try {
+    await SnapService.SendTextToTarget(content, true)
+    toast.success(t('winsnap.toast.sent'))
+  } catch (error) {
+    console.error('Failed to send and trigger:', error)
+    await checkSnapStatus()
+    toast.error(hasAttachedTarget.value ? t('winsnap.toast.sendFailed') : t('winsnap.toast.noTarget'))
+  }
+}
+
+const handleSendToEdit = async (content: string) => {
+  if (!content) return
+  try {
+    await SnapService.PasteTextToTarget(content)
+    toast.success(t('winsnap.toast.pasted'))
+  } catch (error) {
+    console.error('Failed to paste to edit:', error)
+    await checkSnapStatus()
+    toast.error(hasAttachedTarget.value ? t('winsnap.toast.pasteFailed') : t('winsnap.toast.noTarget'))
+  }
+}
+
+const handleCopyToClipboard = async (content: string) => {
+  if (!content) return
+  try {
+    await Clipboard.SetText(content)
+    toast.success(t('winsnap.toast.copied'))
+  } catch (error) {
+    console.error('Failed to copy to clipboard:', error)
+  }
+}
+// ==================== End snap mode specific state ====================
 
 // Chat input
 const chatInput = ref('')
@@ -126,6 +280,12 @@ const conversationsLoadedByAgent = ref<Record<number, boolean>>({})
 const conversationsLoadingByAgent = ref<Record<number, boolean>>({})
 const conversationsStaleByAgent = ref<Record<number, boolean>>({})
 const activeConversationId = ref<number | null>(null)
+
+const activeConversation = computed<Conversation | null>(() => {
+  if (!activeConversationId.value || !activeAgentId.value) return null
+  const list = conversationsByAgent.value[activeAgentId.value] ?? []
+  return list.find((c) => c.id === activeConversationId.value) ?? null
+})
 
 // Conversation dialogs
 const renameConversationOpen = ref(false)
@@ -153,7 +313,7 @@ const canSend = computed(() => {
   return (
     !!activeAgentId.value &&
     chatInput.value.trim() !== '' &&
-    selectedModelKey.value !== '' &&
+    !!selectedModelInfo.value &&
     !isGenerating.value
   )
 })
@@ -308,11 +468,28 @@ const loadModels = async () => {
   try {
     const providers = await ProvidersService.ListProviders()
     const enabled = providers.filter((p) => p.enabled)
-    // Load all provider models in parallel
-    const results = await Promise.all(
+    // Load provider models in parallel; allow partial failures.
+    const settled = await Promise.allSettled(
       enabled.map((p) => ProvidersService.GetProviderWithModels(p.provider_id))
     )
-    providersWithModels.value = results.filter(Boolean) as ProviderWithModels[]
+    const ok: ProviderWithModels[] = []
+    let failedCount = 0
+    for (const s of settled) {
+      if (s.status === 'fulfilled') {
+        if (s.value) ok.push(s.value)
+      } else {
+        failedCount += 1
+        console.warn('Failed to load provider models:', s.reason)
+      }
+    }
+    providersWithModels.value = ok
+
+    // If some providers failed but we still have models, keep UI usable and show a gentle hint.
+    if (failedCount > 0 && ok.length > 0) {
+      toast.default(t('assistant.errors.loadModelsPartialFailed'))
+    } else if (failedCount > 0 && ok.length === 0) {
+      toast.error(t('assistant.errors.loadModelsFailed'))
+    }
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadModelsFailed'))
   }
@@ -333,6 +510,26 @@ const selectDefaultModel = () => {
   if (!activeAgent.value) {
     selectedModelKey.value = ''
     return
+  }
+
+  // Prefer the active conversation's model if available.
+  {
+    const conv = activeConversation.value
+    if (conv?.llm_provider_id && conv?.llm_model_id) {
+      const key = `${conv.llm_provider_id}::${conv.llm_model_id}`
+      // Verify the model still exists
+      for (const pw of providersWithModels.value) {
+        if (pw.provider.provider_id !== conv.llm_provider_id) continue
+        for (const group of pw.model_groups) {
+          if (group.type !== 'llm') continue
+          const found = group.models.find((m) => m.model_id === conv.llm_model_id)
+          if (found) {
+            selectedModelKey.value = key
+            return
+          }
+        }
+      }
+    }
   }
 
   // Check if agent has a default model configured
@@ -388,6 +585,51 @@ const selectedModelInfo = computed(() => {
   }
   return null
 })
+
+const parseSelectedModelKey = (key: string): { providerId: string; modelId: string } | null => {
+  if (!key) return null
+  const [providerId, modelId] = key.split('::')
+  if (!providerId || !modelId) return null
+  return { providerId, modelId }
+}
+
+const saveModelToConversationIfNeeded = async (opts?: { silent?: boolean }) => {
+  const silent = opts?.silent ?? true
+  if (!activeConversationId.value) return
+
+  const parsed = parseSelectedModelKey(selectedModelKey.value)
+  if (!parsed) return
+
+  // Avoid redundant updates when switching conversations (we already read from DB into selectedModelKey).
+  const current = activeConversation.value
+  if (
+    current &&
+    current.llm_provider_id === parsed.providerId &&
+    current.llm_model_id === parsed.modelId
+  ) {
+    return
+  }
+
+  try {
+    const updated = await ConversationsService.UpdateConversation(
+      activeConversationId.value,
+      new UpdateConversationInput({
+        llm_provider_id: parsed.providerId,
+        llm_model_id: parsed.modelId,
+      })
+    )
+    if (updated) {
+      handleConversationUpdated(updated)
+    }
+  } catch (error: unknown) {
+    // Non-critical: if this fails, backend will continue using the previously saved model.
+    if (!silent) {
+      toast.error(getErrorMessage(error) || t('assistant.errors.updateConversationFailed'))
+    } else {
+      console.warn('Failed to save model to conversation:', error)
+    }
+  }
+}
 
 const handleCreate = async (data: { name: string; prompt: string; icon: string }) => {
   loading.value = true
@@ -545,6 +787,9 @@ const handleSend = async () => {
   // Now send the message via ChatService
   if (activeConversationId.value) {
     try {
+      // Ensure conversation model is synced before sending to backend.
+      // Backend send API only takes conversation_id, so it relies on the saved model in conversation record.
+      await saveModelToConversationIfNeeded({ silent: true })
       await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId)
 
       // Update conversation's last_message
@@ -695,12 +940,12 @@ const handleTogglePin = async (conv: Conversation) => {
   }
 }
 
-const handleConversationUpdated = (updated: Conversation) => {
+function handleConversationUpdated(updated: Conversation) {
   const agentId = updated.agent_id
   const current = conversationsByAgent.value[agentId] ?? []
+  const exists = current.some((c) => c.id === updated.id)
   // Update and re-sort (pinned first, then by updated_at desc)
-  const next = current
-    .map((c) => (c.id === updated.id ? updated : c))
+  const next = (exists ? current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...current])
     .sort((a, b) => {
       // Pinned items first
       if (a.is_pinned !== b.is_pinned) {
@@ -803,6 +1048,12 @@ watch(providersWithModels, () => {
   selectDefaultModel()
 })
 
+// Persist model switching to current conversation so backend uses the new model.
+watch(selectedModelKey, () => {
+  // Fire-and-forget; handleSend will also await a sync to avoid race conditions.
+  void saveModelToConversationIfNeeded({ silent: true })
+})
+
 // 当前标签页是否激活
 const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 
@@ -830,8 +1081,18 @@ watch(isTabActive, (active) => {
 // Listen for text selection events
 let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeConversationsChanged: (() => void) | null = null
+// Snap mode event listeners
+let unsubscribeSnapSettings: (() => void) | null = null
+let unsubscribeSnapStateChanged: (() => void) | null = null
+let unsubscribeTextSelectionSnap: (() => void) | null = null
+let onPointerDown: ((e: PointerEvent) => void) | null = null
 
 onMounted(() => {
+  // In snap mode, default sidebar to collapsed
+  if (isSnapMode.value) {
+    sidebarCollapsed.value = true
+  }
+
   void (async () => {
     await loadAgents()
     await loadModels()
@@ -840,25 +1101,90 @@ onMounted(() => {
     if (activeAgentId.value != null) {
       await loadConversations(activeAgentId.value, { force: true })
     }
+
+    // Snap mode initialization
+    if (isSnapMode.value) {
+      await loadSnapSettings()
+      await checkSnapStatus()
+    }
   })()
 
   // Subscribe to chat events (important: do this at page level, not in ChatMessageList)
   chatStore.subscribe()
 
-  // Listen for text selection to send to assistant
-  unsubscribeTextSelection = Events.On('text-selection:send-to-assistant', (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
-    const text = payload?.text ?? ''
-    if (text) {
-      chatInput.value = text
-      // Auto-send after a short delay (if model is selected)
-      if (canSend.value) {
+  // Listen for text selection to send to assistant (main mode only)
+  if (!isSnapMode.value) {
+    unsubscribeTextSelection = Events.On('text-selection:send-to-assistant', (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+      const text = payload?.text ?? ''
+      if (text) {
+        chatInput.value = text
+        // Auto-send after a short delay (if model is selected)
+        if (canSend.value) {
+          window.setTimeout(() => {
+            handleSend()
+          }, 100)
+        }
+      }
+    })
+  }
+
+  // Snap mode event listeners
+  if (isSnapMode.value) {
+    // Listen for settings changes
+    unsubscribeSnapSettings = Events.On('snap:settings-changed', () => {
+      void loadSnapSettings()
+      void checkSnapStatus()
+    })
+
+    // Listen for snap state changes
+    unsubscribeSnapStateChanged = Events.On('snap:state-changed', (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+      const state = payload?.state
+      const targetProcess = payload?.targetProcess
+      hasAttachedTarget.value = state === 'attached' && !!targetProcess
+    })
+
+    // Listen for text selection to send to snap
+    unsubscribeTextSelectionSnap = Events.On('text-selection:send-to-snap', (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+      const text = payload?.text ?? ''
+      if (text) {
+        chatInput.value = text
+        // Auto-send after a short delay
         window.setTimeout(() => {
-          handleSend()
+          if (canSend.value) {
+            handleSend()
+          }
         }, 100)
       }
+    })
+
+    // Fallback: pull the latest selection action once on startup
+    void (async () => {
+      try {
+        const action = await TextSelectionService.GetLastButtonAction()
+        const text = String((action as any)?.text ?? '')
+        if (text) {
+          chatInput.value = text
+          window.setTimeout(() => {
+            if (canSend.value) {
+              handleSend()
+            }
+          }, 100)
+        }
+      } catch (error) {
+        console.error('Failed to get last selection action:', error)
+      }
+    })()
+
+    // When interacting with snap window while attached, bring both windows to front
+    onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return
+      void SnapService.WakeAttached()
     }
-  })
+    window.addEventListener('pointerdown', onPointerDown, true)
+  }
 
   // Listen for conversation changes from other assistant tabs.
   unsubscribeConversationsChanged = Events.On('conversations:changed', (event: any) => {
@@ -885,32 +1211,124 @@ onUnmounted(() => {
   unsubscribeTextSelection = null
   unsubscribeConversationsChanged?.()
   unsubscribeConversationsChanged = null
+
+  // Snap mode cleanup
+  unsubscribeSnapSettings?.()
+  unsubscribeSnapSettings = null
+  unsubscribeSnapStateChanged?.()
+  unsubscribeSnapStateChanged = null
+  unsubscribeTextSelectionSnap?.()
+  unsubscribeTextSelectionSnap = null
+  if (onPointerDown) {
+    window.removeEventListener('pointerdown', onPointerDown, true)
+    onPointerDown = null
+  }
 })
 </script>
 
 <template>
-  <div class="flex h-full w-full overflow-hidden bg-background">
-    <!-- Left side: Agent list -->
+  <div :class="cn('flex h-full w-full overflow-hidden bg-background', isSnapMode && 'flex-col')">
+    <!-- Snap mode header toolbar -->
+    <div
+      v-if="isSnapMode"
+      class="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-3"
+      style="--wails-draggable: drag"
+    >
+      <!-- Left: Agent selector -->
+      <div class="flex items-center gap-1" style="--wails-draggable: no-drag">
+        <Select
+          :model-value="activeAgentId?.toString() ?? ''"
+          @update:model-value="(v) => { if (v) { activeAgentId = Number(v); handleNewConversation(); } }"
+        >
+          <SelectTrigger class="h-7 w-auto min-w-[120px] max-w-[180px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50">
+            <div v-if="activeAgent" class="flex items-center gap-1.5">
+              <img v-if="activeAgent.icon" :src="activeAgent.icon" class="size-4 rounded object-contain" />
+              <LogoIcon v-else class="size-4" />
+              <span class="truncate">{{ activeAgent.name }}</span>
+            </div>
+            <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem v-for="a in agents" :key="a.id" :value="a.id.toString()">
+                <div class="flex items-center gap-2">
+                  <img v-if="a.icon" :src="a.icon" class="size-4 rounded object-contain" />
+                  <LogoIcon v-else class="size-4" />
+                  <span>{{ a.name }}</span>
+                </div>
+              </SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <!-- Right: New conversation + Cancel snap -->
+      <div class="flex items-center gap-1.5" style="--wails-draggable: no-drag">
+        <button
+          class="rounded-md p-1 hover:bg-muted"
+          :title="t('assistant.sidebar.newConversation')"
+          type="button"
+          @click="handleNewConversation"
+        >
+          <Plus class="size-4 text-muted-foreground" />
+        </button>
+        <button
+          class="ml-1 inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-xs hover:bg-muted"
+          type="button"
+          @click="cancelSnap"
+        >
+          <PinOff class="size-3.5 text-muted-foreground" />
+          <span class="text-muted-foreground">{{ t('winsnap.cancelSnap') }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main content wrapper -->
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
+    <!-- Overlay backdrop for snap mode sidebar -->
+    <div
+      v-if="isSnapMode && !sidebarCollapsed"
+      class="absolute inset-0 z-10 bg-black/20"
+      @click="sidebarCollapsed = true"
+    />
+
+    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded) -->
     <aside
+      v-if="!isSnapMode || !sidebarCollapsed"
       :class="
         cn(
-          'flex shrink-0 flex-col border-r border-border transition-all duration-200',
-          sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-sidebar'
+          'flex shrink-0 flex-col border-r border-border bg-background transition-all duration-200',
+          sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-sidebar',
+          // In snap mode, sidebar is an overlay
+          isSnapMode && !sidebarCollapsed && 'absolute inset-y-0 left-0 z-20 shadow-lg'
         )
       "
     >
+      <!-- Snap mode: close button at top -->
+      <div v-if="isSnapMode && !sidebarCollapsed" class="flex items-center justify-end border-b border-border px-2 py-1.5">
+        <Button
+          size="icon"
+          variant="ghost"
+          class="size-6"
+          :title="t('assistant.sidebar.collapse')"
+          @click="sidebarCollapsed = true"
+        >
+          <IconSidebarCollapse class="size-4 text-muted-foreground" />
+        </Button>
+      </div>
+
       <div class="flex items-center justify-between gap-2 p-3">
         <div class="inline-flex rounded-md bg-muted p-1">
           <button
             :class="
               cn(
                 'rounded px-3 py-1 text-sm transition-colors',
-                mode === 'personal'
+                listMode === 'personal'
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               )
             "
-            @click="mode = 'personal'"
+            @click="listMode = 'personal'"
           >
             {{ t('assistant.modes.personal') }}
           </button>
@@ -1106,8 +1524,15 @@ onUnmounted(() => {
         v-if="activeConversationId && (chatMessages.length > 0 || isGenerating)"
         :conversation-id="activeConversationId"
         :tab-id="tabId"
+        :mode="props.mode"
+        :has-attached-target="hasAttachedTarget"
+        :show-ai-send-button="showAiSendButton"
+        :show-ai-edit-button="showAiEditButton"
         class="min-w-0 flex-1 overflow-hidden"
         @edit-message="handleEditMessage"
+        @snap-send-and-trigger="handleSendAndTrigger"
+        @snap-send-to-edit="handleSendToEdit"
+        @snap-copy="handleCopyToClipboard"
       />
 
       <!-- Empty state / Input area -->
@@ -1317,7 +1742,9 @@ onUnmounted(() => {
         </div>
       </div>
     </section>
+    </div><!-- End main content wrapper -->
 
+    <!-- Dialogs (rendered outside main content wrapper for proper z-index) -->
     <CreateAgentDialog v-model:open="createOpen" :loading="loading" @create="handleCreate" />
     <AgentSettingsDialog
       v-model:open="settingsOpen"
@@ -1326,7 +1753,6 @@ onUnmounted(() => {
       @deleted="handleDeleted"
     />
 
-    <!-- Conversation dialogs -->
     <RenameConversationDialog
       v-model:open="renameConversationOpen"
       :conversation="actionConversation"
