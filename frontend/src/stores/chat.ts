@@ -162,6 +162,14 @@ export const useChatStore = defineStore('chat', () => {
         messagesByConversation.value[conversationId] = merged
       }
 
+      // Build a map of tool results from tool-role messages (tool_call_id → content)
+      const toolResultMap = new Map<string, string>()
+      for (const msg of fetched) {
+        if (msg.role === 'tool' && msg.tool_call_id) {
+          toolResultMap.set(msg.tool_call_id, msg.content)
+        }
+      }
+
       // Parse and restore segments from backend for each assistant message
       for (const msg of fetched) {
         if (msg.role === 'assistant' && msg.segments) {
@@ -191,6 +199,7 @@ export const useChatStore = defineStore('chat', () => {
                         toolCallId: id,
                         toolName: name,
                         argsJson: args,
+                        resultJson: toolResultMap.get(id),
                         status: 'completed',
                       })
                     }
