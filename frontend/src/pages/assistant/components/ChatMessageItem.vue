@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -22,10 +22,18 @@ const props = defineProps<{
   segments?: MessageSegment[] // Ordered segments for interleaved display
   errorKey?: string // Specific error key for more informative error messages
   errorDetail?: string // Actual error message detail for user display
+  // Snap mode props
+  mode?: 'main' | 'snap'
+  hasAttachedTarget?: boolean
+  showAiSendButton?: boolean
+  showAiEditButton?: boolean
 }>()
 
 const emit = defineEmits<{
   edit: [messageId: number, newContent: string]
+  snapSendAndTrigger: [content: string]
+  snapSendToEdit: [content: string]
+  snapCopy: [content: string]
 }>()
 
 const { t } = useI18n()
@@ -115,6 +123,7 @@ const toolCalls = computed(() => {
 const isUser = computed(() => props.message.role === MessageRole.USER)
 const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
+const isSnapMode = computed(() => props.mode === 'snap')
 
 const showThinking = computed(() => isAssistant.value && thinkingContent.value)
 const showStatus = computed(
@@ -303,13 +312,37 @@ const handleCancelEdit = () => {
           )
         "
       >
+        <!-- Snap mode: Send and trigger button (assistant messages only) -->
+        <Button
+          v-if="isSnapMode && isAssistant && showAiSendButton && hasAttachedTarget"
+          size="icon"
+          variant="ghost"
+          class="size-6"
+          :title="t('winsnap.actions.sendAndTrigger')"
+          @click="emit('snapSendAndTrigger', displayContent)"
+        >
+          <SendHorizontal class="size-3.5 text-muted-foreground" />
+        </Button>
+
+        <!-- Snap mode: Send to edit button (assistant messages only) -->
+        <Button
+          v-if="isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
+          size="icon"
+          variant="ghost"
+          class="size-6"
+          :title="t('winsnap.actions.sendToEdit')"
+          @click="emit('snapSendToEdit', displayContent)"
+        >
+          <Type class="size-3.5 text-muted-foreground" />
+        </Button>
+
         <!-- Copy button -->
         <Button
           size="icon"
           variant="ghost"
           class="size-6"
           :title="t('assistant.chat.copy')"
-          @click="handleCopy"
+          @click="isSnapMode && isAssistant ? emit('snapCopy', displayContent) : handleCopy()"
         >
           <Check v-if="copied" class="size-3.5 text-green-500" />
           <Copy v-else class="size-3.5 text-muted-foreground" />
