@@ -82,15 +82,23 @@ const streaming = computed(() => chatStore.getStreaming(props.conversationId).va
 // Check if generating
 const isGenerating = computed(() => chatStore.isGenerating(props.conversationId).value)
 
-// Scroll to bottom
+// Scroll to bottom (with a small delayed retry for stability)
 const scrollToBottom = () => {
-  if (scrollContainerRef.value && shouldAutoScroll.value) {
-    nextTick(() => {
-      if (scrollContainerRef.value) {
-        scrollContainerRef.value.scrollTop = scrollContainerRef.value.scrollHeight
-      }
-    })
+  if (!scrollContainerRef.value || !shouldAutoScroll.value) return
+
+  const performScroll = () => {
+    if (scrollContainerRef.value) {
+      scrollContainerRef.value.scrollTop = scrollContainerRef.value.scrollHeight
+    }
   }
+
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      performScroll()
+      // Retry once after layout settles (fonts/images may affect height)
+      setTimeout(performScroll, 50)
+    })
+  })
 }
 
 // Handle scroll to detect if user has scrolled up
@@ -147,7 +155,7 @@ watch(
 // Load messages when conversation changes
 watch(
   () => props.conversationId,
-  async (newId) => {
+  async (newId, oldId) => {
     if (newId > 0) {
       await chatStore.loadMessages(newId)
       // When opening a conversation, jump to bottom by default.

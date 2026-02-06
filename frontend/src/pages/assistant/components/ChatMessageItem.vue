@@ -132,27 +132,45 @@ const showStatus = computed(
 
 // Compute display segments: from props (streaming/persisted) or fallback from message data
 const displaySegments = computed((): MessageSegment[] => {
-  // Priority: provided segments (streaming or persisted)
+  // Priority 1: Use provided segments if available
   if (props.segments && props.segments.length > 0) {
     return props.segments
   }
-  // Fallback: construct from message data (non-interleaved, with thinking first if exists)
+  
+  // Priority 2: For streaming without segments, build from individual streaming props
+  // (This fixes the first message tool call issue)
+  if (props.isStreaming) {
+    const segs: MessageSegment[] = []
+    if (props.streamingThinking) {
+      segs.push({ type: 'thinking', content: props.streamingThinking })
+    }
+    if (props.streamingContent) {
+      segs.push({ type: 'content', content: props.streamingContent })
+    }
+    if (props.streamingToolCalls && props.streamingToolCalls.length > 0) {
+      segs.push({ type: 'tools', toolCalls: props.streamingToolCalls })
+    }
+    if (segs.length > 0) return segs
+  }
+  
+  // Priority 3: Fallback for historical messages - construct from message data
   if (!isAssistant.value) return []
   const segs: MessageSegment[] = []
-  // Add thinking segment if exists
+  
   const thinking = thinkingContent.value
   if (thinking) {
     segs.push({ type: 'thinking', content: thinking })
   }
-  // Add content segment if exists
+  
   const content = displayContent.value
   if (content) {
     segs.push({ type: 'content', content })
   }
-  // Add tools segment if exists
+  
   if (toolCalls.value.length > 0) {
     segs.push({ type: 'tools', toolCalls: toolCalls.value })
   }
+  
   return segs
 })
 

@@ -114,10 +114,56 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       const messages = await ChatService.GetMessages(conversationId)
-      messagesByConversation.value[conversationId] = messages ?? []
+      const fetched = messages ?? []
+      const current = messagesByConversation.value[conversationId] ?? []
+      const streaming = streamingByConversation.value[conversationId]
+
+      const normalizeContent = (v: unknown) => String(v ?? '').trim()
+
+      // IMPORTANT:
+      // On first app launch / first message, there are multiple async flows running:
+      // - ChatMessageList watches conversationId and calls loadMessages()
+      // - sendMessage() optimistically appends a local user message (negative ID)
+      // - backend emits streaming events to upsert the assistant placeholder
+      //
+      // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
+      // user message and/or streaming assistant placeholder, making the UI look empty until
+      // a later reload (often when streaming completes).
+      //
+      // Strategy:
+      // - If backend returns empty but we already have local messages, do not overwrite.
+      // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
+      if (fetched.length === 0 && current.length > 0) {
+        // Keep current messages; avoid clobbering optimistic/streaming state.
+      } else {
+        const fetchedIds = new Set(fetched.map((m) => m.id))
+        const merged: Message[] = [...fetched]
+
+        // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
+        // This avoids duplicates after a later reload.
+        for (const msg of current) {
+          if (msg.id >= 0) continue
+          const existsOnServer = fetched.some(
+            (fm) => fm.role === msg.role && normalizeContent(fm.content) === normalizeContent(msg.content)
+          )
+          if (!existsOnServer) {
+            merged.push(msg)
+          }
+        }
+
+        // Keep streaming assistant placeholder/message if it's not in fetched yet.
+        if (streaming && !fetchedIds.has(streaming.messageId)) {
+          const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
+          if (localStreamingMsg) {
+            merged.push(localStreamingMsg)
+          }
+        }
+
+        messagesByConversation.value[conversationId] = merged
+      }
 
       // Parse and restore segments from backend for each assistant message
-      for (const msg of messages ?? []) {
+      for (const msg of fetched) {
         if (msg.role === 'assistant' && msg.segments) {
           try {
             const rawSegments = JSON.parse(msg.segments) as Array<{
@@ -180,7 +226,10 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error: unknown) {
       errorByConversation.value[conversationId] =
         error instanceof Error ? error.message : 'Failed to load messages'
-      messagesByConversation.value[conversationId] = []
+      // Do not clear existing messages on transient failures; keeping UI stable is preferred.
+      if (!messagesByConversation.value[conversationId]) {
+        messagesByConversation.value[conversationId] = []
+      }
     } finally {
       loadingByConversation.value[conversationId] = false
     }
