@@ -286,7 +286,7 @@ export default {
       errorToolCall: 'Tool call failed',
       errorStream: 'AI service connection interrupted',
       cancelled: 'Stopped',
-      thinking: 'Thinking',
+      thinking: 'Reasoning',
       thinkingInProgress: 'Thinking...',
       thinkingOn: 'Thinking mode enabled',
       thinkingOff: 'Thinking mode disabled',

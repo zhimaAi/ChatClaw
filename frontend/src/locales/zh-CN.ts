@@ -283,7 +283,7 @@ export default {
       errorToolCall: '工具调用过程中出现错误',
       errorStream: 'AI 服务连接中断',
       cancelled: '已停止',
-      thinking: '思考中',
+      thinking: '思考过程',
       thinkingInProgress: '正在思考...',
       thinkingOn: '思考模式已开启',
       thinkingOff: '思考模式已关闭',

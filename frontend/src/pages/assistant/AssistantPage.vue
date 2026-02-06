@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUp, Check, Copy, MoreHorizontal, Pin, PinOff, Plus, Brain, SendHorizontal, Square, Type } from 'lucide-vue-next'
+import { ArrowUp, Check, Copy, MoreHorizontal, Pin, PinOff, Plus, Lightbulb, SendHorizontal, Square, Type } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
@@ -714,6 +714,8 @@ const handleNewConversation = () => {
   chatInput.value = ''
   // Clear knowledge base selection for new conversation
   clearKnowledgeSelection()
+  // Reset thinking mode to default (off) for new conversation
+  enableThinking.value = false
 }
 
 const handleNewConversationForAgent = (agentId: number) => {
@@ -1645,14 +1647,16 @@ onUnmounted(() => {
                       <Button
                         size="icon"
                         variant="ghost"
-                        class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                        :class="{
-                          'border-primary/50 bg-primary/10': enableThinking,
-                        }"
+                        class="size-8 rounded-full border border-border bg-background"
+                        :class="
+                          enableThinking
+                            ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
+                            : 'hover:bg-muted/40'
+                        "
                         @click="enableThinking = !enableThinking"
                       >
-                        <Brain
-                          class="size-4"
+                        <Lightbulb
+                          class="size-4 pointer-events-none"
                           :class="enableThinking ? 'text-primary' : 'text-muted-foreground'"
                         />
                       </Button>
@@ -1681,13 +1685,15 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                      :class="{
-                        'border-primary/50 bg-primary/10': selectedLibraryIds.length > 0,
-                      }"
+                      class="size-8 rounded-full border border-border bg-background"
+                      :class="
+                        selectedLibraryIds.length > 0
+                          ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
+                          : 'hover:bg-muted/40'
+                      "
                     >
                       <IconSelectKnowledge
-                        class="size-4"
+                        class="size-4 pointer-events-none"
                         :class="
                           selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'
                         "
