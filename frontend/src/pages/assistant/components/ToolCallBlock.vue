@@ -99,7 +99,7 @@ const getQueryFromArgs = (argsJson?: string): string => {
             <span class="opacity-70">{{ t('assistant.chat.toolCalling') }}</span>
           </template>
           <template v-else-if="toolCall.status === 'completed'">
-            <Check class="size-3 text-green-500" />
+            <Check class="size-3 text-muted-foreground" />
             <span class="opacity-70">{{ t('assistant.chat.toolCompleted') }}</span>
           </template>
           <template v-else-if="toolCall.status === 'error'">

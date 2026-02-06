@@ -393,7 +393,7 @@ const handleCancelEdit = () => {
           :title="t('assistant.chat.copy')"
           @click="isSnapMode && isAssistant ? emit('snapCopy', displayContent) : handleCopy()"
         >
-          <Check v-if="copied" class="size-3.5 text-green-500" />
+          <Check v-if="copied" class="size-3.5 text-muted-foreground" />
           <Copy v-else class="size-3.5 text-muted-foreground" />
         </Button>
 
