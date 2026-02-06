@@ -129,6 +129,19 @@ const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
 const isSnapMode = computed(() => props.mode === 'snap')
 
+// Token usage display: only show when not streaming and has token data
+const hasTokenUsage = computed(() => {
+  if (props.isStreaming) return false
+  const { input_tokens, output_tokens } = props.message
+  return isAssistant.value && (input_tokens > 0 || output_tokens > 0)
+})
+
+// Format token count (e.g. 1234 -> "1,234", 12345 -> "12.3k")
+const formatTokenCount = (count: number): string => {
+  if (count >= 10000) return `${(count / 1000).toFixed(1)}k`
+  return count.toLocaleString()
+}
+
 const showStatus = computed(
   () =>
     props.message.status === MessageStatus.ERROR || props.message.status === MessageStatus.CANCELLED
@@ -350,64 +363,80 @@ const handleCancelEdit = () => {
         <p class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
       </div>
 
-      <!-- Action buttons (visible on hover) -->
+      <!-- Action bar: token usage (left) + action buttons (right, hover) -->
       <div
         v-if="!isEditing && !isStreaming"
         :class="
           cn(
-            'flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
+            'flex items-center gap-2',
             isAssistant && '-mt-1',
             isUser ? 'justify-end' : 'justify-start'
           )
         "
       >
-        <!-- Snap mode: Send and trigger button (assistant messages only) -->
-        <Button
-          v-if="isSnapMode && isAssistant && showAiSendButton && hasAttachedTarget"
-          size="icon"
-          variant="ghost"
-          class="size-6"
-          :title="t('winsnap.actions.sendAndTrigger')"
-          @click="emit('snapSendAndTrigger', displayContent)"
+        <!-- Token usage (assistant only, always visible) -->
+        <span
+          v-if="hasTokenUsage"
+          class="text-[11px] tabular-nums text-muted-foreground/40 select-none"
         >
-          <SendHorizontal class="size-3.5 text-muted-foreground" />
-        </Button>
+          {{
+            t('assistant.chat.tokenUsage', {
+              input: formatTokenCount(message.input_tokens),
+              output: formatTokenCount(message.output_tokens),
+            })
+          }}
+        </span>
 
-        <!-- Snap mode: Send to edit button (assistant messages only) -->
-        <Button
-          v-if="isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
-          size="icon"
-          variant="ghost"
-          class="size-6"
-          :title="t('winsnap.actions.sendToEdit')"
-          @click="emit('snapSendToEdit', displayContent)"
-        >
-          <Type class="size-3.5 text-muted-foreground" />
-        </Button>
+        <!-- Action buttons (visible on hover) -->
+        <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <!-- Snap mode: Send and trigger button (assistant messages only) -->
+          <Button
+            v-if="isSnapMode && isAssistant && showAiSendButton && hasAttachedTarget"
+            size="icon"
+            variant="ghost"
+            class="size-6"
+            :title="t('winsnap.actions.sendAndTrigger')"
+            @click="emit('snapSendAndTrigger', displayContent)"
+          >
+            <SendHorizontal class="size-3.5 text-muted-foreground" />
+          </Button>
 
-        <!-- Copy button -->
-        <Button
-          size="icon"
-          variant="ghost"
-          class="size-6"
-          :title="t('assistant.chat.copy')"
-          @click="isSnapMode && isAssistant ? emit('snapCopy', displayContent) : handleCopy()"
-        >
-          <Check v-if="copied" class="size-3.5 text-muted-foreground" />
-          <Copy v-else class="size-3.5 text-muted-foreground" />
-        </Button>
+          <!-- Snap mode: Send to edit button (assistant messages only) -->
+          <Button
+            v-if="isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
+            size="icon"
+            variant="ghost"
+            class="size-6"
+            :title="t('winsnap.actions.sendToEdit')"
+            @click="emit('snapSendToEdit', displayContent)"
+          >
+            <Type class="size-3.5 text-muted-foreground" />
+          </Button>
 
-        <!-- Edit button (only for user messages) -->
-        <Button
-          v-if="isUser"
-          size="icon"
-          variant="ghost"
-          class="size-6"
-          :title="t('assistant.chat.edit')"
-          @click="handleEdit"
-        >
-          <Pencil class="size-3.5 text-muted-foreground" />
-        </Button>
+          <!-- Copy button -->
+          <Button
+            size="icon"
+            variant="ghost"
+            class="size-6"
+            :title="t('assistant.chat.copy')"
+            @click="isSnapMode && isAssistant ? emit('snapCopy', displayContent) : handleCopy()"
+          >
+            <Check v-if="copied" class="size-3.5 text-muted-foreground" />
+            <Copy v-else class="size-3.5 text-muted-foreground" />
+          </Button>
+
+          <!-- Edit button (only for user messages) -->
+          <Button
+            v-if="isUser"
+            size="icon"
+            variant="ghost"
+            class="size-6"
+            :title="t('assistant.chat.edit')"
+            @click="handleEdit"
+          >
+            <Pencil class="size-3.5 text-muted-foreground" />
+          </Button>
+        </div>
       </div>
     </div>
   </div>
