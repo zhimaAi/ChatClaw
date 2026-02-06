@@ -228,6 +228,46 @@ static int winsnap_order_window_above_target(int selfWindowNumber, int targetWin
 	return result;
 }
 
+// Bring target app's windows to front without activating it (no focus change).
+// This uses AppleScript or Accessibility API to raise windows without stealing focus.
+// Returns 1 if successful, 0 if failed.
+static int winsnap_bring_target_to_front_no_activate(pid_t targetPid) {
+	if (targetPid <= 0) return 0;
+
+	// Use CGWindowListCopyWindowInfo to find target's windows and use
+	// AXUIElementSetAttributeValue to raise them without activation.
+	// This is more reliable than AppleScript for not stealing focus.
+
+	AXUIElementRef appElement = AXUIElementCreateApplication(targetPid);
+	if (!appElement) return 0;
+
+	CFArrayRef windowArray = NULL;
+	AXError err = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute, (CFTypeRef *)&windowArray);
+	if (err != kAXErrorSuccess || !windowArray) {
+		CFRelease(appElement);
+		return 0;
+	}
+
+	CFIndex count = CFArrayGetCount(windowArray);
+	int raised = 0;
+	for (CFIndex i = 0; i < count; i++) {
+		AXUIElementRef windowElement = (AXUIElementRef)CFArrayGetValueAtIndex(windowArray, i);
+		if (!windowElement) continue;
+
+		// Use AXRaise to bring window to front without activating the app
+		// AXRaise brings the window to the front of its layer without changing focus
+		AXError raiseErr = AXUIElementPerformAction(windowElement, kAXRaiseAction);
+		if (raiseErr == kAXErrorSuccess) {
+			raised = 1;
+			break; // Only need to raise the main window
+		}
+	}
+
+	CFRelease(windowArray);
+	CFRelease(appElement);
+	return raised;
+}
+
 // Get window number from NSWindow pointer. Returns 0 if invalid.
 static int winsnap_get_window_number(void *nsWindow) {
 	if (!nsWindow) return 0;
@@ -495,6 +535,80 @@ func BringWinsnapToFront(window *application.WebviewWindow) error {
 		return ErrWinsnapWindowInvalid
 	}
 	C.winsnap_order_front_without_focus(C.int(windowNumber))
+	return nil
+}
+
+// IsTargetObscured checks if the target window is obscured by other app windows.
+// Returns true if there are other app windows between winsnap and target.
+// This is used in the step loop to detect when the attached target needs to be woken up.
+func IsTargetObscured(self *application.WebviewWindow, targetProcessName string) (bool, error) {
+	if self == nil {
+		return false, ErrWinsnapWindowInvalid
+	}
+
+	nativeHandle := self.NativeWindow()
+	if nativeHandle == nil {
+		return false, ErrWinsnapWindowInvalid
+	}
+
+	selfWindowNumber := int(C.winsnap_get_window_number(nativeHandle))
+	if selfWindowNumber <= 0 {
+		return false, ErrWinsnapWindowInvalid
+	}
+
+	if targetProcessName == "" {
+		return false, errors.New("winsnap: TargetProcessName is empty")
+	}
+	name := normalizeMacTargetName(targetProcessName)
+	if name == "" {
+		return false, errors.New("winsnap: TargetProcessName is empty")
+	}
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	pid := C.winsnap_find_pid_by_name_local(cname)
+	if pid <= 0 {
+		return false, ErrTargetWindowNotFound
+	}
+
+	// winsnap_is_target_adjacent returns 1 if adjacent (not obscured), 0 if obscured
+	adjacent := C.winsnap_is_target_adjacent(C.int(selfWindowNumber), pid)
+	return adjacent == 0, nil
+}
+
+// BringTargetToFrontNoActivate brings the target window to front without stealing focus.
+// This uses Accessibility API (AXRaise) to raise the window without activating the app.
+// The current focus remains unchanged - only the z-order is adjusted.
+func BringTargetToFrontNoActivate(self *application.WebviewWindow, targetProcessName string) error {
+	if targetProcessName == "" {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+	name := normalizeMacTargetName(targetProcessName)
+	if name == "" {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	pid := C.winsnap_find_pid_by_name_local(cname)
+	if pid <= 0 {
+		return ErrTargetWindowNotFound
+	}
+
+	// Bring target to front without activating (using AXRaise)
+	if C.winsnap_bring_target_to_front_no_activate(pid) == 0 {
+		return errors.New("winsnap: failed to bring target to front")
+	}
+
+	// After raising target, ensure winsnap stays above it
+	if self != nil {
+		nativeHandle := self.NativeWindow()
+		if nativeHandle != nil {
+			selfWindowNumber := int(C.winsnap_get_window_number(nativeHandle))
+			targetWindowNumber := int(C.winsnap_find_main_window_number_for_pid(pid))
+			if selfWindowNumber > 0 && targetWindowNumber > 0 {
+				C.winsnap_order_window_above_target(C.int(selfWindowNumber), C.int(targetWindowNumber))
+			}
+		}
+	}
 	return nil
 }
 

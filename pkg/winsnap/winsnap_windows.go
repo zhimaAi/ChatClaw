@@ -367,19 +367,38 @@ func expandWindowsTargetNames(raw string) []string {
 }
 
 func findMainWindowByProcessName(processName string) (windows.HWND, error) {
+	return findMainWindowByProcessNameEx(processName, false)
+}
+
+// findMainWindowByProcessNameIncludingMinimized finds the main window even if it's minimized.
+// This is used for wake operations where we need to restore minimized windows.
+func findMainWindowByProcessNameIncludingMinimized(processName string) (windows.HWND, error) {
+	return findMainWindowByProcessNameEx(processName, true)
+}
+
+// findMainWindowByProcessNameEx finds the main window by process name.
+// If includeMinimized is true, it will also consider minimized windows.
+func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (windows.HWND, error) {
 	targetLower := strings.ToLower(processName)
 
 	type cand struct {
-		hwnd  windows.HWND
-		score int
-		area  int64
+		hwnd      windows.HWND
+		score     int
+		area      int64
+		minimized bool
 	}
 	var best cand
 
 	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
 		h := windows.HWND(hwnd)
+		isMinimized := isWindowIconic(h)
+
 		// Keep this check permissive; some apps (e.g. WeChat) may have empty titles or owned main windows.
-		if !isWindowVisible(h) || isWindowIconic(h) {
+		// For wake operations, we also consider minimized windows.
+		if !isWindowVisible(h) {
+			return 1
+		}
+		if isMinimized && !includeMinimized {
 			return 1
 		}
 
@@ -415,6 +434,10 @@ func findMainWindowByProcessName(processName string) (windows.HWND, error) {
 		if titleLen > 0 {
 			score += 20
 		}
+		// Prefer non-minimized windows over minimized ones
+		if isMinimized {
+			score -= 10
+		}
 
 		var r rect
 		if err := getWindowRect(h, &r); err == nil {
@@ -424,13 +447,13 @@ func findMainWindowByProcessName(processName string) (windows.HWND, error) {
 				area := w * hh
 				// Prefer higher score; tie-break by larger area.
 				if best.hwnd == 0 || score > best.score || (score == best.score && area > best.area) {
-					best = cand{hwnd: h, score: score, area: area}
+					best = cand{hwnd: h, score: score, area: area, minimized: isMinimized}
 				}
 			}
 		} else {
 			// No rect: still allow score-only selection.
 			if best.hwnd == 0 || score > best.score {
-				best = cand{hwnd: h, score: score, area: 0}
+				best = cand{hwnd: h, score: score, area: 0, minimized: isMinimized}
 			}
 		}
 		return 1 // continue enumeration

@@ -56,6 +56,7 @@ type SnapService struct {
 
 	ctrl                 winsnap.Controller
 	currentTarget        string
+	lastAttachedTarget   string // Remembers the last attached target when hidden, for wake restoration
 	lastWinsnapMinimized bool
 
 	loopCancel context.CancelFunc
@@ -118,6 +119,7 @@ func (s *SnapService) WakeAttached() error {
 // WakeWindow brings the winsnap window to the front, regardless of snap state.
 // This is used by text selection service:
 // - In attached state: wakes both target and winsnap window.
+// - In hidden state with last attached target: wakes both target and winsnap window (restore attached state).
 // - In standalone state: wakes only the winsnap window.
 // - If the winsnap window does not exist (never created / closed), it will be recreated on-demand.
 func (s *SnapService) WakeWindow() {
@@ -127,6 +129,7 @@ func (s *SnapService) WakeWindow() {
 	w := s.win
 	target := s.currentTarget
 	state := s.status.State
+	lastAttached := s.lastAttachedTarget
 	s.mu.Unlock()
 
 	// If window is nil or invalid, recreate it via WindowService.
@@ -147,6 +150,7 @@ func (s *SnapService) WakeWindow() {
 			}
 			target = s.currentTarget
 			state = s.status.State
+			lastAttached = s.lastAttachedTarget
 		}
 		s.mu.Unlock()
 	}
@@ -155,7 +159,38 @@ func (s *SnapService) WakeWindow() {
 		return
 	}
 
-	// If it was hidden (off-screen), bring it back to a usable standalone position.
+	// If currently attached, wake both target and winsnap.
+	if state == SnapStateAttached && target != "" {
+		_ = winsnap.WakeAttachedWindow(w, target)
+		return
+	}
+
+	// If hidden but was previously attached to a target, try to restore attached state.
+	// This handles the case where user minimized everything and then uses text selection popup.
+	if (state == SnapStateHidden || state == SnapStateStopped) && lastAttached != "" {
+		// Try to wake the last attached target along with winsnap.
+		err := winsnap.WakeAttachedWindow(w, lastAttached)
+		if err == nil {
+			// Successfully woke attached window, restore attached state.
+			s.mu.Lock()
+			s.currentTarget = lastAttached
+			s.status.State = SnapStateAttached
+			s.status.TargetProcess = lastAttached
+			s.status.LastError = ""
+			s.touchLocked("")
+			s.mu.Unlock()
+
+			// Emit state change event
+			s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+				"state":         string(SnapStateAttached),
+				"targetProcess": lastAttached,
+			})
+			return
+		}
+		// If wake failed (target not found), fall through to standalone mode.
+	}
+
+	// If it was hidden (off-screen) with no attached target, bring it back to standalone position.
 	if state == SnapStateHidden || state == SnapStateStopped {
 		s.moveToStandalone(w)
 		s.mu.Lock()
@@ -165,13 +200,6 @@ func (s *SnapService) WakeWindow() {
 		s.touchLocked("")
 		s.mu.Unlock()
 		state = SnapStateStandalone
-		target = ""
-	}
-
-	if state == SnapStateAttached && target != "" {
-		// Attached state: wake both target and winsnap.
-		_ = winsnap.WakeAttachedWindow(w, target)
-		return
 	}
 
 	// Standalone or other state: wake the winsnap window only.
@@ -414,10 +442,25 @@ func (s *SnapService) step() {
 	if err != nil {
 		// Check if our own app is frontmost (user interacting with our app's window)
 		// In this case, preserve current snap state - don't hide or change anything.
-		// NOTE: We do NOT auto-wake the attached target here because we cannot distinguish
-		// whether the user clicked on the winsnap window or the main window.
-		// Waking is triggered only by frontend pointerdown event on the winsnap window.
 		if err == winsnap.ErrSelfIsFrontmost {
+			// When our app is frontmost and we're attached to a target, check if the target
+			// window is being obscured by other apps. If so, bring it to front WITHOUT stealing focus.
+			// This ensures the attached target stays visible when user interacts with winsnap.
+			s.mu.Lock()
+			currentTarget := s.currentTarget
+			currentState := s.status.State
+			win := s.win
+			s.mu.Unlock()
+
+			if currentState == SnapStateAttached && currentTarget != "" && win != nil {
+				// Check if target is obscured and bring it to front if needed (async to avoid blocking step)
+				// Use BringTargetToFrontNoActivate to avoid stealing focus from winsnap
+				go func() {
+					if obscured, _ := winsnap.IsTargetObscured(win, currentTarget); obscured {
+						_ = winsnap.BringTargetToFrontNoActivate(win, currentTarget)
+					}
+				}()
+			}
 			return
 		}
 		// Other errors: snapping is not supported or failed.
@@ -428,7 +471,19 @@ func (s *SnapService) step() {
 		return
 	}
 
+	// If currently in standalone state, don't hide even if no target is found.
+	// Standalone mode means the winsnap window is intentionally visible without attachment.
+	// This is used when text selection popup wakes the winsnap window on-demand.
 	if !found || target == "" {
+		s.mu.Lock()
+		currentState := s.status.State
+		s.mu.Unlock()
+
+		// In standalone state, keep the window visible - don't hide it
+		if currentState == SnapStateStandalone {
+			return
+		}
+
 		s.hideOffscreen(w)
 		return
 	}
@@ -444,6 +499,13 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 	}
 	oldState := s.status.State
 	oldTarget := s.status.TargetProcess
+
+	// Remember the last attached target for wake restoration.
+	// This allows WakeWindow to restore attached state instead of going standalone.
+	if oldState == SnapStateAttached && s.currentTarget != "" {
+		s.lastAttachedTarget = s.currentTarget
+	}
+
 	s.currentTarget = ""
 	s.lastWinsnapMinimized = false
 	s.status.State = SnapStateHidden
@@ -515,6 +577,7 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	oldTarget := s.status.TargetProcess
 	s.ctrl = c
 	s.currentTarget = targetProcess
+	s.lastAttachedTarget = "" // Clear: now actively attached, no need to remember
 	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
 	s.status.State = SnapStateAttached
 	s.status.TargetProcess = targetProcess

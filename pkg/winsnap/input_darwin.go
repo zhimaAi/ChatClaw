@@ -91,46 +91,129 @@ static void winsnap_simulate_cmd_v() {
 	CFRelease(source);
 }
 
-// Simulate Enter key
-static void winsnap_simulate_enter() {
-	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-	if (!source) return;
+// Simulate Enter key using CGEventPostToPid to send directly to target process.
+// Some apps (like DingTalk) filter events from kCGEventSourceStateHIDSystemState,
+// so we need to post directly to the target process.
+static void winsnap_simulate_enter_to_pid(pid_t targetPid) {
+	// Use kCGEventSourceStateCombinedSessionState which is more compatible with apps
+	// that filter synthetic events
+	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
+	if (!source) {
+		// Fallback to HID system state
+		source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+		if (!source) return;
+	}
 
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, true);
-	CGEventSetTimestamp(keyDown, current_uptime_nsec()); // Required for macOS Sequoia+
-	CGEventPost(kCGHIDEventTap, keyDown);
-	CFRelease(keyDown);
-
-	usleep(10000); // 10ms
-
+	CGEventSetTimestamp(keyDown, current_uptime_nsec());
+	
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, false);
-	CGEventSetTimestamp(keyUp, current_uptime_nsec()); // Required for macOS Sequoia+
-	CGEventPost(kCGHIDEventTap, keyUp);
-	CFRelease(keyUp);
+	CGEventSetTimestamp(keyUp, current_uptime_nsec());
 
+	if (targetPid > 0) {
+		// Post directly to target process - this bypasses app-level event filtering
+		CGEventPostToPid(targetPid, keyDown);
+		usleep(20000); // 20ms - slightly longer for process-targeted events
+		CGEventPostToPid(targetPid, keyUp);
+	} else {
+		// Fallback to system-wide post
+		CGEventPost(kCGHIDEventTap, keyDown);
+		usleep(10000);
+		CGEventPost(kCGHIDEventTap, keyUp);
+	}
+
+	CFRelease(keyDown);
+	CFRelease(keyUp);
 	CFRelease(source);
 }
 
-// Simulate Cmd+Enter
-static void winsnap_simulate_cmd_enter() {
-	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-	if (!source) return;
+// Legacy function for compatibility
+static void winsnap_simulate_enter() {
+	winsnap_simulate_enter_to_pid(0);
+}
+
+// Simulate Cmd+Enter to target process
+static void winsnap_simulate_cmd_enter_to_pid(pid_t targetPid) {
+	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
+	if (!source) {
+		source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+		if (!source) return;
+	}
+
+	// For Cmd+Enter, we need to send Cmd down, then Return down/up, then Cmd up
+	CGEventRef cmdDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Command, true);
+	CGEventSetTimestamp(cmdDown, current_uptime_nsec());
 
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, true);
 	CGEventSetFlags(keyDown, kCGEventFlagMaskCommand);
-	CGEventSetTimestamp(keyDown, current_uptime_nsec()); // Required for macOS Sequoia+
-	CGEventPost(kCGHIDEventTap, keyDown);
-	CFRelease(keyDown);
-
-	usleep(10000); // 10ms
+	CGEventSetTimestamp(keyDown, current_uptime_nsec());
 
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, false);
 	CGEventSetFlags(keyUp, kCGEventFlagMaskCommand);
-	CGEventSetTimestamp(keyUp, current_uptime_nsec()); // Required for macOS Sequoia+
-	CGEventPost(kCGHIDEventTap, keyUp);
-	CFRelease(keyUp);
+	CGEventSetTimestamp(keyUp, current_uptime_nsec());
 
+	CGEventRef cmdUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Command, false);
+	CGEventSetTimestamp(cmdUp, current_uptime_nsec());
+
+	if (targetPid > 0) {
+		CGEventPostToPid(targetPid, cmdDown);
+		usleep(10000);
+		CGEventPostToPid(targetPid, keyDown);
+		usleep(20000);
+		CGEventPostToPid(targetPid, keyUp);
+		usleep(10000);
+		CGEventPostToPid(targetPid, cmdUp);
+	} else {
+		CGEventPost(kCGHIDEventTap, cmdDown);
+		usleep(10000);
+		CGEventPost(kCGHIDEventTap, keyDown);
+		usleep(10000);
+		CGEventPost(kCGHIDEventTap, keyUp);
+		usleep(10000);
+		CGEventPost(kCGHIDEventTap, cmdUp);
+	}
+
+	CFRelease(cmdDown);
+	CFRelease(keyDown);
+	CFRelease(keyUp);
+	CFRelease(cmdUp);
 	CFRelease(source);
+}
+
+// Legacy function for compatibility
+static void winsnap_simulate_cmd_enter() {
+	winsnap_simulate_cmd_enter_to_pid(0);
+}
+
+// Get PID by process name (for sending keys to specific process)
+static pid_t winsnap_get_pid_by_name(const char *name) {
+	if (!name) return 0;
+	@autoreleasepool {
+		NSString *target = [NSString stringWithUTF8String:name];
+		if (!target || target.length == 0) return 0;
+
+		// Normalize: drop path, .app, .exe suffixes
+		target = [target lastPathComponent];
+		NSString *lower = [target lowercaseString];
+		if ([lower hasSuffix:@".app"]) {
+			target = [target substringToIndex:(target.length - 4)];
+		}
+		lower = [target lowercaseString];
+		if ([lower hasSuffix:@".exe"]) {
+			target = [target substringToIndex:(target.length - 4)];
+		}
+
+		for (NSRunningApplication *app in [[NSWorkspace sharedWorkspace] runningApplications]) {
+			if (!app || app.terminated) continue;
+			NSString *loc = app.localizedName;
+			NSString *exe = app.executableURL.lastPathComponent;
+			if ((loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) ||
+				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]])) {
+				return app.processIdentifier;
+			}
+		}
+		return 0;
+	}
 }
 
 // Get the main window frame of a running application by process name
@@ -204,9 +287,34 @@ static bool winsnap_get_app_window_frame(const char *name, CGRect *outFrame) {
 	}
 }
 
+// Get current mouse position in CG coordinate system
+static CGPoint winsnap_get_mouse_position() {
+	CGEventRef event = CGEventCreate(NULL);
+	CGPoint pos = CGEventGetLocation(event);
+	CFRelease(event);
+	return pos;
+}
+
+// Move mouse to specified position
+static void winsnap_move_mouse(CGFloat x, CGFloat y) {
+	CGPoint point = CGPointMake(x, y);
+	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+	if (!source) return;
+
+	CGEventRef moveEvent = CGEventCreateMouseEvent(source, kCGEventMouseMoved, point, kCGMouseButtonLeft);
+	CGEventSetTimestamp(moveEvent, current_uptime_nsec());
+	CGEventPost(kCGHIDEventTap, moveEvent);
+	CFRelease(moveEvent);
+	CFRelease(source);
+}
+
 // Simulate mouse click at screen coordinates
 // x, y are in CG coordinate system (origin at top-left of primary display)
-static void winsnap_simulate_click(CGFloat x, CGFloat y) {
+// restorePosition: if true, restore mouse to original position after click
+static void winsnap_simulate_click_with_restore(CGFloat x, CGFloat y, bool restorePosition) {
+	// Save original mouse position
+	CGPoint origPos = winsnap_get_mouse_position();
+
 	CGPoint point = CGPointMake(x, y);
 	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
 	if (!source) return;
@@ -226,12 +334,24 @@ static void winsnap_simulate_click(CGFloat x, CGFloat y) {
 	CFRelease(mouseUp);
 
 	CFRelease(source);
+
+	// Restore mouse position after click
+	if (restorePosition) {
+		usleep(50000); // 50ms delay before restoring
+		winsnap_move_mouse(origPos.x, origPos.y);
+	}
+}
+
+// Legacy function for compatibility
+static void winsnap_simulate_click(CGFloat x, CGFloat y) {
+	winsnap_simulate_click_with_restore(x, y, false);
 }
 
 // Click on the input area of a target app window
 // offsetX: pixels from left edge (0 = center horizontally)
 // offsetY: pixels from bottom (0 = use default 120)
 // Returns true if click was performed
+// Note: This function restores the mouse position after clicking
 static bool winsnap_click_input_area(const char *name, int offsetX, int offsetY) {
 	CGRect frame;
 	if (!winsnap_get_app_window_frame(name, &frame)) {
@@ -261,7 +381,8 @@ static bool winsnap_click_input_area(const char *name, int offsetX, int offsetY)
 		y = frame.origin.y + frame.size.height / 2;
 	}
 
-	winsnap_simulate_click(x, y);
+	// Click and restore mouse position (same behavior as Windows)
+	winsnap_simulate_click_with_restore(x, y, true);
 	return true;
 }
 */
@@ -278,7 +399,7 @@ import (
 // 2. Activating target window
 // 3. Clicking on input area to focus (unless noClick is true)
 // 4. Simulating Cmd+V to paste
-// 5. Optionally simulating Enter or Cmd+Enter to send
+// 5. Optionally simulating Enter or Cmd+Enter to send (directly to target process)
 func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendKeyStrategy string, noClick bool, clickOffsetX, clickOffsetY int) error {
 	if targetProcess == "" {
 		return errors.New("winsnap: target process is empty")
@@ -294,13 +415,16 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 		return errors.New("winsnap: failed to set clipboard text")
 	}
 
-	// Activate target app
+	// Activate target app and get its PID for direct key sending
 	targetName := normalizeMacTargetName(targetProcess)
 	cName := C.CString(targetName)
 	defer C.free(unsafe.Pointer(cName))
 	if !C.winsnap_activate_app(cName) {
 		return ErrTargetWindowNotFound
 	}
+
+	// Get target PID for direct key sending (some apps filter synthetic events)
+	targetPid := C.winsnap_get_pid_by_name(cName)
 
 	time.Sleep(150 * time.Millisecond)
 
@@ -315,15 +439,16 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 	C.winsnap_simulate_cmd_v()
 	time.Sleep(100 * time.Millisecond)
 
-	// Optionally trigger send
+	// Optionally trigger send - use CGEventPostToPid to send directly to target process
+	// This bypasses app-level event filtering that some apps (like DingTalk) use
 	if triggerSend {
 		time.Sleep(150 * time.Millisecond)
 		// On macOS, most apps use Enter to send, but some use Cmd+Enter
 		// We'll use the same strategy names but map ctrl_enter to cmd_enter
 		if sendKeyStrategy == "ctrl_enter" {
-			C.winsnap_simulate_cmd_enter()
+			C.winsnap_simulate_cmd_enter_to_pid(targetPid)
 		} else {
-			C.winsnap_simulate_enter()
+			C.winsnap_simulate_enter_to_pid(targetPid)
 		}
 	}
 

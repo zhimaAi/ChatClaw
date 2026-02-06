@@ -72,6 +72,85 @@ func SyncAttachedZOrderNoActivate(_ *application.WebviewWindow, _ string) error 
 	return nil
 }
 
+// IsTargetObscured checks if the target window is obscured by other app windows.
+// Returns true if there are other app windows between winsnap and target.
+// This is used in the step loop to detect when the attached target needs to be woken up.
+func IsTargetObscured(self *application.WebviewWindow, targetProcessName string) (bool, error) {
+	if self == nil {
+		return false, ErrWinsnapWindowInvalid
+	}
+	selfH := uintptr(self.NativeWindow())
+	if selfH == 0 {
+		return false, ErrWinsnapWindowInvalid
+	}
+
+	targetNames := expandWindowsTargetNames(targetProcessName)
+	if len(targetNames) == 0 {
+		return false, errors.New("winsnap: TargetProcessName is empty")
+	}
+	var targetHwnd windows.HWND
+	var err error
+	for _, n := range targetNames {
+		targetHwnd, err = findMainWindowByProcessName(n)
+		if err == nil && targetHwnd != 0 {
+			break
+		}
+	}
+	if err != nil || targetHwnd == 0 {
+		return false, ErrTargetWindowNotFound
+	}
+
+	// isTargetAdjacent returns true if adjacent (not obscured), false if obscured
+	adjacent := isTargetAdjacent(windows.HWND(selfH), targetHwnd, targetNames)
+	return !adjacent, nil
+}
+
+// BringTargetToFrontNoActivate brings the target window to front without stealing focus.
+// On Windows, this uses SetWindowPos with SWP_NOACTIVATE to adjust z-order without activation.
+func BringTargetToFrontNoActivate(self *application.WebviewWindow, targetProcessName string) error {
+	if self == nil {
+		return ErrWinsnapWindowInvalid
+	}
+	selfH := uintptr(self.NativeWindow())
+	if selfH == 0 {
+		return ErrWinsnapWindowInvalid
+	}
+
+	targetNames := expandWindowsTargetNames(targetProcessName)
+	if len(targetNames) == 0 {
+		return errors.New("winsnap: TargetProcessName is empty")
+	}
+	var targetHwnd windows.HWND
+	var err error
+	for _, n := range targetNames {
+		targetHwnd, err = findMainWindowByProcessName(n)
+		if err == nil && targetHwnd != 0 {
+			break
+		}
+	}
+	if err != nil || targetHwnd == 0 {
+		return ErrTargetWindowNotFound
+	}
+
+	// Bring target to top of z-order without activating
+	_, _, _ = procSetWindowPosWake.Call(uintptr(targetHwnd), hwndTopWake, 0, 0, 0, 0,
+		uintptr(swpNoMoveWake|swpNoSizeWake|swpNoActivateWake))
+
+	// Then bring winsnap above target
+	_, _, _ = procSetWindowPosWake.Call(selfH, hwndTopWake, 0, 0, 0, 0,
+		uintptr(swpNoMoveWake|swpNoSizeWake|swpNoActivateWake))
+
+	// Keep winsnap just above target
+	if isTopMost(targetHwnd) {
+		_ = setWindowTopMostNoActivate(windows.HWND(selfH))
+	} else {
+		_ = setWindowNoTopMostNoActivate(windows.HWND(selfH))
+	}
+	_ = setWindowPosAfterNoMoveNoSizeNoActivate(windows.HWND(selfH), targetHwnd)
+
+	return nil
+}
+
 // WakeAttachedWindow brings the target window and the winsnap window to the front,
 // keeping winsnap ordered directly above the target (same-level behavior).
 func WakeAttachedWindow(self *application.WebviewWindow, targetProcessName string) error {
@@ -206,10 +285,13 @@ func wakeAttachedWindowInternal(self *application.WebviewWindow, targetProcessNa
 	if len(targetNames) == 0 {
 		return errors.New("winsnap: TargetProcessName is empty")
 	}
+
+	// Use findMainWindowByProcessNameIncludingMinimized to find windows even after Win+D.
+	// This ensures we can wake minimized windows.
 	var targetHwnd windows.HWND
 	var err error
 	for _, n := range targetNames {
-		targetHwnd, err = findMainWindowByProcessName(n)
+		targetHwnd, err = findMainWindowByProcessNameIncludingMinimized(n)
 		if err == nil && targetHwnd != 0 {
 			break
 		}
@@ -297,7 +379,7 @@ func setWindowPosAfterNoMoveNoSizeNoActivate(hwnd windows.HWND, insertAfter wind
 // IMPORTANT: On Windows, we must NOT trigger WM_ACTIVATE or other messages that cause
 // Wails to internally call Focus(), which would crash WebView2 for HiddenOnTaskbar windows.
 // Instead of using SetForegroundWindow (which triggers WM_ACTIVATE), we use:
-// - ShowWindow to ensure visibility
+// - ShowWindow to ensure visibility (SW_RESTORE if minimized, SW_SHOWNOACTIVATE otherwise)
 // - SetWindowPos with HWND_TOPMOST then HWND_NOTOPMOST to bring to front without activation
 // - SWP_NOACTIVATE flag to prevent activation messages
 func WakeStandaloneWindow(window *application.WebviewWindow) error {
@@ -309,14 +391,20 @@ func WakeStandaloneWindow(window *application.WebviewWindow) error {
 		return ErrWinsnapWindowInvalid
 	}
 
-	// Show window without activating (use SW_SHOWNOACTIVATE instead of SW_RESTORE)
-	const swShowNoActivate = 4
-	procShowWindowWake.Call(h, swShowNoActivate)
+	// Check if window is minimized (e.g., by Win+D)
+	// If minimized, we must use SW_RESTORE to bring it back
+	if isWindowIconic(windows.HWND(h)) {
+		procShowWindowWake.Call(h, swRestoreWake)
+	} else {
+		// Show window without activating (use SW_SHOWNOACTIVATE)
+		const swShowNoActivate = 4
+		procShowWindowWake.Call(h, swShowNoActivate)
+	}
 
 	// Bring to front using SetWindowPos with SWP_NOACTIVATE
 	// First set as TOPMOST, then remove TOPMOST (this brings window to front of normal z-order)
-	const hwndTopMost = ^uintptr(0)    // -1 = HWND_TOPMOST
-	const hwndNoTopMost = ^uintptr(1)  // -2 = HWND_NOTOPMOST
+	const hwndTopMost = ^uintptr(0)   // -1 = HWND_TOPMOST
+	const hwndNoTopMost = ^uintptr(1) // -2 = HWND_NOTOPMOST
 	flags := uintptr(swpNoMoveWake | swpNoSizeWake | swpNoActivateWake)
 
 	// Set topmost then remove (brings to front without activation)
