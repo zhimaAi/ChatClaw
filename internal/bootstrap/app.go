@@ -203,8 +203,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
 	// 注册聊天服务
 	app.RegisterService(application.NewService(chat.NewChatService(app)))
-	// 注册应用服务（传入主窗口引用，用于 ShowMainWindow API）
-	app.RegisterService(application.NewService(appservice.NewAppService(app, mainWindow)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
@@ -220,6 +218,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
 	multiaskService := multiask.NewMultiaskService(app, mainWindow)
 	app.RegisterService(application.NewService(multiaskService))
+
+	// 注册应用服务（传入主窗口引用，用于 ShowMainWindow API）
+	app.RegisterService(application.NewService(appservice.NewAppService(app, mainWindow)))
 
 	// 创建悬浮球服务（独立 AlwaysOnTop 小窗）
 	floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
