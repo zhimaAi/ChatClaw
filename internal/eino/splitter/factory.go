@@ -52,8 +52,8 @@ var DefaultSeparators = []string{
 func NewSplitter(ctx context.Context, cfg *Config) (document.Transformer, error) {
 	if cfg == nil {
 		cfg = &Config{
-			ChunkSize:    1024,
-			ChunkOverlap: 100,
+			ChunkSize:    512,
+			ChunkOverlap: 50,
 		}
 	}
 
@@ -94,11 +94,11 @@ func NewSplitter(ctx context.Context, cfg *Config) (document.Transformer, error)
 	// 默认使用递归分割
 	chunkSize := cfg.ChunkSize
 	if chunkSize <= 0 {
-		chunkSize = 1024
+		chunkSize = 512
 	}
 	chunkOverlap := cfg.ChunkOverlap
 	if chunkOverlap < 0 {
-		chunkOverlap = 100
+		chunkOverlap = 50
 	}
 
 	return recursive.NewSplitter(ctx, &recursive.Config{

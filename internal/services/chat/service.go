@@ -15,11 +15,15 @@ import (
 	"time"
 
 	einoagent "willchat/internal/eino/agent"
+	einoembed "willchat/internal/eino/embedding"
+	"willchat/internal/eino/processor"
 	"willchat/internal/eino/tools"
 	"willchat/internal/errs"
+	"willchat/internal/services/retrieval"
 	"willchat/internal/sqlite"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
@@ -162,7 +166,7 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	ctx := context.Background()
 
 	// Get conversation and agent info
-	agentConfig, providerConfig, err := s.getAgentAndProviderConfig(ctx, db, input.ConversationID)
+	agentConfig, providerConfig, agentExtras, err := s.getAgentAndProviderConfig(ctx, db, input.ConversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +190,7 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	go func() {
 		defer close(gen.done)
 		defer s.tryDeleteGeneration(input.ConversationID, gen)
-		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig)
+		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
 	}()
 
 	return &SendMessageResult{
@@ -264,7 +268,7 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 	}
 
 	// Get agent and provider config
-	agentConfig, providerConfig, err := s.getAgentAndProviderConfig(ctx, db, input.ConversationID)
+	agentConfig, providerConfig, agentExtras, err := s.getAgentAndProviderConfig(ctx, db, input.ConversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +292,7 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 	go func() {
 		defer close(gen.done)
 		defer s.tryDeleteGeneration(input.ConversationID, gen)
-		s.runGenerationWithExistingHistory(genCtx, db, input.ConversationID, input.TabID, requestID, agentConfig, providerConfig)
+		s.runGenerationWithExistingHistory(genCtx, db, input.ConversationID, input.TabID, requestID, agentConfig, providerConfig, agentExtras)
 	}()
 
 	return &SendMessageResult{
@@ -329,40 +333,56 @@ func (s *ChatService) deleteMessagesAfter(ctx context.Context, db *bun.DB, conve
 	return nil
 }
 
+// AgentExtras contains additional agent configuration not in einoagent.Config
+type AgentExtras struct {
+	LibraryIDs     []int64
+	MatchThreshold float64
+}
+
 // getAgentAndProviderConfig gets the agent and provider configuration for a conversation
-func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB, conversationID int64) (einoagent.Config, einoagent.ProviderConfig, error) {
+func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB, conversationID int64) (einoagent.Config, einoagent.ProviderConfig, AgentExtras, error) {
 	// Get conversation
 	type conversationRow struct {
 		AgentID       int64  `bun:"agent_id"`
 		LLMProviderID string `bun:"llm_provider_id"`
 		LLMModelID    string `bun:"llm_model_id"`
+		LibraryIDs    string `bun:"library_ids"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return einoagent.Config{}, einoagent.ProviderConfig{}, errs.New("error.chat_conversation_not_found")
+			return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.New("error.chat_conversation_not_found")
 		}
-		return einoagent.Config{}, einoagent.ProviderConfig{}, errs.Wrap("error.chat_conversation_read_failed", err)
+		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.Wrap("error.chat_conversation_read_failed", err)
+	}
+
+	// Parse conversation-level library_ids JSON array
+	var convLibraryIDs []int64
+	if conv.LibraryIDs != "" && conv.LibraryIDs != "[]" {
+		if err := json.Unmarshal([]byte(conv.LibraryIDs), &convLibraryIDs); err != nil {
+			log.Printf("[chat] failed to parse library_ids for conversation: %v", err)
+		}
 	}
 
 	// Get agent
 	type agentRow struct {
-		Name                 string  `bun:"name"`
-		Prompt               string  `bun:"prompt"`
-		DefaultLLMProviderID string  `bun:"default_llm_provider_id"`
-		DefaultLLMModelID    string  `bun:"default_llm_model_id"`
-		LLMTemperature       float64 `bun:"llm_temperature"`
-		LLMTopP              float64 `bun:"llm_top_p"`
-		LLMMaxTokens         int     `bun:"llm_max_tokens"`
-		EnableLLMTemperature bool    `bun:"enable_llm_temperature"`
-		EnableLLMTopP        bool    `bun:"enable_llm_top_p"`
-		EnableLLMMaxTokens   bool    `bun:"enable_llm_max_tokens"`
-		LLMMaxContextCount   int     `bun:"llm_max_context_count"`
-		RetrievalTopK        int     `bun:"retrieval_top_k"`
+		Name                    string  `bun:"name"`
+		Prompt                  string  `bun:"prompt"`
+		DefaultLLMProviderID    string  `bun:"default_llm_provider_id"`
+		DefaultLLMModelID       string  `bun:"default_llm_model_id"`
+		LLMTemperature          float64 `bun:"llm_temperature"`
+		LLMTopP                 float64 `bun:"llm_top_p"`
+		LLMMaxTokens            int     `bun:"llm_max_tokens"`
+		EnableLLMTemperature    bool    `bun:"enable_llm_temperature"`
+		EnableLLMTopP           bool    `bun:"enable_llm_top_p"`
+		EnableLLMMaxTokens      bool    `bun:"enable_llm_max_tokens"`
+		LLMMaxContextCount      int     `bun:"llm_max_context_count"`
+		RetrievalTopK           int     `bun:"retrieval_top_k"`
+		RetrievalMatchThreshold float64 `bun:"retrieval_match_threshold"`
 	}
 	var agent agentRow
 	if err := db.NewSelect().
@@ -370,13 +390,13 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		Column("name", "prompt", "default_llm_provider_id", "default_llm_model_id",
 			"llm_temperature", "llm_top_p", "llm_max_tokens",
 			"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens",
-			"llm_max_context_count", "retrieval_top_k").
+			"llm_max_context_count", "retrieval_top_k", "retrieval_match_threshold").
 		Where("id = ?", conv.AgentID).
 		Scan(ctx, &agent); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return einoagent.Config{}, einoagent.ProviderConfig{}, errs.New("error.chat_agent_not_found")
+			return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.New("error.chat_agent_not_found")
 		}
-		return einoagent.Config{}, einoagent.ProviderConfig{}, errs.Wrap("error.chat_agent_read_failed", err)
+		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.Wrap("error.chat_agent_read_failed", err)
 	}
 
 	// Determine which provider/model to use (conversation overrides agent default)
@@ -390,7 +410,7 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	}
 
 	if providerID == "" || modelID == "" {
-		return einoagent.Config{}, einoagent.ProviderConfig{}, errs.New("error.chat_model_not_configured")
+		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.New("error.chat_model_not_configured")
 	}
 
 	// Get provider
@@ -408,13 +428,13 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		Where("provider_id = ?", providerID).
 		Scan(ctx, &provider); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return einoagent.Config{}, einoagent.ProviderConfig{}, errs.Newf("error.chat_provider_not_found", map[string]any{"ProviderID": providerID})
+			return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.Newf("error.chat_provider_not_found", map[string]any{"ProviderID": providerID})
 		}
-		return einoagent.Config{}, einoagent.ProviderConfig{}, errs.Wrap("error.chat_provider_read_failed", err)
+		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.Wrap("error.chat_provider_read_failed", err)
 	}
 
 	if !provider.Enabled {
-		return einoagent.Config{}, einoagent.ProviderConfig{}, errs.New("error.chat_provider_not_enabled")
+		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.New("error.chat_provider_not_enabled")
 	}
 
 	agentConfig := einoagent.Config{
@@ -439,7 +459,17 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		ExtraConfig: provider.ExtraConfig,
 	}
 
-	return agentConfig, providerConfig, nil
+	// Use conversation-level library_ids for retrieval
+	if len(convLibraryIDs) > 0 {
+		log.Printf("[chat] using library_ids: %v", convLibraryIDs)
+	}
+
+	extras := AgentExtras{
+		LibraryIDs:     convLibraryIDs,
+		MatchThreshold: agent.RetrievalMatchThreshold,
+	}
+
+	return agentConfig, providerConfig, extras, nil
 }
 
 // tryDeleteGeneration removes the generation from the map only if it is still the active one.
@@ -451,7 +481,7 @@ func (s *ChatService) tryDeleteGeneration(conversationID int64, gen *activeGener
 }
 
 // runGeneration runs the generation loop
-func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig) {
+func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
 
 	var seq int32 = 0
 	nextSeq := func() int {
@@ -496,11 +526,11 @@ func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversatio
 	dbCancel()
 
 	// Run generation with existing history
-	s.runGenerationWithExistingHistory(ctx, db, conversationID, tabID, requestID, agentConfig, providerConfig)
+	s.runGenerationWithExistingHistory(ctx, db, conversationID, tabID, requestID, agentConfig, providerConfig, agentExtras)
 }
 
 // runGenerationWithExistingHistory runs the generation loop with existing message history
-func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig) {
+func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
 
 	var seq int32 = 0
 	nextSeq := func() int {
@@ -574,9 +604,22 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		log.Printf("[llm] context conv=%d req=%s\n%s", conversationID, requestID, summarizeMessagesForLog(messages, 12, 160))
 	}
 
+	// Create extra tools (e.g., LibraryRetrieverTool if agent has associated libraries)
+	var extraTools []tool.BaseTool
+	if len(agentExtras.LibraryIDs) > 0 {
+		retrieverTool, toolErr := s.createLibraryRetrieverTool(ctx, db, agentExtras.LibraryIDs, agentConfig.RetrievalTopK, agentExtras.MatchThreshold)
+		if toolErr != nil {
+			log.Printf("[chat] failed to create library retriever tool: %v", toolErr)
+			// Continue without the retriever tool
+		} else if retrieverTool != nil {
+			extraTools = append(extraTools, retrieverTool)
+			log.Printf("[chat] library retriever tool created with %d libraries, topK=%d, threshold=%.2f", len(agentExtras.LibraryIDs), agentConfig.RetrievalTopK, agentExtras.MatchThreshold)
+		}
+	}
+
 	// Create agent
 	agentConfig.Provider = providerConfig
-	agent, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry)
+	agent, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools)
 	if err != nil {
 		emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
@@ -1161,4 +1204,51 @@ func (s *ChatService) updateMessageFinal(db *bun.DB, messageID int64, content, t
 			s.app.Logger.Error("update message final failed", "messageID", messageID, "error", err)
 		}
 	}
+}
+
+// createLibraryRetrieverTool creates a LibraryRetrieverTool for the given library IDs
+func (s *ChatService) createLibraryRetrieverTool(ctx context.Context, db *bun.DB, libraryIDs []int64, topK int, matchThreshold float64) (tool.BaseTool, error) {
+	if len(libraryIDs) == 0 {
+		return nil, nil
+	}
+
+	// Get embedding config for creating embedder
+	embeddingConfig, err := processor.GetEmbeddingConfig(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("get embedding config: %w", err)
+	}
+
+	// Create embedder for vector search
+	embedder, err := einoembed.NewEmbedder(ctx, &einoembed.ProviderConfig{
+		ProviderType: embeddingConfig.ProviderType,
+		APIKey:       embeddingConfig.APIKey,
+		APIEndpoint:  embeddingConfig.APIEndpoint,
+		ModelID:      embeddingConfig.ModelID,
+		Dimension:    embeddingConfig.Dimension,
+		ExtraConfig:  embeddingConfig.ExtraConfig,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create embedder: %w", err)
+	}
+
+	// Create retrieval service
+	retrievalService := retrieval.NewService(db, embedder)
+
+	// Set default topK if not specified
+	if topK <= 0 {
+		topK = 10
+	}
+
+	// Create the library retriever tool
+	retrieverTool, err := tools.NewLibraryRetrieverTool(ctx, &tools.LibraryRetrieverConfig{
+		LibraryIDs:     libraryIDs,
+		TopK:           topK,
+		MatchThreshold: matchThreshold,
+		Retriever:      retrievalService,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create library retriever tool: %w", err)
+	}
+
+	return retrieverTool, nil
 }

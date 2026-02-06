@@ -22,6 +22,10 @@ export default {
       name: '网络搜索',
       description: '使用 DuckDuckGo 搜索网络信息',
     },
+    libraryRetriever: {
+      name: '知识库检索',
+      description: '从知识库中检索相关内容',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -240,6 +244,9 @@ export default {
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       selectImage: '选择图片',
+      clearSelected: '清空选中',
+      selectedCount: '已选 {count} 个知识库',
+      noKnowledge: '暂无知识库',
       send: '发送',
       stop: '停止',
       copy: '复制',

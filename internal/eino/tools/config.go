@@ -52,11 +52,12 @@ func (c *ToolsConfig) IsEnabled(toolID string) bool {
 
 // Tool IDs
 const (
-	ToolIDCalculator          = "calculator"
-	ToolIDDuckDuckGoSearch    = "duckduckgo_search"
-	ToolIDBrowserUse          = "browser_use"
-	ToolIDHTTPGet             = "http_get"
-	ToolIDHTTPPost            = "http_post"
-	ToolIDSequentialThinking  = "sequential_thinking"
-	ToolIDWikipedia           = "wikipedia_search"
+	ToolIDCalculator         = "calculator"
+	ToolIDDuckDuckGoSearch   = "duckduckgo_search"
+	ToolIDBrowserUse         = "browser_use"
+	ToolIDHTTPGet            = "http_get"
+	ToolIDHTTPPost           = "http_post"
+	ToolIDSequentialThinking = "sequential_thinking"
+	ToolIDWikipedia          = "wikipedia_search"
+	ToolIDLibraryRetriever   = "library_retriever"
 )

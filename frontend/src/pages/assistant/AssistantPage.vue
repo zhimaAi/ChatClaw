@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowUp, MoreHorizontal, Pin, PinOff, Square } from 'lucide-vue-next'
+import { ArrowUp, Check, MoreHorizontal, Pin, PinOff, Square } from 'lucide-vue-next'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
@@ -44,6 +44,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import { LibraryService, type Library } from '@bindings/willchat/internal/services/library'
 import {
   Select,
   SelectContent,
@@ -52,6 +53,17 @@ import {
   SelectLabel,
   SelectTrigger,
 } from '@/components/ui/select'
+import {
+  SelectRoot,
+  SelectTrigger as SelectTriggerRaw,
+  SelectPortal,
+  SelectContent as SelectContentRaw,
+  SelectViewport,
+  SelectItem as SelectItemRaw,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectSeparator,
+} from 'reka-ui'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -98,6 +110,10 @@ const chatInput = ref('')
 // Model selection
 const providersWithModels = ref<ProviderWithModels[]>([])
 const selectedModelKey = ref('')
+
+// Knowledge base selection
+const libraries = ref<Library[]>([])
+const selectedLibraryIds = ref<number[]>([])
 
 // Conversations state (cached by agent)
 const conversationsByAgent = ref<Record<number, Conversation[]>>({})
@@ -223,6 +239,8 @@ const loadConversations = async (agentId: number, opts: LoadConversationsOptions
             chatStore.clearMessages(previousConversationId)
           }
           activeConversationId.value = null
+          // Clear knowledge base selection when conversation no longer exists
+          selectedLibraryIds.value = []
         }
       } else {
         // Don't auto-select any conversation when loading
@@ -230,6 +248,8 @@ const loadConversations = async (agentId: number, opts: LoadConversationsOptions
           chatStore.clearMessages(previousConversationId)
         }
         activeConversationId.value = null
+        // Clear knowledge base selection for new conversation state
+        selectedLibraryIds.value = []
       }
     }
   } catch (error: unknown) {
@@ -276,6 +296,17 @@ const loadModels = async () => {
     providersWithModels.value = results.filter(Boolean) as ProviderWithModels[]
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.loadModelsFailed'))
+  }
+}
+
+// Load knowledge base list
+const loadLibraries = async () => {
+  try {
+    const list = await LibraryService.ListLibraries()
+    libraries.value = list || []
+    console.log('[KnowledgeSelect] loaded libraries:', libraries.value.map(l => ({ id: l.id, name: l.name })))
+  } catch (error: unknown) {
+    console.error('Failed to load libraries:', error)
   }
 }
 
@@ -418,6 +449,8 @@ const handleNewConversation = () => {
   }
   activeConversationId.value = null
   chatInput.value = ''
+  // Clear knowledge base selection for new conversation
+  selectedLibraryIds.value = []
 }
 
 const handleNewConversationForAgent = (agentId: number) => {
@@ -453,6 +486,7 @@ const handleSend = async () => {
           last_message: messageContent,
           llm_provider_id: providerId || '',
           llm_model_id: modelId || '',
+          library_ids: selectedLibraryIds.value,
         })
       )
       if (newConversation) {
@@ -542,10 +576,53 @@ const handleSelectConversation = (conversation: Conversation) => {
   if (conversation.llm_provider_id && conversation.llm_model_id) {
     selectedModelKey.value = `${conversation.llm_provider_id}::${conversation.llm_model_id}`
   }
+
+  // Set knowledge base selection from conversation
+  selectedLibraryIds.value = conversation.library_ids || []
 }
 
-const handleSelectKnowledge = () => {
-  // TODO: Implement knowledge selection
+// Handle library selection change from Select component
+const handleLibrarySelectionChange = async () => {
+  console.log('[KnowledgeSelect] selection changed:', { selectedIds: selectedLibraryIds.value })
+  // Save to conversation if one is active
+  await saveLibraryIdsToConversation()
+}
+
+// Clear all selected libraries
+const clearLibrarySelection = async () => {
+  selectedLibraryIds.value = []
+  await saveLibraryIdsToConversation()
+}
+
+// Save library_ids to current conversation
+const saveLibraryIdsToConversation = async () => {
+  if (!activeConversationId.value) return
+
+  try {
+    await ConversationsService.UpdateConversation(
+      activeConversationId.value,
+      new UpdateConversationInput({
+        library_ids: selectedLibraryIds.value,
+      })
+    )
+  } catch (error: unknown) {
+    console.error('Failed to save library selection:', error)
+  }
+}
+
+// Sync library_ids from current conversation (for multi-tab sync)
+const syncLibraryIdsFromConversation = async () => {
+  if (!activeConversationId.value || !activeAgentId.value) {
+    selectedLibraryIds.value = []
+    return
+  }
+
+  // Find current conversation from cached list
+  const conversations = conversationsByAgent.value[activeAgentId.value] || []
+  const currentConversation = conversations.find((c) => c.id === activeConversationId.value)
+  if (currentConversation) {
+    selectedLibraryIds.value = currentConversation.library_ids || []
+  }
 }
 
 const handleSelectImage = () => {
@@ -657,6 +734,8 @@ const confirmDeleteConversation = async () => {
     if (activeConversationId.value === actionConversation.value.id) {
       chatStore.clearMessages(activeConversationId.value)
       activeConversationId.value = null
+      // Clear knowledge base selection when active conversation is deleted
+      selectedLibraryIds.value = []
     }
     toast.success(t('assistant.conversation.delete.success'))
     deleteConversationOpen.value = false
@@ -697,6 +776,8 @@ watch(activeAgentId, (newAgentId, oldAgentId) => {
       chatStore.clearMessages(activeConversationId.value)
     }
     activeConversationId.value = null
+    // Clear knowledge base selection when no agent is active
+    selectedLibraryIds.value = []
   }
 })
 
@@ -716,10 +797,14 @@ watch(isTabActive, (active) => {
     void (async () => {
       await loadModels()
       await loadAgents()
+      // Refresh knowledge base list (user may have created/deleted libraries in other pages)
+      await loadLibraries()
 
       // Multi-tab reliability: always refresh conversations from DB when this tab becomes active.
       if (activeAgentId.value != null) {
         await loadConversations(activeAgentId.value, { preserveSelection: true, force: true })
+        // Sync library_ids for current conversation (may have changed from other tabs)
+        await syncLibraryIdsFromConversation()
       }
     })()
   }
@@ -733,6 +818,7 @@ onMounted(() => {
   void (async () => {
     await loadAgents()
     await loadModels()
+    await loadLibraries()
 
     if (activeAgentId.value != null) {
       await loadConversations(activeAgentId.value, { force: true })
@@ -1080,15 +1166,73 @@ onUnmounted(() => {
                   </SelectContent>
                 </Select>
 
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                  :title="t('assistant.chat.selectKnowledge')"
-                  @click="handleSelectKnowledge"
+                <!-- Knowledge base multi-select using reka-ui Select with multiple -->
+                <SelectRoot
+                  v-model="selectedLibraryIds"
+                  multiple
+                  @update:model-value="handleLibrarySelectionChange"
+                  @update:open="(open: boolean) => open && loadLibraries()"
                 >
-                  <IconSelectKnowledge class="size-4 text-muted-foreground" />
-                </Button>
+                  <SelectTriggerRaw
+                    as-child
+                    :title="
+                      selectedLibraryIds.length > 0
+                        ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
+                        : t('assistant.chat.selectKnowledge')
+                    "
+                  >
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                      :class="{
+                        'border-primary/50 bg-primary/10': selectedLibraryIds.length > 0,
+                      }"
+                    >
+                      <IconSelectKnowledge
+                        class="size-4"
+                        :class="selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'"
+                      />
+                    </Button>
+                  </SelectTriggerRaw>
+                  <SelectPortal>
+                    <SelectContentRaw
+                      class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                      position="popper"
+                      :side-offset="5"
+                    >
+                      <SelectViewport>
+                        <!-- Clear selection option - use a div with click handler since SelectItem would add it to selection -->
+                        <div
+                          class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground"
+                          @click="clearLibrarySelection"
+                        >
+                          {{ t('assistant.chat.clearSelected') }}
+                        </div>
+                        <SelectSeparator v-if="libraries.length > 0" class="mx-1 my-1 h-px bg-muted" />
+                        <!-- Library list -->
+                        <template v-if="libraries.length > 0">
+                          <SelectItemRaw
+                            v-for="lib in libraries"
+                            :key="lib.id"
+                            :value="Number(lib.id)"
+                            class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
+                          >
+                            <SelectItemIndicator class="absolute left-2 flex size-4 items-center justify-center">
+                              <Check class="size-4 text-primary" />
+                            </SelectItemIndicator>
+                            <SelectItemText>{{ lib.name }}</SelectItemText>
+                          </SelectItemRaw>
+                        </template>
+                        <template v-else>
+                          <div class="px-2 py-1.5 text-sm text-muted-foreground">
+                            {{ t('assistant.chat.noKnowledge') }}
+                          </div>
+                        </template>
+                      </SelectViewport>
+                    </SelectContentRaw>
+                  </SelectPortal>
+                </SelectRoot>
 
                 <Button
                   size="icon"

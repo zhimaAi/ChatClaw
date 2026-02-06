@@ -3,6 +3,7 @@ package conversations
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -130,6 +131,14 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		return nil, errs.Newf("error.agent_not_found", map[string]any{"ID": input.AgentID})
 	}
 
+	// Serialize library_ids to JSON string
+	libraryIDsJSON := "[]"
+	if len(input.LibraryIDs) > 0 {
+		if jsonBytes, err := json.Marshal(input.LibraryIDs); err == nil {
+			libraryIDsJSON = string(jsonBytes)
+		}
+	}
+
 	m := &conversationModel{
 		AgentID:       input.AgentID,
 		Name:          name,
@@ -137,6 +146,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		IsPinned:      false,
 		LLMProviderID: strings.TrimSpace(input.LLMProviderID),
 		LLMModelID:    strings.TrimSpace(input.LLMModelID),
+		LibraryIDs:    libraryIDsJSON,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -223,6 +233,16 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 
 		if input.LLMModelID != nil {
 			q = q.Set("llm_model_id = ?", strings.TrimSpace(*input.LLMModelID))
+		}
+
+		if input.LibraryIDs != nil {
+			libraryIDsJSON := "[]"
+			if len(*input.LibraryIDs) > 0 {
+				if jsonBytes, err := json.Marshal(*input.LibraryIDs); err == nil {
+					libraryIDsJSON = string(jsonBytes)
+				}
+			}
+			q = q.Set("library_ids = ?", libraryIDsJSON)
 		}
 
 		res, err := q.Exec(ctx)

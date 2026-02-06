@@ -38,6 +38,7 @@ const getToolDisplayName = (toolName: string) => {
   const nameMap: Record<string, string> = {
     calculator: t('tools.calculator.name'),
     duckduckgo_search: t('tools.duckduckgo.name'),
+    library_retriever: t('tools.libraryRetriever.name'),
   }
   return nameMap[toolName] ?? toolName
 }

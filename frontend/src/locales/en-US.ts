@@ -22,6 +22,10 @@ export default {
       name: 'Web Search',
       description: 'Search the web using DuckDuckGo',
     },
+    libraryRetriever: {
+      name: 'Knowledge Search',
+      description: 'Search relevant content from knowledge base',
+    },
   },
   winsnap: {
     title: 'WillChat',
@@ -243,6 +247,9 @@ export default {
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
       selectImage: 'Select image',
+      clearSelected: 'Clear selected',
+      selectedCount: '{count} knowledge base(s) selected',
+      noKnowledge: 'No knowledge base available',
       send: 'Send',
       stop: 'Stop',
       copy: 'Copy',

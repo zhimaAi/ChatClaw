@@ -61,8 +61,8 @@ const raptorLLMGroups = ref<Group[]>([])
 const RAPTOR_LLM_NONE = '__none__'
 const raptorLLMKey = ref<string>(RAPTOR_LLM_NONE)
 
-const chunkSize = ref<string>('1024')
-const chunkOverlap = ref<string>('100')
+const chunkSize = ref<string>('512')
+const chunkOverlap = ref<string>('50')
 
 const close = () => emit('update:open', false)
 
