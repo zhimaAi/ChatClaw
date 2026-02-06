@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -111,7 +112,9 @@ func (r *ToolRegistry) GetEnabledTools(ctx context.Context, config *ToolsConfig)
 		if config.IsEnabled(id) {
 			t, err := r.getOrCreate(ctx, id)
 			if err != nil {
-				return nil, err
+				// Log warning but continue - don't fail the whole operation for one tool
+				log.Printf("[tools] warning: failed to create tool %s (skipping): %v", id, err)
+				continue
 			}
 			if t != nil {
 				tools = append(tools, t)
