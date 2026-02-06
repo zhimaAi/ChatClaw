@@ -18,7 +18,7 @@ func init() {
 INSERT OR IGNORE INTO providers (provider_id, name, type, icon, is_builtin, enabled, sort_order, api_endpoint, api_key, extra_config, created_at, updated_at)
 VALUES ('chatwiki', 'ChatWiki', 'openai', 'chatwiki', 1, 1, 0, ?, '', '{}', ?, ?);
 `
-			if _, err := db.ExecContext(ctx, sql, define.ChatWikiAPIEndpoint, now, now); err != nil {
+			if _, err := db.ExecContext(ctx, sql, define.ChatWikiOpenAPIEndpoint(), now, now); err != nil {
 				return err
 			}
 			// Ensure chatwiki is enabled by default (for both new insert and existing)
