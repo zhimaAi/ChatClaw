@@ -26,7 +26,7 @@ import {
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
-import IconSelectImage from '@/assets/icons/select-image.svg'
+
 import type { ProviderWithModels } from '@bindings/willchat/internal/services/providers'
 import type { Library } from '@bindings/willchat/internal/services/library'
 import LogoIcon from '@/assets/images/logo.svg'
@@ -54,7 +54,6 @@ const emit = defineEmits<{
   'update:selectedLibraryIds': [value: number[]]
   send: []
   stop: []
-  selectImage: []
   librarySelectionChange: []
   clearLibrarySelection: []
   loadLibraries: []
@@ -264,15 +263,7 @@ const handleClearLibrarySelection = () => {
               </SelectPortal>
             </SelectRoot>
 
-            <Button
-              size="icon"
-              variant="ghost"
-              class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-              :title="t('assistant.chat.selectImage')"
-              @click="emit('selectImage')"
-            >
-              <IconSelectImage class="size-4 text-muted-foreground" />
-            </Button>
+
           </div>
 
           <template v-if="isGenerating">

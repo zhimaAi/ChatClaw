@@ -760,12 +760,30 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		return out
 	}
 
+	// indexKeyMap tracks the canonical key used for each streaming index so that
+	// subsequent delta chunks (which may lack an ID) merge into the correct state.
+	indexKeyMap := make(map[int]string)
+
 	updateToolStates := func(toolCalls []schema.ToolCall) {
 		for i, tc := range toolCalls {
+			// Determine the index for this chunk (prefer explicit Index, fallback to slice position).
+			idx := i
+			if tc.Index != nil {
+				idx = *tc.Index
+			}
+
+			// Determine the lookup key: prefer ID, then check if we already have a
+			// canonical key for this index (from a prior chunk that carried the ID),
+			// and finally fall back to "idx_N".
 			key := tc.ID
 			if key == "" {
-				key = fmt.Sprintf("idx_%d", i)
+				if existing, ok := indexKeyMap[idx]; ok {
+					key = existing
+				} else {
+					key = fmt.Sprintf("idx_%d", idx)
+				}
 			}
+
 			st, ok := toolStatesByKey[key]
 			if !ok {
 				st = &toolCallState{}
@@ -774,6 +792,9 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 			}
 			if tc.ID != "" {
 				st.id = tc.ID
+				// Register this key as the canonical key for the index so that
+				// future delta chunks without an ID can find it.
+				indexKeyMap[idx] = key
 			}
 			if tc.Function.Name != "" {
 				st.name = tc.Function.Name
@@ -893,27 +914,33 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					// Handle tool calls
 					if len(msg.ToolCalls) > 0 {
 						updateToolStates(msg.ToolCalls)
-						// Emit tool call updates only when we have a real call_id.
-						for _, tc := range msg.ToolCalls {
-							if tc.ID == "" {
-								continue
+						// Emit tool call updates for chunks that carry an ID or can be
+						// resolved to a known tool call via indexKeyMap.
+						for i, tc := range msg.ToolCalls {
+							idx := i
+							if tc.Index != nil {
+								idx = *tc.Index
 							}
-							toolName := tc.Function.Name
-							if toolName == "" {
-								// Try to find name from accumulated state.
-								for _, key := range toolOrder {
-									st := toolStatesByKey[key]
-									if st != nil && st.id == tc.ID && st.name != "" {
-										toolName = st.name
-										break
+
+							// Resolve the tool call ID: use explicit ID, or look up via index.
+							resolvedID := tc.ID
+							if resolvedID == "" {
+								if canonicalKey, ok := indexKeyMap[idx]; ok {
+									if st := toolStatesByKey[canonicalKey]; st != nil {
+										resolvedID = st.id
 									}
 								}
 							}
-							args := tc.Function.Arguments
-							// Use accumulated args if available (more complete than current chunk).
+							if resolvedID == "" {
+								continue
+							}
+
+							// Look up accumulated state for this tool call.
+							var toolName, args string
 							for _, key := range toolOrder {
 								st := toolStatesByKey[key]
-								if st != nil && st.id == tc.ID {
+								if st != nil && st.id == resolvedID {
+									toolName = st.name
 									args = st.args
 									break
 								}
@@ -922,11 +949,11 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 								continue
 							}
 							// Add tool call to segments
-							addToolCallToSegments(tc.ID)
+							addToolCallToSegments(resolvedID)
 							if args != "" && !json.Valid([]byte(args)) {
-								s.app.Logger.Warn("[chat] tool arguments not valid JSON", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", tc.ID, "args", args)
+								s.app.Logger.Warn("[chat] tool arguments not valid JSON", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", resolvedID, "args", args)
 							}
-							s.app.Logger.Info("[llm] tool_call", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", tc.ID, "args", truncateRunes(args, 300))
+							s.app.Logger.Info("[llm] tool_call", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", resolvedID, "args", truncateRunes(args, 300))
 							emit(EventChatTool, ChatToolEvent{
 								ChatEvent: ChatEvent{
 									ConversationID: conversationID,
@@ -937,7 +964,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 									Ts:             time.Now().UnixMilli(),
 								},
 								Type:       "call",
-								ToolCallID: tc.ID,
+								ToolCallID: resolvedID,
 								ToolName:   toolName,
 								ArgsJSON:   args,
 							})

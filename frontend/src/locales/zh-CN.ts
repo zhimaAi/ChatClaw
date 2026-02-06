@@ -294,6 +294,7 @@ export default {
       toolResult: '结果',
       toolQuery: '查询：',
       rawJson: '原始 JSON',
+      tokenUsage: '输入 {input} · 输出 {output}',
     },
     menu: {
       settings: '助手设置',
