@@ -3,12 +3,16 @@ package providers
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
 	"willchat/internal/define"
+	"willchat/internal/device"
 	"willchat/internal/errs"
 	"willchat/internal/sqlite"
 
@@ -73,6 +77,112 @@ func (s *ProvidersService) ListProviders() ([]Provider, error) {
 	return out, nil
 }
 
+// chatWikiAPIKeyPayload ChatWiki API key plaintext structure
+type chatWikiAPIKeyPayload struct {
+	UserID string `json:"user_id"`
+	UserIP string `json:"user_ip"`
+}
+
+// generateChatWikiAPIKeyInternal generates API key (used by both GenerateChatWikiAPIKey and EnsureChatWikiInitialized)
+func generateChatWikiAPIKeyInternal() (string, error) {
+	clientID, err := device.GetClientID()
+	if err != nil {
+		return "", errs.Wrap("error.chatwiki_generate_key_failed", err)
+	}
+
+	userIP, err := fetchPublicIP()
+	if err != nil {
+		return "", errs.Wrap("error.chatwiki_fetch_ip_failed", err)
+	}
+
+	payload := chatWikiAPIKeyPayload{
+		UserID: clientID,
+		UserIP: strings.TrimSpace(userIP),
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", errs.Wrap("error.chatwiki_generate_key_failed", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(b), nil
+}
+
+// GenerateChatWikiAPIKey generates API key for chatwiki provider.
+// Plaintext: {"user_id":"<device_id>","user_ip":"<public_ip>"}, then base64 encoded.
+func (s *ProvidersService) GenerateChatWikiAPIKey() (string, error) {
+	return generateChatWikiAPIKeyInternal()
+}
+
+// EnsureChatWikiInitialized ensures chatwiki provider has API key at app startup.
+// Called during bootstrap after sqlite init. If api_key is empty, generates and saves.
+func EnsureChatWikiInitialized() error {
+	db := sqlite.DB()
+	if db == nil {
+		return nil // sqlite not ready, skip
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	var m providerModel
+	err := db.NewSelect().
+		Model(&m).
+		Where("provider_id = ?", "chatwiki").
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+
+	if strings.TrimSpace(m.APIKey) != "" {
+		return nil // already has key
+	}
+
+	key, err := generateChatWikiAPIKeyInternal()
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewUpdate().
+		Model((*providerModel)(nil)).
+		Where("provider_id = ?", "chatwiki").
+		Set("api_key = ?", key).
+		Set("updated_at = ?", sqlite.NowUTC()).
+		Exec(ctx)
+	return err
+}
+
+// fetchPublicIP fetches the machine's public IP via api.ipify.org
+func fetchPublicIP() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.ipify.org?format=text", nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.New("failed to fetch public IP")
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(b)), nil
+}
+
 // GetProvider 获取单个供应商详情
 func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 	providerID = strings.TrimSpace(providerID)
@@ -109,6 +219,22 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	provider, err := s.GetProvider(providerID)
 	if err != nil {
 		return nil, err
+	}
+
+	// ChatWiki: fetch models from /custom-model/list API
+	if providerID == "chatwiki" {
+		groups, err := s.fetchChatWikiModels(provider)
+		if err != nil {
+			return nil, err
+		}
+		// Persist fetched models into local DB (add/update/delete) so they can be reused offline.
+		if err := s.syncChatWikiModelsToDB(provider.ProviderID, groups); err != nil {
+			return nil, err
+		}
+		return &ProviderWithModels{
+			Provider:    *provider,
+			ModelGroups: groups,
+		}, nil
 	}
 
 	db, err := s.db()
@@ -155,6 +281,332 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	}, nil
 }
 
+// SyncChatWikiModels fetches ChatWiki model list and syncs it to local `models` table.
+// This is intended to be called at app startup to keep the local cache fresh.
+func (s *ProvidersService) SyncChatWikiModels() error {
+	provider, err := s.GetProvider("chatwiki")
+	if err != nil {
+		// If ChatWiki provider doesn't exist, skip.
+		// (Return nil instead of surfacing provider_not_found at startup.)
+		return nil
+	}
+	groups, err := s.fetchChatWikiModels(provider)
+	if err != nil {
+		return err
+	}
+	return s.syncChatWikiModelsToDB(provider.ProviderID, groups)
+}
+
+type chatWikiRemoteModel struct {
+	ModelID   string
+	Name      string
+	Type      string
+	SortOrder int
+}
+
+func (s *ProvidersService) flattenChatWikiGroups(groups []ModelGroup) []chatWikiRemoteModel {
+	// Use per-type ordering so `sort_order` is stable within each type.
+	perTypeOrder := map[string]int{
+		"llm":       0,
+		"embedding": 0,
+		"rerank":    0,
+	}
+	out := make([]chatWikiRemoteModel, 0, 64)
+	for _, g := range groups {
+		t := strings.TrimSpace(strings.ToLower(g.Type))
+		for _, m := range g.Models {
+			modelID := strings.TrimSpace(m.ModelID)
+			if modelID == "" {
+				continue
+			}
+			// Prevent breaking frontend key format "provider::model".
+			if err := validateModelID(modelID); err != nil {
+				continue
+			}
+			name := strings.TrimSpace(m.Name)
+			if name == "" {
+				name = modelID
+			}
+			if t != "llm" && t != "embedding" && t != "rerank" {
+				t = "llm"
+			}
+			sort := perTypeOrder[t]
+			perTypeOrder[t] = sort + 1
+			out = append(out, chatWikiRemoteModel{
+				ModelID:   modelID,
+				Name:      name,
+				Type:      t,
+				SortOrder: sort,
+			})
+		}
+	}
+	return out
+}
+
+func chunkStrings(in []string, size int) [][]string {
+	if size <= 0 || len(in) == 0 {
+		return nil
+	}
+	out := make([][]string, 0, (len(in)+size-1)/size)
+	for i := 0; i < len(in); i += size {
+		j := i + size
+		if j > len(in) {
+			j = len(in)
+		}
+		out = append(out, in[i:j])
+	}
+	return out
+}
+
+func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []ModelGroup) error {
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	remote := s.flattenChatWikiGroups(groups)
+	remoteMap := make(map[string]chatWikiRemoteModel, len(remote))
+	for _, r := range remote {
+		remoteMap[r.ModelID] = r
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Load existing cached models for this provider.
+		existing := make([]modelModel, 0)
+		if err := tx.NewSelect().
+			Model(&existing).
+			Where("provider_id = ?", providerID).
+			Scan(ctx); err != nil {
+			return errs.Wrap("error.chatwiki_model_sync_failed", err)
+		}
+
+		existingMap := make(map[string]modelModel, len(existing))
+		for _, e := range existing {
+			existingMap[e.ModelID] = e
+		}
+
+		// Compute deletes (local but not in remote).
+		toDelete := make([]string, 0)
+		for modelID := range existingMap {
+			if _, ok := remoteMap[modelID]; !ok {
+				toDelete = append(toDelete, modelID)
+			}
+		}
+		for _, part := range chunkStrings(toDelete, 200) {
+			if _, err := tx.NewDelete().
+				Table("models").
+				Where("provider_id = ?", providerID).
+				Where("model_id IN (?)", bun.In(part)).
+				Exec(ctx); err != nil {
+				return errs.Wrap("error.chatwiki_model_sync_failed", err)
+			}
+		}
+
+		// Inserts and updates.
+		toInsert := make([]modelModel, 0)
+		for _, r := range remote {
+			if e, ok := existingMap[r.ModelID]; ok {
+				// Force readonly/cache-managed attributes.
+				needUpdate := false
+				if strings.TrimSpace(e.Name) != r.Name {
+					needUpdate = true
+				}
+				if strings.TrimSpace(strings.ToLower(e.Type)) != r.Type {
+					needUpdate = true
+				}
+				if e.SortOrder != r.SortOrder {
+					needUpdate = true
+				}
+				if !e.Enabled {
+					needUpdate = true
+				}
+				if !e.IsBuiltin {
+					needUpdate = true
+				}
+				if needUpdate {
+					if _, err := tx.NewUpdate().
+						Model((*modelModel)(nil)).
+						Where("provider_id = ?", providerID).
+						Where("model_id = ?", r.ModelID).
+						Set("name = ?", r.Name).
+						Set("type = ?", r.Type).
+						Set("sort_order = ?", r.SortOrder).
+						Set("enabled = ?", true).
+						Set("is_builtin = ?", true).
+						Set("updated_at = ?", sqlite.NowUTC()).
+						Exec(ctx); err != nil {
+						return errs.Wrap("error.chatwiki_model_sync_failed", err)
+					}
+				}
+				continue
+			}
+
+			toInsert = append(toInsert, modelModel{
+				ProviderID: providerID,
+				ModelID:    r.ModelID,
+				Name:       r.Name,
+				Type:       r.Type,
+				IsBuiltin:  true,
+				Enabled:    true,
+				SortOrder:  r.SortOrder,
+			})
+		}
+
+		for _, part := range func(ms []modelModel, size int) [][]modelModel {
+			if size <= 0 || len(ms) == 0 {
+				return nil
+			}
+			out := make([][]modelModel, 0, (len(ms)+size-1)/size)
+			for i := 0; i < len(ms); i += size {
+				j := i + size
+				if j > len(ms) {
+					j = len(ms)
+				}
+				out = append(out, ms[i:j])
+			}
+			return out
+		}(toInsert, 200) {
+			if _, err := tx.NewInsert().
+				Model(&part).
+				Exec(ctx); err != nil {
+				return errs.Wrap("error.chatwiki_model_sync_failed", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// chatWikiModelItem /custom-model/list API response item
+type chatWikiModelItem struct {
+	ModelID   string `json:"model_id"`
+	ID        string `json:"id"` // alternative field
+	ModelName string `json:"modelName"` // display name
+	Name      string `json:"name"`      // fallback
+	ModelType string `json:"modelType"` // for grouping: llm, embedding, rerank
+	Type      string `json:"type"`      // fallback
+}
+
+// chatWikiModelListResponse /custom-model/list API response (supports data or models array)
+type chatWikiModelListResponse struct {
+	Data   []chatWikiModelItem `json:"data"`
+	Models []chatWikiModelItem `json:"models"`
+}
+
+// fetchChatWikiModels fetches models from ChatWiki /custom-model/list API
+func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup, error) {
+	baseURL := strings.TrimSuffix(strings.TrimSpace(provider.APIEndpoint), "/")
+	if baseURL == "" {
+		return nil, errs.New("error.chatwiki_api_endpoint_required")
+	}
+	if strings.TrimSpace(provider.APIKey) == "" {
+		return nil, errs.New("error.chatwiki_api_key_required")
+	}
+
+	url := baseURL + "/custom-model/list"
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+provider.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": resp.StatusCode})
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+	}
+
+	// Try object with data/models
+	var respObj chatWikiModelListResponse
+	if err := json.Unmarshal(b, &respObj); err == nil {
+		items := respObj.Data
+		if len(items) == 0 {
+			items = respObj.Models
+		}
+		return s.chatWikiModelsToGroups(items, provider.ProviderID)
+	}
+
+	// Try direct array
+	var items []chatWikiModelItem
+	if err := json.Unmarshal(b, &items); err != nil {
+		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+	}
+	return s.chatWikiModelsToGroups(items, provider.ProviderID)
+}
+
+func (s *ProvidersService) chatWikiModelsToGroups(items []chatWikiModelItem, providerID string) ([]ModelGroup, error) {
+	groupMap := make(map[string][]Model)
+	perTypeOrder := map[string]int{
+		"llm":       0,
+		"embedding": 0,
+		"rerank":    0,
+	}
+	for _, item := range items {
+		// IMPORTANT:
+		// ChatWiki: Persist into local `models` table using modelName as `model_id`.
+		// Do NOT use API `id` value, since the frontend expects a stable, human-readable model key.
+		modelID := strings.TrimSpace(item.ModelName)
+		if modelID == "" {
+			continue
+		}
+		// Display name: keep consistent with model_id (UI selection key uses model_id).
+		name := modelID
+		// Group by modelType, fallback to type
+		modelType := strings.TrimSpace(strings.ToLower(item.ModelType))
+		if modelType == "" {
+			modelType = strings.TrimSpace(strings.ToLower(item.Type))
+		}
+		if modelType == "" {
+			modelType = "llm"
+		}
+		if modelType != "llm" && modelType != "embedding" && modelType != "rerank" {
+			modelType = "llm"
+		}
+		// Skip invalid IDs (would break frontend selection key format).
+		if err := validateModelID(modelID); err != nil {
+			continue
+		}
+		sort := perTypeOrder[modelType]
+		perTypeOrder[modelType] = sort + 1
+		m := Model{
+			ID:         0,
+			ProviderID: providerID,
+			ModelID:    modelID,
+			Name:       name,
+			Type:       modelType,
+			IsBuiltin:  true, // system-managed cache
+			Enabled:    true,
+			SortOrder:  sort,
+		}
+		groupMap[modelType] = append(groupMap[modelType], m)
+	}
+
+	typeOrder := []string{"llm", "embedding", "rerank"}
+	groups := make([]ModelGroup, 0)
+	for _, t := range typeOrder {
+		if ms, ok := groupMap[t]; ok {
+			groups = append(groups, ModelGroup{Type: t, Models: ms})
+		}
+	}
+	return groups, nil
+}
+
 // UpdateProvider 更新供应商信息
 func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProviderInput) (*Provider, error) {
 	providerID = strings.TrimSpace(providerID)
@@ -170,8 +622,8 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 禁止关闭正在作为"全局嵌入模型"使用的供应商
-	if input.Enabled != nil && !*input.Enabled {
+	// 禁止关闭正在作为"全局嵌入模型"使用的供应商（ChatWiki 关闭时无需验证）
+	if input.Enabled != nil && !*input.Enabled && providerID != "chatwiki" {
 		type row struct {
 			Key   string         `bun:"key"`
 			Value sql.NullString `bun:"value"`
@@ -494,6 +946,9 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
 	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatwiki_models_readonly")
+	}
 
 	input.ModelID = strings.TrimSpace(input.ModelID)
 	if input.ModelID == "" {
@@ -583,6 +1038,9 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	providerID = strings.TrimSpace(providerID)
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
+	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatwiki_models_readonly")
 	}
 
 	modelID = strings.TrimSpace(modelID)
@@ -676,6 +1134,9 @@ func (s *ProvidersService) GetModel(providerID string, modelID string) (*Model, 
 // DeleteModel 删除模型
 func (s *ProvidersService) DeleteModel(providerID string, modelID string) error {
 	providerID = strings.TrimSpace(providerID)
+	if providerID == "chatwiki" {
+		return errs.New("error.chatwiki_models_readonly")
+	}
 	if providerID == "" {
 		return errs.New("error.provider_id_required")
 	}

@@ -159,6 +159,8 @@ export default {
       apiVersion: 'API 版本',
       apiVersionPlaceholder: '例如：2024-02-01',
       apiVersionRequired: '请先填写 API 版本',
+      generateApiKey: '生成密钥',
+      generateApiKeySuccess: 'API 密钥已生成并保存',
       check: '检测',
       checkSuccess: '检测成功',
       checkFailed: '检测失败',
@@ -226,6 +228,8 @@ export default {
     },
     placeholders: {
       noAgentSelected: '请选择一个助手',
+      createAgentFirst: '请先创建助手',
+      selectModelFirst: '请选择模型',
       chatComingSoon: '这里将展示助手对应的聊天内容（话题列表暂未实现）。',
       inputPlaceholder: '请输入问题',
       enterToSend: '请输入内容',

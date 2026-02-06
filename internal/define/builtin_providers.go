@@ -19,8 +19,9 @@ type BuiltinModelConfig struct {
 	SortOrder  int
 }
 
-// BuiltinProviders 内置供应商列表
+// BuiltinProviders 内置供应商列表（chatwiki 默认置顶，将通过接口查询信息）
 var BuiltinProviders = []BuiltinProviderConfig{
+	{ProviderID: "chatwiki", Name: "ChatWiki", Type: "openai", Icon: "chatwiki", SortOrder: 0, APIEndpoint: ChatWikiAPIEndpoint},
 	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 1, APIEndpoint: "https://api.openai.com/v1"},
 	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 2, APIEndpoint: ""},
 	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 3, APIEndpoint: "https://api.anthropic.com/v1"},

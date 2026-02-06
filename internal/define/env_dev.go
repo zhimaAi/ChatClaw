@@ -4,6 +4,7 @@ package define
 
 // 开发环境默认值（当未启用 -tags production 时生效）
 var (
-	Env       = "development"
-	ServerURL = "https://dev1.willchat.chatwiki.com"
+	Env                 = "development"
+	ServerURL           = "https://dev1.willchat.chatwiki.com"
+	ChatWikiAPIEndpoint = "http://localhost:8080/openapi"
 )

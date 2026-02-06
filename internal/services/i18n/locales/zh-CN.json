@@ -1,7 +1,6 @@
 {
   "systray.show": "显示",
   "systray.quit": "退出",
-
   "error.app_required": "缺少应用实例",
   "error.i18n_required": "缺少多语言服务",
   "error.sqlite_not_initialized": "数据库尚未初始化",
@@ -15,7 +14,6 @@
   "error.window_already_registered": "窗口「{{.Name}}」已注册",
   "error.window_not_registered": "窗口「{{.Name}}」未注册",
   "error.window_service_required": "缺少窗口服务",
-
   "error.provider_id_required": "缺少供应商ID",
   "error.provider_not_found": "未找到供应商「{{.ProviderID}}」",
   "error.provider_list_failed": "获取供应商列表失败",
@@ -45,6 +43,13 @@
   "error.cannot_delete_rerank_model_in_use": "该重排模型正在被知识库「{{.LibraryName}}」使用，无法删除",
   "error.no_llm_model": "供应商「{{.ProviderID}}」没有可用的大语言模型",
   "error.unsupported_provider_type": "不支持的供应商类型「{{.Type}}」",
+  "error.chatwiki_generate_key_failed": "生成 ChatWiki API 密钥失败",
+  "error.chatwiki_fetch_ip_failed": "获取公网 IP 失败",
+  "error.chatwiki_api_endpoint_required": "请先配置 ChatWiki API 地址",
+  "error.chatwiki_api_key_required": "请先生成 ChatWiki API 密钥",
+  "error.chatwiki_model_list_failed": "获取模型列表失败（{{.Status}}）",
+  "error.chatwiki_model_sync_failed": "同步 ChatWiki 模型到本地失败",
+  "error.chatwiki_models_readonly": "ChatWiki 模型仅通过接口获取，禁止添加、编辑、删除",
   "error.library_list_failed": "获取知识库列表失败",
   "error.library_create_failed": "创建知识库失败",
   "error.library_name_required": "缺少知识库名称",
@@ -66,10 +71,8 @@
   "error.browser_invalid_url": "URL 不合法",
   "error.browser_unsupported_url_scheme": "不支持的 URL 协议",
   "error.browser_open_failed": "打开浏览器失败",
-
   "error.question_required": "缺少问题内容",
   "error.request_id_required": "缺少请求ID",
-
   "error.agent_id_required": "缺少助手ID",
   "error.agent_not_found": "未找到助手「{{.ID}}」",
   "error.agent_list_failed": "获取助手列表失败",
@@ -95,7 +98,6 @@
   "error.agent_icon_invalid": "图标文件不合法",
   "error.agent_icon_too_large": "图标文件过大（需不超过100KB）",
   "error.agent_icon_type_not_allowed": "不支持的图标文件格式",
-
   "error.document_list_failed": "获取文档列表失败",
   "error.document_upload_failed": "上传文档失败",
   "error.document_rename_failed": "重命名文档失败",
@@ -117,7 +119,6 @@
   "error.conversation_update_failed": "更新会话失败",
   "error.conversation_delete_failed": "删除会话失败",
   "error.conversation_name_required": "缺少会话名称",
-
   "error.chat_conversation_id_required": "缺少会话ID",
   "error.chat_conversation_not_found": "会话不存在",
   "error.chat_conversation_read_failed": "读取会话信息失败",
@@ -147,7 +148,6 @@
   "error.chat_generation_failed": "生成失败：{{.Error}}",
   "error.chat_stream_failed": "流式输出失败：{{.Error}}",
   "error.chat_tool_execution_failed": "工具执行失败：{{.Tool}} - {{.Error}}",
-
   "tools.calculator.name": "计算器",
   "tools.calculator.description": "执行数学计算",
   "tools.duckduckgo.name": "网络搜索",

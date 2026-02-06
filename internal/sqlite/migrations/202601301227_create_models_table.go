@@ -100,13 +100,14 @@ create table if not exists models (
 				now := time.Now().UTC().Format(dateTimeFormat)
 				providers := make([]migrationProvider, 0, len(define.BuiltinProviders))
 				for _, p := range define.BuiltinProviders {
+					enabled := p.ProviderID == "chatwiki" // ChatWiki enabled by default
 					providers = append(providers, migrationProvider{
 						ProviderID:  p.ProviderID,
 						Name:        p.Name,
 						Type:        p.Type,
 						Icon:        p.Icon,
 						IsBuiltin:   true,
-						Enabled:     false,
+						Enabled:     enabled,
 						SortOrder:   p.SortOrder,
 						APIEndpoint: p.APIEndpoint,
 						APIKey:      "",

@@ -129,7 +129,21 @@ const chatMessages = computed(() => {
 })
 
 const canSend = computed(() => {
-  return chatInput.value.trim() !== '' && selectedModelKey.value !== '' && !isGenerating.value
+  return (
+    !!activeAgentId.value &&
+    chatInput.value.trim() !== '' &&
+    selectedModelKey.value !== '' &&
+    !isGenerating.value
+  )
+})
+
+// Reason why send is disabled (for tooltip)
+const sendDisabledReason = computed(() => {
+  if (isGenerating.value) return ''
+  if (!activeAgentId.value) return t('assistant.placeholders.createAgentFirst')
+  if (!selectedModelKey.value) return t('assistant.placeholders.selectModelFirst')
+  if (!chatInput.value.trim()) return t('assistant.placeholders.enterToSend')
+  return ''
 })
 
 const hasModels = computed(() => {
@@ -1127,7 +1141,7 @@ onUnmounted(() => {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{{ t('assistant.placeholders.enterToSend') }}</p>
+                      <p>{{ sendDisabledReason || t('assistant.placeholders.enterToSend') }}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
