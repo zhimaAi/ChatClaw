@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -25,6 +26,12 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"google.golang.org/genai"
+)
+
+var (
+	// Enable provider HTTP request logs (may include endpoint URLs and response previews).
+	// DO NOT enable in production by default.
+	debugProviders = os.Getenv("WILLCHAT_DEBUG_PROVIDERS") == "1"
 )
 
 // ProvidersService 供应商服务（暴露给前端调用）
@@ -358,6 +365,17 @@ func chunkStrings(in []string, size int) [][]string {
 	return out
 }
 
+func truncateString(s string, max int) string {
+	if max <= 0 || s == "" {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "...(truncated)"
+}
+
 func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []ModelGroup) error {
 	db, err := s.db()
 	if err != nil {
@@ -502,34 +520,103 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	if baseURL == "" {
 		return nil, errs.New("error.chatwiki_api_endpoint_required")
 	}
-	if strings.TrimSpace(provider.APIKey) == "" {
-		return nil, errs.New("error.chatwiki_api_key_required")
-	}
 
-	url := baseURL + "/custom-model/list"
+	// ChatWiki model list endpoint lives under the OpenAPI base path.
+	// Users may configure api_endpoint as either:
+	// - https://dev1.willchat.chatwiki.com/openapi   (recommended)
+	// - https://dev1.willchat.chatwiki.com          (legacy / mis-config)
+	// Normalize here so we always hit the JSON API instead of the admin HTML.
+	var url string
+	if strings.Contains(baseURL, "/openapi") {
+		// already includes openapi base
+		url = strings.TrimSuffix(baseURL, "/") + "/custom-model/list"
+	} else {
+		url = strings.TrimSuffix(baseURL, "/") + "/openapi/custom-model/list"
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
 	}
-	req.Header.Set("Authorization", "Bearer "+provider.APIKey)
+	// Model list endpoint may be public. Only attach Authorization if we have a key.
+	hasAuth := strings.TrimSpace(provider.APIKey) != ""
+	if hasAuth {
+		req.Header.Set("Authorization", "Bearer "+provider.APIKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
+
+	if debugProviders && s.app != nil {
+		s.app.Logger.Info(
+			"ChatWiki model list request",
+			"provider_id", provider.ProviderID,
+			"url", url,
+			"timeout_seconds", 15,
+			"has_authorization", hasAuth,
+		)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+		if debugProviders && s.app != nil {
+			s.app.Logger.Warn(
+				"ChatWiki model list request failed",
+				"provider_id", provider.ProviderID,
+				"url", url,
+				"elapsed_ms", time.Since(start).Milliseconds(),
+				"error", err,
+			)
+		}
+		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Best-effort response preview for debugging (may be empty for redirects).
+		var preview string
+		if debugProviders {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+			preview = truncateString(string(b), 512)
+		}
+		if debugProviders && s.app != nil {
+			s.app.Logger.Warn(
+				"ChatWiki model list unexpected status",
+				"provider_id", provider.ProviderID,
+				"url", url,
+				"status", resp.StatusCode,
+				"elapsed_ms", time.Since(start).Milliseconds(),
+				"response_preview", preview,
+			)
+		}
 		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": resp.StatusCode})
 	}
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+		if debugProviders && s.app != nil {
+			s.app.Logger.Warn(
+				"ChatWiki model list read body failed",
+				"provider_id", provider.ProviderID,
+				"url", url,
+				"elapsed_ms", time.Since(start).Milliseconds(),
+				"error", err,
+			)
+		}
+		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
+	}
+
+	if debugProviders && s.app != nil {
+		s.app.Logger.Info(
+			"ChatWiki model list response received",
+			"provider_id", provider.ProviderID,
+			"url", url,
+			"status", resp.StatusCode,
+			"elapsed_ms", time.Since(start).Milliseconds(),
+			"response_bytes", len(b),
+			"response_preview", truncateString(string(b), 512),
+		)
 	}
 
 	// Try object with data/models
@@ -545,7 +632,7 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	// Try direct array
 	var items []chatWikiModelItem
 	if err := json.Unmarshal(b, &items); err != nil {
-		return nil, errs.Wrap("error.chatwiki_model_list_failed", err)
+		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
 	}
 	return s.chatWikiModelsToGroups(items, provider.ProviderID)
 }
