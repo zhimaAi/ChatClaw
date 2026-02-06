@@ -343,15 +343,16 @@ type AgentExtras struct {
 func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB, conversationID int64) (einoagent.Config, einoagent.ProviderConfig, AgentExtras, error) {
 	// Get conversation
 	type conversationRow struct {
-		AgentID       int64  `bun:"agent_id"`
-		LLMProviderID string `bun:"llm_provider_id"`
-		LLMModelID    string `bun:"llm_model_id"`
-		LibraryIDs    string `bun:"library_ids"`
+		AgentID        int64  `bun:"agent_id"`
+		LLMProviderID  string `bun:"llm_provider_id"`
+		LLMModelID     string `bun:"llm_model_id"`
+		LibraryIDs     string `bun:"library_ids"`
+		EnableThinking bool   `bun:"enable_thinking"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "enable_thinking").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -451,6 +452,7 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		EnableMaxTokens: agent.EnableLLMMaxTokens,
 		ContextCount:    agent.LLMMaxContextCount,
 		RetrievalTopK:   agent.RetrievalTopK,
+		EnableThinking:  conv.EnableThinking,
 	}
 
 	providerConfig := einoagent.ProviderConfig{
@@ -641,28 +643,44 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 	var finishReason string
 	var inputTokens, outputTokens int
 
-	// Track segments for interleaved content/tool-call display
+	// Track segments for interleaved thinking/content/tool-call display
 	type segment struct {
-		Type        string   `json:"type"`                    // "content" or "tools"
-		Content     string   `json:"content,omitempty"`       // for type="content"
+		Type        string   `json:"type"`                    // "thinking", "content" or "tools"
+		Content     string   `json:"content,omitempty"`       // for type="content" or "thinking"
 		ToolCallIDs []string `json:"tool_call_ids,omitempty"` // for type="tools"
 	}
 	var segments []segment
-	var lastSegmentIsContent bool
+	var lastSegmentType string                             // "thinking", "content", or "tools"
 	var lastSegmentToolCallIDs map[string]bool // to track which tool calls are in the last segment
+
+	// Helper to add thinking to segments
+	addThinkingToSegments := func(thinking string) {
+		if thinking == "" {
+			return
+		}
+		if lastSegmentType == "thinking" && len(segments) > 0 {
+			// Append to last thinking segment
+			segments[len(segments)-1].Content += thinking
+		} else {
+			// Start new thinking segment
+			segments = append(segments, segment{Type: "thinking", Content: thinking})
+			lastSegmentType = "thinking"
+			lastSegmentToolCallIDs = nil
+		}
+	}
 
 	// Helper to add content to segments
 	addContentToSegments := func(content string) {
 		if content == "" {
 			return
 		}
-		if lastSegmentIsContent && len(segments) > 0 {
+		if lastSegmentType == "content" && len(segments) > 0 {
 			// Append to last content segment
 			segments[len(segments)-1].Content += content
 		} else {
 			// Start new content segment
 			segments = append(segments, segment{Type: "content", Content: content})
-			lastSegmentIsContent = true
+			lastSegmentType = "content"
 			lastSegmentToolCallIDs = nil
 		}
 	}
@@ -672,10 +690,10 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		if toolCallID == "" {
 			return
 		}
-		if lastSegmentIsContent || len(segments) == 0 {
+		if lastSegmentType != "tools" || len(segments) == 0 {
 			// Start new tools segment
 			segments = append(segments, segment{Type: "tools", ToolCallIDs: []string{toolCallID}})
-			lastSegmentIsContent = false
+			lastSegmentType = "tools"
 			lastSegmentToolCallIDs = map[string]bool{toolCallID: true}
 		} else if !lastSegmentToolCallIDs[toolCallID] {
 			// Add to existing tools segment (if not already there)
@@ -836,6 +854,23 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 						log.Printf("[chat] stream recv failed conv=%d tab=%s req=%s err=%v", conversationID, tabID, requestID, err)
 						emitError("error.chat_stream_failed", map[string]any{"Error": err.Error()})
 						break
+					}
+
+					// Handle thinking content (ReasoningContent)
+					if msg.ReasoningContent != "" {
+						thinkingBuilder.WriteString(msg.ReasoningContent)
+						addThinkingToSegments(msg.ReasoningContent)
+						emit(EventChatThinking, ChatThinkingEvent{
+							ChatEvent: ChatEvent{
+								ConversationID: conversationID,
+								TabID:          tabID,
+								RequestID:      requestID,
+								Seq:            nextSeq(),
+								MessageID:      assistantMsg.ID,
+								Ts:             time.Now().UnixMilli(),
+							},
+							Delta: msg.ReasoningContent,
+						})
 					}
 
 					// Handle content

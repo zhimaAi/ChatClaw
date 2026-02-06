@@ -45,8 +45,9 @@ export interface ToolCallInfo {
   status: 'calling' | 'completed' | 'error'
 }
 
-// Message segment for interleaved content/tool-call display (ReAct paradigm)
+// Message segment for interleaved thinking/content/tool-call display (ReAct paradigm)
 export type MessageSegment =
+  | { type: 'thinking'; content: string }
   | { type: 'content'; content: string }
   | { type: 'tools'; toolCalls: ToolCallInfo[] }
 
@@ -155,7 +156,9 @@ export const useChatStore = defineStore('chat', () => {
 
               // Convert backend segments to frontend format
               const frontendSegments: MessageSegment[] = rawSegments.map((seg) => {
-                if (seg.type === 'content') {
+                if (seg.type === 'thinking') {
+                  return { type: 'thinking' as const, content: seg.content || '' }
+                } else if (seg.type === 'content') {
                   return { type: 'content' as const, content: seg.content || '' }
                 } else if (seg.type === 'tools') {
                   const toolCalls: ToolCallInfo[] = (seg.tool_call_ids || [])
@@ -405,7 +408,19 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
-      streaming.thinkingContent += delta || ''
+      const chunk = delta || ''
+      streaming.thinkingContent += chunk
+
+      // Track segments: append to last thinking segment or start a new one
+      if (chunk) {
+        const lastSeg = streaming.segments[streaming.segments.length - 1]
+        if (lastSeg && lastSeg.type === 'thinking') {
+          lastSeg.content += chunk
+        } else {
+          streaming.segments.push({ type: 'thinking', content: chunk })
+        }
+      }
+
       upsertMessage(conversation_id, streaming.messageId, {
         thinking_content: streaming.thinkingContent,
       } as any)
@@ -624,10 +639,13 @@ export const useChatStore = defineStore('chat', () => {
       // For errors, persist streaming segments locally since we don't call loadMessages.
       // Deep-clone to detach from reactive streaming state.
       segmentsByMessage.value[streaming.messageId] = streaming.segments.map((seg) => {
-        if (seg.type === 'content') {
+        if (seg.type === 'thinking') {
+          return { type: 'thinking' as const, content: seg.content }
+        } else if (seg.type === 'content') {
           return { type: 'content' as const, content: seg.content }
+        } else {
+          return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
         }
-        return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
       })
 
       // Clear streaming state after a tick to let the UI read from segments first
