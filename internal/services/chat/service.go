@@ -618,6 +618,12 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		} else if retrieverTool != nil {
 			extraTools = append(extraTools, retrieverTool)
 			s.app.Logger.Info("[chat] library retriever tool created", "libraries", len(agentExtras.LibraryIDs), "topK", agentConfig.RetrievalTopK, "threshold", agentExtras.MatchThreshold)
+
+			// Append knowledge-base-first hint to the system instruction so that the LLM
+			// prioritizes the library_retriever tool over web search tools.
+			agentConfig.Instruction += "\n\n[IMPORTANT] A private knowledge base is attached to this conversation. " +
+				"You MUST use the library_retriever tool FIRST to search for answers before using any web search tools (duckduckgo_search, wikipedia_search, etc.). " +
+				"Only fall back to web search if the knowledge base returns no relevant results."
 		}
 	}
 

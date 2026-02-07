@@ -56,10 +56,16 @@ func DefaultLibraryRetrieverConfig() *LibraryRetrieverConfig {
 	}
 }
 
-// toolDescription provides the description for the library retriever tool
-const toolDescription = `Retrieve relevant document fragments from the associated knowledge base.
+// toolDescription provides the description for the library retriever tool.
+// IMPORTANT: This description is visible to the LLM and influences tool selection.
+// It should strongly signal that this tool is the primary/preferred source of information
+// so that the LLM prioritizes it over web search when a knowledge base is attached.
+const toolDescription = `Search and retrieve relevant information from the user's private knowledge base. This is the PRIMARY and PREFERRED source of information — always try this tool FIRST before using any web search or other external tools. The knowledge base contains curated, authoritative documents uploaded by the user.
 
-Tips: Try different keywords or adjust level (0=detailed, 1=summary, 2=overview) for better results.`
+Usage tips:
+- Try different keywords or rephrase the query if initial results are insufficient.
+- Adjust level parameter: 0=detailed chunks (default), 1=summary, 2=overview.
+- Only fall back to web search (duckduckgo_search) if the knowledge base returns no relevant results.`
 
 // NewLibraryRetrieverTool creates a new library retriever tool.
 func NewLibraryRetrieverTool(ctx context.Context, config *LibraryRetrieverConfig) (tool.InvokableTool, error) {
