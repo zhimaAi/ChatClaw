@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"io/fs"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -216,6 +217,17 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
+
+	// ========== macOS 应用菜单 ==========
+	// Set up standard macOS application menu so that system shortcuts work:
+	// Cmd+M (minimize), Cmd+H (hide), Cmd+Q (quit), Cmd+C/V/X (copy/paste/cut), etc.
+	if runtime.GOOS == "darwin" {
+		appMenu := app.NewMenu()
+		appMenu.AddRole(application.AppMenu)
+		appMenu.AddRole(application.EditMenu)
+		appMenu.AddRole(application.WindowMenu)
+		app.Menu.Set(appMenu)
+	}
 
 	// ========== 创建窗口 ==========
 
