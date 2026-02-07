@@ -30,6 +30,10 @@ export default {
       name: 'Execute Command',
       description: 'Execute a shell command in the system terminal',
     },
+    httpRequest: {
+      name: 'HTTP Request',
+      description: 'Send an HTTP request to a URL',
+    },
   },
   winsnap: {
     title: 'WillChat',

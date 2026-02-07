@@ -119,8 +119,6 @@ github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1
 github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e/go.mod h1:a+pHHWgeL8QNNIzAKyXKOeoLJiYXX8tTeQy2wMQkfIY=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e h1:mt+3CkZmfgpM1YtfUAd4cmUxlw5TBBV3gI0Uq0FyP78=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e/go.mod h1:Np0BXy/9hPRu3wCgn+ij6L7YsjFcybVzg1k7uYOXh0M=
-github.com/cloudwego/eino-ext/components/tool/httprequest v0.0.0-20260204064123-1f91f547c77e h1:7DhfzjBlCythLhiuH/IgeAdVSJJ7L2otWEuKWlq0Unc=
-github.com/cloudwego/eino-ext/components/tool/httprequest v0.0.0-20260204064123-1f91f547c77e/go.mod h1:4YHp/Tzdfu7dvEkZzxmJ70A4BUWuMvDWJq9UQvtQwmc=
 github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e h1:3Wt1PWi51xlwKGSR2hg65+HKRKwkmoIiot6gk2YB5/s=
 github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e/go.mod h1:tfHD4Gn2kHfabi0pghN4y2yYDS24AZX1nQUwG0PESm8=
 github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260204064123-1f91f547c77e h1:Jk4yFdc7hsWAPKaz1ygWSc9vQ5K/xoa+bQJ5DbJR8KM=

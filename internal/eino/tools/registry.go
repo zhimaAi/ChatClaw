@@ -39,12 +39,8 @@ func NewToolRegistry() *ToolRegistry {
 		return NewBrowserUseTool(ctx, nil)
 	})
 
-	r.Register(ToolIDHTTPGet, func(ctx context.Context) (tool.BaseTool, error) {
-		return NewHTTPGetTool(ctx, nil)
-	})
-
-	r.Register(ToolIDHTTPPost, func(ctx context.Context) (tool.BaseTool, error) {
-		return NewHTTPPostTool(ctx, nil)
+	r.Register(ToolIDHTTPRequest, func(ctx context.Context) (tool.BaseTool, error) {
+		return NewHTTPRequestTool(ctx, nil)
 	})
 
 	r.Register(ToolIDSequentialThinking, func(ctx context.Context) (tool.BaseTool, error) {

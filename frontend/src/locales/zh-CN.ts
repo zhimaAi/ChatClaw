@@ -30,6 +30,10 @@ export default {
       name: '执行命令',
       description: '在系统终端中执行 Shell 命令',
     },
+    httpRequest: {
+      name: 'HTTP 请求',
+      description: '发送 HTTP 请求到指定 URL',
+    },
   },
   winsnap: {
     title: 'WillChat',

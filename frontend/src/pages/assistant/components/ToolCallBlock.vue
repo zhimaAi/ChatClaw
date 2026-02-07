@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, Wrench, Loader2, Check, X } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
@@ -40,6 +40,7 @@ const getToolDisplayName = (toolName: string) => {
     duckduckgo_search: t('tools.duckduckgo.name'),
     library_retriever: t('tools.libraryRetriever.name'),
     execute: t('tools.execute.name'),
+    http_request: t('tools.httpRequest.name'),
   }
   return nameMap[toolName] ?? toolName
 }
@@ -184,7 +185,7 @@ const getQueryFromArgs = (argsJson?: string): string => {
           </details>
         </template>
 
-        <!-- Arguments -->
+        <!-- Generic: Arguments -->
         <div v-else-if="toolCall.argsJson" class="space-y-1">
           <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolArgs') }}</div>
           <pre
@@ -192,7 +193,7 @@ const getQueryFromArgs = (argsJson?: string): string => {
           ><code>{{ formatJson(toolCall.argsJson) }}</code></pre>
         </div>
 
-        <!-- Result -->
+        <!-- Generic: Result -->
         <div
           v-if="toolCall.resultJson && toolCall.toolName !== 'duckduckgo_search'"
           class="space-y-1"
