@@ -20,7 +20,8 @@ import WindowControlButtons from './WindowControlButtons.vue'
 
 /**
  * Module-to-icon mapping for tab icons (matching side nav icons).
- * assistant module uses dynamic image icons set by AssistantPage, so not included here.
+ * For assistant tabs the SVG icon is used as a fallback when no agent icon is set;
+ * once an agent is selected its custom icon takes precedence (see shouldUseModuleIcon).
  *
  * Note: SVG imports are typed as `string` by vite/client.d.ts but at runtime
  * vite-svg-loader (defaultImport: 'component') provides Vue components.
