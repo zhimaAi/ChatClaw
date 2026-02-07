@@ -82,6 +82,28 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * Unified icon resolution strategy.
+   * - Assistant tabs: icon defaults to undefined so the title bar renders the
+   *   side-nav SVG fallback; the legacy default PNG is also treated as "no icon".
+   * - Other modules: icon falls back to DefaultTabIcon.
+   */
+  const resolveTabIcon = (
+    module: NavModule,
+    icon?: string,
+    options?: { isDefault?: boolean }
+  ): { icon: string | undefined; iconIsDefault: boolean } => {
+    if (module === 'assistant') {
+      // Legacy default PNG → treat as empty; empty string → treat as empty.
+      const resolved = icon && icon !== DefaultTabIcon ? icon : undefined
+      return { icon: resolved, iconIsDefault: options?.isDefault ?? false }
+    }
+    return {
+      icon: icon ?? DefaultTabIcon,
+      iconIsDefault: options?.isDefault ?? icon == null,
+    }
+  }
+
+  /**
    * 设置侧边栏折叠状态
    */
   const setSidebarCollapsed = (collapsed: boolean) => {
@@ -109,12 +131,13 @@ export const useNavigationStore = defineStore('navigation', () => {
 
     // 创建新标签页
     const id = createTabId()
+    const { icon, iconIsDefault } = resolveTabIcon(module)
     const newTab: Tab = {
       id,
       titleKey: moduleLabels[module],
       module,
-      icon: DefaultTabIcon,
-      iconIsDefault: true,
+      icon,
+      iconIsDefault,
     }
     tabs.value.push(newTab)
     activeTabId.value = id
@@ -125,11 +148,13 @@ export const useNavigationStore = defineStore('navigation', () => {
    */
   const addTab = (tab: Omit<Tab, 'id'>) => {
     const id = createTabId()
-    const icon = tab.icon ?? DefaultTabIcon
+    const resolved = resolveTabIcon(tab.module, tab.icon, {
+      isDefault: tab.iconIsDefault,
+    })
     const newTab: Tab = {
       ...tab,
-      icon,
-      iconIsDefault: tab.iconIsDefault ?? tab.icon == null,
+      icon: resolved.icon,
+      iconIsDefault: resolved.iconIsDefault,
       id,
     }
     tabs.value.push(newTab)
@@ -202,8 +227,9 @@ export const useNavigationStore = defineStore('navigation', () => {
   ) => {
     const tab = tabs.value.find((t) => t.id === tabId)
     if (tab) {
-      tab.icon = icon ?? DefaultTabIcon
-      tab.iconIsDefault = options?.isDefault ?? icon == null
+      const resolved = resolveTabIcon(tab.module, icon, options)
+      tab.icon = resolved.icon
+      tab.iconIsDefault = resolved.iconIsDefault
     }
   }
 
@@ -225,13 +251,22 @@ export const useNavigationStore = defineStore('navigation', () => {
   const refreshAssistantDefaultIcons = () => {
     const newLogoDataUrl = getLogoDataUrl()
     for (const tab of tabs.value) {
-      if (tab.module === 'assistant') {
-        // 兼容旧数据：DefaultTabIcon 视为默认图标
-        const isDefault = tab.iconIsDefault === true || tab.icon === DefaultTabIcon
-        if (isDefault) {
-          tab.icon = newLogoDataUrl
-          tab.iconIsDefault = true
-        }
+      if (tab.module !== 'assistant') continue
+
+      // Normalize legacy data first (e.g. tabs restored from persistence with the old default PNG).
+      const resolved = resolveTabIcon(tab.module, tab.icon, {
+        isDefault: tab.iconIsDefault,
+      })
+      tab.icon = resolved.icon
+      tab.iconIsDefault = resolved.iconIsDefault
+
+      // Skip empty icons (we want SVG fallback for "no agent" state).
+      if (!tab.icon) continue
+
+      // Refresh default icons to match the current theme.
+      if (tab.iconIsDefault) {
+        tab.icon = newLogoDataUrl
+        tab.iconIsDefault = true
       }
     }
   }

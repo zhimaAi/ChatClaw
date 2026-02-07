@@ -108,7 +108,7 @@ const handleClearLibrarySelection = () => {
       </div>
 
       <div
-        class="w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 py-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+        class="w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
       >
         <textarea
           :value="chatInput"

@@ -17,7 +17,6 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/tool/httprequest v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260204064123-1f91f547c77e
 	github.com/denisbrodbeck/machineid v1.0.1
