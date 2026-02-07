@@ -978,18 +978,19 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 						}
 					}
 
-					// Handle response meta
-					if msg.ResponseMeta != nil {
-						if msg.ResponseMeta.FinishReason != "" {
-							finishReason = msg.ResponseMeta.FinishReason
-						}
-						if msg.ResponseMeta.Usage != nil {
-							inputTokens = int(msg.ResponseMeta.Usage.PromptTokens)
-							outputTokens = int(msg.ResponseMeta.Usage.CompletionTokens)
-						}
+				// Handle response meta
+				if msg.ResponseMeta != nil {
+					if msg.ResponseMeta.FinishReason != "" {
+						finishReason = msg.ResponseMeta.FinishReason
+					}
+					if msg.ResponseMeta.Usage != nil {
+						// Accumulate tokens across multiple LLM calls (e.g. tool-call loops)
+						inputTokens += int(msg.ResponseMeta.Usage.PromptTokens)
+						outputTokens += int(msg.ResponseMeta.Usage.CompletionTokens)
 					}
 				}
-			} else if msgOutput.Message != nil {
+			}
+		} else if msgOutput.Message != nil {
 				// Non-streaming message
 				msg := msgOutput.Message
 
@@ -1057,18 +1058,19 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 					})
 				}
 
-				// Handle response meta
-				if msg.ResponseMeta != nil {
-					if msg.ResponseMeta.FinishReason != "" {
-						finishReason = msg.ResponseMeta.FinishReason
-					}
-					if msg.ResponseMeta.Usage != nil {
-						inputTokens = int(msg.ResponseMeta.Usage.PromptTokens)
-						outputTokens = int(msg.ResponseMeta.Usage.CompletionTokens)
-					}
+			// Handle response meta
+			if msg.ResponseMeta != nil {
+				if msg.ResponseMeta.FinishReason != "" {
+					finishReason = msg.ResponseMeta.FinishReason
+				}
+				if msg.ResponseMeta.Usage != nil {
+					// Accumulate tokens across multiple LLM calls (e.g. tool-call loops)
+					inputTokens += int(msg.ResponseMeta.Usage.PromptTokens)
+					outputTokens += int(msg.ResponseMeta.Usage.CompletionTokens)
 				}
 			}
 		}
+	}
 	}
 
 	// Check final cancellation
