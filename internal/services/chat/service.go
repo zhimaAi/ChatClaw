@@ -623,6 +623,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 			// prioritizes the library_retriever tool over web search tools.
 			agentConfig.Instruction += "\n\n[IMPORTANT] A private knowledge base is attached to this conversation. " +
 				"You MUST use the library_retriever tool FIRST to search for answers before using any web search tools (duckduckgo_search, wikipedia_search, etc.). " +
+				"When calling library_retriever, ALWAYS provide 2-5 queries from different angles, using varied keywords and phrasings, to ensure comprehensive coverage. " +
 				"Only fall back to web search if the knowledge base returns no relevant results."
 		}
 	}
