@@ -124,9 +124,9 @@ watch(
   }
 )
 
-// Watch for streaming content changes and scroll
+// Watch for streaming content and thinking changes and scroll
 watch(
-  () => streaming.value?.content,
+  () => [streaming.value?.content, streaming.value?.thinkingContent],
   () => {
     scrollToBottom()
   }
