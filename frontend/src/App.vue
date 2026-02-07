@@ -6,7 +6,7 @@ import { useNavigationStore, type NavModule } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
-import { Events, System } from '@wailsio/runtime'
+import { Events, System, Window } from '@wailsio/runtime'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import { SnapService } from '@bindings/willchat/internal/services/windows'
@@ -50,6 +50,7 @@ watch(
 let unsubscribeTextSelection: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
+let onKeyDownMacMinimize: ((e: KeyboardEvent) => void) | null = null
 
 /**
  * 主题变化监听 - 当主题切换时更新所有 assistant 标签页的默认图标
@@ -126,6 +127,20 @@ onMounted(() => {
   })
   themeObserver.observe(document.documentElement, { attributes: true })
 
+  // macOS Cmd+M workaround:
+  // Wails v3 frameless windows lack NSWindowStyleMaskMiniaturizable, so the standard
+  // Cmd+M minimize shortcut does nothing. We intercept it here and call Window.Hide()
+  // (same as the yellow traffic-light button) to simulate minimize-to-dock behavior.
+  if (System.IsMac()) {
+    onKeyDownMacMinimize = (e: KeyboardEvent) => {
+      if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'm') {
+        e.preventDefault()
+        void Window.Hide()
+      }
+    }
+    window.addEventListener('keydown', onKeyDownMacMinimize, true)
+  }
+
   // Global IME guard:
   // When the user presses Enter while composing (IME), prevent any keydown.enter handlers
   // from treating it as a "submit/send" action. We do NOT preventDefault so IME can commit text.
@@ -162,6 +177,10 @@ onUnmounted(() => {
   if (onKeyDownCapture) {
     window.removeEventListener('keydown', onKeyDownCapture, true)
     onKeyDownCapture = null
+  }
+  if (onKeyDownMacMinimize) {
+    window.removeEventListener('keydown', onKeyDownMacMinimize, true)
+    onKeyDownMacMinimize = null
   }
   themeObserver?.disconnect()
 })
