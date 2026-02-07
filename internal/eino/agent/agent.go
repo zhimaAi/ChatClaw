@@ -275,14 +275,31 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 }
 
 // BuildMiddlewares creates and returns the agent middleware stack:
-//   - filesystem: provides file operation tools (ls, read_file, write_file, edit_file, glob, grep)
+//   - filesystem: provides file operation tools (ls, read_file, write_file, edit_file, glob, grep, execute)
 //   - reduction:  clears old tool results and offloads large results to the filesystem backend
 //   - skill:      provides a skill tool for on-demand skill loading from SKILL.md files
+//
+// The filesystem middleware automatically registers an "execute" tool because LocalBackend
+// implements the filesystem.ShellBackend interface. The execute tool allows the LLM to run
+// arbitrary shell commands (with security policy constraints).
 func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
 	// Create local filesystem backend (rooted at user's home directory)
-	fsBackend, err := filesystem.NewLocalBackend(&filesystem.LocalBackendConfig{})
+	// ShellPolicy provides basic security constraints for command execution.
+	fsBackend, err := filesystem.NewLocalBackend(&filesystem.LocalBackendConfig{
+		ShellPolicy: &filesystem.ShellPolicy{
+			BlockedCommands: []string{
+				"rm -rf /",
+				"rm -rf /*",
+				"mkfs",
+				"dd if=",
+				":(){:|:&};:",
+				"format c:",
+				"format d:",
+			},
+		},
+	})
 	if err != nil {
 		log.Printf("[agent] failed to create local filesystem backend: %v", err)
 		// Fall back to only using reduction clearing without filesystem offloading

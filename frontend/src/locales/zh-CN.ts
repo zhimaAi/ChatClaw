@@ -26,6 +26,10 @@ export default {
       name: '知识库检索',
       description: '从知识库中检索相关内容',
     },
+    execute: {
+      name: '执行命令',
+      description: '在系统终端中执行 Shell 命令',
+    },
   },
   winsnap: {
     title: 'WillChat',

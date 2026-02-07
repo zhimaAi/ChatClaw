@@ -39,6 +39,7 @@ const getToolDisplayName = (toolName: string) => {
     calculator: t('tools.calculator.name'),
     duckduckgo_search: t('tools.duckduckgo.name'),
     library_retriever: t('tools.libraryRetriever.name'),
+    execute: t('tools.execute.name'),
   }
   return nameMap[toolName] ?? toolName
 }

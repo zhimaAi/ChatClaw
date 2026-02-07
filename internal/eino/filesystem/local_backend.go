@@ -6,19 +6,43 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/adk/filesystem"
 )
 
-// LocalBackend implements filesystem.Backend using the real local filesystem.
+// ShellPolicy defines security constraints for shell command execution.
+// Fields are designed to be extensible — add new checks here in the future.
+type ShellPolicy struct {
+	// TrustedDirs limits which directories can be used as working directory.
+	// Empty means no restriction (default).
+	TrustedDirs []string
+
+	// BlockedCommands is a list of command patterns that should be rejected.
+	// Uses simple substring matching.
+	// Example: ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:"]
+	BlockedCommands []string
+
+	// DefaultTimeout is the max execution time for a single command.
+	// 0 means use the hardcoded default (120s).
+	DefaultTimeout time.Duration
+}
+
+// LocalBackend implements filesystem.Backend and filesystem.ShellBackend
+// using the real local filesystem.
 // For security, all paths are resolved relative to a base directory (typically user's home).
 type LocalBackend struct {
 	// baseDir is the root directory that all operations are relative to.
 	// Paths starting with "/" are treated as relative to this directory.
 	baseDir string
+
+	// policy holds the shell execution security policy. Nil means no restrictions.
+	policy *ShellPolicy
 }
 
 // LocalBackendConfig configures the LocalBackend.
@@ -27,6 +51,10 @@ type LocalBackendConfig struct {
 	// All paths will be resolved relative to this directory.
 	// If empty, defaults to the user's home directory.
 	BaseDir string
+
+	// ShellPolicy defines security constraints for shell command execution.
+	// Nil means no restrictions (default).
+	ShellPolicy *ShellPolicy
 }
 
 // NewLocalBackend creates a new LocalBackend with the given configuration.
@@ -49,7 +77,7 @@ func NewLocalBackend(config *LocalBackendConfig) (*LocalBackend, error) {
 		return nil, fmt.Errorf("base path is not a directory: %s", baseDir)
 	}
 
-	return &LocalBackend{baseDir: baseDir}, nil
+	return &LocalBackend{baseDir: baseDir, policy: config.ShellPolicy}, nil
 }
 
 // resolvePath converts an API path to an absolute filesystem path.
@@ -504,5 +532,87 @@ func (b *LocalBackend) Edit(ctx context.Context, req *filesystem.EditRequest) er
 	return nil
 }
 
-// Ensure LocalBackend implements filesystem.Backend interface
+// Execute runs a shell command via a subprocess and returns its output.
+// Uses the platform's native default shell: cmd.exe on Windows, zsh on macOS, bash on Linux.
+// The command runs in baseDir as the working directory.
+func (b *LocalBackend) Execute(ctx context.Context, req *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
+	// Validate command against security policy
+	if err := b.validateCommand(req.Command); err != nil {
+		exitCode := -1
+		return &filesystem.ExecuteResponse{
+			Output:   "Command blocked: " + err.Error(),
+			ExitCode: &exitCode,
+		}, nil
+	}
+
+	// Set timeout from policy or use default (120s)
+	timeout := 120 * time.Second
+	if b.policy != nil && b.policy.DefaultTimeout > 0 {
+		timeout = b.policy.DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Build command using the platform's native default shell
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.CommandContext(ctx, "cmd.exe", "/C", req.Command)
+	case "darwin":
+		cmd = exec.CommandContext(ctx, "/bin/zsh", "-c", req.Command)
+	default: // linux and others
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", req.Command)
+	}
+	cmd.Dir = b.baseDir
+
+	// Capture combined stdout+stderr output
+	output, err := cmd.CombinedOutput()
+
+	exitCode := 0
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+
+	// Truncate output if too large to avoid token explosion
+	const maxOutput = 128 * 1024 // 128KB
+	outputStr := string(output)
+	truncated := false
+	if len(outputStr) > maxOutput {
+		outputStr = outputStr[:maxOutput]
+		truncated = true
+	}
+
+	// Handle timeout case
+	if ctx.Err() == context.DeadlineExceeded {
+		outputStr += "\n[Command timed out]"
+	}
+
+	// If there was an exec-level error (e.g. command not found) but we still have output, include it
+	if err != nil && len(outputStr) == 0 {
+		outputStr = err.Error()
+	}
+
+	return &filesystem.ExecuteResponse{
+		Output:    outputStr,
+		ExitCode:  &exitCode,
+		Truncated: truncated,
+	}, nil
+}
+
+// validateCommand checks the command against the shell security policy.
+// Returns nil if allowed, error with reason if blocked.
+func (b *LocalBackend) validateCommand(command string) error {
+	if b.policy == nil {
+		return nil
+	}
+	for _, blocked := range b.policy.BlockedCommands {
+		if strings.Contains(command, blocked) {
+			return fmt.Errorf("command contains blocked pattern: %q", blocked)
+		}
+	}
+	return nil
+}
+
+// Ensure LocalBackend implements both filesystem.Backend and filesystem.ShellBackend interfaces
 var _ filesystem.Backend = (*LocalBackend)(nil)
+var _ filesystem.ShellBackend = (*LocalBackend)(nil)

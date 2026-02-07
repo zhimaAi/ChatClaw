@@ -26,6 +26,10 @@ export default {
       name: 'Knowledge Search',
       description: 'Search relevant content from knowledge base',
     },
+    execute: {
+      name: 'Execute Command',
+      description: 'Execute a shell command in the system terminal',
+    },
   },
   winsnap: {
     title: 'WillChat',
