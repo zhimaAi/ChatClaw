@@ -452,9 +452,16 @@ func (b *LocalBackend) Execute(ctx context.Context, req *filesystem.ExecuteReque
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
+		// Prepend UTF-8 encoding directives so Chinese and other non-ASCII
+		// characters in command output are not garbled.  Both the .NET
+		// Console encoding and PowerShell's $OutputEncoding must be set
+		// because they govern different output paths.
+		wrappedCmd := "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
+			"$OutputEncoding = [System.Text.Encoding]::UTF8; " +
+			req.Command
 		cmd = exec.CommandContext(ctx, "powershell.exe",
 			"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-			"-Command", req.Command,
+			"-Command", wrappedCmd,
 		)
 	case "darwin":
 		cmd = exec.CommandContext(ctx, "/bin/zsh", "-c", req.Command)
