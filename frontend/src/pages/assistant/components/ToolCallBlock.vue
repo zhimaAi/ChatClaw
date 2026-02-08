@@ -41,6 +41,9 @@ const getToolDisplayName = (toolName: string) => {
     library_retriever: t('tools.libraryRetriever.name'),
     execute: t('tools.execute.name'),
     http_request: t('tools.httpRequest.name'),
+    sequentialthinking: t('tools.sequentialThinking.name'),
+    wikipedia_search: t('tools.wikipedia.name'),
+    browser_use: t('tools.browserUse.name'),
   }
   return nameMap[toolName] ?? toolName
 }

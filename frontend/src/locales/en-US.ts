@@ -34,6 +34,18 @@ export default {
       name: 'HTTP Request',
       description: 'Send an HTTP request to a URL',
     },
+    sequentialThinking: {
+      name: 'Step-by-Step Reasoning',
+      description: 'Break down complex problems into sequential analysis steps',
+    },
+    wikipedia: {
+      name: 'Wikipedia',
+      description: 'Search Wikipedia for knowledge and information',
+    },
+    browserUse: {
+      name: 'Browser',
+      description: 'Browse and interact with web pages',
+    },
   },
   winsnap: {
     title: 'WillChat',

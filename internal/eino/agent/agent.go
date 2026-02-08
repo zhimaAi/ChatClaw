@@ -337,6 +337,9 @@ func buildFilesystemSystemPrompt(baseDir string) string {
 
 - Working directory: %s
 - Returns combined stdout/stderr output with exit code
+- Timeout: 60 seconds per command. Commands exceeding this limit are killed automatically.
+- **NEVER run long-running or persistent commands** (e.g. "php artisan serve", "npm run dev", "python manage.py runserver", "docker compose up", "tail -f", "watch"). These will block and timeout. If the user needs to start a server, instruct them to run it manually in a separate terminal.
+- For build commands that may take long, keep them focused (e.g. "npm run build" is fine, but avoid running dev servers).
 - Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool)
 `, osName, shell, baseDir, baseDir, baseDir, baseDir, baseDir, baseDir, baseDir)
 

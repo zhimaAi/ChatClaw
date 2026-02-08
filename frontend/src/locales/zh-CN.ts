@@ -34,6 +34,18 @@ export default {
       name: 'HTTP 请求',
       description: '发送 HTTP 请求到指定 URL',
     },
+    sequentialThinking: {
+      name: '逐步推理',
+      description: '将复杂问题拆分为多个步骤逐步分析',
+    },
+    wikipedia: {
+      name: '维基百科',
+      description: '搜索维基百科获取知识信息',
+    },
+    browserUse: {
+      name: '浏览器',
+      description: '使用浏览器浏览网页并交互',
+    },
   },
   winsnap: {
     title: 'WillChat',

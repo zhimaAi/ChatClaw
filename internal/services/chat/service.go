@@ -1186,12 +1186,18 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		}
 	}
 
-	// Build tool name map for repairing assistant tool_calls entries.
+	// Build maps for repairing assistant tool_calls entries:
+	// 1. toolNameByCallID: maps tool_call_id -> tool name for name recovery
+	// 2. answeredToolCallIDs: set of tool_call_ids that have a corresponding tool result message
 	toolNameByCallID := make(map[string]string)
+	answeredToolCallIDs := make(map[string]bool)
 	for _, m := range models {
-		if m.Role == RoleTool && m.ToolCallID != "" && m.ToolCallName != "" {
-			if _, ok := toolNameByCallID[m.ToolCallID]; !ok {
-				toolNameByCallID[m.ToolCallID] = m.ToolCallName
+		if m.Role == RoleTool && m.ToolCallID != "" {
+			answeredToolCallIDs[m.ToolCallID] = true
+			if m.ToolCallName != "" {
+				if _, ok := toolNameByCallID[m.ToolCallID]; !ok {
+					toolNameByCallID[m.ToolCallID] = m.ToolCallName
+				}
 			}
 		}
 	}
@@ -1229,9 +1235,17 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				// - tool call id must be present if a tool message references it
 				// - function.name should not be empty
 				// - function.arguments must be a valid JSON object string (at least "{}")
+				// - each tool_call_id MUST have a matching tool result message (otherwise
+				//   providers like Qwen/DashScope reject the request with
+				//   "tool_calls must be followed by tool messages")
 				repaired := make([]schema.ToolCall, 0, len(toolCalls))
 				for _, tc := range toolCalls {
 					if tc.ID == "" {
+						continue
+					}
+					// Drop tool calls whose result was never saved (e.g. generation
+					// was cancelled mid-tool-execution).
+					if !answeredToolCallIDs[tc.ID] {
 						continue
 					}
 					if tc.Function.Name == "" {
