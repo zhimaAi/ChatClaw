@@ -445,9 +445,13 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		return einoagent.Config{}, einoagent.ProviderConfig{}, AgentExtras{}, errs.New("error.chat_provider_not_enabled")
 	}
 
+	// Wrap the user-defined prompt with a clear section header so it stands
+	// out from the middleware-appended instructions (filesystem, skill, etc.).
+	instruction := fmt.Sprintf("# System Instruction\n\n%s", strings.TrimSpace(agent.Prompt))
+
 	agentConfig := einoagent.Config{
 		Name:            agent.Name,
-		Instruction:     agent.Prompt,
+		Instruction:     instruction,
 		ModelID:         modelID,
 		Temperature:     &agent.LLMTemperature,
 		TopP:            &agent.LLMTopP,
