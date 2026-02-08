@@ -4,8 +4,8 @@ go 1.25
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
-	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
-	github.com/chromedp/chromedp v0.13.3
+	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
+	github.com/chromedp/chromedp v0.14.2
 	github.com/cloudwego/eino v0.7.28
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e
@@ -33,7 +33,7 @@ require (
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.23
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.68
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.69
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xuri/excelize/v2 v2.10.0
 	golang.org/x/sys v0.40.0
