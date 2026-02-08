@@ -18,8 +18,9 @@ const maxSnapshotChars = 8000
 // ref numbers were assigned via data-wc-ref attributes in the DOM.
 type snapshotResult struct {
 	text     string
-	maxRef   int  // highest ref number assigned
-	hasRefs  bool // true if any refs were assigned
+	maxRef   int              // highest ref number assigned
+	hasRefs  bool             // true if any refs were assigned
+	refHrefs map[int]string   // ref → href URL for link elements (used by actionClick)
 }
 
 // jsElement is what the JS injection returns for each interactive element.
@@ -162,6 +163,7 @@ func (b *browserTool) getSnapshot(ctx context.Context) (*snapshotResult, error) 
 func formatElements(elements []jsElement) *snapshotResult {
 	var sb strings.Builder
 	maxRef := 0
+	hrefs := make(map[int]string)
 
 	for _, el := range elements {
 		role := inferRole(el)
@@ -207,15 +209,22 @@ func formatElements(elements []jsElement) *snapshotResult {
 		if el.Ref > maxRef {
 			maxRef = el.Ref
 		}
+
+		// Record href for link elements (used by actionClick to navigate
+		// instead of mouse-clicking, avoiding cross-origin target loss).
+		if el.Href != "" && strings.HasPrefix(el.Href, "http") {
+			hrefs[el.Ref] = el.Href
+		}
 	}
 
 	text := sb.String()
 	text = truncateAtLine(text, maxSnapshotChars)
 
 	return &snapshotResult{
-		text:    text,
-		maxRef:  maxRef,
-		hasRefs: maxRef > 0,
+		text:     text,
+		maxRef:   maxRef,
+		hasRefs:  maxRef > 0,
+		refHrefs: hrefs,
 	}
 }
 

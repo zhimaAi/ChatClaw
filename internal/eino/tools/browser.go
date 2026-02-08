@@ -65,6 +65,12 @@ type browserTool struct {
 	allocCtx context.Context
 	cancel   context.CancelFunc
 
+	// browserCtx is the first chromedp context created during init.
+	// It holds a reference to the Browser instance and can be used for
+	// browser-level CDP commands (like chromedp.Targets()) even when
+	// individual tab targets have been destroyed by cross-origin navigation.
+	browserCtx context.Context
+
 	// Tab management
 	mu        sync.Mutex
 	tabCtxs   map[target.ID]context.Context
@@ -122,7 +128,7 @@ func (b *browserTool) init() error {
 		// alive across tool calls. Per-call timeouts/cancellation are handled in InvokableRun.
 		b.allocCtx, b.cancel = chromedp.NewExecAllocator(context.Background(), opts...)
 
-		// Create the first tab
+		// Create the first tab.
 		tabCtx, tabCancel := chromedp.NewContext(b.allocCtx)
 		// Navigate to blank to ensure the browser actually starts
 		if err := chromedp.Run(tabCtx, chromedp.Navigate("about:blank")); err != nil {
@@ -131,6 +137,11 @@ func (b *browserTool) init() error {
 			b.cancel()
 			return
 		}
+
+		// Save this context for browser-level CDP commands (chromedp.Targets).
+		// The Browser WebSocket connection lives on this context and survives
+		// individual tab target destruction. We must NEVER cancel this context.
+		b.browserCtx = tabCtx
 
 		tid := chromedp.FromContext(tabCtx).Target.TargetID
 		b.tabCtxs = map[target.ID]context.Context{tid: tabCtx}
@@ -292,12 +303,48 @@ func (b *browserTool) actionGoToURL(ctx context.Context, urlStr string) (string,
 	defer stop()
 	defer opCancel()
 
-	if err := chromedp.Run(opCtx,
-		chromedp.Navigate(urlStr),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-	); err != nil {
-		return "", fmt.Errorf("navigation failed: %w", err)
+	// Step 1: Send the navigate command.
+	if err := chromedp.Run(opCtx, chromedp.Navigate(urlStr)); err != nil {
+		// Navigation itself failed — may be a cross-origin target swap.
+		// Try to recover the target and retry.
+		log.Printf("[browser] Navigate to %s failed: %v, attempting recovery...", urlStr, err)
+		recoveredCtx, recErr := b.recoverActiveTarget(ctx)
+		if recErr != nil {
+			return "", fmt.Errorf("navigation failed: %w (recovery: %v)", err, recErr)
+		}
+		opCancel()
+		stop()
+		opCtx, opCancel, stop = b.opContext(ctx, recoveredCtx)
+		defer stop()
+		defer opCancel()
+
+		// Retry navigate on the recovered target
+		if err2 := chromedp.Run(opCtx, chromedp.Navigate(urlStr)); err2 != nil {
+			return "", fmt.Errorf("navigation failed after recovery: %w", err2)
+		}
 	}
+
+	// Step 2: Wait for the page body to be ready.
+	if err := chromedp.Run(opCtx, chromedp.WaitReady("body", chromedp.ByQuery)); err != nil {
+		log.Printf("[browser] WaitReady after navigate to %s failed: %v, attempting recovery...", urlStr, err)
+		recoveredCtx, recErr := b.recoverActiveTarget(ctx)
+		if recErr != nil {
+			// Even recovery failed — try to snapshot anyway on whatever we have
+			log.Printf("[browser] recovery after navigate WaitReady failed: %v", recErr)
+		} else {
+			opCancel()
+			stop()
+			opCtx, opCancel, stop = b.opContext(ctx, recoveredCtx)
+			defer stop()
+			defer opCancel()
+
+			// Give the new target time to load
+			_ = chromedp.Run(opCtx, chromedp.WaitReady("body", chromedp.ByQuery))
+		}
+	}
+
+	// Step 3: Brief extra wait for dynamic content
+	_ = chromedp.Run(opCtx, chromedp.Sleep(500*time.Millisecond))
 
 	snap, err := b.getSnapshot(opCtx)
 	if err != nil {
@@ -315,6 +362,17 @@ func (b *browserTool) actionClick(ctx context.Context, ref int) (string, error) 
 		return "", fmt.Errorf("ref %d not found in current snapshot (valid range: 1-%d)", ref, b.lastSnap.maxRef)
 	}
 
+	// Check if the element has an href from the last snapshot. If so, navigate
+	// directly instead of mouse-clicking. This avoids Chrome's cross-origin
+	// process swap which destroys the old target on same-tab navigation.
+	if b.lastSnap != nil && b.lastSnap.refHrefs != nil {
+		if href, ok := b.lastSnap.refHrefs[ref]; ok && href != "" {
+			log.Printf("[browser] ref %d has href, navigating to %s instead of clicking", ref, href)
+			return b.actionGoToURL(ctx, href)
+		}
+	}
+
+	// Non-link element: use real mouse click
 	tabCtx := b.activeCtx()
 	opCtx, opCancel, stop := b.opContext(ctx, tabCtx)
 	defer stop()
@@ -354,21 +412,42 @@ func (b *browserTool) actionClick(ctx context.Context, ref int) (string, error) 
 		return "", ctx.Err()
 	}
 
-	// Wait for page to settle after click/navigation
+	// Wait for page to settle after click/navigation.
 	snapTabCtx := activeForSnapshot
 	snapOpCtx, snapCancel, snapStop := b.opContext(ctx, snapTabCtx)
 	defer snapStop()
 	defer snapCancel()
 
+	// Try WaitReady. If it fails, the target may have been replaced by a
+	// cross-origin navigation (Chrome Site Isolation). Attempt recovery.
 	if err := chromedp.Run(snapOpCtx, chromedp.WaitReady("body", chromedp.ByQuery)); err != nil {
-		log.Printf("[browser] WaitReady after click: %v", err)
+		log.Printf("[browser] WaitReady after click failed: %v, attempting target recovery...", err)
+
+		recoveredCtx, recoveredErr := b.recoverActiveTarget(ctx)
+		if recoveredErr != nil {
+			log.Printf("[browser] target recovery failed: %v", recoveredErr)
+			return fmt.Sprintf("Clicked ref %d but page navigation caused target loss: %v (recovery: %v)", ref, err, recoveredErr), nil
+		}
+
+		// Replace snapshot context with the recovered one
+		snapCancel()
+		snapStop()
+		snapTabCtx = recoveredCtx
+		snapOpCtx, snapCancel, snapStop = b.opContext(ctx, snapTabCtx)
+		defer snapStop()
+		defer snapCancel()
+
+		// Wait for the recovered target to be ready
+		if err2 := chromedp.Run(snapOpCtx, chromedp.WaitReady("body", chromedp.ByQuery)); err2 != nil {
+			log.Printf("[browser] WaitReady after recovery: %v", err2)
+		}
 	}
 
 	// If URL changed, give extra time for dynamic content
 	var urlAfter string
 	_ = chromedp.Run(snapOpCtx, chromedp.Location(&urlAfter))
 	if urlAfter != "" && urlAfter != urlBefore {
-		_ = chromedp.Run(snapOpCtx, chromedp.Sleep(500*time.Millisecond))
+		_ = chromedp.Run(snapOpCtx, chromedp.Sleep(1*time.Second))
 	} else {
 		_ = chromedp.Run(snapOpCtx, chromedp.Sleep(200*time.Millisecond))
 	}
@@ -583,9 +662,14 @@ func (b *browserTool) actionCloseTab(ctx context.Context) (string, error) {
 	closing := b.activeTab
 	closingIdx := indexOfTargetID(b.tabOrder, closing)
 
-	// Cancel and remove closing tab
-	if cancel, ok := b.tabCancel[closing]; ok {
-		cancel()
+	// Cancel and remove closing tab.
+	// Do not cancel browserCtx — it holds the Browser WebSocket connection.
+	if closingCtx, ok := b.tabCtxs[closing]; ok {
+		if closingCtx != b.browserCtx {
+			if cancel, cancelOk := b.tabCancel[closing]; cancelOk {
+				cancel()
+			}
+		}
 	}
 	delete(b.tabCtxs, closing)
 	delete(b.tabCancel, closing)
@@ -611,6 +695,89 @@ func (b *browserTool) actionCloseTab(ctx context.Context) (string, error) {
 	b.lastSnap = snap
 	urlStr, _ := b.location(opCtx)
 	return fmt.Sprintf("Closed tab. Now on:\nURL: %s\n\n%s", urlStr, snap.text), nil
+}
+
+// --- Target Recovery ---
+
+// recoverActiveTarget finds the current active page target after a cross-origin
+// navigation destroyed the old target (Chrome Site Isolation / process swap).
+//
+// It uses b.browserCtx (which holds the Browser instance from init) to call
+// chromedp.Targets(), finds the replacement target, and updates tab management.
+func (b *browserTool) recoverActiveTarget(ctx context.Context) (context.Context, error) {
+	// b.browserCtx holds the Browser instance. chromedp.Targets() needs a
+	// context that went through NewContext (not just the allocator context).
+	targets, err := chromedp.Targets(b.browserCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list targets: %w", err)
+	}
+
+	b.mu.Lock()
+	oldActiveTab := b.activeTab
+	knownTargets := make(map[target.ID]bool, len(b.tabCtxs))
+	for tid := range b.tabCtxs {
+		knownTargets[tid] = true
+	}
+	b.mu.Unlock()
+
+	// First pass: prefer a page target we haven't seen (the replacement).
+	var newTargetID target.ID
+	for _, t := range targets {
+		if t.Type != "page" || t.URL == "about:blank" || t.URL == "" {
+			continue
+		}
+		if !knownTargets[t.TargetID] {
+			newTargetID = t.TargetID
+			break
+		}
+	}
+
+	// Second pass: pick any page target that is not our dead active tab.
+	if newTargetID == "" {
+		for _, t := range targets {
+			if t.Type == "page" && t.URL != "about:blank" && t.URL != "" && t.TargetID != oldActiveTab {
+				newTargetID = t.TargetID
+				break
+			}
+		}
+	}
+
+	if newTargetID == "" {
+		return nil, fmt.Errorf("no suitable page target found for recovery (saw %d targets)", len(targets))
+	}
+
+	log.Printf("[browser] recovering target: old=%s new=%s", oldActiveTab, newTargetID)
+
+	// Create a new chromedp context attached to the replacement target
+	newTabCtx, newTabCancel := chromedp.NewContext(b.allocCtx, chromedp.WithTargetID(newTargetID))
+
+	// Swap old → new in tab management.
+	// IMPORTANT: Do NOT cancel the old tab context if it is browserCtx,
+	// because browserCtx holds the Browser WebSocket connection we need alive.
+	b.mu.Lock()
+	if oldCtx, ok := b.tabCtxs[oldActiveTab]; ok {
+		if oldCtx != b.browserCtx {
+			if cancel, cancelOk := b.tabCancel[oldActiveTab]; cancelOk {
+				cancel()
+			}
+		}
+	}
+	delete(b.tabCtxs, oldActiveTab)
+	delete(b.tabCancel, oldActiveTab)
+
+	for i, tid := range b.tabOrder {
+		if tid == oldActiveTab {
+			b.tabOrder[i] = newTargetID
+			break
+		}
+	}
+
+	b.tabCtxs[newTargetID] = newTabCtx
+	b.tabCancel[newTargetID] = newTabCancel
+	b.activeTab = newTargetID
+	b.mu.Unlock()
+
+	return newTabCtx, nil
 }
 
 // --- Helpers ---
