@@ -628,18 +628,19 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		}
 	}
 
-	// Create agent
+	// Create agent (includes per-session browserTool; cleanup releases its Chrome process)
 	agentConfig.Provider = providerConfig
-	agent, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools)
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools)
 	if err != nil {
 		emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
 		return
 	}
+	defer agentResult.Cleanup()
 
 	// Create runner
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent:           agent,
+		Agent:           agentResult.Agent,
 		EnableStreaming: true,
 	})
 

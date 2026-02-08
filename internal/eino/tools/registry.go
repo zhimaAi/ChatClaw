@@ -35,9 +35,9 @@ func NewToolRegistry() *ToolRegistry {
 		return NewDuckDuckGoTool(ctx, nil)
 	})
 
-	r.Register(ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
-		return NewBrowserUseTool(ctx, nil)
-	})
+	// NOTE: BrowserUse is NOT registered here. Each conversation creates its
+	// own browserTool instance (via NewChatModelAgent) to avoid cross-session
+	// interference when multiple tabs run concurrently.
 
 	r.Register(ToolIDHTTPRequest, func(ctx context.Context) (tool.BaseTool, error) {
 		return NewHTTPRequestTool(ctx, nil)
@@ -55,12 +55,25 @@ func NewToolRegistry() *ToolRegistry {
 }
 
 // Register registers a tool factory with the given ID.
+// If a cached instance exists for this ID, it is closed (if it implements
+// Closeable) before being removed from the cache.
 func (r *ToolRegistry) Register(id string, factory ToolFactory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.factories[id] = factory
-	// Invalidate cache when a factory is re-registered
+	// Close and remove the old cached instance so the new factory starts fresh.
+	r.closeCachedLocked(id)
 	delete(r.cached, id)
+}
+
+// closeCachedLocked closes the cached tool if it implements Closeable.
+// Must be called with r.mu held.
+func (r *ToolRegistry) closeCachedLocked(id string) {
+	if old, ok := r.cached[id]; ok {
+		if c, ok := old.(Closeable); ok {
+			c.Close()
+		}
+	}
 }
 
 // getOrCreate returns a cached tool instance or creates one via the factory.
@@ -95,6 +108,13 @@ func (r *ToolRegistry) GetAllTools(ctx context.Context) ([]tool.BaseTool, error)
 // If config is nil, all tools are returned (default behavior).
 // Tool instances are cached after first creation.
 func (r *ToolRegistry) GetEnabledTools(ctx context.Context, config *ToolsConfig) ([]tool.BaseTool, error) {
+	return r.GetEnabledToolsExcluding(ctx, config)
+}
+
+// GetEnabledToolsExcluding returns tools based on the configuration, excluding
+// the specified tool IDs. This is used to skip tools that are managed
+// per-session (e.g., browserTool) rather than shared globally.
+func (r *ToolRegistry) GetEnabledToolsExcluding(ctx context.Context, config *ToolsConfig, excludeIDs ...string) ([]tool.BaseTool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -103,8 +123,17 @@ func (r *ToolRegistry) GetEnabledTools(ctx context.Context, config *ToolsConfig)
 		config = DefaultToolsConfig()
 	}
 
+	// Build exclude set for O(1) lookup
+	exclude := make(map[string]struct{}, len(excludeIDs))
+	for _, id := range excludeIDs {
+		exclude[id] = struct{}{}
+	}
+
 	var tools []tool.BaseTool
 	for id := range r.factories {
+		if _, skip := exclude[id]; skip {
+			continue
+		}
 		if config.IsEnabled(id) {
 			t, err := r.getOrCreate(ctx, id)
 			if err != nil {
@@ -155,10 +184,11 @@ func (r *ToolRegistry) AddTool(id string, t tool.BaseTool) {
 }
 
 // RemoveTool removes a tool from both the cache and factories.
-// This is useful for removing dynamically added tools.
+// If the cached instance implements Closeable, it is closed first.
 func (r *ToolRegistry) RemoveTool(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.closeCachedLocked(id)
 	delete(r.cached, id)
 	delete(r.factories, id)
 }
