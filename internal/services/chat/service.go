@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,10 +28,17 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-var (
-	// Enable LLM request/response previews (may contain user content).
-	debugLLM = os.Getenv("WILLCHAT_DEBUG_LLM") == "1"
-)
+// llmLogMaxContent is the max rune length for message content in LLM context logs.
+const llmLogMaxContent = 300
+
+// llmLogMaxOutput is the max rune length for LLM output in completion logs.
+const llmLogMaxOutput = 1000
+
+// llmLogMaxInstruction is the max rune length for instruction in LLM start logs.
+const llmLogMaxInstruction = 500
+
+// llmLogMaxToolResult is the max rune length for tool result content in logs.
+const llmLogMaxToolResult = 500
 
 func truncateRunes(s string, max int) string {
 	if max <= 0 || s == "" {
@@ -600,13 +606,12 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		return
 	}
 
-	// LLM request log (summary)
+	// LLM request log
 	s.app.Logger.Info("[llm] start", "conv", conversationID, "tab", tabID, "req", requestID,
 		"provider_id", providerConfig.ProviderID, "provider_type", providerConfig.Type,
-		"model", agentConfig.ModelID, "endpoint", providerConfig.APIEndpoint, "messages", len(messages))
-	if debugLLM {
-		s.app.Logger.Debug("[llm] context", "conv", conversationID, "req", requestID, "context", summarizeMessagesForLog(messages, 12, 160))
-	}
+		"model", agentConfig.ModelID, "endpoint", providerConfig.APIEndpoint, "messages", len(messages),
+		"instruction", truncateRunes(agentConfig.Instruction, llmLogMaxInstruction))
+	s.app.Logger.Info("[llm] context", "conv", conversationID, "req", requestID, "context", summarizeMessagesForLog(messages, 12, llmLogMaxContent))
 
 	// Create extra tools (e.g., LibraryRetrieverTool if agent has associated libraries)
 	var extraTools []tool.BaseTool
@@ -630,7 +635,22 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 
 	// Create agent (includes per-session browserTool; cleanup releases its Chrome process)
 	agentConfig.Provider = providerConfig
-	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools)
+	llmCallCount := 0
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools,
+		func(_ context.Context, msgs []*schema.Message) {
+			llmCallCount++
+			// Log the full prompt context before each LLM call.
+			var systemPrompt string
+			for _, m := range msgs {
+				if m.Role == schema.System {
+					systemPrompt += m.Content
+				}
+			}
+			s.app.Logger.Info("[llm] before_call", "conv", conversationID, "req", requestID,
+				"call", llmCallCount, "messages", len(msgs),
+				"system_prompt", truncateRunes(systemPrompt, 2000),
+				"context", summarizeMessagesForLog(msgs, 20, llmLogMaxContent))
+		})
 	if err != nil {
 		emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
@@ -1012,7 +1032,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 							}
 						}
 					}
-					s.app.Logger.Info("[llm] tool_result", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", msg.ToolCallID, "result_len", len(msg.Content))
+					s.app.Logger.Info("[llm] tool_result", "conv", conversationID, "tab", tabID, "req", requestID, "tool", toolName, "call_id", msg.ToolCallID, "result_len", len(msg.Content), "result", truncateRunes(msg.Content, llmLogMaxToolResult))
 					emit(EventChatTool, ChatToolEvent{
 						ChatEvent: ChatEvent{
 							ConversationID: conversationID,
@@ -1113,9 +1133,7 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		"status", StatusSuccess, "finish", finishReason, "input_tokens", inputTokens,
 		"output_tokens", outputTokens, "content_len", len(contentBuilder.String()),
 		"thinking_len", len(thinkingBuilder.String()), "tool_calls_len", len(toolCallsStr))
-	if debugLLM {
-		s.app.Logger.Debug("[llm] output", "conv", conversationID, "req", requestID, "output", truncateRunes(contentBuilder.String(), 800))
-	}
+	s.app.Logger.Info("[llm] output", "conv", conversationID, "req", requestID, "output", truncateRunes(contentBuilder.String(), llmLogMaxOutput))
 
 	// Emit complete event
 	emit(EventChatComplete, ChatCompleteEvent{
