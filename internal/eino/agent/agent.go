@@ -209,6 +209,11 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 	return ollama.NewChatModel(ctx, cfg)
 }
 
+// BeforeChatModelFunc is called before each LLM invocation with the complete
+// message list (system prompt + history + user message) that will be sent.
+// This is useful for logging the full prompt context.
+type BeforeChatModelFunc func(ctx context.Context, messages []*schema.Message)
+
 // AgentResult holds the created agent and a cleanup function that should be
 // called (typically via defer) when the agent is no longer needed. Cleanup
 // releases per-session resources such as headless Chrome processes.
@@ -221,7 +226,11 @@ type AgentResult struct {
 // Each call creates its own browserTool instance so that concurrent conversations
 // (tabs) do not share or interfere with each other's browser sessions.
 // The caller MUST call result.Cleanup() when the agent is no longer needed.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool) (*AgentResult, error) {
+//
+// beforeChatModel, if non-nil, is called before every LLM invocation with
+// the complete message list that will be sent to the model, including the
+// system instruction, middleware additions, and all tool schemas.
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
@@ -268,6 +277,16 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	agentConfig.Middlewares = BuildMiddlewares(ctx)
 
+	// Append a logging middleware that fires before each LLM call.
+	if beforeChatModel != nil {
+		agentConfig.Middlewares = append(agentConfig.Middlewares, adk.AgentMiddleware{
+			BeforeChatModel: func(ctx context.Context, state *adk.ChatModelAgentState) error {
+				beforeChatModel(ctx, state.Messages)
+				return nil
+			},
+		})
+	}
+
 	agent, err := adk.NewChatModelAgent(ctx, agentConfig)
 	if err != nil {
 		browserTool.Close()
@@ -309,9 +328,10 @@ func buildFilesystemSystemPrompt(baseDir string) string {
 - ls: list files in a directory (use absolute path, e.g. "%s")
 - read_file: read a file from the filesystem
 - write_file: write/create a file (prefer this over shell echo for creating files with code)
-- edit_file: edit a file in the filesystem
+- edit_file: edit a file in the filesystem (string replacement based)
+- patch_file: apply line-based patch operations (insert/delete/replace by line numbers). More precise than edit_file for multi-line changes.
 - glob: find files matching a pattern (e.g., "%s/**/*.py")
-- grep: search for text within files
+- grep: search for text within files (supports regex, context lines, case-insensitive, output modes)
 
 # Execute Tool
 
@@ -370,6 +390,29 @@ func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	if err != nil {
 		log.Printf("[agent] failed to create filesystem middleware: %v", err)
 	} else {
+		// Replace the built-in grep tool with our enhanced version and add patch_file.
+		grepTool, grepErr := filesystem.NewGrepTool(fsBackend)
+		if grepErr != nil {
+			log.Printf("[agent] failed to create grep tool: %v", grepErr)
+		} else {
+			// Remove the built-in grep tool (same name) so ours takes its place.
+			filtered := make([]tool.BaseTool, 0, len(filesystemMw.AdditionalTools))
+			for _, t := range filesystemMw.AdditionalTools {
+				info, infoErr := t.Info(ctx)
+				if infoErr != nil || info.Name != filesystem.GrepToolID {
+					filtered = append(filtered, t)
+				}
+			}
+			filesystemMw.AdditionalTools = append(filtered, grepTool)
+		}
+
+		patchTool, patchErr := filesystem.NewPatchTool(fsBackend)
+		if patchErr != nil {
+			log.Printf("[agent] failed to create patch_file tool: %v", patchErr)
+		} else {
+			filesystemMw.AdditionalTools = append(filesystemMw.AdditionalTools, patchTool)
+		}
+
 		middlewares = append(middlewares, filesystemMw)
 	}
 
