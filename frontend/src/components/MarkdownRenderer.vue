@@ -79,15 +79,19 @@ let blockIndex = 0
 // Custom renderer using new marked v13+ API
 const renderer: Partial<import('marked').RendererObject> = {
   code({ text, lang }: Tokens.Code) {
-    const language = lang || 'plaintext'
-    const validLang = hljs.getLanguage(language) ? language : 'plaintext'
-    const highlighted = hljs.highlight(text, { language: validLang }).value
+    const language = lang || ''
+    const validLang = language && hljs.getLanguage(language) ? language : ''
+    // If language is recognized, highlight it; otherwise escape and show as plain text
+    const highlighted = validLang
+      ? hljs.highlight(text, { language: validLang }).value
+      : text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const displayLang = lang || 'text'
     const currentIndex = blockIndex++
 
     return `
       <div class="code-block-wrapper group relative my-3 overflow-hidden rounded-lg border border-border bg-zinc-950">
         <div class="flex items-center justify-between border-b border-border/50 bg-zinc-900 px-4 py-2">
-          <span class="text-xs text-zinc-400">${language}</span>
+          <span class="text-xs text-zinc-400">${displayLang}</span>
           <button
             class="copy-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
             data-code="${encodeURIComponent(text)}"
@@ -100,7 +104,7 @@ const renderer: Partial<import('marked').RendererObject> = {
             <span class="copy-text">Copy</span>
           </button>
         </div>
-        <pre class="overflow-x-auto p-4"><code class="hljs language-${validLang}">${highlighted}</code></pre>
+        <pre class="overflow-x-auto p-4"><code class="hljs${validLang ? ` language-${validLang}` : ''}">${highlighted}</code></pre>
       </div>
     `
   },
