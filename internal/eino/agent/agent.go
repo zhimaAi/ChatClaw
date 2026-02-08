@@ -209,27 +209,44 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 	return ollama.NewChatModel(ctx, cfg)
 }
 
+// AgentResult holds the created agent and a cleanup function that should be
+// called (typically via defer) when the agent is no longer needed. Cleanup
+// releases per-session resources such as headless Chrome processes.
+type AgentResult struct {
+	Agent   adk.Agent
+	Cleanup func()
+}
+
 // NewChatModelAgent creates an ADK ChatModelAgent with tools and middlewares.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool) (adk.Agent, error) {
+// Each call creates its own browserTool instance so that concurrent conversations
+// (tabs) do not share or interfere with each other's browser sessions.
+// The caller MUST call result.Cleanup() when the agent is no longer needed.
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
-	// Re-register BrowserUse factory with the chat model for content extraction.
-	toolRegistry.Register(tools.ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
-		return tools.NewBrowserUseTool(ctx, &tools.BrowserUseConfig{
-			ExtractChatModel: chatModel,
-		})
+	// Create a per-session browserTool. It is lazily initialized (Chrome only
+	// starts if the LLM actually calls the tool), so the cost of creating one
+	// per conversation is negligible.
+	browserTool, err := tools.NewBrowserTool(ctx, &tools.BrowserConfig{
+		Headless:         true,
+		ExtractChatModel: chatModel,
 	})
+	if err != nil {
+		return nil, errs.Wrap("error.chat_browser_tool_failed", err)
+	}
 
-	enabledTools, err := toolRegistry.GetAllTools(ctx)
+	// Get shared tools from the registry, excluding browserTool (it's per-session).
+	enabledTools, err := toolRegistry.GetEnabledToolsExcluding(ctx, nil, tools.ToolIDBrowserUse)
 	if err != nil {
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools))
+	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
+	baseTools = append(baseTools, browserTool)
 	baseTools = append(baseTools, extraTools...)
 
 	agentConfig := &adk.ChatModelAgentConfig{
@@ -251,7 +268,18 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	agentConfig.Middlewares = BuildMiddlewares(ctx)
 
-	return adk.NewChatModelAgent(ctx, agentConfig)
+	agent, err := adk.NewChatModelAgent(ctx, agentConfig)
+	if err != nil {
+		browserTool.Close()
+		return nil, err
+	}
+
+	return &AgentResult{
+		Agent: agent,
+		Cleanup: func() {
+			browserTool.Close()
+		},
+	}, nil
 }
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about

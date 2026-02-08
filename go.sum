@@ -115,8 +115,6 @@ github.com/cloudwego/eino-ext/components/model/ollama v0.1.8 h1:+BStnQlkRxWMV9js
 github.com/cloudwego/eino-ext/components/model/ollama v0.1.8/go.mod h1:C3rf3yy2nEoXFP/CQJne4gbiu1pREKplHKmFlhuOzPE=
 github.com/cloudwego/eino-ext/components/model/openai v0.1.8 h1:uVCE8nNvbhD37xGFgdKESWjvChDSkCAMA+DodhFRBaM=
 github.com/cloudwego/eino-ext/components/model/openai v0.1.8/go.mod h1:K6g2VgULehhJC5dgFdPW3u7gZNZ1p6DhnfA5UhkRpNY=
-github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e h1:o77ZfcqY//PV08N7buc1NhQkLjYURvhVIsvfV1NfA9Q=
-github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e/go.mod h1:a+pHHWgeL8QNNIzAKyXKOeoLJiYXX8tTeQy2wMQkfIY=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e h1:mt+3CkZmfgpM1YtfUAd4cmUxlw5TBBV3gI0Uq0FyP78=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e/go.mod h1:Np0BXy/9hPRu3wCgn+ij6L7YsjFcybVzg1k7uYOXh0M=
 github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e h1:3Wt1PWi51xlwKGSR2hg65+HKRKwkmoIiot6gk2YB5/s=
