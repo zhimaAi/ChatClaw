@@ -218,7 +218,8 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	// Re-register BrowserUse factory with the chat model for content extraction.
 	toolRegistry.Register(tools.ToolIDBrowserUse, func(ctx context.Context) (tool.BaseTool, error) {
-		return tools.NewBrowserUseTool(ctx, &tools.BrowserUseConfig{
+		return tools.NewBrowserTool(ctx, &tools.BrowserConfig{
+			Headless:         true,
 			ExtractChatModel: chatModel,
 		})
 	})

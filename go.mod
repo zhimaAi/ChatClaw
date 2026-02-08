@@ -4,6 +4,8 @@ go 1.25
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
+	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
+	github.com/chromedp/chromedp v0.13.3
 	github.com/cloudwego/eino v0.7.28
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e
@@ -15,7 +17,6 @@ require (
 	github.com/cloudwego/eino-ext/components/model/gemini v0.1.28
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
-	github.com/cloudwego/eino-ext/components/tool/browseruse v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e
 	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260204064123-1f91f547c77e
@@ -74,8 +75,6 @@ require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
-	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8 // indirect
-	github.com/chromedp/chromedp v0.13.3 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
