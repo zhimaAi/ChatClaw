@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProviderList from './ProviderList.vue'
 import ProviderDetail from './ProviderDetail.vue'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import type {
   Provider,
   ProviderWithModels,
@@ -18,6 +19,7 @@ const providerWithModels = ref<ProviderWithModels | null>(null)
 const loadingProviders = ref(false)
 const loadingDetail = ref(false)
 const loadError = ref<string | null>(null)
+const detailError = ref<string | null>(null)
 
 // 加载供应商列表
 const loadProviders = async () => {
@@ -41,11 +43,24 @@ const loadProviders = async () => {
 // 加载供应商详情（包含模型）
 const loadProviderDetail = async (providerId: string) => {
   loadingDetail.value = true
+  detailError.value = null
   try {
     const detail = await ProvidersService.GetProviderWithModels(providerId)
     providerWithModels.value = detail
   } catch (error) {
     console.error('Failed to load provider detail:', error)
+    // Fallback: still render provider base info so user can edit endpoint/key.
+    // Model list may fail due to invalid endpoint/network; shouldn't block settings UI.
+    detailError.value = getErrorMessage(error) || t('settings.modelService.loadFailed')
+    try {
+      const provider = await ProvidersService.GetProvider(providerId)
+      if (provider) {
+        providerWithModels.value = { provider, model_groups: [] } as ProviderWithModels
+        return
+      }
+    } catch (e) {
+      console.error('Failed to load provider base info:', e)
+    }
     providerWithModels.value = null
   } finally {
     loadingDetail.value = false
@@ -112,6 +127,7 @@ onMounted(() => {
     <ProviderDetail
       :provider-with-models="providerWithModels"
       :loading="loadingDetail"
+      :error-message="detailError"
       @update="handleProviderUpdate"
       @refresh="handleRefresh"
     />
