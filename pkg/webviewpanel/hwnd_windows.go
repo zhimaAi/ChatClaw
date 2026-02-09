@@ -4,6 +4,7 @@ package webviewpanel
 
 import (
 	"fmt"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -25,28 +26,70 @@ func FindWindowByTitle(title string) uintptr {
 	return hwnd
 }
 
+// ---------- Reusable EnumWindows / EnumChildWindows callbacks ----------
+// Created once to avoid exhausting Go's fixed callback-slot table on Windows.
+
+var (
+	fwbtCBOnce       sync.Once
+	fwbtCB           uintptr
+	fwbtMu           sync.Mutex
+	fwbtSubstring    string
+	fwbtResult       uintptr
+)
+
+func fwbtEnumProc(hwnd, lParam uintptr) uintptr {
+	title := make([]uint16, 256)
+	procGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&title[0])), 256)
+	windowTitle := syscall.UTF16ToString(title)
+	if windowTitle != "" && contains(windowTitle, fwbtSubstring) {
+		fwbtResult = hwnd
+		return 0
+	}
+	return 1
+}
+
+var (
+	fcwbcCBOnce      sync.Once
+	fcwbcCB          uintptr
+	fcwbcMu          sync.Mutex
+	fcwbcSubstring   string
+	fcwbcBestHwnd    uintptr
+	fcwbcBestArea    int64
+)
+
+func fcwbcEnumProc(hwnd, lParam uintptr) uintptr {
+	class := make([]uint16, 256)
+	procGetClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&class[0])), 256)
+	className := syscall.UTF16ToString(class)
+	if className == "" || !contains(className, fcwbcSubstring) {
+		return 1
+	}
+	var rect RECT
+	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
+	w := int64(rect.Right - rect.Left)
+	h := int64(rect.Bottom - rect.Top)
+	area := w * h
+	if area > fcwbcBestArea {
+		fcwbcBestHwnd = hwnd
+		fcwbcBestArea = area
+	}
+	return 1
+}
+
 // FindWindowByTitleContains finds a window whose title contains the given substring.
 // Returns the window handle (HWND) or 0 if not found.
 func FindWindowByTitleContains(titleSubstring string) uintptr {
-	var result uintptr
+	fwbtMu.Lock()
+	defer fwbtMu.Unlock()
 
-	callback := syscall.NewCallback(func(hwnd, lParam uintptr) uintptr {
-		title := make([]uint16, 256)
-		procGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&title[0])), 256)
-		windowTitle := syscall.UTF16ToString(title)
+	fwbtSubstring = titleSubstring
+	fwbtResult = 0
 
-		if windowTitle != "" {
-			// Check if title contains the substring
-			if contains(windowTitle, titleSubstring) {
-				result = hwnd
-				return 0 // Stop enumeration
-			}
-		}
-		return 1 // Continue enumeration
+	fwbtCBOnce.Do(func() {
+		fwbtCB = syscall.NewCallback(fwbtEnumProc)
 	})
-
-	procEnumWindows.Call(callback, 0)
-	return result
+	procEnumWindows.Call(fwbtCB, 0)
+	return fwbtResult
 }
 
 // FindChildWindowByClassContains finds a child window whose class name contains the given substring.
@@ -57,37 +100,18 @@ func FindChildWindowByClassContains(parentHwnd uintptr, classSubstring string) u
 		return 0
 	}
 
-	type best struct {
-		hwnd uintptr
-		area int64
-	}
-	var b best
+	fcwbcMu.Lock()
+	defer fcwbcMu.Unlock()
 
-	callback := syscall.NewCallback(func(hwnd, lParam uintptr) uintptr {
-		// Get class name
-		class := make([]uint16, 256)
-		procGetClassNameW.Call(hwnd, uintptr(unsafe.Pointer(&class[0])), 256)
-		className := syscall.UTF16ToString(class)
+	fcwbcSubstring = classSubstring
+	fcwbcBestHwnd = 0
+	fcwbcBestArea = 0
 
-		if className == "" || !contains(className, classSubstring) {
-			return 1
-		}
-
-		// Estimate size (area) to pick the main host
-		var rect RECT
-		procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-		w := int64(rect.Right - rect.Left)
-		h := int64(rect.Bottom - rect.Top)
-		area := w * h
-		if area > b.area {
-			b.hwnd = hwnd
-			b.area = area
-		}
-		return 1
+	fcwbcCBOnce.Do(func() {
+		fcwbcCB = syscall.NewCallback(fcwbcEnumProc)
 	})
-
-	procEnumChildWindows.Call(parentHwnd, callback, 0)
-	return b.hwnd
+	procEnumChildWindows.Call(parentHwnd, fcwbcCB, 0)
+	return fcwbcBestHwnd
 }
 
 // GetClientSizeDIP returns the client width/height in DIP (96 DPI base).

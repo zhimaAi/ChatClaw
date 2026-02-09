@@ -5,11 +5,46 @@ package winsnap
 import (
 	"errors"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/sys/windows"
 )
+
+// Package-level state for the EnumWindows callback.
+// The callback is created once (via sync.Once) to avoid exhausting the
+// Go runtime's fixed-size callback table (~2000 slots) on Windows.
+// Access is serialised by enumMu; EnumWindows invokes the callback
+// synchronously so the lock is held for the entire enumeration.
+var (
+	enumCBOnce  sync.Once
+	enumCB      uintptr
+	enumMu      sync.Mutex
+	enumTargets map[string]struct{}
+	enumResult  string
+)
+
+// enumWindowsProc is the single, reusable EnumWindows callback.
+func enumWindowsProc(hwnd uintptr, _ uintptr) uintptr {
+	h := windows.HWND(hwnd)
+	if !isTopLevelCandidate(h) {
+		return 1
+	}
+	pid, perr := getWindowProcessID(h)
+	if perr != nil || pid == 0 {
+		return 1
+	}
+	exe, eerr := getProcessImageBaseName(pid)
+	if eerr != nil {
+		return 1
+	}
+	if _, ok := enumTargets[strings.ToLower(exe)]; !ok {
+		return 1
+	}
+	enumResult = exe
+	return 0 // stop enumeration
+}
 
 // TopMostVisibleProcessName returns the process image base name (e.g. "WXWork.exe")
 // of the top-most (highest z-order) visible top-level window that belongs to any
@@ -32,31 +67,22 @@ func TopMostVisibleProcessName(targetProcessNames []string) (processName string,
 		return "", false, nil
 	}
 
-	var out string
-	cb := windows.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
-		h := windows.HWND(hwnd)
-		if !isTopLevelCandidate(h) {
-			return 1
-		}
-		pid, perr := getWindowProcessID(h)
-		if perr != nil || pid == 0 {
-			return 1
-		}
-		exe, eerr := getProcessImageBaseName(pid)
-		if eerr != nil {
-			return 1
-		}
-		if _, ok := targets[strings.ToLower(exe)]; !ok {
-			return 1
-		}
-		out = exe
-		return 0
+	// Serialise access to the shared callback state.
+	enumMu.Lock()
+	defer enumMu.Unlock()
+
+	enumTargets = targets
+	enumResult = ""
+
+	enumCBOnce.Do(func() {
+		enumCB = windows.NewCallback(enumWindowsProc)
 	})
-	_, _, _ = procEnumWindows.Call(cb, 0)
-	if out == "" {
+
+	_, _, _ = procEnumWindows.Call(enumCB, 0)
+	if enumResult == "" {
 		return "", false, nil
 	}
-	return out, true, nil
+	return enumResult, true, nil
 }
 
 // MoveOffscreen moves the given window far outside the visible desktop area.

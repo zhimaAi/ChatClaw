@@ -837,6 +837,7 @@ onUnmounted(() => {
         :send-disabled-reason="sendDisabledReason"
         :chat-messages="chatMessages"
         :active-agent-id="activeAgentId"
+        :is-snap-mode="isSnapMode"
         @update:chat-input="chatInput = $event"
         @update:selected-model-key="selectedModelKey = $event"
         @update:enable-thinking="enableThinking = $event"

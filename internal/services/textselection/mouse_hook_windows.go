@@ -42,6 +42,9 @@ var (
 
 	mouseHookInstance   *MouseHookWatcher
 	mouseHookInstanceMu sync.Mutex
+
+	mouseHookCBOnce sync.Once
+	mouseHookCB     uintptr
 )
 
 const (
@@ -130,10 +133,12 @@ func (w *MouseHookWatcher) run() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	cb := syscall.NewCallback(lowLevelMouseProc)
+	mouseHookCBOnce.Do(func() {
+		mouseHookCB = syscall.NewCallback(lowLevelMouseProc)
+	})
 	hook, _, _ := procSetWindowsHookExW.Call(
 		uintptr(whMouseLL),
-		cb,
+		mouseHookCB,
 		0,
 		0,
 	)

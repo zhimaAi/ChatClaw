@@ -1,5 +1,6 @@
-import { computed } from 'vue'
+import { computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Events } from '@wailsio/runtime'
 import { type Locale } from '../locales'
 import { Service as I18nService } from '@bindings/willchat/internal/services/i18n'
 import { SettingsService } from '@bindings/willchat/internal/services/settings'
@@ -45,12 +46,14 @@ export function useLocale() {
 
   // 切换语言（同时更新前端和后端）
   async function switchLocale(newLocale: Locale) {
-    // Persist to DB and update backend localizer
+    // Persist to DB and update backend localizer.
+    // I18nService.SetLocale also emits 'locale:changed' from Go backend
+    // so all windows (snap, selection) will be notified.
     await Promise.all([
       SettingsService.SetValue('language', newLocale),
       I18nService.SetLocale(newLocale),
     ])
-    // 更新前端
+    // 更新当前窗口前端
     locale.value = newLocale
   }
 
@@ -58,4 +61,25 @@ export function useLocale() {
     locale: currentLocale,
     switchLocale,
   }
+}
+
+/**
+ * Listen for locale changes broadcast from Go backend and sync i18n.
+ * Call once in each window's App.vue setup (snap, selection, etc.).
+ * Returns an unsubscribe function.
+ */
+export function useLocaleSync(localeRef?: Ref<string>) {
+  const i18n = localeRef ?? useI18n().locale
+
+  const unsubscribe = Events.On('locale:changed', (event: any) => {
+    // Go backend emits map[string]string{"locale": "xx"}.
+    // Wails wraps it as event.data (object or array).
+    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const newLocale = payload?.locale
+    if (newLocale && (newLocale === 'zh-CN' || newLocale === 'en-US')) {
+      i18n.value = newLocale
+    }
+  })
+
+  return unsubscribe
 }

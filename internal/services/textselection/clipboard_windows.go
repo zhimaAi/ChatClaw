@@ -90,6 +90,9 @@ type msg struct {
 var (
 	clipboardWatcherInstance *ClipboardWatcher
 	clipboardWatcherMu       sync.Mutex
+
+	clipboardWndProcCBOnce sync.Once
+	clipboardWndProcCB     uintptr
 )
 
 // NewClipboardWatcher creates a new clipboard watcher.
@@ -135,10 +138,13 @@ func (w *ClipboardWatcher) run() {
 	className, _ := syscall.UTF16PtrFromString("ClipboardWatcherClass")
 	windowName, _ := syscall.UTF16PtrFromString("ClipboardWatcher")
 
+	clipboardWndProcCBOnce.Do(func() {
+		clipboardWndProcCB = syscall.NewCallback(clipboardWndProc)
+	})
 	wc := wndClassExW{
 		CbSize:        uint32(unsafe.Sizeof(wndClassExW{})),
 		Style:         csHRedraw | csVRedraw,
-		LpfnWndProc:   syscall.NewCallback(clipboardWndProc),
+		LpfnWndProc:   clipboardWndProcCB,
 		LpszClassName: className,
 	}
 

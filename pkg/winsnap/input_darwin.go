@@ -91,36 +91,22 @@ static void winsnap_simulate_cmd_v() {
 	CFRelease(source);
 }
 
-// Simulate Enter key using CGEventPostToPid to send directly to target process.
-// Some apps (like DingTalk) filter events from kCGEventSourceStateHIDSystemState,
-// so we need to post directly to the target process.
+// Simulate Enter key via CGEventPost through Window Server.
+// Using kCGEventSourceStateHIDSystemState + CGEventPost(kCGHIDEventTap) so the event
+// travels the same path as a physical key press.
 static void winsnap_simulate_enter_to_pid(pid_t targetPid) {
-	// Use kCGEventSourceStateCombinedSessionState which is more compatible with apps
-	// that filter synthetic events
-	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
-	if (!source) {
-		// Fallback to HID system state
-		source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-		if (!source) return;
-	}
+	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+	if (!source) return;
 
 	CGEventRef keyDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, true);
 	CGEventSetTimestamp(keyDown, current_uptime_nsec());
-	
+
 	CGEventRef keyUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Return, false);
 	CGEventSetTimestamp(keyUp, current_uptime_nsec());
 
-	if (targetPid > 0) {
-		// Post directly to target process - this bypasses app-level event filtering
-		CGEventPostToPid(targetPid, keyDown);
-		usleep(20000); // 20ms - slightly longer for process-targeted events
-		CGEventPostToPid(targetPid, keyUp);
-	} else {
-		// Fallback to system-wide post
-		CGEventPost(kCGHIDEventTap, keyDown);
-		usleep(10000);
-		CGEventPost(kCGHIDEventTap, keyUp);
-	}
+	CGEventPost(kCGHIDEventTap, keyDown);
+	usleep(20000); // 20ms
+	CGEventPost(kCGHIDEventTap, keyUp);
 
 	CFRelease(keyDown);
 	CFRelease(keyUp);
@@ -132,15 +118,11 @@ static void winsnap_simulate_enter() {
 	winsnap_simulate_enter_to_pid(0);
 }
 
-// Simulate Cmd+Enter to target process
+// Simulate Cmd+Enter via CGEventPost through Window Server.
 static void winsnap_simulate_cmd_enter_to_pid(pid_t targetPid) {
-	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateCombinedSessionState);
-	if (!source) {
-		source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
-		if (!source) return;
-	}
+	CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+	if (!source) return;
 
-	// For Cmd+Enter, we need to send Cmd down, then Return down/up, then Cmd up
 	CGEventRef cmdDown = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Command, true);
 	CGEventSetTimestamp(cmdDown, current_uptime_nsec());
 
@@ -155,23 +137,13 @@ static void winsnap_simulate_cmd_enter_to_pid(pid_t targetPid) {
 	CGEventRef cmdUp = CGEventCreateKeyboardEvent(source, (CGKeyCode)kVK_Command, false);
 	CGEventSetTimestamp(cmdUp, current_uptime_nsec());
 
-	if (targetPid > 0) {
-		CGEventPostToPid(targetPid, cmdDown);
-		usleep(10000);
-		CGEventPostToPid(targetPid, keyDown);
-		usleep(20000);
-		CGEventPostToPid(targetPid, keyUp);
-		usleep(10000);
-		CGEventPostToPid(targetPid, cmdUp);
-	} else {
-		CGEventPost(kCGHIDEventTap, cmdDown);
-		usleep(10000);
-		CGEventPost(kCGHIDEventTap, keyDown);
-		usleep(10000);
-		CGEventPost(kCGHIDEventTap, keyUp);
-		usleep(10000);
-		CGEventPost(kCGHIDEventTap, cmdUp);
-	}
+	CGEventPost(kCGHIDEventTap, cmdDown);
+	usleep(10000);
+	CGEventPost(kCGHIDEventTap, keyDown);
+	usleep(20000);
+	CGEventPost(kCGHIDEventTap, keyUp);
+	usleep(10000);
+	CGEventPost(kCGHIDEventTap, cmdUp);
 
 	CFRelease(cmdDown);
 	CFRelease(keyDown);

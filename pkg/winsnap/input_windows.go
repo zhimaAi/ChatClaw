@@ -5,12 +5,59 @@ package winsnap
 import (
 	"errors"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+// Reusable callback for getProcessWindowsBoundsForClick.
+var (
+	gpwbClickCBOnce  sync.Once
+	gpwbClickCB      uintptr
+	gpwbClickMu      sync.Mutex
+	gpwbClickPID     uint32
+	gpwbClickBounds  rectInput
+	gpwbClickFound   bool
+)
+
+func gpwbClickEnumProc(hwnd uintptr, _ uintptr) uintptr {
+	h := windows.HWND(hwnd)
+	if !isWindowVisible(h) || isWindowIconic(h) {
+		return 1
+	}
+	winPID, err := getWindowProcessID(h)
+	if err != nil || winPID != gpwbClickPID {
+		return 1
+	}
+	ex := getExStyle(h)
+	if ex&wsExToolWindow != 0 {
+		return 1
+	}
+	var r rect
+	if err := getWindowRect(h, &r); err != nil {
+		return 1
+	}
+	if r.Right <= r.Left || r.Bottom <= r.Top {
+		return 1
+	}
+	if r.Left < gpwbClickBounds.left {
+		gpwbClickBounds.left = r.Left
+	}
+	if r.Top < gpwbClickBounds.top {
+		gpwbClickBounds.top = r.Top
+	}
+	if r.Right > gpwbClickBounds.right {
+		gpwbClickBounds.right = r.Right
+	}
+	if r.Bottom > gpwbClickBounds.bottom {
+		gpwbClickBounds.bottom = r.Bottom
+	}
+	gpwbClickFound = true
+	return 1
+}
 
 var (
 	procOpenClipboard     = modUser32.NewProc("OpenClipboard")
@@ -198,7 +245,11 @@ type childWindowInfo struct {
 	title     string
 }
 
-var enumChildResults []childWindowInfo
+var (
+	enumChildResults  []childWindowInfo
+	enumChildCBOnce   sync.Once
+	enumChildCB       uintptr
+)
 
 // enumChildCallback is called for each child window
 func enumChildCallback(hwnd uintptr, lParam uintptr) uintptr {
@@ -214,8 +265,11 @@ func enumChildCallback(hwnd uintptr, lParam uintptr) uintptr {
 
 // enumerateChildWindows returns all child windows of a parent
 func enumerateChildWindows(parentHwnd uintptr) []childWindowInfo {
+	enumChildCBOnce.Do(func() {
+		enumChildCB = syscall.NewCallback(enumChildCallback)
+	})
 	enumChildResults = nil
-	procEnumChildWindows.Call(parentHwnd, syscall.NewCallback(enumChildCallback), 0)
+	procEnumChildWindows.Call(parentHwnd, enumChildCB, 0)
 	return enumChildResults
 }
 
@@ -367,63 +421,24 @@ func getProcessWindowsBoundsForClick(targetProcess string) (bounds rectInput, fo
 		return bounds, false
 	}
 
-	// Initialize bounds with extreme values
-	bounds = rectInput{
-		left:   0x7FFFFFFF, // max int32
+	gpwbClickMu.Lock()
+	defer gpwbClickMu.Unlock()
+
+	gpwbClickPID = targetPID
+	gpwbClickBounds = rectInput{
+		left:   0x7FFFFFFF,
 		top:    0x7FFFFFFF,
-		right:  -0x7FFFFFFF, // min int32
+		right:  -0x7FFFFFFF,
 		bottom: -0x7FFFFFFF,
 	}
+	gpwbClickFound = false
 
-	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
-		h := windows.HWND(hwnd)
-
-		// Skip invisible and minimized windows
-		if !isWindowVisible(h) || isWindowIconic(h) {
-			return 1
-		}
-
-		// Check if window belongs to target process
-		winPID, err := getWindowProcessID(h)
-		if err != nil || winPID != targetPID {
-			return 1
-		}
-
-		// Skip tool windows
-		ex := getExStyle(h)
-		if ex&wsExToolWindow != 0 {
-			return 1
-		}
-
-		var r rect
-		if err := getWindowRect(h, &r); err != nil {
-			return 1
-		}
-
-		// Skip windows with zero or negative size
-		if r.Right <= r.Left || r.Bottom <= r.Top {
-			return 1
-		}
-
-		// Expand bounds
-		if r.Left < bounds.left {
-			bounds.left = r.Left
-		}
-		if r.Top < bounds.top {
-			bounds.top = r.Top
-		}
-		if r.Right > bounds.right {
-			bounds.right = r.Right
-		}
-		if r.Bottom > bounds.bottom {
-			bounds.bottom = r.Bottom
-		}
-		found = true
-		return 1
+	gpwbClickCBOnce.Do(func() {
+		gpwbClickCB = syscall.NewCallback(gpwbClickEnumProc)
 	})
-	_, _, _ = procEnumWindows.Call(cb, 0)
+	_, _, _ = procEnumWindows.Call(gpwbClickCB, 0)
 
-	return bounds, found
+	return gpwbClickBounds, gpwbClickFound
 }
 
 // clickInputAreaOfWindow clicks near the bottom of the window where input box usually is
