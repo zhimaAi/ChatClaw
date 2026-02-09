@@ -1,6 +1,9 @@
 package bootstrap
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"runtime"
@@ -200,6 +203,44 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	}); err != nil {
 		sqlite.Close()
 		return nil, nil, fmt.Errorf("init task manager: %w", err)
+	}
+
+	// ========== ChatWiki embedding 全局设置对齐 ==========
+	// 约束：
+	// - embedding provider/model 来自 ChatWiki 的模型列表（已在启动时 SyncChatWikiModels 刷新到本地 models 表）
+	// - embedding dimension 固定为 1024
+	// - 通过 SettingsService.UpdateEmbeddingConfig 更新 settings +（必要时）重建 doc_vec + 提交全量重嵌入任务
+	{
+		db := sqlite.DB()
+		if db != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			var embeddingModelID sql.NullString
+			err := db.NewSelect().
+				Table("models").
+				Column("model_id").
+				Where("provider_id = ?", "chatwiki").
+				Where("type = ?", "embedding").
+				Where("enabled = ?", true).
+				OrderExpr("sort_order ASC").
+				Limit(1).
+				Scan(ctx, &embeddingModelID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				app.Logger.Warn("query chatwiki embedding model failed (non-fatal)", "error", err)
+			} else if embeddingModelID.Valid && strings.TrimSpace(embeddingModelID.String) != "" {
+				if err := settings.NewSettingsService(app).UpdateEmbeddingConfig(settings.UpdateEmbeddingConfigInput{
+					ProviderID: "chatwiki",
+					ModelID:    embeddingModelID.String,
+					Dimension:  1024,
+				}); err != nil {
+					app.Logger.Warn("sync chatwiki embedding settings failed (non-fatal)", "error", err)
+				}
+			} else {
+				// No embedding models available from ChatWiki cache; keep existing settings.
+				app.Logger.Warn("no chatwiki embedding model found; keep existing embedding settings")
+			}
+		}
 	}
 
 	// ========== 注册应用服务 ==========
