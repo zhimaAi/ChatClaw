@@ -207,19 +207,12 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	// 获取目标进程 PID，用于计算多窗口整体边界
-	targetPID, err := getWindowProcessID(target)
-	if err != nil {
-		return nil, fmt.Errorf("winsnap: failed to get target process ID: %w", err)
-	}
-
 	f := &follower{
-		self:      windows.HWND(selfHWND),
-		target:    target,
-		targetPID: targetPID,
-		gap:       opts.Gap,
-		ready:     make(chan struct{}),
-		app:       opts.App,
+		self:   windows.HWND(selfHWND),
+		target: target,
+		gap:    opts.Gap,
+		ready:  make(chan struct{}),
+		app:    opts.App,
 	}
 	if err := f.start(); err != nil {
 		_ = f.Stop()
@@ -229,11 +222,10 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 }
 
 type follower struct {
-	self      windows.HWND
-	target    windows.HWND
-	targetPID uint32 // 目标进程 PID，用于计算多窗口整体边界
-	gap       int
-	app       *application.App
+	self   windows.HWND
+	target windows.HWND
+	gap    int
+	app    *application.App
 
 	mu        sync.Mutex
 	hookLoc   uintptr
@@ -241,9 +233,9 @@ type follower struct {
 	tid       uint32
 	ready     chan struct{}
 	closed    bool
-	selfWidth int32 // 缓存自己的宽度
+	selfWidth int32 // cached initial width of our window
 
-	// Throttling for syncToTarget to avoid overwhelming system with EnumWindows calls
+	// Throttling for syncToTarget to avoid overwhelming system calls
 	syncing int32 // atomic flag: 1 = currently syncing, 0 = idle
 }
 
@@ -372,8 +364,9 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		if idObject != objidWindow || idChild != 0 {
 			return 0
 		}
-		// Skip if the changed window is our own winsnap window
-		if hwnd == f.self {
+		// Only track the anchored main target window — ignore popup/preview windows
+		// from the same process. This matches the demo project's proven approach.
+		if hwnd != f.target {
 			return 0
 		}
 		_ = f.syncToTarget()
@@ -384,7 +377,6 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		}
 		// When target becomes foreground, we need to ensure our window is also
 		// brought to the top, placed right after the target in z-order.
-		// Use syncToTargetWithZOrderFix to handle this case.
 		_ = f.syncToTargetWithZOrderFix()
 	default:
 		return 0
@@ -429,6 +421,48 @@ func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, fo
 	return gpwbBounds, gpwbFound
 }
 
+// getTargetBounds returns the bounds of the single anchored target window.
+// Always uses f.target only — never enumerates other process windows — so that
+// popup / preview windows from the same process cannot distort the position.
+func (f *follower) getTargetBounds() (targetBounds rect, err error) {
+	if err = getExtendedFrameBounds(f.target, &targetBounds); err != nil {
+		var targetWin rect
+		if err = getWindowRect(f.target, &targetWin); err != nil {
+			return
+		}
+		targetBounds = targetWin
+	}
+	return
+}
+
+// calcSnapGeometry computes the x, y, width, height for positioning the winsnap
+// window to the right of the target window.
+func (f *follower) calcSnapGeometry(targetBounds rect) (x, y, width, height int32, err error) {
+	var selfWin, selfFrame rect
+	if err = getWindowRect(f.self, &selfWin); err != nil {
+		return
+	}
+	if err = getExtendedFrameBounds(f.self, &selfFrame); err != nil {
+		selfFrame = selfWin
+		err = nil // non-fatal
+	}
+
+	// Windows 10/11 often have an invisible resize border or extended frame.
+	// Align *visible* frame edges, not the raw window rect edges, so "Gap=0"
+	// looks truly adjacent.
+	selfOffsetX := selfFrame.Left - selfWin.Left
+	selfOffsetY := selfFrame.Top - selfWin.Top
+
+	x = targetBounds.Right + int32(f.gap) - selfOffsetX
+	y = targetBounds.Top - selfOffsetY
+	height = targetBounds.Bottom - targetBounds.Top
+	width = f.selfWidth
+	if width <= 0 {
+		width = selfWin.Right - selfWin.Left
+	}
+	return
+}
+
 func (f *follower) syncToTarget() error {
 	// Throttle: skip if already syncing to avoid overwhelming system
 	if !atomic.CompareAndSwapInt32(&f.syncing, 0, 1) {
@@ -440,97 +474,46 @@ func (f *follower) syncToTarget() error {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	// Use single window bounds for performance in high-frequency callbacks.
-	// Multi-window bounds calculation (EnumWindows) is too expensive to call
-	// on every location change event during window dragging.
-	var targetBounds rect
-	if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
-		var targetWin rect
-		if err := getWindowRect(f.target, &targetWin); err != nil {
-			return err
-		}
-		targetBounds = targetWin
-	}
-
-	var selfWin, selfFrame rect
-	if err := getWindowRect(f.self, &selfWin); err != nil {
+	targetBounds, err := f.getTargetBounds()
+	if err != nil {
 		return err
 	}
-	if err := getExtendedFrameBounds(f.self, &selfFrame); err != nil {
-		selfFrame = selfWin
+
+	x, y, width, height, err := f.calcSnapGeometry(targetBounds)
+	if err != nil {
+		return err
 	}
 
-	// Windows 10/11 often have an invisible resize border or extended frame.
-	// Align *visible* frame edges, not the raw window rect edges, so "Gap=0"
-	// looks truly adjacent.
-	selfOffsetX := selfFrame.Left - selfWin.Left
-	selfOffsetY := selfFrame.Top - selfWin.Top
-
-	// Position at the right edge of combined bounds
-	x := targetBounds.Right + int32(f.gap) - selfOffsetX
-	y := targetBounds.Top - selfOffsetY
-
-	// Use combined height of target windows
-	targetHeight := targetBounds.Bottom - targetBounds.Top
-	width := f.selfWidth
-	if width <= 0 {
-		width = selfWin.Right - selfWin.Left
-	}
-
-	// 与目标窗口同层级：
-	// - 若目标是 top-most，则吸附框也进入 top-most 组，并紧贴在目标窗口之上
-	// - 若目标不是 top-most，则确保吸附框不在 top-most 组，并紧贴在目标窗口之上
+	// Match z-order layer with target window:
+	// - If target is top-most, promote self into top-most group and place after target.
+	// - Otherwise, ensure self is not top-most and place after target.
 	if isTopMost(f.target) {
-		// Ensure self is top-most first (no move/size), then place after target.
 		_ = setWindowTopMostNoActivate(f.self)
-		return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
+		return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, height)
 	}
 	_ = setWindowNoTopMostNoActivate(f.self)
-	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
+	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, height)
 }
 
 // syncToTargetWithZOrderFix is called when the target window becomes foreground.
 // It ensures our winsnap window is brought to the top along with the target.
 // This is needed because SetWindowPos with insertAfter=target may not bring our
 // window above other windows that were previously above us.
+//
+// Uses the same single-window bounds as syncToTarget (anchored to f.target only).
 func (f *follower) syncToTargetWithZOrderFix() error {
 	if !isWindow(f.target) {
 		return errors.New("winsnap: target window is not valid")
 	}
 
-	// Get combined bounds of all windows belonging to target process
-	targetBounds, found := getProcessWindowsBounds(f.targetPID, f.self)
-	if !found {
-		// Fallback to single window if no bounds found
-		var targetWin rect
-		if err := getWindowRect(f.target, &targetWin); err != nil {
-			return err
-		}
-		if err := getExtendedFrameBounds(f.target, &targetBounds); err != nil {
-			targetBounds = targetWin
-		}
-	}
-
-	var selfWin, selfFrame rect
-	if err := getWindowRect(f.self, &selfWin); err != nil {
+	targetBounds, err := f.getTargetBounds()
+	if err != nil {
 		return err
 	}
-	if err := getExtendedFrameBounds(f.self, &selfFrame); err != nil {
-		selfFrame = selfWin
-	}
 
-	selfOffsetX := selfFrame.Left - selfWin.Left
-	selfOffsetY := selfFrame.Top - selfWin.Top
-
-	// Position at the right edge of combined bounds
-	x := targetBounds.Right + int32(f.gap) - selfOffsetX
-	y := targetBounds.Top - selfOffsetY
-
-	// Use combined height of target windows
-	targetHeight := targetBounds.Bottom - targetBounds.Top
-	width := f.selfWidth
-	if width <= 0 {
-		width = selfWin.Right - selfWin.Left
+	x, y, width, height, err := f.calcSnapGeometry(targetBounds)
+	if err != nil {
+		return err
 	}
 
 	// When target becomes foreground, we need to ensure winsnap is also visible.
@@ -543,7 +526,7 @@ func (f *follower) syncToTargetWithZOrderFix() error {
 		// Explicitly bring to top first before positioning after target
 		_ = bringWindowToTopNoActivate(f.self)
 	}
-	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, targetHeight)
+	return setWindowPosWithSizeAfter(f.self, f.target, x, y, width, height)
 }
 
 func normalizeProcessName(name string) string {
@@ -600,8 +583,8 @@ func findMainWindowByProcessNameIncludingMinimized(processName string) (windows.
 }
 
 // findMainWindowByProcessNameEx finds a representative main window by process name.
-// This is used for z-order management and event listening. The actual positioning
-// uses getProcessWindowsBounds to consider all windows.
+// This is used for both event listening and position anchoring — the follower
+// only tracks this single window (no multi-window combined bounds).
 // If includeMinimized is true, it will also consider minimized windows.
 func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (windows.HWND, error) {
 	fmwMu.Lock()
@@ -645,6 +628,11 @@ func isTopLevelCandidate(hwnd windows.HWND) bool {
 	if getWindowOwner(hwnd) != 0 && ex&wsExAppWindow == 0 {
 		return false
 	}
+	// NOTE: Do NOT filter on WS_POPUP here. Many modern apps (WeChat, DingTalk)
+	// use WS_POPUP for their main window because they implement custom title bars.
+	// The real protection against popup/preview interference comes from:
+	// - winEventProc only tracking f.target (ignores other process windows)
+	// - syncToTarget using single-window bounds (no combined bounds)
 	return true
 }
 
