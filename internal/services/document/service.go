@@ -801,7 +801,10 @@ func (s *DocumentService) processDocument(docID, libraryID int64, runID string, 
 			Column("processing_run_id").
 			Where("id = ?", docID).
 			Scan(ctx, &currentRunID); err != nil {
-			return false
+			// DB query error is transient (e.g. SQLITE_BUSY); optimistically continue
+			// to avoid silently dropping the final completion event.
+			s.app.Logger.Warn("shouldContinue: query failed, optimistically continuing", "docID", docID, "error", err)
+			return true
 		}
 		return currentRunID == runID
 	}
