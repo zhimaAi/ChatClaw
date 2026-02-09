@@ -501,6 +501,10 @@ export default {
       selectFile: 'Select File',
       loadFailed: 'Failed to load documents',
       noMore: 'No more',
+      sort: {
+        createdDesc: 'Newest first',
+        createdAsc: 'Oldest first',
+      },
       fileTypes: {
         documents: 'Document Files',
         all: 'All Files',
