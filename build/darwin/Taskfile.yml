@@ -5,9 +5,9 @@ includes:
 
 vars:
   # Signing configuration - edit these values for your project
-  # SIGN_IDENTITY: "Developer ID Application: Your Company (TEAMID)"
-  # KEYCHAIN_PROFILE: "my-notarize-profile"
-  # ENTITLEMENTS: "build/darwin/entitlements.plist"
+  SIGN_IDENTITY: "Developer ID Application: Sesame Xiaoshi Network Technology (Wuhan) Co., Ltd. (X7Q4CHLWN6)"
+  KEYCHAIN_PROFILE: "willchat-profile"
+  ENTITLEMENTS: "build/darwin/entitlements.plist"
 
   # Docker image for cross-compilation (used when building on non-macOS)
   CROSS_IMAGE: wails-cross
@@ -101,10 +101,12 @@ tasks:
       - task: build
         vars:
           ARCH: amd64
+          DEV: '{{.DEV}}'
           OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-amd64"
       - task: build
         vars:
           ARCH: arm64
+          DEV: '{{.DEV}}'
           OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
     cmds:
       - task: '{{if eq OS "darwin"}}build:universal:lipo:native{{else}}build:universal:lipo:go{{end}}'
@@ -129,6 +131,7 @@ tasks:
       - task: build
         vars:
           ARCH: '{{.ARCH}}'
+          DEV: '{{.DEV}}'
     cmds:
       - task: create:app:bundle
 
@@ -136,44 +139,28 @@ tasks:
     summary: Packages darwin universal binary (arm64 + amd64)
     deps:
       - task: build:universal
+        vars:
+          DEV: '{{.DEV}}'
     cmds:
       - task: create:app:bundle
 
   create:dmg:
-    summary: Creates a `.dmg` from the generated `.app` bundle
+    summary: Creates a `.dmg` from the `.app` bundle (internal, does NOT build/package)
+    internal: true
     preconditions:
       - sh: command -v create-dmg >/dev/null 2>&1
         msg: "create-dmg not found. Install it first: brew install create-dmg"
+      - sh: test -d "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+        msg: "App bundle not found: {{.BIN_DIR}}/{{.APP_NAME}}.app"
     cmds:
-      - task: '{{if eq .UNIVERSAL "true"}}package:universal{{else}}package{{end}}'
-        vars:
-          ARCH: '{{.ARCH}}'
       - |
         set -euo pipefail
         APP_PATH="{{.BIN_DIR}}/{{.APP_NAME}}.app"
-        DMG_PATH="{{.DMG_OUTPUT}}"
-        DMG_VOLNAME="{{.DMG_VOLNAME}}"
-        TARGET_ARCH="{{.TARGET_ARCH}}"
-
-        if [ -z "$DMG_PATH" ]; then
-          if [ "{{.UNIVERSAL}}" = "true" ]; then
-            DMG_PATH="{{.BIN_DIR}}/{{.APP_NAME}}-universal.dmg"
-          else
-            DMG_PATH="{{.BIN_DIR}}/{{.APP_NAME}}-$TARGET_ARCH.dmg"
-          fi
-        fi
-        if [ -z "$DMG_VOLNAME" ]; then
-          DMG_VOLNAME="{{.APP_NAME}}"
-        fi
-
-        if [ ! -d "$APP_PATH" ]; then
-          echo "App bundle not found: $APP_PATH" >&2
-          exit 1
-        fi
+        DMG_PATH="{{.DMG_PATH}}"
 
         rm -f "$DMG_PATH"
         create-dmg \
-          --volname "$DMG_VOLNAME" \
+          --volname "{{.APP_NAME}}" \
           --window-pos 200 120 \
           --window-size 600 400 \
           --icon-size 100 \
@@ -182,12 +169,7 @@ tasks:
           "$DMG_PATH" \
           "$APP_PATH"
     vars:
-      # Set UNIVERSAL=true to build a universal `.app` before creating the `.dmg`.
-      UNIVERSAL: '{{.UNIVERSAL | default "false"}}'
-      # Resolved target arch used for default dmg naming (amd64/arm64).
-      TARGET_ARCH: '{{.ARCH | default ARCH}}'
-      DMG_VOLNAME: '{{.DMG_VOLNAME | default ""}}'
-      DMG_OUTPUT: '{{.DMG_OUTPUT | default ""}}'
+      DMG_PATH: '{{.DMG_PATH | default (printf "%s/%s-%s.dmg" .BIN_DIR .APP_NAME (.ARCH | default ARCH))}}'
 
   create:app:bundle:
     summary: Creates an `.app` bundle
@@ -226,28 +208,109 @@ tasks:
     desc: |
       Signs the .app bundle for distribution.
       Configure SIGN_IDENTITY in the vars section at the top of this file.
+
+      Usage:
+        wails3 task darwin:sign ARCH=arm64
+        wails3 task darwin:sign ARCH=arm64 DEV=true
     deps:
-      - task: package
+      - task: '{{if eq .UNIVERSAL "true"}}package:universal{{else}}package{{end}}'
+        vars:
+          ARCH: '{{.ARCH}}'
+          DEV: '{{.DEV}}'
     cmds:
       - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --identity "{{.SIGN_IDENTITY}}" {{if .ENTITLEMENTS}}--entitlements {{.ENTITLEMENTS}}{{end}}
+    vars:
+      UNIVERSAL: '{{.UNIVERSAL | default "false"}}'
     preconditions:
       - sh: '[ -n "{{.SIGN_IDENTITY}}" ]'
         msg: "SIGN_IDENTITY is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
 
   sign:notarize:
-    summary: Signs and notarizes the application bundle
+    summary: Builds, signs .app, creates .dmg, signs & notarizes .dmg, then staples
     desc: |
-      Signs the .app bundle and submits it for notarization.
-      Configure SIGN_IDENTITY and KEYCHAIN_PROFILE in the vars section at the top of this file.
+      Complete distribution pipeline:
+        1. Build the binary (DEV=true for dev, DEV=false for production)
+        2. Package into .app bundle
+        3. Sign .app with Developer ID (with entitlements & hardened runtime)
+        4. Create .dmg from the signed .app
+        5. Sign .dmg with Developer ID
+        6. Notarize .dmg via Apple notarytool
+        7. Staple the notarization ticket to .dmg
+
+      Usage:
+        wails3 task darwin:sign:notarize ARCH=arm64
+        wails3 task darwin:sign:notarize ARCH=arm64 DEV=true
+        wails3 task darwin:sign:notarize ARCH=amd64
+        wails3 task darwin:sign:notarize UNIVERSAL=true
 
       Setup (one-time):
-        wails3 signing credentials --apple-id "you@email.com" --team-id "TEAMID" --password "app-specific-password" --profile "my-profile"
+        xcrun notarytool store-credentials "{{.KEYCHAIN_PROFILE}}" --apple-id "you@email.com" --team-id "TEAMID" --password "app-specific-password"
     deps:
-      - task: package
-    cmds:
-      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --identity "{{.SIGN_IDENTITY}}" {{if .ENTITLEMENTS}}--entitlements {{.ENTITLEMENTS}}{{end}} --notarize --keychain-profile {{.KEYCHAIN_PROFILE}}
+      - task: '{{if eq .UNIVERSAL "true"}}package:universal{{else}}package{{end}}'
+        vars:
+          ARCH: '{{.ARCH}}'
+          DEV: '{{.DEV}}'
+    vars:
+      UNIVERSAL: '{{.UNIVERSAL | default "false"}}'
+      TARGET_ARCH: '{{.ARCH | default ARCH}}'
+      DMG_PATH: '{{if eq (.UNIVERSAL | default "false") "true"}}{{.BIN_DIR}}/{{.APP_NAME}}-universal.dmg{{else}}{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH | default ARCH}}.dmg{{end}}'
     preconditions:
       - sh: '[ -n "{{.SIGN_IDENTITY}}" ]'
         msg: "SIGN_IDENTITY is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
       - sh: '[ -n "{{.KEYCHAIN_PROFILE}}" ]'
         msg: "KEYCHAIN_PROFILE is required. Set it in the vars section at the top of build/darwin/Taskfile.yml"
+      - sh: command -v create-dmg >/dev/null 2>&1
+        msg: "create-dmg not found. Install it first: brew install create-dmg"
+    cmds:
+      # Step 1: Sign .app with Developer ID + hardened runtime (required for notarization)
+      - |
+        set -euo pipefail
+        echo "==> Signing .app bundle (hardened runtime)..."
+        codesign --force --deep \
+          --sign "{{.SIGN_IDENTITY}}" \
+          --options runtime \
+          {{if .ENTITLEMENTS}}--entitlements "{{.ENTITLEMENTS}}"{{end}} \
+          "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+        echo "==> Verifying .app signature..."
+        codesign --verify --verbose "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      # Step 2: Create .dmg from the signed .app
+      - task: create:dmg
+        vars:
+          DMG_PATH: '{{.DMG_PATH}}'
+          ARCH: '{{.TARGET_ARCH}}'
+      # Step 3: Sign .dmg with Developer ID
+      - |
+        echo "==> Signing .dmg..."
+        codesign --force --sign "{{.SIGN_IDENTITY}}" "{{.DMG_PATH}}"
+      # Step 4: Notarize .dmg
+      - |
+        set -euo pipefail
+        echo "==> Submitting .dmg for notarization (this may take a few minutes)..."
+        SUBMIT_OUTPUT=$(xcrun notarytool submit "{{.DMG_PATH}}" \
+          --keychain-profile "{{.KEYCHAIN_PROFILE}}" \
+          --wait 2>&1) || true
+        echo "$SUBMIT_OUTPUT"
+
+        # Extract submission id
+        SUB_ID=$(echo "$SUBMIT_OUTPUT" | grep '  id:' | head -1 | awk '{print $2}')
+
+        # Check if notarization succeeded
+        if echo "$SUBMIT_OUTPUT" | grep -q 'status: Accepted'; then
+          echo "==> Notarization succeeded!"
+        else
+          echo ""
+          echo "==> Notarization FAILED. Fetching detailed log..."
+          if [ -n "$SUB_ID" ]; then
+            xcrun notarytool log "$SUB_ID" \
+              --keychain-profile "{{.KEYCHAIN_PROFILE}}" 2>&1 || true
+          fi
+          exit 1
+        fi
+      # Step 5: Staple the notarization ticket to .dmg
+      - |
+        echo "==> Stapling notarization ticket..."
+        xcrun stapler staple "{{.DMG_PATH}}"
+      - |
+        echo ""
+        echo "✅ Done! Distribution-ready .dmg:"
+        echo "   {{.DMG_PATH}}"

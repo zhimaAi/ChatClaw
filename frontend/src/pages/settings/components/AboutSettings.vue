@@ -14,7 +14,7 @@ import LogoIcon from '@/assets/images/logo.svg'
 const { t } = useI18n()
 
 // 官网地址
-const OFFICIAL_WEBSITE = 'https://willchat.chatwiki.com'
+const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillChat'
 
 // 应用版本
 const appVersion = ref('...')
