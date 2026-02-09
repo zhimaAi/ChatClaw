@@ -499,6 +499,10 @@ export default {
       selectFile: '选择文件',
       loadFailed: '加载文档列表失败',
       noMore: '没有更多了',
+      sort: {
+        createdDesc: '按创建时间倒序',
+        createdAsc: '按创建时间正序',
+      },
       fileTypes: {
         documents: '文档文件',
         all: '所有文件',

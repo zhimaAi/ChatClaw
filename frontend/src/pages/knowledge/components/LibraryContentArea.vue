@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
-import { Search, Upload, Plus } from 'lucide-vue-next'
+import { Search, Upload, Plus, ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-vue-next'
 import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const searchQuery = ref('')
+const sortBy = ref<'created_desc' | 'created_asc'>('created_desc')
 const deleteDialogOpen = ref(false)
 const documentToDelete = ref<Document | null>(null)
 const renameDialogOpen = ref(false)
@@ -151,6 +152,7 @@ const loadMore = async (token?: number) => {
       keyword: searchQuery.value,
       before_id: beforeID.value,
       limit: PAGE_SIZE,
+      sort_by: sortBy.value,
     })
     if (currentToken !== loadToken) return
 
@@ -207,6 +209,11 @@ watch(searchQuery, () => {
 const filteredDocuments = computed(() => {
   return documents.value
 })
+
+const toggleSort = () => {
+  sortBy.value = sortBy.value === 'created_desc' ? 'created_asc' : 'created_desc'
+  resetAndLoad()
+}
 
 const handleAddDocument = async () => {
   try {
@@ -443,7 +450,9 @@ onMounted(() => {
       return
     }
     documents.value.unshift(converted)
-    documents.value.sort((a, b) => b.id - a.id)
+    documents.value.sort((a, b) =>
+      sortBy.value === 'created_asc' ? a.id - b.id : b.id - a.id
+    )
     if (documents.value.length > PAGE_SIZE) {
       documents.value.length = PAGE_SIZE
     }
@@ -492,6 +501,24 @@ onUnmounted(() => {
             class="h-6 pr-7 text-xs placeholder:text-muted-foreground/40"
           />
         </div>
+        <!-- 排序按钮 -->
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-6"
+          :title="
+            sortBy === 'created_desc'
+              ? t('knowledge.content.sort.createdDesc')
+              : t('knowledge.content.sort.createdAsc')
+          "
+          @click="toggleSort"
+        >
+          <ArrowDownNarrowWide
+            v-if="sortBy === 'created_desc'"
+            class="size-4 text-muted-foreground"
+          />
+          <ArrowUpNarrowWide v-else class="size-4 text-muted-foreground" />
+        </Button>
         <!-- 添加文档按钮 -->
         <Button
           variant="ghost"
