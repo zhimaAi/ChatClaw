@@ -441,21 +441,23 @@ func getProcessWindowsBoundsForClick(targetProcess string) (bounds rectInput, fo
 	return gpwbClickBounds, gpwbClickFound
 }
 
-// clickInputAreaOfWindow clicks near the bottom of the window where input box usually is
-// This is useful for Qt applications like DingTalk that don't expose standard Edit controls
-// offsetX: pixels from left edge of the ENTIRE application (all windows combined)
+// clickInputAreaOfWindow clicks near the bottom of the window where the input box
+// usually is. Coordinates are calculated relative to the passed-in main window
+// (hwnd) or its chat child — never by enumerating all process windows — so that
+// popup / preview windows cannot distort the click position.
+//
+// offsetX: pixels from the left edge of the target window (0 = center)
 // offsetY: pixels from bottom (0 = use default based on target process)
-// targetProcess: used to determine default values and calculate combined bounds
+// targetProcess: used only to determine default offsetY per-app
 func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess string) bool {
-	// First, try to find the chat child window for Y coordinate calculation
+	// Try to find the chat child window for more precise targeting
 	chatChild := findChatChildWindow(hwnd)
 	targetHwnd := hwnd
-
 	if chatChild != 0 {
 		targetHwnd = chatChild
 	}
 
-	// Get the rect of the specific window (for Y coordinate and fallback)
+	// Get the rect of the specific window
 	var windowRect rectInput
 	ret, _, _ := procGetWindowRectIn.Call(targetHwnd, uintptr(unsafe.Pointer(&windowRect)))
 	if ret == 0 {
@@ -466,12 +468,14 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 		}
 	}
 
-	// Get the combined bounds of ALL windows belonging to target process
-	// This is used for X coordinate calculation (distance from left edge)
-	appBounds, hasBounds := getProcessWindowsBoundsForClick(targetProcess)
-	if !hasBounds {
-		// Fallback to single window bounds
-		appBounds = windowRect
+	// Also get the main window rect for X coordinate calculation when a chat
+	// child was found (the main window width is a better reference for offsetX).
+	mainRect := windowRect
+	if chatChild != 0 {
+		var mr rectInput
+		if r, _, _ := procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&mr))); r != 0 {
+			mainRect = mr
+		}
 	}
 
 	// Use provided offsetY or default based on app
@@ -480,21 +484,20 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 		clickOffsetY = getDefaultClickOffsetY(targetProcess)
 	}
 
-	// Calculate X position: use offsetX from left edge of ENTIRE application
+	// Calculate X position: relative to the main window, not combined process bounds
 	var x int32
 	if offsetX > 0 {
-		// offsetX is relative to the leftmost edge of all windows
-		x = appBounds.left + int32(offsetX)
-		// Make sure we're within the application bounds
-		if x > appBounds.right-10 {
-			x = (appBounds.left + appBounds.right) / 2
+		x = mainRect.left + int32(offsetX)
+		// Clamp within the main window
+		if x > mainRect.right-10 {
+			x = (mainRect.left + mainRect.right) / 2
 		}
 	} else {
-		// Center horizontally within the entire application
-		x = (appBounds.left + appBounds.right) / 2
+		// Center horizontally within the main window
+		x = (mainRect.left + mainRect.right) / 2
 	}
 
-	// Calculate Y position: from bottom of the specific target window
+	// Calculate Y position: from bottom of the target (child or main) window
 	y := windowRect.bottom - int32(clickOffsetY)
 
 	// Make sure we're within the window

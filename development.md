@@ -61,24 +61,16 @@ CGO 已在 `build/windows/Taskfile.yml` 中默认启用（`CGO_ENABLED=1`）。
 wails3 dev
 ```
 
-## 调试模式打包
-
-```bash
-wails3 build
-```
-
-> 打包出的二进制带有调试信息，有一个命令行窗口查看日志，可以排查问题
-
 ## Windows 多架构打包
 
 ```bash
 # amd64
-wails3 task windows:build ARCH=amd64 DEV=true
-wails3 task windows:package ARCH=amd64 DEV=true
+wails3 task windows:build ARCH=amd64 DEV=true  # DEV=false 表示打包生产环境二进制，需要做代码签名
+wails3 task windows:package ARCH=amd64 DEV=true # DEV=false 表示打包生产环境安装包，需要再做一次代码签名
 
 # arm64
-wails3 task windows:build ARCH=arm64 DEV=true
-wails3 task windows:package ARCH=arm64 DEV=true
+wails3 task windows:build ARCH=arm64 DEV=true # DEV=false 表示打包生产环境二进制，需要做代码签名
+wails3 task windows:package ARCH=arm64 DEV=true # DEV=false 表示打包生产环境安装包，需要再做一次代码签名
 ```
 
 ### Windows 安装包依赖（makensis）
@@ -88,21 +80,15 @@ Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
 - 参考文档：`https://wails.io/zh-Hans/docs/next/guides/windows-installer/`
 - 安装后将 makensis 安装目录添加到 **Path** 环境变量中（确保命令行可直接执行 `makensis`）
 
-## macOS 多架构打包
+## macos 多架构构建、签名、打包
 
 ```bash
-# arm64 / amd64
-wails3 task package ARCH=arm64 DEV=true
-wails3 task package ARCH=amd64 DEV=true
+# arm64
+wails3 task darwin:sign ARCH=arm64 DEV=true # wails3 task darwin:sign:notarize ARCH=arm64 DEV=false 表示生产环境打包
 
-# universal（二进制 + .app）
-wails3 task darwin:package:universal
-```
+# amd64
+wails3 task darwin:sign ARCH=amd64 DEV=true  # wails3 task darwin:sign:notarize ARCH=amd64 DEV=false 表示生产环境打包
 
-## macOS 生成 DMG
-
-```bash
-wails3 task darwin:create:dmg ARCH=arm64 DEV=true
-wails3 task darwin:create:dmg ARCH=amd64 DEV=true
-wails3 task darwin:create:dmg UNIVERSAL=true DEV=true
+# arm64+amd64
+wails3 task darwin:sign UNIVERSAL=true DEV=true  # wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false 表示生产环境打包
 ```
