@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
-import { Search, Upload, Plus } from 'lucide-vue-next'
+import { Search, Upload, Plus, ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-vue-next'
 import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const searchQuery = ref('')
+const sortBy = ref<'created_desc' | 'created_asc'>('created_desc')
 const deleteDialogOpen = ref(false)
 const documentToDelete = ref<Document | null>(null)
 const renameDialogOpen = ref(false)
@@ -68,8 +69,10 @@ let loadToken = 0
 const isUploading = ref(false)
 const uploadTotal = ref(0)
 const uploadDone = ref(0)
+const isDragOver = ref(false)
 let unsubscribeUploadProgress: (() => void) | null = null
 let unsubscribeUploaded: (() => void) | null = null
+let unsubscribeFileDrop: (() => void) | null = null
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
@@ -151,6 +154,7 @@ const loadMore = async (token?: number) => {
       keyword: searchQuery.value,
       before_id: beforeID.value,
       limit: PAGE_SIZE,
+      sort_by: sortBy.value,
     })
     if (currentToken !== loadToken) return
 
@@ -208,6 +212,11 @@ const filteredDocuments = computed(() => {
   return documents.value
 })
 
+const toggleSort = () => {
+  sortBy.value = sortBy.value === 'created_desc' ? 'created_asc' : 'created_desc'
+  resetAndLoad()
+}
+
 const handleAddDocument = async () => {
   try {
     const result = await Dialogs.OpenFile({
@@ -248,6 +257,32 @@ const handleAddDocument = async () => {
     // User cancelled the file dialog — not an error
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to upload documents:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
+  } finally {
+    isUploading.value = false
+  }
+}
+
+// Handle files dropped via Wails native file drop
+const handleFileDrop = async (filePaths: string[]) => {
+  if (!props.library?.id || filePaths.length === 0) return
+  if (isUploading.value) return
+
+  try {
+    isUploading.value = true
+    uploadTotal.value = filePaths.length
+    uploadDone.value = 0
+    await nextTick()
+
+    const uploaded = await DocumentService.UploadDocuments({
+      library_id: props.library.id,
+      file_paths: filePaths,
+    })
+
+    await resetAndLoad()
+    toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
+  } catch (error) {
+    console.error('Failed to upload dropped files:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {
     isUploading.value = false
@@ -429,6 +464,17 @@ onMounted(() => {
     }
   )
 
+  // 监听 Wails 原生文件拖拽事件
+  unsubscribeFileDrop = Events.On(
+    'filedrop:files',
+    (event: { data: { files: string[] } }) => {
+      const files = event.data?.files
+      if (files && files.length > 0) {
+        handleFileDrop(files)
+      }
+    }
+  )
+
   // 单个文档已入库事件（可用于小批量即时显示；大批量仍以 resetAndLoad 为主）
   unsubscribeUploaded = Events.On('document:uploaded', (event: { data: BackendDocument }) => {
     const doc = event.data
@@ -443,7 +489,9 @@ onMounted(() => {
       return
     }
     documents.value.unshift(converted)
-    documents.value.sort((a, b) => b.id - a.id)
+    documents.value.sort((a, b) =>
+      sortBy.value === 'created_asc' ? a.id - b.id : b.id - a.id
+    )
     if (documents.value.length > PAGE_SIZE) {
       documents.value.length = PAGE_SIZE
     }
@@ -468,6 +516,9 @@ onUnmounted(() => {
   if (unsubscribeUploaded) {
     unsubscribeUploaded()
   }
+  if (unsubscribeFileDrop) {
+    unsubscribeFileDrop()
+  }
   if (searchTimeout) {
     clearTimeout(searchTimeout)
   }
@@ -475,7 +526,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div class="relative flex h-full flex-col" data-file-drop-target>
     <!-- 头部区域 -->
     <div class="flex h-12 items-center justify-between px-4">
       <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
@@ -492,6 +543,24 @@ onUnmounted(() => {
             class="h-6 pr-7 text-xs placeholder:text-muted-foreground/40"
           />
         </div>
+        <!-- 排序按钮 -->
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-6"
+          :title="
+            sortBy === 'created_desc'
+              ? t('knowledge.content.sort.createdDesc')
+              : t('knowledge.content.sort.createdAsc')
+          "
+          @click="toggleSort"
+        >
+          <ArrowDownNarrowWide
+            v-if="sortBy === 'created_desc'"
+            class="size-4 text-muted-foreground"
+          />
+          <ArrowUpNarrowWide v-else class="size-4 text-muted-foreground" />
+        </Button>
         <!-- 添加文档按钮 -->
         <Button
           variant="ghost"
@@ -610,5 +679,40 @@ onUnmounted(() => {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- Drag-and-drop overlay (shown when Wails adds .file-drop-target-active) -->
+    <div class="drop-overlay pointer-events-none">
+      <div class="flex flex-col items-center gap-2">
+        <Upload class="size-10 text-primary" />
+        <p class="text-sm font-medium text-primary">
+          {{ t('knowledge.content.drop.hint') }}
+        </p>
+        <p class="text-xs text-muted-foreground">
+          {{ t('knowledge.content.drop.formats') }}
+        </p>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* Drag overlay: hidden by default, shown when Wails adds file-drop-target-active */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  border: 2px dashed hsl(var(--primary) / 0.5);
+  background: hsl(var(--background) / 0.92);
+  backdrop-filter: blur(4px);
+  transition: opacity 0.15s ease;
+}
+
+/* When Wails detects a file drag over the drop target */
+[data-file-drop-target].file-drop-target-active .drop-overlay {
+  display: flex;
+}
+</style>

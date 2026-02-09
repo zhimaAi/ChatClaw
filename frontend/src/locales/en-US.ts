@@ -501,6 +501,10 @@ export default {
       selectFile: 'Select File',
       loadFailed: 'Failed to load documents',
       noMore: 'No more',
+      sort: {
+        createdDesc: 'Newest first',
+        createdAsc: 'Oldest first',
+      },
       fileTypes: {
         documents: 'Document Files',
         all: 'All Files',
@@ -527,6 +531,10 @@ export default {
         failed: 'Failed to upload documents',
         count: '{count} documents uploaded',
         uploading: 'Uploading {done}/{total}',
+      },
+      drop: {
+        hint: 'Drop files here to upload',
+        formats: 'Supports PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD',
       },
       rename: {
         title: 'Rename Document',

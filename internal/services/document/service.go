@@ -129,8 +129,10 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 }
 
 // ListDocumentsPage 获取知识库文档分页（cursor 分页）
-// - 无关键词时：按 id DESC 排序，支持 before_id 游标分页
-// - 有关键词时：按 FTS5 BM25 相关度降序排列，不使用 before_id（搜索结果一次性返回）
+// - 无关键词时：按 sort_by 排序，支持 before_id 游标分页
+//   - "created_desc"（默认）: id DESC, before_id 为上一页最小 id
+//   - "created_asc": id ASC, before_id 为上一页最大 id（此时 before_id 语义变为 after_id）
+// - 有关键词时：按 FTS5 BM25 相关度降序排列，不使用 before_id（搜索结果一次性返回），sort_by 被忽略
 // - 每次返回 limit（默认/最大 100）
 func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Document, error) {
 	if input.LibraryID <= 0 {
@@ -168,6 +170,7 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 		ftsMatch := fmt.Sprintf("(%s) AND library_id:%d", matchQuery, input.LibraryID)
 
 		// Query FTS directly with library_id filter, then JOIN for full document data
+		// Sort by BM25 relevance regardless of sort_by parameter
 		err := db.NewRaw(`
 			SELECT d.*
 			FROM doc_name_fts
@@ -180,17 +183,27 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 			return nil, errs.Wrap("error.document_list_failed", err)
 		}
 	} else {
-		// No keyword: use cursor pagination with id DESC
+		// No keyword: use cursor pagination
 		q := db.NewSelect().
 			Model(&models).
 			Where("d.library_id = ?", input.LibraryID)
 
-		if input.BeforeID > 0 {
-			q = q.Where("d.id < ?", input.BeforeID)
-		}
-
-		if err := q.OrderExpr("d.id DESC").Limit(limit).Scan(ctx); err != nil {
-			return nil, errs.Wrap("error.document_list_failed", err)
+		if input.SortBy == "created_asc" {
+			// Ascending order: before_id acts as "after_id" (return rows with id > before_id)
+			if input.BeforeID > 0 {
+				q = q.Where("d.id > ?", input.BeforeID)
+			}
+			if err := q.OrderExpr("d.id ASC").Limit(limit).Scan(ctx); err != nil {
+				return nil, errs.Wrap("error.document_list_failed", err)
+			}
+		} else {
+			// Default: descending order
+			if input.BeforeID > 0 {
+				q = q.Where("d.id < ?", input.BeforeID)
+			}
+			if err := q.OrderExpr("d.id DESC").Limit(limit).Scan(ctx); err != nil {
+				return nil, errs.Wrap("error.document_list_failed", err)
+			}
 		}
 	}
 
