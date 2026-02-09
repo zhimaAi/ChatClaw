@@ -198,6 +198,22 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * 关闭右侧标签页（保留指定标签页及其左侧标签页）
+   */
+  const closeRightTabs = (tabId: string) => {
+    const index = tabs.value.findIndex((t) => t.id === tabId)
+    if (index === -1) return
+
+    tabs.value = tabs.value.slice(0, index + 1)
+
+    // If active tab was among the closed tabs, switch to the target tab
+    if (!tabs.value.find((t) => t.id === activeTabId.value)) {
+      activeTabId.value = tabId
+      activeModule.value = tabs.value[index].module
+    }
+  }
+
+  /**
    * 关闭所有标签页
    */
   const closeAllTabs = () => {
@@ -283,6 +299,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     addTab,
     closeTab,
     closeOtherTabs,
+    closeRightTabs,
     closeAllTabs,
     setActiveTab,
     updateTabIcon,

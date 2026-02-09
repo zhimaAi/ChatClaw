@@ -103,6 +103,7 @@ export default {
   tab: {
     close: 'Close Tab',
     closeOthers: 'Close Other Tabs',
+    closeRight: 'Close Tabs to the Right',
     closeAll: 'Close All Tabs',
   },
   hello: {

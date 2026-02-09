@@ -103,6 +103,7 @@ export default {
   tab: {
     close: '关闭标签页',
     closeOthers: '关闭其他标签页',
+    closeRight: '关闭右侧标签页',
     closeAll: '关闭所有标签页',
   },
   hello: {
