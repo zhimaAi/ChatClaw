@@ -1,6 +1,8 @@
 package floatingball
 
 import (
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,57 +90,81 @@ type FloatingBallService struct {
 	sizeEnforceH     int
 	sizeEnforceTries int
 	sizeEnforceWhy   string
+
+	// Primary display work area cache.
+	// We prefer app.Screen.GetPrimary(), but on some platforms / early lifecycle this can be nil/empty.
+	// Once we have a valid work area, we keep using it to enforce "primary display only" behavior.
+	hasPrimaryWorkArea bool
+	primaryWorkArea    application.Rect
+	primaryPhysicalWorkArea application.Rect
+	primaryScaleFactor      float32
+	primaryWorkAreaSource   string
+	loggedApproxPhysical    bool
+}
+
+func (s *FloatingBallService) debugEnabled() bool {
+	// Enable via environment variable (preferred for local debugging):
+	//   WILLCHAT_DEBUG_FLOATINGBALL=1
+	// Or via settings cache:
+	//   debug_floatingball=true
+	if settings.GetBool("debug_floatingball", false) {
+		return true
+	}
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("WILLCHAT_DEBUG_FLOATINGBALL")))
+	switch v {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *FloatingBallService) debugLog(msg string, fields map[string]any) {
-	// Disabled: floatingball logs are too noisy for normal usage.
-	_ = msg
-	_ = fields
+	if !s.debugEnabled() {
+		return
+	}
+	if s.app == nil || s.app.Logger == nil {
+		return
+	}
+	args := make([]any, 0, 2+len(fields)*2)
+	args = append(args, "service", "floatingball")
+	for k, v := range fields {
+		args = append(args, k, v)
+	}
+	s.app.Logger.Info(msg, args...)
 }
 
-// safeRelativePositionLocked returns a best-effort position relative to current Screen.WorkArea.
+func dipToPhysical(dip int, scaleFactor float32) int {
+	if scaleFactor <= 0 {
+		return dip
+	}
+	// Round to nearest int to reduce drift.
+	return int(float32(dip)*scaleFactor + 0.5)
+}
+
+func physicalToDip(physical int, scaleFactor float32) int {
+	if scaleFactor <= 0 {
+		return physical
+	}
+	return int(float32(physical)/scaleFactor + 0.5)
+}
+
+// safeRelativePositionLocked returns a best-effort position relative to the *primary* screen WorkArea.
 // Across platforms / multi-monitor setups, coordinate spaces can vary. We normalise values into the plausible
 // WorkArea-relative range to avoid false edge-snaps.
 func (s *FloatingBallService) safeRelativePositionLocked() (int, int) {
 	if s.win == nil {
 		return 0, 0
 	}
-	x, y := s.win.RelativePosition()
 	work, ok := s.workAreaLocked()
 	if !ok {
-		return x, y
+		return s.win.RelativePosition()
 	}
 
-	// 1) If values look like absolute coordinates, subtract WorkArea origin
-	if x > work.Width+ballSize || x < -(ballSize*2) {
-		x2 := x - work.X
-		if x2 <= work.Width+ballSize && x2 >= -(ballSize*2) {
-			x = x2
-		}
-	}
-	if y > work.Height+ballSize || y < -(ballSize*2) {
-		y2 := y - work.Y
-		if y2 <= work.Height+ballSize && y2 >= -(ballSize*2) {
-			y = y2
-		}
-	}
-
-	// 2) DPI/scale mismatch fallback: if still out-of-range but halving makes it plausible, halve it.
-	// (e.g. macOS retina can sometimes report 2x coordinates depending on codepath)
-	if x > work.Width+ballSize && x/2 <= work.Width+ballSize {
-		x = x / 2
-	}
-	if x < -(ballSize*2) && x/2 >= -(ballSize*2) {
-		x = x / 2
-	}
-	if y > work.Height+ballSize && y/2 <= work.Height+ballSize {
-		y = y / 2
-	}
-	if y < -(ballSize*2) && y/2 >= -(ballSize*2) {
-		y = y / 2
-	}
-
-	return x, y
+	// Use Bounds() as the source of truth for absolute DIP coordinates.
+	// RelativePosition()/GetScreen() can "switch screens" during edge hide or across monitors and cause jumps.
+	b := s.win.Bounds()
+	return b.X - work.X, b.Y - work.Y
 }
 
 func NewFloatingBallService(app *application.App, mainWindow *application.WebviewWindow) *FloatingBallService {
@@ -432,7 +458,7 @@ func (s *FloatingBallService) SetAppActive(active bool) {
 			s.idleDockTimer = nil
 		}
 		if s.dock != DockNone {
-			_, relY := s.win.RelativePosition()
+			_, relY := s.safeRelativePositionLocked()
 			s.collapseToYLocked(relY)
 		}
 	}
@@ -462,7 +488,12 @@ func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 	}
 
 	// 创建时就设置为屏幕最右侧贴边 + 垂直居中（避免首次显示跑到默认位置）
-	x, y := s.defaultPositionLocked()
+	relX, relY := s.defaultPositionLocked()
+	x, y := relX, relY
+	if work, ok := s.workAreaLocked(); ok {
+		x = work.X + relX
+		y = work.Y + relY
+	}
 
 	w := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:          windowName,
@@ -540,10 +571,30 @@ func (s *FloatingBallService) onWindowDidMove() {
 	if !s.visible {
 		return
 	}
+
+	// ignoreMoveUntil 用于屏蔽“代码主动 SetPosition/SetSize”导致的 move。
+	// IMPORTANT: do not clamp/snap during this window, otherwise edge-hide/collapse moves may get overridden.
+	if !s.dragging && time.Now().Before(s.ignoreMoveUntil) {
+		return
+	}
+
+	// Always enforce "primary display only" on any move event.
+	// This covers cases where native dragging occurs without frontend calling SetDragging(true).
+	if !s.dragging {
+		if clamped, relX, relY := s.clampToPrimaryDipLocked("move"); clamped {
+			// After clamping, immediately re-run snap logic (DIP) so dock state stays consistent.
+			s.snapAfterMoveAtLocked(relX, relY)
+			return
+		}
+	}
 	// 拖拽中不自动贴边/缩小
 	if s.dragging {
+		// Hard constraint: keep the floating ball on the primary display only.
+		// We allow the small "half-hidden" offset when collapsed+docked.
+		_, _, _ = s.clampToPrimaryDipLocked("drag")
+
 		// 记录是否发生有效移动（阈值 2px）
-		relX, relY := s.win.RelativePosition()
+		relX, relY := s.safeRelativePositionLocked()
 		if abs(relX-s.dragStartX) > 2 || abs(relY-s.dragStartY) > 2 {
 			s.dragMoved = true
 		}
@@ -551,7 +602,6 @@ func (s *FloatingBallService) onWindowDidMove() {
 		return
 	}
 	// ignoreMoveUntil 用于屏蔽“代码主动 SetPosition/SetSize”导致的 move
-	// 但不能影响拖拽移动的检测（上面已提前处理 dragging）
 	if time.Now().Before(s.ignoreMoveUntil) {
 		return
 	}
@@ -563,6 +613,57 @@ func (s *FloatingBallService) onWindowDidMove() {
 	s.snapTimer = time.AfterFunc(snapDebounce, func() {
 		s.snapAfterMove()
 	})
+}
+
+// clampToPrimaryDipLocked clamps the window into the primary WorkArea (DIP).
+// Returns whether a clamp was applied, plus the resulting (primary-workarea-relative) DIP coords.
+func (s *FloatingBallService) clampToPrimaryDipLocked(reason string) (bool, int, int) {
+	if s.win == nil || !s.visible {
+		return false, 0, 0
+	}
+	work, ok := s.workAreaLocked()
+	if !ok {
+		return false, 0, 0
+	}
+
+	// Current absolute DIP position: Bounds() is absolute in the global coordinate space.
+	b := s.win.Bounds()
+	absX, absY := b.X, b.Y
+	minX := work.X
+	maxX := work.X + work.Width - b.Width
+	if s.collapsed && s.dock == DockLeft {
+		minX = work.X - (b.Width - collapsedVisible)
+	}
+	if s.collapsed && s.dock == DockRight {
+		maxX = work.X + work.Width - collapsedVisible
+	}
+	minY := work.Y
+	maxY := work.Y + work.Height - b.Height
+
+	cx := clamp(absX, minX, maxX)
+	cy := clamp(absY, minY, maxY)
+	relXDip := cx - work.X
+	relYDip := cy - work.Y
+	if cx == absX && cy == absY {
+		return false, relXDip, relYDip
+	}
+
+	s.debugLog("floatingball:clamp_primary_dip", map[string]any{
+		"reason":    reason,
+		"source":    s.primaryWorkAreaSource,
+		"dock":      s.dock,
+		"collapsed": s.collapsed,
+		"work":      work,
+		"bounds":    b,
+		"minX":      minX, "maxX": maxX, "minY": minY, "maxY": maxY,
+		"fromX":     absX, "fromY": absY,
+		"toX":       cx, "toY": cy,
+		"relXDip":   relXDip, "relYDip": relYDip,
+	})
+
+	s.ignoreMoveUntil = time.Now().Add(250 * time.Millisecond)
+	s.win.SetBounds(application.Rect{X: cx, Y: cy, Width: b.Width, Height: b.Height})
+	return true, relXDip, relYDip
 }
 
 func (s *FloatingBallService) snapAfterMove() {
@@ -676,9 +777,9 @@ func (s *FloatingBallService) repositionTick() {
 	}
 	s.repositionTries++
 
-	// impl 就绪的一个可靠信号：GetScreen() 返回非 nil
-	screen, _ := s.win.GetScreen()
-	if screen != nil {
+	// Wait until we have a usable WorkArea, otherwise default positioning
+	// may fall back to (0,0) and "stick" at top-left on some machines.
+	if _, ok := s.workAreaLocked(); ok {
 		s.restoreOrDefaultLocked()
 		return
 	}
@@ -725,7 +826,7 @@ func (s *FloatingBallService) expandLocked() {
 	if !ok {
 		return
 	}
-	_, relY := s.win.RelativePosition()
+	_, relY := s.safeRelativePositionLocked()
 	bounds := s.win.Bounds()
 	y := clamp(relY, 0, work.Height-bounds.Height)
 
@@ -741,7 +842,7 @@ func (s *FloatingBallService) rehideLocked() {
 	if !ok {
 		return
 	}
-	_, relY := s.win.RelativePosition()
+	_, relY := s.safeRelativePositionLocked()
 	bounds := s.win.Bounds()
 	y := clamp(relY, 0, work.Height-bounds.Height)
 
@@ -838,12 +939,39 @@ func (s *FloatingBallService) setPositionLocked(x, y int) {
 	s.win.SetPosition(x, y)
 }
 
+func (s *FloatingBallService) setPhysicalBoundsLocked(x, y, w, h int) {
+	if s.win == nil {
+		return
+	}
+	s.ignoreMoveUntil = time.Now().Add(250 * time.Millisecond)
+	s.debugLog("floatingball:setPhysicalBounds", map[string]any{
+		"x": x, "y": y, "w": w, "h": h,
+	})
+	s.win.SetPhysicalBounds(application.Rect{X: x, Y: y, Width: w, Height: h})
+}
+
 func (s *FloatingBallService) setRelativePositionLocked(x, y int) {
 	if s.win == nil {
 		return
 	}
 	s.ignoreMoveUntil = time.Now().Add(250 * time.Millisecond)
-	s.win.SetRelativePosition(x, y)
+	work, ok := s.workAreaLocked()
+	if !ok {
+		s.win.SetRelativePosition(x, y)
+		return
+	}
+
+	b := s.win.Bounds()
+	absX := work.X + x
+	absY := work.Y + y
+	s.debugLog("floatingball:setRelativePosition", map[string]any{
+		"source":  s.primaryWorkAreaSource,
+		"relDipX": x, "relDipY": y,
+		"work":    work,
+		"bounds":  b,
+		"toX":     absX, "toY": absY,
+	})
+	s.win.SetBounds(application.Rect{X: absX, Y: absY, Width: b.Width, Height: b.Height})
 }
 
 func (s *FloatingBallService) setSizeLocked(width, height int) {
@@ -1002,22 +1130,143 @@ func abs(v int) int {
 }
 
 func (s *FloatingBallService) workAreaLocked() (application.Rect, bool) {
-	// 优先以窗口所在屏幕为准（mac 上更可靠；也支持多显示器）
-	if s.win != nil {
-		if screen, _ := s.win.GetScreen(); screen != nil {
+	// Product requirement: floating ball is only allowed on the primary display.
+	//
+	// We cache the primary work area once we can obtain it. This avoids two problems:
+	// - Some platforms may temporarily return nil/empty primary screen info at startup.
+	// - We must not switch the "reference work area" when the window moves across monitors.
+	// 1) Preferred: app primary screen. If it becomes available later, override any fallback cache.
+	if s.app != nil && s.app.Screen != nil {
+		if screen := s.app.Screen.GetPrimary(); screen != nil {
 			if screen.WorkArea.Width > 0 && screen.WorkArea.Height > 0 {
-				return screen.WorkArea, true
+				s.primaryWorkArea = screen.WorkArea
+				s.primaryPhysicalWorkArea = screen.PhysicalWorkArea
+				s.primaryScaleFactor = screen.ScaleFactor
+				s.primaryWorkAreaSource = "app_primary"
+				s.hasPrimaryWorkArea = true
+				s.debugLog("floatingball:workarea:cache", map[string]any{
+					"source":           s.primaryWorkAreaSource,
+					"workArea":         s.primaryWorkArea,
+					"physicalWorkArea": s.primaryPhysicalWorkArea,
+					"scaleFactor":      s.primaryScaleFactor,
+				})
+				return s.primaryWorkArea, true
 			}
 		}
 	}
-	if s.app == nil || s.app.Screen == nil {
-		return application.Rect{}, false
+
+	// If we already have a cached value (from fallback), reuse it.
+	if s.hasPrimaryWorkArea && s.primaryWorkArea.Width > 0 && s.primaryWorkArea.Height > 0 {
+		return s.primaryWorkArea, true
 	}
-	if screen := s.app.Screen.GetPrimary(); screen != nil {
-		if screen.WorkArea.Width > 0 && screen.WorkArea.Height > 0 {
-			return screen.WorkArea, true
+
+	// 2) Fallback: use the floating window's screen info *once* (typically the initial primary screen).
+	// Prefer the main window's screen (more likely to stay on primary). Do NOT use this as a dynamic
+	// per-monitor reference; it's only to bootstrap the cache.
+	if s.mainWindow != nil {
+		if screen, _ := s.mainWindow.GetScreen(); screen != nil {
+			if screen.WorkArea.Width > 0 && screen.WorkArea.Height > 0 {
+				s.primaryWorkArea = screen.WorkArea
+				s.primaryPhysicalWorkArea = screen.PhysicalWorkArea
+				s.primaryScaleFactor = screen.ScaleFactor
+				s.primaryWorkAreaSource = "main_window"
+				s.hasPrimaryWorkArea = true
+				s.debugLog("floatingball:workarea:cache", map[string]any{
+					"source":           s.primaryWorkAreaSource,
+					"workArea":         s.primaryWorkArea,
+					"physicalWorkArea": s.primaryPhysicalWorkArea,
+					"scaleFactor":      s.primaryScaleFactor,
+				})
+				return s.primaryWorkArea, true
+			}
 		}
 	}
+
+	if s.win != nil {
+		if screen, _ := s.win.GetScreen(); screen != nil {
+			if screen.WorkArea.Width > 0 && screen.WorkArea.Height > 0 {
+				s.primaryWorkArea = screen.WorkArea
+				s.primaryPhysicalWorkArea = screen.PhysicalWorkArea
+				s.primaryScaleFactor = screen.ScaleFactor
+				s.primaryWorkAreaSource = "floating_window"
+				s.hasPrimaryWorkArea = true
+				s.debugLog("floatingball:workarea:cache", map[string]any{
+					"source":           s.primaryWorkAreaSource,
+					"workArea":         s.primaryWorkArea,
+					"physicalWorkArea": s.primaryPhysicalWorkArea,
+					"scaleFactor":      s.primaryScaleFactor,
+				})
+				return s.primaryWorkArea, true
+			}
+		}
+	}
+
 	return application.Rect{}, false
+}
+
+func (s *FloatingBallService) physicalWorkAreaLocked() (application.Rect, float32, bool) {
+	// Ensure cache is populated if possible.
+	if !s.hasPrimaryWorkArea || s.primaryWorkArea.Width <= 0 || s.primaryWorkArea.Height <= 0 {
+		_, _ = s.workAreaLocked()
+	}
+
+	sf := s.primaryScaleFactor
+	if sf <= 0 {
+		sf = 1
+	}
+
+	// Build a "scaled physical" work area from DIP.
+	if s.primaryWorkArea.Width > 0 && s.primaryWorkArea.Height > 0 {
+		scaled := application.Rect{
+			X:      dipToPhysical(s.primaryWorkArea.X, sf),
+			Y:      dipToPhysical(s.primaryWorkArea.Y, sf),
+			Width:  dipToPhysical(s.primaryWorkArea.Width, sf),
+			Height: dipToPhysical(s.primaryWorkArea.Height, sf),
+		}
+
+		// Some platforms report PhysicalWorkArea identical to WorkArea even when ScaleFactor>1.
+		// In that case, using the reported PhysicalWorkArea would clamp to half the screen.
+		if s.primaryPhysicalWorkArea.Width > 0 && s.primaryPhysicalWorkArea.Height > 0 {
+			reported := s.primaryPhysicalWorkArea
+			looksUnscaled := sf > 1.1 &&
+				(reported.Width == s.primaryWorkArea.Width || reported.Height == s.primaryWorkArea.Height) &&
+				(scaled.Width > reported.Width || scaled.Height > reported.Height)
+
+			if looksUnscaled {
+				if !s.loggedApproxPhysical {
+					s.loggedApproxPhysical = true
+					s.debugLog("floatingball:workarea:physical:override_unscaled", map[string]any{
+						"source":      s.primaryWorkAreaSource,
+						"workArea":    s.primaryWorkArea,
+						"scaleFactor": sf,
+						"reported":    reported,
+						"scaled":      scaled,
+					})
+				}
+				return scaled, sf, true
+			}
+
+			return reported, sf, true
+		}
+
+		// No reported physical work area: use scaled DIP.
+		if !s.loggedApproxPhysical {
+			s.loggedApproxPhysical = true
+			s.debugLog("floatingball:workarea:physical:approx", map[string]any{
+				"source":      s.primaryWorkAreaSource,
+				"workArea":    s.primaryWorkArea,
+				"scaleFactor": sf,
+				"scaled":      scaled,
+			})
+		}
+		return scaled, sf, true
+	}
+
+	// Fallback: if we only have reported physical work area, return it.
+	if s.primaryPhysicalWorkArea.Width > 0 && s.primaryPhysicalWorkArea.Height > 0 {
+		return s.primaryPhysicalWorkArea, sf, true
+	}
+
+	return application.Rect{}, sf, false
 }
 
