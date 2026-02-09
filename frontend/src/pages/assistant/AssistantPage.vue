@@ -578,6 +578,42 @@ onMounted(() => {
       })
     }
 
+    // Check for pending chat data (e.g. from knowledge page shortcut)
+    const pendingData = navigationStore.consumePendingChatData(props.tabId)
+    if (pendingData) {
+      // Apply pre-selected agent
+      if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
+        activeAgentId.value = pendingData.agentId
+      }
+      // Apply pre-selected model
+      if (pendingData.selectedModelKey) {
+        selectedModelKey.value = pendingData.selectedModelKey
+      }
+      // Apply library selection
+      if (pendingData.libraryIds && pendingData.libraryIds.length > 0) {
+        selectedLibraryIds.value = pendingData.libraryIds
+      }
+      // Apply thinking mode
+      if (pendingData.enableThinking != null) {
+        enableThinking.value = pendingData.enableThinking
+      }
+      // Apply chat input and auto-send
+      if (pendingData.chatInput) {
+        chatInput.value = pendingData.chatInput
+      }
+      // Ensure we start with a new conversation
+      activeConversationId.value = null
+
+      // Auto-send after a short delay to let Vue reactivity settle
+      if (pendingData.chatInput) {
+        window.setTimeout(() => {
+          if (canSend.value) {
+            handleSend()
+          }
+        }, 200)
+      }
+    }
+
     // Snap mode initialization
     if (isSnapMode.value) {
       await loadSnapSettings()

@@ -20,6 +20,7 @@ import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
 import EditLibraryDialog from './components/EditLibraryDialog.vue'
 import LibraryContentArea from './components/LibraryContentArea.vue'
+import KnowledgeChatInput from './components/KnowledgeChatInput.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -324,6 +325,9 @@ onMounted(() => {
 
       <!-- 知识库内容管理 -->
       <LibraryContentArea v-else :key="selectedLibrary.id" :library="selectedLibrary" />
+
+      <!-- Bottom chat input shortcut -->
+      <KnowledgeChatInput :selected-library-id="selectedLibraryId" :tab-id="tabId" />
     </main>
 
     <CreateLibraryDialog v-model:open="createDialogOpen" @created="handleCreated" />

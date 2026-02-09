@@ -494,6 +494,9 @@ export default {
       saved: '已保存',
       saveFailed: '保存失败',
     },
+    chat: {
+      selectAgent: '选择助手',
+    },
     content: {
       searchPlaceholder: '搜索',
       addDocument: '添加文档',

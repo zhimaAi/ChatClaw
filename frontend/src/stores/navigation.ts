@@ -36,6 +36,25 @@ export interface Tab {
 }
 
 /**
+ * Pending chat data for cross-module navigation.
+ * E.g. Knowledge page can pre-fill chat input and jump to a new assistant tab.
+ */
+export interface PendingChatData {
+  /** Pre-filled chat input text */
+  chatInput: string
+  /** Pre-selected library IDs */
+  libraryIds: number[]
+  /** Pre-selected model key (providerId::modelId) */
+  selectedModelKey?: string
+  /** Pre-selected agent ID */
+  agentId?: number
+  /** Whether thinking mode is enabled */
+  enableThinking?: boolean
+  /** Target tab ID that should consume this data */
+  targetTabId: string
+}
+
+/**
  * 模块标题映射（用于创建标签页时的默认标题）
  */
 const moduleLabels: Record<NavModule, string> = {
@@ -67,6 +86,9 @@ export const useNavigationStore = defineStore('navigation', () => {
 
   // 当前激活的标签页ID
   const activeTabId = ref<string | null>(null)
+
+  // Pending chat data for cross-module navigation
+  const pendingChatData = ref<PendingChatData | null>(null)
 
   // 当前激活的标签页
   const activeTab = computed(() => {
@@ -287,12 +309,36 @@ export const useNavigationStore = defineStore('navigation', () => {
     }
   }
 
+  /**
+   * Set pending chat data (e.g. from knowledge page) and create a new assistant tab.
+   * Returns the new tab ID.
+   */
+  const setPendingChatAndOpenAssistant = (data: Omit<PendingChatData, 'targetTabId'>): string => {
+    const tabId = addTab({ module: 'assistant' })
+    pendingChatData.value = { ...data, targetTabId: tabId }
+    return tabId
+  }
+
+  /**
+   * Consume pending chat data for a specific tab.
+   * Returns the data and clears it, or null if no data / tab mismatch.
+   */
+  const consumePendingChatData = (tabId: string): PendingChatData | null => {
+    if (!pendingChatData.value || pendingChatData.value.targetTabId !== tabId) {
+      return null
+    }
+    const data = pendingChatData.value
+    pendingChatData.value = null
+    return data
+  }
+
   return {
     activeModule,
     sidebarCollapsed,
     tabs,
     activeTabId,
     activeTab,
+    pendingChatData,
     toggleSidebar,
     setSidebarCollapsed,
     navigateToModule,
@@ -305,5 +351,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     updateTabIcon,
     updateTabTitle,
     refreshAssistantDefaultIcons,
+    setPendingChatAndOpenAssistant,
+    consumePendingChatData,
   }
 })

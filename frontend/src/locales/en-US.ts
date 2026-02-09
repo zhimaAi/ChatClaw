@@ -496,6 +496,9 @@ export default {
       saved: 'Saved',
       saveFailed: 'Failed to save',
     },
+    chat: {
+      selectAgent: 'Select Agent',
+    },
     content: {
       searchPlaceholder: 'Search',
       addDocument: 'Add Document',
