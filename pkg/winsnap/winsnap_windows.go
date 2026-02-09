@@ -18,7 +18,156 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var ()
+// ---------- Reusable EnumWindows callbacks ----------
+// Go on Windows has a hard limit (~2000) for syscall.NewCallback slots.
+// We create each callback once and communicate per-call parameters via
+// package-level variables guarded by a mutex. EnumWindows invokes the
+// callback synchronously, so the mutex is held for the entire enumeration.
+
+var (
+	// getProcessWindowsBounds callback
+	gpwbCBOnce      sync.Once
+	gpwbCB          uintptr
+	gpwbMu          sync.Mutex
+	gpwbPID         uint32
+	gpwbSelfPID     uint32
+	gpwbBounds      rect
+	gpwbFound       bool
+)
+
+func gpwbEnumProc(hwnd uintptr, _ uintptr) uintptr {
+	h := windows.HWND(hwnd)
+	if !isWindowVisible(h) || isWindowIconic(h) {
+		return 1
+	}
+	winPID, err := getWindowProcessID(h)
+	if err != nil || winPID != gpwbPID {
+		return 1
+	}
+	if gpwbSelfPID != 0 && winPID == gpwbSelfPID {
+		return 1
+	}
+	ex := getExStyle(h)
+	if ex&wsExToolWindow != 0 {
+		return 1
+	}
+	var r rect
+	if err := getWindowRect(h, &r); err != nil {
+		return 1
+	}
+	if r.Right <= r.Left || r.Bottom <= r.Top {
+		return 1
+	}
+	if r.Left < gpwbBounds.Left {
+		gpwbBounds.Left = r.Left
+	}
+	if r.Top < gpwbBounds.Top {
+		gpwbBounds.Top = r.Top
+	}
+	if r.Right > gpwbBounds.Right {
+		gpwbBounds.Right = r.Right
+	}
+	if r.Bottom > gpwbBounds.Bottom {
+		gpwbBounds.Bottom = r.Bottom
+	}
+	gpwbFound = true
+	return 1
+}
+
+var (
+	// findMainWindowByProcessNameEx callback
+	fmwCBOnce         sync.Once
+	fmwCB             uintptr
+	fmwMu             sync.Mutex
+	fmwTargetLower    string
+	fmwIncludeMin     bool
+	fmwBestHwnd       windows.HWND
+	fmwBestScore      int
+	fmwBestArea       int64
+	fmwBestMinimized  bool
+)
+
+func fmwEnumProc(hwnd uintptr, _ uintptr) uintptr {
+	h := windows.HWND(hwnd)
+	isMin := isWindowIconic(h)
+	if !isWindowVisible(h) {
+		return 1
+	}
+	if isMin && !fmwIncludeMin {
+		return 1
+	}
+	pid, err := getWindowProcessID(h)
+	if err != nil || pid == 0 {
+		return 1
+	}
+	exe, err := getProcessImageBaseName(pid)
+	if err != nil || strings.ToLower(exe) != fmwTargetLower {
+		return 1
+	}
+	ex := getExStyle(h)
+	owner := getWindowOwner(h)
+	titleLen := getWindowTextLength(h)
+	score := 0
+	if ex&wsExToolWindow != 0 {
+		score -= 200
+	}
+	if ex&wsExNoActivate != 0 {
+		score -= 50
+	}
+	if ex&wsExAppWindow != 0 {
+		score += 30
+	}
+	if owner == 0 {
+		score += 100
+	} else {
+		score -= 20
+	}
+	if titleLen > 0 {
+		score += 20
+	}
+	if isMin {
+		score -= 10
+	}
+	var r rect
+	if err := getWindowRect(h, &r); err == nil {
+		w := int64(r.Right - r.Left)
+		hh := int64(r.Bottom - r.Top)
+		if w > 0 && hh > 0 {
+			area := w * hh
+			if fmwBestHwnd == 0 || score > fmwBestScore || (score == fmwBestScore && area > fmwBestArea) {
+				fmwBestHwnd = h
+				fmwBestScore = score
+				fmwBestArea = area
+				fmwBestMinimized = isMin
+			}
+		}
+	} else {
+		if fmwBestHwnd == 0 || score > fmwBestScore {
+			fmwBestHwnd = h
+			fmwBestScore = score
+			fmwBestArea = 0
+			fmwBestMinimized = isMin
+		}
+	}
+	return 1
+}
+
+// follower WinEventHook callback: created once, dispatches via thread-ID map.
+// SetWinEventHook with WINEVENT_OUTOFCONTEXT invokes the callback on the
+// same thread's message pump, so we map threadID → *follower.
+var (
+	followerCBOnce sync.Once
+	followerCB     uintptr
+	followerMap    sync.Map // uint32 (thread ID) -> *follower
+)
+
+func followerWinEventShim(hHook uintptr, event uint32, hwnd windows.HWND, idObject, idChild int32, eventThread, eventTime uint32) uintptr {
+	tid := getCurrentThreadId()
+	if v, ok := followerMap.Load(tid); ok {
+		return v.(*follower).winEventProc(hHook, event, hwnd, idObject, idChild, eventThread, eventTime)
+	}
+	return 0
+}
 
 func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	if opts.Window == nil {
@@ -148,13 +297,19 @@ func (f *follower) start() error {
 			return
 		}
 
-		cb := syscall.NewCallback(f.winEventProc)
+		// Register this follower for WinEventHook dispatch; create callback once.
+		followerMap.Store(f.tid, f)
+		defer followerMap.Delete(f.tid)
+		followerCBOnce.Do(func() {
+			followerCB = syscall.NewCallback(followerWinEventShim)
+		})
+
 		// 1) 监听目标窗口位置变化（移动/缩放）
 		hookLoc, _, errNo := procSetWinEventHook.Call(
 			uintptr(eventObjectLocationChange),
 			uintptr(eventObjectLocationChange),
 			0,
-			cb,
+			followerCB,
 			uintptr(pid),
 			0,
 			uintptr(wineventOutOfContext|wineventSkipOwnProcess),
@@ -166,7 +321,7 @@ func (f *follower) start() error {
 			uintptr(eventSystemForeground),
 			uintptr(eventSystemForeground),
 			0,
-			cb,
+			followerCB,
 			uintptr(pid),
 			0,
 			uintptr(wineventOutOfContext|wineventSkipOwnProcess),
@@ -248,74 +403,30 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 // Returns the combined bounds (left, top, right, bottom) of all visible windows.
 // The winsnap window (selfHWND) is excluded from the bounds calculation.
 func getProcessWindowsBounds(pid uint32, selfHWND windows.HWND) (bounds rect, found bool) {
-	// Get self PID to exclude our own windows
 	var selfPID uint32
 	if selfHWND != 0 {
 		selfPID, _ = getWindowProcessID(selfHWND)
 	}
 
-	// Initialize bounds with extreme values
-	bounds = rect{
-		Left:   0x7FFFFFFF, // max int32
+	gpwbMu.Lock()
+	defer gpwbMu.Unlock()
+
+	gpwbPID = pid
+	gpwbSelfPID = selfPID
+	gpwbBounds = rect{
+		Left:   0x7FFFFFFF,
 		Top:    0x7FFFFFFF,
-		Right:  -0x7FFFFFFF, // min int32
+		Right:  -0x7FFFFFFF,
 		Bottom: -0x7FFFFFFF,
 	}
+	gpwbFound = false
 
-	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
-		h := windows.HWND(hwnd)
-
-		// Skip invisible and minimized windows
-		if !isWindowVisible(h) || isWindowIconic(h) {
-			return 1
-		}
-
-		// Check if window belongs to target process
-		winPID, err := getWindowProcessID(h)
-		if err != nil || winPID != pid {
-			return 1
-		}
-
-		// Skip our own app's windows
-		if selfPID != 0 && winPID == selfPID {
-			return 1
-		}
-
-		// Skip tool windows and non-app windows
-		ex := getExStyle(h)
-		if ex&wsExToolWindow != 0 {
-			return 1
-		}
-
-		var r rect
-		if err := getWindowRect(h, &r); err != nil {
-			return 1
-		}
-
-		// Skip windows with zero or negative size
-		if r.Right <= r.Left || r.Bottom <= r.Top {
-			return 1
-		}
-
-		// Expand bounds - include ALL windows belonging to target process
-		if r.Left < bounds.Left {
-			bounds.Left = r.Left
-		}
-		if r.Top < bounds.Top {
-			bounds.Top = r.Top
-		}
-		if r.Right > bounds.Right {
-			bounds.Right = r.Right
-		}
-		if r.Bottom > bounds.Bottom {
-			bounds.Bottom = r.Bottom
-		}
-		found = true
-		return 1
+	gpwbCBOnce.Do(func() {
+		gpwbCB = syscall.NewCallback(gpwbEnumProc)
 	})
-	_, _, _ = procEnumWindows.Call(cb, 0)
+	_, _, _ = procEnumWindows.Call(gpwbCB, 0)
 
-	return bounds, found
+	return gpwbBounds, gpwbFound
 }
 
 func (f *follower) syncToTarget() error {
@@ -493,91 +604,25 @@ func findMainWindowByProcessNameIncludingMinimized(processName string) (windows.
 // uses getProcessWindowsBounds to consider all windows.
 // If includeMinimized is true, it will also consider minimized windows.
 func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (windows.HWND, error) {
-	targetLower := strings.ToLower(processName)
+	fmwMu.Lock()
+	defer fmwMu.Unlock()
 
-	type cand struct {
-		hwnd      windows.HWND
-		score     int
-		area      int64
-		minimized bool
-	}
-	var best cand
+	fmwTargetLower = strings.ToLower(processName)
+	fmwIncludeMin = includeMinimized
+	fmwBestHwnd = 0
+	fmwBestScore = 0
+	fmwBestArea = 0
+	fmwBestMinimized = false
 
-	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
-		h := windows.HWND(hwnd)
-		isMinimized := isWindowIconic(h)
-
-		// Keep this check permissive; some apps (e.g. WeChat) may have empty titles or owned main windows.
-		// For wake operations, we also consider minimized windows.
-		if !isWindowVisible(h) {
-			return 1
-		}
-		if isMinimized && !includeMinimized {
-			return 1
-		}
-
-		pid, err := getWindowProcessID(h)
-		if err != nil || pid == 0 {
-			return 1
-		}
-		exe, err := getProcessImageBaseName(pid)
-		if err != nil || strings.ToLower(exe) != targetLower {
-			return 1
-		}
-
-		ex := getExStyle(h)
-		owner := getWindowOwner(h)
-		titleLen := getWindowTextLength(h)
-
-		// Compute a score that prefers "main app window".
-		score := 0
-		if ex&wsExToolWindow != 0 {
-			score -= 200
-		}
-		if ex&wsExNoActivate != 0 {
-			score -= 50
-		}
-		if ex&wsExAppWindow != 0 {
-			score += 30
-		}
-		if owner == 0 {
-			score += 100
-		} else {
-			score -= 20
-		}
-		if titleLen > 0 {
-			score += 20
-		}
-		// Prefer non-minimized windows over minimized ones
-		if isMinimized {
-			score -= 10
-		}
-
-		var r rect
-		if err := getWindowRect(h, &r); err == nil {
-			w := int64(r.Right - r.Left)
-			hh := int64(r.Bottom - r.Top)
-			if w > 0 && hh > 0 {
-				area := w * hh
-				// Prefer higher score; tie-break by larger area.
-				if best.hwnd == 0 || score > best.score || (score == best.score && area > best.area) {
-					best = cand{hwnd: h, score: score, area: area, minimized: isMinimized}
-				}
-			}
-		} else {
-			// No rect: still allow score-only selection.
-			if best.hwnd == 0 || score > best.score {
-				best = cand{hwnd: h, score: score, area: 0, minimized: isMinimized}
-			}
-		}
-		return 1 // continue enumeration
+	fmwCBOnce.Do(func() {
+		fmwCB = syscall.NewCallback(fmwEnumProc)
 	})
-	_, _, _ = procEnumWindows.Call(cb, 0)
+	_, _, _ = procEnumWindows.Call(fmwCB, 0)
 
-	if best.hwnd == 0 {
+	if fmwBestHwnd == 0 {
 		return 0, ErrTargetWindowNotFound
 	}
-	return best.hwnd, nil
+	return fmwBestHwnd, nil
 }
 
 func isTopLevelCandidate(hwnd windows.HWND) bool {
