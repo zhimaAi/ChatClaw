@@ -17,7 +17,7 @@ import DoubaoIcon from '@/assets/icons/providers/doubao.svg'
 import BaiduIcon from '@/assets/icons/providers/baidu.svg'
 import GrokIcon from '@/assets/icons/providers/grok.svg'
 import OllamaIcon from '@/assets/icons/providers/ollama.svg'
-import ChatwikiIcon from '@/assets/icons/providers/chatwiki.svg'
+import AppLogoIcon from '@/assets/images/logo.svg'
 
 // AI 模型图标（用于多问页面）
 import ChatgptModelIcon from '@/assets/icons/models/chatgpt-icon.svg'
@@ -59,7 +59,8 @@ const builtinIcons: Record<string, SvgComponent> = {
   baidu: BaiduIcon,
   grok: GrokIcon,
   ollama: OllamaIcon,
-  chatwiki: ChatwikiIcon,
+  // Use app logo for ChatWiki to avoid cropped/incomplete rendering.
+  chatwiki: AppLogoIcon,
   // AI 模型图标（用于多问页面，使用 model- 前缀区分）
   'model-chatgpt': ChatgptModelIcon,
   'model-claude': ClaudeModelIcon,
