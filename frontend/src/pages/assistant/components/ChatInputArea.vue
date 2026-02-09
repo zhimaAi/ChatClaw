@@ -82,6 +82,19 @@ const handleLibrarySelectionChange = () => {
 const handleClearLibrarySelection = () => {
   emit('clearLibrarySelection')
 }
+
+// Whether the currently selected model's provider is free (e.g. ChatWiki)
+const selectedProviderIsFree = computed(() => {
+  if (!props.selectedModelInfo?.providerId || !props.providersWithModels?.length) return false
+  const pw = props.providersWithModels.find((p) => p.provider?.provider_id === props.selectedModelInfo?.providerId)
+  return isProviderFree(pw)
+})
+
+function isProviderFree(pw: ProviderWithModels | undefined): boolean {
+  if (!pw?.provider) return false
+  const p = pw.provider as { is_free?: boolean }
+  return Boolean(p.is_free)
+}
 </script>
 
 <template>
@@ -144,6 +157,12 @@ const handleClearLibrarySelection = () => {
                             class="shrink-0 text-foreground"
                           />
                           <span class="truncate">{{ selectedModelInfo.modelName }}</span>
+                          <span
+                            v-if="selectedProviderIsFree"
+                            class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                          >
+                            {{ t('assistant.chat.freeBadge') }}
+                          </span>
                         </div>
                         <span v-else class="text-muted-foreground">
                           {{ t('assistant.chat.noModel') }}
@@ -153,8 +172,14 @@ const handleClearLibrarySelection = () => {
                         <SelectGroup>
                           <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
                           <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
-                            <SelectLabel class="mt-2 text-xs text-muted-foreground">
-                              {{ pw.provider.name }}
+                            <SelectLabel class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <span>{{ pw.provider.name }}</span>
+                              <span
+                                v-if="isProviderFree(pw)"
+                                class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                              >
+                                {{ t('assistant.chat.freeBadge') }}
+                              </span>
                             </SelectLabel>
                             <template v-for="g in pw.model_groups" :key="g.type">
                               <template v-if="g.type === 'llm'">

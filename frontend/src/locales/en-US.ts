@@ -296,6 +296,7 @@ export default {
     },
     chat: {
       selectModel: 'Select model',
+      freeBadge: 'Free',
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
       selectImage: 'Select image',

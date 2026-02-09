@@ -83,7 +83,34 @@ const activePointerId = ref<number | null>(null)
 const capturedPointerId = ref<number | null>(null)
 const pointerStartX = ref(0)
 const pointerStartY = ref(0)
+const screenStartX = ref(0)
+const screenStartY = ref(0)
+const relStartX = ref<number | null>(null)
+const relStartY = ref<number | null>(null)
 const isDragging = ref(false)
+
+let rafMoveId: number | null = null
+let pendingMove: { x: number; y: number } | null = null
+
+const scheduleDragMove = (x: number, y: number) => {
+  pendingMove = { x, y }
+  if (rafMoveId != null) return
+  rafMoveId = requestAnimationFrame(() => {
+    rafMoveId = null
+    const p = pendingMove
+    pendingMove = null
+    if (!p) return
+    void FloatingBallService.DragMoveTo(Math.round(p.x), Math.round(p.y))
+  })
+}
+
+const cancelDragMove = () => {
+  if (rafMoveId != null) {
+    cancelAnimationFrame(rafMoveId)
+    rafMoveId = null
+  }
+  pendingMove = null
+}
 
 const onEnter = () => {
   if (hovered.value) return
@@ -106,24 +133,45 @@ const onPointerDown = (e: PointerEvent) => {
   capturedPointerId.value = null
   pointerStartX.value = e.clientX
   pointerStartY.value = e.clientY
+  screenStartX.value = e.screenX
+  screenStartY.value = e.screenY
+  relStartX.value = null
+  relStartY.value = null
   isDragging.value = true
   void FloatingBallService.SetDragging(true)
+  void FloatingBallService.GetRelativePosition().then((pos) => {
+    // If pointer already ended, ignore.
+    if (activePointerId.value !== e.pointerId) return
+    relStartX.value = pos.x ?? null
+    relStartY.value = pos.y ?? null
+    logDrag('dragStartRel', { x: pos.x, y: pos.y })
+  })
 }
 
 const onPointerMove = (e: PointerEvent) => {
   if (activePointerId.value == null || e.pointerId !== activePointerId.value) return
-  if (capturedPointerId.value != null) return
-  const dx = Math.abs(e.clientX - pointerStartX.value)
-  const dy = Math.abs(e.clientY - pointerStartY.value)
-  if (dx <= 2 && dy <= 2) return
-  try {
-    ;(e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId)
-    const captured = (e.currentTarget as HTMLElement | null)?.hasPointerCapture?.(e.pointerId)
-    logDrag('setPointerCapture', { id: e.pointerId, captured })
-    if (captured) capturedPointerId.value = e.pointerId
-  } catch {
-    logDrag('setPointerCapture:failed', { id: e.pointerId })
+
+  // Before capture: only decide whether this is a real drag.
+  if (capturedPointerId.value == null) {
+    const dx = Math.abs(e.clientX - pointerStartX.value)
+    const dy = Math.abs(e.clientY - pointerStartY.value)
+    if (dx <= 2 && dy <= 2) return
+    try {
+      ;(e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId)
+      const captured = (e.currentTarget as HTMLElement | null)?.hasPointerCapture?.(e.pointerId)
+      logDrag('setPointerCapture', { id: e.pointerId, captured })
+      if (captured) capturedPointerId.value = e.pointerId
+    } catch {
+      logDrag('setPointerCapture:failed', { id: e.pointerId })
+    }
+    return
   }
+
+  // After capture: implement custom drag. Use screenX/screenY deltas so movement is stable even while the window moves.
+  if (relStartX.value == null || relStartY.value == null) return
+  const dx = e.screenX - screenStartX.value
+  const dy = e.screenY - screenStartY.value
+  scheduleDragMove(relStartX.value + dx, relStartY.value + dy)
 }
 const onPointerUp = (e: PointerEvent) => {
   logDrag('pointerup', { id: e.pointerId, type: e.pointerType, x: e.clientX, y: e.clientY })
@@ -132,16 +180,22 @@ const onPointerUp = (e: PointerEvent) => {
   } catch {
     // ignore
   }
+  cancelDragMove()
   activePointerId.value = null
   capturedPointerId.value = null
   isDragging.value = false
+  relStartX.value = null
+  relStartY.value = null
   void FloatingBallService.SetDragging(false)
 }
 const onPointerCancel = () => {
   logDrag('pointercancel', {})
+  cancelDragMove()
   activePointerId.value = null
   capturedPointerId.value = null
   isDragging.value = false
+  relStartX.value = null
+  relStartY.value = null
   void FloatingBallService.SetDragging(false)
 }
 
@@ -181,8 +235,11 @@ const setActive = (active: boolean) => {
   if (!active) {
     activePointerId.value = null
     capturedPointerId.value = null
+    cancelDragMove()
     if (isDragging.value) {
       isDragging.value = false
+      relStartX.value = null
+      relStartY.value = null
       void FloatingBallService.SetDragging(false)
     }
   }
@@ -307,7 +364,7 @@ watch(
                 : 'rounded-full bg-black/25'
               : 'rounded-full bg-transparent',
           ]"
-          style="--wails-draggable: drag"
+          style="--wails-draggable: no-drag"
         >
           <img
             :key="collapsed ? 'collapsed' : 'expanded'"
