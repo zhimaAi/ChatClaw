@@ -142,8 +142,8 @@ const onPointerDown = (e: PointerEvent) => {
   void FloatingBallService.GetRelativePosition().then((pos) => {
     // If pointer already ended, ignore.
     if (activePointerId.value !== e.pointerId) return
-    relStartX.value = pos.x
-    relStartY.value = pos.y
+    relStartX.value = pos.x ?? null
+    relStartY.value = pos.y ?? null
     logDrag('dragStartRel', { x: pos.x, y: pos.y })
   })
 }
