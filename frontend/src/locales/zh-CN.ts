@@ -293,6 +293,7 @@ export default {
     },
     chat: {
       selectModel: '选择模型',
+      freeBadge: '免费',
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       selectImage: '选择图片',

@@ -17,6 +17,7 @@ type Provider struct {
 	Type        string    `json:"type"`
 	Icon        string    `json:"icon"`
 	IsBuiltin   bool      `json:"is_builtin"`
+	IsFree      bool      `json:"is_free"`
 	Enabled     bool      `json:"enabled"`
 	SortOrder   int       `json:"sort_order"`
 	APIEndpoint string    `json:"api_endpoint"`
@@ -84,6 +85,7 @@ type providerModel struct {
 	Type        string    `bun:"type,notnull"`
 	Icon        string    `bun:"icon,notnull"`
 	IsBuiltin   bool      `bun:"is_builtin,notnull"`
+	IsFree      bool      `bun:"is_free,notnull"`
 	Enabled     bool      `bun:"enabled,notnull"`
 	SortOrder   int       `bun:"sort_order,notnull"`
 	APIEndpoint string    `bun:"api_endpoint,notnull"`
@@ -119,6 +121,7 @@ func (m *providerModel) toDTO() Provider {
 		Type:        m.Type,
 		Icon:        m.Icon,
 		IsBuiltin:   m.IsBuiltin,
+		IsFree:      m.IsFree,
 		Enabled:     m.Enabled,
 		SortOrder:   m.SortOrder,
 		APIEndpoint: m.APIEndpoint,

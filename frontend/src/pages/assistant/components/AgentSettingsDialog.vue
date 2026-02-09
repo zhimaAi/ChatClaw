@@ -124,6 +124,12 @@ watch(
 
 const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.value !== '')
 
+const selectedProviderIsFree = computed(() => {
+  if (!modelProviderId.value || !providersWithModels.value.length) return false
+  const pw = providersWithModels.value.find((p) => p.provider?.provider_id === modelProviderId.value)
+  return Boolean((pw?.provider as { is_free?: boolean })?.is_free)
+})
+
 const displayContextCount = computed(() => {
   return contextCount.value >= 200
     ? t('assistant.settings.model.unlimited')
@@ -372,6 +378,12 @@ const handleDelete = async () => {
                           <div class="min-w-0 truncate text-sm font-medium text-foreground">
                             {{ modelName || modelId }}
                           </div>
+                          <span
+                            v-if="selectedProviderIsFree"
+                            class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                          >
+                            {{ t('assistant.chat.freeBadge') }}
+                          </span>
                         </div>
                         <div v-else class="text-sm text-muted-foreground">
                           {{ t('assistant.settings.model.noDefaultModel') }}
@@ -386,8 +398,14 @@ const handleDelete = async () => {
                             v-for="pw in providersWithModels"
                             :key="pw.provider.provider_id"
                           >
-                            <SelectLabel class="mt-2">
-                              {{ pw.provider.name }}
+                            <SelectLabel class="mt-2 flex items-center gap-1.5">
+                              <span>{{ pw.provider.name }}</span>
+                              <span
+                                v-if="(pw.provider as { is_free?: boolean })?.is_free"
+                                class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                              >
+                                {{ t('assistant.chat.freeBadge') }}
+                              </span>
                             </SelectLabel>
                             <template v-for="g in pw.model_groups" :key="g.type">
                               <template v-if="g.type === 'llm'">
