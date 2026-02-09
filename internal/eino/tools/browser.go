@@ -569,8 +569,8 @@ func (b *browserTool) actionCloseTab(ctx context.Context) (string, error) {
 
 type opHandle struct {
 	ctx    context.Context
-	stopFn func() bool          // returned by context.AfterFunc
-	ccFn   context.CancelFunc   // cancel function for ctx
+	stopFn func() bool        // returned by context.AfterFunc
+	ccFn   context.CancelFunc // cancel function for ctx
 }
 
 // cancel releases all resources held by this handle.

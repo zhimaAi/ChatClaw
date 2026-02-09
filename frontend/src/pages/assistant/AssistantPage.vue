@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import IconAssistant from '@/assets/icons/assistant.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
 import IconSidebarExpand from '@/assets/icons/sidebar-expand.svg'
 import { cn } from '@/lib/utils'
@@ -134,6 +135,11 @@ const activeAgent = computed(() => {
   if (activeAgentId.value == null) return null
   return agents.value.find((a) => a.id === activeAgentId.value) ?? null
 })
+
+// Whether the agent list is empty (loaded & no agents)
+const isAgentEmpty = computed(
+  () => !loading.value && agents.value.length === 0
+)
 
 // Helper function to clear knowledge base selection
 const clearKnowledgeSelection = () => {
@@ -735,9 +741,9 @@ onUnmounted(() => {
       @click="sidebarCollapsed = true"
     />
 
-    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded) -->
+    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded, hidden when empty) -->
     <AgentSidebar
-      v-if="!sidebarCollapsed"
+      v-if="!sidebarCollapsed && !isAgentEmpty"
       :agents="agents"
       :active-agent-id="activeAgentId"
       :active-conversation-id="activeConversationId"
@@ -761,8 +767,8 @@ onUnmounted(() => {
       @close-sidebar="sidebarCollapsed = true"
     />
 
-    <!-- Collapse/Expand button -->
-    <div class="flex w-8 shrink-0 items-center justify-center">
+    <!-- Collapse/Expand button (hidden when empty) -->
+    <div v-if="!isAgentEmpty" class="flex w-8 shrink-0 items-center justify-center">
       <Button
         size="icon"
         variant="ghost"
@@ -777,9 +783,29 @@ onUnmounted(() => {
 
     <!-- Right side: Chat area -->
     <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <!-- Agent list empty state -->
+      <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
+        <div class="flex flex-col items-center gap-4">
+          <div class="grid size-10 place-items-center rounded-lg bg-muted">
+            <IconAssistant class="size-4 text-muted-foreground" />
+          </div>
+          <div class="flex flex-col items-center gap-1.5">
+            <h3 class="text-base font-medium text-foreground">
+              {{ t('assistant.emptyState.title') }}
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              {{ t('assistant.emptyState.desc') }}
+            </p>
+          </div>
+          <Button class="mt-1" @click="createOpen = true">
+            {{ t('assistant.emptyState.createBtn') }}
+          </Button>
+        </div>
+      </div>
+
       <!-- Chat messages area - show when we have an active conversation -->
       <ChatMessageList
-        v-if="activeConversationId"
+        v-if="!isAgentEmpty && activeConversationId"
         :conversation-id="activeConversationId"
         :tab-id="tabId"
         :mode="props.mode"
@@ -795,8 +821,9 @@ onUnmounted(() => {
         @snap-copy="handleCopyToClipboard"
       />
 
-      <!-- Empty state / Input area -->
+      <!-- Empty state / Input area (hidden when no agents) -->
       <ChatInputArea
+        v-if="!isAgentEmpty"
         :chat-input="chatInput"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"

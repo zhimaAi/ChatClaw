@@ -259,6 +259,11 @@ export default {
       team: 'Team',
     },
     empty: 'No agents yet',
+    emptyState: {
+      title: 'No Agents',
+      desc: 'Please add an agent',
+      createBtn: 'Create Agent',
+    },
     create: {
       title: 'Create Agent',
     },
@@ -425,8 +430,9 @@ export default {
     teamNotReady: 'Team knowledge base is not available yet',
     selectOne: 'Please select a knowledge base',
     empty: {
-      title: 'No knowledge base yet',
-      desc: 'Click the plus button to create your first knowledge base',
+      title: 'Knowledge Base is Empty',
+      desc: 'Please add a knowledge base',
+      createBtn: 'Create Knowledge Base',
     },
     item: {
       menu: 'More actions',
