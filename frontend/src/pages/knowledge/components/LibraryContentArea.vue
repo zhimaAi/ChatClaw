@@ -245,6 +245,8 @@ const handleAddDocument = async () => {
       toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
     }
   } catch (error) {
+    // User cancelled the file dialog — not an error
+    if (String(error).includes('cancelled by user')) return
     console.error('Failed to upload documents:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {

@@ -199,21 +199,27 @@ const handleClose = () => emit('update:open', false)
 
 const handlePickIcon = async () => {
   if (saving.value) return
-  const path = await Dialogs.OpenFile({
-    CanChooseFiles: true,
-    CanChooseDirectories: false,
-    AllowsMultipleSelection: false,
-    Title: t('assistant.icon.pickTitle'),
-    Filters: [
-      {
-        DisplayName: t('assistant.icon.filterImages'),
-        Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
-      },
-    ],
-  })
-  if (!path) return
-  icon.value = await AgentsService.ReadIconFile(path)
-  iconChanged.value = true
+  try {
+    const path = await Dialogs.OpenFile({
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Title: t('assistant.icon.pickTitle'),
+      Filters: [
+        {
+          DisplayName: t('assistant.icon.filterImages'),
+          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
+        },
+      ],
+    })
+    if (!path) return
+    icon.value = await AgentsService.ReadIconFile(path)
+    iconChanged.value = true
+  } catch (error) {
+    // User cancelled the file dialog — not an error
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to pick icon:', error)
+  }
 }
 
 const handleSave = async () => {
