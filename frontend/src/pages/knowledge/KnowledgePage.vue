@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, MoreHorizontal, Settings } from 'lucide-vue-next'
+import { Plus, MoreHorizontal, Settings, FolderOpen } from 'lucide-vue-next'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -62,6 +62,11 @@ const selectedLibraryId = ref<number | null>(null)
 
 const selectedLibrary = computed(
   () => libraries.value.find((l) => l.id === selectedLibraryId.value) || null
+)
+
+// Whether the library list is empty (loaded & no personal libraries)
+const isLibraryEmpty = computed(
+  () => !loading.value && activeTab.value === 'personal' && libraries.value.length === 0
 )
 
 const loadLibraries = async () => {
@@ -161,8 +166,8 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <!-- 左侧：知识库列表 -->
-    <aside class="flex w-sidebar shrink-0 flex-col border-r border-border">
+    <!-- 左侧：知识库列表（知识库为空时隐藏） -->
+    <aside v-if="!isLibraryEmpty" class="flex w-sidebar shrink-0 flex-col border-r border-border">
       <div class="flex items-center justify-between gap-2 px-3 py-3">
         <!-- tabs -->
         <div class="inline-flex rounded-md bg-muted p-1">
@@ -284,6 +289,24 @@ onMounted(() => {
           class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           {{ t('knowledge.teamNotReady') }}
+        </div>
+      </div>
+
+      <!-- 知识库为空 -->
+      <div v-else-if="isLibraryEmpty" class="flex h-full items-center justify-center px-8">
+        <div class="flex flex-col items-center gap-4">
+          <FolderOpen class="size-12 text-muted-foreground/50" :stroke-width="1.5" />
+          <div class="flex flex-col items-center gap-1.5">
+            <h3 class="text-base font-medium text-foreground">
+              {{ t('knowledge.empty.title') }}
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              {{ t('knowledge.empty.desc') }}
+            </p>
+          </div>
+          <Button class="mt-1" @click="handleCreateClick">
+            {{ t('knowledge.empty.createBtn') }}
+          </Button>
         </div>
       </div>
 

@@ -420,8 +420,9 @@ export default {
     teamNotReady: '团队知识库暂未开放',
     selectOne: '请选择一个知识库',
     empty: {
-      title: '暂无知识库',
-      desc: '点击右上角加号创建你的第一个知识库',
+      title: '知识库为空',
+      desc: '请添加一个知识库',
+      createBtn: '创建知识库',
     },
     item: {
       menu: '更多操作',
