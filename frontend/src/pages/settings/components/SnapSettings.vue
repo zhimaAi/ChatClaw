@@ -51,7 +51,7 @@ const DEFAULT_CLICK_OFFSET_Y: Record<string, string> = {
   snap_qq: '120',
   snap_dingtalk: '120',
   snap_feishu: '50',
-  snap_douyin: '120',
+  snap_douyin: '50',
 }
 
 // 吸附应用点击偏移量 X（像素，0 表示居中）
