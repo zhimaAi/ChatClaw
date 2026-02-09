@@ -525,6 +525,47 @@ func (s *FloatingBallService) OpenMainFromUI() {
 	s.mainWindow.Focus()
 }
 
+// GetRelativePosition returns current window position relative to the primary WorkArea (DIP).
+// This is intended for custom drag logic in the floatingball frontend.
+func (s *FloatingBallService) GetRelativePosition() map[string]int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x, y := s.safeRelativePositionLocked()
+	return map[string]int{"x": x, "y": y}
+}
+
+// DragMoveTo moves the floating ball to a relative position (DIP) within the primary WorkArea.
+// It clamps the requested position to keep the window fully visible on the primary display.
+// This is used to implement smooth custom dragging (avoids native cross-display flicker).
+func (s *FloatingBallService) DragMoveTo(relX, relY int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.win == nil || !s.visible {
+		return
+	}
+	work, ok := s.workAreaLocked()
+	if !ok {
+		return
+	}
+
+	// When dragging, detach from dock state to avoid edge-hide logic interfering.
+	s.dock = DockNone
+
+	// If currently collapsed, expand to full size before moving.
+	if s.collapsed {
+		s.collapsed = false
+		s.setSizeLocked(ballSize, ballSize)
+	}
+
+	b := s.win.Bounds()
+	maxX := work.Width - b.Width
+	maxY := work.Height - b.Height
+	x := clamp(relX, 0, maxX)
+	y := clamp(relY, 0, maxY)
+	s.setRelativePositionLocked(x, y)
+}
+
 func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 	if s.app == nil {
 		return nil
