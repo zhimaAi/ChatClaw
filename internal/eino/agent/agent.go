@@ -436,15 +436,15 @@ func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 }
 
 // buildSkillMiddleware creates the skill middleware.
-// Skills are stored under <UserConfigDir>/.agents/skills/<skill-name>/SKILL.md.
+// Skills are stored under $HOME/.agents/skills/<skill-name>/SKILL.md.
 func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
-	cfgDir, err := os.UserConfigDir()
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("[agent] failed to get user config dir for skills: %v", err)
+		log.Printf("[agent] failed to get home dir for skills: %v", err)
 		return adk.AgentMiddleware{}, false
 	}
 
-	skillsDir := filepath.Join(cfgDir, ".agents", "skills")
+	skillsDir := filepath.Join(homeDir, ".agents", "skills")
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		log.Printf("[agent] failed to create skills directory %s: %v", skillsDir, err)
 		return adk.AgentMiddleware{}, false
