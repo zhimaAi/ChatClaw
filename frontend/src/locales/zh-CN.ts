@@ -12,6 +12,7 @@ export default {
     copy: '复制',
     detail: '详情',
     hide: '收起',
+    retry: '重试',
   },
   tools: {
     calculator: {

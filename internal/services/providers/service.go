@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -99,7 +101,9 @@ func generateChatWikiAPIKeyInternal() (string, error) {
 
 	userIP, err := fetchPublicIP()
 	if err != nil {
-		return "", errs.Wrap("error.chatwiki_fetch_ip_failed", err)
+		// Network may be restricted (e.g., no global internet access). Do not block key generation.
+		// ChatWiki model list endpoint can be public; other endpoints may still work without IP binding.
+		userIP = ""
 	}
 
 	payload := chatWikiAPIKeyPayload{
@@ -164,13 +168,47 @@ func EnsureChatWikiInitialized() error {
 
 // fetchPublicIP fetches the machine's public IP via api.ipify.org
 func fetchPublicIP() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Multiple fallbacks for restricted networks (CN-only, captive portals, etc.).
+	// We only need a best-effort IP string for telemetry/binding. If all fail, caller may proceed without IP.
+	endpoints := []string{
+		// Global providers (may be blocked in CN-only networks)
+		"https://api.ipify.org?format=text",
+		"https://ipv4.icanhazip.com/",
+		"https://ifconfig.me/ip",
+		"https://ident.me/",
+		// CN-friendly providers (often reachable inside CN)
+		"https://myip.ipip.net",                  // contains IP in text
+		"http://pv.sohu.com/cityjson?ie=utf-8",   // contains "cip": "x.x.x.x"
+		"https://ip.3322.net",                    // plain text
+	}
+
+	var lastErr error
+	for _, u := range endpoints {
+		ip, err := fetchIPFromEndpoint(u)
+		if err == nil && strings.TrimSpace(ip) != "" {
+			return ip, nil
+		}
+		if err != nil {
+			lastErr = err
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("failed to fetch public IP")
+	}
+	return "", lastErr
+}
+
+var ipCandidateRe = regexp.MustCompile(`(?i)\b(?:\d{1,3}\.){3}\d{1,3}\b|(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}\b`)
+
+func fetchIPFromEndpoint(url string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.ipify.org?format=text", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("Accept", "text/plain,application/json,*/*")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -179,15 +217,32 @@ func fetchPublicIP() (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.New("failed to fetch public IP")
+		return "", errors.New("non-200 when fetching public IP")
 	}
-
-	b, err := io.ReadAll(resp.Body)
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		return "", err
 	}
 
-	return strings.TrimSpace(string(b)), nil
+	raw := strings.TrimSpace(string(b))
+	if raw == "" {
+		return "", errors.New("empty response when fetching public IP")
+	}
+
+	// Try exact parse first.
+	if ip := net.ParseIP(raw); ip != nil {
+		return ip.String(), nil
+	}
+
+	// Extract first parsable IP candidate from response body.
+	cands := ipCandidateRe.FindAllString(raw, -1)
+	for _, c := range cands {
+		c = strings.TrimSpace(strings.Trim(c, `"'`))
+		if ip := net.ParseIP(c); ip != nil {
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("no ip found in response")
 }
 
 // GetProvider 获取单个供应商详情
