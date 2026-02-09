@@ -161,6 +161,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		},
 	})
 
+	// Allow i18n to broadcast locale:changed events to all windows
+	i18n.SetApp(app)
+
 	// ========== 初始化基础设施 ==========
 
 	// 初始化数据库

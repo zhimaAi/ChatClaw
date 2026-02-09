@@ -45,6 +45,7 @@ const props = defineProps<{
   sendDisabledReason: string
   chatMessages: any[]
   activeAgentId: number | null
+  isSnapMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -121,48 +122,62 @@ const handleClearLibrarySelection = () => {
 
         <div class="mt-3 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <Select
-              :model-value="selectedModelKey"
-              :disabled="!hasModels"
-              @update:model-value="(v: any) => v && emit('update:selectedModelKey', String(v))"
-            >
-              <SelectTrigger
-                class="h-8 w-auto min-w-[160px] max-w-[240px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
-              >
-                <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
-                  <ProviderIcon
-                    :icon="selectedModelInfo.providerId"
-                    :size="14"
-                    class="shrink-0 text-foreground"
-                  />
-                  <span class="truncate">{{ selectedModelInfo.modelName }}</span>
-                </div>
-                <span v-else class="text-muted-foreground">
-                  {{ t('assistant.chat.noModel') }}
-                </span>
-              </SelectTrigger>
-              <SelectContent class="max-h-[260px]">
-                <SelectGroup>
-                  <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
-                  <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
-                    <SelectLabel class="mt-2 text-xs text-muted-foreground">
-                      {{ pw.provider.name }}
-                    </SelectLabel>
-                    <template v-for="g in pw.model_groups" :key="g.type">
-                      <template v-if="g.type === 'llm'">
-                        <SelectItem
-                          v-for="m in g.models"
-                          :key="pw.provider.provider_id + '::' + m.model_id"
-                          :value="pw.provider.provider_id + '::' + m.model_id"
-                        >
-                          {{ m.name }}
-                        </SelectItem>
-                      </template>
-                    </template>
-                  </template>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <div class="min-w-0">
+                    <Select
+                      :model-value="selectedModelKey"
+                      :disabled="!hasModels"
+                      @update:model-value="(v: any) => v && emit('update:selectedModelKey', String(v))"
+                    >
+                      <SelectTrigger
+                        :class="cn(
+                          'h-8 w-auto rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
+                          isSnapMode ? 'min-w-0 max-w-[160px]' : 'min-w-[160px] max-w-[240px]'
+                        )"
+                      >
+                        <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
+                          <ProviderIcon
+                            :icon="selectedModelInfo.providerId"
+                            :size="14"
+                            class="shrink-0 text-foreground"
+                          />
+                          <span class="truncate">{{ selectedModelInfo.modelName }}</span>
+                        </div>
+                        <span v-else class="text-muted-foreground">
+                          {{ t('assistant.chat.noModel') }}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent class="max-h-[260px]">
+                        <SelectGroup>
+                          <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
+                          <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
+                            <SelectLabel class="mt-2 text-xs text-muted-foreground">
+                              {{ pw.provider.name }}
+                            </SelectLabel>
+                            <template v-for="g in pw.model_groups" :key="g.type">
+                              <template v-if="g.type === 'llm'">
+                                <SelectItem
+                                  v-for="m in g.models"
+                                  :key="pw.provider.provider_id + '::' + m.model_id"
+                                  :value="pw.provider.provider_id + '::' + m.model_id"
+                                >
+                                  {{ m.name }}
+                                </SelectItem>
+                              </template>
+                            </template>
+                          </template>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent v-if="selectedModelInfo">
+                  <p>{{ selectedModelInfo.modelName }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <!-- Thinking mode toggle -->
             <TooltipProvider>

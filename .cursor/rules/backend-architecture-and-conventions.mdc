@@ -32,6 +32,7 @@ alwaysApply: false
 - 不要创建循环依赖（services 之间不要互相 import）
 - 不要直接 `log.Fatal`，除非是 `main.go` 中的启动失败
 - 不要硬编码用户可见的文本，必须走 i18n
+- **不要在函数体内裸调 `syscall.NewCallback` / `windows.NewCallback`**——Go 在 Windows 上只有约 2000 个回调槽位且永不释放，必须用 `sync.Once` 保证只创建一次（详见 `docs/windows-syscall-callback-limit.md`）
 
 ## 代码模式
 
@@ -49,4 +50,42 @@ return errs.Wrap("error.xxx_failed", err)
 
 // 使用翻译
 title := i18n.T("window.settings_title")
+```
+
+## Windows 回调模式
+
+在 Windows 平台调用 `syscall.NewCallback` / `windows.NewCallback` 时，**必须**用 `sync.Once` 包裹，确保回调只创建一次。回调函数不能是闭包，需通过包级变量传参。
+
+```go
+// ✅ 正确
+var (
+    myCBOnce sync.Once
+    myCB     uintptr
+    myMu     sync.Mutex
+    myParam  string
+    myResult uintptr
+)
+
+func myEnumProc(hwnd uintptr, _ uintptr) uintptr {
+    // use myParam / myResult ...
+    return 1
+}
+
+func myFunc(param string) uintptr {
+    myMu.Lock()
+    defer myMu.Unlock()
+    myParam = param
+    myResult = 0
+    myCBOnce.Do(func() { myCB = syscall.NewCallback(myEnumProc) })
+    procEnumWindows.Call(myCB, 0)
+    return myResult
+}
+
+// ❌ 错误 — 每次调用都分配新槽位
+func myFunc(param string) uintptr {
+    var result uintptr
+    cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr { ... })
+    procEnumWindows.Call(cb, 0)
+    return result
+}
 ```

@@ -58,6 +58,9 @@ type clickHookStruct struct {
 var (
 	clickOutsideInstance   *ClickOutsideWatcher
 	clickOutsideInstanceMu sync.Mutex
+
+	clickOutsideCBOnce sync.Once
+	clickOutsideCB     uintptr
 )
 
 // NewClickOutsideWatcher creates a new click outside watcher.
@@ -125,10 +128,12 @@ func (w *ClickOutsideWatcher) run() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	cb := syscall.NewCallback(clickOutsideMouseProc)
+	clickOutsideCBOnce.Do(func() {
+		clickOutsideCB = syscall.NewCallback(clickOutsideMouseProc)
+	})
 	hook, _, _ := procSetWindowsHookExW.Call(
 		uintptr(whMouseLL),
-		cb,
+		clickOutsideCB,
 		0,
 		0,
 	)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jeandeaual/go-locale"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/text/language"
 )
 
@@ -24,7 +25,16 @@ var (
 	bundle    *i18n.Bundle
 	localizer *i18n.Localizer
 	mu        sync.RWMutex
+	appRef    *application.App
 )
+
+// SetApp stores the application reference for cross-window event broadcasting.
+// Call after the app is created in bootstrap.
+func SetApp(a *application.App) {
+	mu.Lock()
+	defer mu.Unlock()
+	appRef = a
+}
 
 func init() {
 	bundle = i18n.NewBundle(language.Chinese)
@@ -91,7 +101,6 @@ func GetLocale() string {
 // SetLocale 设置语言（空字符串时自动检测系统语言）
 func SetLocale(locale string) {
 	mu.Lock()
-	defer mu.Unlock()
 
 	if locale == "" {
 		locale = DetectLocale()
@@ -100,6 +109,13 @@ func SetLocale(locale string) {
 	}
 	currentLocale = locale
 	localizer = i18n.NewLocalizer(bundle, locale)
+	a := appRef
+	mu.Unlock()
+
+	// Broadcast to all windows so snap/selection can sync
+	if a != nil {
+		a.Event.Emit("locale:changed", map[string]string{"locale": locale})
+	}
 }
 
 // T 获取翻译文本

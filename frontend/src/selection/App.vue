@@ -3,8 +3,12 @@ import { onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Logo from '@/assets/images/logo.svg'
 import { Events } from '@wailsio/runtime'
+import { useLocaleSync } from '@/composables/useLocale'
 
 const { t } = useI18n()
+
+// Sync locale when main window switches language
+const unsubLocale = useLocaleSync()
 
 // Emit button click event to backend using mousedown to avoid focus issues.
 // On Windows, clicking the popup would cause Wails to call Focus() which can
@@ -38,6 +42,7 @@ const handleMouseLeave = () => {
 }
 
 onUnmounted(() => {
+  unsubLocale()
   if (hideTimer) {
     clearTimeout(hideTimer)
     hideTimer = null

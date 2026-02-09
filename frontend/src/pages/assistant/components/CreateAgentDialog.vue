@@ -45,20 +45,26 @@ watch(
 const handleClose = () => emit('update:open', false)
 const handlePickIcon = async () => {
   if (props.loading) return
-  const path = await Dialogs.OpenFile({
-    CanChooseFiles: true,
-    CanChooseDirectories: false,
-    AllowsMultipleSelection: false,
-    Title: t('assistant.icon.pickTitle'),
-    Filters: [
-      {
-        DisplayName: t('assistant.icon.filterImages'),
-        Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
-      },
-    ],
-  })
-  if (!path) return
-  icon.value = await AgentsService.ReadIconFile(path)
+  try {
+    const path = await Dialogs.OpenFile({
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Title: t('assistant.icon.pickTitle'),
+      Filters: [
+        {
+          DisplayName: t('assistant.icon.filterImages'),
+          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
+        },
+      ],
+    })
+    if (!path) return
+    icon.value = await AgentsService.ReadIconFile(path)
+  } catch (error) {
+    // User cancelled the file dialog — not an error
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to pick icon:', error)
+  }
 }
 const handleCreate = () => {
   if (!isValid.value || props.loading) return
