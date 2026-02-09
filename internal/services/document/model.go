@@ -73,11 +73,13 @@ type RenameInput struct {
 // ListDocumentsPageInput 文档分页查询输入参数（cursor 分页）
 // - BeforeID: 返回 id < before_id 的数据（按 id DESC）
 // - Limit: 每次返回条数（建议 100）
+// - SortBy: 排序方式（"created_desc" 或 "created_asc"），默认 "created_desc"
 type ListDocumentsPageInput struct {
 	LibraryID int64  `json:"library_id"`
 	Keyword   string `json:"keyword"`
 	BeforeID  int64  `json:"before_id"`
 	Limit     int    `json:"limit"`
+	SortBy    string `json:"sort_by"`
 }
 
 // ProgressEvent 进度事件数据（发送给前端）

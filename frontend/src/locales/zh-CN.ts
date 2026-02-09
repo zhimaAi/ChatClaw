@@ -500,6 +500,10 @@ export default {
       selectFile: '选择文件',
       loadFailed: '加载文档列表失败',
       noMore: '没有更多了',
+      sort: {
+        createdDesc: '按创建时间倒序',
+        createdAsc: '按创建时间正序',
+      },
       fileTypes: {
         documents: '文档文件',
         all: '所有文件',
@@ -526,6 +530,10 @@ export default {
         failed: '文档上传失败',
         count: '已上传 {count} 个文档',
         uploading: '正在上传 {done}/{total}',
+      },
+      drop: {
+        hint: '拖放文件到此处上传',
+        formats: '支持 PDF、Word、Excel、TXT、Markdown、CSV、HTML、OFD 格式',
       },
       rename: {
         title: '重命名文档',

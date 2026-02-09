@@ -382,6 +382,17 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		floatingBallService.InitFromSettings()
 	})
 
+	// 监听文件拖拽事件，将文件路径转发到前端
+	mainWindow.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		files := event.Context().DroppedFiles()
+		if len(files) == 0 {
+			return
+		}
+		app.Event.Emit("filedrop:files", map[string]any{
+			"files": files,
+		})
+	})
+
 	// 监听主窗口关闭事件，实现"关闭时最小化"
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		minimizeEnabled := trayService.IsMinimizeToTrayEnabled()
