@@ -12,6 +12,7 @@ export default {
     copy: 'Copy',
     detail: 'Details',
     hide: 'Hide',
+    retry: 'Retry',
   },
   tools: {
     calculator: {

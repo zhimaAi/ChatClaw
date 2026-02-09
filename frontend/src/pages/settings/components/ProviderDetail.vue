@@ -48,6 +48,7 @@ interface AzureExtraConfig {
 const props = defineProps<{
   providerWithModels: ProviderWithModels | null
   loading?: boolean
+  errorMessage?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -572,6 +573,19 @@ const confirmDeleteModel = async () => {
       <div
         class="rounded-xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
+        <!-- Error banner (models failed to load, but form still usable) -->
+        <div
+          v-if="props.errorMessage"
+          class="mb-4 flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3"
+        >
+          <div class="min-w-0 text-sm text-muted-foreground">
+            {{ t('settings.modelService.loadFailed') }}：{{ props.errorMessage }}
+          </div>
+          <Button size="sm" variant="outline" :disabled="loading" @click="emit('refresh')">
+            {{ t('common.retry') }}
+          </Button>
+        </div>
+
         <!-- 标题和开关 -->
         <div
           class="flex items-center justify-between rounded-lg border border-border bg-background/50 px-3 py-3 dark:border-white/10"
