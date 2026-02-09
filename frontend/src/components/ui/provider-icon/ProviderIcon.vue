@@ -109,14 +109,19 @@ const useComponent = computed(() => {
 </script>
 
 <template>
-  <!-- 内置图标：作为 Vue 组件渲染，支持 currentColor -->
-  <component
-    :is="iconComponent"
+  <!-- 内置图标：作为 Vue 组件渲染，支持 currentColor；外层固定尺寸避免 SVG 自身 1em 等导致放大 -->
+  <span
     v-if="useComponent"
-    :width="size"
-    :height="size"
-    :class="cn('inline-block shrink-0 text-foreground', props.class)"
-  />
+    class="inline-block shrink-0"
+    :style="{ width: size + 'px', height: size + 'px' }"
+  >
+    <component
+      :is="iconComponent"
+      :width="size"
+      :height="size"
+      :class="cn('block h-full w-full text-foreground', props.class)"
+    />
+  </span>
   <!-- Data URL 图标：作为 img 渲染 -->
   <img
     v-else

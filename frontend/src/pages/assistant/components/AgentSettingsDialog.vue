@@ -127,8 +127,14 @@ const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.v
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
   const pw = providersWithModels.value.find((p) => p.provider?.provider_id === modelProviderId.value)
-  return Boolean((pw?.provider as { is_free?: boolean })?.is_free)
+  return isProviderFree(pw)
 })
+
+function isProviderFree(pw: ProviderWithModels | undefined): boolean {
+  if (!pw?.provider) return false
+  const p = pw.provider as { is_free?: boolean }
+  return Boolean(p.is_free)
+}
 
 const displayContextCount = computed(() => {
   return contextCount.value >= 200
@@ -401,7 +407,7 @@ const handleDelete = async () => {
                             <SelectLabel class="mt-2 flex items-center gap-1.5">
                               <span>{{ pw.provider.name }}</span>
                               <span
-                                v-if="(pw.provider as { is_free?: boolean })?.is_free"
+                                v-if="isProviderFree(pw)"
                                 class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                               >
                                 {{ t('assistant.chat.freeBadge') }}

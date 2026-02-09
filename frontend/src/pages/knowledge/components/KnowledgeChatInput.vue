@@ -118,8 +118,13 @@ watch(providersWithModels, () => {
 const selectedProviderIsFree = computed(() => {
   if (!selectedModelInfo.value?.providerId || !providersWithModels.value?.length) return false
   const pw = providersWithModels.value.find((p) => p.provider?.provider_id === selectedModelInfo.value?.providerId)
-  return Boolean((pw?.provider as { is_free?: boolean })?.is_free)
+  return isProviderFree(pw)
 })
+
+function isProviderFree(pw: { provider?: { is_free?: boolean } } | undefined): boolean {
+  if (!pw?.provider) return false
+  return Boolean(pw.provider.is_free)
+}
 
 // When tab becomes active, refresh agents and models
 // (user may have deleted agents or disabled models in other pages)
@@ -236,7 +241,7 @@ onMounted(async () => {
                           <SelectLabel class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                             <span>{{ pw.provider.name }}</span>
                             <span
-                              v-if="(pw.provider as { is_free?: boolean })?.is_free"
+                              v-if="isProviderFree(pw)"
                               class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                             >
                               {{ t('assistant.chat.freeBadge') }}

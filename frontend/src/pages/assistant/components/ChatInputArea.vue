@@ -87,8 +87,14 @@ const handleClearLibrarySelection = () => {
 const selectedProviderIsFree = computed(() => {
   if (!props.selectedModelInfo?.providerId || !props.providersWithModels?.length) return false
   const pw = props.providersWithModels.find((p) => p.provider?.provider_id === props.selectedModelInfo?.providerId)
-  return Boolean((pw?.provider as { is_free?: boolean })?.is_free)
+  return isProviderFree(pw)
 })
+
+function isProviderFree(pw: ProviderWithModels | undefined): boolean {
+  if (!pw?.provider) return false
+  const p = pw.provider as { is_free?: boolean }
+  return Boolean(p.is_free)
+}
 </script>
 
 <template>
@@ -169,7 +175,7 @@ const selectedProviderIsFree = computed(() => {
                             <SelectLabel class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                               <span>{{ pw.provider.name }}</span>
                               <span
-                                v-if="(pw.provider as { is_free?: boolean })?.is_free"
+                                v-if="isProviderFree(pw)"
                                 class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                               >
                                 {{ t('assistant.chat.freeBadge') }}
