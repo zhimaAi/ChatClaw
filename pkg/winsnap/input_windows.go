@@ -165,20 +165,27 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 	// Try to find editable child window
 	editHwnd := findEditableChild(uintptr(targetHWND))
 
-	// For Qt applications like DingTalk that don't use standard Edit controls,
-	// we need to click on the input area to give it focus.
-	// Key insight: DingTalk loses input focus when window is deactivated
-
 	// Get window class to detect DingTalk or other Qt apps
 	className := getWindowClassName(uintptr(targetHWND))
 	isQtApp := strings.Contains(className, "Qt")
+
+	// Detect Chromium/CEF-based apps (e.g., Douyin, modern WeChat).
+	// In these apps the actual chat input is rendered inside the web content,
+	// NOT as a native Edit control. Even if findEditableChild returns a native
+	// Edit handle (e.g., a search bar or title-bar input), it is NOT the chat
+	// input box. We must click to focus the web-rendered input area.
+	chatChildHwnd := findChatChildWindow(uintptr(targetHWND))
+	isChromiumApp := chatChildHwnd != 0
 
 	// Skip click if noClick mode is enabled (for apps that auto-keep focus on input)
 	if noClick {
 		// Just a small delay after activation
 		time.Sleep(50 * time.Millisecond)
-	} else if editHwnd == 0 || isQtApp {
-		// If no standard edit control found OR it's a Qt app, click on input area
+	} else if editHwnd == 0 || isQtApp || isChromiumApp {
+		// Click on input area when:
+		// - No standard edit control found, OR
+		// - Qt app (native edit controls are unreliable after deactivation), OR
+		// - Chromium/CEF app (native edit controls are NOT the actual chat input)
 		clickInputAreaOfWindow(uintptr(targetHWND), clickOffsetX, clickOffsetY, targetProcess)
 		// Wait for click to register and input to get focus
 		time.Sleep(200 * time.Millisecond)
