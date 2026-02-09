@@ -12,6 +12,7 @@ export default {
     copy: '复制',
     detail: '详情',
     hide: '收起',
+    retry: '重试',
   },
   tools: {
     calculator: {
@@ -102,6 +103,7 @@ export default {
   tab: {
     close: '关闭标签页',
     closeOthers: '关闭其他标签页',
+    closeRight: '关闭右侧标签页',
     closeAll: '关闭所有标签页',
   },
   hello: {
@@ -492,12 +494,19 @@ export default {
       saved: '已保存',
       saveFailed: '保存失败',
     },
+    chat: {
+      selectAgent: '选择助手',
+    },
     content: {
       searchPlaceholder: '搜索',
       addDocument: '添加文档',
       selectFile: '选择文件',
       loadFailed: '加载文档列表失败',
       noMore: '没有更多了',
+      sort: {
+        createdDesc: '按创建时间倒序',
+        createdAsc: '按创建时间正序',
+      },
       fileTypes: {
         documents: '文档文件',
         all: '所有文件',
@@ -524,6 +533,10 @@ export default {
         failed: '文档上传失败',
         count: '已上传 {count} 个文档',
         uploading: '正在上传 {done}/{total}',
+      },
+      drop: {
+        hint: '拖放文件到此处上传',
+        formats: '支持 PDF、Word、Excel、TXT、Markdown、CSV、HTML、OFD 格式',
       },
       rename: {
         title: '重命名文档',

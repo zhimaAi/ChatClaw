@@ -238,6 +238,12 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
           >
             {{ t('tab.closeOthers') }}
           </ContextMenuItem>
+          <ContextMenuItem
+            :disabled="navigationStore.tabs.indexOf(tab) >= navigationStore.tabs.length - 1"
+            @click="navigationStore.closeRightTabs(tab.id)"
+          >
+            {{ t('tab.closeRight') }}
+          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem @click="navigationStore.closeAllTabs()">
             {{ t('tab.closeAll') }}

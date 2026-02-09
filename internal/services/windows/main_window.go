@@ -27,6 +27,7 @@ func NewMainWindow(app *application.App) *application.WebviewWindow {
 		Width:            1280,
 		Height:           800,
 		Frameless:        true,
+		EnableFileDrop:   true,
 		BackgroundColour: application.NewRGB(27, 38, 54),
 		URL:              "/",
 		// Windows: start hidden to avoid black screen flash during webview loading.

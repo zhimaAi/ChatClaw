@@ -8,5 +8,5 @@ export {
   type MessageSegment,
   type StreamingMessageState,
 } from './chat'
-export { useNavigationStore, type NavModule, type Tab } from './navigation'
+export { useNavigationStore, type NavModule, type Tab, type PendingChatData } from './navigation'
 export { useSettingsStore, type SettingsMenuItem } from './settings'

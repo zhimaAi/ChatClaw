@@ -12,6 +12,7 @@ export default {
     copy: 'Copy',
     detail: 'Details',
     hide: 'Hide',
+    retry: 'Retry',
   },
   tools: {
     calculator: {
@@ -102,6 +103,7 @@ export default {
   tab: {
     close: 'Close Tab',
     closeOthers: 'Close Other Tabs',
+    closeRight: 'Close Tabs to the Right',
     closeAll: 'Close All Tabs',
   },
   hello: {
@@ -494,12 +496,19 @@ export default {
       saved: 'Saved',
       saveFailed: 'Failed to save',
     },
+    chat: {
+      selectAgent: 'Select Agent',
+    },
     content: {
       searchPlaceholder: 'Search',
       addDocument: 'Add Document',
       selectFile: 'Select File',
       loadFailed: 'Failed to load documents',
       noMore: 'No more',
+      sort: {
+        createdDesc: 'Newest first',
+        createdAsc: 'Oldest first',
+      },
       fileTypes: {
         documents: 'Document Files',
         all: 'All Files',
@@ -526,6 +535,10 @@ export default {
         failed: 'Failed to upload documents',
         count: '{count} documents uploaded',
         uploading: 'Uploading {done}/{total}',
+      },
+      drop: {
+        hint: 'Drop files here to upload',
+        formats: 'Supports PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD',
       },
       rename: {
         title: 'Rename Document',
