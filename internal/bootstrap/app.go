@@ -501,5 +501,7 @@ func initLogger() (*slog.Logger, *os.File) {
 	}
 
 	w := io.MultiWriter(os.Stderr, f)
-	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})), f
+	l := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
+	l.Info("logger initialized", "path", logPath, "version", define.Version, "env", define.Env)
+	return l, f
 }
