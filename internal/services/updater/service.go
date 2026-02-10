@@ -58,6 +58,10 @@ func NewUpdaterService(app *application.App) *UpdaterService {
 // a badge on the "Check for Update" button. The auto_update setting only
 // controls whether the update dialog is shown automatically.
 func (s *UpdaterService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	// Clean up leftover .old binary from a previous update (Windows leaves it behind
+	// because the old process was still running when the update was applied).
+	s.cleanupOldBinary()
+
 	go func() {
 		time.Sleep(3 * time.Second)
 
@@ -75,6 +79,30 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 		}
 	}()
 	return nil
+}
+
+// cleanupOldBinary removes the .old file left behind by a previous update.
+// On Windows, the running process cannot delete itself, so the library renames
+// the old binary to .<name>.old and hides it. We clean it up on next launch
+// when the file is no longer locked.
+func (s *UpdaterService) cleanupOldBinary() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return
+	}
+
+	dir := filepath.Dir(exe)
+	name := filepath.Base(exe)
+
+	// go-selfupdate uses the pattern ".<name>.old" for the backup file
+	oldPath := filepath.Join(dir, fmt.Sprintf(".%s.old", name))
+	if err := os.Remove(oldPath); err == nil {
+		s.app.Logger.Info("cleaned up old binary", "path", oldPath)
+	}
 }
 
 // CheckForUpdate checks if a newer version is available.
@@ -214,16 +242,16 @@ func (s *UpdaterService) RestartApp() error {
 	if err != nil {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		return errs.Wrap("error.update_restart_failed", err)
-	}
 
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "darwin":
-		// On macOS, use "open" to launch the .app bundle
+		exe, err = filepath.EvalSymlinks(exe)
+		if err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+		// On macOS, use "open" to launch the .app bundle.
 		// exe is like /Applications/WillClaw.app/Contents/MacOS/WillClaw
 		appPath := exe
 		for i := 0; i < 3; i++ {
@@ -234,21 +262,39 @@ func (s *UpdaterService) RestartApp() error {
 		} else {
 			cmd = exec.Command(exe)
 		}
+	case "windows":
+		// On Windows, after go-selfupdate applies an update:
+		//   original WillClaw.exe → renamed to .WillClaw.exe.old
+		//   new binary            → placed at WillClaw.exe
+		//
+		// os.Executable() returns the path used to start this process (WillClaw.exe),
+		// which now points to the NEW binary. Do NOT call filepath.EvalSymlinks here
+		// because Windows may resolve it to the renamed .old file.
+		//
+		// Launch the new process with DETACHED_PROCESS flag so it is fully
+		// independent from the current process tree and survives parent exit.
+		cmd = exec.Command(exe)
+		setDetachedProcess(cmd)
 	default:
+		exe, err = filepath.EvalSymlinks(exe)
+		if err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
 		cmd = exec.Command(exe)
 	}
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
 
 	if err := cmd.Start(); err != nil {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
 
-	// Give the new process a moment to start, then exit
+	// Give the new process a moment to start, then quit gracefully.
+	// Use app.Quit() instead of os.Exit(0) so that Wails can properly
+	// tear down the WebView and release resources.
 	go func() {
-		time.Sleep(500 * time.Millisecond)
-		os.Exit(0)
+		time.Sleep(1 * time.Second)
+		s.app.Quit()
 	}()
 
 	return nil
