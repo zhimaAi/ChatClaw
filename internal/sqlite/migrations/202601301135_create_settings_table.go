@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR IGNORE INTO settings (key, value, type, category, description, created_at, updated_at) VALUES
-  ('language', 'zh-CN', 'string', 'general', '语言', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+  ('language', '', 'string', 'general', '语言', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 INSERT OR IGNORE INTO settings (key, value, type, category, description, created_at, updated_at) VALUES
   ('theme', 'light', 'string', 'general', '主题', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 `
