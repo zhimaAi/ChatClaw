@@ -35,8 +35,14 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
-// BuiltinModels 内置模型列表
+// BuiltinModels 内置模型列表（初始化时写入 models 表；ChatWiki 默认几条，与本地/服务器常见免费模型一致，后续可由 SyncChatWikiModels 增删改）
 var BuiltinModels = []BuiltinModelConfig{
+	// ChatWiki（免费模型，初始化即写入；与 custom-model/list 返回的 modelName 一致时可被同步逻辑更新）
+	{ProviderID: "chatwiki", ModelID: "Qwen/Qwen3-8B", Name: "Qwen/Qwen3-8B", Type: "llm", SortOrder: 0},
+	{ProviderID: "chatwiki", ModelID: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Type: "llm", SortOrder: 1},
+	{ProviderID: "chatwiki", ModelID: "BAAI/bge-m3", Name: "BAAI/bge-m3", Type: "embedding", SortOrder: 0},
+	{ProviderID: "chatwiki", ModelID: "BAAI/bge-reranker-v2-m3", Name: "BAAI/bge-reranker-v2-m3", Type: "rerank", SortOrder: 0},
+
 	// OpenAI
 	{ProviderID: "openai", ModelID: "gpt-5.2", Name: "GPT-5.2", Type: "llm", SortOrder: 100},
 	{ProviderID: "openai", ModelID: "gpt-5.1", Name: "GPT-5.1", Type: "llm", SortOrder: 101},
