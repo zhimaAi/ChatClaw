@@ -286,12 +286,13 @@ func (s *UpdaterService) RestartApp() error {
 		// On Windows with SingleInstance, we cannot start the new process while
 		// the current one is still running — it would be rejected as a second
 		// instance. Use "cmd /C" with a ping delay: ping waits ~2 seconds, then
-		// starts the new exe. The cmd process is fully detached (DETACHED_PROCESS)
-		// so it survives our exit. Then we quit immediately.
-		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe)
+		// starts the new exe. We must pass the entire command as a single string
+		// to "cmd /C" because Go's exec.Command quotes individual args in ways
+		// that break cmd.exe parsing (especially the empty title in "start").
+		shellCmd := fmt.Sprintf(`ping localhost -n 3 >nul & start "" "%s"`, exe)
+		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe, "shellCmd", shellCmd)
 
-		cmd := exec.Command("cmd", "/C",
-			"ping", "localhost", "-n", "3", ">", "nul", "&", "start", `""`, exe)
+		cmd := exec.Command("cmd", "/C", shellCmd)
 		setDetachedProcess(cmd)
 
 		if err := cmd.Start(); err != nil {
