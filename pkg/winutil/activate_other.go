@@ -1,14 +1,14 @@
-//go:build darwin && !cgo
+//go:build !windows && !darwin
 
-package textselection
+package winutil
 
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// forceActivateWindow fallback when CGO is disabled on macOS.
+// ForceActivateWindow on non-Windows/macOS platforms directly calls Focus.
 // Safely checks if the window is still valid before calling Focus.
-func forceActivateWindow(w *application.WebviewWindow) {
+func ForceActivateWindow(w *application.WebviewWindow) {
 	if w == nil {
 		return
 	}
@@ -19,6 +19,3 @@ func forceActivateWindow(w *application.WebviewWindow) {
 	}
 	w.Focus()
 }
-
-// ActivateAppByPid is a no-op when CGO is disabled.
-func ActivateAppByPid(pid int32) {}

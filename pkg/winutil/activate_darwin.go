@@ -1,6 +1,6 @@
 //go:build darwin && cgo
 
-package textselection
+package winutil
 
 /*
 #cgo darwin CFLAGS: -x objective-c -fobjc-arc
@@ -9,16 +9,8 @@ package textselection
 #import <Cocoa/Cocoa.h>
 
 // Activate current application (bring to front)
-static void textselection_activate_current_app(void) {
+static void winutil_activate_current_app(void) {
 	NSRunningApplication *app = [NSRunningApplication currentApplication];
-	if (!app) return;
-	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
-}
-
-// Activate application by PID
-static void textselection_activate_app_by_pid(pid_t pid) {
-	if (pid <= 0) return;
-	NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
 	if (!app) return;
 	[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 }
@@ -29,15 +21,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// forceActivateWindow on macOS uses NSRunningApplication to bring the app to front.
+// ForceActivateWindow on macOS uses NSRunningApplication to bring the app to front.
 // This is more reliable than Wails Focus() which may not work when the app is not frontmost.
 // Safely handles the case when the window has been closed/released.
-func forceActivateWindow(w *application.WebviewWindow) {
+func ForceActivateWindow(w *application.WebviewWindow) {
 	if w == nil {
 		return
 	}
 	// Activate the current application to bring all its windows to front
-	C.textselection_activate_current_app()
+	C.winutil_activate_current_app()
 	// Check if window is still valid before calling Focus
 	// On macOS, NativeWindow() returns nil for closed windows
 	if w.NativeWindow() == nil {
@@ -45,9 +37,4 @@ func forceActivateWindow(w *application.WebviewWindow) {
 	}
 	// Also call Wails Focus to ensure the specific window gets focus
 	w.Focus()
-}
-
-// ActivateAppByPid activates an application by its process ID.
-func ActivateAppByPid(pid int32) {
-	C.textselection_activate_app_by_pid(C.int(pid))
 }
