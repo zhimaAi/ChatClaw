@@ -1,23 +1,36 @@
 <script setup lang="ts">
 /**
- * 关于我们设置组件
+ * About settings component.
+ * Update dialog is rendered in App.vue for global access.
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/willchat/internal/services/browser'
 import { AppService } from '@bindings/willchat/internal/services/app'
+import { SettingsService } from '@bindings/willchat/internal/services/settings'
+import { UpdaterService } from '@bindings/willchat/internal/services/updater'
+import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/toast'
+import { Events } from '@wailsio/runtime'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 import LogoIcon from '@/assets/images/logo.svg'
 
 const { t } = useI18n()
 
-// 官网地址
+// Official website
 const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillChat'
 
-// 应用版本
+// Application version
 const appVersion = ref('...')
+
+// Check update loading state
+const isCheckingUpdate = ref(false)
+
+// Auto update toggle
+const autoUpdate = ref(true)
 
 onMounted(async () => {
   try {
@@ -27,9 +40,19 @@ onMounted(async () => {
     console.error('Failed to get version:', error)
     appVersion.value = 'unknown'
   }
+
+  // Load auto update setting
+  try {
+    const setting = await SettingsService.Get('auto_update')
+    if (setting) {
+      autoUpdate.value = setting.value === 'true'
+    }
+  } catch {
+    // Use default value if setting not found
+  }
 })
 
-// 打开官网
+// Open website
 async function handleOpenWebsite() {
   try {
     await BrowserService.OpenURL(OFFICIAL_WEBSITE)
@@ -37,11 +60,47 @@ async function handleOpenWebsite() {
     console.error('Failed to open website:', error)
   }
 }
+
+// Check for update — delegates to App.vue via frontend event
+async function handleCheckUpdate() {
+  if (isCheckingUpdate.value) return
+  isCheckingUpdate.value = true
+  try {
+    const result = await UpdaterService.CheckForUpdate()
+    if (result && result.has_update) {
+      // Notify App.vue to open the update dialog
+      Events.Emit('update:show-dialog', {
+        mode: 'new-version',
+        version: result.latest_version,
+        release_notes: result.release_notes || '',
+      })
+    } else {
+      toast.success(t('settings.about.alreadyLatest'))
+    }
+  } catch (error) {
+    console.error('Failed to check for update:', error)
+    toast.error(t('settings.about.checkFailed'))
+  } finally {
+    isCheckingUpdate.value = false
+  }
+}
+
+// Toggle auto update
+async function handleAutoUpdateChange(value: boolean) {
+  autoUpdate.value = value
+  try {
+    await SettingsService.SetValue('auto_update', String(value))
+  } catch (error) {
+    console.error('Failed to save auto update setting:', error)
+    // Revert on failure
+    autoUpdate.value = !value
+  }
+}
 </script>
 
 <template>
   <SettingsCard :title="t('settings.about.title')">
-    <!-- 应用信息区域 -->
+    <!-- Application info area -->
     <div class="flex items-center gap-5 border-b border-border p-4 dark:border-white/10">
       <!-- Logo -->
       <div
@@ -50,7 +109,7 @@ async function handleOpenWebsite() {
         <LogoIcon class="size-icon-lg" />
       </div>
 
-      <!-- 应用名称和版权信息 -->
+      <!-- App name and copyright -->
       <div class="flex flex-1 flex-col items-start gap-1">
         <span class="text-sm font-medium text-foreground">
           {{ t('settings.about.appName') }}
@@ -64,10 +123,20 @@ async function handleOpenWebsite() {
           {{ appVersion }}
         </div>
       </div>
+
+      <!-- Check update button -->
+      <Button
+        variant="outline"
+        size="sm"
+        :disabled="isCheckingUpdate"
+        @click="handleCheckUpdate"
+      >
+        {{ isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate') }}
+      </Button>
     </div>
 
-    <!-- 官方网站链接 -->
-    <SettingsItem :label="t('settings.about.officialWebsite')" :bordered="false">
+    <!-- Official website -->
+    <SettingsItem :label="t('settings.about.officialWebsite')">
       <button
         class="inline-flex cursor-pointer items-center gap-1 text-sm text-primary hover:opacity-80"
         @click="handleOpenWebsite"
@@ -75,6 +144,11 @@ async function handleOpenWebsite() {
         {{ t('settings.about.view') }}
         <ChevronRight class="size-4" />
       </button>
+    </SettingsItem>
+
+    <!-- Auto update toggle -->
+    <SettingsItem :label="t('settings.about.autoUpdate')" :bordered="false">
+      <Switch :model-value="autoUpdate" @update:model-value="handleAutoUpdateChange" />
     </SettingsItem>
   </SettingsCard>
 </template>
