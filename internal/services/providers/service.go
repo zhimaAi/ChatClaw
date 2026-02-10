@@ -276,27 +276,11 @@ func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 	return &dto, nil
 }
 
-// GetProviderWithModels 获取供应商及其模型列表
+// GetProviderWithModels 获取供应商及其模型列表（含 ChatWiki 在内，一律从本地 DB 读取；ChatWiki 免费模型在应用启动时由 SyncChatWikiModels 同步一次）
 func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWithModels, error) {
 	provider, err := s.GetProvider(providerID)
 	if err != nil {
 		return nil, err
-	}
-
-	// ChatWiki: fetch models from /custom-model/list API
-	if providerID == "chatwiki" {
-		groups, err := s.fetchChatWikiModels(provider)
-		if err != nil {
-			return nil, err
-		}
-		// Persist fetched models into local DB (add/update/delete) so they can be reused offline.
-		if err := s.syncChatWikiModelsToDB(provider.ProviderID, groups); err != nil {
-			return nil, err
-		}
-		return &ProviderWithModels{
-			Provider:    *provider,
-			ModelGroups: groups,
-		}, nil
 	}
 
 	db, err := s.db()
@@ -575,19 +559,8 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	if baseURL == "" {
 		return nil, errs.New("error.chatwiki_api_endpoint_required")
 	}
-
-	// ChatWiki model list endpoint lives under the OpenAPI base path.
-	// Users may configure api_endpoint as either:
-	// - https://dev1.willchat.chatwiki.com/openapi   (recommended)
-	// - https://dev1.willchat.chatwiki.com          (legacy / mis-config)
-	// Normalize here so we always hit the JSON API instead of the admin HTML.
-	var url string
-	if strings.Contains(baseURL, "/openapi") {
-		// already includes openapi base
-		url = strings.TrimSuffix(baseURL, "/") + "/custom-model/list"
-	} else {
-		url = strings.TrimSuffix(baseURL, "/") + "/openapi/custom-model/list"
-	}
+	// API address is already configured (including openapi base if needed); only append the path.
+	url := baseURL + "/custom-model/list"
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 

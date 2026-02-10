@@ -21,7 +21,7 @@ type BuiltinModelConfig struct {
 
 // BuiltinProviders 内置供应商列表（chatwiki 默认置顶，将通过接口查询信息）
 var BuiltinProviders = []BuiltinProviderConfig{
-	{ProviderID: "chatwiki", Name: "ChatWiki", Type: "openai", Icon: "chatwiki", SortOrder: 0, APIEndpoint: ChatWikiOpenAPIEndpoint()},
+	{ProviderID: "chatwiki", Name: "ChatWiki", Type: "openai", Icon: "chatwiki", SortOrder: 0, APIEndpoint: ServerURL},
 	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 1, APIEndpoint: "https://api.openai.com/v1"},
 	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 2, APIEndpoint: ""},
 	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 3, APIEndpoint: "https://api.anthropic.com/v1"},
@@ -35,8 +35,14 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
-// BuiltinModels 内置模型列表
+// BuiltinModels 内置模型列表（初始化时写入 models 表；ChatWiki 默认几条，与本地/服务器常见免费模型一致，后续可由 SyncChatWikiModels 增删改）
 var BuiltinModels = []BuiltinModelConfig{
+	// ChatWiki（免费模型，初始化即写入；与 custom-model/list 返回的 modelName 一致时可被同步逻辑更新）
+	{ProviderID: "chatwiki", ModelID: "Qwen/Qwen3-8B", Name: "Qwen/Qwen3-8B", Type: "llm", SortOrder: 0},
+	{ProviderID: "chatwiki", ModelID: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Type: "llm", SortOrder: 1},
+	{ProviderID: "chatwiki", ModelID: "BAAI/bge-m3", Name: "BAAI/bge-m3", Type: "embedding", SortOrder: 0},
+	{ProviderID: "chatwiki", ModelID: "BAAI/bge-reranker-v2-m3", Name: "BAAI/bge-reranker-v2-m3", Type: "rerank", SortOrder: 0},
+
 	// OpenAI
 	{ProviderID: "openai", ModelID: "gpt-5.2", Name: "GPT-5.2", Type: "llm", SortOrder: 100},
 	{ProviderID: "openai", ModelID: "gpt-5.1", Name: "GPT-5.1", Type: "llm", SortOrder: 101},
@@ -97,7 +103,11 @@ var BuiltinModels = []BuiltinModelConfig{
 }
 
 // GetBuiltinProviderDefaultEndpoint 获取内置供应商的默认 API 地址
+// ChatWiki 直接使用 ServerURL
 func GetBuiltinProviderDefaultEndpoint(providerID string) (string, bool) {
+	if providerID == "chatwiki" {
+		return ServerURL, true
+	}
 	for _, p := range BuiltinProviders {
 		if p.ProviderID == providerID {
 			return p.APIEndpoint, true

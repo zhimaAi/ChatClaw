@@ -49,6 +49,18 @@ const embeddingCurrentLabel = computed(() => {
   return model?.name || ''
 })
 
+function isProviderFree(g: Group): boolean {
+  const p = g.provider as { is_free?: boolean }
+  return Boolean(p?.is_free)
+}
+
+const selectedProviderIsFree = computed(() => {
+  const [pid] = embeddingSelectedKey.value.split('::')
+  if (!pid) return false
+  const g = embeddingGroups.value.find((gr) => gr.provider.provider_id === pid)
+  return g ? isProviderFree(g) : false
+})
+
 const close = () => emit('update:open', false)
 
 const isEmbeddingSelectionAvailable = computed(() => {
@@ -185,12 +197,30 @@ const handleSave = async () => {
           <Select v-model="embeddingSelectedKey" :disabled="loading || saving">
             <SelectTrigger class="w-full">
               <SelectValue :placeholder="t('knowledge.create.selectPlaceholder')">
-                <template v-if="embeddingCurrentLabel">{{ embeddingCurrentLabel }}</template>
+                <template v-if="embeddingCurrentLabel">
+                  <span class="flex items-center gap-1.5 truncate">
+                    <span class="truncate">{{ embeddingCurrentLabel }}</span>
+                    <span
+                      v-if="selectedProviderIsFree"
+                      class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                    >
+                      {{ t('assistant.chat.freeBadge') }}
+                    </span>
+                  </span>
+                </template>
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
-                <SelectLabel>{{ g.provider.name }}</SelectLabel>
+                <SelectLabel class="flex items-center gap-1.5">
+                  <span>{{ g.provider.name }}</span>
+                  <span
+                    v-if="isProviderFree(g)"
+                    class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                  >
+                    {{ t('assistant.chat.freeBadge') }}
+                  </span>
+                </SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
