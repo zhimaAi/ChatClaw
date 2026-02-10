@@ -51,7 +51,7 @@ const DEFAULT_CLICK_OFFSET_Y: Record<string, string> = {
   snap_qq: '120',
   snap_dingtalk: '120',
   snap_feishu: '50',
-  snap_douyin: '120',
+  snap_douyin: '50',
 }
 
 // 吸附应用点击偏移量 X（像素，0 表示居中）
@@ -76,7 +76,7 @@ const snapWecomNoClick = ref(false)
 const snapQQNoClick = ref(false)
 const snapDingtalkNoClick = ref(false)
 const snapFeishuNoClick = ref(false)
-const snapDouyinNoClick = ref(false)
+const snapDouyinNoClick = ref(true)
 
 // 所有吸附应用的 ref 映射（每个开关独立，不互斥）
 const snapAppRefs: Record<string, { value: boolean }> = {
@@ -138,6 +138,7 @@ const snapApps = computed(() => [
     icon: WechatIcon,
     value: snapWechat,
     noClick: snapWechatNoClick,
+    hasNoClickOption: true,
     clickOffsetX: snapWechatClickOffsetX,
     clickOffsetY: snapWechatClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_wechat,
@@ -148,6 +149,7 @@ const snapApps = computed(() => [
     icon: WecomIcon,
     value: snapWecom,
     noClick: snapWecomNoClick,
+    hasNoClickOption: true,
     clickOffsetX: snapWecomClickOffsetX,
     clickOffsetY: snapWecomClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_wecom,
@@ -158,6 +160,7 @@ const snapApps = computed(() => [
     icon: QQIcon,
     value: snapQQ,
     noClick: snapQQNoClick,
+    hasNoClickOption: true,
     clickOffsetX: snapQQClickOffsetX,
     clickOffsetY: snapQQClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_qq,
@@ -168,6 +171,7 @@ const snapApps = computed(() => [
     icon: DingtalkIcon,
     value: snapDingtalk,
     noClick: snapDingtalkNoClick,
+    hasNoClickOption: false,
     clickOffsetX: snapDingtalkClickOffsetX,
     clickOffsetY: snapDingtalkClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_dingtalk,
@@ -178,6 +182,7 @@ const snapApps = computed(() => [
     icon: FeishuIcon,
     value: snapFeishu,
     noClick: snapFeishuNoClick,
+    hasNoClickOption: true,
     clickOffsetX: snapFeishuClickOffsetX,
     clickOffsetY: snapFeishuClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_feishu,
@@ -188,6 +193,7 @@ const snapApps = computed(() => [
     icon: DouyinIcon,
     value: snapDouyin,
     noClick: snapDouyinNoClick,
+    hasNoClickOption: true,
     clickOffsetX: snapDouyinClickOffsetX,
     clickOffsetY: snapDouyinClickOffsetY,
     defaultY: DEFAULT_CLICK_OFFSET_Y.snap_douyin,
@@ -455,8 +461,9 @@ onUnmounted(() => {
           class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
           :class="{ 'border-b border-border': index !== snapApps.length - 1 }"
         >
-          <!-- 输入模式单选 -->
+          <!-- 输入模式单选（部分应用不支持不点击模式） -->
           <RadioGroup
+            v-if="app.hasNoClickOption"
             :model-value="app.noClick.value ? 'no_click' : 'click'"
             class="flex flex-col gap-2"
             @update:model-value="(mode: string) => handleInputModeChange(app.key, app.noClick, mode)"
@@ -476,8 +483,8 @@ onUnmounted(() => {
               </Label>
             </div>
           </RadioGroup>
-          <!-- 点击偏移量输入（仅当点击模式时显示） -->
-          <div v-if="!app.noClick.value" class="flex items-center justify-between gap-4 pl-6">
+          <!-- 点击偏移量输入（不点击模式时隐藏；无不点击选项的应用始终显示） -->
+          <div v-if="!app.hasNoClickOption || !app.noClick.value" class="flex items-center justify-between gap-4 pl-6">
             <div class="flex items-center gap-2">
               <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
               <Input

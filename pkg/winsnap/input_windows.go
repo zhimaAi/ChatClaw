@@ -4,6 +4,7 @@ package winsnap
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"syscall"
@@ -165,20 +166,27 @@ func SendTextToTarget(targetProcess string, text string, triggerSend bool, sendK
 	// Try to find editable child window
 	editHwnd := findEditableChild(uintptr(targetHWND))
 
-	// For Qt applications like DingTalk that don't use standard Edit controls,
-	// we need to click on the input area to give it focus.
-	// Key insight: DingTalk loses input focus when window is deactivated
-
 	// Get window class to detect DingTalk or other Qt apps
 	className := getWindowClassName(uintptr(targetHWND))
 	isQtApp := strings.Contains(className, "Qt")
+
+	// Detect Chromium/CEF-based apps (e.g., Douyin, modern WeChat).
+	// In these apps the actual chat input is rendered inside the web content,
+	// NOT as a native Edit control. Even if findEditableChild returns a native
+	// Edit handle (e.g., a search bar or title-bar input), it is NOT the chat
+	// input box. We must click to focus the web-rendered input area.
+	chatChildHwnd := findChatChildWindow(uintptr(targetHWND))
+	isChromiumApp := chatChildHwnd != 0
 
 	// Skip click if noClick mode is enabled (for apps that auto-keep focus on input)
 	if noClick {
 		// Just a small delay after activation
 		time.Sleep(50 * time.Millisecond)
-	} else if editHwnd == 0 || isQtApp {
-		// If no standard edit control found OR it's a Qt app, click on input area
+	} else if editHwnd == 0 || isQtApp || isChromiumApp {
+		// Click on input area when:
+		// - No standard edit control found, OR
+		// - Qt app (native edit controls are unreliable after deactivation), OR
+		// - Chromium/CEF app (native edit controls are NOT the actual chat input)
 		clickInputAreaOfWindow(uintptr(targetHWND), clickOffsetX, clickOffsetY, targetProcess)
 		// Wait for click to register and input to get focus
 		time.Sleep(200 * time.Millisecond)
@@ -358,28 +366,49 @@ func clickAtPosition(x, y int32) {
 	procSetCursorPos.Call(uintptr(origPos.x), uintptr(origPos.y))
 }
 
-// findChatChildWindow finds the chat content child window (like DingChatWnd or CefBrowserWindow)
+// findChatChildWindow finds the chat content child window (like DingChatWnd or CefBrowserWindow).
+// For Chromium/Electron apps, EnumChildWindows may return many Chrome_WidgetWin_1 descendants
+// (render widgets, popups, overlays). We pick the LARGEST one by area, which is typically the
+// main content area, not a tiny internal widget.
 func findChatChildWindow(parentHwnd uintptr) uintptr {
 	children := enumerateChildWindows(parentHwnd)
-	
-	// Priority: DingChatWnd > CefBrowserWindow > Chrome_WidgetWin_1
+
+	// Priority 1: DingChatWnd (app-specific, unique)
 	for _, child := range children {
 		if child.className == "DingChatWnd" {
 			return child.hwnd
 		}
 	}
+	// Priority 2: CefBrowserWindow (app-specific, usually unique)
 	for _, child := range children {
 		if child.className == "CefBrowserWindow" {
 			return child.hwnd
 		}
 	}
+	// Priority 3: Chrome_WidgetWin_1 — pick the one with the largest area.
+	// Chromium apps often have many Chrome_WidgetWin_1 descendants at different levels;
+	// the first one enumerated may be a tiny internal widget whose rect is too small
+	// to calculate a meaningful click offset from.
+	var bestHwnd uintptr
+	var bestArea int64
 	for _, child := range children {
-		if child.className == "Chrome_WidgetWin_1" {
-			return child.hwnd
+		if child.className != "Chrome_WidgetWin_1" {
+			continue
+		}
+		var r rectInput
+		ret, _, _ := procGetWindowRectIn.Call(child.hwnd, uintptr(unsafe.Pointer(&r)))
+		if ret == 0 {
+			continue
+		}
+		w := int64(r.right - r.left)
+		h := int64(r.bottom - r.top)
+		area := w * h
+		if area > bestArea {
+			bestArea = area
+			bestHwnd = child.hwnd
 		}
 	}
-	
-	return 0
+	return bestHwnd
 }
 
 // Default click offset from bottom (pixels) - varies by app
@@ -450,38 +479,44 @@ func getProcessWindowsBoundsForClick(targetProcess string) (bounds rectInput, fo
 // offsetY: pixels from bottom (0 = use default based on target process)
 // targetProcess: used only to determine default offsetY per-app
 func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess string) bool {
-	// Try to find the chat child window for more precise targeting
+	// Get the main window rect first (always needed as fallback and for X calculation).
+	var mainRect rectInput
+	if ret, _, _ := procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&mainRect))); ret == 0 {
+		return false
+	}
+	mainHeight := mainRect.bottom - mainRect.top
+
+	fmt.Printf("[SNAP_DEBUG] clickInputAreaOfWindow: mainRect={L:%d T:%d R:%d B:%d} h=%d, offsetX=%d offsetY=%d target=%s\n",
+		mainRect.left, mainRect.top, mainRect.right, mainRect.bottom, mainHeight, offsetX, offsetY, targetProcess)
+
+	// Try to find the chat child window for more precise Y targeting.
 	chatChild := findChatChildWindow(hwnd)
-	targetHwnd := hwnd
+	windowRect := mainRect // default: use main window rect for Y calculation
 	if chatChild != 0 {
-		targetHwnd = chatChild
-	}
-
-	// Get the rect of the specific window
-	var windowRect rectInput
-	ret, _, _ := procGetWindowRectIn.Call(targetHwnd, uintptr(unsafe.Pointer(&windowRect)))
-	if ret == 0 {
-		// If failed to get child rect, try parent
-		ret, _, _ = procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&windowRect)))
-		if ret == 0 {
-			return false
+		var childRect rectInput
+		if ret, _, _ := procGetWindowRectIn.Call(chatChild, uintptr(unsafe.Pointer(&childRect))); ret != 0 {
+			childHeight := childRect.bottom - childRect.top
+			fmt.Printf("[SNAP_DEBUG]   chatChild found: rect={L:%d T:%d R:%d B:%d} h=%d\n",
+				childRect.left, childRect.top, childRect.right, childRect.bottom, childHeight)
+			// Only use the chat child rect if it is large enough (at least half the main
+			// window height). Small Chrome_WidgetWin_1 children are internal Chromium
+			// widgets whose rect would cause the Y-offset clamp to always trigger.
+			if childHeight >= mainHeight/2 && childHeight >= 300 {
+				windowRect = childRect
+				fmt.Printf("[SNAP_DEBUG]   using chatChild rect for Y calculation\n")
+			} else {
+				fmt.Printf("[SNAP_DEBUG]   chatChild too small (h=%d < mainH/2=%d or <300), using mainRect\n", childHeight, mainHeight/2)
+			}
 		}
-	}
-
-	// Also get the main window rect for X coordinate calculation when a chat
-	// child was found (the main window width is a better reference for offsetX).
-	mainRect := windowRect
-	if chatChild != 0 {
-		var mr rectInput
-		if r, _, _ := procGetWindowRectIn.Call(hwnd, uintptr(unsafe.Pointer(&mr))); r != 0 {
-			mainRect = mr
-		}
+	} else {
+		fmt.Printf("[SNAP_DEBUG]   no chatChild found, using mainRect\n")
 	}
 
 	// Use provided offsetY or default based on app
 	clickOffsetY := offsetY
 	if clickOffsetY <= 0 {
 		clickOffsetY = getDefaultClickOffsetY(targetProcess)
+		fmt.Printf("[SNAP_DEBUG]   offsetY<=0, using default: %d\n", clickOffsetY)
 	}
 
 	// Calculate X position: relative to the main window, not combined process bounds
@@ -501,9 +536,14 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 	y := windowRect.bottom - int32(clickOffsetY)
 
 	// Make sure we're within the window
+	clamped := false
 	if y < windowRect.top+100 {
 		y = (windowRect.top + windowRect.bottom) / 2
+		clamped = true
 	}
+
+	fmt.Printf("[SNAP_DEBUG]   FINAL click: x=%d y=%d (clamped=%v, windowRect={L:%d T:%d R:%d B:%d}, clickOffsetY=%d)\n",
+		x, y, clamped, windowRect.left, windowRect.top, windowRect.right, windowRect.bottom, clickOffsetY)
 
 	clickAtPosition(x, y)
 	return true

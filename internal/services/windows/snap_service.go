@@ -2,8 +2,10 @@ package windows
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -797,13 +799,16 @@ func snapTargetsForKey(key string) []string {
 	}
 }
 
-// snapKeyForTarget returns the settings key (e.g., "snap_dingtalk") for a given target process name
+// snapKeyForTarget returns the settings key (e.g., "snap_dingtalk") for a given target process name.
+// Uses case-insensitive comparison because Windows process names returned by
+// QueryFullProcessImageName may differ in case from our hardcoded target names
+// (e.g., "douyin.exe" vs "Douyin.exe").
 func snapKeyForTarget(targetProcess string) string {
 	keys := []string{"snap_wechat", "snap_wecom", "snap_qq", "snap_dingtalk", "snap_feishu", "snap_douyin"}
 	for _, key := range keys {
 		targets := snapTargetsForKey(key)
 		for _, t := range targets {
-			if t == targetProcess {
+			if strings.EqualFold(t, targetProcess) {
 				return key
 			}
 		}
@@ -816,18 +821,37 @@ func snapKeyForTarget(targetProcess string) string {
 func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, offsetY int) {
 	key := snapKeyForTarget(targetProcess)
 	if key == "" {
+		fmt.Printf("[SNAP_DEBUG] snapKeyForTarget(%q) returned empty! Settings will NOT be loaded.\n", targetProcess)
 		return false, 0, 0
 	}
 	// Setting key format: snap_[app]_no_click, snap_[app]_click_offset_x/y
-	noClick = settings.GetBool(key+"_no_click", false)
+	// Douyin defaults to no-click mode; others default to click mode.
+	noClick = settings.GetBool(key+"_no_click", defaultNoClickForKey(key))
 	offsetX = settings.GetInt(key+"_click_offset_x", 0)
 	offsetY = settings.GetInt(key+"_click_offset_y", 0)
+	fmt.Printf("[SNAP_DEBUG] getClickSettingsForTarget(%q): key=%q noClick=%v offsetX=%d offsetY(raw)=%d\n",
+		targetProcess, key, noClick, offsetX, offsetY)
 	// If not configured (0 or empty), fall back to per-app defaults to match frontend UX.
 	// This is important on macOS where the click implementation otherwise falls back to a generic value.
 	if offsetY <= 0 {
 		offsetY = defaultClickOffsetYForKey(key)
+		fmt.Printf("[SNAP_DEBUG]   offsetY fallback to default: %d\n", offsetY)
 	}
 	return noClick, offsetX, offsetY
+}
+
+// defaultNoClickForKey returns whether the app defaults to no-click mode.
+// Douyin defaults to no-click (input keeps focus automatically);
+// all other apps default to click mode.
+//
+// Keep this consistent with frontend defaults in SnapSettings.vue.
+func defaultNoClickForKey(key string) bool {
+	switch key {
+	case "snap_douyin":
+		return true
+	default:
+		return false
+	}
 }
 
 // defaultClickOffsetYForKey returns the default click Y offset (pixels from bottom)
@@ -836,7 +860,7 @@ func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, off
 // Keep this consistent with frontend defaults in SnapSettings.vue.
 func defaultClickOffsetYForKey(key string) int {
 	switch key {
-	case "snap_feishu":
+	case "snap_feishu", "snap_douyin":
 		return 50
 	default:
 		return 120

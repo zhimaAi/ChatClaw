@@ -387,8 +387,8 @@ const handleCancelEdit = () => {
           }}
         </span>
 
-        <!-- Action buttons (visible on hover) -->
-        <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <!-- Action buttons: always visible -->
+        <div class="flex items-center gap-1">
           <!-- Snap mode: Send and trigger button (assistant messages only) -->
           <Button
             v-if="isSnapMode && isAssistant && showAiSendButton && hasAttachedTarget"
