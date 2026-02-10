@@ -52,6 +52,7 @@ export default {
     title: 'WillClaw',
     assistantName: '灵魂厨房助手',
     cancelSnap: '取消吸附',
+    snapApp: '吸附应用',
     closeWindow: '关闭',
     placeholder: '请输入问题',
     thinking: '思考中...',
