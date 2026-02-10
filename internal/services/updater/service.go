@@ -25,7 +25,7 @@ const (
 	repoName  = "WillChat"
 
 	// Timeout for GitHub reachability probe
-	githubProbeTimeout = 5 * time.Second
+	githubProbeTimeout = 3 * time.Second
 )
 
 // UpdateInfo is the result returned to the frontend.
