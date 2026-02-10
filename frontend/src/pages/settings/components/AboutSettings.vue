@@ -139,10 +139,10 @@ async function handleAutoUpdateChange(value: boolean) {
         >
           {{ isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate') }}
         </Button>
-        <!-- Red badge indicating a new version is available -->
+        <!-- Badge indicating a new version is available -->
         <span
           v-if="appStore.hasAvailableUpdate"
-          class="absolute -right-1 -top-1 size-2.5 rounded-full bg-red-500"
+          class="absolute -right-1 -top-1 size-2.5 rounded-full bg-foreground/70"
         />
       </div>
     </div>
