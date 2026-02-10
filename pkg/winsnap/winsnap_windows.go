@@ -79,12 +79,13 @@ var (
 	fmwCBOnce         sync.Once
 	fmwCB             uintptr
 	fmwMu             sync.Mutex
-	fmwTargetLower    string
-	fmwIncludeMin     bool
-	fmwBestHwnd       windows.HWND
-	fmwBestScore      int
-	fmwBestArea       int64
-	fmwBestMinimized  bool
+	fmwTargetLower     string
+	fmwIncludeMin      bool
+	fmwPreferLandscape bool // When true, landscape windows get a scoring bonus (for multi-window apps like Douyin)
+	fmwBestHwnd        windows.HWND
+	fmwBestScore       int
+	fmwBestArea        int64
+	fmwBestMinimized   bool
 )
 
 func fmwEnumProc(hwnd uintptr, _ uintptr) uintptr {
@@ -133,6 +134,11 @@ func fmwEnumProc(hwnd uintptr, _ uintptr) uintptr {
 		w := int64(r.Right - r.Left)
 		hh := int64(r.Bottom - r.Top)
 		if w > 0 && hh > 0 {
+			// For apps with multiple windows (e.g. Douyin has both chat and video
+			// windows), prefer the landscape (chat) window over portrait (video).
+			if fmwPreferLandscape && w > hh {
+				score += 50
+			}
 			area := w * hh
 			if fmwBestHwnd == 0 || score > fmwBestScore || (score == fmwBestScore && area > fmwBestArea) {
 				fmwBestHwnd = h
@@ -208,11 +214,12 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	}
 
 	f := &follower{
-		self:   windows.HWND(selfHWND),
-		target: target,
-		gap:    opts.Gap,
-		ready:  make(chan struct{}),
-		app:    opts.App,
+		self:              windows.HWND(selfHWND),
+		target:            target,
+		gap:               opts.Gap,
+		ready:             make(chan struct{}),
+		app:               opts.App,
+		targetProcessName: opts.TargetProcessName,
 	}
 	if err := f.start(); err != nil {
 		_ = f.Stop()
@@ -227,13 +234,14 @@ type follower struct {
 	gap    int
 	app    *application.App
 
-	mu        sync.Mutex
-	hookLoc   uintptr
-	hookFG    uintptr
-	tid       uint32
-	ready     chan struct{}
-	closed    bool
-	selfWidth int32 // cached initial width of our window
+	mu                sync.Mutex
+	hookLoc           uintptr
+	hookFG            uintptr
+	tid               uint32
+	ready             chan struct{}
+	closed            bool
+	selfWidth         int32 // cached initial width of our window
+	targetProcessName string // original process name, used for dynamic window re-evaluation
 
 	// Throttling for syncToTarget to avoid overwhelming system calls
 	syncing int32 // atomic flag: 1 = currently syncing, 0 = idle
@@ -375,6 +383,13 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		if hwnd == f.self {
 			return 0
 		}
+		// If a DIFFERENT window from the target process becomes foreground,
+		// switch to tracking it (e.g. user clicks Douyin's chat window while
+		// we were tracking the video window). Only switch if the new window
+		// passes basic validity checks (visible, top-level, has title).
+		if hwnd != f.target && f.isValidSwitchTarget(hwnd) {
+			f.target = hwnd
+		}
 		// When target becomes foreground, we need to ensure our window is also
 		// brought to the top, placed right after the target in z-order.
 		_ = f.syncToTargetWithZOrderFix()
@@ -382,6 +397,38 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		return 0
 	}
 	return 0
+}
+
+// isValidSwitchTarget checks if a foreground window from the target process is a
+// valid candidate to switch tracking to. This filters out tool windows, popups,
+// and other transient windows that should not become the snap anchor.
+func (f *follower) isValidSwitchTarget(hwnd windows.HWND) bool {
+	if !isWindowVisible(hwnd) {
+		return false
+	}
+	ex := getExStyle(hwnd)
+	if ex&wsExToolWindow != 0 {
+		return false
+	}
+	// Must be a top-level window (no owner)
+	if getWindowOwner(hwnd) != 0 {
+		return false
+	}
+	// Must have a title (filters out invisible helper windows)
+	if getWindowTextLength(hwnd) == 0 {
+		return false
+	}
+	// Must have a reasonable size
+	var r rect
+	if err := getWindowRect(hwnd, &r); err != nil {
+		return false
+	}
+	w := int64(r.Right - r.Left)
+	h := int64(r.Bottom - r.Top)
+	if w < 200 || h < 200 {
+		return false
+	}
+	return true
 }
 
 // getProcessWindowsBounds calculates the combined bounds of all visible windows
@@ -592,6 +639,9 @@ func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (w
 
 	fmwTargetLower = strings.ToLower(processName)
 	fmwIncludeMin = includeMinimized
+	// Apps like Douyin have both chat (landscape) and video (portrait) windows.
+	// Prefer landscape windows so we attach to the chat window.
+	fmwPreferLandscape = fmwTargetLower == "douyin.exe"
 	fmwBestHwnd = 0
 	fmwBestScore = 0
 	fmwBestArea = 0

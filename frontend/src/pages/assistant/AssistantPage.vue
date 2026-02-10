@@ -692,9 +692,20 @@ onMounted(() => {
       }
     })()
 
-    // When interacting with snap window while attached, bring both windows to front
+    // When interacting with snap window while attached, bring both windows to front.
+    // Skip when a Radix UI overlay (Select, Tooltip, Popover, etc.) is open —
+    // WakeAttached manipulates native window z-order and focus, which interferes
+    // with the overlay's event handling and can freeze the entire Windows UI.
     onPointerDown = (e: globalThis.PointerEvent) => {
       if (e.button !== 0) return
+      const target = e.target as HTMLElement | null
+      if (
+        target?.closest(
+          '[data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
+        )
+      ) {
+        return
+      }
       void SnapService.WakeAttached()
     }
     window.addEventListener('pointerdown', onPointerDown, true)
