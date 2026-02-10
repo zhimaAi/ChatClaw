@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -87,56 +86,29 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 // the old binary to .<name>.old and hides it. We clean it up on next launch
 // when the file is no longer locked.
 //
-// Instead of guessing the exact filename, we scan the exe directory for any
-// file matching the pattern *.old that looks like an old binary.
+// IMPORTANT: We use selfupdate.ExecutablePath() (not os.Executable()) because
+// go-selfupdate resolves the exe path via GetFinalPathNameByHandle on Windows,
+// which may return a different casing/path than os.Executable(). The .old file
+// lives next to the resolved path, so we must use the same resolution.
 func (s *UpdaterService) cleanupOldBinary() {
-	exe, err := os.Executable()
+	// Use the same path resolution as go-selfupdate so we look in the right directory.
+	exe, err := selfupdate.ExecutablePath()
 	if err != nil {
-		return
+		// Fallback to os.Executable() if selfupdate resolution fails.
+		exe, err = os.Executable()
+		if err != nil {
+			return
+		}
 	}
 
 	dir := filepath.Dir(exe)
+	name := filepath.Base(exe)
 
-	// Write diagnostics to the log file directly (slog may not be writing to disk).
-	logDebug := func(msg string) {
-		cfgDir, e := os.UserConfigDir()
-		if e != nil {
-			return
-		}
-		f, e := os.OpenFile(filepath.Join(cfgDir, define.AppID, "willclaw.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if e != nil {
-			return
-		}
-		defer f.Close()
-		fmt.Fprintf(f, "[cleanup] %s\n", msg)
-	}
+	// go-selfupdate uses the pattern ".<name>.old" for the backup file
+	oldPath := filepath.Join(dir, "."+name+".old")
 
-	logDebug(fmt.Sprintf("exe=%s dir=%s", exe, dir))
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		logDebug(fmt.Sprintf("ReadDir failed: %v", err))
-		return
-	}
-
-	logDebug(fmt.Sprintf("found %d entries in dir", len(entries)))
-
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		lower := strings.ToLower(name)
-		// go-selfupdate names it ".<original>.old", e.g. ".WillClaw.exe.old"
-		if strings.HasSuffix(lower, ".old") {
-			logDebug(fmt.Sprintf("candidate: %s", name))
-			oldPath := filepath.Join(dir, name)
-			if err := os.Remove(oldPath); err != nil {
-				logDebug(fmt.Sprintf("remove failed: %s -> %v", oldPath, err))
-			} else {
-				logDebug(fmt.Sprintf("removed: %s", oldPath))
-			}
-		}
+	if err := os.Remove(oldPath); err == nil {
+		s.app.Logger.Info("cleaned up old binary", "path", oldPath)
 	}
 }
 
