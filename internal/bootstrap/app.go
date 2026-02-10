@@ -28,6 +28,7 @@ import (
 	"willchat/internal/services/textselection"
 	"willchat/internal/services/tray"
 	"willchat/internal/services/windows"
+	"willchat/pkg/winutil"
 	"willchat/internal/services/winsnapchat"
 	"willchat/internal/sqlite"
 	"willchat/internal/taskmanager"
@@ -69,10 +70,11 @@ func (m *mainWindowManager) safeWake() {
 
 	m.window.Restore()
 	m.window.Show()
-	m.window.Focus()
+	// Use native API to activate window; avoids WebView2 Focus() crash on Windows.
+	winutil.ForceActivateWindow(m.window)
 }
 
-// safeShow safely shows and focuses the main window.
+// safeShow safely shows and focuses the main window, bringing it to the foreground.
 func (m *mainWindowManager) safeShow() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -82,7 +84,8 @@ func (m *mainWindowManager) safeShow() {
 	}
 
 	m.window.Show()
-	m.window.Focus()
+	// Use native API to activate window; avoids WebView2 Focus() crash on Windows.
+	winutil.ForceActivateWindow(m.window)
 }
 
 // safeUnMinimiseAndShow safely unminimizes, shows and focuses the main window.
@@ -96,7 +99,8 @@ func (m *mainWindowManager) safeUnMinimiseAndShow() {
 
 	m.window.UnMinimise()
 	m.window.Show()
-	m.window.Focus()
+	// Use native API to activate window; avoids WebView2 Focus() crash on Windows.
+	winutil.ForceActivateWindow(m.window)
 }
 
 // safeHide safely hides the main window.
@@ -338,7 +342,20 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
 		app.Quit()
 	})
-	systray := app.SystemTray.New().SetIcon(opts.Icon).SetMenu(systrayMenu)
+	systray := app.SystemTray.New().SetIcon(opts.Icon).SetMenu(systrayMenu).
+		OnClick(func() {
+			// Run in a goroutine to avoid deadlock: the OnClick handler is called
+			// synchronously on the main thread by Wails, but window.Show() internally
+			// uses InvokeSync which also dispatches to the main thread and waits.
+			// (Menu item callbacks are already wrapped in goroutines by Wails, but
+			// SystemTray OnClick is not.)
+			go func() {
+				mainWinMgr.safeShow()
+				if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+					_ = floatingBallService.SetVisible(true)
+				}
+			}()
+		})
 
 	// 创建托盘服务（用于前端动态控制 show/hide + 缓存关闭策略）
 	trayService := tray.NewTrayService(app, systray)
