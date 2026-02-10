@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Plus, PinOff } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   Select,
   SelectContent,
@@ -9,18 +15,22 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import LogoIcon from '@/assets/images/logo.svg'
+import IconSnapAttached from '@/assets/icons/snap-attached.svg'
+import IconSnapDetached from '@/assets/icons/snap-detached.svg'
 import type { Agent } from '@bindings/willchat/internal/services/agents'
 
 defineProps<{
   agents: Agent[]
   activeAgent: Agent | null
   activeAgentId: number | null
+  hasAttachedTarget: boolean
 }>()
 
 const emit = defineEmits<{
   'update:activeAgentId': [value: number]
   'newConversation': []
   'cancelSnap': []
+  'findAndAttach': []
 }>()
 
 const { t } = useI18n()
@@ -68,8 +78,8 @@ const handleAgentChange = (value: any) => {
       </Select>
     </div>
 
-    <!-- Right: New conversation + Cancel snap -->
-    <div class="flex items-center gap-1.5" style="--wails-draggable: no-drag">
+    <!-- Right: New conversation + Snap toggle icon -->
+    <div class="flex items-center gap-2" style="--wails-draggable: no-drag">
       <button
         class="rounded-md p-1 hover:bg-muted"
         :title="t('assistant.sidebar.newConversation')"
@@ -78,13 +88,33 @@ const handleAgentChange = (value: any) => {
       >
         <Plus class="size-4 text-muted-foreground" />
       </button>
+
+      <!-- Snap icon: attached state (with bg + tooltip) -->
+      <TooltipProvider v-if="hasAttachedTarget" :delay-duration="300">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              class="rounded-md bg-muted p-1"
+              type="button"
+              @click="emit('cancelSnap')"
+            >
+              <IconSnapAttached class="size-5 text-muted-foreground" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {{ t('winsnap.cancelSnap') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <!-- Snap icon: detached state (no bg) -->
       <button
-        class="ml-1 inline-flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-xs hover:bg-muted"
+        v-else
+        class="rounded-md p-1 hover:bg-muted"
         type="button"
-        @click="emit('cancelSnap')"
+        @click="emit('findAndAttach')"
       >
-        <PinOff class="size-3.5 text-muted-foreground" />
-        <span class="text-muted-foreground">{{ t('winsnap.cancelSnap') }}</span>
+        <IconSnapDetached class="size-5 text-muted-foreground" />
       </button>
     </div>
   </div>

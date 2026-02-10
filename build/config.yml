@@ -11,7 +11,7 @@ info:
   description: "WillChat" # The application description
   copyright: "Copyright © 2016- 2026 Wuhan Sesame Small Customer Service Network Technology Co., Ltd." # Copyright text
   comments: "WillChat" # Comments
-  version: "0.0.1" # The application version
+  version: "0.0.2" # The application version
 
 # iOS build configuration (uncomment to customise iOS project generation)
 # Note: Keys under `ios` OVERRIDE values under `info` when set.

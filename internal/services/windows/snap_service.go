@@ -272,6 +272,102 @@ func (s *SnapService) PasteTextToTarget(text string) error {
 	return winsnap.PasteTextToTarget(target, text, noClick, clickOffsetX, clickOffsetY)
 }
 
+// DetachToStandalone detaches the winsnap window from its current target and
+// moves it to a standalone position (right side of screen). If other snap app
+// toggles are still enabled, the polling loop keeps running so the window can
+// re-attach when one of those apps becomes foreground.
+func (s *SnapService) DetachToStandalone() error {
+	// 1. Stop the current attach controller only (NOT the polling loop yet)
+	s.mu.Lock()
+	if s.ctrl != nil {
+		_ = s.ctrl.Stop()
+		s.ctrl = nil
+	}
+	oldState := s.status.State
+	s.currentTarget = ""
+	s.lastAttachedTarget = ""
+	s.lastWinsnapMinimized = false
+	s.status.TargetProcess = ""
+	s.status.LastError = ""
+	w := s.win
+	s.mu.Unlock()
+
+	// 2. Move to standalone position (NOT hide)
+	if w != nil {
+		s.moveToStandalone(w)
+	}
+
+	// 3. Re-read settings — the caller already disabled the current target's
+	//    toggle, but other apps may still be enabled (e.g. WeCom when DingTalk
+	//    was just cancelled). Sync the enabled lists from the settings cache.
+	enabledKeys, enabledTargets := readSnapTargetsFromSettings()
+
+	s.mu.Lock()
+	s.enabledKeys = enabledKeys
+	s.enabledTargets = enabledTargets
+	s.status.EnabledKeys = append([]string(nil), enabledKeys...)
+	s.status.EnabledTargets = append([]string(nil), enabledTargets...)
+	s.status.State = SnapStateStandalone
+	s.touchLocked("")
+	stillHasTargets := len(enabledTargets) > 0
+	s.mu.Unlock()
+
+	// 4. If no other targets are enabled, stop the polling loop entirely.
+	//    Otherwise keep it running so it can detect and re-attach when another
+	//    enabled app becomes foreground.
+	if !stillHasTargets {
+		s.mu.Lock()
+		cancel := s.loopCancel
+		s.loopCancel = nil
+		s.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+	}
+	// If still has targets and loop is NOT running (shouldn't normally happen),
+	// ensure it is started.
+	if stillHasTargets {
+		_ = s.ensureRunning()
+	}
+
+	// 5. Emit state-changed event so frontend can update UI
+	if oldState != SnapStateStandalone {
+		s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+			"state":         string(SnapStateStandalone),
+			"targetProcess": "",
+		})
+	}
+	s.app.Event.Emit("snap:settings-changed", s.GetStatus())
+
+	return nil
+}
+
+// FindSnapTarget scans ALL supported snap target applications (regardless of
+// whether their settings toggles are enabled) and returns the settings key
+// (e.g. "snap_wechat") of the top-most visible window. Returns empty string
+// if no supported app is visible.
+func (s *SnapService) FindSnapTarget() (string, error) {
+	allKeys := []string{"snap_wechat", "snap_wecom", "snap_qq", "snap_dingtalk", "snap_feishu", "snap_douyin"}
+	var allTargets []string
+	for _, key := range allKeys {
+		allTargets = append(allTargets, snapTargetsForKey(key)...)
+	}
+	allTargets = uniqueStrings(allTargets)
+
+	target, found, err := winsnap.TopMostVisibleProcessName(allTargets)
+	if err != nil {
+		// Ignore ErrSelfIsFrontmost — treat as "no target found"
+		if err == winsnap.ErrSelfIsFrontmost {
+			return "", nil
+		}
+		return "", err
+	}
+	if !found || target == "" {
+		return "", nil
+	}
+	return snapKeyForTarget(target), nil
+}
+
 // SyncFromSettings reads snap toggles from settings cache, then starts/stops
 // snapping loop accordingly.
 func (s *SnapService) SyncFromSettings() (SnapStatus, error) {

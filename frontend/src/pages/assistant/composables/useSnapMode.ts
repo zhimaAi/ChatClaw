@@ -94,12 +94,28 @@ export function useSnapMode() {
         const settingsKey = processToSettingsKey[status.targetProcess]
         if (settingsKey) {
           await SettingsService.SetValue(settingsKey, 'false')
-          await SnapService.SyncFromSettings()
-          hasAttachedTarget.value = false
         }
       }
+      // Detach but keep window visible at standalone position (right side of screen)
+      await SnapService.DetachToStandalone()
+      hasAttachedTarget.value = false
     } catch (error) {
       console.error('Failed to cancel snap:', error)
+    }
+  }
+
+  const findAndAttach = async () => {
+    try {
+      const key = await SnapService.FindSnapTarget()
+      if (!key) {
+        toast.error(t('winsnap.toast.noSnapTarget'))
+        return
+      }
+      await SettingsService.SetValue(key, 'true')
+      await SnapService.SyncFromSettings()
+    } catch (error) {
+      console.error('Failed to find and attach:', error)
+      toast.error(t('winsnap.toast.attachFailed'))
     }
   }
 
@@ -148,6 +164,7 @@ export function useSnapMode() {
     checkSnapStatus,
     loadSnapSettings,
     cancelSnap,
+    findAndAttach,
     handleSendAndTrigger,
     handleSendToEdit,
     handleCopyToClipboard,

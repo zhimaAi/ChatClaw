@@ -111,6 +111,7 @@ const {
   checkSnapStatus,
   loadSnapSettings,
   cancelSnap,
+  findAndAttach,
   handleSendAndTrigger,
   handleSendToEdit,
   handleCopyToClipboard,
@@ -763,9 +764,11 @@ onUnmounted(() => {
       :agents="agents"
       :active-agent="activeAgent"
       :active-agent-id="activeAgentId"
+      :has-attached-target="hasAttachedTarget"
       @update:active-agent-id="activeAgentId = $event"
       @new-conversation="handleNewConversation"
       @cancel-snap="cancelSnap"
+      @find-and-attach="findAndAttach"
     />
 
     <!-- Main content wrapper -->
