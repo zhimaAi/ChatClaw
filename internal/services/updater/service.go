@@ -87,7 +87,10 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 // launch when the file is no longer locked.
 //
 // NOTE: We directly construct the expected old-binary path instead of scanning
-// the directory, because os.ReadDir on Windows may skip hidden files.
+// the directory, because os.ReadDir on Windows skips hidden files. We also use
+// the \\?\ extended-length path prefix because Windows path APIs treat a
+// leading dot in a filename component (e.g. "dir\.file") as a relative
+// directory reference, making it impossible to access with normal paths.
 func (s *UpdaterService) cleanupOldBinary() {
 	logToFile := newFileLogger()
 
@@ -103,12 +106,9 @@ func (s *UpdaterService) cleanupOldBinary() {
 	oldPath := filepath.Join(dir, "."+name+".old")
 	logToFile("[cleanup] trying to remove: %s", oldPath)
 
-	// On Windows the old binary is marked FILE_ATTRIBUTE_HIDDEN by go-selfupdate.
-	// os.Remove may fail on hidden files on some Windows configurations, so we
-	// first clear the hidden attribute via a platform-specific helper, then remove.
-	unhideFile(oldPath)
-
-	if err := os.Remove(oldPath); err != nil {
+	// Use platform-specific removal that handles hidden files and dot-prefixed
+	// filenames on Windows (via \\?\ prefix and kernel32 DeleteFileW).
+	if err := removeHiddenFile(oldPath); err != nil {
 		if !os.IsNotExist(err) {
 			logToFile("[cleanup] remove failed: %v", err)
 		}
