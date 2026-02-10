@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
-import { FloatingBallService } from '@bindings/willchat/internal/services/floatingball'
+import { FloatingBallService } from '@bindings/willclaw/internal/services/floatingball'
 import logoUrl from '@/assets/images/logo.svg?url'
 
 const debugDrag = () => {
