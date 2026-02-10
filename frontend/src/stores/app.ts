@@ -8,6 +8,9 @@ export const useAppStore = defineStore('app', () => {
   // 主题设置
   const theme = ref<Theme>('system')
 
+  // Whether a new version is available (used to show badge on "Check for Update" button)
+  const hasAvailableUpdate = ref(false)
+
   // 获取系统主题
   const getSystemTheme = (): 'light' | 'dark' => {
     if (typeof window !== 'undefined') {
@@ -81,5 +84,6 @@ export const useAppStore = defineStore('app', () => {
     setTheme,
     initTheme,
     getSystemTheme,
+    hasAvailableUpdate,
   }
 })

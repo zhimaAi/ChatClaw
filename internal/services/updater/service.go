@@ -54,14 +54,13 @@ func NewUpdaterService(app *application.App) *UpdaterService {
 }
 
 // ServiceStartup is called by Wails after the application starts.
-// It schedules a background update check if auto_update is enabled.
+// It always schedules a background update check so the frontend can show
+// a badge on the "Check for Update" button. The auto_update setting only
+// controls whether the update dialog is shown automatically.
 func (s *UpdaterService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	go func() {
 		time.Sleep(3 * time.Second)
 
-		if !settings.GetBool("auto_update", true) {
-			return
-		}
 		info, err := s.CheckForUpdate()
 		if err != nil {
 			s.app.Logger.Warn("auto update check failed", "error", err)
@@ -69,6 +68,9 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 		}
 		if info != nil && info.HasUpdate {
 			s.app.Logger.Info("new version available", "version", info.LatestVersion)
+			// Always emit the event so the frontend can display an update badge.
+			// The frontend decides whether to auto-show the dialog based on
+			// the auto_update setting.
 			s.app.Event.Emit("update:available", *info)
 		}
 	}()
