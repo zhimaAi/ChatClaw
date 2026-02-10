@@ -7,13 +7,19 @@ import "willclaw/internal/services/i18n"
 // 说明：
 // - 前端通常只能拿到 error.message（Wails Promise reject），所以这里以 message 为主。
 // - key 保留给后端日志/排查（或未来扩展前端结构化错误处理）。
+// - 当存在 Cause 时，Error() 会附带底层原因，便于调试（如 "应用更新失败: network timeout"）。
 type I18nError struct {
 	Key     string
 	Message string
 	Cause   error
 }
 
-func (e *I18nError) Error() string { return e.Message }
+func (e *I18nError) Error() string {
+	if e.Cause != nil {
+		return e.Message + ": " + e.Cause.Error()
+	}
+	return e.Message
+}
 func (e *I18nError) Unwrap() error { return e.Cause }
 
 // New 创建 i18n 业务错误
