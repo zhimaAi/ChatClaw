@@ -106,14 +106,33 @@ func (s *UpdaterService) cleanupOldBinary() {
 	oldPath := filepath.Join(dir, "."+name+".old")
 	logToFile("[cleanup] trying to remove: %s", oldPath)
 
-	// Use platform-specific removal that handles hidden files and dot-prefixed
-	// filenames on Windows (via \\?\ prefix and kernel32 DeleteFileW).
+	// Attempt 1: platform-specific removal (\\?\ prefix + DeleteFileW on Windows).
 	if err := removeHiddenFile(oldPath); err != nil {
-		if !os.IsNotExist(err) {
-			logToFile("[cleanup] remove failed: %v", err)
-		}
+		logToFile("[cleanup] removeHiddenFile error: %v", err)
 	} else {
-		logToFile("[cleanup] removed: %s", oldPath)
+		logToFile("[cleanup] removeHiddenFile succeeded")
+		return
+	}
+
+	// Attempt 2 (Windows fallback): use cmd /C del /F /A:H to force-delete
+	// a hidden file. The "del" command handles dot-prefixed names correctly.
+	if runtime.GOOS == "windows" {
+		logToFile("[cleanup] trying cmd /C del fallback")
+		out, err := exec.Command("cmd", "/C", "del", "/F", "/A:H", oldPath).CombinedOutput()
+		if err != nil {
+			logToFile("[cleanup] cmd del error: %v, output: %s", err, string(out))
+		} else {
+			logToFile("[cleanup] cmd del succeeded")
+			return
+		}
+
+		// Attempt 3: try with short 8.3 name by listing via dir /X
+		logToFile("[cleanup] trying dir /X to find short name")
+		dirOut, err := exec.Command("cmd", "/C", "dir", "/A:H", "/X", dir).CombinedOutput()
+		logToFile("[cleanup] dir /A:H /X output:\n%s", string(dirOut))
+		if err != nil {
+			logToFile("[cleanup] dir /X error: %v", err)
+		}
 	}
 }
 
