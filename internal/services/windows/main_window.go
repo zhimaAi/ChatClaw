@@ -21,7 +21,7 @@ import (
 func NewMainWindow(app *application.App) *application.WebviewWindow {
 	return app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "WillChat",
+		Title:            "WillClaw",
 		MinWidth:         1064,
 		MinHeight:        628,
 		Width:            1280,

@@ -3,7 +3,7 @@ package app
 import (
 	"sync"
 
-	"willchat/internal/define"
+	"willclaw/internal/define"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

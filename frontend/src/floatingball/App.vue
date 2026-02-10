@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
-import { FloatingBallService } from '@bindings/willchat/internal/services/floatingball'
+import { FloatingBallService } from '@bindings/willclaw/internal/services/floatingball'
 import logoUrl from '@/assets/images/logo.svg?url'
 
 const debugDrag = () => {
@@ -372,7 +372,7 @@ watch(
             :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
             class="block"
             style="transform: translateZ(0); backface-visibility: hidden"
-            alt="WillChat"
+            alt="WillClaw"
             draggable="false"
           />
         </div>

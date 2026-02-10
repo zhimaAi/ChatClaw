@@ -42,9 +42,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-import type { Library } from '@bindings/willchat/internal/services/library'
-import { LibraryService } from '@bindings/willchat/internal/services/library'
-import { SettingsService } from '@bindings/willchat/internal/services/settings'
+import type { Library } from '@bindings/willclaw/internal/services/library'
+import { LibraryService } from '@bindings/willclaw/internal/services/library'
+import { SettingsService } from '@bindings/willclaw/internal/services/settings'
 
 type LibraryTab = 'personal' | 'team'
 

@@ -7,10 +7,10 @@ import SettingsItem from './SettingsItem.vue'
 import { Window } from '@wailsio/runtime'
 
 // 后端绑定
-import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
-import { TrayService } from '@bindings/willchat/internal/services/tray'
-import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
-import { FloatingBallService } from '@bindings/willchat/internal/services/floatingball'
+import { SettingsService, Category } from '@bindings/willclaw/internal/services/settings'
+import { TrayService } from '@bindings/willclaw/internal/services/tray'
+import { TextSelectionService } from '@bindings/willclaw/internal/services/textselection'
+import { FloatingBallService } from '@bindings/willclaw/internal/services/floatingball'
 
 const { t } = useI18n()
 
@@ -19,7 +19,7 @@ const showTrayIcon = ref(true)
 const minimizeToTrayOnClose = ref(true)
 
 // 悬浮窗设置状态
-const showFloatingWindow = ref(true)
+const showFloatingWindow = ref(false)
 
 // 悬浮窗开关：快速连点时仅在“停手”后同步一次（避免频繁桥接/写库导致 UI 吞点击）
 let floatingWindowDesired = showFloatingWindow.value

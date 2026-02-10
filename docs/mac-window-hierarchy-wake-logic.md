@@ -1,9 +1,9 @@
 ## macOS：吸附窗体 / 被吸附窗体 / 主窗体 / 划词弹窗 的层级与唤醒逻辑
 
-本文档梳理 WillChat 在 **macOS** 上与窗口相关的 4 个对象之间的层级（z-order / window level）与唤醒（activate / focus）策略：
+本文档梳理 WillClaw 在 **macOS** 上与窗口相关的 4 个对象之间的层级（z-order / window level）与唤醒（activate / focus）策略：
 
-- **主窗体**：`main`（WillChat 主界面）
-- **吸附窗体**：`winsnap`（WillChat 侧边吸附聊天窗）
+- **主窗体**：`main`（WillClaw 主界面）
+- **吸附窗体**：`winsnap`（WillClaw 侧边吸附聊天窗）
 - **被吸附窗体**：外部目标应用的主窗口（如 微信/企业微信/飞书 等）
 - **划词搜索弹窗**：`textselection`（透明小弹窗按钮）
 
@@ -11,7 +11,7 @@
 
 - **层级**：谁在谁上面？什么时候会“只在目标窗体上方”而不是全局置顶？
 - **互动**：哪些用户动作会触发窗口之间的联动？
-- **唤醒**：哪些场景会激活目标应用、激活 WillChat、以及把键盘焦点交给哪个窗口？
+- **唤醒**：哪些场景会激活目标应用、激活 WillClaw、以及把键盘焦点交给哪个窗口？
 
 ---
 
@@ -196,17 +196,17 @@ macOS 下实现（`pkg/winsnap/wake_darwin.go`）：
 
 策略：
 
-- 不抢焦点、不激活 WillChat
+- 不抢焦点、不激活 WillClaw
 - 只做 `orderWindow:NSWindowAbove relativeTo:targetWinNo`，保证 winsnap 仍浮在目标窗口之上
 
 结论：**目标 app 激活时，winsnap 仅调整可见层级，不抢键盘焦点。**
 
-### 场景 D：用户在 WillChat 自己窗口内划词（main/winsnap）
+### 场景 D：用户在 WillClaw 自己窗口内划词（main/winsnap）
 
 问题背景：
 
 - macOS 的系统级 mouse hook 会跳过“我们自己是 frontmost”的情况（避免递归/权限/事件干扰）
-- 因此在 WillChat 内部划词需要前端兜底监听 selection
+- 因此在 WillClaw 内部划词需要前端兜底监听 selection
 
 实现：
 

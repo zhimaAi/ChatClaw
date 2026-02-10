@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
-import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
+import { SnapService } from '@bindings/willclaw/internal/services/windows'
+import { SettingsService, Category } from '@bindings/willclaw/internal/services/settings'
 import { Clipboard } from '@wailsio/runtime'
 
 // Map from target process name to settings key

@@ -10,7 +10,7 @@ import ModelSelector from './components/ModelSelector.vue'
 import ColumnToggle from './components/ColumnToggle.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import MessageInput from './components/MessageInput.vue'
-import { MultiaskService } from '../../../bindings/willchat/internal/services/multiask'
+import { MultiaskService } from '../../../bindings/willclaw/internal/services/multiask'
 import { useNavigationStore } from '@/stores'
 
 const { t } = useI18n()
@@ -31,8 +31,8 @@ const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 /**
  * localStorage 存储键名
  */
-const STORAGE_KEY_MODEL_ORDER = 'willchat:multiask:model-order'
-const STORAGE_KEY_SELECTED_MODELS = 'willchat:multiask:selected-models'
+const STORAGE_KEY_MODEL_ORDER = 'willclaw:multiask:model-order'
+const STORAGE_KEY_SELECTED_MODELS = 'willclaw:multiask:selected-models'
 
 /**
  * 服务是否已初始化
@@ -47,7 +47,7 @@ const initService = async () => {
 
   try {
     console.log('[MultiaskPage] Initializing MultiaskService...')
-    await MultiaskService.Initialize('WillChat')
+    await MultiaskService.Initialize('WillClaw')
     serviceInitialized.value = true
     console.log('[MultiaskPage] MultiaskService initialized successfully')
     return true

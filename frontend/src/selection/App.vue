@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Logo from '@/assets/images/logo.svg'
 import { Events } from '@wailsio/runtime'
 import { useLocaleSync } from '@/composables/useLocale'
 
@@ -29,7 +28,7 @@ let hideTimer: number | null = null
 
 const handleMouseEnter = () => {
   if (hideTimer) {
-    clearTimeout(hideTimer)
+    window.clearTimeout(hideTimer)
     hideTimer = null
   }
 }
@@ -44,7 +43,7 @@ const handleMouseLeave = () => {
 onUnmounted(() => {
   unsubLocale()
   if (hideTimer) {
-    clearTimeout(hideTimer)
+    window.clearTimeout(hideTimer)
     hideTimer = null
   }
 })
@@ -57,10 +56,9 @@ onUnmounted(() => {
     @mouseleave="handleMouseLeave"
   >
     <div
-      class="flex cursor-pointer items-center gap-2 rounded-full border border-border bg-background px-4 py-2 shadow-lg transition-all hover:shadow-xl"
+      class="flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 shadow-lg transition-all hover:shadow-xl"
       @mousedown="handleMouseDown"
     >
-      <Logo class="size-6" />
       <span class="text-sm font-medium text-foreground">{{ t('selection.aiChat') }}</span>
     </div>
   </div>

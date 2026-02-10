@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=WillChat
-Comment=WillChat
+Name=WillClaw
+Comment=WillClaw
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/WillChat %u
+Exec=/usr/local/bin/WillClaw %u
 Terminal=false
 Type=Application
-Icon=WillChat
+Icon=WillClaw
 Categories=Utility;
-StartupWMClass=WillChat
+StartupWMClass=WillClaw
 
  

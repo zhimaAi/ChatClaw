@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/willchat/internal/services/agents'
+import { AgentsService, type Agent } from '@bindings/willclaw/internal/services/agents'
 
 export function useAgents() {
   const { t } = useI18n()

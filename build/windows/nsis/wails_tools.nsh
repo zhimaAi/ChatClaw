@@ -5,13 +5,13 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "WillChat"
+    !define INFO_PROJECTNAME "WillClaw"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "sesame"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "WillChat"
+    !define INFO_PRODUCTNAME "WillClaw"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.0.1"

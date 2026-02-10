@@ -5,13 +5,13 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import {
   ProvidersService,
   type ProviderWithModels,
-} from '@bindings/willchat/internal/services/providers'
+} from '@bindings/willclaw/internal/services/providers'
 import {
   ConversationsService,
   type Conversation,
   UpdateConversationInput,
-} from '@bindings/willchat/internal/services/conversations'
-import type { Agent } from '@bindings/willchat/internal/services/agents'
+} from '@bindings/willclaw/internal/services/conversations'
+import type { Agent } from '@bindings/willclaw/internal/services/agents'
 
 export function useModelSelection() {
   const { t } = useI18n()

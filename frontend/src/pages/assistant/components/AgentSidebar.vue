@@ -21,8 +21,8 @@ import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
 import { Pin, PinOff, MoreHorizontal } from 'lucide-vue-next'
-import type { Agent } from '@bindings/willchat/internal/services/agents'
-import type { Conversation } from '@bindings/willchat/internal/services/conversations'
+import type { Agent } from '@bindings/willclaw/internal/services/agents'
+import type { Conversation } from '@bindings/willclaw/internal/services/conversations'
 
 type ListMode = 'personal' | 'team'
 

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"willchat/internal/services/settings"
-	"willchat/internal/services/windows"
+	"willclaw/internal/services/settings"
+	"willclaw/internal/services/windows"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"

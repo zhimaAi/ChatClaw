@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"willchat/internal/errs"
-	"willchat/internal/services/settings"
-	"willchat/pkg/winsnap"
+	"willclaw/internal/errs"
+	"willclaw/internal/services/settings"
+	"willclaw/pkg/winsnap"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"

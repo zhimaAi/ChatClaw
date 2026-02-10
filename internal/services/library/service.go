@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"willchat/internal/errs"
-	"willchat/internal/services/settings"
-	"willchat/internal/sqlite"
-	"willchat/internal/taskmanager"
+	"willclaw/internal/errs"
+	"willclaw/internal/services/settings"
+	"willclaw/internal/sqlite"
+	"willclaw/internal/taskmanager"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"

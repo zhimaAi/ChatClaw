@@ -26,8 +26,8 @@ import FeishuIcon from '@/assets/icons/snap/feishu.svg'
 import DouyinIcon from '@/assets/icons/snap/douyin.svg'
 
 // 后端绑定
-import { SettingsService, Category } from '@bindings/willchat/internal/services/settings'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
+import { SettingsService, Category } from '@bindings/willclaw/internal/services/settings'
+import { SnapService } from '@bindings/willclaw/internal/services/windows'
 
 const { t } = useI18n()
 

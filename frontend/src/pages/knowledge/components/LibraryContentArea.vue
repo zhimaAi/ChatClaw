@@ -21,11 +21,11 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import DocumentCard from './DocumentCard.vue'
 import RenameDocumentDialog from './RenameDocumentDialog.vue'
 import type { Document, DocumentStatus } from './DocumentCard.vue'
-import type { Library } from '@bindings/willchat/internal/services/library'
+import type { Library } from '@bindings/willclaw/internal/services/library'
 import {
   DocumentService,
   type Document as BackendDocument,
-} from '@bindings/willchat/internal/services/document'
+} from '@bindings/willclaw/internal/services/document'
 
 // 进度事件数据（从后端接收）
 interface ProgressEvent {

@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"willchat/internal/errs"
-	"willchat/internal/services/document"
-	"willchat/internal/sqlite"
-	"willchat/internal/taskmanager"
+	"willclaw/internal/errs"
+	"willclaw/internal/services/document"
+	"willclaw/internal/sqlite"
+	"willclaw/internal/taskmanager"
 
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"

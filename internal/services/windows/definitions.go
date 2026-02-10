@@ -12,36 +12,36 @@ func DefaultDefinitions() []WindowDefinition {
 		{
 			Name: WindowWinsnap,
 			CreateOptions: func() application.WebviewWindowOptions {
-			return application.WebviewWindowOptions{
-				Name:   WindowWinsnap,
-				Title:  "WillChat",
-				Width:  400,
-				Height: 720,
-				Hidden: true,
-				// Use frameless mode — the custom SnapModeHeader provides its own
-				// drag region and close button; no native title bar needed.
-				Frameless: true,
-				// Let z-order follow the attached target window (not global top-most).
-				// - Windows: we insert after the target hwnd (see pkg/winsnap/winsnap_windows.go)
-				// - macOS: we order above the target window number on activation (see pkg/winsnap/winsnap_darwin.go)
-				AlwaysOnTop: runtime.GOOS != "windows" && runtime.GOOS != "darwin",
-				URL:         "/winsnap.html",
-				// Windows specific: hide from taskbar
-				Windows: application.WindowsWindow{
-					HiddenOnTaskbar: true,
-					// Avoid extra shadow/rounded-corner decorations in frameless mode.
-					DisableFramelessWindowDecorations: true,
-				},
-				Mac: application.MacWindow{
-					// Use normal window level; ordering is handled dynamically to stay above the target window only.
-					WindowLevel: application.MacWindowLevelNormal,
-					// No invisible title bar — dragging is handled by --wails-draggable in the header.
-					InvisibleTitleBarHeight: 0,
-					CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
-						application.MacWindowCollectionBehaviorTransient |
-						application.MacWindowCollectionBehaviorIgnoresCycle,
-				},
-			}
+				return application.WebviewWindowOptions{
+					Name:   WindowWinsnap,
+					Title:  "WillClaw",
+					Width:  400,
+					Height: 720,
+					Hidden: true,
+					// Use frameless mode — the custom SnapModeHeader provides its own
+					// drag region and close button; no native title bar needed.
+					Frameless: true,
+					// Let z-order follow the attached target window (not global top-most).
+					// - Windows: we insert after the target hwnd (see pkg/winsnap/winsnap_windows.go)
+					// - macOS: we order above the target window number on activation (see pkg/winsnap/winsnap_darwin.go)
+					AlwaysOnTop: runtime.GOOS != "windows" && runtime.GOOS != "darwin",
+					URL:         "/winsnap.html",
+					// Windows specific: hide from taskbar
+					Windows: application.WindowsWindow{
+						HiddenOnTaskbar: true,
+						// Avoid extra shadow/rounded-corner decorations in frameless mode.
+						DisableFramelessWindowDecorations: true,
+					},
+					Mac: application.MacWindow{
+						// Use normal window level; ordering is handled dynamically to stay above the target window only.
+						WindowLevel: application.MacWindowLevelNormal,
+						// No invisible title bar — dragging is handled by --wails-draggable in the header.
+						InvisibleTitleBarHeight: 0,
+						CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+							application.MacWindowCollectionBehaviorTransient |
+							application.MacWindowCollectionBehaviorIgnoresCycle,
+					},
+				}
 			},
 			// Side window should not steal focus when shown.
 			FocusOnShow: false,

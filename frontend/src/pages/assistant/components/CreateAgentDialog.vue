@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LogoIcon from '@/assets/images/logo.svg'
 import { Dialogs } from '@wailsio/runtime'
-import { AgentsService } from '@bindings/willchat/internal/services/agents'
+import { AgentsService } from '@bindings/willclaw/internal/services/agents'
 import {
   Dialog,
   DialogContent,

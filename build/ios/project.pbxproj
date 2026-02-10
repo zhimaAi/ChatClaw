@@ -13,20 +13,20 @@
 		C0DEBEEF00000000000000F4 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEBEEF0000000000000104 /* Security.framework */; };
 		C0DEBEEF00000000000000F5 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEBEEF0000000000000105 /* CoreFoundation.framework */; };
 		C0DEBEEF00000000000000F6 /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEBEEF0000000000000106 /* libresolv.tbd */; };
-		C0DEBEEF00000000000000F7 /* WillChat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEBEEF0000000000000107 /* WillChat.a */; };
+		C0DEBEEF00000000000000F7 /* WillClaw.a in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEBEEF0000000000000107 /* WillClaw.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		C0DEBEEF0000000000000002 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		C0DEBEEF0000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		C0DEBEEF0000000000000004 /* WillChat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WillChat.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DEBEEF0000000000000004 /* WillClaw.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "WillClaw.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0DEBEEF0000000000000101 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		C0DEBEEF0000000000000102 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		C0DEBEEF0000000000000103 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		C0DEBEEF0000000000000104 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		C0DEBEEF0000000000000105 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		C0DEBEEF0000000000000106 /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
-		C0DEBEEF0000000000000107 /* WillChat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "WillChat.a"; path = ../../../bin/WillChat.a; sourceTree = SOURCE_ROOT; };
+		C0DEBEEF0000000000000107 /* WillClaw.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = "WillClaw.a"; path = ../../../bin/WillClaw.a; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -42,7 +42,7 @@
 		C0DEBEEF0000000000000020 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C0DEBEEF0000000000000004 /* WillChat.app */,
+				C0DEBEEF0000000000000004 /* WillClaw.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -65,7 +65,7 @@
 				C0DEBEEF0000000000000104 /* Security.framework */,
 				C0DEBEEF0000000000000105 /* CoreFoundation.framework */,
 				C0DEBEEF0000000000000106 /* libresolv.tbd */,
-				C0DEBEEF0000000000000107 /* WillChat.a */,
+				C0DEBEEF0000000000000107 /* WillClaw.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -73,9 +73,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C0DEBEEF0000000000000040 /* WillChat */ = {
+		C0DEBEEF0000000000000040 /* WillClaw */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C0DEBEEF0000000000000070 /* Build configuration list for PBXNativeTarget "WillChat" */;
+			buildConfigurationList = C0DEBEEF0000000000000070 /* Build configuration list for PBXNativeTarget "WillClaw" */;
 			buildPhases = (
 				C0DEBEEF0000000000000055 /* Prebuild: Wails Go Archive */,
 				C0DEBEEF0000000000000050 /* Sources */,
@@ -85,9 +85,9 @@
 			);
 			dependencies = (
 			);
-			name = "WillChat";
-			productName = "WillChat";
-			productReference = C0DEBEEF0000000000000004 /* WillChat.app */;
+			name = "WillClaw";
+			productName = "WillClaw";
+			productReference = C0DEBEEF0000000000000004 /* WillClaw.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -116,7 +116,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				C0DEBEEF0000000000000040 /* WillChat */,
+				C0DEBEEF0000000000000040 /* WillClaw */,
 			);
 		};
 /* End PBXProject section */
@@ -126,7 +126,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C0DEBEEF00000000000000F7 /* WillChat.a in Frameworks */,
+				C0DEBEEF00000000000000F7 /* WillClaw.a in Frameworks */,
 				C0DEBEEF00000000000000F1 /* UIKit.framework in Frameworks */,
 				C0DEBEEF00000000000000F2 /* Foundation.framework in Frameworks */,
 				C0DEBEEF00000000000000F3 /* WebKit.framework in Frameworks */,
@@ -155,7 +155,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nAPP_ROOT=\"${PROJECT_DIR}/../../..\"\nSDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)\nexport GOOS=ios\nexport GOARCH=arm64\nexport CGO_ENABLED=1\nexport CGO_CFLAGS=\"-isysroot ${SDK_PATH} -target arm64-apple-ios15.0-simulator -mios-simulator-version-min=15.0\"\nexport CGO_LDFLAGS=\"-isysroot ${SDK_PATH} -target arm64-apple-ios15.0-simulator\"\ncd \"${APP_ROOT}\"\n# Ensure overlay exists\nif [ ! -f build/ios/xcode/overlay.json ]; then\n  wails3 ios overlay:gen -out build/ios/xcode/overlay.json -config build/config.yml || true\nfi\n# Build Go c-archive if missing or older than sources\nif [ ! -f bin/WillChat.a ]; then\n  echo \"Building Go c-archive...\"\n  go build -buildmode=c-archive -overlay build/ios/xcode/overlay.json -o bin/WillChat.a\nfi\n";
+			shellScript = "set -e\nAPP_ROOT=\"${PROJECT_DIR}/../../..\"\nSDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path)\nexport GOOS=ios\nexport GOARCH=arm64\nexport CGO_ENABLED=1\nexport CGO_CFLAGS=\"-isysroot ${SDK_PATH} -target arm64-apple-ios15.0-simulator -mios-simulator-version-min=15.0\"\nexport CGO_LDFLAGS=\"-isysroot ${SDK_PATH} -target arm64-apple-ios15.0-simulator\"\ncd \"${APP_ROOT}\"\n# Ensure overlay exists\nif [ ! -f build/ios/xcode/overlay.json ]; then\n  wails3 ios overlay:gen -out build/ios/xcode/overlay.json -config build/config.yml || true\nfi\n# Build Go c-archive if missing or older than sources\nif [ ! -f bin/WillClaw.a ]; then\n  echo \"Building Go c-archive...\"\n  go build -buildmode=c-archive -overlay build/ios/xcode/overlay.json -o bin/WillClaw.a\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -176,8 +176,8 @@
 			buildSettings = {
 				INFOPLIST_FILE = main/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sesame.willchat";
-				PRODUCT_NAME = "WillChat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sesame.willclaw";
+				PRODUCT_NAME = "WillClaw";
 				CODE_SIGNING_ALLOWED = NO;
 				SDKROOT = iphonesimulator;
 			};
@@ -188,8 +188,8 @@
 			buildSettings = {
 				INFOPLIST_FILE = main/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.sesame.willchat";
-				PRODUCT_NAME = "WillChat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.sesame.willclaw";
+				PRODUCT_NAME = "WillClaw";
 				CODE_SIGNING_ALLOWED = NO;
 				SDKROOT = iphonesimulator;
 			};
@@ -198,7 +198,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C0DEBEEF0000000000000070 /* Build configuration list for PBXNativeTarget "WillChat" */ = {
+		C0DEBEEF0000000000000070 /* Build configuration list for PBXNativeTarget "WillClaw" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C0DEBEEF0000000000000090 /* Debug */,

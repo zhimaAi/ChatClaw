@@ -1,4 +1,4 @@
-module willchat
+module willclaw
 
 go 1.25
 
