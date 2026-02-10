@@ -24,8 +24,10 @@ const (
 	repoOwner = "zhimaAi"
 	repoName  = "WillChat"
 
-	// Timeout for GitHub reachability probe
-	githubProbeTimeout = 3 * time.Second
+	// Google reachability probe: if Google is accessible, the network is
+	// not behind the GFW, so we can safely use GitHub for downloads.
+	googleProbeURL     = "https://www.google.com"
+	googleProbeTimeout = 3 * time.Second
 )
 
 // UpdateInfo is the result returned to the frontend.
@@ -43,6 +45,7 @@ type UpdaterService struct {
 
 	mu     sync.Mutex
 	latest *selfupdate.Release // cached latest release after CheckForUpdate
+	source selfupdate.Source   // cached source selected during CheckForUpdate
 }
 
 // NewUpdaterService creates a new updater service.
@@ -112,9 +115,11 @@ func (s *UpdaterService) CheckForUpdate() (*UpdateInfo, error) {
 		}, nil
 	}
 
-	// Cache the latest release for DownloadAndApply
+	// Cache the latest release and source for DownloadAndApply,
+	// so that the same source is used for both check and download.
 	s.mu.Lock()
 	s.latest = latest
+	s.source = source
 	s.mu.Unlock()
 
 	return &UpdateInfo{
@@ -131,15 +136,14 @@ func (s *UpdaterService) CheckForUpdate() (*UpdateInfo, error) {
 func (s *UpdaterService) DownloadAndApply() error {
 	s.mu.Lock()
 	latest := s.latest
+	source := s.source
 	s.mu.Unlock()
 
 	if latest == nil {
 		return errs.New("error.update_no_release")
 	}
-
-	source, err := s.selectSource()
-	if err != nil {
-		return errs.Wrap("error.update_source_failed", err)
+	if source == nil {
+		return errs.New("error.update_no_source")
 	}
 
 	updater, err := selfupdate.NewUpdater(selfupdate.Config{
@@ -248,23 +252,28 @@ func (s *UpdaterService) RestartApp() error {
 	return nil
 }
 
-// selectSource probes GitHub and falls back to Gitee if unreachable.
+// selectSource probes Google to decide whether the network can reach
+// international sites; if yes it uses GitHub, otherwise falls back to Gitee.
 func (s *UpdaterService) selectSource() (selfupdate.Source, error) {
-	if isGitHubReachable() {
-		s.app.Logger.Debug("using GitHub as update source")
+	if isGoogleReachable() {
+		s.app.Logger.Debug("Google reachable, using GitHub as update source")
 		return selfupdate.NewGitHubSource(selfupdate.GitHubConfig{})
 	}
 
-	s.app.Logger.Info("GitHub unreachable, falling back to Gitee")
+	s.app.Logger.Info("Google unreachable, using Gitee as update source")
 	return NewGiteeSource(), nil
 }
 
-// isGitHubReachable checks if GitHub API is accessible within the probe timeout.
-func isGitHubReachable() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), githubProbeTimeout)
+// isGoogleReachable checks if Google is accessible within the probe timeout.
+// When Google is reachable the user is on an unrestricted network, so GitHub
+// downloads will also work. This is a stricter check than probing GitHub API
+// directly, because GitHub API may respond while release asset downloads are
+// still throttled or blocked.
+func isGoogleReachable() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), googleProbeTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://api.github.com", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, googleProbeURL, nil)
 	if err != nil {
 		return false
 	}
