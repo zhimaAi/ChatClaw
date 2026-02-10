@@ -285,14 +285,18 @@ func (s *UpdaterService) RestartApp() error {
 	case "windows":
 		// On Windows with SingleInstance, we cannot start the new process while
 		// the current one is still running — it would be rejected as a second
-		// instance. Use "cmd /C" with a ping delay: ping waits ~2 seconds, then
-		// starts the new exe. We must pass the entire command as a single string
-		// to "cmd /C" because Go's exec.Command quotes individual args in ways
-		// that break cmd.exe parsing (especially the empty title in "start").
-		shellCmd := fmt.Sprintf(`ping localhost -n 3 >nul & start "" "%s"`, exe)
-		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe, "shellCmd", shellCmd)
+		// instance. Write a temporary .bat script that waits ~2s (via ping)
+		// then launches the new exe. Using a .bat file avoids all Go/cmd.exe
+		// argument quoting issues.
+		batPath := filepath.Join(os.TempDir(), "willclaw_restart.bat")
+		batContent := fmt.Sprintf("@echo off\r\nping localhost -n 3 >nul\r\nstart \"\" \"%s\"\r\ndel \"%%~f0\"\r\n", exe)
+		if err := os.WriteFile(batPath, []byte(batContent), 0o644); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
 
-		cmd := exec.Command("cmd", "/C", shellCmd)
+		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe, "bat", batPath)
+
+		cmd := exec.Command("cmd", "/C", batPath)
 		setDetachedProcess(cmd)
 
 		if err := cmd.Start(); err != nil {
@@ -300,7 +304,7 @@ func (s *UpdaterService) RestartApp() error {
 		}
 
 		// Quit immediately so the SingleInstance lock is released before
-		// the delayed "start" command fires.
+		// the delayed bat script fires.
 		go func() {
 			time.Sleep(200 * time.Millisecond)
 			s.app.Quit()
