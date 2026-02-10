@@ -91,12 +91,15 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 // which may return a different casing/path than os.Executable(). The .old file
 // lives next to the resolved path, so we must use the same resolution.
 func (s *UpdaterService) cleanupOldBinary() {
+	logToFile := newFileLogger()
+
 	// Use the same path resolution as go-selfupdate so we look in the right directory.
 	exe, err := selfupdate.ExecutablePath()
 	if err != nil {
-		// Fallback to os.Executable() if selfupdate resolution fails.
+		logToFile("[cleanup] selfupdate.ExecutablePath failed: %v, falling back to os.Executable", err)
 		exe, err = os.Executable()
 		if err != nil {
+			logToFile("[cleanup] os.Executable also failed: %v", err)
 			return
 		}
 	}
@@ -106,9 +109,34 @@ func (s *UpdaterService) cleanupOldBinary() {
 
 	// go-selfupdate uses the pattern ".<name>.old" for the backup file
 	oldPath := filepath.Join(dir, "."+name+".old")
+	logToFile("[cleanup] looking for old binary at: %s", oldPath)
 
-	if err := os.Remove(oldPath); err == nil {
-		s.app.Logger.Info("cleaned up old binary", "path", oldPath)
+	if err := os.Remove(oldPath); err != nil {
+		if os.IsNotExist(err) {
+			logToFile("[cleanup] no old binary found (OK)")
+		} else {
+			logToFile("[cleanup] remove failed: %v", err)
+		}
+	} else {
+		logToFile("[cleanup] removed old binary: %s", oldPath)
+	}
+}
+
+// newFileLogger returns a function that appends log lines to the willclaw.log
+// file. This bypasses slog (which does not write to disk in production).
+func newFileLogger() func(format string, args ...any) {
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		return func(string, ...any) {}
+	}
+	logPath := filepath.Join(cfgDir, define.AppID, "willclaw.log")
+	return func(format string, args ...any) {
+		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		fmt.Fprintf(f, format+"\n", args...)
 	}
 }
 
