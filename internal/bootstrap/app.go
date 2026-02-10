@@ -5,11 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
-	"log/slog"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -139,10 +135,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
-	// Initialize logger: write to both stderr and a log file in the config directory.
-	// The log file is rotated on each launch (overwritten), kept at a reasonable size.
-	logger, logFile := initLogger()
-
 	// 主窗口管理器，用于安全的窗口操作
 	mainWinMgr := &mainWindowManager{}
 
@@ -153,7 +145,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app = application.New(application.Options{
 		Name:        "WillClaw",
 		Description: "WillClaw Desktop App",
-		Logger:      logger,
 		Services: []application.Service{
 			application.NewService(greet.NewGreetService("Hello, ")),
 			application.NewService(i18nService),
@@ -467,42 +458,5 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 			tm.StopNow()
 		}
 		sqlite.Close()
-		if logFile != nil {
-			logFile.Close()
-		}
 	}, nil
-}
-
-// initLogger creates a slog.Logger that writes to both stderr and a log file.
-// The log file is located at <UserConfigDir>/willclaw/willclaw.log and is
-// truncated on each launch so it stays small. Returns the logger and the
-// file handle (caller must close it). If the file cannot be created, logging
-// falls back to stderr only.
-func initLogger() (*slog.Logger, *os.File) {
-	level := slog.LevelInfo
-	if define.IsDev() {
-		level = slog.LevelDebug
-	}
-
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})), nil
-	}
-
-	dir := filepath.Join(cfgDir, define.AppID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})), nil
-	}
-
-	logPath := filepath.Join(dir, "willclaw.log")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})), nil
-	}
-
-	w := io.MultiWriter(os.Stderr, f)
-	l := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
-	l.Info("logger initialized", "path", logPath, "version", define.Version, "env", define.Env)
-
-	return l, f
 }
