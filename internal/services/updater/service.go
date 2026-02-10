@@ -90,17 +90,21 @@ func (s *UpdaterService) cleanupOldBinary() {
 	if err != nil {
 		return
 	}
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		return
-	}
 
 	dir := filepath.Dir(exe)
 	name := filepath.Base(exe)
 
 	// go-selfupdate uses the pattern ".<name>.old" for the backup file
 	oldPath := filepath.Join(dir, fmt.Sprintf(".%s.old", name))
-	if err := os.Remove(oldPath); err == nil {
+
+	if _, statErr := os.Stat(oldPath); statErr != nil {
+		// File does not exist — nothing to clean
+		return
+	}
+
+	if err := os.Remove(oldPath); err != nil {
+		s.app.Logger.Warn("failed to clean up old binary", "path", oldPath, "error", err)
+	} else {
 		s.app.Logger.Info("cleaned up old binary", "path", oldPath)
 	}
 }
@@ -237,13 +241,16 @@ func (s *UpdaterService) GetPendingUpdate() *UpdateInfo {
 }
 
 // RestartApp launches a new instance of the application and exits the current one.
+//
+// On Windows, the application uses SingleInstance mode which prevents a second
+// process from running while the first is still alive. Therefore we must quit
+// the current process FIRST and use a shell-delayed launch (ping localhost to
+// wait ~2s) so the new process starts only after this one has fully exited.
 func (s *UpdaterService) RestartApp() error {
 	exe, err := os.Executable()
 	if err != nil {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
-
-	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "darwin":
@@ -257,45 +264,64 @@ func (s *UpdaterService) RestartApp() error {
 		for i := 0; i < 3; i++ {
 			appPath = filepath.Dir(appPath)
 		}
+
+		var cmd *exec.Cmd
 		if filepath.Ext(appPath) == ".app" {
 			cmd = exec.Command("open", "-n", appPath)
 		} else {
 			cmd = exec.Command(exe)
 		}
+
+		s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
+		if err := cmd.Start(); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		go func() {
+			time.Sleep(1 * time.Second)
+			s.app.Quit()
+		}()
+
 	case "windows":
-		// On Windows, after go-selfupdate applies an update:
-		//   original WillClaw.exe → renamed to .WillClaw.exe.old
-		//   new binary            → placed at WillClaw.exe
-		//
-		// os.Executable() returns the path used to start this process (WillClaw.exe),
-		// which now points to the NEW binary. Do NOT call filepath.EvalSymlinks here
-		// because Windows may resolve it to the renamed .old file.
-		//
-		// Launch the new process with DETACHED_PROCESS flag so it is fully
-		// independent from the current process tree and survives parent exit.
-		cmd = exec.Command(exe)
+		// On Windows with SingleInstance, we cannot start the new process while
+		// the current one is still running — it would be rejected as a second
+		// instance. Use "cmd /C" with a ping delay: ping waits ~2 seconds, then
+		// starts the new exe. The cmd process is fully detached (DETACHED_PROCESS)
+		// so it survives our exit. Then we quit immediately.
+		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe)
+
+		cmd := exec.Command("cmd", "/C",
+			"ping", "localhost", "-n", "3", ">", "nul", "&", "start", `""`, exe)
 		setDetachedProcess(cmd)
+
+		if err := cmd.Start(); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		// Quit immediately so the SingleInstance lock is released before
+		// the delayed "start" command fires.
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			s.app.Quit()
+		}()
+
 	default:
 		exe, err = filepath.EvalSymlinks(exe)
 		if err != nil {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
-		cmd = exec.Command(exe)
+		cmd := exec.Command(exe)
+
+		s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
+		if err := cmd.Start(); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		go func() {
+			time.Sleep(1 * time.Second)
+			s.app.Quit()
+		}()
 	}
-
-	s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
-
-	if err := cmd.Start(); err != nil {
-		return errs.Wrap("error.update_restart_failed", err)
-	}
-
-	// Give the new process a moment to start, then quit gracefully.
-	// Use app.Quit() instead of os.Exit(0) so that Wails can properly
-	// tear down the WebView and release resources.
-	go func() {
-		time.Sleep(1 * time.Second)
-		s.app.Quit()
-	}()
 
 	return nil
 }
