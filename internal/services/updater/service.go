@@ -260,7 +260,6 @@ func (s *UpdaterService) RestartApp() error {
 		if err != nil {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
-		// Resolve the .app bundle path from the inner binary.
 		appPath := exe
 		for i := 0; i < 3; i++ {
 			appPath = filepath.Dir(appPath)
@@ -272,15 +271,16 @@ func (s *UpdaterService) RestartApp() error {
 		} else {
 			cmd = exec.Command(exe)
 		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-		s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
 		if err := cmd.Start(); err != nil {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
 
 		go func() {
-			time.Sleep(1 * time.Second)
-			s.app.Quit()
+			time.Sleep(500 * time.Millisecond)
+			os.Exit(0)
 		}()
 
 	case "windows":
@@ -328,15 +328,16 @@ func (s *UpdaterService) RestartApp() error {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
 		cmd := exec.Command(exe)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-		s.app.Logger.Info("restarting application", "exe", exe, "cmd", cmd.Args)
 		if err := cmd.Start(); err != nil {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
 
 		go func() {
-			time.Sleep(1 * time.Second)
-			s.app.Quit()
+			time.Sleep(500 * time.Millisecond)
+			os.Exit(0)
 		}()
 	}
 
