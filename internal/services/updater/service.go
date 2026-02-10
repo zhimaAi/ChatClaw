@@ -88,7 +88,7 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 // when the file is no longer locked.
 //
 // Instead of guessing the exact filename, we scan the exe directory for any
-// file matching the pattern *.[exe.]old to handle path/case variations.
+// file matching the pattern *.old that looks like an old binary.
 func (s *UpdaterService) cleanupOldBinary() {
 	exe, err := os.Executable()
 	if err != nil {
@@ -97,23 +97,44 @@ func (s *UpdaterService) cleanupOldBinary() {
 
 	dir := filepath.Dir(exe)
 
+	// Write diagnostics to the log file directly (slog may not be writing to disk).
+	logDebug := func(msg string) {
+		cfgDir, e := os.UserConfigDir()
+		if e != nil {
+			return
+		}
+		f, e := os.OpenFile(filepath.Join(cfgDir, define.AppID, "willclaw.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if e != nil {
+			return
+		}
+		defer f.Close()
+		fmt.Fprintf(f, "[cleanup] %s\n", msg)
+	}
+
+	logDebug(fmt.Sprintf("exe=%s dir=%s", exe, dir))
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		logDebug(fmt.Sprintf("ReadDir failed: %v", err))
 		return
 	}
+
+	logDebug(fmt.Sprintf("found %d entries in dir", len(entries)))
 
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		name := e.Name()
+		lower := strings.ToLower(name)
 		// go-selfupdate names it ".<original>.old", e.g. ".WillClaw.exe.old"
-		if strings.HasSuffix(strings.ToLower(name), ".old") && strings.Contains(strings.ToLower(name), ".exe.") {
+		if strings.HasSuffix(lower, ".old") {
+			logDebug(fmt.Sprintf("candidate: %s", name))
 			oldPath := filepath.Join(dir, name)
 			if err := os.Remove(oldPath); err != nil {
-				s.app.Logger.Warn("failed to clean up old binary", "path", oldPath, "error", err)
+				logDebug(fmt.Sprintf("remove failed: %s -> %v", oldPath, err))
 			} else {
-				s.app.Logger.Info("cleaned up old binary", "path", oldPath)
+				logDebug(fmt.Sprintf("removed: %s", oldPath))
 			}
 		}
 	}
