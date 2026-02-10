@@ -83,42 +83,37 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 
 // cleanupOldBinary removes .old files left behind by a previous update.
 // On Windows, the running process cannot delete itself, so the library renames
-// the old binary to .<name>.old and hides it. We clean it up on next launch
-// when the file is no longer locked.
+// the old binary to .<name>.old and marks it as hidden. We clean it up on next
+// launch when the file is no longer locked.
 //
-// IMPORTANT: We use selfupdate.ExecutablePath() (not os.Executable()) because
-// go-selfupdate resolves the exe path via GetFinalPathNameByHandle on Windows,
-// which may return a different casing/path than os.Executable(). The .old file
-// lives next to the resolved path, so we must use the same resolution.
+// NOTE: We directly construct the expected old-binary path instead of scanning
+// the directory, because os.ReadDir on Windows may skip hidden files.
 func (s *UpdaterService) cleanupOldBinary() {
 	logToFile := newFileLogger()
 
-	// Use the same path resolution as go-selfupdate so we look in the right directory.
-	exe, err := selfupdate.ExecutablePath()
+	exe, err := os.Executable()
 	if err != nil {
-		logToFile("[cleanup] selfupdate.ExecutablePath failed: %v, falling back to os.Executable", err)
-		exe, err = os.Executable()
-		if err != nil {
-			logToFile("[cleanup] os.Executable also failed: %v", err)
-			return
-		}
+		return
 	}
 
 	dir := filepath.Dir(exe)
 	name := filepath.Base(exe)
 
-	// go-selfupdate uses the pattern ".<name>.old" for the backup file
+	// go-selfupdate uses the pattern ".<name>.old" for the backup file.
 	oldPath := filepath.Join(dir, "."+name+".old")
-	logToFile("[cleanup] looking for old binary at: %s", oldPath)
+	logToFile("[cleanup] trying to remove: %s", oldPath)
+
+	// On Windows the old binary is marked FILE_ATTRIBUTE_HIDDEN by go-selfupdate.
+	// os.Remove may fail on hidden files on some Windows configurations, so we
+	// first clear the hidden attribute via a platform-specific helper, then remove.
+	unhideFile(oldPath)
 
 	if err := os.Remove(oldPath); err != nil {
-		if os.IsNotExist(err) {
-			logToFile("[cleanup] no old binary found (OK)")
-		} else {
+		if !os.IsNotExist(err) {
 			logToFile("[cleanup] remove failed: %v", err)
 		}
 	} else {
-		logToFile("[cleanup] removed old binary: %s", oldPath)
+		logToFile("[cleanup] removed: %s", oldPath)
 	}
 }
 
