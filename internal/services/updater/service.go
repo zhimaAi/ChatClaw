@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,10 +82,13 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 	return nil
 }
 
-// cleanupOldBinary removes the .old file left behind by a previous update.
+// cleanupOldBinary removes .old files left behind by a previous update.
 // On Windows, the running process cannot delete itself, so the library renames
 // the old binary to .<name>.old and hides it. We clean it up on next launch
 // when the file is no longer locked.
+//
+// Instead of guessing the exact filename, we scan the exe directory for any
+// file matching the pattern *.[exe.]old to handle path/case variations.
 func (s *UpdaterService) cleanupOldBinary() {
 	exe, err := os.Executable()
 	if err != nil {
@@ -92,20 +96,26 @@ func (s *UpdaterService) cleanupOldBinary() {
 	}
 
 	dir := filepath.Dir(exe)
-	name := filepath.Base(exe)
 
-	// go-selfupdate uses the pattern ".<name>.old" for the backup file
-	oldPath := filepath.Join(dir, fmt.Sprintf(".%s.old", name))
-
-	if _, statErr := os.Stat(oldPath); statErr != nil {
-		// File does not exist — nothing to clean
+	entries, err := os.ReadDir(dir)
+	if err != nil {
 		return
 	}
 
-	if err := os.Remove(oldPath); err != nil {
-		s.app.Logger.Warn("failed to clean up old binary", "path", oldPath, "error", err)
-	} else {
-		s.app.Logger.Info("cleaned up old binary", "path", oldPath)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// go-selfupdate names it ".<original>.old", e.g. ".WillClaw.exe.old"
+		if strings.HasSuffix(strings.ToLower(name), ".old") && strings.Contains(strings.ToLower(name), ".exe.") {
+			oldPath := filepath.Join(dir, name)
+			if err := os.Remove(oldPath); err != nil {
+				s.app.Logger.Warn("failed to clean up old binary", "path", oldPath, "error", err)
+			} else {
+				s.app.Logger.Info("cleaned up old binary", "path", oldPath)
+			}
+		}
 	}
 }
 
