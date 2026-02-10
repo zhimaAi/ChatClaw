@@ -326,8 +326,8 @@ onMounted(() => {
       <!-- 知识库内容管理 -->
       <LibraryContentArea v-else :key="selectedLibrary.id" :library="selectedLibrary" />
 
-      <!-- Bottom chat input shortcut -->
-      <KnowledgeChatInput :selected-library-id="selectedLibraryId" :tab-id="tabId" />
+      <!-- Bottom chat input shortcut (hidden when no libraries exist) -->
+      <KnowledgeChatInput v-if="!isLibraryEmpty" :selected-library-id="selectedLibraryId" :tab-id="tabId" />
     </main>
 
     <CreateLibraryDialog v-model:open="createDialogOpen" @created="handleCreated" />
