@@ -112,6 +112,7 @@ const {
   loadSnapSettings,
   cancelSnap,
   findAndAttach,
+  closeSnapWindow,
   handleSendAndTrigger,
   handleSendToEdit,
   handleCopyToClipboard,
@@ -769,6 +770,7 @@ onUnmounted(() => {
       @new-conversation="handleNewConversation"
       @cancel-snap="cancelSnap"
       @find-and-attach="findAndAttach"
+      @close-window="closeSnapWindow"
     />
 
     <!-- Main content wrapper -->

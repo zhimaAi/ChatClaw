@@ -475,6 +475,31 @@ func (s *SnapService) stop() error {
 	return nil
 }
 
+// CloseSnapWindow stops the snap service entirely and hides the window.
+// The caller (frontend) is responsible for disabling snap toggles in settings
+// before calling this method.
+func (s *SnapService) CloseSnapWindow() error {
+	// 1. Stop everything: polling loop + attach controller + hide window
+	_ = s.stop()
+
+	// 2. Clear enabled lists in status
+	s.mu.Lock()
+	s.enabledKeys = nil
+	s.enabledTargets = nil
+	s.status.EnabledKeys = nil
+	s.status.EnabledTargets = nil
+	s.mu.Unlock()
+
+	// 3. Emit events so frontend updates UI
+	s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+		"state":         string(SnapStateStopped),
+		"targetProcess": "",
+	})
+	s.app.Event.Emit("snap:settings-changed", s.GetStatus())
+
+	return nil
+}
+
 // moveToStandalone moves the winsnap window to a standalone position (centered on screen).
 func (s *SnapService) moveToStandalone(w *application.WebviewWindow) {
 	if w == nil {

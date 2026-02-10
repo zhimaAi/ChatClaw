@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { Plus } from 'lucide-vue-next'
+import { Plus, X } from 'lucide-vue-next'
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +31,7 @@ const emit = defineEmits<{
   'newConversation': []
   'cancelSnap': []
   'findAndAttach': []
+  'closeWindow': []
 }>()
 
 const { t } = useI18n()
@@ -115,6 +116,16 @@ const handleAgentChange = (value: any) => {
         @click="emit('findAndAttach')"
       >
         <IconSnapDetached class="size-5 text-muted-foreground" />
+      </button>
+
+      <!-- Close button -->
+      <button
+        class="rounded-md p-1 hover:bg-muted"
+        :title="t('winsnap.closeWindow')"
+        type="button"
+        @click="emit('closeWindow')"
+      >
+        <X class="size-4 text-muted-foreground" />
       </button>
     </div>
   </div>

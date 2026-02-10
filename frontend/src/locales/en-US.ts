@@ -52,6 +52,7 @@ export default {
     title: 'WillChat',
     assistantName: 'Soul Kitchen Assistant',
     cancelSnap: 'Cancel Snap',
+    closeWindow: 'Close',
     placeholder: 'Type your question',
     thinking: 'Thinking...',
     actions: {
