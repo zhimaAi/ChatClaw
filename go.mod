@@ -34,7 +34,7 @@ require (
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.23
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.70
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.71
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xuri/excelize/v2 v2.10.0
 	golang.org/x/sys v0.40.0
