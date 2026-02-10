@@ -86,11 +86,11 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 // the old binary to .<name>.old and marks it as hidden. We clean it up on next
 // launch when the file is no longer locked.
 //
-// NOTE: We directly construct the expected old-binary path instead of scanning
-// the directory, because os.ReadDir on Windows skips hidden files. We also use
-// the \\?\ extended-length path prefix because Windows path APIs treat a
-// leading dot in a filename component (e.g. "dir\.file") as a relative
-// directory reference, making it impossible to access with normal paths.
+// NOTE: On Windows, absolute paths with dot-prefixed filenames (e.g.
+// "C:\dir\.file") are misinterpreted by the Win32 path parser as a relative
+// directory reference. Neither Go's os.Remove, kernel32 DeleteFileW with \\?\
+// prefix, nor PowerShell can access such files by absolute path. The
+// workaround is to "cd /D" into the directory and use the relative filename.
 func (s *UpdaterService) cleanupOldBinary() {
 	logToFile := newFileLogger()
 
@@ -101,37 +101,38 @@ func (s *UpdaterService) cleanupOldBinary() {
 
 	dir := filepath.Dir(exe)
 	name := filepath.Base(exe)
+	oldName := "." + name + ".old"
 
-	// go-selfupdate uses the pattern ".<name>.old" for the backup file.
-	oldPath := filepath.Join(dir, "."+name+".old")
-	logToFile("[cleanup] trying to remove: %s", oldPath)
-
-	// Attempt 1: platform-specific removal (\\?\ prefix + DeleteFileW on Windows).
-	if err := removeHiddenFile(oldPath); err != nil {
-		logToFile("[cleanup] removeHiddenFile error: %v", err)
-	} else {
-		logToFile("[cleanup] removeHiddenFile succeeded")
-		return
-	}
-
-	// Attempt 2 (Windows fallback): use cmd /C del /F /A:H to force-delete
-	// a hidden file. The "del" command handles dot-prefixed names correctly.
+	// On Windows, absolute paths with dot-prefixed filenames (e.g.
+	// "C:\dir\.file") are misinterpreted by the Win32 path parser. We work
+	// around this by cd-ing into the directory and using the relative name.
 	if runtime.GOOS == "windows" {
-		logToFile("[cleanup] trying cmd /C del fallback")
-		out, err := exec.Command("cmd", "/C", "del", "/F", "/A:H", oldPath).CombinedOutput()
-		if err != nil {
-			logToFile("[cleanup] cmd del error: %v, output: %s", err, string(out))
-		} else {
-			logToFile("[cleanup] cmd del succeeded")
+		logToFile("[cleanup] trying to remove %s in dir %s", oldName, dir)
+
+		// attrib -H to clear hidden attribute, then del /F to force-delete.
+		// Both commands use a relative name after "cd /D" to avoid the
+		// dot-prefix path parsing bug.
+		script := fmt.Sprintf(
+			"@echo off\r\ncd /D \"%s\"\r\nattrib -H \"%s\" >nul 2>&1\r\ndel /F \"%s\"\r\n",
+			dir, oldName, oldName,
+		)
+		batPath := filepath.Join(os.TempDir(), "willclaw_cleanup.bat")
+		if err := os.WriteFile(batPath, []byte(script), 0o644); err != nil {
+			logToFile("[cleanup] failed to write bat: %v", err)
 			return
 		}
-
-		// Attempt 3: try with short 8.3 name by listing via dir /X
-		logToFile("[cleanup] trying dir /X to find short name")
-		dirOut, err := exec.Command("cmd", "/C", "dir", "/A:H", "/X", dir).CombinedOutput()
-		logToFile("[cleanup] dir /A:H /X output:\n%s", string(dirOut))
+		out, err := exec.Command("cmd", "/C", batPath).CombinedOutput()
+		_ = os.Remove(batPath)
 		if err != nil {
-			logToFile("[cleanup] dir /X error: %v", err)
+			logToFile("[cleanup] bat error: %v, output: %s", err, string(out))
+		} else {
+			logToFile("[cleanup] bat succeeded, output: %s", string(out))
+		}
+	} else {
+		// On Unix, just use os.Remove directly — no dot-prefix issues.
+		oldPath := filepath.Join(dir, oldName)
+		if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+			logToFile("[cleanup] remove failed: %v", err)
 		}
 	}
 }
@@ -333,8 +334,26 @@ func (s *UpdaterService) RestartApp() error {
 		// instance. Write a temporary .bat script that waits ~2s (via ping)
 		// then launches the new exe. Using a .bat file avoids all Go/cmd.exe
 		// argument quoting issues.
+		//
+		// The bat script also cleans up the .old backup binary. We do this here
+		// (instead of at next startup) because:
+		//   1. The old process has fully exited, so no file lock.
+		//   2. Using "cd /D" + relative path avoids Windows path parsing issues
+		//      with dot-prefixed filenames in absolute paths.
+		exeDir := filepath.Dir(exe)
+		exeName := filepath.Base(exe)
+		oldName := "." + exeName + ".old"
 		batPath := filepath.Join(os.TempDir(), "willclaw_restart.bat")
-		batContent := fmt.Sprintf("@echo off\r\nping localhost -n 3 >nul\r\nstart \"\" \"%s\"\r\ndel \"%%~f0\"\r\n", exe)
+		batContent := fmt.Sprintf(
+			"@echo off\r\n"+
+				"ping localhost -n 3 >nul\r\n"+
+				"cd /D \"%s\"\r\n"+
+				"attrib -H \"%s\" >nul 2>&1\r\n"+
+				"del /F \"%s\" >nul 2>&1\r\n"+
+				"start \"\" \"%s\"\r\n"+
+				"del \"%%~f0\"\r\n",
+			exeDir, oldName, oldName, exe,
+		)
 		if err := os.WriteFile(batPath, []byte(batContent), 0o644); err != nil {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
