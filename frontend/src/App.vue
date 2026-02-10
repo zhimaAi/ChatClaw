@@ -2,17 +2,19 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
-import { useNavigationStore, type NavModule } from '@/stores'
+import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System, Window } from '@wailsio/runtime'
 import { TextSelectionService } from '@bindings/willclaw/internal/services/textselection'
 import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
+import { SettingsService } from '@bindings/willclaw/internal/services/settings'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import { SnapService } from '@bindings/willclaw/internal/services/windows'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
 const navigationStore = useNavigationStore()
+const appStore = useAppStore()
 const activeTab = computed(() => navigationStore.activeTab)
 
 /**
@@ -86,14 +88,32 @@ onMounted(async () => {
     // Ignore — no pending update
   }
 
-  // Listen for backend auto-check event (ServiceStartup emits after 3s)
-  unsubscribeUpdateAvailable = Events.On('update:available', (event: any) => {
+  // Listen for backend auto-check event (ServiceStartup emits after 3s).
+  // Always mark the badge so the user sees a red dot on "Check for Update".
+  // Only auto-open the dialog when auto_update is enabled.
+  unsubscribeUpdateAvailable = Events.On('update:available', async (event: any) => {
     const info = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     if (info?.has_update && info?.latest_version) {
-      updateDialogVersion.value = info.latest_version
-      updateDialogNotes.value = info.release_notes || ''
-      updateDialogMode.value = 'new-version'
-      updateDialogOpen.value = true
+      // Always mark update available (for badge display)
+      appStore.hasAvailableUpdate = true
+
+      // Only auto-show the update dialog when the user opted in to auto-update
+      let autoUpdate = true
+      try {
+        const setting = await SettingsService.Get('auto_update')
+        if (setting) {
+          autoUpdate = setting.value !== 'false'
+        }
+      } catch {
+        // Default to showing the dialog if we can't read the setting
+      }
+
+      if (autoUpdate) {
+        updateDialogVersion.value = info.latest_version
+        updateDialogNotes.value = info.release_notes || ''
+        updateDialogMode.value = 'new-version'
+        updateDialogOpen.value = true
+      }
     }
   })
 

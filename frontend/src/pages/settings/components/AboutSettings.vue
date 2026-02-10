@@ -14,11 +14,13 @@ import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { Events } from '@wailsio/runtime'
+import { useAppStore } from '@/stores'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 import LogoIcon from '@/assets/images/logo.svg'
 
 const { t } = useI18n()
+const appStore = useAppStore()
 
 // Official website
 const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillClaw'
@@ -68,6 +70,8 @@ async function handleCheckUpdate() {
   try {
     const result = await UpdaterService.CheckForUpdate()
     if (result && result.has_update) {
+      // Mark update available in global store (for badge display)
+      appStore.hasAvailableUpdate = true
       // Notify App.vue to open the update dialog
       Events.Emit('update:show-dialog', {
         mode: 'new-version',
@@ -75,6 +79,7 @@ async function handleCheckUpdate() {
         release_notes: result.release_notes || '',
       })
     } else {
+      appStore.hasAvailableUpdate = false
       toast.success(t('settings.about.alreadyLatest'))
     }
   } catch (error) {
@@ -125,14 +130,21 @@ async function handleAutoUpdateChange(value: boolean) {
       </div>
 
       <!-- Check update button -->
-      <Button
-        variant="outline"
-        size="sm"
-        :disabled="isCheckingUpdate"
-        @click="handleCheckUpdate"
-      >
-        {{ isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate') }}
-      </Button>
+      <div class="relative inline-flex">
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="isCheckingUpdate"
+          @click="handleCheckUpdate"
+        >
+          {{ isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate') }}
+        </Button>
+        <!-- Red badge indicating a new version is available -->
+        <span
+          v-if="appStore.hasAvailableUpdate"
+          class="absolute -right-1 -top-1 size-2.5 rounded-full bg-red-500"
+        />
+      </div>
     </div>
 
     <!-- Official website -->
