@@ -14,7 +14,7 @@ onUnmounted(() => unsubLocale())
 </script>
 
 <template>
-  <div class="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
+  <div class="flex h-screen w-screen flex-col overflow-hidden border border-border bg-background text-foreground">
     <AssistantPage tab-id="winsnap" mode="snap" />
     <Toaster />
   </div>

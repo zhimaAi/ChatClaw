@@ -52,6 +52,7 @@ export default {
     title: 'WillClaw',
     assistantName: 'Soul Kitchen Assistant',
     cancelSnap: 'Cancel Snap',
+    snapApp: 'Snap to App',
     closeWindow: 'Close',
     placeholder: 'Type your question',
     thinking: 'Thinking...',
