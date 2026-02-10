@@ -19,7 +19,7 @@ const showTrayIcon = ref(true)
 const minimizeToTrayOnClose = ref(true)
 
 // 悬浮窗设置状态
-const showFloatingWindow = ref(true)
+const showFloatingWindow = ref(false)
 
 // 悬浮窗开关：快速连点时仅在“停手”后同步一次（避免频繁桥接/写库导致 UI 吞点击）
 let floatingWindowDesired = showFloatingWindow.value

@@ -217,7 +217,8 @@ func NewFloatingBallService(app *application.App, mainWindow *application.Webvie
 	return &FloatingBallService{
 		app:        app,
 		mainWindow: mainWindow,
-		visible:    true,
+		// Default off. Actual state will be loaded from settings on app start.
+		visible:    false,
 		dock:       DockNone,
 		appActive:  true,
 	}
@@ -225,7 +226,7 @@ func NewFloatingBallService(app *application.App, mainWindow *application.Webvie
 
 // InitFromSettings 根据 settings 内存缓存初始化悬浮球显示状态
 func (s *FloatingBallService) InitFromSettings() {
-	visible := settings.GetBool("show_floating_window", true)
+	visible := settings.GetBool("show_floating_window", false)
 	_ = s.SetVisible(visible)
 }
 
@@ -894,7 +895,9 @@ func (s *FloatingBallService) resetToDefaultPositionLocked() {
 		"workArea": s.primaryWorkArea,
 		"workSource": s.primaryWorkAreaSource,
 	})
-	s.dock = DockNone
+	// Default position is at the right edge by design, so treat it as docked-right.
+	// This ensures idle auto-hide works without requiring an initial user move.
+	s.dock = DockRight
 	s.collapsed = false
 	s.setSizeLocked(ballSize, ballSize)
 	s.setRelativePositionLocked(x, y)
@@ -1033,9 +1036,9 @@ func (s *FloatingBallService) scheduleIdleDockLocked() {
 		if s.hovered || s.collapsed {
 			return
 		}
-		if !s.win.IsVisible() {
-			return
-		}
+		// Some platforms may temporarily report IsVisible=false right after the first Show()
+		// until the window receives a native move/paint. For idle auto-dock/rehide we treat
+		// s.visible as the source of truth and proceed even if IsVisible() is false.
 
 		// 自动缩小：若已贴边则直接缩小；若未贴边则仅在靠近边缘时贴边并缩小
 		work, ok := s.workAreaLocked()

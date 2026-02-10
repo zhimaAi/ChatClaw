@@ -16,7 +16,7 @@ INSERT OR IGNORE INTO settings (key, value, type, category, description, created
 ('minimize_to_tray_on_close', 'true', 'boolean', 'tools', '托盘：关闭窗口时是否最小化到系统托盘', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 
 -- 悬浮窗相关设置
-('show_floating_window', 'true', 'boolean', 'tools', '悬浮窗：是否显示桌面悬浮窗', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('show_floating_window', 'false', 'boolean', 'tools', '悬浮窗：是否显示桌面悬浮窗', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 
 -- 划词搜索相关设置
 ('enable_selection_search', 'false', 'boolean', 'tools', '划词搜索：是否启用划词搜索功能', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
