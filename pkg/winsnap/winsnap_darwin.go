@@ -45,6 +45,10 @@ typedef struct WinsnapFollower {
 	CGFloat selfWidth;
 	CGFloat selfHeight;
 
+	// When true, prefer landscape (w > h) windows over portrait — used for
+	// multi-window apps like Douyin where the chat window is landscape.
+	bool preferLandscape;
+
 	// Last applied position (for threshold filtering)
 	CGPoint lastAppliedOrigin;
 
@@ -178,7 +182,9 @@ static bool winsnap_window_is_visible(AXUIElementRef win) {
 
 // Pick the best "main chat window" rather than transient dialogs/modals.
 // Strategy: choose the largest visible AXStandardWindow from app's AXWindows list.
-static AXUIElementRef winsnap_copy_best_window(AXUIElementRef appElem) {
+// When preferLandscape is true, landscape (w > h) windows get a scoring bonus so
+// that the chat window is preferred over a portrait video window (e.g. Douyin).
+static AXUIElementRef winsnap_copy_best_window_ex(AXUIElementRef appElem, bool preferLandscape) {
 	if (!appElem) return NULL;
 
 	CFTypeRef windowsVal = NULL;
@@ -186,7 +192,7 @@ static AXUIElementRef winsnap_copy_best_window(AXUIElementRef appElem) {
 		CFGetTypeID(windowsVal) == CFArrayGetTypeID()) {
 		CFArrayRef arr = (CFArrayRef)windowsVal;
 		AXUIElementRef best = NULL;
-		double bestArea = 0.0;
+		double bestScore = -1.0;
 		CFIndex n = CFArrayGetCount(arr);
 		for (CFIndex i = 0; i < n; i++) {
 			AXUIElementRef w = (AXUIElementRef)CFArrayGetValueAtIndex(arr, i);
@@ -196,8 +202,13 @@ static AXUIElementRef winsnap_copy_best_window(AXUIElementRef appElem) {
 			CGRect fr = CGRectZero;
 			if (!winsnap_get_ax_frame(w, &fr)) continue;
 			double area = (double)fr.size.width * (double)fr.size.height;
-			if (area > bestArea) {
-				bestArea = area;
+			double score = area;
+			// Bonus for landscape windows in multi-window apps (e.g. Douyin chat vs video)
+			if (preferLandscape && fr.size.width > fr.size.height) {
+				score += 1e9; // Large bonus to ensure landscape wins regardless of area
+			}
+			if (score > bestScore) {
+				bestScore = score;
 				best = w;
 			}
 		}
@@ -211,6 +222,11 @@ static AXUIElementRef winsnap_copy_best_window(AXUIElementRef appElem) {
 
 	// Fallback to main/focused when window list is unavailable.
 	return winsnap_copy_target_window(appElem);
+}
+
+// Convenience wrapper for callers that don't need landscape preference.
+static AXUIElementRef winsnap_copy_best_window(AXUIElementRef appElem) {
+	return winsnap_copy_best_window_ex(appElem, false);
 }
 
 static bool winsnap_get_ax_frame(AXUIElementRef elem, CGRect *outFrame) {
@@ -328,7 +344,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 
 	AXUIElementRef win = f->observedWindow;
 	if (!win) {
-		win = winsnap_copy_best_window(f->appElem);
+		win = winsnap_copy_best_window_ex(f->appElem, f->preferLandscape);
 		if (win) {
 			f->observedWindow = win;
 		}
@@ -433,7 +449,7 @@ static void winsnap_sync_to_target(WinsnapFollower *f) {
 static void winsnap_update_observed_window(WinsnapFollower *f) {
 	if (!f || !f->observer || !f->appElem) return;
 
-	AXUIElementRef newWin = winsnap_copy_best_window(f->appElem);
+	AXUIElementRef newWin = winsnap_copy_best_window_ex(f->appElem, f->preferLandscape);
 	if (!newWin) return;
 
 	if (f->observedWindow && CFEqual(f->observedWindow, newWin)) {
@@ -478,7 +494,7 @@ static void winsnap_ax_callback(AXObserverRef observer, AXUIElementRef element, 
 	}
 }
 
-static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int gap, ScreenInfo *screenInfo, char **errOut) {
+static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int gap, ScreenInfo *screenInfo, bool preferLandscape, char **errOut) {
 	if (!selfWindow) {
 		winsnap_set_err(errOut, @"winsnap: self window is null");
 		return NULL;
@@ -496,6 +512,7 @@ static WinsnapFollower* winsnap_follower_create(void *selfWindow, pid_t pid, int
 	f->pid = pid;
 	f->gap = gap;
 	f->selfWindow = selfWindow;
+	f->preferLandscape = preferLandscape;
 	f->runLoop = NULL;
 	f->stopping = false;
 	f->lock = OS_UNFAIR_LOCK_INIT;
@@ -691,6 +708,10 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		}
 	}
 
+	// Apps like Douyin have both chat (landscape) and video (portrait) windows.
+	// Prefer landscape windows so we attach to the chat window.
+	preferLandscape := isDouyinTarget(targetName)
+
 	df := &darwinFollower{done: make(chan struct{})}
 	df.ready = make(chan struct{})
 
@@ -701,7 +722,7 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 		defer close(df.done)
 
 		var cErr *C.char
-		f := C.winsnap_follower_create(unsafe.Pointer(selfHWND), pid, C.int(opts.Gap), primaryScreen, &cErr)
+		f := C.winsnap_follower_create(unsafe.Pointer(selfHWND), pid, C.int(opts.Gap), primaryScreen, C.bool(preferLandscape), &cErr)
 		if cErr != nil {
 			msg := C.GoString(cErr)
 			C.free(unsafe.Pointer(cErr))
@@ -772,4 +793,12 @@ func normalizeMacTargetName(name string) string {
 		n = strings.TrimSpace(n[:len(n)-4])
 	}
 	return n
+}
+
+// isDouyinTarget checks if the target process name belongs to Douyin.
+// Douyin has multiple windows (chat + video); we need landscape preference
+// to pick the chat window.
+func isDouyinTarget(name string) bool {
+	ln := strings.ToLower(name)
+	return ln == "douyin" || ln == "douyin.exe" || ln == "抖音"
 }

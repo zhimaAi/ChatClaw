@@ -79,12 +79,13 @@ var (
 	fmwCBOnce         sync.Once
 	fmwCB             uintptr
 	fmwMu             sync.Mutex
-	fmwTargetLower    string
-	fmwIncludeMin     bool
-	fmwBestHwnd       windows.HWND
-	fmwBestScore      int
-	fmwBestArea       int64
-	fmwBestMinimized  bool
+	fmwTargetLower     string
+	fmwIncludeMin      bool
+	fmwPreferLandscape bool // When true, landscape windows get a scoring bonus (for multi-window apps like Douyin)
+	fmwBestHwnd        windows.HWND
+	fmwBestScore       int
+	fmwBestArea        int64
+	fmwBestMinimized   bool
 )
 
 func fmwEnumProc(hwnd uintptr, _ uintptr) uintptr {
@@ -133,6 +134,11 @@ func fmwEnumProc(hwnd uintptr, _ uintptr) uintptr {
 		w := int64(r.Right - r.Left)
 		hh := int64(r.Bottom - r.Top)
 		if w > 0 && hh > 0 {
+			// For apps with multiple windows (e.g. Douyin has both chat and video
+			// windows), prefer the landscape (chat) window over portrait (video).
+			if fmwPreferLandscape && w > hh {
+				score += 50
+			}
 			area := w * hh
 			if fmwBestHwnd == 0 || score > fmwBestScore || (score == fmwBestScore && area > fmwBestArea) {
 				fmwBestHwnd = h
@@ -592,6 +598,9 @@ func findMainWindowByProcessNameEx(processName string, includeMinimized bool) (w
 
 	fmwTargetLower = strings.ToLower(processName)
 	fmwIncludeMin = includeMinimized
+	// Apps like Douyin have both chat (landscape) and video (portrait) windows.
+	// Prefer landscape windows so we attach to the chat window.
+	fmwPreferLandscape = fmwTargetLower == "douyin.exe"
 	fmwBestHwnd = 0
 	fmwBestScore = 0
 	fmwBestArea = 0
