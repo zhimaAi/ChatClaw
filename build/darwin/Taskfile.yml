@@ -6,7 +6,7 @@ includes:
 vars:
   # Signing configuration - edit these values for your project
   SIGN_IDENTITY: "Developer ID Application: Sesame Xiaoshi Network Technology (Wuhan) Co., Ltd. (X7Q4CHLWN6)"
-  KEYCHAIN_PROFILE: "willchat-profile"
+  KEYCHAIN_PROFILE: "willclaw-profile"
   ENTITLEMENTS: "build/darwin/entitlements.plist"
 
   # Docker image for cross-compilation (used when building on non-macOS)
@@ -43,7 +43,7 @@ tasks:
       APP_VERSION:
         # Cross-platform (Windows/macOS/Linux): avoid grep/sed dependencies
         sh: go run ./internal/tools/appversion -config build/config.yml
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-tags fts5 -buildvcs=false -gcflags=all="-l"{{else}}-tags "production fts5" -trimpath -buildvcs=false -ldflags="-w -s -X willchat/internal/define.Version={{.APP_VERSION}}"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-tags fts5 -buildvcs=false -gcflags=all="-l"{{else}}-tags "production fts5" -trimpath -buildvcs=false -ldflags="-w -s -X willclaw/internal/define.Version={{.APP_VERSION}}"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:

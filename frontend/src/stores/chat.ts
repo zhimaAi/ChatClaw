@@ -6,7 +6,7 @@ import {
   type Message,
   SendMessageInput,
   EditAndResendInput,
-} from '@bindings/willchat/internal/services/chat'
+} from '@bindings/willclaw/internal/services/chat'
 
 // Message status constants
 export const MessageStatus = {

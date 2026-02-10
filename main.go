@@ -6,7 +6,7 @@ import (
 	"log"
 	"runtime"
 
-	"willchat/internal/bootstrap"
+	"willclaw/internal/bootstrap"
 )
 
 //go:embed all:frontend/dist

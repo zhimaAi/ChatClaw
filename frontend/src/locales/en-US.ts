@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'WillChat',
+    title: 'WillClaw',
     theme: 'Theme',
   },
   common: {
@@ -49,7 +49,7 @@ export default {
     },
   },
   winsnap: {
-    title: 'WillChat',
+    title: 'WillClaw',
     assistantName: 'Soul Kitchen Assistant',
     cancelSnap: 'Cancel Snap',
     placeholder: 'Type your question',
@@ -192,8 +192,8 @@ export default {
     // About Us
     about: {
       title: 'About Us',
-      appName: 'WillChat',
-      copyright: '© 2026 WillChat Sesame Network Technology  All rights reserved',
+      appName: 'WillClaw',
+      copyright: '© 2026 WillClaw Sesame Network Technology  All rights reserved',
       officialWebsite: 'Official Website',
       view: 'View',
       checkUpdate: 'Check for Updates',

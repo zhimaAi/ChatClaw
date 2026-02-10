@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { UpdaterService } from '@bindings/willchat/internal/services/updater'
+import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
 import { toast } from '@/components/ui/toast'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 

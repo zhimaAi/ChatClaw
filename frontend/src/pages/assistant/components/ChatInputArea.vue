@@ -27,8 +27,8 @@ import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
 
-import type { ProviderWithModels } from '@bindings/willchat/internal/services/providers'
-import type { Library } from '@bindings/willchat/internal/services/library'
+import type { ProviderWithModels } from '@bindings/willclaw/internal/services/providers'
+import type { Library } from '@bindings/willclaw/internal/services/library'
 import LogoIcon from '@/assets/images/logo.svg'
 
 const props = defineProps<{

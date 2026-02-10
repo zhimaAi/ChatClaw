@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"willchat/internal/define"
-	"willchat/internal/device"
-	"willchat/internal/errs"
-	"willchat/internal/sqlite"
+	"willclaw/internal/define"
+	"willclaw/internal/device"
+	"willclaw/internal/errs"
+	"willclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -33,7 +33,7 @@ import (
 var (
 	// Enable provider HTTP request logs (may include endpoint URLs and response previews).
 	// DO NOT enable in production by default.
-	debugProviders = os.Getenv("WILLCHAT_DEBUG_PROVIDERS") == "1"
+	debugProviders = os.Getenv("WILLCLAW_DEBUG_PROVIDERS") == "1"
 )
 
 // ProvidersService 供应商服务（暴露给前端调用）

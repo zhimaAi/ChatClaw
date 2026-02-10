@@ -35,7 +35,7 @@ type HTTPRequestConfig struct {
 func DefaultHTTPRequestConfig() *HTTPRequestConfig {
 	return &HTTPRequestConfig{
 		DefaultHeaders: map[string]string{
-			"User-Agent": "WillChat-HTTPTool/1.0",
+			"User-Agent": "WillClaw-HTTPTool/1.0",
 		},
 		Timeout:                30 * time.Second,
 		DefaultMaxResponseSize: 32 * 1024,  // 32 KB

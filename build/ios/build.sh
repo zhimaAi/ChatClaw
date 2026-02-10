@@ -2,8 +2,8 @@
 set -e
 
 # Build configuration
-APP_NAME="WillChat"
-BUNDLE_ID="com.sesame.willchat"
+APP_NAME="WillClaw"
+BUNDLE_ID="com.sesame.willclaw"
 VERSION="0.0.1"
 BUILD_NUMBER="0.0.1"
 BUILD_DIR="build/ios"

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"willchat/internal/define"
-	"willchat/internal/services/settings"
+	"willclaw/internal/define"
+	"willclaw/internal/services/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -113,13 +113,13 @@ type FloatingBallService struct {
 
 func (s *FloatingBallService) debugEnabled() bool {
 	// Enable via environment variable (preferred for local debugging):
-	//   WILLCHAT_DEBUG_FLOATINGBALL=1
+	//   WILLCLAW_DEBUG_FLOATINGBALL=1
 	// Or via settings cache:
 	//   debug_floatingball=true
 	//
 	// Note: On macOS, launching the app from Finder/Spotlight typically won't inherit shell env vars.
 	// For development builds, we default to enabled to make diagnosis easier.
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("WILLCHAT_DEBUG_FLOATINGBALL")))
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("WILLCLAW_DEBUG_FLOATINGBALL")))
 	switch v {
 	case "0", "false", "no", "n", "off":
 		return false
@@ -591,7 +591,7 @@ func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 
 	w := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:          windowName,
-		Title:         "WillChat",
+		Title:         "WillClaw",
 		Width:         ballSize,
 		Height:        ballSize,
 		MinWidth:      collapsedWidth,

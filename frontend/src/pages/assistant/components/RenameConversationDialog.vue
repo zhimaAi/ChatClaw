@@ -14,11 +14,11 @@ import {
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 
-import type { Conversation } from '@bindings/willchat/internal/services/conversations'
+import type { Conversation } from '@bindings/willclaw/internal/services/conversations'
 import {
   ConversationsService,
   UpdateConversationInput,
-} from '@bindings/willchat/internal/services/conversations'
+} from '@bindings/willclaw/internal/services/conversations'
 
 const props = defineProps<{
   open: boolean

@@ -18,14 +18,14 @@ import type {
   Provider,
   ProviderWithModels,
   Model,
-} from '@/../bindings/willchat/internal/services/providers'
+} from '@/../bindings/willclaw/internal/services/providers'
 import {
   ProvidersService,
   UpdateProviderInput,
   CheckAPIKeyInput,
   CreateModelInput,
   UpdateModelInput,
-} from '@/../bindings/willchat/internal/services/providers'
+} from '@/../bindings/willclaw/internal/services/providers'
 import ModelFormDialog from './ModelFormDialog.vue'
 import {
   AlertDialog,
@@ -37,8 +37,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { SettingsService } from '@/../bindings/willchat/internal/services/settings'
-import { AgentsService } from '@bindings/willchat/internal/services/agents'
+import { SettingsService } from '@/../bindings/willclaw/internal/services/settings'
+import { AgentsService } from '@bindings/willclaw/internal/services/agents'
 
 // Azure extra_config 类型
 interface AzureExtraConfig {

@@ -51,7 +51,7 @@ tasks:
         # Cross-platform (Windows/macOS/Linux): avoid grep/sed dependencies
         sh: go run ./internal/tools/appversion -config build/config.yml
         cmd: go run ./internal/tools/appversion -config build/config.yml
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-tags fts5 -buildvcs=false -gcflags=all="-l"{{else}}-tags "production fts5" -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui -X willchat/internal/define.Version={{.APP_VERSION}}"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-tags fts5 -buildvcs=false -gcflags=all="-l"{{else}}-tags "production fts5" -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui -X willclaw/internal/define.Version={{.APP_VERSION}}"{{end}}'
     env:
       GOOS: windows
       CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'

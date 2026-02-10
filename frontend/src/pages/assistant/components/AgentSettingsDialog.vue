@@ -31,12 +31,12 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/willchat/internal/services/agents'
+import { AgentsService, type Agent } from '@bindings/willclaw/internal/services/agents'
 import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
   type ProviderWithModels,
-} from '@bindings/willchat/internal/services/providers'
+} from '@bindings/willclaw/internal/services/providers'
 
 type TabKey = 'model' | 'prompt' | 'retrieval' | 'delete'
 

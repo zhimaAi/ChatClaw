@@ -17,17 +17,17 @@ import AgentSidebar from './components/AgentSidebar.vue'
 import ChatInputArea from './components/ChatInputArea.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore } from '@/stores'
-import { type Agent } from '@bindings/willchat/internal/services/agents'
+import { type Agent } from '@bindings/willclaw/internal/services/agents'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
   type Conversation,
   CreateConversationInput,
   UpdateConversationInput,
-} from '@bindings/willchat/internal/services/conversations'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
-import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
-import { LibraryService, type Library } from '@bindings/willchat/internal/services/library'
+} from '@bindings/willclaw/internal/services/conversations'
+import { SnapService } from '@bindings/willclaw/internal/services/windows'
+import { TextSelectionService } from '@bindings/willclaw/internal/services/textselection'
+import { LibraryService, type Library } from '@bindings/willclaw/internal/services/library'
 import {
   AlertDialog,
   AlertDialogAction,

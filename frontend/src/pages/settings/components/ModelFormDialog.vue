@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Model } from '@/../bindings/willchat/internal/services/providers'
+import type { Model } from '@/../bindings/willclaw/internal/services/providers'
 
 const props = defineProps<{
   open: boolean

@@ -14,7 +14,7 @@ func DefaultDefinitions() []WindowDefinition {
 			CreateOptions: func() application.WebviewWindowOptions {
 				return application.WebviewWindowOptions{
 					Name:   WindowWinsnap,
-					Title:  "WillChat",
+					Title:  "WillClaw",
 					Width:  400,
 					Height: 720,
 					Hidden: true,

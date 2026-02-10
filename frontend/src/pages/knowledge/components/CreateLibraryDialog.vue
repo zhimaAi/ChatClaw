@@ -24,12 +24,12 @@ import type {
   Provider,
   ProviderWithModels,
   Model,
-} from '@bindings/willchat/internal/services/providers'
-import { ProvidersService } from '@bindings/willchat/internal/services/providers'
+} from '@bindings/willclaw/internal/services/providers'
+import { ProvidersService } from '@bindings/willclaw/internal/services/providers'
 
-import type { Library } from '@bindings/willchat/internal/services/library'
-import { LibraryService, CreateLibraryInput } from '@bindings/willchat/internal/services/library'
-import { SettingsService } from '@bindings/willchat/internal/services/settings'
+import type { Library } from '@bindings/willclaw/internal/services/library'
+import { LibraryService, CreateLibraryInput } from '@bindings/willclaw/internal/services/library'
+import { SettingsService } from '@bindings/willclaw/internal/services/settings'
 
 const props = defineProps<{
   open: boolean

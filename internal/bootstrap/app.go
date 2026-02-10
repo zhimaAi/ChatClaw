@@ -11,28 +11,28 @@ import (
 	"sync"
 	"time"
 
-	"willchat/internal/define"
-	"willchat/internal/services/agents"
-	appservice "willchat/internal/services/app"
-	"willchat/internal/services/browser"
-	"willchat/internal/services/chat"
-	"willchat/internal/services/conversations"
-	"willchat/internal/services/document"
-	"willchat/internal/services/floatingball"
-	"willchat/internal/services/greet"
-	"willchat/internal/services/i18n"
-	"willchat/internal/services/library"
-	"willchat/internal/services/multiask"
-	"willchat/internal/services/providers"
-	"willchat/internal/services/settings"
-	"willchat/internal/services/textselection"
-	"willchat/internal/services/tray"
-	"willchat/internal/services/updater"
-	"willchat/internal/services/windows"
-	"willchat/pkg/winutil"
-	"willchat/internal/services/winsnapchat"
-	"willchat/internal/sqlite"
-	"willchat/internal/taskmanager"
+	"willclaw/internal/define"
+	"willclaw/internal/services/agents"
+	appservice "willclaw/internal/services/app"
+	"willclaw/internal/services/browser"
+	"willclaw/internal/services/chat"
+	"willclaw/internal/services/conversations"
+	"willclaw/internal/services/document"
+	"willclaw/internal/services/floatingball"
+	"willclaw/internal/services/greet"
+	"willclaw/internal/services/i18n"
+	"willclaw/internal/services/library"
+	"willclaw/internal/services/multiask"
+	"willclaw/internal/services/providers"
+	"willclaw/internal/services/settings"
+	"willclaw/internal/services/textselection"
+	"willclaw/internal/services/tray"
+	"willclaw/internal/services/updater"
+	"willclaw/internal/services/windows"
+	"willclaw/internal/services/winsnapchat"
+	"willclaw/internal/sqlite"
+	"willclaw/internal/taskmanager"
+	"willclaw/pkg/winutil"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -143,8 +143,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 创建应用实例
 	app = application.New(application.Options{
-		Name:        "WillChat",
-		Description: "WillChat Desktop App",
+		Name:        "WillClaw",
+		Description: "WillClaw Desktop App",
 		Services: []application.Service{
 			application.NewService(greet.NewGreetService("Hello, ")),
 			application.NewService(i18nService),
@@ -397,7 +397,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		_, _ = textSelectionService.SyncFromSettings()
 		// 初始化多问服务（需要窗口已创建，在后台进行以避免阻塞）
 		go func() {
-			if err := multiaskService.Initialize("WillChat"); err != nil {
+			if err := multiaskService.Initialize("WillClaw"); err != nil {
 				app.Logger.Error("Failed to initialize multiask service", "error", err)
 			}
 		}()

@@ -31,11 +31,11 @@ import type {
   Provider,
   ProviderWithModels,
   Model,
-} from '@bindings/willchat/internal/services/providers'
-import { ProvidersService } from '@bindings/willchat/internal/services/providers'
+} from '@bindings/willclaw/internal/services/providers'
+import { ProvidersService } from '@bindings/willclaw/internal/services/providers'
 
-import type { Library } from '@bindings/willchat/internal/services/library'
-import { LibraryService, UpdateLibraryInput } from '@bindings/willchat/internal/services/library'
+import type { Library } from '@bindings/willclaw/internal/services/library'
+import { LibraryService, UpdateLibraryInput } from '@bindings/willclaw/internal/services/library'
 
 const props = defineProps<{
   open: boolean

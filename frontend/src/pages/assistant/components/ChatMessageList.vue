@@ -2,7 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores'
-import type { Message } from '@bindings/willchat/internal/services/chat'
+import type { Message } from '@bindings/willclaw/internal/services/chat'
 import ChatMessageItem from './ChatMessageItem.vue'
 
 const props = defineProps<{

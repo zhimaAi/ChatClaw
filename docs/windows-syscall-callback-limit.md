@@ -8,7 +8,7 @@ Go 运行时在 Windows 上对 `syscall.NewCallback` / `syscall.NewCallbackCDecl
 
 ## 问题场景
 
-WillChat 大量使用 Windows API（`EnumWindows`、`SetWinEventHook`、`SetWindowsHookEx` 等），这些 API 需要传入函数回调。如果在**循环或频繁调用的函数**中每次都调用 `syscall.NewCallback()`，回调槽位会快速耗尽。
+WillClaw 大量使用 Windows API（`EnumWindows`、`SetWinEventHook`、`SetWindowsHookEx` 等），这些 API 需要传入函数回调。如果在**循环或频繁调用的函数**中每次都调用 `syscall.NewCallback()`，回调槽位会快速耗尽。
 
 ### 典型错误示例
 

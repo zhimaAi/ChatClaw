@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils'
 import { useI18n } from 'vue-i18n'
 import { ProviderIcon } from '@/components/ui/provider-icon'
-import type { Provider } from '@/../bindings/willchat/internal/services/providers'
+import type { Provider } from '@/../bindings/willclaw/internal/services/providers'
 
 const { t } = useI18n()
 

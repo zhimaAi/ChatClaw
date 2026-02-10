@@ -7,10 +7,10 @@ import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System, Window } from '@wailsio/runtime'
-import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
-import { UpdaterService } from '@bindings/willchat/internal/services/updater'
+import { TextSelectionService } from '@bindings/willclaw/internal/services/textselection'
+import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
-import { SnapService } from '@bindings/willchat/internal/services/windows'
+import { SnapService } from '@bindings/willclaw/internal/services/windows'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
 const navigationStore = useNavigationStore()
 const activeTab = computed(() => navigationStore.activeTab)

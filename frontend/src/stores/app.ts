@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { SettingsService } from '@bindings/willchat/internal/services/settings'
+import { SettingsService } from '@bindings/willclaw/internal/services/settings'
 
 export type Theme = 'light' | 'dark' | 'system'
 

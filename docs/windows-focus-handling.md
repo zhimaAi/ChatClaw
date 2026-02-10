@@ -56,7 +56,7 @@ func ForceActivateWindow(w *application.WebviewWindow) {
 **使用示例**:
 
 ```go
-import "willchat/pkg/winutil"
+import "willclaw/pkg/winutil"
 
 // ✅ 正确：使用封装的原生 API
 winutil.ForceActivateWindow(mainWindow)

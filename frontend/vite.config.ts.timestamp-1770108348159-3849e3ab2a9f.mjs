@@ -1,11 +1,11 @@
 // vite.config.ts
 import path from "node:path";
-import { defineConfig } from "file:///usr/local/var/www/willchat-client/frontend/node_modules/vite/dist/node/index.js";
-import vue from "file:///usr/local/var/www/willchat-client/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs";
-import tailwindcss from "file:///usr/local/var/www/willchat-client/frontend/node_modules/@tailwindcss/vite/dist/index.mjs";
-import wails from "file:///usr/local/var/www/willchat-client/frontend/node_modules/@wailsio/runtime/dist/plugins/vite.js";
-import svgLoader from "file:///usr/local/var/www/willchat-client/frontend/node_modules/vite-svg-loader/index.js";
-var __vite_injected_original_dirname = "/usr/local/var/www/willchat-client/frontend";
+import { defineConfig } from "file:///usr/local/var/www/willclaw-client/frontend/node_modules/vite/dist/node/index.js";
+import vue from "file:///usr/local/var/www/willclaw-client/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs";
+import tailwindcss from "file:///usr/local/var/www/willclaw-client/frontend/node_modules/@tailwindcss/vite/dist/index.mjs";
+import wails from "file:///usr/local/var/www/willclaw-client/frontend/node_modules/@wailsio/runtime/dist/plugins/vite.js";
+import svgLoader from "file:///usr/local/var/www/willclaw-client/frontend/node_modules/vite-svg-loader/index.js";
+var __vite_injected_original_dirname = "/usr/local/var/www/willclaw-client/frontend";
 var vite_config_default = defineConfig({
   plugins: [vue(), tailwindcss(), wails("./bindings"), svgLoader({ defaultImport: "component" })],
   resolve: {

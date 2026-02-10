@@ -1,6 +1,6 @@
 package errs
 
-import "willchat/internal/services/i18n"
+import "willclaw/internal/services/i18n"
 
 // I18nError 业务错误：携带 i18n key，并把本地化后的 message 作为 Error() 输出。
 //

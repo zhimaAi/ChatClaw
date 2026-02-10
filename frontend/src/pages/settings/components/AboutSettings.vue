@@ -6,10 +6,10 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
-import { BrowserService } from '@bindings/willchat/internal/services/browser'
-import { AppService } from '@bindings/willchat/internal/services/app'
-import { SettingsService } from '@bindings/willchat/internal/services/settings'
-import { UpdaterService } from '@bindings/willchat/internal/services/updater'
+import { BrowserService } from '@bindings/willclaw/internal/services/browser'
+import { AppService } from '@bindings/willclaw/internal/services/app'
+import { SettingsService } from '@bindings/willclaw/internal/services/settings'
+import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -21,7 +21,7 @@ import LogoIcon from '@/assets/images/logo.svg'
 const { t } = useI18n()
 
 // Official website
-const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillChat'
+const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillClaw'
 
 // Application version
 const appVersion = ref('...')

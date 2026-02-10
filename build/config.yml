@@ -6,11 +6,11 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "sesame" # The name of the company
-  productName: "WillChat" # The name of the application
-  productIdentifier: "com.sesame.willchat" # The unique product identifier
-  description: "WillChat" # The application description
+  productName: "WillClaw" # The name of the application
+  productIdentifier: "com.sesame.willclaw" # The unique product identifier
+  description: "WillClaw" # The application description
   copyright: "Copyright © 2016- 2026 Wuhan Sesame Small Customer Service Network Technology Co., Ltd." # Copyright text
-  comments: "WillChat" # Comments
+  comments: "WillClaw" # Comments
   version: "0.0.1" # The application version
 
 # iOS build configuration (uncomment to customise iOS project generation)

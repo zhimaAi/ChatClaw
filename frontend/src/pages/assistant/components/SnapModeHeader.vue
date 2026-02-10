@@ -9,7 +9,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import LogoIcon from '@/assets/images/logo.svg'
-import type { Agent } from '@bindings/willchat/internal/services/agents'
+import type { Agent } from '@bindings/willclaw/internal/services/agents'
 
 defineProps<{
   agents: Agent[]

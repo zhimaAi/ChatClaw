@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"willchat/pkg/webviewpanel"
+	"willclaw/pkg/webviewpanel"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -299,7 +299,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
     const isClaude = hostname.includes('claude.ai');
     const isDeepSeek = hostname.includes('deepseek.com');
     
-    console.log('[WillChat] Detected site:', { hostname, isChatGPT, isDoubao, isQwen, isClaude, isDeepSeek });
+    console.log('[WillClaw] Detected site:', { hostname, isChatGPT, isDoubao, isQwen, isClaude, isDeepSeek });
     
     // 根据网站选择不同的输入框选择器
     let inputSelectors = [];
@@ -436,14 +436,14 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
         try {
             input = document.querySelector(selector);
             if (input) {
-                console.log('[WillChat] Found input with selector:', selector);
+                console.log('[WillClaw] Found input with selector:', selector);
                 break;
             }
         } catch (e) {}
     }
     
     if (!input) {
-        console.warn('[WillChat] No input element found');
+        console.warn('[WillClaw] No input element found');
         return;
     }
     
@@ -474,14 +474,14 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             
             // 对于千问 (Slate.js 编辑器)，需要使用特殊方式注入内容
             if (isQwen) {
-                console.log('[WillChat] Using Slate.js-compatible input method for Qwen...');
+                console.log('[WillClaw] Using Slate.js-compatible input method for Qwen...');
                 
                 // 1. 定位容器元素
                 const container = document.querySelector('div[class^="inputContainer-"]');
                 const editor = input; // input 已经是 Slate 编辑器
                 
                 if (!container) {
-                    console.log('[WillChat] Qwen container not found, using fallback method...');
+                    console.log('[WillClaw] Qwen container not found, using fallback method...');
                 }
                 
                 // 2. 模拟全套鼠标点击序列，诱导容器进入 focus 状态
@@ -516,7 +516,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                     // 尝试触发粘贴，如果粘贴被禁就回退到 insertText
                     const pasteResult = editor.dispatchEvent(pasteEvent);
                     if (!pasteResult) {
-                        console.log('[WillChat] Paste blocked, trying execCommand...');
+                        console.log('[WillClaw] Paste blocked, trying execCommand...');
                         document.execCommand('insertText', false, message);
                     }
                     
@@ -526,7 +526,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                         inputType: 'insertText' 
                     }));
                     
-                    console.log('[WillChat] Qwen message injected successfully');
+                    console.log('[WillClaw] Qwen message injected successfully');
                 }, 50);
                 
                 return; // 异步处理，提前返回
@@ -554,7 +554,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             }
         }
         input.focus();
-        console.log('[WillChat] Message injected successfully');
+        console.log('[WillClaw] Message injected successfully');
     };
     
     fillInput();
@@ -570,7 +570,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                 for (const btn of btns) {
                     if (!btn.disabled && btn.offsetParent !== null) {
                         sendButton = btn;
-                        console.log('[WillChat] Found send button with selector:', selector);
+                        console.log('[WillClaw] Found send button with selector:', selector);
                         break;
                     }
                 }
@@ -596,7 +596,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                     
                     if (isVisible && isNotDisabled && looksLikeSend) {
                         sendButton = btn;
-                        console.log('[WillChat] Found send button near input');
+                        console.log('[WillClaw] Found send button near input');
                         break;
                     }
                 }
@@ -609,19 +609,19 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
         const sendMessage = () => {
             // 通义千问使用按钮点击发送（Slate.js 编辑器）
             if (isQwen) {
-                console.log('[WillChat] Using button click to send (Qwen Slate.js)...');
+                console.log('[WillClaw] Using button click to send (Qwen Slate.js)...');
                 
                 // 查找千问的发送按钮（operateBtn div）
                 const qwenSendBtn = document.querySelector('div[class*="operateBtn-"]');
                 if (qwenSendBtn && !qwenSendBtn.classList.contains('disabled')) {
-                    console.log('[WillChat] Clicking Qwen send button...');
+                    console.log('[WillClaw] Clicking Qwen send button...');
                     qwenSendBtn.click();
                 } else if (sendButton) {
-                    console.log('[WillChat] Qwen operateBtn not found or disabled, trying fallback button...');
+                    console.log('[WillClaw] Qwen operateBtn not found or disabled, trying fallback button...');
                     sendButton.click();
                 } else {
                     // 最后尝试 Enter 键
-                    console.log('[WillChat] No send button found, trying Enter key...');
+                    console.log('[WillClaw] No send button found, trying Enter key...');
                     input.focus();
                     const enterEvent = new KeyboardEvent('keydown', {
                         key: 'Enter',
@@ -639,7 +639,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             
             // 豆包、DeepSeek 优先使用 Enter 键发送
             if (isDoubao || isDeepSeek) {
-                console.log('[WillChat] Using Enter key to send (Doubao/DeepSeek)...');
+                console.log('[WillClaw] Using Enter key to send (Doubao/DeepSeek)...');
                 input.focus();
                 
                 // 模拟 Enter 键按下
@@ -680,7 +680,7 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                 // 如果 Enter 没生效，尝试点击按钮
                 setTimeout(() => {
                     if (sendButton) {
-                        console.log('[WillChat] Enter might not work, trying button click...');
+                        console.log('[WillClaw] Enter might not work, trying button click...');
                         sendButton.click();
                     }
                 }, 200);
@@ -690,11 +690,11 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             
             // 其他网站优先使用按钮
             if (sendButton) {
-                console.log('[WillChat] Clicking send button...');
+                console.log('[WillClaw] Clicking send button...');
                 sendButton.click();
             } else {
                 // 如果没找到按钮，尝试模拟 Enter 键
-                console.log('[WillChat] No send button found, trying Enter key...');
+                console.log('[WillClaw] No send button found, trying Enter key...');
                 const enterEvent = new KeyboardEvent('keydown', {
                     key: 'Enter',
                     code: 'Enter',

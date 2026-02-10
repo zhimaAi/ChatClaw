@@ -14,15 +14,15 @@ import (
 	selfupdate "github.com/creativeprojects/go-selfupdate"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"willchat/internal/define"
-	"willchat/internal/errs"
-	"willchat/internal/services/settings"
+	"willclaw/internal/define"
+	"willclaw/internal/errs"
+	"willclaw/internal/services/settings"
 )
 
 const (
-	// GitHub repository slug for WillChat
+	// GitHub repository slug for WillClaw
 	repoOwner = "zhimaAi"
-	repoName  = "WillChat"
+	repoName  = "WillClaw"
 
 	// Timeout for GitHub reachability probe
 	githubProbeTimeout = 3 * time.Second
@@ -218,7 +218,7 @@ func (s *UpdaterService) RestartApp() error {
 	switch runtime.GOOS {
 	case "darwin":
 		// On macOS, use "open" to launch the .app bundle
-		// exe is like /Applications/WillChat.app/Contents/MacOS/WillChat
+		// exe is like /Applications/WillClaw.app/Contents/MacOS/WillClaw
 		appPath := exe
 		for i := 0; i < 3; i++ {
 			appPath = filepath.Dir(appPath)

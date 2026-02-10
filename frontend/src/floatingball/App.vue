@@ -372,7 +372,7 @@ watch(
             :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
             class="block"
             style="transform: translateZ(0); backface-visibility: hidden"
-            alt="WillChat"
+            alt="WillClaw"
             draggable="false"
           />
         </div>
