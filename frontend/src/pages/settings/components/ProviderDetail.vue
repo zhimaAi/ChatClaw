@@ -746,7 +746,7 @@ const confirmDeleteModel = async () => {
                             <Pencil class="size-3.5" />
                           </button>
                           <button
-                            class="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                             :title="t('settings.modelService.deleteModel')"
                             @click.stop="handleDeleteModel(model)"
                           >
@@ -793,7 +793,7 @@ const confirmDeleteModel = async () => {
             {{ t('settings.modelService.cancel') }}
           </AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            class="bg-foreground text-background hover:bg-foreground/90"
             :disabled="isDeleting"
             @click.prevent="confirmDeleteModel"
           >

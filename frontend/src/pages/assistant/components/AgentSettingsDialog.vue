@@ -638,7 +638,7 @@ const handleDelete = async () => {
                   {{ t('assistant.settings.delete.hint') }}
                 </div>
 
-                <Button variant="destructive" :disabled="saving" @click="deleteConfirmOpen = true">
+                <Button variant="outline" class="border-border text-foreground hover:bg-accent" :disabled="saving" @click="deleteConfirmOpen = true">
                   {{ t('assistant.settings.delete.action') }}
                 </Button>
 
@@ -664,7 +664,7 @@ const handleDelete = async () => {
                         {{ t('assistant.actions.cancel') }}
                       </AlertDialogCancel>
                       <AlertDialogAction
-                        class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        class="bg-foreground text-background hover:bg-foreground/90"
                         :disabled="saving"
                         @click="handleDelete"
                       >

@@ -270,7 +270,7 @@ onMounted(() => {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  class="gap-2 text-destructive focus:text-destructive"
+                  class="gap-2 text-muted-foreground focus:text-foreground"
                   @select="handleOpenDelete(lib)"
                 >
                   <IconDelete class="size-4" />
@@ -356,7 +356,7 @@ onMounted(() => {
             {{ t('knowledge.delete.cancel') }}
           </AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            class="bg-foreground text-background hover:bg-foreground/90"
             @click.prevent="confirmDelete"
           >
             {{ t('knowledge.delete.confirm') }}

@@ -89,7 +89,7 @@ onMounted(async () => {
   }
 
   // Listen for backend auto-check event (ServiceStartup emits after 3s).
-  // Always mark the badge so the user sees a red dot on "Check for Update".
+  // Always mark the badge so the user sees a dot on "Check for Update".
   // Only auto-open the dialog when auto_update is enabled.
   unsubscribeUpdateAvailable = Events.On('update:available', async (event: any) => {
     const info = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)

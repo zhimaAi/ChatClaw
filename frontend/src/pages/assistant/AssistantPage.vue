@@ -931,7 +931,7 @@ onUnmounted(() => {
             {{ t('assistant.conversation.delete.cancel') }}
           </AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            class="bg-foreground text-background hover:bg-foreground/90"
             @click.prevent="confirmDeleteConversation"
           >
             {{ t('assistant.conversation.delete.confirm') }}

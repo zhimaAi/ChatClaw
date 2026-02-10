@@ -259,7 +259,7 @@ const handleListModeChange = (mode: ListMode) => {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    class="gap-2 text-destructive focus:text-destructive"
+                    class="gap-2 text-muted-foreground focus:text-foreground"
                     @select="emit('openDelete', conv)"
                   >
                     <IconDelete class="size-4" />
