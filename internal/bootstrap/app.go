@@ -162,7 +162,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 				// 当第二个实例启动时，安全地聚焦主窗口
 				mainWinMgr.safeWake()
 				// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
-				if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+				if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
 					_ = floatingBallService.SetVisible(true)
 				}
 			},
@@ -338,7 +338,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		// 安全地显示主窗口
 		mainWinMgr.safeShow()
 		// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
-		if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+		if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
 			_ = floatingBallService.SetVisible(true)
 		}
 	})
@@ -432,7 +432,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		if floatingBallService == nil {
 			return
 		}
-		if !settings.GetBool("show_floating_window", true) {
+		if !settings.GetBool("show_floating_window", false) {
 			return
 		}
 		if floatingBallService.IsVisible() {
