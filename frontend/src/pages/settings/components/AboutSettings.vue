@@ -1,33 +1,46 @@
 <script setup lang="ts">
 /**
- * 关于我们设置组件
+ * About settings component with auto-update support.
  */
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/willchat/internal/services/browser'
 import { AppService } from '@bindings/willchat/internal/services/app'
 import { SettingsService } from '@bindings/willchat/internal/services/settings'
+import { UpdaterService } from '@bindings/willchat/internal/services/updater'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
+import { Events } from '@wailsio/runtime'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
+import UpdateDialog from './UpdateDialog.vue'
 import LogoIcon from '@/assets/images/logo.svg'
 
 const { t } = useI18n()
 
-// 官网地址
+// Official website
 const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillChat'
 
-// 应用版本
+// Application version
 const appVersion = ref('...')
 
-// 检查更新状态
+// Update states
 const isCheckingUpdate = ref(false)
+const hasUpdate = ref(false)
+const latestVersion = ref('')
+const releaseNotes = ref('')
 
-// 自动更新开关状态
+// Dialog state
+const dialogOpen = ref(false)
+const dialogMode = ref<'new-version' | 'just-updated'>('new-version')
+
+// Auto update toggle
 const autoUpdate = ref(true)
+
+// Event unsubscribe
+let unsubscribeUpdateAvailable: (() => void) | null = null
 
 onMounted(async () => {
   try {
@@ -47,9 +60,41 @@ onMounted(async () => {
   } catch {
     // Use default value if setting not found
   }
+
+  // Check for pending update (just-updated scenario)
+  try {
+    const pending = await UpdaterService.GetPendingUpdate()
+    if (pending && pending.latest_version) {
+      latestVersion.value = pending.latest_version
+      releaseNotes.value = pending.release_notes || ''
+      dialogMode.value = 'just-updated'
+      dialogOpen.value = true
+    }
+  } catch {
+    // Ignore — no pending update
+  }
+
+  // Listen for background update:available event from ServiceStartup
+  unsubscribeUpdateAvailable = Events.On('update:available', handleUpdateAvailable)
 })
 
-// 打开官网
+onUnmounted(() => {
+  unsubscribeUpdateAvailable?.()
+  unsubscribeUpdateAvailable = null
+})
+
+// Handle update:available event from backend
+function handleUpdateAvailable(info: any) {
+  if (info?.has_update && info?.latest_version) {
+    hasUpdate.value = true
+    latestVersion.value = info.latest_version
+    releaseNotes.value = info.release_notes || ''
+    dialogMode.value = 'new-version'
+    dialogOpen.value = true
+  }
+}
+
+// Open website
 async function handleOpenWebsite() {
   try {
     await BrowserService.OpenURL(OFFICIAL_WEBSITE)
@@ -58,21 +103,30 @@ async function handleOpenWebsite() {
   }
 }
 
-// 检查更新
+// Check for update
 async function handleCheckUpdate() {
   if (isCheckingUpdate.value) return
   isCheckingUpdate.value = true
   try {
-    await AppService.CheckForUpdate()
-    toast.success(t('settings.about.alreadyLatest'))
+    const result = await UpdaterService.CheckForUpdate()
+    if (result && result.has_update) {
+      hasUpdate.value = true
+      latestVersion.value = result.latest_version
+      releaseNotes.value = result.release_notes || ''
+      dialogMode.value = 'new-version'
+      dialogOpen.value = true
+    } else {
+      toast.success(t('settings.about.alreadyLatest'))
+    }
   } catch (error) {
     console.error('Failed to check for update:', error)
+    toast.error(t('settings.about.checkFailed'))
   } finally {
     isCheckingUpdate.value = false
   }
 }
 
-// 切换自动更新
+// Toggle auto update
 async function handleAutoUpdateChange(value: boolean) {
   autoUpdate.value = value
   try {
@@ -87,7 +141,7 @@ async function handleAutoUpdateChange(value: boolean) {
 
 <template>
   <SettingsCard :title="t('settings.about.title')">
-    <!-- 应用信息区域 -->
+    <!-- Application info area -->
     <div class="flex items-center gap-5 border-b border-border p-4 dark:border-white/10">
       <!-- Logo -->
       <div
@@ -96,7 +150,7 @@ async function handleAutoUpdateChange(value: boolean) {
         <LogoIcon class="size-icon-lg" />
       </div>
 
-      <!-- 应用名称和版权信息 -->
+      <!-- App name and copyright -->
       <div class="flex flex-1 flex-col items-start gap-1">
         <span class="text-sm font-medium text-foreground">
           {{ t('settings.about.appName') }}
@@ -111,7 +165,7 @@ async function handleAutoUpdateChange(value: boolean) {
         </div>
       </div>
 
-      <!-- 检查更新按钮 -->
+      <!-- Check update button -->
       <Button
         variant="outline"
         size="sm"
@@ -122,7 +176,7 @@ async function handleAutoUpdateChange(value: boolean) {
       </Button>
     </div>
 
-    <!-- 官方网站链接 -->
+    <!-- Official website -->
     <SettingsItem :label="t('settings.about.officialWebsite')">
       <button
         class="inline-flex cursor-pointer items-center gap-1 text-sm text-primary hover:opacity-80"
@@ -133,9 +187,18 @@ async function handleAutoUpdateChange(value: boolean) {
       </button>
     </SettingsItem>
 
-    <!-- 自动更新开关 -->
+    <!-- Auto update toggle -->
     <SettingsItem :label="t('settings.about.autoUpdate')" :bordered="false">
       <Switch :model-value="autoUpdate" @update:model-value="handleAutoUpdateChange" />
     </SettingsItem>
   </SettingsCard>
+
+  <!-- Update dialog (new version / just updated) -->
+  <UpdateDialog
+    :open="dialogOpen"
+    :mode="dialogMode"
+    :version="latestVersion"
+    :release-notes="releaseNotes"
+    @update:open="dialogOpen = $event"
+  />
 </template>

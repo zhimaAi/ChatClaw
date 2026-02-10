@@ -151,5 +151,12 @@
   "tools.calculator.name": "Calculator",
   "tools.calculator.description": "Perform mathematical calculations",
   "tools.duckduckgo.name": "Web Search",
-  "tools.duckduckgo.description": "Search the web using DuckDuckGo"
+  "tools.duckduckgo.description": "Search the web using DuckDuckGo",
+  "error.update_source_failed": "failed to connect to update server",
+  "error.update_init_failed": "failed to initialize updater",
+  "error.update_check_failed": "failed to check for updates",
+  "error.update_no_release": "please check for updates first",
+  "error.update_exe_path_failed": "failed to locate executable path",
+  "error.update_apply_failed": "failed to apply update",
+  "error.update_restart_failed": "failed to restart application"
 }

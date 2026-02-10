@@ -151,5 +151,12 @@
   "tools.calculator.name": "计算器",
   "tools.calculator.description": "执行数学计算",
   "tools.duckduckgo.name": "网络搜索",
-  "tools.duckduckgo.description": "使用 DuckDuckGo 搜索网络信息"
+  "tools.duckduckgo.description": "使用 DuckDuckGo 搜索网络信息",
+  "error.update_source_failed": "无法连接更新服务器",
+  "error.update_init_failed": "初始化更新器失败",
+  "error.update_check_failed": "检查更新失败",
+  "error.update_no_release": "请先检查更新",
+  "error.update_exe_path_failed": "无法获取可执行文件路径",
+  "error.update_apply_failed": "应用更新失败",
+  "error.update_restart_failed": "重启应用失败"
 }
