@@ -214,11 +214,12 @@ func attachRightOfProcess(opts AttachOptions) (Controller, error) {
 	}
 
 	f := &follower{
-		self:   windows.HWND(selfHWND),
-		target: target,
-		gap:    opts.Gap,
-		ready:  make(chan struct{}),
-		app:    opts.App,
+		self:              windows.HWND(selfHWND),
+		target:            target,
+		gap:               opts.Gap,
+		ready:             make(chan struct{}),
+		app:               opts.App,
+		targetProcessName: opts.TargetProcessName,
 	}
 	if err := f.start(); err != nil {
 		_ = f.Stop()
@@ -233,13 +234,14 @@ type follower struct {
 	gap    int
 	app    *application.App
 
-	mu        sync.Mutex
-	hookLoc   uintptr
-	hookFG    uintptr
-	tid       uint32
-	ready     chan struct{}
-	closed    bool
-	selfWidth int32 // cached initial width of our window
+	mu                sync.Mutex
+	hookLoc           uintptr
+	hookFG            uintptr
+	tid               uint32
+	ready             chan struct{}
+	closed            bool
+	selfWidth         int32 // cached initial width of our window
+	targetProcessName string // original process name, used for dynamic window re-evaluation
 
 	// Throttling for syncToTarget to avoid overwhelming system calls
 	syncing int32 // atomic flag: 1 = currently syncing, 0 = idle
@@ -381,6 +383,13 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		if hwnd == f.self {
 			return 0
 		}
+		// If a DIFFERENT window from the target process becomes foreground,
+		// switch to tracking it (e.g. user clicks Douyin's chat window while
+		// we were tracking the video window). Only switch if the new window
+		// passes basic validity checks (visible, top-level, has title).
+		if hwnd != f.target && f.isValidSwitchTarget(hwnd) {
+			f.target = hwnd
+		}
 		// When target becomes foreground, we need to ensure our window is also
 		// brought to the top, placed right after the target in z-order.
 		_ = f.syncToTargetWithZOrderFix()
@@ -388,6 +397,38 @@ func (f *follower) winEventProc(_ uintptr, event uint32, hwnd windows.HWND, idOb
 		return 0
 	}
 	return 0
+}
+
+// isValidSwitchTarget checks if a foreground window from the target process is a
+// valid candidate to switch tracking to. This filters out tool windows, popups,
+// and other transient windows that should not become the snap anchor.
+func (f *follower) isValidSwitchTarget(hwnd windows.HWND) bool {
+	if !isWindowVisible(hwnd) {
+		return false
+	}
+	ex := getExStyle(hwnd)
+	if ex&wsExToolWindow != 0 {
+		return false
+	}
+	// Must be a top-level window (no owner)
+	if getWindowOwner(hwnd) != 0 {
+		return false
+	}
+	// Must have a title (filters out invisible helper windows)
+	if getWindowTextLength(hwnd) == 0 {
+		return false
+	}
+	// Must have a reasonable size
+	var r rect
+	if err := getWindowRect(hwnd, &r); err != nil {
+		return false
+	}
+	w := int64(r.Right - r.Left)
+	h := int64(r.Bottom - r.Top)
+	if w < 200 || h < 200 {
+		return false
+	}
+	return true
 }
 
 // getProcessWindowsBounds calculates the combined bounds of all visible windows
