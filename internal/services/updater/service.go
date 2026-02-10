@@ -254,40 +254,10 @@ func (s *UpdaterService) RestartApp() error {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
 
-	switch runtime.GOOS {
-	case "darwin":
-		exe, err = filepath.EvalSymlinks(exe)
-		if err != nil {
-			return errs.Wrap("error.update_restart_failed", err)
-		}
-		appPath := exe
-		for i := 0; i < 3; i++ {
-			appPath = filepath.Dir(appPath)
-		}
-
-		var cmd *exec.Cmd
-		if filepath.Ext(appPath) == ".app" {
-			cmd = exec.Command("open", "-n", appPath)
-		} else {
-			cmd = exec.Command(exe)
-		}
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Start(); err != nil {
-			return errs.Wrap("error.update_restart_failed", err)
-		}
-
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			os.Exit(0)
-		}()
-
-	case "windows":
-		// SingleInstance mode rejects a second process while the first is alive.
-		// A bat script waits ~2s, cleans up the .old binary, then launches the
-		// new exe. Using "cd /D" + relative name works around the Win32 path
-		// parser bug with dot-prefixed filenames.
+	// Windows needs special handling: SingleInstance rejects a second process,
+	// and the .old binary cleanup requires cd + relative path. Use a bat script
+	// that waits for this process to exit, cleans up, then launches the new exe.
+	if runtime.GOOS == "windows" {
 		exeDir := filepath.Dir(exe)
 		exeName := filepath.Base(exe)
 		oldName := "." + exeName + ".old"
@@ -306,8 +276,6 @@ func (s *UpdaterService) RestartApp() error {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
 
-		s.app.Logger.Info("restarting application (windows delayed launch)", "exe", exe, "bat", batPath)
-
 		cmd := exec.Command("cmd", "/C", batPath)
 		setDetachedProcess(cmd)
 
@@ -315,31 +283,48 @@ func (s *UpdaterService) RestartApp() error {
 			return errs.Wrap("error.update_restart_failed", err)
 		}
 
-		// Quit immediately so the SingleInstance lock is released before
-		// the delayed bat script fires.
 		go func() {
 			time.Sleep(200 * time.Millisecond)
 			s.app.Quit()
 		}()
 
-	default:
-		exe, err = filepath.EvalSymlinks(exe)
-		if err != nil {
-			return errs.Wrap("error.update_restart_failed", err)
-		}
-		cmd := exec.Command(exe)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Start(); err != nil {
-			return errs.Wrap("error.update_restart_failed", err)
-		}
-
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			os.Exit(0)
-		}()
+		return nil
 	}
+
+	// macOS / Linux: keep the original logic exactly as-is.
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return errs.Wrap("error.update_restart_failed", err)
+	}
+
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		appPath := exe
+		for i := 0; i < 3; i++ {
+			appPath = filepath.Dir(appPath)
+		}
+		if filepath.Ext(appPath) == ".app" {
+			cmd = exec.Command("open", "-n", appPath)
+		} else {
+			cmd = exec.Command(exe)
+		}
+	default:
+		cmd = exec.Command(exe)
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return errs.Wrap("error.update_restart_failed", err)
+	}
+
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(0)
+	}()
 
 	return nil
 }
