@@ -245,6 +245,10 @@ export default {
       copyright: '© 2026 武汉芝麻小客服网络科技有限公司 版权所有',
       officialWebsite: '官方网站',
       view: '查看',
+      checkUpdate: '检查更新',
+      checkingUpdate: '正在检查...',
+      alreadyLatest: '当前已是最新版本',
+      autoUpdate: '自动更新',
     },
   },
   assistant: {

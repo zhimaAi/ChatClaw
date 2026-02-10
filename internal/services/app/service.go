@@ -8,6 +8,18 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// CheckUpdateResult represents the result of a version check
+type CheckUpdateResult struct {
+	// HasUpdate indicates whether a new version is available
+	HasUpdate bool `json:"has_update"`
+	// CurrentVersion is the current application version
+	CurrentVersion string `json:"current_version"`
+	// LatestVersion is the latest available version (empty if no update)
+	LatestVersion string `json:"latest_version"`
+	// Message is a human-readable message about the check result
+	Message string `json:"message"`
+}
+
 // AppService 应用服务（暴露给前端调用）
 type AppService struct {
 	app        *application.App
@@ -38,4 +50,15 @@ func (s *AppService) ShowMainWindow() {
 			s.mainWindow.Focus()
 		}
 	})
+}
+
+// CheckForUpdate checks if there is a newer version available.
+// Currently always returns "already up to date". Real update logic will be added later.
+func (s *AppService) CheckForUpdate() (*CheckUpdateResult, error) {
+	currentVersion := define.Version
+	return &CheckUpdateResult{
+		HasUpdate:      false,
+		CurrentVersion: currentVersion,
+		LatestVersion:  currentVersion,
+	}, nil
 }

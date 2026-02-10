@@ -196,6 +196,10 @@ export default {
       copyright: '© 2026 WillChat Sesame Network Technology  All rights reserved',
       officialWebsite: 'Official Website',
       view: 'View',
+      checkUpdate: 'Check for Updates',
+      checkingUpdate: 'Checking...',
+      alreadyLatest: 'You are on the latest version',
+      autoUpdate: 'Auto Update',
     },
     // Model service
     modelService: {
