@@ -27,6 +27,7 @@ import (
 	"willchat/internal/services/settings"
 	"willchat/internal/services/textselection"
 	"willchat/internal/services/tray"
+	"willchat/internal/services/updater"
 	"willchat/internal/services/windows"
 	"willchat/internal/services/winsnapchat"
 	"willchat/internal/sqlite"
@@ -263,6 +264,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
+	// 注册自动更新服务
+	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
 
 	// ========== macOS 应用菜单 ==========
 	// Set up standard macOS application menu so that system shortcuts work:

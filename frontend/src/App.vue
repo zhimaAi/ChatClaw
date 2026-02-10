@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, type NavModule } from '@/stores'
@@ -8,8 +8,10 @@ import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System, Window } from '@wailsio/runtime'
 import { TextSelectionService } from '@bindings/willchat/internal/services/textselection'
+import { UpdaterService } from '@bindings/willchat/internal/services/updater'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import { SnapService } from '@bindings/willchat/internal/services/windows'
+import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
 const navigationStore = useNavigationStore()
 const activeTab = computed(() => navigationStore.activeTab)
 
@@ -47,6 +49,15 @@ watch(
  * 处理划词弹窗按钮点击事件
  * 根据吸附窗体状态决定发送文本到哪里
  */
+// --- Global update dialog state ---
+const updateDialogOpen = ref(false)
+const updateDialogMode = ref<'new-version' | 'just-updated'>('new-version')
+const updateDialogVersion = ref('')
+const updateDialogNotes = ref('')
+
+let unsubscribeUpdateAvailable: (() => void) | null = null
+let unsubscribeShowDialog: (() => void) | null = null
+
 let unsubscribeTextSelection: (() => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
@@ -59,7 +70,42 @@ let onKeyDownMacMinimize: ((e: KeyboardEvent) => void) | null = null
 let themeObserver: InstanceType<typeof window.MutationObserver> | null = null
 let wasDarkMode = document.documentElement.classList.contains('dark')
 
-onMounted(() => {
+onMounted(async () => {
+  // --- Global update monitoring ---
+
+  // Check for pending update on startup (just-updated scenario)
+  try {
+    const pending = await UpdaterService.GetPendingUpdate()
+    if (pending && pending.latest_version) {
+      updateDialogVersion.value = pending.latest_version
+      updateDialogNotes.value = pending.release_notes || ''
+      updateDialogMode.value = 'just-updated'
+      updateDialogOpen.value = true
+    }
+  } catch {
+    // Ignore — no pending update
+  }
+
+  // Listen for backend auto-check event (ServiceStartup emits after 3s)
+  unsubscribeUpdateAvailable = Events.On('update:available', (event: any) => {
+    const info = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    if (info?.has_update && info?.latest_version) {
+      updateDialogVersion.value = info.latest_version
+      updateDialogNotes.value = info.release_notes || ''
+      updateDialogMode.value = 'new-version'
+      updateDialogOpen.value = true
+    }
+  })
+
+  // Listen for AboutSettings.vue manual check result
+  unsubscribeShowDialog = Events.On('update:show-dialog', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    updateDialogVersion.value = payload?.version || ''
+    updateDialogNotes.value = payload?.release_notes || ''
+    updateDialogMode.value = payload?.mode || 'new-version'
+    updateDialogOpen.value = true
+  })
+
   // Text selection event handling
   unsubscribeTextSelection = Events.On('text-selection:action', async (event: any) => {
     const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
@@ -170,6 +216,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unsubscribeUpdateAvailable?.()
+  unsubscribeUpdateAvailable = null
+  unsubscribeShowDialog?.()
+  unsubscribeShowDialog = null
+
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null
@@ -188,6 +239,15 @@ onUnmounted(() => {
 
 <template>
   <Toaster />
+
+  <!-- Global update dialog (new version / just updated) -->
+  <UpdateDialog
+    :open="updateDialogOpen"
+    :mode="updateDialogMode"
+    :version="updateDialogVersion"
+    :release-notes="updateDialogNotes"
+    @update:open="updateDialogOpen = $event"
+  />
   <MainLayout>
     <!--
       标签页状态保留架构：

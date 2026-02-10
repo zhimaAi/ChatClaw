@@ -92,3 +92,59 @@ wails3 task darwin:sign ARCH=amd64 DEV=true  # wails3 task darwin:sign:notarize 
 # arm64+amd64
 wails3 task darwin:sign UNIVERSAL=true DEV=true  # wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false 表示生产环境打包
 ```
+
+## 自动更新（Release 资产命名规范）
+
+应用内置了基于 [go-selfupdate](https://github.com/creativeprojects/go-selfupdate) 的自动更新功能，优先从 GitHub Releases 检查更新，GitHub 不可达时自动回退到 Gitee。
+
+发布新版本时，除了常规安装包（`.dmg` / `-installer.exe`），还需要上传**自动更新资产**到 GitHub Release（以及同步到 Gitee Release）。
+
+### 资产命名格式
+
+`go-selfupdate` 默认按以下格式匹配资产文件名：
+
+```
+{cmd}_{os}_{arch}.{ext}
+```
+
+其中 `{cmd}` = 可执行文件名（`WillChat`），`{os}` / `{arch}` 为 Go 标准命名。
+
+| 平台            | 文件名                              |
+|----------------|-------------------------------------|
+| macOS arm64    | `WillChat_darwin_arm64.tar.gz`      |
+| macOS amd64    | `WillChat_darwin_amd64.tar.gz`      |
+| Windows amd64  | `WillChat_windows_amd64.zip`        |
+| Windows arm64  | `WillChat_windows_arm64.zip`        |
+| Linux amd64    | `WillChat_linux_amd64.tar.gz`       |
+| Linux arm64    | `WillChat_linux_arm64.tar.gz`       |
+
+### 制作更新资产示例（macOS arm64）
+
+```bash
+# 1. 构建
+wails3 task darwin:sign:notarize ARCH=arm64 DEV=false
+
+# 2. 打包为 tar.gz（仅包含二进制）
+cd bin
+tar -czf WillChat_darwin_arm64.tar.gz -C WillChat.app/Contents/MacOS WillChat
+cd ..
+```
+
+### 制作更新资产示例（Windows amd64）
+
+```bash
+# 1. 构建
+wails3 task windows:build ARCH=amd64 DEV=false
+
+# 2. 打包为 zip（仅包含二进制）
+cd bin
+zip WillChat_windows_amd64.zip WillChat.exe
+cd ..
+```
+
+### 发布步骤
+
+1. 在 GitHub 创建 Release（tag 格式如 `v1.0.0`）
+2. 各平台分别构建并打包更新资产（因为 CGO 无法交叉编译，需在对应平台上打包）
+3. 上传所有平台的安装包 + 更新资产到 Release
+4. 同步 Release 到 Gitee（包括上传相同的文件）
