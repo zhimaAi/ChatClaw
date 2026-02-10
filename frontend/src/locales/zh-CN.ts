@@ -52,6 +52,7 @@ export default {
     title: 'WillChat',
     assistantName: '灵魂厨房助手',
     cancelSnap: '取消吸附',
+    closeWindow: '关闭',
     placeholder: '请输入问题',
     thinking: '思考中...',
     actions: {
