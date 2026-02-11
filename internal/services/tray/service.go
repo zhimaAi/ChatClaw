@@ -3,7 +3,7 @@ package tray
 import (
 	"sync"
 
-	"willclaw/internal/services/settings"
+	"chatclaw/internal/services/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

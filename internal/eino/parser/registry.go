@@ -6,10 +6,10 @@ import (
 	"github.com/cloudwego/eino-ext/components/document/parser/html"
 	"github.com/cloudwego/eino/components/document/parser"
 
-	csvparser "willclaw/internal/eino/parser/csv"
-	docxparser "willclaw/internal/eino/parser/docx"
-	pdfparser "willclaw/internal/eino/parser/pdf"
-	xlsxparser "willclaw/internal/eino/parser/xlsx"
+	csvparser "chatclaw/internal/eino/parser/csv"
+	docxparser "chatclaw/internal/eino/parser/docx"
+	pdfparser "chatclaw/internal/eino/parser/pdf"
+	xlsxparser "chatclaw/internal/eino/parser/xlsx"
 )
 
 // NewDocumentParser 创建一个支持多种文件格式的文档解析器

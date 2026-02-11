@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"willclaw/internal/define"
+	"chatclaw/internal/define"
 
 	"github.com/uptrace/bun"
 )

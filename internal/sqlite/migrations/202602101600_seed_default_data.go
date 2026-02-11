@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"willclaw/internal/services/i18n"
+	"chatclaw/internal/services/i18n"
 
 	"github.com/uptrace/bun"
 )

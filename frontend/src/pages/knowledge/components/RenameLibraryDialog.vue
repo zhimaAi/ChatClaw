@@ -15,8 +15,8 @@ import FieldLabel from './FieldLabel.vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 
-import type { Library } from '@bindings/willclaw/internal/services/library'
-import { LibraryService, UpdateLibraryInput } from '@bindings/willclaw/internal/services/library'
+import type { Library } from '@bindings/chatclaw/internal/services/library'
+import { LibraryService, UpdateLibraryInput } from '@bindings/chatclaw/internal/services/library'
 
 const props = defineProps<{
   open: boolean

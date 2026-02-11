@@ -17,7 +17,7 @@ import {
 import LogoIcon from '@/assets/images/logo.svg'
 import IconSnapAttached from '@/assets/icons/snap-attached.svg'
 import IconSnapDetached from '@/assets/icons/snap-detached.svg'
-import type { Agent } from '@bindings/willclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 
 defineProps<{
   agents: Agent[]

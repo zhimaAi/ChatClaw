@@ -7,10 +7,10 @@ import SettingsItem from './SettingsItem.vue'
 import { Window } from '@wailsio/runtime'
 
 // 后端绑定
-import { SettingsService, Category } from '@bindings/willclaw/internal/services/settings'
-import { TrayService } from '@bindings/willclaw/internal/services/tray'
-import { TextSelectionService } from '@bindings/willclaw/internal/services/textselection'
-import { FloatingBallService } from '@bindings/willclaw/internal/services/floatingball'
+import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
+import { TrayService } from '@bindings/chatclaw/internal/services/tray'
+import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
+import { FloatingBallService } from '@bindings/chatclaw/internal/services/floatingball'
 
 const { t } = useI18n()
 

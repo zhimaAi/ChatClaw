@@ -14,15 +14,15 @@ import (
 	selfupdate "github.com/creativeprojects/go-selfupdate"
 	"github.com/wailsapp/wails/v3/pkg/application"
 
-	"willclaw/internal/define"
-	"willclaw/internal/errs"
-	"willclaw/internal/services/settings"
+	"chatclaw/internal/define"
+	"chatclaw/internal/errs"
+	"chatclaw/internal/services/settings"
 )
 
 const (
-	// GitHub repository slug for WillClaw
+	// GitHub repository slug for ChatClaw
 	repoOwner = "zhimaAi"
-	repoName  = "WillClaw"
+	repoName  = "ChatClaw"
 
 	// Google reachability probe: if Google is accessible, the network is
 	// not behind the GFW, so we can safely use GitHub for downloads.
@@ -107,7 +107,7 @@ func (s *UpdaterService) cleanupOldBinary() {
 			"@echo off\r\ncd /D \"%s\"\r\nattrib -H \"%s\" >nul 2>&1\r\ndel /F \"%s\" >nul 2>&1\r\n",
 			dir, oldName, oldName,
 		)
-		batPath := filepath.Join(os.TempDir(), "willclaw_cleanup.bat")
+		batPath := filepath.Join(os.TempDir(), "chatclaw_cleanup.bat")
 		if err := os.WriteFile(batPath, []byte(script), 0o644); err != nil {
 			return
 		}
@@ -261,7 +261,7 @@ func (s *UpdaterService) RestartApp() error {
 		exeDir := filepath.Dir(exe)
 		exeName := filepath.Base(exe)
 		oldName := "." + exeName + ".old"
-		batPath := filepath.Join(os.TempDir(), "willclaw_restart.bat")
+		batPath := filepath.Join(os.TempDir(), "chatclaw_restart.bat")
 		batContent := fmt.Sprintf(
 			"@echo off\r\n"+
 				"ping localhost -n 3 >nul\r\n"+

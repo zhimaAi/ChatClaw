@@ -1,4 +1,4 @@
-module willclaw
+module chatclaw
 
 go 1.25
 

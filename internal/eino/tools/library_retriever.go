@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"willclaw/internal/services/retrieval"
+	"chatclaw/internal/services/retrieval"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"

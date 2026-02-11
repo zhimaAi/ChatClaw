@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "WillClaw"
+name: "ChatClaw"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.0.1"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "WillClaw"
+description: "ChatClaw"
 vendor: "sesame"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/WillClaw"
-    dst: "/usr/local/bin/WillClaw"
+  - src: "./bin/ChatClaw"
+    dst: "/usr/local/bin/ChatClaw"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/WillClaw.png"
-  - src: "./build/linux/WillClaw.desktop"
-    dst: "/usr/share/applications/WillClaw.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/ChatClaw.png"
+  - src: "./build/linux/ChatClaw.desktop"
+    dst: "/usr/share/applications/ChatClaw.desktop"
 
 # Default dependencies for Debian 12/Ubuntu 22.04+ with WebKit 4.1
 depends:

@@ -23,9 +23,9 @@ import type {
   Provider,
   ProviderWithModels,
   Model,
-} from '@bindings/willclaw/internal/services/providers'
-import { ProvidersService } from '@bindings/willclaw/internal/services/providers'
-import { SettingsService } from '@bindings/willclaw/internal/services/settings'
+} from '@bindings/chatclaw/internal/services/providers'
+import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
+import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()

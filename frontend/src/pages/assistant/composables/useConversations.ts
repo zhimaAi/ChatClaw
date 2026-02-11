@@ -8,7 +8,7 @@ import {
   type Conversation,
   CreateConversationInput,
   UpdateConversationInput,
-} from '@bindings/willclaw/internal/services/conversations'
+} from '@bindings/chatclaw/internal/services/conversations'
 import { Events } from '@wailsio/runtime'
 
 export function useConversations(tabId: string) {

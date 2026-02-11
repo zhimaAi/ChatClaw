@@ -3,7 +3,7 @@ package browser
 import (
 	"net/url"
 	"strings"
-	"willclaw/internal/errs"
+	"chatclaw/internal/errs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

@@ -19,12 +19,12 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/uptrace/bun"
 
-	"willclaw/internal/eino/chatmodel"
-	einoembed "willclaw/internal/eino/embedding"
-	einoparser "willclaw/internal/eino/parser"
-	"willclaw/internal/eino/raptor"
-	"willclaw/internal/eino/splitter"
-	"willclaw/internal/fts/tokenizer"
+	"chatclaw/internal/eino/chatmodel"
+	einoembed "chatclaw/internal/eino/embedding"
+	einoparser "chatclaw/internal/eino/parser"
+	"chatclaw/internal/eino/raptor"
+	"chatclaw/internal/eino/splitter"
+	"chatclaw/internal/fts/tokenizer"
 )
 
 // Phase represents a high-level stage of the document pipeline.

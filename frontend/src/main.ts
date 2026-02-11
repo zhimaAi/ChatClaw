@@ -4,7 +4,7 @@ import App from './App.vue'
 import { initI18n } from './i18n'
 import { fetchLocale } from './composables/useLocale'
 import { useAppStore } from './stores'
-import { AppService } from '@bindings/willclaw/internal/services/app'
+import { AppService } from '@bindings/chatclaw/internal/services/app'
 import './assets/index.css'
 
 async function bootstrap() {
