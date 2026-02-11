@@ -1,8 +1,9 @@
 <script setup lang="ts">
 type SvgComponent = any
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
-import { useSettingsStore, type SettingsMenuItem } from '@/stores'
+import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 
 // 导入图标（作为 Vue 组件）
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
@@ -13,20 +14,28 @@ import AboutIcon from '@/assets/icons/about.svg'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+const appStore = useAppStore()
 
 interface MenuItem {
   id: SettingsMenuItem
   labelKey: string
   icon: SvgComponent
+  /** If true, this item is only shown in GUI (desktop) mode */
+  guiOnly?: boolean
 }
 
-const menuItems: MenuItem[] = [
+const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
-  { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon },
-  { id: 'tools', labelKey: 'settings.menu.tools', icon: ToolsIcon },
+  { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
+  { id: 'tools', labelKey: 'settings.menu.tools', icon: ToolsIcon, guiOnly: true },
   { id: 'about', labelKey: 'settings.menu.about', icon: AboutIcon },
 ]
+
+// Filter out GUI-only items when running in server mode
+const menuItems = computed(() =>
+  allMenuItems.filter((item) => !item.guiOnly || appStore.isGUIMode)
+)
 
 const handleMenuClick = (menuId: SettingsMenuItem) => {
   settingsStore.setActiveMenu(menuId)

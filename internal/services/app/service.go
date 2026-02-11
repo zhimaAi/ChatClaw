@@ -28,6 +28,12 @@ func (s *AppService) GetVersion() string {
 	return define.Version
 }
 
+// GetRunMode returns the current run mode: "gui" (desktop) or "server" (HTTP).
+// Determined at compile time via build tags.
+func (s *AppService) GetRunMode() string {
+	return define.RunMode
+}
+
 // ShowMainWindow shows the main window (called by frontend after Vue app is mounted).
 // This is used on Windows to avoid black screen flash during webview loading.
 // Safe to call multiple times; only the first call has effect.

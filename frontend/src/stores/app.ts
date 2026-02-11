@@ -1,12 +1,21 @@
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { AppService } from '@bindings/chatclaw/internal/services/app'
 
 export type Theme = 'light' | 'dark' | 'system'
+export type RunMode = 'gui' | 'server'
 
 export const useAppStore = defineStore('app', () => {
   // 主题设置
   const theme = ref<Theme>('system')
+
+  // Run mode: "gui" (desktop) or "server" (HTTP), determined by backend build tag
+  const runMode = ref<RunMode>('gui')
+
+  // Convenience computed flags
+  const isServerMode = computed(() => runMode.value === 'server')
+  const isGUIMode = computed(() => runMode.value === 'gui')
 
   // Whether a new version is available (used to show badge on "Check for Update" button)
   const hasAvailableUpdate = ref(false)
@@ -40,6 +49,18 @@ export const useAppStore = defineStore('app', () => {
     void SettingsService.SetValue('theme', newTheme).catch((e: unknown) => {
       console.warn('Failed to persist theme to backend settings:', e)
     })
+  }
+
+  // Fetch run mode from backend (should be called once at app startup)
+  const initRunMode = async () => {
+    try {
+      const mode = await AppService.GetRunMode()
+      if (mode === 'gui' || mode === 'server') {
+        runMode.value = mode
+      }
+    } catch (e) {
+      console.warn('Failed to fetch run mode from backend:', e)
+    }
   }
 
   // 初始化主题
@@ -85,5 +106,9 @@ export const useAppStore = defineStore('app', () => {
     initTheme,
     getSystemTheme,
     hasAvailableUpdate,
+    runMode,
+    isServerMode,
+    isGUIMode,
+    initRunMode,
   }
 })

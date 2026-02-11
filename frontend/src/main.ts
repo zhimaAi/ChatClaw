@@ -22,6 +22,9 @@ async function bootstrap() {
   const appStore = useAppStore()
   appStore.initTheme()
 
+  // Fetch run mode from backend (gui / server) before mount so UI can adapt immediately
+  await appStore.initRunMode()
+
   app.mount('#app')
 
   // Show main window after Vue app is mounted (Windows: avoid black screen flash)
