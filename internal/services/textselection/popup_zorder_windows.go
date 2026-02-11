@@ -44,6 +44,9 @@ func hidePopupNative(w *application.WebviewWindow) {
 // setPopupPositionCocoa is only used on macOS; no-op on Windows.
 func setPopupPositionCocoa(_ *application.WebviewWindow, _, _ int) {}
 
+// showPopupClampedCocoa is only used on macOS; no-op on Windows.
+func showPopupClampedCocoa(_ *application.WebviewWindow, _, _, _, _ int) {}
+
 // setPopupPositionPhysical positions and sizes the popup at the given physical pixel
 // coordinates using native SetWindowPos. This bypasses Wails' DIP coordinate conversion
 // which can be inaccurate on multi-monitor setups with different DPI.

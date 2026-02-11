@@ -414,10 +414,26 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 
 	if runtime.GOOS == "darwin" {
 		// macOS: screenX/Y are Cocoa points (global, Y from bottom).
-		finalX := screenX - s.popWidth/2
-		// In Cocoa coordinates Y increases upward, so "above mouse" = mouseY + offset
-		finalY := screenY + 10
-		s.showPopupAt(finalX, finalY)
+		// Use ensurePopWindowDarwinClamped which detects the correct screen at mouse position,
+		// clamps the popup to that screen's visible frame, and positions + makes topmost
+		// in a single atomic main-thread operation.
+		s.mu.Lock()
+		popW := s.popWidth
+		popH := s.popHeight
+		s.popX = screenX - popW/2
+		s.popY = screenY + 10
+		s.popupActive = true
+		s.mu.Unlock()
+
+		s.ensurePopWindowDarwinClamped(screenX, screenY, popW, popH)
+
+		// Update click outside watcher
+		if s.clickOutsideWatcher != nil {
+			s.mu.RLock()
+			px, py := s.popX, s.popY
+			s.mu.RUnlock()
+			s.clickOutsideWatcher.SetPopupRect(int32(px), int32(py), int32(popW), int32(popH))
+		}
 	} else {
 		// Windows: screenX/Y are physical (virtual screen) pixels.
 		// Work entirely in physical pixels and use native SetWindowPos (bypass Wails DIP).
@@ -626,10 +642,26 @@ func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
 
 	if runtime.GOOS == "darwin" {
 		// macOS: screenX/Y are Cocoa points (global, Y from bottom).
-		finalX := screenX - s.popWidth/2
-		// In Cocoa coordinates Y increases upward, so "above mouse" = mouseY + offset
-		finalY := screenY + 10
-		s.showPopupAt(finalX, finalY)
+		// Use ensurePopWindowDarwinClamped which detects the correct screen at mouse position,
+		// clamps the popup to that screen's visible frame, and positions + makes topmost
+		// in a single atomic main-thread operation.
+		s.mu.Lock()
+		popW := s.popWidth
+		popH := s.popHeight
+		s.popX = screenX - popW/2
+		s.popY = screenY + 10
+		s.popupActive = true
+		s.mu.Unlock()
+
+		s.ensurePopWindowDarwinClamped(screenX, screenY, popW, popH)
+
+		// Update click outside watcher
+		if s.clickOutsideWatcher != nil {
+			s.mu.RLock()
+			px, py := s.popX, s.popY
+			s.mu.RUnlock()
+			s.clickOutsideWatcher.SetPopupRect(int32(px), int32(py), int32(popW), int32(popH))
+		}
 	} else {
 		// Windows: screenX/Y are physical (virtual screen) pixels.
 		// Work entirely in physical pixels and use native SetWindowPos (bypass Wails DIP).
@@ -939,7 +971,9 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 
 // ensurePopWindowDarwin creates or reuses the popup window on macOS,
 // positioning it using Cocoa points via native API (bypasses Wails' broken multi-monitor SetPosition).
-func (s *TextSelectionService) ensurePopWindowDarwin(x, y int) {
+// ensurePopWindowCreateDarwin creates or retrieves the popup window on macOS.
+// Returns nil if the window cannot be created.
+func (s *TextSelectionService) ensurePopWindowCreateDarwin() *application.WebviewWindow {
 	s.mu.Lock()
 	app := s.app
 	w := s.popWindow
@@ -947,7 +981,7 @@ func (s *TextSelectionService) ensurePopWindowDarwin(x, y int) {
 	s.mu.Unlock()
 
 	if app == nil {
-		return
+		return nil
 	}
 
 	// Check if existing window is still valid
@@ -973,7 +1007,7 @@ func (s *TextSelectionService) ensurePopWindowDarwin(x, y int) {
 
 		w = app.Window.NewWithOptions(opts)
 		if w == nil {
-			return
+			return nil
 		}
 
 		tryConfigurePopupNoActivate(w)
@@ -1004,13 +1038,40 @@ func (s *TextSelectionService) ensurePopWindowDarwin(x, y int) {
 			s.popWindow = nil
 		}
 		s.mu.Unlock()
-		return
+		return nil
 	}
 
-	// Use native Cocoa positioning (correct for multi-monitor)
-	setPopupPositionCocoa(w, x, y)
+	return w
+}
+
+// ensurePopWindowDarwin creates window and positions it at exact Cocoa point coordinates.
+// Used for in-app selections where the position is calculated from the main window.
+func (s *TextSelectionService) ensurePopWindowDarwin(x, y int) {
+	w := s.ensurePopWindowCreateDarwin()
+	if w == nil {
+		return
+	}
+	// Show window first (let Wails initialize), then override position via native API
 	w.Show()
+	setPopupPositionCocoa(w, x, y)
 	forcePopupTopMostNoActivate(w)
+}
+
+// ensurePopWindowDarwinClamped creates window and positions it at the correct screen
+// based on mouse position, with clamping to the screen's visible frame.
+// Used for external (mouse hook) selections where multi-monitor screen detection is needed.
+// mouseX/mouseY: raw mouse position in Cocoa points (global, Y from bottom).
+// popW/popH: popup dimensions in Cocoa points.
+func (s *TextSelectionService) ensurePopWindowDarwinClamped(mouseX, mouseY, popW, popH int) {
+	w := s.ensurePopWindowCreateDarwin()
+	if w == nil {
+		return
+	}
+	// Show window first (let Wails initialize), then position + clamp + topmost
+	// in a single atomic dispatch_async(main_queue) block via native Cocoa API.
+	// This avoids race conditions where Wails' Show() overrides our position.
+	w.Show()
+	showPopupClampedCocoa(w, mouseX, mouseY, popW, popH)
 }
 
 // disableMacOSWindowTiling disables window tiling management on macOS.

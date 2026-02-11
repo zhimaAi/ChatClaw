@@ -25,3 +25,6 @@ func forcePopupTopMostNoActivate(_ *application.WebviewWindow) {}
 
 // setPopupPositionCocoa is a no-op without CGO on macOS.
 func setPopupPositionCocoa(_ *application.WebviewWindow, _, _ int) {}
+
+// showPopupClampedCocoa is a no-op without CGO on macOS.
+func showPopupClampedCocoa(_ *application.WebviewWindow, _, _, _, _ int) {}
