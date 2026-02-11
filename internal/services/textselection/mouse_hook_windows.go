@@ -311,8 +311,16 @@ func (w *MouseHookWatcher) handlePossibleSelection(mouseX, mouseY int32) {
 
 		if before != nil {
 			after := captureScreenPixels(cx, cy, cw, ch)
-			if !hasSignificantPixelChange(before, after, 0.05) {
-				// No visible change at drag start position → no text selected → skip
+
+			// Two-layer detection:
+			// 1. System highlight color check — catches standard Windows apps.
+			// 2. Uniform chromatic change — catches custom highlights
+			//    (DingTalk light-blue, VS Code dark-blue, etc.) while
+			//    rejecting gray/white changes from window moves & screenshot overlays.
+			sysMatch := hasSelectionHighlight(before, after, 0.02)
+			uniformMatch := hasUniformChromaticChange(before, after, 0.05)
+			if !sysMatch && !uniformMatch {
+				// Neither detection triggered → no text selected → skip
 				return
 			}
 		}
