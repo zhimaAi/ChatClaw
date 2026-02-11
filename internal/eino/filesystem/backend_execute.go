@@ -59,9 +59,11 @@ func (b *LocalBackend) Execute(ctx context.Context, req *filesystem.ExecuteReque
 			"-Command", wrappedCmd,
 		)
 	case "darwin":
-		cmd = exec.Command("/bin/zsh", "-c", req.Command)
+		// Login shell (-l) ensures ~/.zprofile & ~/.zshrc are sourced,
+		// so user-installed tools (npx, python, etc.) are on PATH.
+		cmd = exec.Command("/bin/zsh", "-l", "-c", req.Command)
 	default:
-		cmd = exec.Command("/bin/bash", "-c", req.Command)
+		cmd = exec.Command("/bin/bash", "-l", "-c", req.Command)
 	}
 	cmd.Dir = b.baseDir
 
