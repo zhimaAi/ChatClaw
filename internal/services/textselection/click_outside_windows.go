@@ -169,8 +169,8 @@ func clickOutsideMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr 
 		if w != nil {
 			hookStruct := (*clickHookStruct)(unsafe.Pointer(lParam))
 
-			// Get DPI scale factor, convert to logical pixels (consistent with popup coordinate system)
-			scale := getDPIScale()
+			// Get DPI scale factor, convert to logical pixels (use per-monitor DPI for multi-monitor support)
+			scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
 			x := int32(float64(hookStruct.Pt.X) / scale)
 			y := int32(float64(hookStruct.Pt.Y) / scale)
 

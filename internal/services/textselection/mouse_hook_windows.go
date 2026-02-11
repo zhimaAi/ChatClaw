@@ -183,8 +183,8 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 				w.dragStartY = hookStruct.Pt.Y
 				w.dragStartTime = time.Now()
 				onDragStartWithPid := w.onDragStartWithPid
-				// Convert to logical pixels
-				scale := getDPIScale()
+				// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
+				scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
 				mouseX := int32(float64(hookStruct.Pt.X) / scale)
 				mouseY := int32(float64(hookStruct.Pt.Y) / scale)
 				w.mu.Unlock()
@@ -209,8 +209,8 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 					distance := dx*dx + dy*dy
 					dragDuration := time.Since(w.dragStartTime)
 
-					// Convert to logical pixels
-					scale := getDPIScale()
+					// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
+					scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
 					mouseX := int32(float64(hookStruct.Pt.X) / scale)
 					mouseY := int32(float64(hookStruct.Pt.Y) / scale)
 
