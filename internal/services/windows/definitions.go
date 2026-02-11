@@ -29,8 +29,8 @@ func DefaultDefinitions() []WindowDefinition {
 					// Windows specific: hide from taskbar
 					Windows: application.WindowsWindow{
 						HiddenOnTaskbar: true,
-						// Avoid extra shadow/rounded-corner decorations in frameless mode.
-						DisableFramelessWindowDecorations: true,
+						// Keep DisableFramelessWindowDecorations as false (default) so that
+						// Wails adds a thin border + shadow to the frameless window.
 					},
 					Mac: application.MacWindow{
 						// Use normal window level; ordering is handled dynamically to stay above the target window only.

@@ -81,14 +81,22 @@ const handleAgentChange = (value: any) => {
 
     <!-- Right: New conversation + Snap toggle icon -->
     <div class="flex items-center gap-2" style="--wails-draggable: no-drag">
-      <button
-        class="rounded-md p-1 hover:bg-muted"
-        :title="t('assistant.sidebar.newConversation')"
-        type="button"
-        @click="emit('newConversation')"
-      >
-        <Plus class="size-4 text-muted-foreground" />
-      </button>
+      <TooltipProvider :delay-duration="300">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              class="rounded-md p-1 hover:bg-muted"
+              type="button"
+              @click="emit('newConversation')"
+            >
+              <Plus class="size-4 text-muted-foreground" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {{ t('assistant.sidebar.newConversation') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       <!-- Snap icon: attached state (with bg + tooltip) -->
       <TooltipProvider v-if="hasAttachedTarget" :delay-duration="300">
@@ -108,15 +116,23 @@ const handleAgentChange = (value: any) => {
         </Tooltip>
       </TooltipProvider>
 
-      <!-- Snap icon: detached state (no bg) -->
-      <button
-        v-else
-        class="rounded-md p-1 hover:bg-muted"
-        type="button"
-        @click="emit('findAndAttach')"
-      >
-        <IconSnapDetached class="size-5 text-muted-foreground" />
-      </button>
+      <!-- Snap icon: detached state (no bg, with tooltip) -->
+      <TooltipProvider v-else :delay-duration="300">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              class="rounded-md p-1 hover:bg-muted"
+              type="button"
+              @click="emit('findAndAttach')"
+            >
+              <IconSnapDetached class="size-5 text-muted-foreground" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {{ t('winsnap.snapApp') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       <!-- Close button -->
       <button

@@ -61,9 +61,15 @@ let unsubscribeUpdateAvailable: (() => void) | null = null
 let unsubscribeShowDialog: (() => void) | null = null
 
 let unsubscribeTextSelection: (() => void) | null = null
+let onMouseDown: ((e: MouseEvent) => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
 let onKeyDownMacMinimize: ((e: KeyboardEvent) => void) | null = null
+
+// Track mousedown position to distinguish real drag-selections from simple clicks.
+let mouseDownX = 0
+let mouseDownY = 0
+const MIN_DRAG_DISTANCE = 5 // px — must drag at least this far to count as a text selection
 
 /**
  * 主题变化监听 - 当主题切换时更新所有 assistant 标签页的默认图标
@@ -160,13 +166,29 @@ onMounted(async () => {
     }
   })
 
-  // In-app text selection: global mouseup listener (mouse hook skips our own windows).
-  onMouseUp = (e: MouseEvent) => {
-    // Only react to left button.
+  // In-app text selection: global mousedown + mouseup listeners.
+  // Mouse hook skips our own windows, so we handle in-app selection here.
+  // We track mousedown position and only show the popup when the user actually
+  // dragged to select text (not a simple click which would re-trigger with stale selection).
+  onMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
+    mouseDownX = e.screenX
+    mouseDownY = e.screenY
+  }
+  window.addEventListener('mousedown', onMouseDown, true)
+
+  onMouseUp = (e: MouseEvent) => {
+    if (e.button !== 0) return
+
+    // Ignore simple clicks — only react when the user dragged to make a new selection.
+    const dx = e.screenX - mouseDownX
+    const dy = e.screenY - mouseDownY
+    if (Math.sqrt(dx * dx + dy * dy) < MIN_DRAG_DISTANCE) return
+
     const sel = window.getSelection?.()
     const text = sel?.toString?.().trim?.() ?? ''
     if (!text) return
+
     // Best-effort: use screen coordinates so popup works for both main & other windows.
     // macOS: backend mouse hook uses physical pixels; browser events are in CSS pixels (points).
     const scale = System.IsMac() ? window.devicePixelRatio || 1 : 1
@@ -241,6 +263,10 @@ onUnmounted(() => {
   unsubscribeShowDialog?.()
   unsubscribeShowDialog = null
 
+  if (onMouseDown) {
+    window.removeEventListener('mousedown', onMouseDown, true)
+    onMouseDown = null
+  }
   if (onMouseUp) {
     window.removeEventListener('mouseup', onMouseUp, true)
     onMouseUp = null
