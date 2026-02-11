@@ -189,13 +189,13 @@ onMounted(async () => {
     const text = sel?.toString?.().trim?.() ?? ''
     if (!text) return
 
-    // Best-effort: use screen coordinates so popup works for both main & other windows.
-    // macOS: backend mouse hook uses physical pixels; browser events are in CSS pixels (points).
-    const scale = System.IsMac() ? window.devicePixelRatio || 1 : 1
+    // In-app text selection: use browser screen coordinates (DIP / CSS pixels).
+    // Backend showAtScreenPosInternal uses Wails DIP positioning for in-app selections.
+    // No scaling needed — browser screenX/Y are already in DIP on all platforms.
     void TextSelectionService.ShowAtScreenPos(
       text,
-      Math.round(e.screenX * scale),
-      Math.round(e.screenY * scale)
+      Math.round(e.screenX),
+      Math.round(e.screenY)
     )
   }
   window.addEventListener('mouseup', onMouseUp, true)

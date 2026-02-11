@@ -41,6 +41,7 @@ var (
 	procIsClipboardFormatAvailable    = modUser32.NewProc("IsClipboardFormatAvailable")
 	procGetCursorPos                  = modUser32.NewProc("GetCursorPos")
 	procGetPhysicalCursorPos          = modUser32.NewProc("GetPhysicalCursorPos")
+	procGetClipboardSequenceNumber    = modUser32.NewProc("GetClipboardSequenceNumber")
 	procGetDpiForSystem               = modUser32.NewProc("GetDpiForSystem")
 	procGetDeviceCaps                 = modUser32.NewProc("GetDeviceCaps")
 	procGetDC                         = modUser32.NewProc("GetDC")
@@ -240,6 +241,14 @@ func getClipboardText() string {
 	// Convert to string
 	text := windows.UTF16PtrToString((*uint16)(unsafe.Pointer(ptr)))
 	return text
+}
+
+// getClipboardSeqNo returns the current clipboard sequence number.
+// This number increments each time the clipboard content changes.
+// Comparing before/after a Ctrl+C simulation tells us whether text was actually selected.
+func getClipboardSeqNo() uint32 {
+	ret, _, _ := procGetClipboardSequenceNumber.Call()
+	return uint32(ret)
 }
 
 // GetCursorPos gets the current mouse position in physical (virtual screen) pixel coordinates.
