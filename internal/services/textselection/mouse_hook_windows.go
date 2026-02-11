@@ -31,6 +31,15 @@ type MouseHookWatcher struct {
 	lastMouseX    int32
 	lastMouseY    int32
 	dragDistance   int32 // Minimum drag distance threshold (in physical pixels)
+
+	// Screenshot-based selection detection.
+	// A small screen region is captured at mouse-down (before selection highlight)
+	// and compared at mouse-up. If pixels changed, text was likely selected.
+	beforePixels []byte // BGRA pixel data captured at mouse-down
+	captureX     int32  // capture region top-left X (physical px)
+	captureY     int32  // capture region top-left Y (physical px)
+	captureW     int32  // capture region width  (physical px)
+	captureH     int32  // capture region height (physical px)
 }
 
 var (
@@ -173,46 +182,63 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 		mouseHookInstanceMu.Unlock()
 
 		if w != nil {
-			hookStruct := (*msllHookStruct)(unsafe.Pointer(lParam))
-
 			switch wParam {
-			case wmLButtonDown:
-				w.mu.Lock()
-				w.isDragging = true
-				w.dragStartX = hookStruct.Pt.X
-				w.dragStartY = hookStruct.Pt.Y
-				w.dragStartTime = time.Now()
-				onDragStartWithPid := w.onDragStartWithPid
-				// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
-				scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
-				mouseX := int32(float64(hookStruct.Pt.X) / scale)
-				mouseY := int32(float64(hookStruct.Pt.Y) / scale)
-				w.mu.Unlock()
+		case wmLButtonDown:
+			// Use GetPhysicalCursorPos to always get physical screen coordinates,
+			// regardless of the hook thread's DPI awareness context.
+			// hookStruct.Pt may return system-DPI-logical coords on some setups,
+			// which causes incorrect positioning on multi-monitor with different DPIs.
+			physX, physY := GetPhysicalCursorPos()
 
-				// Notify drag start with mouse position for caller to check if inside popup
-				// On Windows, we pass -1 as PID (not needed, popup doesn't steal focus)
-				if onDragStartWithPid != nil {
-					go onDragStartWithPid(mouseX, mouseY, -1)
-				}
+			// Capture a small screen region around the cursor BEFORE selection starts.
+			// Low-level hook fires before the target app processes the click,
+			// so this snapshot is guaranteed to be the pre-selection state.
+			// BitBlt from screen DC does NOT include the mouse cursor,
+			// so cursor movement won't cause false pixel differences later.
+			const capW, capH int32 = 120, 30
+			capX := physX - capW/2
+			capY := physY - capH/2
+			pixels := captureScreenPixels(capX, capY, capW, capH)
+
+			w.mu.Lock()
+			w.isDragging = true
+			w.dragStartX = physX
+			w.dragStartY = physY
+			w.dragStartTime = time.Now()
+			w.beforePixels = pixels
+			w.captureX = capX
+			w.captureY = capY
+			w.captureW = capW
+			w.captureH = capH
+			onDragStartWithPid := w.onDragStartWithPid
+			mouseX := physX
+			mouseY := physY
+			w.mu.Unlock()
+
+			// Notify drag start with mouse position for caller to check if inside popup
+			// On Windows, we pass -1 as PID (not needed, popup doesn't steal focus)
+			if onDragStartWithPid != nil {
+				go onDragStartWithPid(mouseX, mouseY, -1)
+			}
 
 			case wmMouseMove:
+				physX, physY := GetPhysicalCursorPos()
 				w.mu.Lock()
-				w.lastMouseX = hookStruct.Pt.X
-				w.lastMouseY = hookStruct.Pt.Y
+				w.lastMouseX = physX
+				w.lastMouseY = physY
 				w.mu.Unlock()
 
 			case wmLButtonUp:
+				physX, physY := GetPhysicalCursorPos()
 				w.mu.Lock()
 				if w.isDragging {
-					dx := hookStruct.Pt.X - w.dragStartX
-					dy := hookStruct.Pt.Y - w.dragStartY
+					dx := physX - w.dragStartX
+					dy := physY - w.dragStartY
 					distance := dx*dx + dy*dy
 					dragDuration := time.Since(w.dragStartTime)
 
-					// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
-					scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
-					mouseX := int32(float64(hookStruct.Pt.X) / scale)
-					mouseY := int32(float64(hookStruct.Pt.Y) / scale)
+					mouseX := physX
+					mouseY := physY
 
 					// Multi-layer heuristic filtering to reduce false triggers:
 					//
@@ -272,7 +298,34 @@ func (w *MouseHookWatcher) handlePossibleSelection(mouseX, mouseY int32) {
 
 	// Check if using new mode (show popup then copy)
 	if showPopupCallback != nil {
-		// New mode: only show popup, don't execute Ctrl+C
+		// Validate that text was actually selected using screenshot comparison.
+		// Compare screen pixels captured at mouse-down (before selection) with
+		// pixels captured now (after selection). Text selection highlights cause
+		// visible pixel changes; dragging on desktop/images/non-text areas does not.
+		// This is completely passive — no Ctrl+C, no clipboard access.
+		w.mu.Lock()
+		before := w.beforePixels
+		cx, cy, cw, ch := w.captureX, w.captureY, w.captureW, w.captureH
+		w.beforePixels = nil // release memory
+		w.mu.Unlock()
+
+		if before != nil {
+			after := captureScreenPixels(cx, cy, cw, ch)
+
+			// Two-layer detection:
+			// 1. System highlight color check — catches standard Windows apps.
+			// 2. Uniform chromatic change — catches custom highlights
+			//    (DingTalk light-blue, VS Code dark-blue, etc.) while
+			//    rejecting gray/white changes from window moves & screenshot overlays.
+			sysMatch := hasSelectionHighlight(before, after, 0.02)
+			uniformMatch := hasUniformChromaticChange(before, after, 0.05)
+			if !sysMatch && !uniformMatch {
+				// Neither detection triggered → no text selected → skip
+				return
+			}
+		}
+
+		// Pixels changed — likely text was selected. Show popup.
 		// originalAppPid is set to -1 on Windows to indicate "other app"
 		showPopupCallback(mouseX, mouseY, -1)
 		return

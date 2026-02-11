@@ -503,7 +503,24 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 			// widgets whose rect would cause the Y-offset clamp to always trigger.
 			if childHeight >= mainHeight/2 && childHeight >= 300 {
 				windowRect = childRect
-				fmt.Printf("[SNAP_DEBUG]   using chatChild rect for Y calculation\n")
+
+				// SAFETY: Clamp child window bounds to the main window's visible area.
+				// EnumChildWindows enumerates ALL descendants (recursive). Some Chromium
+				// internal windows (GPU compositor layers, overlays) may extend beyond
+				// the main window rect. Using an unclamped bottom would make the click
+				// land below the visible window — possibly on the taskbar.
+				if windowRect.bottom > mainRect.bottom {
+					fmt.Printf("[SNAP_DEBUG]   chatChild bottom %d exceeds mainRect bottom %d, clamping\n",
+						windowRect.bottom, mainRect.bottom)
+					windowRect.bottom = mainRect.bottom
+				}
+				if windowRect.top < mainRect.top {
+					fmt.Printf("[SNAP_DEBUG]   chatChild top %d above mainRect top %d, clamping\n",
+						windowRect.top, mainRect.top)
+					windowRect.top = mainRect.top
+				}
+
+				fmt.Printf("[SNAP_DEBUG]   using chatChild rect for Y calculation (after clamp: B=%d)\n", windowRect.bottom)
 			} else {
 				fmt.Printf("[SNAP_DEBUG]   chatChild too small (h=%d < mainH/2=%d or <300), using mainRect\n", childHeight, mainHeight/2)
 			}
@@ -535,15 +552,29 @@ func clickInputAreaOfWindow(hwnd uintptr, offsetX, offsetY int, targetProcess st
 	// Calculate Y position: from bottom of the target (child or main) window
 	y := windowRect.bottom - int32(clickOffsetY)
 
-	// Make sure we're within the window
+	// Make sure we're within the window vertically
 	clamped := false
 	if y < windowRect.top+100 {
-		y = (windowRect.top + windowRect.bottom) / 2
+		// Fall back to 4/5 of the window height (bottom 1/5 region) — most chat apps
+		// place the input box in the bottom ~20% of the window.
+		y = mainRect.top + (mainRect.bottom-mainRect.top)*4/5
 		clamped = true
 	}
 
-	fmt.Printf("[SNAP_DEBUG]   FINAL click: x=%d y=%d (clamped=%v, windowRect={L:%d T:%d R:%d B:%d}, clickOffsetY=%d)\n",
-		x, y, clamped, windowRect.left, windowRect.top, windowRect.right, windowRect.bottom, clickOffsetY)
+	// Final safety net: ensure click Y never exceeds the MAIN window's visible bottom.
+	// This catches any case where the child window rect was larger than expected,
+	// even after the per-field clamp above (e.g. rounding, race with window resize).
+	if y > mainRect.bottom-10 {
+		y = mainRect.bottom - int32(clickOffsetY)
+		clamped = true
+		// If still out of bounds after recalculation, fall back to 4/5 of the window
+		if y < mainRect.top+100 || y > mainRect.bottom-10 {
+			y = mainRect.top + (mainRect.bottom-mainRect.top)*4/5
+		}
+	}
+
+	fmt.Printf("[SNAP_DEBUG]   FINAL click: x=%d y=%d (clamped=%v, windowRect={L:%d T:%d R:%d B:%d}, mainBottom=%d, clickOffsetY=%d)\n",
+		x, y, clamped, windowRect.left, windowRect.top, windowRect.right, windowRect.bottom, mainRect.bottom, clickOffsetY)
 
 	clickAtPosition(x, y)
 	return true

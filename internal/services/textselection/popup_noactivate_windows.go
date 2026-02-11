@@ -12,19 +12,25 @@ import (
 
 var (
 	procSetWindowLongPtrWNA = modUser32.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtrWNA = modUser32.NewProc("GetWindowLongPtrW")
 	procCallWindowProcW     = modUser32.NewProc("CallWindowProcW")
 )
 
 const (
 	gwlpWndProc = ^uintptr(3) // GWLP_WNDPROC = -4
+	gwlExStyle  = ^uintptr(19) // GWL_EXSTYLE = -20
 
 	wmMouseActivate = 0x0021
 	wmActivate      = 0x0006
 	wmNCActivate    = 0x0086
 	wmSetFocus      = 0x0007
+	wmDpiChanged    = 0x02E0 // WM_DPICHANGED
 
 	maNoActivate = 3
 	waInactive   = 0
+
+	wsExNoActivate = 0x08000000 // WS_EX_NOACTIVATE: prevents the window from being activated
+	wsExToolWindow = 0x00000080 // WS_EX_TOOLWINDOW: excluded from Alt+Tab
 )
 
 // Store original window procedures and hooked windows
@@ -70,6 +76,16 @@ func popupWndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		// Block WM_SETFOCUS to prevent Wails from calling Focus() on WebView2
 		// which causes "The parameter is incorrect" error
 		return 0
+
+	case wmDpiChanged:
+		// Block WM_DPICHANGED to prevent Wails from repositioning the popup.
+		// When the popup moves from one DPI monitor to another, Windows sends
+		// WM_DPICHANGED with a "suggested rect" (based on the old position).
+		// Wails handles this by calling SetWindowPos with the suggested rect,
+		// which overrides our intended position and drags the popup back to the
+		// original screen. Since we manage positioning ourselves via native
+		// SetWindowPos with physical pixel coordinates, we must suppress this.
+		return 0
 	}
 
 	// Call the original window procedure for all other messages
@@ -101,6 +117,14 @@ func tryConfigurePopupNoActivate(w *application.WebviewWindow) {
 	if _, exists := hookedWindows[h]; exists {
 		return
 	}
+
+	// Add WS_EX_NOACTIVATE extended style so that the system never activates
+	// this window, even on click.  Also add WS_EX_TOOLWINDOW to keep it out
+	// of Alt+Tab.  This is more fundamental than the WndProc hook alone
+	// because it prevents activation at the window-manager level before any
+	// messages are dispatched.
+	exStyle, _, _ := procGetWindowLongPtrWNA.Call(h, gwlExStyle)
+	procSetWindowLongPtrWNA.Call(h, gwlExStyle, exStyle|wsExNoActivate|wsExToolWindow)
 
 	// Replace the window procedure
 	originalWndProc, _, _ := procSetWindowLongPtrWNA.Call(h, gwlpWndProc, popupWndProcCallback)

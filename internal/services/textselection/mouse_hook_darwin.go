@@ -99,23 +99,10 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 			isDragging = true;
 			dragStartPoint = location;
 			dragStartTimestamp = CGEventGetTimestamp(event);
-			// Get Cocoa coordinates and convert to global screen pixel coordinates
+			// Use Cocoa points directly (global coordinate system, works across all monitors)
 			NSPoint mouseLoc = [NSEvent mouseLocation];
-			NSScreen *screen = nil;
-			for (NSScreen *s in [NSScreen screens]) {
-				if (NSPointInRect(mouseLoc, s.frame)) {
-					screen = s;
-					break;
-				}
-			}
-			if (screen == nil) {
-				screen = [NSScreen mainScreen];
-			}
-			CGFloat scale = screen.backingScaleFactor;
-			// Use primary screen height for Y-flip (global coordinate system)
-			CGFloat primaryH = [NSScreen screens][0].frame.size.height;
-			int mouseX = (int)(mouseLoc.x * scale);
-			int mouseY = (int)((primaryH - mouseLoc.y) * scale);
+			int mouseX = (int)(mouseLoc.x);
+			int mouseY = (int)(mouseLoc.y);
 
 			// Log mouse down event
 			dispatch_async(dispatch_get_main_queue(), ^{
@@ -185,26 +172,10 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 				// Record original app's PID for later wakeup
 				pid_t originalAppPid = frontApp.processIdentifier;
 
-				// Get Cocoa mouse position
+				// Use Cocoa points directly (global coordinate system, works across all monitors)
 				NSPoint mouseLoc = [NSEvent mouseLocation];
-
-				// Find screen containing mouse
-				NSScreen *screen = nil;
-				for (NSScreen *s in [NSScreen screens]) {
-					if (NSPointInRect(mouseLoc, s.frame)) {
-						screen = s;
-						break;
-					}
-				}
-				if (screen == nil) {
-					screen = [NSScreen mainScreen];
-				}
-
-				// Calculate global pixel coordinates (use primary screen height for Y-flip)
-				CGFloat scale = screen.backingScaleFactor;
-				CGFloat primaryH = [NSScreen screens][0].frame.size.height;
-				int x = (int)(mouseLoc.x * scale);
-				int y = (int)((primaryH - mouseLoc.y) * scale);
+				int x = (int)(mouseLoc.x);
+				int y = (int)(mouseLoc.y);
 
 				// Use showPopup callback (lazy copy mode: show popup first, copy on button click)
 				// This avoids polluting the user's clipboard during text selection.

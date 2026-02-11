@@ -26,37 +26,16 @@ static NSInteger getClipboardChangeCount() {
 	return [[NSPasteboard generalPasteboard] changeCount];
 }
 
-// Get cursor position (returns global pixel coordinates, top-left origin)
-// Uses primary screen height for Y-flip to ensure consistent global coordinates across all screens.
+// Get cursor position in Cocoa points (global coordinate system, Y from bottom).
+// Cocoa points work natively across all monitors without DPI conversion.
 static void getCursorPosition(int *x, int *y) {
-	// Get Cocoa mouse position (points, bottom-left origin, global coordinates)
 	NSPoint mouseLoc = [NSEvent mouseLocation];
-
-	// Find screen containing mouse (to get correct backing scale factor)
-	NSScreen *screen = nil;
-	for (NSScreen *s in [NSScreen screens]) {
-		if (NSPointInRect(mouseLoc, s.frame)) {
-			screen = s;
-			break;
-		}
-	}
-	if (screen == nil) {
-		screen = [NSScreen mainScreen];
-	}
-
-	CGFloat scale = screen.backingScaleFactor;
-
-	// Use primary screen height for Y-flip (global coordinate system)
-	CGFloat primaryH = [NSScreen screens][0].frame.size.height;
-
-	// Convert to global pixel coordinates
-	*x = (int)(mouseLoc.x * scale);
-	*y = (int)((primaryH - mouseLoc.y) * scale);
+	*x = (int)(mouseLoc.x);
+	*y = (int)(mouseLoc.y);
 }
 
-// Get screen scale factor
+// Get screen scale factor for the screen containing the mouse
 static double getScreenScale() {
-	// Get scale factor of screen containing mouse
 	NSPoint mouseLoc = [NSEvent mouseLocation];
 	NSScreen *screen = nil;
 	for (NSScreen *s in [NSScreen screens]) {

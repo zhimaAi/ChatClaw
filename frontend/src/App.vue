@@ -7,15 +7,80 @@ import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System, Window } from '@wailsio/runtime'
-import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
 const activeTab = computed(() => navigationStore.activeTab)
+
+// --- In-app text selection popup (HTML overlay, no separate window) ---
+const inAppPopup = ref({
+  visible: false,
+  text: '',
+  x: 0,
+  y: 0,
+})
+let inAppPopupHideTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Dispatch selected text to snap window or assistant page. */
+async function dispatchSelectedText(text: string) {
+  if (!text) return
+  try {
+    const status = await SnapService.GetStatus()
+    if (status.state === 'attached') {
+      void SnapService.WakeAttached()
+      Events.Emit('text-selection:send-to-snap', { text })
+    } else {
+      if (activeTab.value?.module !== 'assistant') {
+        navigationStore.navigateToModule('assistant')
+      }
+      Events.Emit('text-selection:send-to-assistant', { text })
+    }
+  } catch {
+    if (activeTab.value?.module !== 'assistant') {
+      navigationStore.navigateToModule('assistant')
+    }
+    Events.Emit('text-selection:send-to-assistant', { text })
+  }
+}
+
+function showInAppPopup(text: string, clientX: number, clientY: number) {
+  if (inAppPopupHideTimer) {
+    clearTimeout(inAppPopupHideTimer)
+    inAppPopupHideTimer = null
+  }
+  // Position popup above the cursor; clamp to viewport
+  const popW = 100
+  const popH = 36
+  const offset = 10
+  let x = clientX - popW / 2
+  let y = clientY - popH - offset
+  if (x < 4) x = 4
+  if (x + popW > window.innerWidth - 4) x = window.innerWidth - 4 - popW
+  if (y < 4) y = clientY + offset // show below cursor if no room above
+  inAppPopup.value = { visible: true, text, x, y }
+}
+
+function hideInAppPopup() {
+  inAppPopup.value.visible = false
+  if (inAppPopupHideTimer) {
+    clearTimeout(inAppPopupHideTimer)
+    inAppPopupHideTimer = null
+  }
+}
+
+function handleInAppPopupClick() {
+  const text = inAppPopup.value.text
+  hideInAppPopup()
+  if (text) {
+    dispatchSelectedText(text)
+  }
+}
 
 /**
  * 模块到组件的映射
@@ -174,29 +239,42 @@ onMounted(async () => {
     if (e.button !== 0) return
     mouseDownX = e.screenX
     mouseDownY = e.screenY
+
+    // Hide in-app popup when clicking outside of it
+    const popupEl = document.getElementById('in-app-selection-popup')
+    if (inAppPopup.value.visible && popupEl && !popupEl.contains(e.target as Node)) {
+      hideInAppPopup()
+    }
   }
   window.addEventListener('mousedown', onMouseDown, true)
 
   onMouseUp = (e: MouseEvent) => {
     if (e.button !== 0) return
 
+    // If clicking inside the in-app popup, let it handle the event
+    const popupEl = document.getElementById('in-app-selection-popup')
+    if (popupEl && popupEl.contains(e.target as Node)) return
+
     // Ignore simple clicks — only react when the user dragged to make a new selection.
     const dx = e.screenX - mouseDownX
     const dy = e.screenY - mouseDownY
-    if (Math.sqrt(dx * dx + dy * dy) < MIN_DRAG_DISTANCE) return
+    if (Math.sqrt(dx * dx + dy * dy) < MIN_DRAG_DISTANCE) {
+      // Simple click outside popup → hide it
+      hideInAppPopup()
+      return
+    }
 
     const sel = window.getSelection?.()
     const text = sel?.toString?.().trim?.() ?? ''
-    if (!text) return
+    if (!text) {
+      hideInAppPopup()
+      return
+    }
 
-    // Best-effort: use screen coordinates so popup works for both main & other windows.
-    // macOS: backend mouse hook uses physical pixels; browser events are in CSS pixels (points).
-    const scale = System.IsMac() ? window.devicePixelRatio || 1 : 1
-    void TextSelectionService.ShowAtScreenPos(
-      text,
-      Math.round(e.screenX * scale),
-      Math.round(e.screenY * scale)
-    )
+    // In-app text selection: show an HTML overlay popup inside the main window.
+    // This avoids creating a separate Wails window which would steal focus and
+    // prevent the user from using delete/copy after selecting text.
+    showInAppPopup(text, e.clientX, e.clientY)
   }
   window.addEventListener('mouseup', onMouseUp, true)
 
@@ -263,6 +341,12 @@ onUnmounted(() => {
   unsubscribeShowDialog?.()
   unsubscribeShowDialog = null
 
+  // Clean up in-app popup timer
+  if (inAppPopupHideTimer) {
+    clearTimeout(inAppPopupHideTimer)
+    inAppPopupHideTimer = null
+  }
+
   if (onMouseDown) {
     window.removeEventListener('mousedown', onMouseDown, true)
     onMouseDown = null
@@ -285,6 +369,23 @@ onUnmounted(() => {
 
 <template>
   <Toaster />
+
+  <!-- In-app text selection popup (HTML overlay, does not steal focus) -->
+  <Teleport to="body">
+    <div
+      v-if="inAppPopup.visible"
+      id="in-app-selection-popup"
+      class="fixed z-[9999] select-none"
+      :style="{ left: inAppPopup.x + 'px', top: inAppPopup.y + 'px' }"
+    >
+      <div
+        class="flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 shadow-sm transition-colors hover:bg-accent dark:shadow-none dark:ring-1 dark:ring-white/10"
+        @mousedown.prevent="handleInAppPopupClick"
+      >
+        <span class="text-sm font-medium text-foreground">{{ t('selection.aiChat') }}</span>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Global update dialog (new version / just updated) -->
   <UpdateDialog

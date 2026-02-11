@@ -167,12 +167,9 @@ func clickOutsideMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr 
 		clickOutsideInstanceMu.Unlock()
 
 		if w != nil {
-			hookStruct := (*clickHookStruct)(unsafe.Pointer(lParam))
-
-			// Get DPI scale factor, convert to logical pixels (use per-monitor DPI for multi-monitor support)
-			scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
-			x := int32(float64(hookStruct.Pt.X) / scale)
-			y := int32(float64(hookStruct.Pt.Y) / scale)
+			// Use GetPhysicalCursorPos to always get physical screen coordinates,
+			// matching the physical pixel coordinates stored in popupRect.
+			x, y := GetPhysicalCursorPos()
 
 			w.mu.Lock()
 			popupRect := w.popupRect

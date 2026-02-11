@@ -104,6 +104,12 @@ export function useSnapMode() {
     }
   }
 
+  // All snap settings keys
+  const allSnapKeys = [
+    'snap_wechat', 'snap_wecom', 'snap_qq',
+    'snap_dingtalk', 'snap_feishu', 'snap_douyin',
+  ]
+
   const findAndAttach = async () => {
     try {
       const key = await SnapService.FindSnapTarget()
@@ -111,32 +117,41 @@ export function useSnapMode() {
         toast.error(t('winsnap.toast.noSnapTarget'))
         return
       }
-      await SettingsService.SetValue(key, 'true')
+
+      // Disable all OTHER snap toggles first, then enable only the found one.
+      // This ensures the polling loop only tracks the newly-found target,
+      // preventing previously-enabled (but unintended) apps from being snapped.
+      const keysToDisable = allSnapKeys.filter((k) => k !== key)
+      await Promise.all([
+        ...keysToDisable.map((k) => SettingsService.SetValue(k, 'false')),
+        SettingsService.SetValue(key, 'true'),
+      ])
+
       await SnapService.SyncFromSettings()
+
+      // Optimistically mark as attached so the UI switches from
+      // "find" icon to "attached" icon immediately, preventing
+      // redundant find clicks while the async attach completes.
+      hasAttachedTarget.value = true
     } catch (error) {
       console.error('Failed to find and attach:', error)
       toast.error(t('winsnap.toast.attachFailed'))
     }
   }
 
-  // All snap settings keys
-  const allSnapKeys = [
-    'snap_wechat', 'snap_wecom', 'snap_qq',
-    'snap_dingtalk', 'snap_feishu', 'snap_douyin',
-  ]
-
   const closeSnapWindow = async () => {
     try {
-      // 1. Disable all snap toggles in settings
+      // Only disable the currently-attached target's toggle, not all toggles.
+      // Other apps' toggles remain unchanged so they can be reused later.
       const status = await SnapService.GetStatus()
-      const keysToDisable = status.enabledKeys?.length
-        ? status.enabledKeys
-        : allSnapKeys
-      await Promise.all(
-        keysToDisable.map((key) => SettingsService.SetValue(key, 'false'))
-      )
+      if (status.state === 'attached' && status.targetProcess) {
+        const settingsKey = processToSettingsKey[status.targetProcess]
+        if (settingsKey) {
+          await SettingsService.SetValue(settingsKey, 'false')
+        }
+      }
 
-      // 2. Stop snap service and hide window
+      // Stop snap service and hide window
       await SnapService.CloseSnapWindow()
       hasAttachedTarget.value = false
     } catch (error) {

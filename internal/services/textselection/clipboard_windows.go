@@ -40,6 +40,8 @@ var (
 	procGetClipboardData              = modUser32.NewProc("GetClipboardData")
 	procIsClipboardFormatAvailable    = modUser32.NewProc("IsClipboardFormatAvailable")
 	procGetCursorPos                  = modUser32.NewProc("GetCursorPos")
+	procGetPhysicalCursorPos          = modUser32.NewProc("GetPhysicalCursorPos")
+	procGetClipboardSequenceNumber    = modUser32.NewProc("GetClipboardSequenceNumber")
 	procGetDpiForSystem               = modUser32.NewProc("GetDpiForSystem")
 	procGetDeviceCaps                 = modUser32.NewProc("GetDeviceCaps")
 	procGetDC                         = modUser32.NewProc("GetDC")
@@ -241,17 +243,32 @@ func getClipboardText() string {
 	return text
 }
 
-// GetCursorPos gets the current mouse position (returns logical pixel coordinates, accounting for DPI scaling).
-// Uses per-monitor DPI for correct coordinates on multi-monitor setups with different DPI settings.
+// getClipboardSeqNo returns the current clipboard sequence number.
+// This number increments each time the clipboard content changes.
+// Comparing before/after a Ctrl+C simulation tells us whether text was actually selected.
+func getClipboardSeqNo() uint32 {
+	ret, _, _ := procGetClipboardSequenceNumber.Call()
+	return uint32(ret)
+}
+
+// GetCursorPos gets the current mouse position in physical (virtual screen) pixel coordinates.
+// No DPI conversion is applied; the Wails DIP conversion happens in the service layer.
 func GetCursorPos() (x, y int32) {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	return pt.X, pt.Y
+}
 
-	// Get DPI scale factor for the monitor containing the cursor
-	scale := getDPIScaleForPoint(pt.X, pt.Y)
-	if scale > 1.0 {
-		// Convert physical pixels to logical pixels
-		return int32(float64(pt.X) / scale), int32(float64(pt.Y) / scale)
+// GetPhysicalCursorPos gets the current cursor position in physical screen coordinates.
+// Unlike GetCursorPos, this ALWAYS returns physical pixels regardless of the calling
+// thread's DPI awareness context. Use this in mouse hooks where the DPI awareness
+// of the hook thread may not be Per-Monitor v2.
+func GetPhysicalCursorPos() (x, y int32) {
+	var pt point
+	ret, _, _ := procGetPhysicalCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	if ret == 0 {
+		// Fallback to GetCursorPos if GetPhysicalCursorPos fails
+		procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 	}
 	return pt.X, pt.Y
 }

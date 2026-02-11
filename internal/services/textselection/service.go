@@ -230,20 +230,21 @@ func (s *TextSelectionService) startWatcher() {
 			return
 		}
 
-		// On macOS coordinates are physical pixels, need to convert popup size to physical pixels
-		popWPx := popW
-		popHPx := popH
-		marginPx := int32(15)
-		if runtime.GOOS == "darwin" {
-			scale := getDPIScale()
-			popWPx = int(float64(popW) * scale)
-			popHPx = int(float64(popH) * scale)
-			marginPx = int32(15 * scale)
-		}
+		// Check if click is inside popup area (with some tolerance).
+		margin := int32(15)
+		var inPopup bool
 
-		// Check if click is inside popup area (with some tolerance)
-		inPopup := mouseX >= int32(popX)-marginPx && mouseX <= int32(popX+popWPx)+marginPx &&
-			mouseY >= int32(popY)-marginPx && mouseY <= int32(popY+popHPx)+marginPx
+		if runtime.GOOS == "darwin" {
+			// macOS: both mouseX/Y and popX/Y are in Cocoa points — direct comparison.
+			inPopup = mouseX >= int32(popX)-margin && mouseX <= int32(popX+popW)+margin &&
+				mouseY >= int32(popY)-margin && mouseY <= int32(popY+popH)+margin
+		} else {
+			// Windows: use native GetWindowRect for accurate physical pixel comparison.
+			// This avoids any DIP/physical conversion issues on multi-monitor setups.
+			left, top, right, bottom := getPopupWindowRect(w)
+			inPopup = mouseX >= left-margin && mouseX <= right+margin &&
+				mouseY >= top-margin && mouseY <= bottom+margin
+		}
 
 		// If click is inside popup, let the popup's frontend handle the click event
 		// (via @mousedown on the visible button). Don't call handleButtonClick() here
@@ -345,7 +346,8 @@ func (s *TextSelectionService) Show(text string, clientX, clientY int) {
 		finalY = screenY - popHeightPx - offsetPx
 	} else {
 		// Windows: standard screen coordinates (Y increases downward)
-		titleBarHeight := 32 // Windows standard title bar height (pixels)
+		// winX/winY from Position() are in DIP; clientX/clientY from DOM are also DIP
+		titleBarHeight := 32 // Windows standard title bar height (DIP)
 
 		screenX := winX + clientX
 		screenY := winY + titleBarHeight + clientY
@@ -353,8 +355,10 @@ func (s *TextSelectionService) Show(text string, clientX, clientY int) {
 		finalX = screenX - s.popWidth/2
 		finalY = screenY - s.popHeight - 10
 
-		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
-		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
+		// Basic bounds check: ensure popup is not above screen
+		if finalY < 0 {
+			finalY = screenY + 20 // Show below mouse instead
+		}
 	}
 
 	// Update popup's recorded position
@@ -389,12 +393,13 @@ func (s *TextSelectionService) ShowAtScreenPos(text string, screenX, screenY int
 }
 
 // showAtScreenPosInternal is the internal method that executes actual show operation in main thread.
+// NOTE: This is ONLY called from the frontend (App.vue) for in-app text selection.
+// The coordinates are browser screenX/screenY in DIP (CSS pixels).
+// For external (mouse hook) selections, use showPopupOnlyAtScreenPos instead.
 func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, screenY int) {
 	s.mu.Lock()
 	s.selectedText = text
-	s.originalAppPid = -1 // Mark as "other app selection" (not in-app selection)
-	s.popX = screenX
-	s.popY = screenY
+	s.originalAppPid = 0 // In-app selection (called from frontend)
 	app := s.app
 
 	// Cancel previous hide timer
@@ -408,42 +413,35 @@ func (s *TextSelectionService) showAtScreenPosInternal(text string, screenX, scr
 		return
 	}
 
-	app.Logger.Info("TextSelectionService.showAtScreenPosInternal", "text", text[:min(len(text), 20)], "screenX", screenX, "screenY", screenY)
+	app.Logger.Info("TextSelectionService.showAtScreenPosInternal (in-app DIP)", "text", text[:min(len(text), 20)], "screenX", screenX, "screenY", screenY)
 
-	var finalX, finalY int
+	// screenX/Y are DIP (browser CSS pixels) — use Wails DIP positioning.
+	// The popup is always on the same screen as the main window, so Wails positioning works fine.
+	finalX := screenX - s.popWidth/2
+	finalY := screenY - s.popHeight - 10
 
-	if runtime.GOOS == "darwin" {
-		// macOS coordinate handling (matching demo project approach):
-		// - Mouse hook (CGEventTap) returns physical pixels
-		// - Use physical pixels consistently for both SetPosition and click detection
-		// Note: Despite Wails docs saying SetPosition uses logical points,
-		//       the demo project uses physical pixels and it works correctly.
-		scale := getDPIScale()
-
-		// screenX/screenY are in physical pixels
-		// Calculate popup position in pixels
-		popWidthPx := int(float64(s.popWidth) * scale)
-		popHeightPx := int(float64(s.popHeight) * scale)
-		offsetPx := int(10 * scale)
-
-		// Use pixel coordinates directly (same as demo project)
-		finalX = screenX - popWidthPx/2
-		finalY = screenY - popHeightPx - offsetPx
-	} else {
-		// Windows: use logical pixels
-		finalX = screenX - s.popWidth/2
-		// Above mouse = mouseY - height - offset (Y increases downward)
-		finalY = screenY - s.popHeight - 10
-
-		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
-		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
+	// Basic bounds check
+	if finalY < 0 {
+		finalY = screenY + 20
 	}
+
+	s.mu.Lock()
+	s.popX = finalX
+	s.popY = finalY
+	s.mu.Unlock()
 
 	s.showPopupAt(finalX, finalY)
 }
 
-// showPopupAt shows the popup at the specified screen position.
-// On macOS, x/y are in physical pixels. On Windows, they are in logical pixels.
+// showPopupAt shows the popup at the specified screen position for IN-APP selections.
+// This is ONLY called from Show() (in-app text selection), where the popup always appears
+// on the same screen as the main window. Wails' DIP positioning works correctly in this case.
+//
+// For EXTERNAL selections (mouse hook), use showPopupPhysical (Windows) or
+// ensurePopWindowDarwinClamped (macOS) instead — those handle multi-monitor positioning
+// with native APIs.
+//
+// x/y are in Wails DIP (logical pixels) on all platforms.
 func (s *TextSelectionService) showPopupAt(x, y int) {
 	s.mu.Lock()
 	s.popX = x
@@ -453,22 +451,157 @@ func (s *TextSelectionService) showPopupAt(x, y int) {
 	popH := s.popHeight
 	s.mu.Unlock()
 
-	// Set window position
+	// In-app: use Wails SetPosition (DIP) — popup is always on same screen as main window
 	s.ensurePopWindow(x, y)
 
 	// Update click outside watcher's popup area
-	// On macOS, both x/y and click detection use physical pixels
 	if s.clickOutsideWatcher != nil {
-		rectW := popW
-		rectH := popH
-		if runtime.GOOS == "darwin" {
-			// Convert popup size to physical pixels
-			scale := getDPIScale()
-			rectW = int(float64(popW) * scale)
-			rectH = int(float64(popH) * scale)
+		if runtime.GOOS == "windows" {
+			// Windows: get actual physical rect from native API for accurate click detection
+			s.mu.RLock()
+			w := s.popWindow
+			s.mu.RUnlock()
+			left, top, right, bottom := getPopupWindowRect(w)
+			if right > left && bottom > top {
+				s.clickOutsideWatcher.SetPopupRect(left, top, right-left, bottom-top)
+			}
+		} else {
+			// macOS/other: use DIP coordinates (matching Wails' coordinate system)
+			s.clickOutsideWatcher.SetPopupRect(int32(x), int32(y), int32(popW), int32(popH))
 		}
-		s.clickOutsideWatcher.SetPopupRect(int32(x), int32(y), int32(rectW), int32(rectH))
 	}
+}
+
+// showPopupPhysical shows the popup at physical pixel coordinates (Windows external selection).
+// Uses native SetWindowPos to bypass Wails' DIP coordinate conversion which is inaccurate
+// on multi-monitor setups with different DPI.
+func (s *TextSelectionService) showPopupPhysical(physX, physY, physW, physH int) {
+	s.mu.Lock()
+	s.popX = physX
+	s.popY = physY
+	s.popupActive = true
+	app := s.app
+	s.mu.Unlock()
+
+	// Create/validate window (positioned off-screen initially)
+	w := s.ensurePopWindowCreate()
+	if w == nil {
+		return
+	}
+
+	if app != nil {
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical BEFORE SetWindowPos",
+			"targetX", physX, "targetY", physY, "targetW", physW, "targetH", physH)
+	}
+
+	// Position using native Win32 API (physical pixels, also sets HWND_TOPMOST)
+	setPopupPositionPhysical(w, physX, physY, physW, physH)
+
+	// Verify position after SetWindowPos
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical AFTER SetWindowPos (before Show)",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
+
+	// Use native ShowWindow(SW_SHOWNA) to avoid focus stealing.
+	// Wails' w.Show() may internally call ShowWindow(SW_SHOW) which activates the window.
+	showPopupNative(w)
+
+	// Verify position after Show
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical AFTER Show",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
+
+	// Re-assert position after Show to override any Wails interference
+	setPopupPositionPhysical(w, physX, physY, physW, physH)
+
+	// Verify final position
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical FINAL position",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
+
+	// Update click outside watcher (physical pixels match mouse hook coordinates)
+	if s.clickOutsideWatcher != nil {
+		s.clickOutsideWatcher.SetPopupRect(int32(physX), int32(physY), int32(physW), int32(physH))
+	}
+}
+
+// ensurePopWindowCreate creates or validates the popup window without positioning it.
+// Returns the window (ready for platform-specific positioning) or nil on failure.
+func (s *TextSelectionService) ensurePopWindowCreate() *application.WebviewWindow {
+	s.mu.Lock()
+	app := s.app
+	w := s.popWindow
+	opts := s.popOptions
+	s.mu.Unlock()
+
+	if app == nil {
+		return nil
+	}
+
+	// Check if existing window is still valid
+	needCreate := w == nil
+	if !needCreate {
+		nativeHandle := w.NativeWindow()
+		if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+			needCreate = true
+			s.mu.Lock()
+			s.popWindow = nil
+			s.mu.Unlock()
+			w = nil
+		}
+	}
+
+	if needCreate {
+		opts.X = -9999
+		opts.Y = -9999
+		opts.InitialPosition = application.WindowXY
+		opts.Hidden = true
+
+		w = app.Window.NewWithOptions(opts)
+		if w == nil {
+			return nil
+		}
+
+		tryConfigurePopupNoActivate(w)
+
+		s.mu.Lock()
+		s.popWindow = w
+		s.mu.Unlock()
+
+		w.RegisterHook(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+			if h := w.NativeWindow(); h != nil {
+				removePopupSubclass(uintptr(h))
+			}
+			s.mu.Lock()
+			if s.popWindow == w {
+				s.popWindow = nil
+			}
+			s.mu.Unlock()
+		})
+
+		if runtime.GOOS == "darwin" {
+			s.disableMacOSWindowTiling(w)
+		}
+	}
+
+	// Double-check validity
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		s.mu.Lock()
+		if s.popWindow == w {
+			s.popWindow = nil
+		}
+		s.mu.Unlock()
+		return nil
+	}
+
+	return w
 }
 
 // showPopupOnlyAtScreenPos shows the popup at the specified screen position WITHOUT copying text.
@@ -491,25 +624,57 @@ func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
 		return
 	}
 
-	var finalX, finalY int
-
 	if runtime.GOOS == "darwin" {
-		scale := getDPIScale()
-		popWidthPx := int(float64(s.popWidth) * scale)
-		popHeightPx := int(float64(s.popHeight) * scale)
-		offsetPx := int(10 * scale)
+		// macOS: screenX/Y are Cocoa points (global, Y from bottom).
+		// Use ensurePopWindowDarwinClamped which detects the correct screen at mouse position,
+		// clamps the popup to that screen's visible frame, and positions + makes topmost
+		// in a single atomic main-thread operation.
+		s.mu.Lock()
+		popW := s.popWidth
+		popH := s.popHeight
+		s.popX = screenX - popW/2
+		s.popY = screenY + 10
+		s.popupActive = true
+		s.mu.Unlock()
 
-		finalX = screenX - popWidthPx/2
-		finalY = screenY - popHeightPx - offsetPx
+		s.ensurePopWindowDarwinClamped(screenX, screenY, popW, popH)
+
+		// Update click outside watcher
+		if s.clickOutsideWatcher != nil {
+			s.mu.RLock()
+			px, py := s.popX, s.popY
+			s.mu.RUnlock()
+			s.clickOutsideWatcher.SetPopupRect(int32(px), int32(py), int32(popW), int32(popH))
+		}
 	} else {
-		finalX = screenX - s.popWidth/2
-		finalY = screenY - s.popHeight - 10
+		// Windows: screenX/Y are physical (virtual screen) pixels.
+		// Work entirely in physical pixels and use native SetWindowPos (bypass Wails DIP).
+		scale := getDPIScaleForPoint(int32(screenX), int32(screenY))
+		physW := int(float64(s.popWidth) * scale)
+		physH := int(float64(s.popHeight) * scale)
+		offsetPx := int(10.0 * scale)
 
-		// Ensure popup doesn't exceed screen bounds (multi-monitor aware)
-		finalX, finalY = clampToWorkArea(finalX, finalY, s.popWidth, s.popHeight, screenX, screenY)
+		finalX := screenX - physW/2
+		finalY := screenY - physH - offsetPx
+
+		if app != nil {
+			wa := getWorkAreaAtPoint(screenX, screenY)
+			app.Logger.Info("[POPUP-DEBUG] showPopupOnlyAtScreenPos (using GetPhysicalCursorPos)",
+				"physMouseX", screenX, "physMouseY", screenY,
+				"dpiScale", scale,
+				"physW", physW, "physH", physH,
+				"beforeClampX", finalX, "beforeClampY", finalY,
+				"workAreaX", wa.X, "workAreaY", wa.Y, "workAreaW", wa.Width, "workAreaH", wa.Height)
+		}
+
+		finalX, finalY = clampToWorkArea(finalX, finalY, physW, physH, screenX, screenY)
+
+		if app != nil {
+			app.Logger.Info("[POPUP-DEBUG] afterClamp", "finalX", finalX, "finalY", finalY)
+		}
+
+		s.showPopupPhysical(finalX, finalY, physW, physH)
 	}
-
-	s.showPopupAt(finalX, finalY)
 }
 
 // Hide hides the popup.
@@ -784,8 +949,99 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 	}
 
 	w.SetPosition(x, y)
-	w.Show()
+	// Use native show to avoid focus stealing (Wails' Show() may activate the window)
+	showPopupNative(w)
 	forcePopupTopMostNoActivate(w)
+}
+
+// ensurePopWindowCreateDarwin creates or retrieves the popup window on macOS.
+// Returns nil if the window cannot be created.
+func (s *TextSelectionService) ensurePopWindowCreateDarwin() *application.WebviewWindow {
+	s.mu.Lock()
+	app := s.app
+	w := s.popWindow
+	opts := s.popOptions
+	s.mu.Unlock()
+
+	if app == nil {
+		return nil
+	}
+
+	// Check if existing window is still valid
+	needCreate := w == nil
+	if !needCreate {
+		nativeHandle := w.NativeWindow()
+		if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+			needCreate = true
+			s.mu.Lock()
+			s.popWindow = nil
+			s.mu.Unlock()
+			w = nil
+		}
+	}
+
+	// If window doesn't exist or is invalid, create new window
+	if needCreate {
+		// Create at a default position; we'll move it right after
+		opts.X = 0
+		opts.Y = 0
+		opts.InitialPosition = application.WindowXY
+		opts.Hidden = true
+
+		w = app.Window.NewWithOptions(opts)
+		if w == nil {
+			return nil
+		}
+
+		tryConfigurePopupNoActivate(w)
+
+		s.mu.Lock()
+		s.popWindow = w
+		s.mu.Unlock()
+
+		w.RegisterHook(events.Common.WindowClosing, func(_ *application.WindowEvent) {
+			if h := w.NativeWindow(); h != nil {
+				removePopupSubclass(uintptr(h))
+			}
+			s.mu.Lock()
+			if s.popWindow == w {
+				s.popWindow = nil
+			}
+			s.mu.Unlock()
+		})
+
+		s.disableMacOSWindowTiling(w)
+	}
+
+	// Double-check window is still valid
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		s.mu.Lock()
+		if s.popWindow == w {
+			s.popWindow = nil
+		}
+		s.mu.Unlock()
+		return nil
+	}
+
+	return w
+}
+
+// ensurePopWindowDarwinClamped creates window and positions it at the correct screen
+// based on mouse position, with clamping to the screen's visible frame.
+// Used for external (mouse hook) selections where multi-monitor screen detection is needed.
+// mouseX/mouseY: raw mouse position in Cocoa points (global, Y from bottom).
+// popW/popH: popup dimensions in Cocoa points.
+func (s *TextSelectionService) ensurePopWindowDarwinClamped(mouseX, mouseY, popW, popH int) {
+	w := s.ensurePopWindowCreateDarwin()
+	if w == nil {
+		return
+	}
+	// Show window first (let Wails initialize), then position + clamp + topmost
+	// in a single atomic dispatch_async(main_queue) block via native Cocoa API.
+	// This avoids race conditions where Wails' Show() overrides our position.
+	showPopupNative(w)
+	showPopupClampedCocoa(w, mouseX, mouseY, popW, popH)
 }
 
 // disableMacOSWindowTiling disables window tiling management on macOS.

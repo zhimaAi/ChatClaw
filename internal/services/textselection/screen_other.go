@@ -20,9 +20,13 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 	return WorkArea{X: -10000, Y: -10000, Width: 30000, Height: 30000}
 }
 
-// clampToWorkArea ensures the popup position is within the work area bounds.
-// On non-Windows platforms, this is a no-op as macOS handles coordinates differently.
+// clampToWorkArea is a no-op on non-Windows platforms.
+// macOS uses Cocoa's unified coordinate system which handles multi-monitor natively.
 func clampToWorkArea(popX, popY, popWidth, popHeight, mouseX, mouseY int) (int, int) {
-	// macOS uses a unified coordinate system, no clamping needed
 	return popX, popY
+}
+
+// getDPIScaleForPoint is only meaningful on Windows; returns 1.0 on other platforms.
+func getDPIScaleForPoint(_, _ int32) float64 {
+	return 1.0
 }
