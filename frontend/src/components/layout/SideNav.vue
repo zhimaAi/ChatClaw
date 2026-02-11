@@ -8,8 +8,9 @@
  */
 
 type SvgComponent = any
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useNavigationStore, type NavModule } from '@/stores'
+import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -18,6 +19,7 @@ import IconSettings from '@/assets/icons/settings.svg'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
+const appStore = useAppStore()
 
 /**
  * 导航项配置
@@ -26,12 +28,14 @@ interface NavItem {
   key: NavModule
   labelKey: string
   icon: SvgComponent
+  /** If true, this item is only shown in GUI (desktop) mode */
+  guiOnly?: boolean
 }
 
 /**
  * 顶部导航项（AI助手、知识库、多问）
  */
-const topNavItems: NavItem[] = [
+const allTopNavItems: NavItem[] = [
   {
     key: 'assistant',
     labelKey: 'nav.assistant',
@@ -46,8 +50,14 @@ const topNavItems: NavItem[] = [
     key: 'multiask',
     labelKey: 'nav.multiask',
     icon: IconMultiask,
+    guiOnly: true,
   },
 ]
+
+// Filter out GUI-only items when running in server mode
+const topNavItems = computed(() =>
+  allTopNavItems.filter((item) => !item.guiOnly || appStore.isGUIMode)
+)
 
 /**
  * 底部导航项（设置）

@@ -24,6 +24,16 @@ func IsProd() bool {
 	return Env == "production"
 }
 
+// IsServerMode 是否为 server（HTTP）运行模式
+func IsServerMode() bool {
+	return RunMode == "server"
+}
+
+// IsGUIMode 是否为 GUI（桌面）运行模式
+func IsGUIMode() bool {
+	return RunMode == "gui"
+}
+
 // DefaultAgentPromptForLocale returns the built-in default agent prompt for the given locale.
 // Used by both seed migration and runtime agent creation to keep them in sync.
 func DefaultAgentPromptForLocale(locale string) string {

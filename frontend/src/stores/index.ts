@@ -1,4 +1,4 @@
-export { useAppStore, type Theme } from './app'
+export { useAppStore, type Theme, type RunMode } from './app'
 export {
   useChatStore,
   MessageStatus,
