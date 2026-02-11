@@ -12,11 +12,13 @@ import (
 
 var (
 	procSetWindowLongPtrWNA = modUser32.NewProc("SetWindowLongPtrW")
+	procGetWindowLongPtrWNA = modUser32.NewProc("GetWindowLongPtrW")
 	procCallWindowProcW     = modUser32.NewProc("CallWindowProcW")
 )
 
 const (
 	gwlpWndProc = ^uintptr(3) // GWLP_WNDPROC = -4
+	gwlExStyle  = ^uintptr(19) // GWL_EXSTYLE = -20
 
 	wmMouseActivate = 0x0021
 	wmActivate      = 0x0006
@@ -26,6 +28,9 @@ const (
 
 	maNoActivate = 3
 	waInactive   = 0
+
+	wsExNoActivate = 0x08000000 // WS_EX_NOACTIVATE: prevents the window from being activated
+	wsExToolWindow = 0x00000080 // WS_EX_TOOLWINDOW: excluded from Alt+Tab
 )
 
 // Store original window procedures and hooked windows
@@ -112,6 +117,14 @@ func tryConfigurePopupNoActivate(w *application.WebviewWindow) {
 	if _, exists := hookedWindows[h]; exists {
 		return
 	}
+
+	// Add WS_EX_NOACTIVATE extended style so that the system never activates
+	// this window, even on click.  Also add WS_EX_TOOLWINDOW to keep it out
+	// of Alt+Tab.  This is more fundamental than the WndProc hook alone
+	// because it prevents activation at the window-manager level before any
+	// messages are dispatched.
+	exStyle, _, _ := procGetWindowLongPtrWNA.Call(h, gwlExStyle)
+	procSetWindowLongPtrWNA.Call(h, gwlExStyle, exStyle|wsExNoActivate|wsExToolWindow)
 
 	// Replace the window procedure
 	originalWndProc, _, _ := procSetWindowLongPtrWNA.Call(h, gwlpWndProc, popupWndProcCallback)

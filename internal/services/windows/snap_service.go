@@ -484,22 +484,36 @@ func (s *SnapService) stop() error {
 	return nil
 }
 
-// CloseSnapWindow stops the snap service entirely and hides the window.
-// The caller (frontend) is responsible for disabling snap toggles in settings
-// before calling this method.
+// CloseSnapWindow hides the snap window and detaches from the current target.
+// The caller (frontend) is responsible for disabling the current target's
+// toggle in settings before calling this method.
+//
+// After hiding, the service re-reads persistent settings. If other snap
+// toggles are still enabled, the polling loop keeps running so the window
+// can reappear when one of those apps becomes foreground.
 func (s *SnapService) CloseSnapWindow() error {
 	// 1. Stop everything: polling loop + attach controller + hide window
 	_ = s.stop()
 
-	// 2. Clear enabled lists in status
+	// 2. Re-read persistent settings — the caller only disabled the current
+	//    target's toggle; other apps may still be enabled.
+	enabledKeys, enabledTargets := readSnapTargetsFromSettings()
+
 	s.mu.Lock()
-	s.enabledKeys = nil
-	s.enabledTargets = nil
-	s.status.EnabledKeys = nil
-	s.status.EnabledTargets = nil
+	s.enabledKeys = enabledKeys
+	s.enabledTargets = enabledTargets
+	s.status.EnabledKeys = append([]string(nil), enabledKeys...)
+	s.status.EnabledTargets = append([]string(nil), enabledTargets...)
 	s.mu.Unlock()
 
-	// 3. Emit events so frontend updates UI
+	// 3. If other targets are still enabled, restart the polling loop.
+	//    The window (hidden by stop()) will reappear automatically when
+	//    one of those targets becomes the foreground window.
+	if len(enabledTargets) > 0 {
+		_ = s.ensureRunning()
+	}
+
+	// 4. Emit events so frontend updates UI
 	s.app.Event.Emit("snap:state-changed", map[string]interface{}{
 		"state":         string(SnapStateStopped),
 		"targetProcess": "",

@@ -23,7 +23,25 @@ const (
 
 var procShowWindowPopup = modUser32.NewProc("ShowWindow")
 
-const swHidePopup = 0 // SW_HIDE
+const (
+	swHidePopup = 0 // SW_HIDE
+	swShowNA    = 8 // SW_SHOWNA: show window without activating it
+)
+
+// showPopupNative shows the popup window without activating it.
+// Uses native ShowWindow(SW_SHOWNA) instead of Wails' w.Show() which may
+// internally call ShowWindow(SW_SHOW) and trigger window activation, stealing
+// focus from the previously active window (e.g. main chat window).
+func showPopupNative(w *application.WebviewWindow) {
+	if w == nil {
+		return
+	}
+	h := uintptr(w.NativeWindow())
+	if h == 0 {
+		return
+	}
+	procShowWindowPopup.Call(h, swShowNA)
+}
 
 // hidePopupNative hides the popup window using native ShowWindow(SW_HIDE).
 // We use native API instead of Wails' w.Hide() because Wails Hide() internally

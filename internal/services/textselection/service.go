@@ -504,7 +504,9 @@ func (s *TextSelectionService) showPopupPhysical(physX, physY, physW, physH int)
 			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
 	}
 
-	w.Show()
+	// Use native ShowWindow(SW_SHOWNA) to avoid focus stealing.
+	// Wails' w.Show() may internally call ShowWindow(SW_SHOW) which activates the window.
+	showPopupNative(w)
 
 	// Verify position after Show
 	if app != nil {
@@ -947,7 +949,8 @@ func (s *TextSelectionService) ensurePopWindow(x, y int) {
 	}
 
 	w.SetPosition(x, y)
-	w.Show()
+	// Use native show to avoid focus stealing (Wails' Show() may activate the window)
+	showPopupNative(w)
 	forcePopupTopMostNoActivate(w)
 }
 
@@ -1037,7 +1040,7 @@ func (s *TextSelectionService) ensurePopWindowDarwinClamped(mouseX, mouseY, popW
 	// Show window first (let Wails initialize), then position + clamp + topmost
 	// in a single atomic dispatch_async(main_queue) block via native Cocoa API.
 	// This avoids race conditions where Wails' Show() overrides our position.
-	w.Show()
+	showPopupNative(w)
 	showPopupClampedCocoa(w, mouseX, mouseY, popW, popH)
 }
 
