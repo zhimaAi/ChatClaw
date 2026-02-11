@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
+	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
 	"chatclaw/internal/services/browser"
@@ -132,6 +133,14 @@ type Options struct {
 // NewApp 创建并初始化应用
 // 返回 app 实例和 cleanup 函数（用于关闭数据库等资源）
 func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
+	// 初始化日志（文件 + 控制台双写；生产模式仅写文件）
+	appLogger, logCleanup, err := logger.New()
+	if err != nil {
+		// Fallback: if file logger fails, continue without it (Wails will use its default).
+		appLogger = nil
+		logCleanup = func() {}
+	}
+
 	// 初始化多语言（设置全局语言）
 	i18nService := i18n.NewService(opts.Locale)
 
@@ -145,6 +154,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app = application.New(application.Options{
 		Name:        "ChatClaw",
 		Description: "ChatClaw Desktop App",
+		Logger:      appLogger,
 		Services: []application.Service{
 			application.NewService(greet.NewGreetService("Hello, ")),
 			application.NewService(i18nService),
@@ -458,5 +468,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 			tm.StopNow()
 		}
 		sqlite.Close()
+		// Close log file last so all shutdown logs are captured.
+		logCleanup()
 	}, nil
 }
