@@ -6,7 +6,7 @@ import (
 	"log"
 	"runtime"
 
-	"willclaw/internal/bootstrap"
+	"chatclaw/internal/bootstrap"
 )
 
 //go:embed all:frontend/dist

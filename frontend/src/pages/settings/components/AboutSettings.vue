@@ -6,10 +6,10 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronRight } from 'lucide-vue-next'
-import { BrowserService } from '@bindings/willclaw/internal/services/browser'
-import { AppService } from '@bindings/willclaw/internal/services/app'
-import { SettingsService } from '@bindings/willclaw/internal/services/settings'
-import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
+import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
+import { AppService } from '@bindings/chatclaw/internal/services/app'
+import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -23,7 +23,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 // Official website
-const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/WillClaw'
+const OFFICIAL_WEBSITE = 'https://github.com/zhimaAi/ChatClaw'
 
 // Application version
 const appVersion = ref('...')

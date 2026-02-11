@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"willclaw/internal/eino/filesystem"
-	"willclaw/internal/eino/tools"
-	"willclaw/internal/errs"
+	"chatclaw/internal/eino/filesystem"
+	"chatclaw/internal/eino/tools"
+	"chatclaw/internal/errs"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"

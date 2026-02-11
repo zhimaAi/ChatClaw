@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"willclaw/internal/errs"
+	"chatclaw/internal/errs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -30,7 +30,7 @@ type StreamPayload struct {
 
 // WinsnapChatService provides streaming chat events for the winsnap window.
 //
-// Current implementation simulates the willclaw-manage streaming API.
+// Current implementation simulates the chatclaw-manage streaming API.
 // Later we can replace simulateStream() with an actual HTTP streaming client.
 type WinsnapChatService struct {
 	app *application.App

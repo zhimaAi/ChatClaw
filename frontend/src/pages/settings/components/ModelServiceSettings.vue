@@ -7,8 +7,8 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import type {
   Provider,
   ProviderWithModels,
-} from '@/../bindings/willclaw/internal/services/providers'
-import { ProvidersService } from '@/../bindings/willclaw/internal/services/providers'
+} from '@/../bindings/chatclaw/internal/services/providers'
+import { ProvidersService } from '@/../bindings/chatclaw/internal/services/providers'
 
 const { t } = useI18n()
 

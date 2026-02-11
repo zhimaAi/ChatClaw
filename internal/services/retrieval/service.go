@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"willclaw/internal/fts/tokenizer"
+	"chatclaw/internal/fts/tokenizer"
 
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/uptrace/bun"

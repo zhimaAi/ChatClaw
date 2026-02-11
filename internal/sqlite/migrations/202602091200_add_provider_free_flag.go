@@ -7,7 +7,7 @@ import (
 )
 
 // 202602091200_add_provider_free_flag
-// Add `is_free` flag to providers table and mark ChatWiki as free provider.
+// Add `is_free` flag to providers table and mark ChatClaw as free provider.
 func init() {
 	Migrations.MustRegister(
 		func(ctx context.Context, db *bun.DB) error {
@@ -19,11 +19,11 @@ ADD COLUMN is_free boolean NOT NULL DEFAULT 0;
 				return err
 			}
 
-			// Mark ChatWiki provider as free.
+			// Mark ChatClaw provider as free.
 			if _, err := db.ExecContext(ctx, `
 UPDATE providers
 SET is_free = 1
-WHERE provider_id = 'chatwiki';
+WHERE provider_id = 'chatclaw';
 `); err != nil {
 				return err
 			}

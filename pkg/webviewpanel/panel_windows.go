@@ -229,7 +229,7 @@ func (p *windowsPanelImpl) setupChromium() {
 			base = "."
 		}
 		panelID := fmt.Sprintf("panel-%d", p.panel.id)
-		p.chromium.DataPath = filepath.Join(base, "chatwiki-panels", panelID)
+		p.chromium.DataPath = filepath.Join(base, "chatclaw-panels", panelID)
 	}
 	// Prevent os.Exit on WebView2 errors; log instead
 	p.chromium.SetErrorCallback(func(err error) {

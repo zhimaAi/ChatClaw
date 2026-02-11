@@ -2,8 +2,8 @@ import { computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { type Locale } from '../locales'
-import { Service as I18nService } from '@bindings/willclaw/internal/services/i18n'
-import { SettingsService } from '@bindings/willclaw/internal/services/settings'
+import { Service as I18nService } from '@bindings/chatclaw/internal/services/i18n'
+import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
 const DEFAULT_LOCALE: Locale = 'zh-CN'
 

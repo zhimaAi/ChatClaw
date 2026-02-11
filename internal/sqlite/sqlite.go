@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"willclaw/internal/define"
-	"willclaw/internal/sqlite/migrations"
+	"chatclaw/internal/define"
+	"chatclaw/internal/sqlite/migrations"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"

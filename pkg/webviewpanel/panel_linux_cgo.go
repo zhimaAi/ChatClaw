@@ -12,8 +12,8 @@ package webviewpanel
 #include <string.h>
 
 // Data keys on GtkWindow
-static const char *WV_OVERLAY_KEY = "chatwiki_wvpanel_overlay";
-static const char *WV_FIXED_KEY   = "chatwiki_wvpanel_fixed";
+static const char *WV_OVERLAY_KEY = "chatclaw_wvpanel_overlay";
+static const char *WV_FIXED_KEY   = "chatclaw_wvpanel_fixed";
 
 typedef struct wvpanel {
   GtkWindow *window;

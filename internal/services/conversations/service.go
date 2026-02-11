@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"willclaw/internal/errs"
-	"willclaw/internal/sqlite"
+	"chatclaw/internal/errs"
+	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"

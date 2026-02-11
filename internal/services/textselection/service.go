@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"willclaw/internal/services/settings"
-	"willclaw/internal/services/windows"
+	"chatclaw/internal/services/settings"
+	"chatclaw/internal/services/windows"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"

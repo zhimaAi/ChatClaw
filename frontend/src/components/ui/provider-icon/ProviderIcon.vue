@@ -59,8 +59,8 @@ const builtinIcons: Record<string, SvgComponent> = {
   baidu: BaiduIcon,
   grok: GrokIcon,
   ollama: OllamaIcon,
-  // Use app logo for ChatWiki to avoid cropped/incomplete rendering.
-  chatwiki: AppLogoIcon,
+  // Use app logo for ChatClaw to avoid cropped/incomplete rendering.
+  chatclaw: AppLogoIcon,
   // AI 模型图标（用于多问页面，使用 model- 前缀区分）
   'model-chatgpt': ChatgptModelIcon,
   'model-claude': ClaudeModelIcon,

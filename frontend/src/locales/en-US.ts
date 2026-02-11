@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'WillClaw',
+    title: 'ChatClaw',
     theme: 'Theme',
   },
   common: {
@@ -49,7 +49,7 @@ export default {
     },
   },
   winsnap: {
-    title: 'WillClaw',
+    title: 'ChatClaw',
     assistantName: 'Soul Kitchen Assistant',
     cancelSnap: 'Cancel Snap',
     snapApp: 'Snap to App',
@@ -197,8 +197,8 @@ export default {
     // About Us
     about: {
       title: 'About Us',
-      appName: 'WillClaw',
-      copyright: '© 2026 WillClaw Sesame Network Technology  All rights reserved',
+      appName: 'ChatClaw',
+      copyright: '© 2026 ChatClaw Sesame Network Technology  All rights reserved',
       officialWebsite: 'Official Website',
       view: 'View',
       checkUpdate: 'Check for Updates',

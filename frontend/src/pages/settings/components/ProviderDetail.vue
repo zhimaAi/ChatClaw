@@ -18,14 +18,14 @@ import type {
   Provider,
   ProviderWithModels,
   Model,
-} from '@/../bindings/willclaw/internal/services/providers'
+} from '@/../bindings/chatclaw/internal/services/providers'
 import {
   ProvidersService,
   UpdateProviderInput,
   CheckAPIKeyInput,
   CreateModelInput,
   UpdateModelInput,
-} from '@/../bindings/willclaw/internal/services/providers'
+} from '@/../bindings/chatclaw/internal/services/providers'
 import ModelFormDialog from './ModelFormDialog.vue'
 import {
   AlertDialog,
@@ -37,8 +37,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { SettingsService } from '@/../bindings/willclaw/internal/services/settings'
-import { AgentsService } from '@bindings/willclaw/internal/services/agents'
+import { SettingsService } from '@/../bindings/chatclaw/internal/services/settings'
+import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 
 // Azure extra_config 类型
 interface AzureExtraConfig {
@@ -75,23 +75,23 @@ const isAzure = computed(() => props.providerWithModels?.provider.provider_id ==
 // 判断是否为 Ollama（Ollama 不需要 API Key）
 const isOllama = computed(() => props.providerWithModels?.provider.provider_id === 'ollama')
 
-// 判断是否为 ChatWiki（ChatWiki 支持一键生成密钥）
-const isChatWiki = computed(() => props.providerWithModels?.provider.provider_id === 'chatwiki')
+// 判断是否为 ChatClaw（ChatClaw 支持一键生成密钥）
+const isChatClaw = computed(() => props.providerWithModels?.provider.provider_id === 'chatclaw')
 
 // 检测按钮是否禁用
 const isCheckDisabled = computed(
   () => isSaving.value || isChecking.value || (!isOllama.value && !localApiKey.value.trim())
 )
 
-// 生成 ChatWiki API 密钥
+// 生成 ChatClaw API 密钥
 const isGeneratingKey = ref(false)
-const handleGenerateChatWikiKey = async () => {
-  if (!props.providerWithModels || props.providerWithModels.provider.provider_id !== 'chatwiki')
+const handleGenerateChatClawKey = async () => {
+  if (!props.providerWithModels || props.providerWithModels.provider.provider_id !== 'chatclaw')
     return
 
   isGeneratingKey.value = true
   try {
-    const key = await ProvidersService.GenerateChatWikiAPIKey()
+    const key = await ProvidersService.GenerateChatClawAPIKey()
     localApiKey.value = key
     // Auto-save
     const updated = await ProvidersService.UpdateProvider(
@@ -103,7 +103,7 @@ const handleGenerateChatWikiKey = async () => {
       toast.success(t('settings.modelService.generateApiKeySuccess'))
     }
   } catch (error) {
-    console.error('Failed to generate ChatWiki API key:', error)
+    console.error('Failed to generate ChatClaw API key:', error)
     toast.error(getErrorMessage(error))
   } finally {
     isGeneratingKey.value = false
@@ -145,8 +145,8 @@ watch(
 const isFormValid = computed(() => {
   if (!props.providerWithModels) return false
 
-  // Ollama 不需要 API Key；ChatWiki 应用初始化时自动生成密钥，无需检测
-  if (isOllama.value || isChatWiki.value) {
+  // Ollama 不需要 API Key；ChatClaw 应用初始化时自动生成密钥，无需检测
+  if (isOllama.value || isChatClaw.value) {
     return true
   }
 
@@ -173,7 +173,7 @@ const isFormValid = computed(() => {
 const validationMessage = computed(() => {
   if (!props.providerWithModels) return ''
 
-  if (isOllama.value || isChatWiki.value) return ''
+  if (isOllama.value || isChatClaw.value) return ''
 
   if (!localApiKey.value.trim()) {
     return t('settings.modelService.apiKeyRequired')
@@ -258,11 +258,11 @@ const handleToggle = async (checked: boolean) => {
     return
   }
 
-  // 如果要关闭，需要检查是否被使用（ChatWiki 关闭时无需验证）
+  // 如果要关闭，需要检查是否被使用（ChatClaw 关闭时无需验证）
   if (!checked) {
     const pid = props.providerWithModels.provider.provider_id
-    if (pid === 'chatwiki') {
-      // ChatWiki: allow disable without validation
+    if (pid === 'chatclaw') {
+      // ChatClaw: allow disable without validation
       localEnabled.value = checked
       void saveEnabled(checked)
       return
@@ -636,17 +636,17 @@ const confirmDeleteModel = async () => {
                 </button>
               </div>
               <Button
-                v-if="isChatWiki"
+                v-if="isChatClaw"
                 variant="outline"
                 :disabled="isGeneratingKey || isSaving"
                 class="min-w-[72px]"
-                @click="handleGenerateChatWikiKey"
+                @click="handleGenerateChatClawKey"
               >
                 <LoaderCircle v-if="isGeneratingKey" class="size-4 animate-spin" />
                 <span v-else>{{ t('settings.modelService.generateApiKey') }}</span>
               </Button>
               <Button
-                v-if="!isChatWiki"
+                v-if="!isChatClaw"
                 variant="outline"
                 :disabled="isCheckDisabled"
                 class="min-w-[72px]"
@@ -701,8 +701,8 @@ const confirmDeleteModel = async () => {
             />
           </div>
 
-          <!-- 添加模型按钮（ChatWiki 模型仅通过接口获取，不支持添加） -->
-          <div v-if="!isChatWiki" class="flex">
+          <!-- 添加模型按钮（ChatClaw 模型仅通过接口获取，不支持添加） -->
+          <div v-if="!isChatClaw" class="flex">
             <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddModel">
               <Plus class="size-4" />
               {{ t('settings.modelService.addModel') }}
@@ -733,9 +733,9 @@ const confirmDeleteModel = async () => {
                         <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{
                           model.name
                         }}</span>
-                        <!-- 编辑和删除按钮（仅对非内置模型显示，ChatWiki 模型禁止编辑删除） -->
+                        <!-- 编辑和删除按钮（仅对非内置模型显示，ChatClaw 模型禁止编辑删除） -->
                         <div
-                          v-if="!isChatWiki && !model.is_builtin"
+                          v-if="!isChatClaw && !model.is_builtin"
                           class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                         >
                           <button

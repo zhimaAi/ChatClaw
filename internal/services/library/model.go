@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"willclaw/internal/sqlite"
+	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
 )

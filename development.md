@@ -1,4 +1,4 @@
-# WillClaw
+# ChatClaw
 
 ## 前置依赖
 
@@ -107,16 +107,16 @@ wails3 task darwin:sign UNIVERSAL=true DEV=true  # wails3 task darwin:sign:notar
 {cmd}_{os}_{arch}.{ext}
 ```
 
-其中 `{cmd}` = 可执行文件名（`WillClaw`），`{os}` / `{arch}` 为 Go 标准命名。
+其中 `{cmd}` = 可执行文件名（`ChatClaw`），`{os}` / `{arch}` 为 Go 标准命名。
 
 | 平台            | 文件名                              |
 |----------------|-------------------------------------|
-| macOS arm64    | `WillClaw_darwin_arm64.tar.gz`      |
-| macOS amd64    | `WillClaw_darwin_amd64.tar.gz`      |
-| Windows amd64  | `WillClaw_windows_amd64.zip`        |
-| Windows arm64  | `WillClaw_windows_arm64.zip`        |
-| Linux amd64    | `WillClaw_linux_amd64.tar.gz`       |
-| Linux arm64    | `WillClaw_linux_arm64.tar.gz`       |
+| macOS arm64    | `ChatClaw_darwin_arm64.tar.gz`      |
+| macOS amd64    | `ChatClaw_darwin_amd64.tar.gz`      |
+| Windows amd64  | `ChatClaw_windows_amd64.zip`        |
+| Windows arm64  | `ChatClaw_windows_arm64.zip`        |
+| Linux amd64    | `ChatClaw_linux_amd64.tar.gz`       |
+| Linux arm64    | `ChatClaw_linux_arm64.tar.gz`       |
 
 ### 制作更新资产示例（macOS arm64）
 
@@ -126,7 +126,7 @@ wails3 task darwin:sign:notarize ARCH=arm64 DEV=false
 
 # 2. 打包为 tar.gz（仅包含二进制）
 cd bin
-tar -czf WillClaw_darwin_arm64.tar.gz -C WillClaw.app/Contents/MacOS WillClaw
+tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
 cd ..
 ```
 
@@ -138,7 +138,7 @@ wails3 task windows:build ARCH=amd64 DEV=false
 
 # 2. 打包为 zip（仅包含二进制）
 cd bin
-zip WillClaw_windows_amd64.zip WillClaw.exe
+zip ChatClaw_windows_amd64.zip ChatClaw.exe
 cd ..
 ```
 

@@ -11,28 +11,28 @@ import (
 	"sync"
 	"time"
 
-	"willclaw/internal/define"
-	"willclaw/internal/services/agents"
-	appservice "willclaw/internal/services/app"
-	"willclaw/internal/services/browser"
-	"willclaw/internal/services/chat"
-	"willclaw/internal/services/conversations"
-	"willclaw/internal/services/document"
-	"willclaw/internal/services/floatingball"
-	"willclaw/internal/services/greet"
-	"willclaw/internal/services/i18n"
-	"willclaw/internal/services/library"
-	"willclaw/internal/services/multiask"
-	"willclaw/internal/services/providers"
-	"willclaw/internal/services/settings"
-	"willclaw/internal/services/textselection"
-	"willclaw/internal/services/tray"
-	"willclaw/internal/services/updater"
-	"willclaw/internal/services/windows"
-	"willclaw/internal/services/winsnapchat"
-	"willclaw/internal/sqlite"
-	"willclaw/internal/taskmanager"
-	"willclaw/pkg/winutil"
+	"chatclaw/internal/define"
+	"chatclaw/internal/services/agents"
+	appservice "chatclaw/internal/services/app"
+	"chatclaw/internal/services/browser"
+	"chatclaw/internal/services/chat"
+	"chatclaw/internal/services/conversations"
+	"chatclaw/internal/services/document"
+	"chatclaw/internal/services/floatingball"
+	"chatclaw/internal/services/greet"
+	"chatclaw/internal/services/i18n"
+	"chatclaw/internal/services/library"
+	"chatclaw/internal/services/multiask"
+	"chatclaw/internal/services/providers"
+	"chatclaw/internal/services/settings"
+	"chatclaw/internal/services/textselection"
+	"chatclaw/internal/services/tray"
+	"chatclaw/internal/services/updater"
+	"chatclaw/internal/services/windows"
+	"chatclaw/internal/services/winsnapchat"
+	"chatclaw/internal/sqlite"
+	"chatclaw/internal/taskmanager"
+	"chatclaw/pkg/winutil"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -143,8 +143,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 创建应用实例
 	app = application.New(application.Options{
-		Name:        "WillClaw",
-		Description: "WillClaw Desktop App",
+		Name:        "ChatClaw",
+		Description: "ChatClaw Desktop App",
 		Services: []application.Service{
 			application.NewService(greet.NewGreetService("Hello, ")),
 			application.NewService(i18nService),
@@ -179,14 +179,14 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("sqlite init: %w", err)
 	}
 
-	// ChatWiki: default enabled, auto-generate API key at startup
-	if err := providers.EnsureChatWikiInitialized(); err != nil {
-		app.Logger.Warn("EnsureChatWikiInitialized failed (non-fatal)", "error", err)
+	// ChatClaw: default enabled, auto-generate API key at startup
+	if err := providers.EnsureChatClawInitialized(); err != nil {
+		app.Logger.Warn("EnsureChatClawInitialized failed (non-fatal)", "error", err)
 	}
-	// ChatWiki: refresh model cache on every app start (add/update/delete). Async, silent; errors only logged.
+	// ChatClaw: refresh model cache on every app start (add/update/delete). Async, silent; errors only logged.
 	go func() {
-		if err := providers.NewProvidersService(app).SyncChatWikiModels(); err != nil {
-			app.Logger.Warn("SyncChatWikiModels failed (non-fatal)", "error", err)
+		if err := providers.NewProvidersService(app).SyncChatClawModels(); err != nil {
+			app.Logger.Warn("SyncChatClawModels failed (non-fatal)", "error", err)
 		}
 	}()
 
@@ -212,9 +212,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("init task manager: %w", err)
 	}
 
-	// ========== ChatWiki embedding 全局设置对齐 ==========
+	// ========== ChatClaw embedding 全局设置对齐 ==========
 	// 约束：
-	// - embedding provider/model 来自 ChatWiki 的模型列表（已在启动时 SyncChatWikiModels 刷新到本地 models 表）
+	// - embedding provider/model 来自 ChatClaw 的模型列表（已在启动时 SyncChatClawModels 刷新到本地 models 表）
 	// - embedding dimension 固定为 1024
 	// - 通过 SettingsService.UpdateEmbeddingConfig 更新 settings +（必要时）重建 doc_vec + 提交全量重嵌入任务
 	{
@@ -227,25 +227,25 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 			err := db.NewSelect().
 				Table("models").
 				Column("model_id").
-				Where("provider_id = ?", "chatwiki").
+				Where("provider_id = ?", "chatclaw").
 				Where("type = ?", "embedding").
 				Where("enabled = ?", true).
 				OrderExpr("sort_order ASC").
 				Limit(1).
 				Scan(ctx, &embeddingModelID)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				app.Logger.Warn("query chatwiki embedding model failed (non-fatal)", "error", err)
+				app.Logger.Warn("query chatclaw embedding model failed (non-fatal)", "error", err)
 			} else if embeddingModelID.Valid && strings.TrimSpace(embeddingModelID.String) != "" {
 				if err := settings.NewSettingsService(app).UpdateEmbeddingConfig(settings.UpdateEmbeddingConfigInput{
-					ProviderID: "chatwiki",
+					ProviderID: "chatclaw",
 					ModelID:    embeddingModelID.String,
 					Dimension:  1024,
 				}); err != nil {
-					app.Logger.Warn("sync chatwiki embedding settings failed (non-fatal)", "error", err)
+					app.Logger.Warn("sync chatclaw embedding settings failed (non-fatal)", "error", err)
 				}
 			} else {
-				// No embedding models available from ChatWiki cache; keep existing settings.
-				app.Logger.Warn("no chatwiki embedding model found; keep existing embedding settings")
+				// No embedding models available from ChatClaw cache; keep existing settings.
+				app.Logger.Warn("no chatclaw embedding model found; keep existing embedding settings")
 			}
 		}
 	}
@@ -397,7 +397,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		_, _ = textSelectionService.SyncFromSettings()
 		// 初始化多问服务（需要窗口已创建，在后台进行以避免阻塞）
 		go func() {
-			if err := multiaskService.Initialize("WillClaw"); err != nil {
+			if err := multiaskService.Initialize("ChatClaw"); err != nil {
 				app.Logger.Error("Failed to initialize multiask service", "error", err)
 			}
 		}()

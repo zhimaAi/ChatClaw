@@ -114,7 +114,7 @@ watch(providersWithModels, () => {
   selectDefaultModel(activeAgent.value, null)
 })
 
-// Whether the currently selected model's provider is free (e.g. ChatWiki)
+// Whether the currently selected model's provider is free (e.g. ChatClaw)
 const selectedProviderIsFree = computed(() => {
   if (!selectedModelInfo.value?.providerId || !providersWithModels.value?.length) return false
   const pw = providersWithModels.value.find((p) => p.provider?.provider_id === selectedModelInfo.value?.providerId)

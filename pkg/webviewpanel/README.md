@@ -35,7 +35,7 @@ WebviewPanel 是一个独立的 Go 包，允许在 Wails v3 应用程序的单�
 ### 1. 获取窗口句柄
 
 ```go
-import "chatwiki/pkg/webviewpanel"
+import "chatclaw/pkg/webviewpanel"
 
 // 通过窗口标题查找
 hwnd := webviewpanel.FindWindowByTitle("My Window Title")
@@ -147,11 +147,11 @@ manager.DestroyAll()
 当 wails PR #4880 合并后，迁移步骤（建议做法）：
 
 #### 迁移目标
-把自定义实现 `chatwiki/pkg/webviewpanel` 迁移到官方 `github.com/wailsapp/wails/v3/pkg/application`（PR #4880 新增的 `WebviewPanel`）。
+把自定义实现 `chatclaw/pkg/webviewpanel` 迁移到官方 `github.com/wailsapp/wails/v3/pkg/application`（PR #4880 新增的 `WebviewPanel`）。
 
 #### 需要改哪些点
 1. **import 替换**
-   - 从 `chatwiki/pkg/webviewpanel`
+   - 从 `chatclaw/pkg/webviewpanel`
    - 改为 `github.com/wailsapp/wails/v3/pkg/application`
 
 2. **创建方式替换（核心差异）**
@@ -170,7 +170,7 @@ manager.DestroyAll()
 本仓库：
 
 ```go
-import "chatwiki/pkg/webviewpanel"
+import "chatclaw/pkg/webviewpanel"
 
 hwnd := webviewpanel.FindWindowByTitle("Main")
 manager := webviewpanel.NewPanelManager(hwnd, true)
@@ -208,7 +208,7 @@ panel := mainWindow.NewPanel(application.WebviewPanelOptions{
 ### 基本用法
 
 ```go
-import "chatwiki/pkg/webviewpanel"
+import "chatclaw/pkg/webviewpanel"
 
 // 创建多标签浏览器
 browser := webviewpanel.NewTabBrowser(hwnd, webviewpanel.TabBrowserConfig{

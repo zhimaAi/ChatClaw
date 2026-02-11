@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"willclaw/internal/define"
-	"willclaw/internal/device"
-	"willclaw/internal/errs"
-	"willclaw/internal/sqlite"
+	"chatclaw/internal/define"
+	"chatclaw/internal/device"
+	"chatclaw/internal/errs"
+	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -33,7 +33,7 @@ import (
 var (
 	// Enable provider HTTP request logs (may include endpoint URLs and response previews).
 	// DO NOT enable in production by default.
-	debugProviders = os.Getenv("WILLCLAW_DEBUG_PROVIDERS") == "1"
+	debugProviders = os.Getenv("CHATCLAW_DEBUG_PROVIDERS") == "1"
 )
 
 // ProvidersService 供应商服务（暴露给前端调用）
@@ -86,47 +86,47 @@ func (s *ProvidersService) ListProviders() ([]Provider, error) {
 	return out, nil
 }
 
-// chatWikiAPIKeyPayload ChatWiki API key plaintext structure
-type chatWikiAPIKeyPayload struct {
+// chatClawAPIKeyPayload ChatClaw API key plaintext structure
+type chatClawAPIKeyPayload struct {
 	UserID string `json:"user_id"`
 	UserIP string `json:"user_ip"`
 }
 
-// generateChatWikiAPIKeyInternal generates API key (used by both GenerateChatWikiAPIKey and EnsureChatWikiInitialized)
-func generateChatWikiAPIKeyInternal() (string, error) {
+// generateChatClawAPIKeyInternal generates API key (used by both GenerateChatClawAPIKey and EnsureChatClawInitialized)
+func generateChatClawAPIKeyInternal() (string, error) {
 	clientID, err := device.GetClientID()
 	if err != nil {
-		return "", errs.Wrap("error.chatwiki_generate_key_failed", err)
+		return "", errs.Wrap("error.chatclaw_generate_key_failed", err)
 	}
 
 	userIP, err := fetchPublicIP()
 	if err != nil {
 		// Network may be restricted (e.g., no global internet access). Do not block key generation.
-		// ChatWiki model list endpoint can be public; other endpoints may still work without IP binding.
+		// ChatClaw model list endpoint can be public; other endpoints may still work without IP binding.
 		userIP = ""
 	}
 
-	payload := chatWikiAPIKeyPayload{
+	payload := chatClawAPIKeyPayload{
 		UserID: clientID,
 		UserIP: strings.TrimSpace(userIP),
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {
-		return "", errs.Wrap("error.chatwiki_generate_key_failed", err)
+		return "", errs.Wrap("error.chatclaw_generate_key_failed", err)
 	}
 
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-// GenerateChatWikiAPIKey generates API key for chatwiki provider.
+// GenerateChatClawAPIKey generates API key for chatclaw provider.
 // Plaintext: {"user_id":"<device_id>","user_ip":"<public_ip>"}, then base64 encoded.
-func (s *ProvidersService) GenerateChatWikiAPIKey() (string, error) {
-	return generateChatWikiAPIKeyInternal()
+func (s *ProvidersService) GenerateChatClawAPIKey() (string, error) {
+	return generateChatClawAPIKeyInternal()
 }
 
-// EnsureChatWikiInitialized ensures chatwiki provider has API key at app startup.
+// EnsureChatClawInitialized ensures chatclaw provider has API key at app startup.
 // Called during bootstrap after sqlite init. If api_key is empty, generates and saves.
-func EnsureChatWikiInitialized() error {
+func EnsureChatClawInitialized() error {
 	db := sqlite.DB()
 	if db == nil {
 		return nil // sqlite not ready, skip
@@ -138,7 +138,7 @@ func EnsureChatWikiInitialized() error {
 	var m providerModel
 	err := db.NewSelect().
 		Model(&m).
-		Where("provider_id = ?", "chatwiki").
+		Where("provider_id = ?", "chatclaw").
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
@@ -152,14 +152,14 @@ func EnsureChatWikiInitialized() error {
 		return nil // already has key
 	}
 
-	key, err := generateChatWikiAPIKeyInternal()
+	key, err := generateChatClawAPIKeyInternal()
 	if err != nil {
 		return err
 	}
 
 	_, err = db.NewUpdate().
 		Model((*providerModel)(nil)).
-		Where("provider_id = ?", "chatwiki").
+		Where("provider_id = ?", "chatclaw").
 		Set("api_key = ?", key).
 		Set("updated_at = ?", sqlite.NowUTC()).
 		Exec(ctx)
@@ -276,7 +276,7 @@ func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 	return &dto, nil
 }
 
-// GetProviderWithModels 获取供应商及其模型列表（含 ChatWiki 在内，一律从本地 DB 读取；ChatWiki 免费模型在应用启动时由 SyncChatWikiModels 同步一次）
+// GetProviderWithModels 获取供应商及其模型列表（含 ChatClaw 在内，一律从本地 DB 读取；ChatClaw 免费模型在应用启动时由 SyncChatClawModels 同步一次）
 func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWithModels, error) {
 	provider, err := s.GetProvider(providerID)
 	if err != nil {
@@ -327,37 +327,37 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	}, nil
 }
 
-// SyncChatWikiModels fetches ChatWiki model list and syncs it to local `models` table.
+// SyncChatClawModels fetches ChatClaw model list and syncs it to local `models` table.
 // This is intended to be called at app startup to keep the local cache fresh.
-func (s *ProvidersService) SyncChatWikiModels() error {
-	provider, err := s.GetProvider("chatwiki")
+func (s *ProvidersService) SyncChatClawModels() error {
+	provider, err := s.GetProvider("chatclaw")
 	if err != nil {
-		// If ChatWiki provider doesn't exist, skip.
+		// If ChatClaw provider doesn't exist, skip.
 		// (Return nil instead of surfacing provider_not_found at startup.)
 		return nil
 	}
-	groups, err := s.fetchChatWikiModels(provider)
+	groups, err := s.fetchChatClawModels(provider)
 	if err != nil {
 		return err
 	}
-	return s.syncChatWikiModelsToDB(provider.ProviderID, groups)
+	return s.syncChatClawModelsToDB(provider.ProviderID, groups)
 }
 
-type chatWikiRemoteModel struct {
+type chatClawRemoteModel struct {
 	ModelID   string
 	Name      string
 	Type      string
 	SortOrder int
 }
 
-func (s *ProvidersService) flattenChatWikiGroups(groups []ModelGroup) []chatWikiRemoteModel {
+func (s *ProvidersService) flattenChatClawGroups(groups []ModelGroup) []chatClawRemoteModel {
 	// Use per-type ordering so `sort_order` is stable within each type.
 	perTypeOrder := map[string]int{
 		"llm":       0,
 		"embedding": 0,
 		"rerank":    0,
 	}
-	out := make([]chatWikiRemoteModel, 0, 64)
+	out := make([]chatClawRemoteModel, 0, 64)
 	for _, g := range groups {
 		t := strings.TrimSpace(strings.ToLower(g.Type))
 		for _, m := range g.Models {
@@ -378,7 +378,7 @@ func (s *ProvidersService) flattenChatWikiGroups(groups []ModelGroup) []chatWiki
 			}
 			sort := perTypeOrder[t]
 			perTypeOrder[t] = sort + 1
-			out = append(out, chatWikiRemoteModel{
+			out = append(out, chatClawRemoteModel{
 				ModelID:   modelID,
 				Name:      name,
 				Type:      t,
@@ -415,14 +415,14 @@ func truncateString(s string, max int) string {
 	return string(r[:max]) + "...(truncated)"
 }
 
-func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []ModelGroup) error {
+func (s *ProvidersService) syncChatClawModelsToDB(providerID string, groups []ModelGroup) error {
 	db, err := s.db()
 	if err != nil {
 		return err
 	}
 
-	remote := s.flattenChatWikiGroups(groups)
-	remoteMap := make(map[string]chatWikiRemoteModel, len(remote))
+	remote := s.flattenChatClawGroups(groups)
+	remoteMap := make(map[string]chatClawRemoteModel, len(remote))
 	for _, r := range remote {
 		remoteMap[r.ModelID] = r
 	}
@@ -437,7 +437,7 @@ func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []Mo
 			Model(&existing).
 			Where("provider_id = ?", providerID).
 			Scan(ctx); err != nil {
-			return errs.Wrap("error.chatwiki_model_sync_failed", err)
+			return errs.Wrap("error.chatclaw_model_sync_failed", err)
 		}
 
 		existingMap := make(map[string]modelModel, len(existing))
@@ -458,7 +458,7 @@ func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []Mo
 				Where("provider_id = ?", providerID).
 				Where("model_id IN (?)", bun.In(part)).
 				Exec(ctx); err != nil {
-				return errs.Wrap("error.chatwiki_model_sync_failed", err)
+				return errs.Wrap("error.chatclaw_model_sync_failed", err)
 			}
 		}
 
@@ -495,7 +495,7 @@ func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []Mo
 						Set("is_builtin = ?", true).
 						Set("updated_at = ?", sqlite.NowUTC()).
 						Exec(ctx); err != nil {
-						return errs.Wrap("error.chatwiki_model_sync_failed", err)
+						return errs.Wrap("error.chatclaw_model_sync_failed", err)
 					}
 				}
 				continue
@@ -529,7 +529,7 @@ func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []Mo
 			if _, err := tx.NewInsert().
 				Model(&part).
 				Exec(ctx); err != nil {
-				return errs.Wrap("error.chatwiki_model_sync_failed", err)
+				return errs.Wrap("error.chatclaw_model_sync_failed", err)
 			}
 		}
 
@@ -537,8 +537,8 @@ func (s *ProvidersService) syncChatWikiModelsToDB(providerID string, groups []Mo
 	})
 }
 
-// chatWikiModelItem /custom-model/list API response item
-type chatWikiModelItem struct {
+// chatClawModelItem /custom-model/list API response item
+type chatClawModelItem struct {
 	ModelID   string `json:"model_id"`
 	ID        string `json:"id"` // alternative field
 	ModelName string `json:"modelName"` // display name
@@ -547,17 +547,17 @@ type chatWikiModelItem struct {
 	Type      string `json:"type"`      // fallback
 }
 
-// chatWikiModelListResponse /custom-model/list API response (supports data or models array)
-type chatWikiModelListResponse struct {
-	Data   []chatWikiModelItem `json:"data"`
-	Models []chatWikiModelItem `json:"models"`
+// chatClawModelListResponse /custom-model/list API response (supports data or models array)
+type chatClawModelListResponse struct {
+	Data   []chatClawModelItem `json:"data"`
+	Models []chatClawModelItem `json:"models"`
 }
 
-// fetchChatWikiModels fetches models from ChatWiki /custom-model/list API
-func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup, error) {
+// fetchChatClawModels fetches models from ChatClaw /custom-model/list API
+func (s *ProvidersService) fetchChatClawModels(provider *Provider) ([]ModelGroup, error) {
 	baseURL := strings.TrimSuffix(strings.TrimSpace(provider.APIEndpoint), "/")
 	if baseURL == "" {
-		return nil, errs.New("error.chatwiki_api_endpoint_required")
+		return nil, errs.New("error.chatclaw_api_endpoint_required")
 	}
 	// API address is already configured (including openapi base if needed); only append the path.
 	url := baseURL + "/custom-model/list"
@@ -567,7 +567,7 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
+		return nil, errs.Newf("error.chatclaw_model_list_failed", map[string]any{"Status": err.Error()})
 	}
 	// Model list endpoint may be public. Only attach Authorization if we have a key.
 	hasAuth := strings.TrimSpace(provider.APIKey) != ""
@@ -578,7 +578,7 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 
 	if debugProviders {
 		s.app.Logger.Info(
-			"ChatWiki model list request",
+			"ChatClaw model list request",
 			"provider_id", provider.ProviderID,
 			"url", url,
 			"timeout_seconds", 15,
@@ -590,14 +590,14 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	if err != nil {
 		if debugProviders {
 			s.app.Logger.Warn(
-				"ChatWiki model list request failed",
+				"ChatClaw model list request failed",
 				"provider_id", provider.ProviderID,
 				"url", url,
 				"elapsed_ms", time.Since(start).Milliseconds(),
 				"error", err,
 			)
 		}
-		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
+		return nil, errs.Newf("error.chatclaw_model_list_failed", map[string]any{"Status": err.Error()})
 	}
 	defer resp.Body.Close()
 
@@ -610,7 +610,7 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 		}
 		if debugProviders {
 			s.app.Logger.Warn(
-				"ChatWiki model list unexpected status",
+				"ChatClaw model list unexpected status",
 				"provider_id", provider.ProviderID,
 				"url", url,
 				"status", resp.StatusCode,
@@ -618,26 +618,26 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 				"response_preview", preview,
 			)
 		}
-		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": resp.StatusCode})
+		return nil, errs.Newf("error.chatclaw_model_list_failed", map[string]any{"Status": resp.StatusCode})
 	}
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		if debugProviders {
 			s.app.Logger.Warn(
-				"ChatWiki model list read body failed",
+				"ChatClaw model list read body failed",
 				"provider_id", provider.ProviderID,
 				"url", url,
 				"elapsed_ms", time.Since(start).Milliseconds(),
 				"error", err,
 			)
 		}
-		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
+		return nil, errs.Newf("error.chatclaw_model_list_failed", map[string]any{"Status": err.Error()})
 	}
 
 	if debugProviders {
 		s.app.Logger.Info(
-			"ChatWiki model list response received",
+			"ChatClaw model list response received",
 			"provider_id", provider.ProviderID,
 			"url", url,
 			"status", resp.StatusCode,
@@ -648,24 +648,24 @@ func (s *ProvidersService) fetchChatWikiModels(provider *Provider) ([]ModelGroup
 	}
 
 	// Try object with data/models
-	var respObj chatWikiModelListResponse
+	var respObj chatClawModelListResponse
 	if err := json.Unmarshal(b, &respObj); err == nil {
 		items := respObj.Data
 		if len(items) == 0 {
 			items = respObj.Models
 		}
-		return s.chatWikiModelsToGroups(items, provider.ProviderID)
+		return s.chatClawModelsToGroups(items, provider.ProviderID)
 	}
 
 	// Try direct array
-	var items []chatWikiModelItem
+	var items []chatClawModelItem
 	if err := json.Unmarshal(b, &items); err != nil {
-		return nil, errs.Newf("error.chatwiki_model_list_failed", map[string]any{"Status": err.Error()})
+		return nil, errs.Newf("error.chatclaw_model_list_failed", map[string]any{"Status": err.Error()})
 	}
-	return s.chatWikiModelsToGroups(items, provider.ProviderID)
+	return s.chatClawModelsToGroups(items, provider.ProviderID)
 }
 
-func (s *ProvidersService) chatWikiModelsToGroups(items []chatWikiModelItem, providerID string) ([]ModelGroup, error) {
+func (s *ProvidersService) chatClawModelsToGroups(items []chatClawModelItem, providerID string) ([]ModelGroup, error) {
 	groupMap := make(map[string][]Model)
 	perTypeOrder := map[string]int{
 		"llm":       0,
@@ -674,7 +674,7 @@ func (s *ProvidersService) chatWikiModelsToGroups(items []chatWikiModelItem, pro
 	}
 	for _, item := range items {
 		// IMPORTANT:
-		// ChatWiki: Persist into local `models` table using modelName as `model_id`.
+		// ChatClaw: Persist into local `models` table using modelName as `model_id`.
 		// Do NOT use API `id` value, since the frontend expects a stable, human-readable model key.
 		modelID := strings.TrimSpace(item.ModelName)
 		if modelID == "" {
@@ -737,8 +737,8 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 禁止关闭正在作为"全局嵌入模型"使用的供应商（ChatWiki 关闭时无需验证）
-	if input.Enabled != nil && !*input.Enabled && providerID != "chatwiki" {
+	// 禁止关闭正在作为"全局嵌入模型"使用的供应商（ChatClaw 关闭时无需验证）
+	if input.Enabled != nil && !*input.Enabled && providerID != "chatclaw" {
 		type row struct {
 			Key   string         `bun:"key"`
 			Value sql.NullString `bun:"value"`
@@ -1061,8 +1061,8 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
 	}
-	if providerID == "chatwiki" {
-		return nil, errs.New("error.chatwiki_models_readonly")
+	if providerID == "chatclaw" {
+		return nil, errs.New("error.chatclaw_models_readonly")
 	}
 
 	input.ModelID = strings.TrimSpace(input.ModelID)
@@ -1154,8 +1154,8 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
 	}
-	if providerID == "chatwiki" {
-		return nil, errs.New("error.chatwiki_models_readonly")
+	if providerID == "chatclaw" {
+		return nil, errs.New("error.chatclaw_models_readonly")
 	}
 
 	modelID = strings.TrimSpace(modelID)
@@ -1249,8 +1249,8 @@ func (s *ProvidersService) GetModel(providerID string, modelID string) (*Model, 
 // DeleteModel 删除模型
 func (s *ProvidersService) DeleteModel(providerID string, modelID string) error {
 	providerID = strings.TrimSpace(providerID)
-	if providerID == "chatwiki" {
-		return errs.New("error.chatwiki_models_readonly")
+	if providerID == "chatclaw" {
+		return errs.New("error.chatclaw_models_readonly")
 	}
 	if providerID == "" {
 		return errs.New("error.provider_id_required")

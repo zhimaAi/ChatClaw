@@ -3,15 +3,15 @@
 <plist version="1.0">
 	<dict>
 		<key>CFBundleExecutable</key>
-		<string>WillClaw</string>
+		<string>ChatClaw</string>
 		<key>CFBundleGetInfoString</key>
-		<string>WillClaw</string>
+		<string>ChatClaw</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.sesame.WillClaw</string>
+		<string>com.sesame.ChatClaw</string>
 		<key>CFBundleName</key>
-		<string>WillClaw</string>
+		<string>ChatClaw</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>

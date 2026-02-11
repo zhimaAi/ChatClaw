@@ -1,6 +1,6 @@
 export default {
   app: {
-    title: 'WillClaw',
+    title: 'ChatClaw',
     theme: '主题',
   },
   common: {
@@ -49,7 +49,7 @@ export default {
     },
   },
   winsnap: {
-    title: 'WillClaw',
+    title: 'ChatClaw',
     assistantName: '灵魂厨房助手',
     cancelSnap: '取消吸附',
     snapApp: '吸附应用',
@@ -246,7 +246,7 @@ export default {
     // 关于我们
     about: {
       title: '关于我们',
-      appName: 'WillClaw',
+      appName: 'ChatClaw',
       copyright: '© 2026 武汉芝麻小客服网络科技有限公司 版权所有',
       officialWebsite: '官方网站',
       view: '查看',

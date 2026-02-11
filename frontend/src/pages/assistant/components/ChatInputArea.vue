@@ -27,8 +27,8 @@ import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
 
-import type { ProviderWithModels } from '@bindings/willclaw/internal/services/providers'
-import type { Library } from '@bindings/willclaw/internal/services/library'
+import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
+import type { Library } from '@bindings/chatclaw/internal/services/library'
 import LogoIcon from '@/assets/images/logo.svg'
 
 const props = defineProps<{
@@ -83,7 +83,7 @@ const handleClearLibrarySelection = () => {
   emit('clearLibrarySelection')
 }
 
-// Whether the currently selected model's provider is free (e.g. ChatWiki)
+// Whether the currently selected model's provider is free (e.g. ChatClaw)
 const selectedProviderIsFree = computed(() => {
   if (!props.selectedModelInfo?.providerId || !props.providersWithModels?.length) return false
   const pw = props.providersWithModels.find((p) => p.provider?.provider_id === props.selectedModelInfo?.providerId)

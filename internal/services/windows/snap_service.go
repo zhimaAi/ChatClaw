@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"willclaw/internal/errs"
-	"willclaw/internal/services/settings"
-	"willclaw/pkg/winsnap"
+	"chatclaw/internal/errs"
+	"chatclaw/internal/services/settings"
+	"chatclaw/pkg/winsnap"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
