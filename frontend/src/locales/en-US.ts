@@ -164,8 +164,8 @@ export default {
         placeholderX: 'Center',
         hint: 'Pixels to locate input box',
       },
-      noClickMode: 'No-click mode (apps that keep focus)',
-      clickMode: 'Click mode (need to click to activate input)',
+      noClickMode: 'Manual selection mode (manually select the input box)',
+      clickMode: 'Auto selection mode (auto-click to select the input box)',
     },
     // Tools settings
     tools: {

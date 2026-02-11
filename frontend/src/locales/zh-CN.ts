@@ -164,8 +164,8 @@ export default {
         placeholderX: '居中',
         hint: '像素，用于定位输入框',
       },
-      noClickMode: '不点击模式（焦点自动保持的应用）',
-      clickMode: '点击模式（需要点击激活输入框）',
+      noClickMode: '手动选择应用编辑框模式（用户手动选择输入消息框）',
+      clickMode: '自动选择应用编辑框模式（自动点击设置位置选择输入消息框）',
     },
     // 功能工具设置
     tools: {
