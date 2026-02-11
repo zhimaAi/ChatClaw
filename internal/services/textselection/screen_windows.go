@@ -11,10 +11,12 @@ import (
 var (
 	procMonitorFromPoint = modUser32.NewProc("MonitorFromPoint")
 	procGetMonitorInfoW  = modUser32.NewProc("GetMonitorInfoW")
+	procGetDpiForMonitor = modShcore.NewProc("GetDpiForMonitor")
 )
 
 const (
 	monitorDefaultToNearest = 2 // MONITOR_DEFAULTTONEAREST
+	mdtEffectiveDPI         = 0 // MDT_EFFECTIVE_DPI
 )
 
 // POINT structure for Windows API
@@ -37,6 +39,40 @@ type WorkArea struct {
 	Y      int
 	Width  int
 	Height int
+}
+
+// getDPIScaleForPoint returns the DPI scale factor for the monitor containing the specified point.
+// This correctly handles multi-monitor setups where each monitor may have a different DPI.
+// Falls back to the cached system DPI if per-monitor API is unavailable (pre-Windows 8.1).
+func getDPIScaleForPoint(x, y int32) float64 {
+	pt := pointStruct{X: x, Y: y}
+
+	hMonitor, _, _ := procMonitorFromPoint.Call(
+		uintptr(pt.X),
+		uintptr(pt.Y),
+		monitorDefaultToNearest,
+	)
+
+	if hMonitor == 0 {
+		return getDPIScale() // fallback to system DPI
+	}
+
+	// Try GetDpiForMonitor (Windows 8.1+)
+	if procGetDpiForMonitor.Find() == nil {
+		var dpiX, dpiY uint32
+		ret, _, _ := procGetDpiForMonitor.Call(
+			hMonitor,
+			mdtEffectiveDPI,
+			uintptr(unsafe.Pointer(&dpiX)),
+			uintptr(unsafe.Pointer(&dpiY)),
+		)
+		if ret == 0 && dpiX > 0 { // S_OK = 0
+			return float64(dpiX) / 96.0
+		}
+	}
+
+	// Fallback to system DPI
+	return getDPIScale()
 }
 
 // getWorkAreaAtPoint returns the work area of the monitor containing the specified point.

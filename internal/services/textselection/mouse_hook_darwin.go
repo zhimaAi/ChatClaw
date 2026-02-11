@@ -99,7 +99,7 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 			isDragging = true;
 			dragStartPoint = location;
 			dragStartTimestamp = CGEventGetTimestamp(event);
-			// Get Cocoa coordinates and convert to screen pixel coordinates
+			// Get Cocoa coordinates and convert to global screen pixel coordinates
 			NSPoint mouseLoc = [NSEvent mouseLocation];
 			NSScreen *screen = nil;
 			for (NSScreen *s in [NSScreen screens]) {
@@ -111,11 +111,11 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 			if (screen == nil) {
 				screen = [NSScreen mainScreen];
 			}
-			NSRect frame = screen.frame;
 			CGFloat scale = screen.backingScaleFactor;
-			CGFloat screenTopY = frame.origin.y + frame.size.height;
-			int mouseX = (int)((mouseLoc.x - frame.origin.x) * scale);
-			int mouseY = (int)((screenTopY - mouseLoc.y) * scale);
+			// Use primary screen height for Y-flip (global coordinate system)
+			CGFloat primaryH = [NSScreen screens][0].frame.size.height;
+			int mouseX = (int)(mouseLoc.x * scale);
+			int mouseY = (int)((primaryH - mouseLoc.y) * scale);
 
 			// Log mouse down event
 			dispatch_async(dispatch_get_main_queue(), ^{
@@ -200,12 +200,11 @@ static CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CG
 					screen = [NSScreen mainScreen];
 				}
 
-				// Calculate pixel coordinates relative to screen top-left
-				NSRect frame = screen.frame;
+				// Calculate global pixel coordinates (use primary screen height for Y-flip)
 				CGFloat scale = screen.backingScaleFactor;
-				CGFloat screenTopY = frame.origin.y + frame.size.height;
-				int x = (int)((mouseLoc.x - frame.origin.x) * scale);
-				int y = (int)((screenTopY - mouseLoc.y) * scale);
+				CGFloat primaryH = [NSScreen screens][0].frame.size.height;
+				int x = (int)(mouseLoc.x * scale);
+				int y = (int)((primaryH - mouseLoc.y) * scale);
 
 				// Use showPopup callback (lazy copy mode: show popup first, copy on button click)
 				// This avoids polluting the user's clipboard during text selection.

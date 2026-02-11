@@ -1,9 +1,14 @@
 import logoSvgRaw from '@/assets/images/logo.svg?raw'
 
 /**
- * 将 logo SVG 转换为 data URL
- * Logo 使用品牌蓝色 (#3F8DFF)，无需根据主题切换颜色
+ * Convert logo SVG to a data URL.
+ * The SVG uses `currentColor`; when rendered as an <img> data URL,
+ * we inject a concrete color based on the current theme.
  */
 export const getLogoDataUrl = () => {
-  return `data:image/svg+xml,${encodeURIComponent(logoSvgRaw)}`
+  const isDark = document.documentElement.classList.contains('dark')
+  // Use foreground-appropriate color: light text for dark mode, dark text for light mode
+  const color = isDark ? '%23e5e5e5' : '%23171717'
+  const svg = logoSvgRaw.replace(/currentColor/g, decodeURIComponent(color))
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }

@@ -63,12 +63,11 @@ static CGEventRef clickOutsideEventCallback(CGEventTapProxy proxy, CGEventType t
 			screen = [NSScreen mainScreen];
 		}
 
-		// Calculate pixel coordinates relative to screen top-left
-		NSRect frame = screen.frame;
+		// Calculate global pixel coordinates (use primary screen height for Y-flip)
 		CGFloat scale = screen.backingScaleFactor;
-		CGFloat screenTopY = frame.origin.y + frame.size.height;
-		int x = (int)((mouseLoc.x - frame.origin.x) * scale);
-		int y = (int)((screenTopY - mouseLoc.y) * scale);
+		CGFloat primaryH = [NSScreen screens][0].frame.size.height;
+		int x = (int)(mouseLoc.x * scale);
+		int y = (int)((primaryH - mouseLoc.y) * scale);
 
 		// Check if outside popup
 		if (x < popupLeft || x > popupRight || y < popupTop || y > popupBottom) {
