@@ -121,6 +121,29 @@ tasks:
     cmds:
       - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
 
+  build:server:
+    summary: Builds the application in server mode (no GUI, HTTP server only)
+    desc: |
+      Builds the application with the server build tag enabled.
+      Server mode runs as a pure HTTP server without native GUI dependencies.
+      Usage: task build:server
+    deps:
+      - task: build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+    cmds:
+      - go build -tags server {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
+    vars:
+      BUILD_FLAGS: "{{.BUILD_FLAGS}}"
+
+  run:server:
+    summary: Builds and runs the application in server mode
+    deps:
+      - task: build:server
+    cmds:
+      - ./{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
+
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
     desc: |
