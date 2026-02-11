@@ -60,7 +60,7 @@ const handleAgentChange = (value: any) => {
         >
           <div v-if="activeAgent" class="flex items-center gap-1.5">
             <img v-if="activeAgent.icon" :src="activeAgent.icon" class="size-4 rounded object-contain" />
-            <LogoIcon v-else class="size-4" />
+            <LogoIcon v-else class="size-4 text-foreground" />
             <span class="truncate">{{ activeAgent.name }}</span>
           </div>
           <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
@@ -70,7 +70,7 @@ const handleAgentChange = (value: any) => {
             <SelectItem v-for="a in agents" :key="a.id" :value="a.id.toString()">
               <div class="flex items-center gap-2">
                 <img v-if="a.icon" :src="a.icon" class="size-4 rounded object-contain" />
-                <LogoIcon v-else class="size-4" />
+                <LogoIcon v-else class="size-4 text-foreground" />
                 <span>{{ a.name }}</span>
               </div>
             </SelectItem>

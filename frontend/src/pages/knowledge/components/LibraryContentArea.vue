@@ -526,7 +526,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative flex h-full flex-col" data-file-drop-target>
+  <div class="relative flex min-h-0 flex-1 flex-col" data-file-drop-target>
     <!-- 头部区域 -->
     <div class="flex h-12 items-center justify-between px-4">
       <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>

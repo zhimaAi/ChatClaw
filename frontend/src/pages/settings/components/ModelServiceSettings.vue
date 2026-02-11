@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Events } from '@wailsio/runtime'
 import ProviderList from './ProviderList.vue'
 import ProviderDetail from './ProviderDetail.vue'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -81,6 +82,11 @@ const handleProviderSelect = (providerId: string) => {
   selectedProviderId.value = providerId
 }
 
+// Broadcast model changes to other windows/tabs (e.g., snap window)
+const notifyModelsChanged = () => {
+  Events.Emit('models:changed')
+}
+
 // 处理供应商更新
 const handleProviderUpdate = (updated: Provider) => {
   // 更新列表中的供应商
@@ -98,6 +104,8 @@ const handleProviderUpdate = (updated: Provider) => {
       provider: updated,
     }
   }
+  // Notify other windows about model/provider changes (e.g., enabled state)
+  notifyModelsChanged()
 }
 
 // 处理模型列表刷新
@@ -105,6 +113,8 @@ const handleRefresh = () => {
   if (selectedProviderId.value) {
     void loadProviderDetail(selectedProviderId.value)
   }
+  // Notify other windows about model list changes (add/delete model)
+  notifyModelsChanged()
 }
 
 // 组件挂载时加载数据

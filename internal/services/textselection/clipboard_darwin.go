@@ -26,13 +26,13 @@ static NSInteger getClipboardChangeCount() {
 	return [[NSPasteboard generalPasteboard] changeCount];
 }
 
-// Get cursor position (returns pixel coordinates relative to screen, top-left origin)
-// Reference floatingball's coordinate transformation logic
+// Get cursor position (returns global pixel coordinates, top-left origin)
+// Uses primary screen height for Y-flip to ensure consistent global coordinates across all screens.
 static void getCursorPosition(int *x, int *y) {
 	// Get Cocoa mouse position (points, bottom-left origin, global coordinates)
 	NSPoint mouseLoc = [NSEvent mouseLocation];
 
-	// Find screen containing mouse
+	// Find screen containing mouse (to get correct backing scale factor)
 	NSScreen *screen = nil;
 	for (NSScreen *s in [NSScreen screens]) {
 		if (NSPointInRect(mouseLoc, s.frame)) {
@@ -44,19 +44,14 @@ static void getCursorPosition(int *x, int *y) {
 		screen = [NSScreen mainScreen];
 	}
 
-	// Get screen parameters
-	NSRect frame = screen.frame;
 	CGFloat scale = screen.backingScaleFactor;
 
-	// Calculate coordinates relative to screen top-left (Cocoa Y is bottom-left origin, need to flip)
-	// screenTopY = frame.origin.y + frame.size.height (screen top's Cocoa Y coordinate)
-	CGFloat screenTopY = frame.origin.y + frame.size.height;
-	CGFloat relativeX = mouseLoc.x - frame.origin.x;
-	CGFloat relativeY = screenTopY - mouseLoc.y;  // Flip Y
+	// Use primary screen height for Y-flip (global coordinate system)
+	CGFloat primaryH = [NSScreen screens][0].frame.size.height;
 
-	// Convert to pixels
-	*x = (int)(relativeX * scale);
-	*y = (int)(relativeY * scale);
+	// Convert to global pixel coordinates
+	*x = (int)(mouseLoc.x * scale);
+	*y = (int)((primaryH - mouseLoc.y) * scale);
 }
 
 // Get screen scale factor
@@ -89,10 +84,11 @@ import (
 	"unsafe"
 )
 
-// DPI scale caching for macOS - similar to Windows implementation
+// DPI scale caching for macOS.
 // On macOS, backingScaleFactor is typically 1.0 (normal) or 2.0 (Retina),
 // and may differ between screens in multi-monitor setups.
-// We cache the main screen's value to avoid frequent CGO calls in high-frequency contexts.
+// We cache the value and refresh it on each getDPIScale() call to handle
+// the mouse moving between screens with different scale factors.
 var (
 	cachedDPIScaleDarwin   float64 = 0
 	cachedDPIScaleMuDarwin sync.RWMutex
@@ -194,12 +190,12 @@ func GetCursorPos() (x, y int32) {
 }
 
 // getDPIScale gets the scale factor on macOS (Retina display).
-// Uses cached value to avoid expensive CGO calls in high-frequency contexts.
-// The cache is initialized once on first call and can be refreshed via RefreshDPIScale().
+// On multi-monitor setups, returns the scale of the screen currently containing the mouse.
+// Refreshes the cached value on each call since the mouse may move between screens
+// with different backing scale factors (e.g., Retina MacBook + non-Retina external).
 func getDPIScale() float64 {
-	dpiScaleInitOnceDarwin.Do(func() {
-		refreshDPIScaleInternalDarwin()
-	})
+	// Always refresh to handle multi-monitor with different scales
+	refreshDPIScaleInternalDarwin()
 
 	cachedDPIScaleMuDarwin.RLock()
 	scale := cachedDPIScaleDarwin

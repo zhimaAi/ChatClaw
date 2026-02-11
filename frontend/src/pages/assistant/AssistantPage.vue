@@ -554,6 +554,7 @@ watch(isTabActive, (active) => {
 let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeConversationsChanged: (() => void) | null = null
 let unsubscribeAgentsChanged: (() => void) | null = null
+let unsubscribeModelsChanged: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -741,6 +742,11 @@ onMounted(() => {
     // Refresh agents list
     void loadAgents()
   })
+
+  // Listen for model/provider changes from settings page (e.g., add/delete model, enable/disable provider)
+  unsubscribeModelsChanged = Events.On('models:changed', () => {
+    void loadModels()
+  })
 })
 
 onUnmounted(() => {
@@ -753,6 +759,8 @@ onUnmounted(() => {
   unsubscribeConversationsChanged = null
   unsubscribeAgentsChanged?.()
   unsubscribeAgentsChanged = null
+  unsubscribeModelsChanged?.()
+  unsubscribeModelsChanged = null
 
   // Snap mode cleanup
   unsubscribeSnapSettings?.()
