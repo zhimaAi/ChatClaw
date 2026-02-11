@@ -4,21 +4,21 @@ package textselection
 
 // MouseHookWatcher placeholder implementation for non-Windows/macOS platforms.
 type MouseHookWatcher struct {
-	callback          func(text string, x, y int32)
-	onDragStart       func(x, y int32)
-	showPopupCallback func(x, y int32, originalAppPid int32)
+	callback              func(text string, x, y int32)
+	onDragStartWithPid    func(x, y int32, frontAppPid int32)
+	showPopupCallback     func(x, y int32, originalAppPid int32)
 }
 
 // NewMouseHookWatcher creates a new mouse hook watcher (not supported on non-Windows/macOS platforms).
 func NewMouseHookWatcher(
 	callback func(text string, x, y int32),
-	onDragStart func(x, y int32),
+	onDragStartWithPid func(x, y int32, frontAppPid int32),
 	showPopupCallback func(x, y int32, originalAppPid int32),
 ) *MouseHookWatcher {
 	return &MouseHookWatcher{
-		callback:          callback,
-		onDragStart:       onDragStart,
-		showPopupCallback: showPopupCallback,
+		callback:              callback,
+		onDragStartWithPid:    onDragStartWithPid,
+		showPopupCallback:     showPopupCallback,
 	}
 }
 
