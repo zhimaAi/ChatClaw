@@ -228,7 +228,7 @@ export function useConversations(tabId: string) {
         [agentId]: false,
       }
       if (activeConversationId.value === conversation.id) {
-        chatStore.clearMessages(activeConversationId.value)
+        chatStore.clearMessages(conversation.id)
         activeConversationId.value = null
       }
       toast.success(t('assistant.conversation.delete.success'))
