@@ -25,6 +25,22 @@ static void textselection_force_popup_topmost(void *nsWindow) {
 		[win orderFrontRegardless];
 	});
 }
+
+// Set popup window position using Cocoa points directly.
+// This bypasses Wails' SetPosition which uses [window screen] for conversion,
+// causing incorrect positioning when moving between screens with different sizes/DPI.
+// Parameters: x/y are global Cocoa coordinates (Y from bottom-left of primary screen).
+static void textselection_set_popup_position(void *nsWindow, int x, int y) {
+	if (!nsWindow) return;
+
+	NSWindow *win = (__bridge NSWindow *)nsWindow;
+	if (!win || ![win isKindOfClass:[NSWindow class]]) return;
+
+	NSRect frame = [win frame];
+	frame.origin.x = (CGFloat)x;
+	frame.origin.y = (CGFloat)y;
+	[win setFrame:frame display:YES];
+}
 */
 import "C"
 
@@ -39,6 +55,14 @@ func hidePopupNative(w *application.WebviewWindow) {
 	w.Hide()
 }
 
+// setPopupPositionPhysical is only used on Windows; no-op on macOS.
+func setPopupPositionPhysical(_ *application.WebviewWindow, _, _, _, _ int) {}
+
+// getPopupWindowRect is only used on Windows; returns zero on macOS.
+func getPopupWindowRect(_ *application.WebviewWindow) (int32, int32, int32, int32) {
+	return 0, 0, 0, 0
+}
+
 // forcePopupTopMostNoActivate ensures the popup is visible above other windows
 // without stealing focus on macOS.
 func forcePopupTopMostNoActivate(w *application.WebviewWindow) {
@@ -50,4 +74,17 @@ func forcePopupTopMostNoActivate(w *application.WebviewWindow) {
 		return
 	}
 	C.textselection_force_popup_topmost(nativeHandle)
+}
+
+// setPopupPositionCocoa sets the popup window position using Cocoa points directly.
+// This correctly handles multi-monitor setups by using Cocoa's unified global coordinate system.
+func setPopupPositionCocoa(w *application.WebviewWindow, x, y int) {
+	if w == nil {
+		return
+	}
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil {
+		return
+	}
+	C.textselection_set_popup_position(nativeHandle, C.int(x), C.int(y))
 }

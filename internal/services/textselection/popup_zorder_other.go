@@ -13,3 +13,11 @@ func hidePopupNative(w *application.WebviewWindow) {
 }
 
 func forcePopupTopMostNoActivate(_ *application.WebviewWindow) {}
+
+func setPopupPositionCocoa(_ *application.WebviewWindow, _, _ int) {}
+
+func setPopupPositionPhysical(_ *application.WebviewWindow, _, _, _, _ int) {}
+
+func getPopupWindowRect(_ *application.WebviewWindow) (int32, int32, int32, int32) {
+	return 0, 0, 0, 0
+}

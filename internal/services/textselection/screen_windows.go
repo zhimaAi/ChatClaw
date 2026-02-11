@@ -109,13 +109,17 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 	}
 }
 
-// clampToWorkArea ensures the popup position is within the work area bounds.
-// Parameters:
-//   - popX, popY: proposed popup position
-//   - popWidth, popHeight: popup dimensions
-//   - mouseX, mouseY: mouse position (used to determine which monitor)
+// clampToWorkArea ensures the popup position (in physical pixels) is within the
+// work area bounds. All coordinates and dimensions are in physical (virtual-screen)
+// pixels. MonitorFromPoint receives physical coords and returns physical work area,
+// so the clamp is performed entirely in a single coordinate system.
 //
-// Returns adjusted x, y coordinates.
+// Parameters:
+//   - popX, popY: proposed popup position in physical pixels
+//   - popWidth, popHeight: popup dimensions in physical pixels
+//   - mouseX, mouseY: mouse position in physical pixels (for MonitorFromPoint)
+//
+// Returns adjusted x, y in physical pixels.
 func clampToWorkArea(popX, popY, popWidth, popHeight, mouseX, mouseY int) (int, int) {
 	wa := getWorkAreaAtPoint(mouseX, mouseY)
 
@@ -129,7 +133,6 @@ func clampToWorkArea(popX, popY, popWidth, popHeight, mouseX, mouseY int) (int, 
 
 	// Clamp Y - if above screen top, show below mouse instead
 	if popY < wa.Y {
-		// Show below mouse with some offset
 		popY = mouseY + 20
 	}
 	if popY+popHeight > wa.Y+wa.Height {

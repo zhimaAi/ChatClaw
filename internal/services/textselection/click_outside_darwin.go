@@ -48,26 +48,10 @@ static CGEventRef clickOutsideEventCallback(CGEventTapProxy proxy, CGEventType t
 	}
 
 	if (type == kCGEventLeftMouseDown && hasPopupRect) {
-		// Get Cocoa mouse position and convert
+		// Use Cocoa points directly (global coordinate system, works across all monitors)
 		NSPoint mouseLoc = [NSEvent mouseLocation];
-
-		// Find screen containing mouse
-		NSScreen *screen = nil;
-		for (NSScreen *s in [NSScreen screens]) {
-			if (NSPointInRect(mouseLoc, s.frame)) {
-				screen = s;
-				break;
-			}
-		}
-		if (screen == nil) {
-			screen = [NSScreen mainScreen];
-		}
-
-		// Calculate global pixel coordinates (use primary screen height for Y-flip)
-		CGFloat scale = screen.backingScaleFactor;
-		CGFloat primaryH = [NSScreen screens][0].frame.size.height;
-		int x = (int)(mouseLoc.x * scale);
-		int y = (int)((primaryH - mouseLoc.y) * scale);
+		int x = (int)(mouseLoc.x);
+		int y = (int)(mouseLoc.y);
 
 		// Check if outside popup
 		if (x < popupLeft || x > popupRight || y < popupTop || y > popupBottom) {

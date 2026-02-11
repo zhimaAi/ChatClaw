@@ -369,7 +369,7 @@ watch(
           <LogoIcon
             :key="collapsed ? 'collapsed' : 'expanded'"
             :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
-            class="block text-white"
+            class="block text-[#3F8DFF]"
             style="transform: translateZ(0); backface-visibility: hidden"
           />
         </div>

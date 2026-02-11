@@ -183,10 +183,9 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 				w.dragStartY = hookStruct.Pt.Y
 				w.dragStartTime = time.Now()
 				onDragStartWithPid := w.onDragStartWithPid
-				// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
-				scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
-				mouseX := int32(float64(hookStruct.Pt.X) / scale)
-				mouseY := int32(float64(hookStruct.Pt.Y) / scale)
+				// Pass physical pixel coordinates directly (Wails DIP conversion happens in service layer)
+				mouseX := hookStruct.Pt.X
+				mouseY := hookStruct.Pt.Y
 				w.mu.Unlock()
 
 				// Notify drag start with mouse position for caller to check if inside popup
@@ -209,10 +208,9 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 					distance := dx*dx + dy*dy
 					dragDuration := time.Since(w.dragStartTime)
 
-					// Convert to logical pixels (use per-monitor DPI for multi-monitor support)
-					scale := getDPIScaleForPoint(hookStruct.Pt.X, hookStruct.Pt.Y)
-					mouseX := int32(float64(hookStruct.Pt.X) / scale)
-					mouseY := int32(float64(hookStruct.Pt.Y) / scale)
+					// Pass physical pixel coordinates directly (Wails DIP conversion happens in service layer)
+					mouseX := hookStruct.Pt.X
+					mouseY := hookStruct.Pt.Y
 
 					// Multi-layer heuristic filtering to reduce false triggers:
 					//
