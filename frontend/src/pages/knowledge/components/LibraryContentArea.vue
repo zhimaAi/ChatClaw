@@ -671,7 +671,7 @@ onUnmounted(() => {
             {{ t('knowledge.content.delete.cancel') }}
           </AlertDialogCancel>
           <AlertDialogAction
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            class="bg-foreground text-background hover:bg-foreground/90"
             @click.prevent="confirmDelete"
           >
             {{ t('knowledge.content.delete.confirm') }}

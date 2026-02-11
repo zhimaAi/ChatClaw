@@ -54,10 +54,9 @@ func NewUpdaterService(app *application.App) *UpdaterService {
 }
 
 // ServiceStartup is called by Wails after the application starts.
-// It always schedules a background update check so the frontend can show
-// a badge on the "Check for Update" button. The auto_update setting only
-// controls whether the update dialog is shown automatically.
 func (s *UpdaterService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.cleanupOldBinary()
+
 	go func() {
 		time.Sleep(3 * time.Second)
 
@@ -75,6 +74,51 @@ func (s *UpdaterService) ServiceStartup(ctx context.Context, options application
 		}
 	}()
 	return nil
+}
+
+// cleanupOldBinary removes the .<exe>.old backup left by go-selfupdate.
+//
+// On Windows the old binary is hidden and its dot-prefixed name cannot be
+// accessed via absolute paths (Win32 treats "\.X" as a relative reference).
+// We work around this by running a bat script that cd's into the directory
+// and uses the relative filename.
+func (s *UpdaterService) cleanupOldBinary() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+
+	dir := filepath.Dir(exe)
+	oldName := "." + filepath.Base(exe) + ".old"
+
+	if runtime.GOOS == "windows" {
+		// Only run the cleanup bat if an .old file likely exists; this avoids
+		// spawning a cmd.exe process (which may flash a console window) on
+		// every normal startup.
+		// We cannot stat the dot-prefixed file directly (Win32 path bug), so
+		// we check via a quick "dir /A /B" in the exe directory.
+		probe := exec.Command("cmd", "/C", fmt.Sprintf(`cd /D "%s" & dir /A /B "%s"`, dir, oldName))
+		setDetachedProcess(probe)
+		if probe.Run() != nil {
+			return // file not found — nothing to clean
+		}
+
+		script := fmt.Sprintf(
+			"@echo off\r\ncd /D \"%s\"\r\nattrib -H \"%s\" >nul 2>&1\r\ndel /F \"%s\" >nul 2>&1\r\n",
+			dir, oldName, oldName,
+		)
+		batPath := filepath.Join(os.TempDir(), "willclaw_cleanup.bat")
+		if err := os.WriteFile(batPath, []byte(script), 0o644); err != nil {
+			return
+		}
+		cmd := exec.Command("cmd", "/C", batPath)
+		setDetachedProcess(cmd)
+		_ = cmd.Run()
+		_ = os.Remove(batPath)
+	} else {
+		oldPath := filepath.Join(dir, oldName)
+		_ = os.Remove(oldPath)
+	}
 }
 
 // CheckForUpdate checks if a newer version is available.
@@ -117,8 +161,6 @@ func (s *UpdaterService) CheckForUpdate() (*UpdateInfo, error) {
 		}, nil
 	}
 
-	// Cache the latest release and source for DownloadAndApply,
-	// so that the same source is used for both check and download.
 	s.mu.Lock()
 	s.latest = latest
 	s.source = source
@@ -134,7 +176,6 @@ func (s *UpdaterService) CheckForUpdate() (*UpdateInfo, error) {
 }
 
 // DownloadAndApply downloads the latest release and replaces the current binary.
-// Must call CheckForUpdate first to detect the latest release.
 func (s *UpdaterService) DownloadAndApply() error {
 	s.mu.Lock()
 	latest := s.latest
@@ -180,9 +221,7 @@ func (s *UpdaterService) DownloadAndApply() error {
 	return nil
 }
 
-// GetPendingUpdate returns update info persisted by the previous DownloadAndApply call,
-// then clears the persisted data. Returns nil if no pending update exists.
-// This is called by the frontend on startup to show the "just updated" dialog.
+// GetPendingUpdate returns and clears update info persisted by DownloadAndApply.
 func (s *UpdaterService) GetPendingUpdate() *UpdateInfo {
 	version, _ := settings.GetValue("pending_update_version")
 	notes, _ := settings.GetValue("pending_update_notes")
@@ -214,6 +253,45 @@ func (s *UpdaterService) RestartApp() error {
 	if err != nil {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
+
+	// Windows needs special handling: SingleInstance rejects a second process,
+	// and the .old binary cleanup requires cd + relative path. Use a bat script
+	// that waits for this process to exit, cleans up, then launches the new exe.
+	if runtime.GOOS == "windows" {
+		exeDir := filepath.Dir(exe)
+		exeName := filepath.Base(exe)
+		oldName := "." + exeName + ".old"
+		batPath := filepath.Join(os.TempDir(), "willclaw_restart.bat")
+		batContent := fmt.Sprintf(
+			"@echo off\r\n"+
+				"ping localhost -n 3 >nul\r\n"+
+				"cd /D \"%s\"\r\n"+
+				"attrib -H \"%s\" >nul 2>&1\r\n"+
+				"del /F \"%s\" >nul 2>&1\r\n"+
+				"start \"\" \"%s\"\r\n"+
+				"del \"%%~f0\"\r\n",
+			exeDir, oldName, oldName, exe,
+		)
+		if err := os.WriteFile(batPath, []byte(batContent), 0o644); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		cmd := exec.Command("cmd", "/C", batPath)
+		setDetachedProcess(cmd)
+
+		if err := cmd.Start(); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			s.app.Quit()
+		}()
+
+		return nil
+	}
+
+	// macOS / Linux: keep the original logic exactly as-is.
 	exe, err = filepath.EvalSymlinks(exe)
 	if err != nil {
 		return errs.Wrap("error.update_restart_failed", err)
@@ -223,8 +301,6 @@ func (s *UpdaterService) RestartApp() error {
 
 	switch runtime.GOOS {
 	case "darwin":
-		// On macOS, use "open" to launch the .app bundle
-		// exe is like /Applications/WillClaw.app/Contents/MacOS/WillClaw
 		appPath := exe
 		for i := 0; i < 3; i++ {
 			appPath = filepath.Dir(appPath)
@@ -245,7 +321,6 @@ func (s *UpdaterService) RestartApp() error {
 		return errs.Wrap("error.update_restart_failed", err)
 	}
 
-	// Give the new process a moment to start, then exit
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		os.Exit(0)
@@ -267,10 +342,6 @@ func (s *UpdaterService) selectSource() (selfupdate.Source, error) {
 }
 
 // isGoogleReachable checks if Google is accessible within the probe timeout.
-// When Google is reachable the user is on an unrestricted network, so GitHub
-// downloads will also work. This is a stricter check than probing GitHub API
-// directly, because GitHub API may respond while release asset downloads are
-// still throttled or blocked.
 func isGoogleReachable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), googleProbeTimeout)
 	defer cancel()

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { UpdaterService } from '@bindings/willclaw/internal/services/updater'
 import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
 const props = defineProps<{
@@ -48,7 +49,7 @@ async function handleInstallAndRestart() {
     await UpdaterService.RestartApp()
   } catch (error) {
     console.error('Failed to install update:', error)
-    toast.error(t('settings.about.updateFailed'))
+    toast.error(getErrorMessage(error) || t('settings.about.updateFailed'))
     isInstalling.value = false
   }
 }

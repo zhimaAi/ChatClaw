@@ -349,7 +349,7 @@ onUnmounted(() => {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          class="gap-2 text-destructive focus:text-destructive"
+          class="gap-2 text-muted-foreground focus:text-foreground"
           @select="emit('delete', document)"
         >
           <IconDelete class="size-4" />
