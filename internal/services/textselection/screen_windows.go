@@ -3,6 +3,7 @@
 package textselection
 
 import (
+	"fmt"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -41,19 +42,26 @@ type WorkArea struct {
 	Height int
 }
 
+// monitorFromPointPacked calls MonitorFromPoint with correctly packed POINT parameter.
+// On x64 Windows, MonitorFromPoint(POINT pt, DWORD dwFlags) expects the POINT struct
+// (8 bytes) to be packed into a single 64-bit register: low 32 bits = x, high 32 bits = y.
+// Passing x and y as separate parameters is WRONG on x64 — it causes y to be read as 0
+// and dwFlags to be misinterpreted as the y value.
+func monitorFromPointPacked(x, y int32, flags uintptr) uintptr {
+	// Pack POINT: low 32 bits = x, high 32 bits = y
+	packed := uintptr(uint32(x)) | (uintptr(uint32(y)) << 32)
+	hMonitor, _, _ := procMonitorFromPoint.Call(packed, flags)
+	return hMonitor
+}
+
 // getDPIScaleForPoint returns the DPI scale factor for the monitor containing the specified point.
 // This correctly handles multi-monitor setups where each monitor may have a different DPI.
 // Falls back to the cached system DPI if per-monitor API is unavailable (pre-Windows 8.1).
 func getDPIScaleForPoint(x, y int32) float64 {
-	pt := pointStruct{X: x, Y: y}
-
-	hMonitor, _, _ := procMonitorFromPoint.Call(
-		uintptr(pt.X),
-		uintptr(pt.Y),
-		monitorDefaultToNearest,
-	)
+	hMonitor := monitorFromPointPacked(x, y, monitorDefaultToNearest)
 
 	if hMonitor == 0 {
+		fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint: MonitorFromPoint returned NULL for (%d,%d), fallback to system DPI\n", x, y)
 		return getDPIScale() // fallback to system DPI
 	}
 
@@ -67,27 +75,25 @@ func getDPIScaleForPoint(x, y int32) float64 {
 			uintptr(unsafe.Pointer(&dpiY)),
 		)
 		if ret == 0 && dpiX > 0 { // S_OK = 0
-			return float64(dpiX) / 96.0
+			scale := float64(dpiX) / 96.0
+			fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint(%d,%d) → dpi=%d scale=%.2f\n", x, y, dpiX, scale)
+			return scale
 		}
 	}
 
 	// Fallback to system DPI
+	fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint: GetDpiForMonitor failed for (%d,%d), fallback to system DPI\n", x, y)
 	return getDPIScale()
 }
 
 // getWorkAreaAtPoint returns the work area of the monitor containing the specified point.
 // This handles multi-monitor setups correctly by finding the monitor at the given coordinates.
 func getWorkAreaAtPoint(x, y int) WorkArea {
-	pt := pointStruct{X: int32(x), Y: int32(y)}
-
-	// Get the monitor that contains the point
-	hMonitor, _, _ := procMonitorFromPoint.Call(
-		uintptr(pt.X),
-		uintptr(pt.Y),
-		monitorDefaultToNearest,
-	)
+	// Use correctly packed MonitorFromPoint call
+	hMonitor := monitorFromPointPacked(int32(x), int32(y), monitorDefaultToNearest)
 
 	if hMonitor == 0 {
+		fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint: MonitorFromPoint returned NULL for (%d,%d), using fallback\n", x, y)
 		// Fallback to default values
 		return WorkArea{X: 0, Y: 0, Width: 1920, Height: 1080}
 	}
@@ -97,16 +103,19 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 	mi.CbSize = uint32(unsafe.Sizeof(mi))
 	ret, _, _ := procGetMonitorInfoW.Call(hMonitor, uintptr(unsafe.Pointer(&mi)))
 	if ret == 0 {
+		fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint: GetMonitorInfoW failed for (%d,%d), using fallback\n", x, y)
 		// Fallback to default values
 		return WorkArea{X: 0, Y: 0, Width: 1920, Height: 1080}
 	}
 
-	return WorkArea{
+	wa := WorkArea{
 		X:      int(mi.RcWork.Left),
 		Y:      int(mi.RcWork.Top),
 		Width:  int(mi.RcWork.Right - mi.RcWork.Left),
 		Height: int(mi.RcWork.Bottom - mi.RcWork.Top),
 	}
+	fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint(%d,%d) → workArea=(%d,%d,%d,%d)\n", x, y, wa.X, wa.Y, wa.Width, wa.Height)
+	return wa
 }
 
 // clampToWorkArea ensures the popup position (in physical pixels) is within the

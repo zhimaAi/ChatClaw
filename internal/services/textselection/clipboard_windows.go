@@ -40,6 +40,7 @@ var (
 	procGetClipboardData              = modUser32.NewProc("GetClipboardData")
 	procIsClipboardFormatAvailable    = modUser32.NewProc("IsClipboardFormatAvailable")
 	procGetCursorPos                  = modUser32.NewProc("GetCursorPos")
+	procGetPhysicalCursorPos          = modUser32.NewProc("GetPhysicalCursorPos")
 	procGetDpiForSystem               = modUser32.NewProc("GetDpiForSystem")
 	procGetDeviceCaps                 = modUser32.NewProc("GetDeviceCaps")
 	procGetDC                         = modUser32.NewProc("GetDC")
@@ -246,6 +247,20 @@ func getClipboardText() string {
 func GetCursorPos() (x, y int32) {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	return pt.X, pt.Y
+}
+
+// GetPhysicalCursorPos gets the current cursor position in physical screen coordinates.
+// Unlike GetCursorPos, this ALWAYS returns physical pixels regardless of the calling
+// thread's DPI awareness context. Use this in mouse hooks where the DPI awareness
+// of the hook thread may not be Per-Monitor v2.
+func GetPhysicalCursorPos() (x, y int32) {
+	var pt point
+	ret, _, _ := procGetPhysicalCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	if ret == 0 {
+		// Fallback to GetCursorPos if GetPhysicalCursorPos fails
+		procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	}
 	return pt.X, pt.Y
 }
 
