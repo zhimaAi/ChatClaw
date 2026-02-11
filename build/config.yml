@@ -9,7 +9,7 @@ info:
   productName: "ChatClaw" # The name of the application
   productIdentifier: "com.sesame.chatclaw" # The unique product identifier
   description: "ChatClaw" # The application description
-  copyright: "Copyright © 2016- 2026 Wuhan Sesame Small Customer Service Network Technology Co., Ltd." # Copyright text
+  copyright: "Copyright © 2016- 2026 Sesame Small Customer Service Network Technology Co., Ltd." # Copyright text
   comments: "ChatClaw" # Comments
   version: "0.0.1" # The application version
 

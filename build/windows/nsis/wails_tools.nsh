@@ -17,7 +17,7 @@
     !define INFO_PRODUCTVERSION "0.0.1"
 !endif
 !ifndef INFO_COPYRIGHT
-    !define INFO_COPYRIGHT "Copyright © 2016- 2026 Wuhan Sesame Small Customer Service Network Technology Co., Ltd."
+    !define INFO_COPYRIGHT "Copyright © 2016- 2026 Sesame Small Customer Service Network Technology Co., Ltd."
 !endif
 !ifndef PRODUCT_EXECUTABLE
     !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"
