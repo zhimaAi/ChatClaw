@@ -22,6 +22,7 @@ const (
 	wmActivate      = 0x0006
 	wmNCActivate    = 0x0086
 	wmSetFocus      = 0x0007
+	wmDpiChanged    = 0x02E0 // WM_DPICHANGED
 
 	maNoActivate = 3
 	waInactive   = 0
@@ -69,6 +70,16 @@ func popupWndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	case wmSetFocus:
 		// Block WM_SETFOCUS to prevent Wails from calling Focus() on WebView2
 		// which causes "The parameter is incorrect" error
+		return 0
+
+	case wmDpiChanged:
+		// Block WM_DPICHANGED to prevent Wails from repositioning the popup.
+		// When the popup moves from one DPI monitor to another, Windows sends
+		// WM_DPICHANGED with a "suggested rect" (based on the old position).
+		// Wails handles this by calling SetWindowPos with the suggested rect,
+		// which overrides our intended position and drags the popup back to the
+		// original screen. Since we manage positioning ourselves via native
+		// SetWindowPos with physical pixel coordinates, we must suppress this.
 		return 0
 	}
 

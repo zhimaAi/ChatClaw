@@ -482,6 +482,7 @@ func (s *TextSelectionService) showPopupPhysical(physX, physY, physW, physH int)
 	s.popX = physX
 	s.popY = physY
 	s.popupActive = true
+	app := s.app
 	s.mu.Unlock()
 
 	// Create/validate window (positioned off-screen initially)
@@ -490,9 +491,39 @@ func (s *TextSelectionService) showPopupPhysical(physX, physY, physW, physH int)
 		return
 	}
 
+	if app != nil {
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical BEFORE SetWindowPos",
+			"targetX", physX, "targetY", physY, "targetW", physW, "targetH", physH)
+	}
+
 	// Position using native Win32 API (physical pixels, also sets HWND_TOPMOST)
 	setPopupPositionPhysical(w, physX, physY, physW, physH)
+
+	// Verify position after SetWindowPos
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical AFTER SetWindowPos (before Show)",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
+
 	w.Show()
+
+	// Verify position after Show
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical AFTER Show",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
+
+	// Re-assert position after Show to override any Wails interference
+	setPopupPositionPhysical(w, physX, physY, physW, physH)
+
+	// Verify final position
+	if app != nil {
+		l, t, r, b := getPopupWindowRect(w)
+		app.Logger.Info("[POPUP-DEBUG] showPopupPhysical FINAL position",
+			"actualLeft", l, "actualTop", t, "actualRight", r, "actualBottom", b)
+	}
 
 	// Update click outside watcher (physical pixels match mouse hook coordinates)
 	if s.clickOutsideWatcher != nil {
@@ -610,7 +641,22 @@ func (s *TextSelectionService) showPopupOnlyAtScreenPos(screenX, screenY int) {
 		finalX := screenX - physW/2
 		finalY := screenY - physH - offsetPx
 
+		if app != nil {
+			wa := getWorkAreaAtPoint(screenX, screenY)
+			app.Logger.Info("[POPUP-DEBUG] showPopupOnlyAtScreenPos (using GetPhysicalCursorPos)",
+				"physMouseX", screenX, "physMouseY", screenY,
+				"dpiScale", scale,
+				"physW", physW, "physH", physH,
+				"beforeClampX", finalX, "beforeClampY", finalY,
+				"workAreaX", wa.X, "workAreaY", wa.Y, "workAreaW", wa.Width, "workAreaH", wa.Height)
+		}
+
 		finalX, finalY = clampToWorkArea(finalX, finalY, physW, physH, screenX, screenY)
+
+		if app != nil {
+			app.Logger.Info("[POPUP-DEBUG] afterClamp", "finalX", finalX, "finalY", finalY)
+		}
+
 		s.showPopupPhysical(finalX, finalY, physW, physH)
 	}
 }

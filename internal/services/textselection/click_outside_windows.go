@@ -167,11 +167,9 @@ func clickOutsideMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr 
 		clickOutsideInstanceMu.Unlock()
 
 		if w != nil {
-			hookStruct := (*clickHookStruct)(unsafe.Pointer(lParam))
-
-			// Use physical pixel coordinates directly (popup rect is also in physical pixels)
-			x := hookStruct.Pt.X
-			y := hookStruct.Pt.Y
+			// Use GetPhysicalCursorPos to always get physical screen coordinates,
+			// matching the physical pixel coordinates stored in popupRect.
+			x, y := GetPhysicalCursorPos()
 
 			w.mu.Lock()
 			popupRect := w.popupRect

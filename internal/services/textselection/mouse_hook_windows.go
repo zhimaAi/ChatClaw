@@ -173,19 +173,21 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 		mouseHookInstanceMu.Unlock()
 
 		if w != nil {
-			hookStruct := (*msllHookStruct)(unsafe.Pointer(lParam))
-
 			switch wParam {
 			case wmLButtonDown:
+				// Use GetPhysicalCursorPos to always get physical screen coordinates,
+				// regardless of the hook thread's DPI awareness context.
+				// hookStruct.Pt may return system-DPI-logical coords on some setups,
+				// which causes incorrect positioning on multi-monitor with different DPIs.
+				physX, physY := GetPhysicalCursorPos()
 				w.mu.Lock()
 				w.isDragging = true
-				w.dragStartX = hookStruct.Pt.X
-				w.dragStartY = hookStruct.Pt.Y
+				w.dragStartX = physX
+				w.dragStartY = physY
 				w.dragStartTime = time.Now()
 				onDragStartWithPid := w.onDragStartWithPid
-				// Pass physical pixel coordinates directly (Wails DIP conversion happens in service layer)
-				mouseX := hookStruct.Pt.X
-				mouseY := hookStruct.Pt.Y
+				mouseX := physX
+				mouseY := physY
 				w.mu.Unlock()
 
 				// Notify drag start with mouse position for caller to check if inside popup
@@ -195,22 +197,23 @@ func lowLevelMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr {
 				}
 
 			case wmMouseMove:
+				physX, physY := GetPhysicalCursorPos()
 				w.mu.Lock()
-				w.lastMouseX = hookStruct.Pt.X
-				w.lastMouseY = hookStruct.Pt.Y
+				w.lastMouseX = physX
+				w.lastMouseY = physY
 				w.mu.Unlock()
 
 			case wmLButtonUp:
+				physX, physY := GetPhysicalCursorPos()
 				w.mu.Lock()
 				if w.isDragging {
-					dx := hookStruct.Pt.X - w.dragStartX
-					dy := hookStruct.Pt.Y - w.dragStartY
+					dx := physX - w.dragStartX
+					dy := physY - w.dragStartY
 					distance := dx*dx + dy*dy
 					dragDuration := time.Since(w.dragStartTime)
 
-					// Pass physical pixel coordinates directly (Wails DIP conversion happens in service layer)
-					mouseX := hookStruct.Pt.X
-					mouseY := hookStruct.Pt.Y
+					mouseX := physX
+					mouseY := physY
 
 					// Multi-layer heuristic filtering to reduce false triggers:
 					//
