@@ -242,12 +242,13 @@ func getClipboardText() string {
 }
 
 // GetCursorPos gets the current mouse position (returns logical pixel coordinates, accounting for DPI scaling).
+// Uses per-monitor DPI for correct coordinates on multi-monitor setups with different DPI settings.
 func GetCursorPos() (x, y int32) {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 
-	// Get DPI scale factor
-	scale := getDPIScale()
+	// Get DPI scale factor for the monitor containing the cursor
+	scale := getDPIScaleForPoint(pt.X, pt.Y)
 	if scale > 1.0 {
 		// Convert physical pixels to logical pixels
 		return int32(float64(pt.X) / scale), int32(float64(pt.Y) / scale)
