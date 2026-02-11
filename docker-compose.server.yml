@@ -1,6 +1,6 @@
 services:
   chatclaw:
-    image: debian:bookworm-slim
+    image: registry.cn-hangzhou.aliyuncs.com/chatwiki/ubuntu:22.04
     container_name: chatclaw-server
     working_dir: /app
     volumes:
