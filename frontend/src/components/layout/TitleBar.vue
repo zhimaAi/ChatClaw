@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { System, Window } from '@wailsio/runtime'
 import { useI18n } from 'vue-i18n'
-import { useNavigationStore, type NavModule } from '@/stores'
+import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconSidebarToggle from '@/assets/icons/sidebar-toggle.svg'
 import IconAddNewTab from '@/assets/icons/add-new-tab.svg'
@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/context-menu'
 
 const navigationStore = useNavigationStore()
+const appStore = useAppStore()
 const { t } = useI18n()
 
 const isMac = computed(() => System.IsMac())
@@ -132,8 +133,8 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
   >
     <!-- 左侧区域 -->
     <div class="flex h-full shrink-0 items-center gap-4 pl-3">
-      <!-- macOS: 自定义红黄绿按钮 -->
-      <WindowControlButtons v-if="isMac" position="left" />
+      <!-- macOS: 自定义红黄绿按钮 (GUI mode only) -->
+      <WindowControlButtons v-if="isMac && appStore.isGUIMode" position="left" />
 
       <!-- 侧边栏展开/收起按钮 -->
       <button
@@ -264,7 +265,7 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
     <!-- 右侧空白拖拽区域 -->
     <div class="min-w-4 shrink-0 self-stretch" style="--wails-draggable: drag" />
 
-    <!-- Windows 窗口控制按钮（右侧） -->
-    <WindowControlButtons v-if="!isMac" position="right" />
+    <!-- Windows 窗口控制按钮（右侧, GUI mode only） -->
+    <WindowControlButtons v-if="!isMac && appStore.isGUIMode" position="right" />
   </div>
 </template>
