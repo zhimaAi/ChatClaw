@@ -55,96 +55,66 @@ CGO 已在 `build/windows/Taskfile.yml` 中默认启用（`CGO_ENABLED=1`）。
 
 ---
 
-## 开发
-
-```bash
-wails3 dev
-```
-
-## Windows 多架构打包
-
-```bash
-# amd64
-wails3 task windows:build ARCH=amd64 DEV=true  # DEV=false 表示打包生产环境二进制，需要做代码签名
-wails3 task windows:package ARCH=amd64 DEV=true # DEV=false 表示打包生产环境安装包，需要再做一次代码签名
-
-# arm64
-wails3 task windows:build ARCH=arm64 DEV=true # DEV=false 表示打包生产环境二进制，需要做代码签名
-wails3 task windows:package ARCH=arm64 DEV=true # DEV=false 表示打包生产环境安装包，需要再做一次代码签名
-```
-
-### Windows 安装包依赖（makensis）
+#### Windows 安装包依赖（makensis）
 
 Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
 
 - 参考文档：`https://wails.io/zh-Hans/docs/next/guides/windows-installer/`
 - 安装后将 makensis 安装目录添加到 **Path** 环境变量中（确保命令行可直接执行 `makensis`）
 
-## macos 多架构构建、签名、打包
+## 开发
 
 ```bash
-# arm64
-wails3 task darwin:sign ARCH=arm64 DEV=true # wails3 task darwin:sign:notarize ARCH=arm64 DEV=false 表示生产环境打包
+# gui模式
+wails3 dev
 
+# server模式
+wails3 task build:docker PLATFORM=amd64
+wails3 task run:docker
+```
+
+## Windows 打包
+
+```bash
 # amd64
-wails3 task darwin:sign ARCH=amd64 DEV=true  # wails3 task darwin:sign:notarize ARCH=amd64 DEV=false 表示生产环境打包
-
-# arm64+amd64
-wails3 task darwin:sign UNIVERSAL=true DEV=true  # wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false 表示生产环境打包
-```
-
-## 自动更新（Release 资产命名规范）
-
-应用内置了基于 [go-selfupdate](https://github.com/creativeprojects/go-selfupdate) 的自动更新功能，优先从 GitHub Releases 检查更新，GitHub 不可达时自动回退到 Gitee。
-
-发布新版本时，除了常规安装包（`.dmg` / `-installer.exe`），还需要上传**自动更新资产**到 GitHub Release（以及同步到 Gitee Release）。
-
-### 资产命名格式
-
-`go-selfupdate` 默认按以下格式匹配资产文件名：
-
-```
-{cmd}_{os}_{arch}.{ext}
-```
-
-其中 `{cmd}` = 可执行文件名（`ChatClaw`），`{os}` / `{arch}` 为 Go 标准命名。
-
-| 平台            | 文件名                              |
-|----------------|-------------------------------------|
-| macOS arm64    | `ChatClaw_darwin_arm64.tar.gz`      |
-| macOS amd64    | `ChatClaw_darwin_amd64.tar.gz`      |
-| Windows amd64  | `ChatClaw_windows_amd64.zip`        |
-| Windows arm64  | `ChatClaw_windows_arm64.zip`        |
-| Linux amd64    | `ChatClaw_linux_amd64.tar.gz`       |
-| Linux arm64    | `ChatClaw_linux_arm64.tar.gz`       |
-
-### 制作更新资产示例（macOS arm64）
-
-```bash
-# 1. 构建
-wails3 task darwin:sign:notarize ARCH=arm64 DEV=false
-
-# 2. 打包为 tar.gz（仅包含二进制）
-cd bin
-tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
-cd ..
-```
-
-### 制作更新资产示例（Windows amd64）
-
-```bash
-# 1. 构建
 wails3 task windows:build ARCH=amd64 DEV=false
-
-# 2. 打包为 zip（仅包含二进制）
 cd bin
 zip ChatClaw_windows_amd64.zip ChatClaw.exe
 cd ..
+wails3 task windows:package ARCH=amd64 DEV=false
 ```
 
-### 发布步骤
+## macos 多架构打包
 
-1. 在 GitHub 创建 Release（tag 格式如 `v1.0.0`）
-2. 各平台分别构建并打包更新资产（因为 CGO 无法交叉编译，需在对应平台上打包）
-3. 上传所有平台的安装包 + 更新资产到 Release
-4. 同步 Release 到 Gitee（包括上传相同的文件）
+```bash
+# arm64
+wails3 task darwin:sign:notarize ARCH=arm64 DEV=false  # wails3 task darwin:sign ARCH=arm64 DEV=true
+cd bin
+tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
+cd ..
+
+# amd64
+wails3 task darwin:sign:notarize ARCH=amd64 DEV=false # wails3 task darwin:sign ARCH=amd64 DEV=true
+cd bin
+tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
+cd ..
+
+# arm64+amd64
+wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
+```
+
+## Linux Server 模式构建、打包
+
+```bash
+# 构建 arm64 镜像并导出二进制文件
+wails3 task build:docker PLATFORM=arm64
+wails3 task export:docker ARCH=arm64
+
+# 构建 amd64 镜像并导出二进制文件
+wails3 task build:docker PLATFORM=amd64
+wails3 task export:docker ARCH=amd64
+
+# 构建 amd64 + arm64 多架构镜像并推送到阿里云镜像仓库
+wails3 task build:docker PLATFORM=multi
+docker push registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
+```
