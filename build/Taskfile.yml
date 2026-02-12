@@ -147,28 +147,31 @@ tasks:
       - ./{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
       
   build:docker:
-    summary: Builds a Docker image for server mode deployment
+    summary: Builds Docker image and exports server binary to ./bin/
     desc: |
-      Builds a Docker image for the specified platform(s).
+      Builds a Docker image for the specified platform(s) and outputs
+      the server binary directly to ./bin/.
       PLATFORM is required: amd64, arm64, or multi (amd64+arm64).
       Usage:
-        task build:docker PLATFORM=arm64           # build arm64 image
-        task build:docker PLATFORM=amd64           # build amd64 image
-        task build:docker PLATFORM=multi           # build amd64 + arm64
+        task build:docker PLATFORM=arm64    # exports bin/linux_arm64/server
+        task build:docker PLATFORM=amd64    # exports bin/linux_amd64/server
+        task build:docker PLATFORM=multi    # exports both architectures
     cmds:
+      - mkdir -p {{.BIN_DIR}}
       - |
         {{- if eq .PLATFORM "multi"}}
         docker buildx build \
           --builder multiarch-builder \
           --platform linux/amd64,linux/arm64 \
           -t {{.DOCKER_IMAGE}}:latest \
+          --output type=local,dest={{.BIN_DIR}} \
           -f build/docker/Dockerfile.server .
         {{- else}}
         docker buildx build \
           --builder multiarch-builder \
           --platform linux/{{.PLATFORM}} \
           -t {{.DOCKER_IMAGE}}:latest \
-          --load \
+          --output type=local,dest={{.BIN_DIR}}/linux_{{.PLATFORM}} \
           -f build/docker/Dockerfile.server .
         {{- end}}
     vars:
@@ -181,39 +184,33 @@ tasks:
       - sh: test -n "{{.PLATFORM}}"
         msg: "PLATFORM is required. Use: PLATFORM=amd64, PLATFORM=arm64, or PLATFORM=multi"
 
-  export:docker:
-    summary: Exports server binary from Docker image to ./bin/
-    desc: |
-      Copies the server binary out of a built Docker image into ./bin/.
-      ARCH is required: amd64 or arm64.
-      The exported binary is named {{.APP_NAME}}-server-linux-<arch>.
-      Usage:
-        task export:docker ARCH=arm64
-        task export:docker ARCH=amd64
-    cmds:
-      - mkdir -p {{.BIN_DIR}}
-      - |
-        CONTAINER_ID=$(docker create --platform "linux/{{.ARCH}}" "{{.DOCKER_IMAGE}}:latest")
-        docker cp "$CONTAINER_ID":/server {{.BIN_DIR}}/{{.APP_NAME}}-server-linux-{{.ARCH}}
-        docker rm "$CONTAINER_ID" > /dev/null
-        echo "Exported: {{.BIN_DIR}}/{{.APP_NAME}}-server-linux-{{.ARCH}}"
-    vars:
-      ARCH: "{{.ARCH}}"
-    preconditions:
-      - sh: docker info > /dev/null 2>&1
-        msg: "Docker is required. Please install Docker first."
-      - sh: test -n "{{.ARCH}}"
-        msg: "ARCH is required. Use: ARCH=amd64 or ARCH=arm64"
-
   run:docker:
-    summary: Builds and runs the Docker image
+    summary: Builds and runs the Docker image (current architecture)
     desc: |
-      Runs the Docker image, exposing port 8080.
+      Builds and runs a single-arch Docker image for local testing.
       Usage: task run:docker [PORT=8080]
     cmds:
+      - |
+        docker buildx build \
+          --builder multiarch-builder \
+          --platform linux/{{.NATIVE_ARCH}} \
+          -t {{.DOCKER_IMAGE}}:latest \
+          --load \
+          -f build/docker/Dockerfile.server .
       - docker run --rm -p {{.PORT | default "8080"}}:8080 {{.DOCKER_IMAGE}}:latest
     vars:
       PORT: "{{.PORT}}"
+      NATIVE_ARCH:
+        sh: |
+          UNAME_M=$(uname -m)
+          case "$UNAME_M" in
+            x86_64)  echo "amd64" ;;
+            aarch64|arm64) echo "arm64" ;;
+            *) echo "$UNAME_M" ;;
+          esac
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker is required. Please install Docker first."
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)

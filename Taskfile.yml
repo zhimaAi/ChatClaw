@@ -59,13 +59,6 @@ tasks:
         vars:
           PLATFORM: '{{.PLATFORM}}'
 
-  export:docker:
-    summary: Exports server binary from Docker image to ./bin/
-    cmds:
-      - task: common:export:docker
-        vars:
-          ARCH: '{{.ARCH}}'
-
   run:docker:
     summary: Builds and runs the Docker image
     cmds:
