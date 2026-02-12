@@ -124,6 +124,43 @@ const createOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsAgent = ref<Agent | null>(null)
 const sidebarCollapsed = ref(false)
+
+// Snap mode: draggable floating expand button
+const snapBtnTop = ref(8) // initial top offset in px
+const snapBtnDragging = ref(false)
+let snapBtnStartY = 0
+let snapBtnStartTop = 0
+let snapBtnDidDrag = false // true if moved beyond threshold
+
+function onSnapBtnPointerDown(e: PointerEvent) {
+  snapBtnDragging.value = true
+  snapBtnDidDrag = false
+  snapBtnStartY = e.clientY
+  snapBtnStartTop = snapBtnTop.value
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+}
+function onSnapBtnPointerMove(e: PointerEvent) {
+  if (!snapBtnDragging.value) return
+  const dy = e.clientY - snapBtnStartY
+  if (Math.abs(dy) > 3) snapBtnDidDrag = true
+  const parent = (e.currentTarget as HTMLElement).parentElement
+  if (!parent) return
+  const btnH = 28
+  // When no messages the input is centered inside the same container,
+  // so limit the button to the upper 40% to avoid overlapping the input box
+  const hasMessages = chatMessages.value.length > 0 || isGenerating.value
+  const maxTop = hasMessages
+    ? parent.clientHeight - btnH
+    : Math.min(parent.clientHeight - btnH, parent.clientHeight * 0.4)
+  const newTop = Math.max(0, Math.min(maxTop, snapBtnStartTop + dy))
+  snapBtnTop.value = newTop
+}
+function onSnapBtnPointerUp(e: PointerEvent) {
+  snapBtnDragging.value = false
+  ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+  // Toggle sidebar on tap (no drag)
+  if (!snapBtnDidDrag) sidebarCollapsed.value = !sidebarCollapsed.value
+}
 const chatInput = ref('')
 const enableThinking = ref(false)
 const libraries = ref<Library[]>([])
@@ -792,9 +829,10 @@ onUnmounted(() => {
       @close-window="closeSnapWindow"
     />
 
-    <!-- Main content wrapper -->
-    <div class="relative flex min-h-0 flex-1 overflow-hidden">
-    <!-- Overlay backdrop for snap mode sidebar -->
+    <!-- Main content wrapper (snap mode: vertical layout so input spans full width) -->
+    <div :class="cn('relative flex min-h-0 flex-1 overflow-hidden', isSnapMode && 'flex-col')">
+
+    <!-- Overlay backdrop for snap mode sidebar (covers entire area including input) -->
     <div
       v-if="isSnapMode && !sidebarCollapsed"
       class="absolute inset-0 z-10 bg-black/20"
@@ -827,8 +865,33 @@ onUnmounted(() => {
       @close-sidebar="sidebarCollapsed = true"
     />
 
-    <!-- Collapse/Expand button (hidden when empty) -->
-    <div v-if="!isAgentEmpty" class="flex w-8 shrink-0 items-center justify-center">
+    <!-- Upper row: expand button + messages -->
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
+
+    <!-- Collapse/Expand button (hidden when empty; snap mode: floating, draggable) -->
+    <div
+      v-if="!isAgentEmpty && isSnapMode"
+      class="absolute left-0.5 z-[5] cursor-grab active:cursor-grabbing"
+      :style="{ top: snapBtnTop + 'px' }"
+      @pointerdown="onSnapBtnPointerDown"
+      @pointermove="onSnapBtnPointerMove"
+      @pointerup="onSnapBtnPointerUp"
+    >
+      <Button
+        size="icon"
+        variant="ghost"
+        class="size-7 pointer-events-none"
+        :title="sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')"
+      >
+        <IconSidebarExpand v-if="sidebarCollapsed" class="size-5 text-muted-foreground" />
+        <IconSidebarCollapse v-else class="size-5 text-muted-foreground" />
+      </Button>
+    </div>
+    <!-- Collapse/Expand button (non-snap mode: in-flow) -->
+    <div
+      v-if="!isAgentEmpty && !isSnapMode"
+      class="flex w-8 shrink-0 items-center justify-center"
+    >
       <Button
         size="icon"
         variant="ghost"
@@ -881,9 +944,9 @@ onUnmounted(() => {
         @snap-copy="handleCopyToClipboard"
       />
 
-      <!-- Empty state / Input area (hidden when no agents) -->
+      <!-- Input area: non-snap mode OR snap mode with no messages (centered empty state) -->
       <ChatInputArea
-        v-if="!isAgentEmpty"
+        v-if="!isAgentEmpty && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))"
         :chat-input="chatInput"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"
@@ -909,6 +972,35 @@ onUnmounted(() => {
         @load-libraries="loadLibrariesFn"
       />
     </section>
+    </div><!-- End upper row -->
+
+    <!-- Input area (snap mode with messages: full-width at bottom) -->
+    <ChatInputArea
+      v-if="!isAgentEmpty && isSnapMode && (chatMessages.length > 0 || isGenerating)"
+      :chat-input="chatInput"
+      :selected-model-key="selectedModelKey"
+      :selected-model-info="selectedModelInfo"
+      :providers-with-models="providersWithModels"
+      :has-models="hasModels"
+      :enable-thinking="enableThinking"
+      :selected-library-ids="selectedLibraryIds"
+      :libraries="libraries"
+      :is-generating="isGenerating"
+      :can-send="canSend"
+      :send-disabled-reason="sendDisabledReason"
+      :chat-messages="chatMessages"
+      :active-agent-id="activeAgentId"
+      :is-snap-mode="isSnapMode"
+      @update:chat-input="chatInput = $event"
+      @update:selected-model-key="selectedModelKey = $event"
+      @update:enable-thinking="enableThinking = $event"
+      @update:selected-library-ids="selectedLibraryIds = $event"
+      @send="handleSend"
+      @stop="handleStop"
+      @library-selection-change="handleLibrarySelectionChange"
+      @clear-library-selection="clearLibrarySelection"
+      @load-libraries="loadLibrariesFn"
+    />
     </div><!-- End main content wrapper -->
 
     <!-- Dialogs (rendered outside main content wrapper for proper z-index) -->
