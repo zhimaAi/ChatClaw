@@ -143,6 +143,75 @@ tasks:
       - task: build:server
     cmds:
       - ./{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
+      
+  build:docker:
+    summary: Builds a Docker image for server mode deployment
+    desc: |
+      Builds a Docker image for the specified platform(s).
+      PLATFORM is required: amd64, arm64, or multi (amd64+arm64).
+      Usage:
+        task build:docker PLATFORM=arm64           # build arm64 image
+        task build:docker PLATFORM=amd64           # build amd64 image
+        task build:docker PLATFORM=multi           # build amd64 + arm64
+    cmds:
+      - |
+        {{- if eq .PLATFORM "multi"}}
+        docker buildx build \
+          --builder multiarch-builder \
+          --platform linux/amd64,linux/arm64 \
+          -t {{.DOCKER_IMAGE}}:latest \
+          -f build/docker/Dockerfile.server .
+        {{- else}}
+        docker buildx build \
+          --builder multiarch-builder \
+          --platform linux/{{.PLATFORM}} \
+          -t {{.DOCKER_IMAGE}}:latest \
+          --load \
+          -f build/docker/Dockerfile.server .
+        {{- end}}
+    vars:
+      PLATFORM: "{{.PLATFORM}}"
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker is required. Please install Docker first."
+      - sh: test -f build/docker/Dockerfile.server
+        msg: "Dockerfile.server not found. Run 'wails3 update build-assets' to generate it."
+      - sh: test -n "{{.PLATFORM}}"
+        msg: "PLATFORM is required. Use: PLATFORM=amd64, PLATFORM=arm64, or PLATFORM=multi"
+
+  export:docker:
+    summary: Exports server binary from Docker image to ./bin/
+    desc: |
+      Copies the server binary out of a built Docker image into ./bin/.
+      ARCH is required: amd64 or arm64.
+      The exported binary is named {{.APP_NAME}}-server-linux-<arch>.
+      Usage:
+        task export:docker ARCH=arm64
+        task export:docker ARCH=amd64
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - |
+        CONTAINER_ID=$(docker create --platform "linux/{{.ARCH}}" "{{.DOCKER_IMAGE}}:latest")
+        docker cp "$CONTAINER_ID":/server {{.BIN_DIR}}/{{.APP_NAME}}-server-linux-{{.ARCH}}
+        docker rm "$CONTAINER_ID" > /dev/null
+        echo "Exported: {{.BIN_DIR}}/{{.APP_NAME}}-server-linux-{{.ARCH}}"
+    vars:
+      ARCH: "{{.ARCH}}"
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker is required. Please install Docker first."
+      - sh: test -n "{{.ARCH}}"
+        msg: "ARCH is required. Use: ARCH=amd64 or ARCH=arm64"
+
+  run:docker:
+    summary: Builds and runs the Docker image
+    desc: |
+      Runs the Docker image, exposing port 8080.
+      Usage: task run:docker [PORT=8080]
+    cmds:
+      - docker run --rm -p {{.PORT | default "8080"}}:8080 {{.DOCKER_IMAGE}}:latest
+    vars:
+      PORT: "{{.PORT}}"
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)

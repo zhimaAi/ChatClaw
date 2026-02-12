@@ -2,8 +2,6 @@
 
 [English](./README.md)
 
-桌面知识库智能体，适用于各类任务。
-
 ChatClaw 是一款桌面端 AI 工具，支持上传知识库创建自定义机器人，实现智能问答。安装即用，并提供免费 AI 模型。
 
 ## 功能预览
@@ -57,6 +55,71 @@ ChatClaw 是一款桌面端 AI 工具，支持上传知识库创建自定义机�
 点击桌面上的悬浮球，即可唤醒或打开 ChatClaw 主应用窗口。
 
 ![](./images/9.png)
+
+## 服务器模式部署
+
+ChatClaw 支持以服务器模式运行（无需桌面 GUI），通过浏览器访问。
+
+### 二进制直接运行
+
+从 [GitHub Releases](https://github.com/chatwiki/chatclaw/releases) 下载对应平台的二进制文件：
+
+| 平台 | 文件 |
+|------|------|
+| Linux x86_64 | `ChatClaw-server-linux-amd64` |
+| Linux ARM64 | `ChatClaw-server-linux-arm64` |
+
+```bash
+chmod +x ChatClaw-server-linux-amd64
+./ChatClaw-server-linux-amd64
+```
+
+浏览器打开 http://localhost:8080 即可使用。
+
+服务默认监听 `0.0.0.0:8080`。可通过环境变量自定义监听地址和端口：
+
+```bash
+WAILS_SERVER_HOST=127.0.0.1 WAILS_SERVER_PORT=3000 ./ChatClaw-server-linux-amd64
+```
+
+### Docker
+
+```bash
+docker run -d \
+  --name chatclaw-server \
+  -p 8080:8080 \
+  -v chatclaw-data:/root/.config/chatclaw \
+  registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
+```
+
+浏览器打开 http://localhost:8080 即可使用。
+
+### Docker Compose
+
+创建 `docker-compose.yml` 文件：
+
+```yaml
+services:
+  chatclaw:
+    image: registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
+    container_name: chatclaw-server
+    volumes:
+      - chatclaw-data:/root/.config/chatclaw
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  chatclaw-data:
+```
+
+然后运行：
+
+```bash
+docker compose up -d
+```
+
+浏览器打开 http://localhost:8080 即可使用。停止服务：`docker compose down`。数据持久化在 `chatclaw-data` 卷中。
 
 ## 技术栈
 

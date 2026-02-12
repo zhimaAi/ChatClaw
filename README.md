@@ -2,7 +2,6 @@
 
 [中文文档](./README_zh-CN.md)
 
-Desktop Knowledge Base Agent For All Tasks.
 
 ChatClaw is a desktop AI tool that supports uploading knowledge bases to create custom robots for intelligent Q&A. Install and start using it immediately. Free AI models are provided.
 
@@ -57,6 +56,71 @@ No need to repeat your query. Consult multiple "AI experts" simultaneously and v
 Click the floating ball on your desktop to instantly wake up or open the main ChatClaw application window.
 
 ![](./images/9.png)
+
+## Server Mode Deployment
+
+ChatClaw can run as a server (no desktop GUI required), accessible via a browser.
+
+### Binary
+
+Download the binary for your platform from [GitHub Releases](https://github.com/chatwiki/chatclaw/releases):
+
+| Platform | File |
+|----------|------|
+| Linux x86_64 | `ChatClaw-server-linux-amd64` |
+| Linux ARM64 | `ChatClaw-server-linux-arm64` |
+
+```bash
+chmod +x ChatClaw-server-linux-amd64
+./ChatClaw-server-linux-amd64
+```
+
+Open http://localhost:8080 in your browser.
+
+The server listens on `0.0.0.0:8080` by default. You can customize host and port via environment variables:
+
+```bash
+WAILS_SERVER_HOST=127.0.0.1 WAILS_SERVER_PORT=3000 ./ChatClaw-server-linux-amd64
+```
+
+### Docker
+
+```bash
+docker run -d \
+  --name chatclaw-server \
+  -p 8080:8080 \
+  -v chatclaw-data:/root/.config/chatclaw \
+  registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
+```
+
+Open http://localhost:8080 in your browser.
+
+### Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  chatclaw:
+    image: registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
+    container_name: chatclaw-server
+    volumes:
+      - chatclaw-data:/root/.config/chatclaw
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  chatclaw-data:
+```
+
+Then run:
+
+```bash
+docker compose up -d
+```
+
+Open http://localhost:8080 in your browser. To stop: `docker compose down`. Data is persisted in the `chatclaw-data` volume.
 
 ## Tech Stack
 

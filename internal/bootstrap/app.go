@@ -162,6 +162,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(opts.Assets),
 		},
+		// Server mode: listen on all interfaces by default.
+		// Can be overridden by WAILS_SERVER_HOST / WAILS_SERVER_PORT env vars.
+		Server: application.ServerOptions{
+			Host: "0.0.0.0",
+			Port: 8080,
+		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},

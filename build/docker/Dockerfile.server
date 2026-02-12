@@ -1,0 +1,66 @@
+# Wails Server Mode Dockerfile
+# Multi-stage build — glibc-based for Ubuntu/Debian compatibility
+
+# Build stage (Debian 12 / glibc)
+FROM golang:bookworm AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+# gcc/libc6-dev: CGO compiler (pre-installed in golang:bookworm)
+# libsqlite3-dev: sqlite3.h required by sqlite-vec CGO bindings
+# pkg-config: required by wails internal packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsqlite3-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy source code
+COPY . .
+
+# Remove local replace directive if present (for production builds)
+RUN sed -i '/^replace/d' go.mod || true
+
+# Download dependencies and vendor them
+RUN go mod tidy && go mod vendor
+
+# Patch wails v3 internal packages in vendor: add !server build constraint
+# Upstream bug: these 4 files lack !server, causing GTK/WebKit CGO on Linux
+# Ref: pkg/application/linux_cgo.go already has !server — internal packages missed
+RUN sed -i 's/!gtk4 && !android/!gtk4 \&\& !android \&\& !server/' \
+      vendor/github.com/wailsapp/wails/v3/internal/operatingsystem/webkit_linux.go \
+      vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/webkit2.go \
+      vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/responsewriter_linux.go \
+      vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/request_linux.go
+
+# Build the server binary with CGO enabled (required by sqlite3 and sqlite-vec)
+RUN CGO_ENABLED=1 go build -mod=vendor -tags "server fts5" \
+    -ldflags="-s -w" \
+    -o server .
+
+# Runtime stage — slim Debian for glibc compatibility
+# Binary also runs on bare Ubuntu Server (22.04/24.04)
+FROM debian:bookworm-slim
+
+# Install minimal runtime dependencies (CA certs for HTTPS, sqlite3 shared lib)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libsqlite3-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the binary
+COPY --from=builder /app/server /server
+
+# Copy frontend assets
+COPY --from=builder /app/frontend/dist /frontend/dist
+
+# Expose the default port
+EXPOSE 8080
+
+# Bind to all interfaces (required for Docker)
+ENV WAILS_SERVER_HOST=0.0.0.0
+
+# Entrypoint script: generates /etc/machine-id on first run for unique device ID.
+# To persist across container restarts, mount a volume at /etc/machine-id.
+COPY build/docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
