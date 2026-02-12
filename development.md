@@ -69,7 +69,7 @@ Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
 wails3 dev
 
 # server模式
-wails3 task build:docker PLATFORM=amd64
+wails3 task build:docker PLATFORM=arm64
 wails3 task run:docker
 ```
 
