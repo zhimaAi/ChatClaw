@@ -32,9 +32,11 @@ RUN sed -i 's/!gtk4 && !android/!gtk4 \&\& !android \&\& !server/' \
       vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/responsewriter_linux.go \
       vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/request_linux.go
 
-# Build the server binary with CGO enabled (required by sqlite3 and sqlite-vec)
-RUN CGO_ENABLED=1 go build -mod=vendor -tags "server fts5" \
-    -ldflags="-s -w" \
+# Extract app version from build/config.yml for ldflags injection
+RUN APP_VERSION=$(grep -A20 '^info:' build/config.yml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | tr -d '"'"'" | sed 's/[[:space:]]*#.*//') \
+    && echo "Building version: ${APP_VERSION}" \
+    && CGO_ENABLED=1 go build -mod=vendor -tags "server fts5" \
+    -ldflags="-s -w -X chatclaw/internal/define.Version=${APP_VERSION}" \
     -o server .
 
 # Runtime stage — slim Debian for glibc compatibility

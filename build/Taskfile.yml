@@ -135,7 +135,9 @@ tasks:
     cmds:
       - go build -tags "server fts5" {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}
     vars:
-      BUILD_FLAGS: "{{.BUILD_FLAGS}}"
+      APP_VERSION:
+        sh: go run ./internal/tools/appversion -config build/config.yml
+      BUILD_FLAGS: '{{if eq (.DEV | default "true") "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-trimpath -buildvcs=false -ldflags="-w -s -X chatclaw/internal/define.Version={{.APP_VERSION}}"{{end}}'
 
   run:server:
     summary: Builds and runs the application in server mode
