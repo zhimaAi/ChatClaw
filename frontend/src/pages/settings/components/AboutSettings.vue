@@ -129,8 +129,8 @@ async function handleAutoUpdateChange(value: boolean) {
         </div>
       </div>
 
-      <!-- Check update button -->
-      <div class="relative inline-flex">
+      <!-- Check update button (hidden in server mode — use docker pull or manual binary replacement) -->
+      <div v-if="appStore.isGUIMode" class="relative inline-flex">
         <Button
           variant="outline"
           size="sm"
@@ -158,8 +158,8 @@ async function handleAutoUpdateChange(value: boolean) {
       </button>
     </SettingsItem>
 
-    <!-- Auto update toggle -->
-    <SettingsItem :label="t('settings.about.autoUpdate')" :bordered="false">
+    <!-- Auto update toggle (hidden in server mode) -->
+    <SettingsItem v-if="appStore.isGUIMode" :label="t('settings.about.autoUpdate')" :bordered="false">
       <Switch :model-value="autoUpdate" @update:model-value="handleAutoUpdateChange" />
     </SettingsItem>
   </SettingsCard>
