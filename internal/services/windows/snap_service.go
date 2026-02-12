@@ -30,9 +30,9 @@ const (
 // Windows uses a smaller gap because its window borders already add visual spacing.
 func snapGap() int {
 	if runtime.GOOS == "windows" {
-		return 5
+		return 3
 	}
-	return 10 // macOS / other
+	return 5 // macOS / other
 }
 
 type SnapStatus struct {
