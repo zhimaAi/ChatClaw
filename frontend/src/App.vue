@@ -131,6 +131,10 @@ let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
 let onKeyDownMacMinimize: ((e: KeyboardEvent) => void) | null = null
 
+// Whether in-app text selection popup is enabled (mirrors enable_selection_search setting)
+const selectionSearchEnabled = ref(false)
+let unsubscribeSelectionSettingChanged: (() => void) | null = null
+
 // Track mousedown position to distinguish real drag-selections from simple clicks.
 let mouseDownX = 0
 let mouseDownY = 0
@@ -231,6 +235,24 @@ onMounted(async () => {
     }
   })
 
+  // Read initial enable_selection_search setting
+  try {
+    const selSetting = await SettingsService.Get('enable_selection_search')
+    if (selSetting) {
+      selectionSearchEnabled.value = selSetting.value === 'true'
+    }
+  } catch {
+    // Default to disabled
+  }
+  // Listen for setting changes so toggling the switch takes effect immediately
+  unsubscribeSelectionSettingChanged = Events.On('settings:selection-search-changed', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    selectionSearchEnabled.value = !!payload?.enabled
+    if (!selectionSearchEnabled.value) {
+      hideInAppPopup()
+    }
+  })
+
   // In-app text selection: global mousedown + mouseup listeners.
   // Mouse hook skips our own windows, so we handle in-app selection here.
   // We track mousedown position and only show the popup when the user actually
@@ -263,6 +285,9 @@ onMounted(async () => {
       hideInAppPopup()
       return
     }
+
+    // Skip if selection search is disabled
+    if (!selectionSearchEnabled.value) return
 
     const sel = window.getSelection?.()
     const text = sel?.toString?.().trim?.() ?? ''
@@ -363,6 +388,8 @@ onUnmounted(() => {
     window.removeEventListener('keydown', onKeyDownMacMinimize, true)
     onKeyDownMacMinimize = null
   }
+  unsubscribeSelectionSettingChanged?.()
+  unsubscribeSelectionSettingChanged = null
   themeObserver?.disconnect()
 })
 </script>

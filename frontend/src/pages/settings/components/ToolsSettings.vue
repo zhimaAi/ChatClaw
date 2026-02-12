@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Switch } from '@/components/ui/switch'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
-import { Window } from '@wailsio/runtime'
+import { Events, Window } from '@wailsio/runtime'
 
 // 后端绑定
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
@@ -299,6 +299,8 @@ const handleSelectionSearchChange = async (val: boolean) => {
   enableSelectionSearch.value = val
   try {
     await updateSetting('enable_selection_search', String(val))
+    // Notify App.vue so in-app selection popup respects the new setting
+    Events.Emit('settings:selection-search-changed', { enabled: val })
     // Sync with backend text selection service
     await TextSelectionService.SyncFromSettings()
   } catch {
