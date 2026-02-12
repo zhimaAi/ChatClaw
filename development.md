@@ -106,18 +106,7 @@ wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
 ## Linux Server 模式构建、打包
 
 ```bash
-# 打包前端
 cd frontend && npm run build && cd ..
-
-# 构建 arm64 镜像并导出二进制文件
-wails3 task build:docker PLATFORM=arm64
-wails3 task export:docker ARCH=arm64
-
-# 构建 amd64 镜像并导出二进制文件
-wails3 task build:docker PLATFORM=amd64
-wails3 task export:docker ARCH=amd64
-
-# 构建 amd64 + arm64 多架构镜像并推送到阿里云镜像仓库
 wails3 task build:docker PLATFORM=multi
 docker push registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
 ```
