@@ -27,6 +27,7 @@ import (
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/textselection"
+	"chatclaw/internal/services/toolchain"
 	"chatclaw/internal/services/tray"
 	"chatclaw/internal/services/updater"
 	"chatclaw/internal/services/windows"
@@ -286,6 +287,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
+	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
+	toolchainService := toolchain.NewToolchainService(app)
+	app.RegisterService(application.NewService(toolchainService))
 
 	// ========== macOS 应用菜单 ==========
 	// Set up standard macOS application menu so that system shortcuts work:
@@ -418,6 +422,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 			}
 		}()
 		floatingBallService.InitFromSettings()
+		// Ensure external toolchain binaries (uv, bun) are installed/updated in background.
+		go toolchainService.EnsureAll()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
