@@ -158,5 +158,11 @@
   "error.update_no_release": "please check for updates first",
   "error.update_exe_path_failed": "failed to locate executable path",
   "error.update_apply_failed": "failed to apply update",
-  "error.update_restart_failed": "failed to restart application"
+  "error.update_restart_failed": "failed to restart application",
+  "error.toolchain_unknown_tool": "unknown tool '{{.Name}}'",
+  "error.toolchain_no_bin_dir": "cannot determine tool install directory",
+  "error.toolchain_create_dir_failed": "failed to create tool directory",
+  "error.toolchain_already_installing": "'{{.Name}}' is already being installed",
+  "error.toolchain_fetch_version_failed": "failed to fetch latest version",
+  "error.toolchain_install_failed": "installation failed"
 }

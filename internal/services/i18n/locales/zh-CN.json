@@ -158,5 +158,11 @@
   "error.update_no_release": "请先检查更新",
   "error.update_exe_path_failed": "无法获取可执行文件路径",
   "error.update_apply_failed": "应用更新失败",
-  "error.update_restart_failed": "重启应用失败"
+  "error.update_restart_failed": "重启应用失败",
+  "error.toolchain_unknown_tool": "未知工具「{{.Name}}」",
+  "error.toolchain_no_bin_dir": "无法确定工具安装目录",
+  "error.toolchain_create_dir_failed": "创建工具目录失败",
+  "error.toolchain_already_installing": "「{{.Name}}」正在安装中",
+  "error.toolchain_fetch_version_failed": "获取最新版本失败",
+  "error.toolchain_install_failed": "安装失败"
 }
