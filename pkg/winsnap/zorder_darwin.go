@@ -109,7 +109,7 @@ static bool winsnap_pid_has_visible_window(pid_t pid) {
 	return found;
 }
 
-// Find pid by app name (localized name or executable name)
+// Find pid by app identifier (localized name / executable name / bundle id)
 static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 	if (!name) return 0;
 	NSString *target = [NSString stringWithUTF8String:name];
@@ -130,10 +130,14 @@ static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 		if (!app || app.terminated) continue;
 		NSString *loc = app.localizedName;
 		NSString *exe = app.executableURL.lastPathComponent;
+		NSString *bid = app.bundleIdentifier;
 		if (loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) {
 			return app.processIdentifier;
 		}
 		if (exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]]) {
+			return app.processIdentifier;
+		}
+		if (bid.length && [[bid lowercaseString] isEqualToString:[target lowercaseString]]) {
 			return app.processIdentifier;
 		}
 	}

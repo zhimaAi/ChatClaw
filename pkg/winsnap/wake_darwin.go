@@ -39,10 +39,14 @@ static pid_t winsnap_find_pid_by_name_local(const char *name) {
 		if (!app || app.terminated) continue;
 		NSString *loc = winsnap_trim(app.localizedName);
 		NSString *exe = winsnap_trim(app.executableURL.lastPathComponent);
+		NSString *bid = winsnap_trim(app.bundleIdentifier);
 		if (loc.length && [loc caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 		if (exe.length && [exe caseInsensitiveCompare:target] == NSOrderedSame) {
+			return app.processIdentifier;
+		}
+		if (bid.length && [bid caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 	}
