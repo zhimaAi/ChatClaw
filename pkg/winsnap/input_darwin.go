@@ -23,6 +23,18 @@ static uint64_t current_uptime_nsec() {
 	return ts;
 }
 
+// Reverse-domain bundle id usually contains at least 3 segments, like cn.apifox.app.
+static bool winsnap_looks_like_bundle_id(NSString *s) {
+	if (!s || s.length == 0) return false;
+	if ([s rangeOfString:@" "].location != NSNotFound) return false;
+	NSArray<NSString *> *parts = [s componentsSeparatedByString:@"."];
+	if (parts.count < 3) return false;
+	for (NSString *p in parts) {
+		if (p.length == 0) return false;
+	}
+	return true;
+}
+
 // Set clipboard text
 static bool winsnap_set_clipboard_text(const char *text) {
 	if (!text) return false;
@@ -45,7 +57,7 @@ static bool winsnap_activate_app(const char *name) {
 		// Normalize: drop path, .app, .exe suffixes
 		target = [target lastPathComponent];
 		NSString *lower = [target lowercaseString];
-		if ([lower hasSuffix:@".app"]) {
+		if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(target)) {
 			target = [target substringToIndex:(target.length - 4)];
 		}
 		lower = [target lowercaseString];
@@ -57,8 +69,10 @@ static bool winsnap_activate_app(const char *name) {
 			if (!app || app.terminated) continue;
 			NSString *loc = app.localizedName;
 			NSString *exe = app.executableURL.lastPathComponent;
+			NSString *bid = app.bundleIdentifier;
 			if ((loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) ||
-				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]])) {
+				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]]) ||
+				(bid.length && [[bid lowercaseString] isEqualToString:[target lowercaseString]])) {
 				[app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
 				return true;
 			}
@@ -181,7 +195,7 @@ static pid_t winsnap_get_pid_by_name(const char *name) {
 		// Normalize: drop path, .app, .exe suffixes
 		target = [target lastPathComponent];
 		NSString *lower = [target lowercaseString];
-		if ([lower hasSuffix:@".app"]) {
+		if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(target)) {
 			target = [target substringToIndex:(target.length - 4)];
 		}
 		lower = [target lowercaseString];
@@ -193,8 +207,10 @@ static pid_t winsnap_get_pid_by_name(const char *name) {
 			if (!app || app.terminated) continue;
 			NSString *loc = app.localizedName;
 			NSString *exe = app.executableURL.lastPathComponent;
+			NSString *bid = app.bundleIdentifier;
 			if ((loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) ||
-				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]])) {
+				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]]) ||
+				(bid.length && [[bid lowercaseString] isEqualToString:[target lowercaseString]])) {
 				return app.processIdentifier;
 			}
 		}
@@ -213,7 +229,7 @@ static bool winsnap_get_app_window_frame(const char *name, CGRect *outFrame) {
 		// Normalize: drop path, .app, .exe suffixes
 		target = [target lastPathComponent];
 		NSString *lower = [target lowercaseString];
-		if ([lower hasSuffix:@".app"]) {
+		if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(target)) {
 			target = [target substringToIndex:(target.length - 4)];
 		}
 		lower = [target lowercaseString];
@@ -226,8 +242,10 @@ static bool winsnap_get_app_window_frame(const char *name, CGRect *outFrame) {
 			if (!app || app.terminated) continue;
 			NSString *loc = app.localizedName;
 			NSString *exe = app.executableURL.lastPathComponent;
+			NSString *bid = app.bundleIdentifier;
 			if ((loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) ||
-				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]])) {
+				(exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]]) ||
+				(bid.length && [[bid lowercaseString] isEqualToString:[target lowercaseString]])) {
 				targetPid = app.processIdentifier;
 				break;
 			}

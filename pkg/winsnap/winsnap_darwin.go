@@ -661,6 +661,23 @@ import (
 	"unsafe"
 )
 
+func looksLikeBundleID(name string) bool {
+	n := strings.TrimSpace(name)
+	if n == "" || strings.Contains(n, " ") {
+		return false
+	}
+	parts := strings.Split(n, ".")
+	if len(parts) < 3 {
+		return false
+	}
+	for _, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return false
+		}
+	}
+	return true
+}
+
 type darwinFollower struct {
 	mu     sync.Mutex
 	f      *C.WinsnapFollower
@@ -796,7 +813,7 @@ func normalizeMacTargetName(name string) string {
 	n = n[strings.LastIndex(n, "/")+1:]
 	// Drop common .app suffix to match localizedName.
 	ln := strings.ToLower(n)
-	if strings.HasSuffix(ln, ".app") {
+	if strings.HasSuffix(ln, ".app") && !looksLikeBundleID(n) {
 		n = strings.TrimSpace(n[:len(n)-4])
 		ln = strings.ToLower(n)
 	}
