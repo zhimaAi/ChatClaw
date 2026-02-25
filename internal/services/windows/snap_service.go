@@ -986,7 +986,7 @@ func snapTargetsForKey(key string) []string {
 		case "snap_dingtalk":
 			return []string{"钉钉", "DingTalk", "dingtalk", "com.alibaba.DingTalkMac"}
 		case "snap_feishu":
-			return []string{"飞书", "Feishu", "feishu", "Lark", "lark", "com.bytedance.feishu", "com.bytedance.Lark"}
+			return []string{"飞书", "Feishu", "feishu", "Lark", "lark", "com.bytedance.feishu", "com.bytedance.Lark", "com.electron.lark"}
 		case "snap_douyin":
 			return []string{"抖音", "Douyin", "douyin"}
 		default:

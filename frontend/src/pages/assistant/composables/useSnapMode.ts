@@ -49,6 +49,7 @@ const processToSettingsKey: Record<string, string> = {
   'lark': 'snap_feishu',
   'com.bytedance.feishu': 'snap_feishu',
   'com.bytedance.Lark': 'snap_feishu',
+  'com.electron.lark': 'snap_feishu',
   '抖音': 'snap_douyin',
   'Douyin': 'snap_douyin',
   'douyin': 'snap_douyin',

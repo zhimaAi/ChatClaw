@@ -16,6 +16,18 @@ static char* winsnap_strdup_nsstring(NSString *s) {
 	return strdup(utf8);
 }
 
+// Reverse-domain bundle id usually contains at least 3 segments, like cn.apifox.app.
+static bool winsnap_looks_like_bundle_id(NSString *s) {
+	if (!s || s.length == 0) return false;
+	if ([s rangeOfString:@" "].location != NSNotFound) return false;
+	NSArray<NSString *> *parts = [s componentsSeparatedByString:@"."];
+	if (parts.count < 3) return false;
+	for (NSString *p in parts) {
+		if (p.length == 0) return false;
+	}
+	return true;
+}
+
 // Check if frontmost app is our own app
 static bool winsnap_is_self_frontmost() {
 	@autoreleasepool {
@@ -118,7 +130,7 @@ static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 	// Normalize: drop path, .app, .exe suffixes
 	target = [target lastPathComponent];
 	NSString *lower = [target lowercaseString];
-	if ([lower hasSuffix:@".app"]) {
+	if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(target)) {
 		target = [target substringToIndex:(target.length - 4)];
 	}
 	lower = [target lowercaseString];
