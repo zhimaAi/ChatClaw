@@ -2,6 +2,7 @@ package windows
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sort"
@@ -43,6 +44,24 @@ type SnapStatus struct {
 	LastError       string    `json:"lastError,omitempty"`
 	UpdatedAtUnixMs int64     `json:"updatedAtUnixMs"`
 }
+
+type SnapAppCandidate struct {
+	Name        string `json:"name"`
+	ProcessName string `json:"processName"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+type customSnapAppConfig struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ProcessName string `json:"processName"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+const (
+	snapCustomAppsSettingKey = "snap_custom_apps"
+	snapCustomKeyPrefix      = "snap_custom_"
+)
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
 // the top-most window among all enabled target applications.
@@ -100,6 +119,12 @@ func (s *SnapService) GetStatus() SnapStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.status
+}
+
+// ListAvailableApps returns currently running foreground applications so frontend
+// can let users pick one as a custom snap target.
+func (s *SnapService) ListAvailableApps() ([]SnapAppCandidate, error) {
+	return listRunningApps()
 }
 
 // WakeAttached brings the attached target window and the winsnap window to the front,
@@ -360,6 +385,11 @@ func (s *SnapService) FindSnapTarget() (string, error) {
 	var allTargets []string
 	for _, key := range allKeys {
 		allTargets = append(allTargets, snapTargetsForKey(key)...)
+	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName != "" {
+			allTargets = append(allTargets, app.ProcessName)
+		}
 	}
 	allTargets = uniqueStrings(allTargets)
 
@@ -880,6 +910,15 @@ func readSnapTargetsFromSettings() (enabledKeys []string, enabledTargets []strin
 		{key: "snap_feishu", targets: snapTargetsForKey("snap_feishu")},
 		{key: "snap_douyin", targets: snapTargetsForKey("snap_douyin")},
 	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName == "" {
+			continue
+		}
+		items = append(items, item{
+			key:     customSnapSettingKey(app.ID),
+			targets: []string{app.ProcessName},
+		})
+	}
 
 	for _, it := range items {
 		if !settings.GetBool(it.key, false) {
@@ -970,7 +1009,55 @@ func snapKeyForTarget(targetProcess string) string {
 			}
 		}
 	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName == "" {
+			continue
+		}
+		if strings.EqualFold(app.ProcessName, targetProcess) {
+			return customSnapSettingKey(app.ID)
+		}
+	}
 	return ""
+}
+
+func customSnapSettingKey(id string) string {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" {
+		return ""
+	}
+	return snapCustomKeyPrefix + trimmed
+}
+
+func loadCustomSnapAppsFromSettings() []customSnapAppConfig {
+	raw, ok := settings.GetValue(snapCustomAppsSettingKey)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var apps []customSnapAppConfig
+	if err := json.Unmarshal([]byte(raw), &apps); err != nil {
+		return nil
+	}
+	out := make([]customSnapAppConfig, 0, len(apps))
+	seen := make(map[string]struct{}, len(apps))
+	for _, app := range apps {
+		id := strings.TrimSpace(app.ID)
+		processName := strings.TrimSpace(app.ProcessName)
+		if id == "" || processName == "" {
+			continue
+		}
+		key := strings.ToLower(id) + "##" + strings.ToLower(processName)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, customSnapAppConfig{
+			ID:          id,
+			Name:        strings.TrimSpace(app.Name),
+			ProcessName: processName,
+			Icon:        strings.TrimSpace(app.Icon),
+		})
+	}
+	return out
 }
 
 // getClickSettingsForTarget returns the configured click settings for a target process

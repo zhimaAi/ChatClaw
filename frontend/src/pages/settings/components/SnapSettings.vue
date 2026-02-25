@@ -2,7 +2,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AcceptableValue } from 'reka-ui'
+import { AppWindow, Plus, Search, Trash2 } from 'lucide-vue-next'
 import { Events } from '@wailsio/runtime'
+import { toast } from '@/components/ui/toast'
 import {
   Select,
   SelectContent,
@@ -12,12 +14,30 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 
-// 导入吸附应用图标
 import WechatIcon from '@/assets/icons/snap/wechat.svg'
 import WecomIcon from '@/assets/icons/snap/wecom.svg'
 import QQIcon from '@/assets/icons/snap/qq.svg'
@@ -25,18 +45,44 @@ import DingtalkIcon from '@/assets/icons/snap/dingtalk.svg'
 import FeishuIcon from '@/assets/icons/snap/feishu.svg'
 import DouyinIcon from '@/assets/icons/snap/douyin.svg'
 
-// 后端绑定
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 
-const { t } = useI18n()
+interface CustomSnapApp {
+  id: string
+  name: string
+  processName: string
+  icon?: string
+  enabled: boolean
+  noClick: boolean
+  clickOffsetX: string
+  clickOffsetY: string
+  defaultY: string
+}
 
-// 设置状态
+interface SnapAppCandidate {
+  name: string
+  processName: string
+  icon?: string
+}
+
+interface SnapServiceWithCustomApi {
+  SyncFromSettings: () => Promise<unknown>
+  NotifySettingsChanged: () => Promise<void>
+  ListAvailableApps: () => Promise<SnapAppCandidate[]>
+}
+
+const CUSTOM_APPS_KEY = 'snap_custom_apps'
+const CUSTOM_APP_KEY_PREFIX = 'snap_custom_'
+const DEFAULT_CUSTOM_CLICK_OFFSET_Y = '120'
+
+const { t } = useI18n()
+const snapService = SnapService as unknown as SnapServiceWithCustomApi
+
 const showAiSendButton = ref(true)
 const sendKeyStrategy = ref('enter')
 const showAiEditButton = ref(true)
 
-// 吸附应用状态（互斥，同一时间只能开启一个）
 const snapWechat = ref(false)
 const snapWecom = ref(false)
 const snapQQ = ref(false)
@@ -44,7 +90,6 @@ const snapDingtalk = ref(false)
 const snapFeishu = ref(false)
 const snapDouyin = ref(false)
 
-// 默认点击偏移量 Y（与后端保持一致，不同应用不同）
 const DEFAULT_CLICK_OFFSET_Y: Record<string, string> = {
   snap_wechat: '120',
   snap_wecom: '120',
@@ -54,7 +99,6 @@ const DEFAULT_CLICK_OFFSET_Y: Record<string, string> = {
   snap_douyin: '50',
 }
 
-// 吸附应用点击偏移量 X（像素，0 表示居中）
 const snapWechatClickOffsetX = ref('')
 const snapWecomClickOffsetX = ref('')
 const snapQQClickOffsetX = ref('')
@@ -62,7 +106,6 @@ const snapDingtalkClickOffsetX = ref('')
 const snapFeishuClickOffsetX = ref('')
 const snapDouyinClickOffsetX = ref('')
 
-// 吸附应用点击偏移量 Y（像素）
 const snapWechatClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_wechat)
 const snapWecomClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_wecom)
 const snapQQClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_qq)
@@ -70,7 +113,6 @@ const snapDingtalkClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_dingtalk)
 const snapFeishuClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_feishu)
 const snapDouyinClickOffsetY = ref(DEFAULT_CLICK_OFFSET_Y.snap_douyin)
 
-// 吸附应用不点击模式
 const snapWechatNoClick = ref(false)
 const snapWecomNoClick = ref(false)
 const snapQQNoClick = ref(false)
@@ -78,7 +120,15 @@ const snapDingtalkNoClick = ref(false)
 const snapFeishuNoClick = ref(false)
 const snapDouyinNoClick = ref(true)
 
-// 所有吸附应用的 ref 映射（每个开关独立，不互斥）
+const customSnapApps = ref<CustomSnapApp[]>([])
+const availableApps = ref<SnapAppCandidate[]>([])
+const loadingAvailableApps = ref(false)
+const customPickerOpen = ref(false)
+const customAppSearch = ref('')
+const selectedCandidateProcess = ref('')
+const deleteDialogOpen = ref(false)
+const deletingCustomApp = ref<CustomSnapApp | null>(null)
+
 const snapAppRefs: Record<string, { value: boolean }> = {
   snap_wechat: snapWechat,
   snap_wecom: snapWecom,
@@ -88,7 +138,6 @@ const snapAppRefs: Record<string, { value: boolean }> = {
   snap_douyin: snapDouyin,
 }
 
-// 点击偏移量 X ref 映射
 const clickOffsetXRefs: Record<string, { value: string }> = {
   snap_wechat_click_offset_x: snapWechatClickOffsetX,
   snap_wecom_click_offset_x: snapWecomClickOffsetX,
@@ -98,7 +147,6 @@ const clickOffsetXRefs: Record<string, { value: string }> = {
   snap_douyin_click_offset_x: snapDouyinClickOffsetX,
 }
 
-// 点击偏移量 Y ref 映射
 const clickOffsetYRefs: Record<string, { value: string }> = {
   snap_wechat_click_offset_y: snapWechatClickOffsetY,
   snap_wecom_click_offset_y: snapWecomClickOffsetY,
@@ -108,7 +156,6 @@ const clickOffsetYRefs: Record<string, { value: string }> = {
   snap_douyin_click_offset_y: snapDouyinClickOffsetY,
 }
 
-// 不点击模式 ref 映射
 const noClickRefs: Record<string, { value: boolean }> = {
   snap_wechat_no_click: snapWechatNoClick,
   snap_wecom_no_click: snapWecomNoClick,
@@ -118,19 +165,72 @@ const noClickRefs: Record<string, { value: boolean }> = {
   snap_douyin_no_click: snapDouyinNoClick,
 }
 
-// 发送按键模式选项
 const sendKeyOptions = [
   { value: 'enter', label: 'settings.snap.sendKeyOptions.enter' },
   { value: 'ctrl_enter', label: 'settings.snap.sendKeyOptions.ctrlEnter' },
 ]
 
-// 当前发送按键模式显示文本
 const currentSendKeyLabel = computed(() => {
   const option = sendKeyOptions.find((opt) => opt.value === sendKeyStrategy.value)
   return option ? t(option.label) : ''
 })
 
-// 吸附应用列表
+const builtInIconMap: Record<string, unknown> = {
+  wechat: WechatIcon,
+  wecom: WecomIcon,
+  qq: QQIcon,
+  dingtalk: DingtalkIcon,
+  feishu: FeishuIcon,
+  douyin: DouyinIcon,
+}
+
+const builtInProcessToAppKeyMap: Record<string, string> = {
+  // Windows
+  'weixin.exe': 'snap_wechat',
+  'wechat.exe': 'snap_wechat',
+  'wechatapp.exe': 'snap_wechat',
+  'wechatappex.exe': 'snap_wechat',
+  'wxwork.exe': 'snap_wecom',
+  'qq.exe': 'snap_qq',
+  'qqnt.exe': 'snap_qq',
+  'dingtalk.exe': 'snap_dingtalk',
+  'feishu.exe': 'snap_feishu',
+  'lark.exe': 'snap_feishu',
+  'douyin.exe': 'snap_douyin',
+  // macOS
+  '微信': 'snap_wechat',
+  'weixin': 'snap_wechat',
+  'wechat': 'snap_wechat',
+  'com.tencent.xinwechat': 'snap_wechat',
+  '企业微信': 'snap_wecom',
+  'wecom': 'snap_wecom',
+  'wework': 'snap_wecom',
+  'wxwork': 'snap_wecom',
+  'qiyeweixin': 'snap_wecom',
+  'com.tencent.weworkmac': 'snap_wecom',
+  'qq': 'snap_qq',
+  'com.tencent.qq': 'snap_qq',
+  '钉钉': 'snap_dingtalk',
+  'dingtalk': 'snap_dingtalk',
+  'com.alibaba.dingtalkmac': 'snap_dingtalk',
+  '飞书': 'snap_feishu',
+  'feishu': 'snap_feishu',
+  'lark': 'snap_feishu',
+  'com.bytedance.feishu': 'snap_feishu',
+  'com.bytedance.lark': 'snap_feishu',
+  '抖音': 'snap_douyin',
+  'douyin': 'snap_douyin',
+}
+
+const builtInAppLabelByKey: Record<string, string> = {
+  snap_wechat: 'settings.snap.apps.wechat',
+  snap_wecom: 'settings.snap.apps.wecom',
+  snap_qq: 'settings.snap.apps.qq',
+  snap_dingtalk: 'settings.snap.apps.dingtalk',
+  snap_feishu: 'settings.snap.apps.feishu',
+  snap_douyin: 'settings.snap.apps.douyin',
+}
+
 const snapApps = computed(() => [
   {
     key: 'snap_wechat',
@@ -200,57 +300,139 @@ const snapApps = computed(() => [
   },
 ])
 
-// 布尔设置映射表
 const boolSettingsMap: Record<string, { value: boolean }> = {
   show_ai_send_button: showAiSendButton,
   show_ai_edit_button: showAiEditButton,
   ...snapAppRefs,
 }
 
+const filteredAvailableApps = computed(() => {
+  const keyword = customAppSearch.value.trim().toLowerCase()
+  if (!keyword) {
+    return availableApps.value
+  }
+  return availableApps.value.filter((app) => {
+    const name = app.name?.toLowerCase() ?? ''
+    const processName = app.processName?.toLowerCase() ?? ''
+    return name.includes(keyword) || processName.includes(keyword)
+  })
+})
+
+const selectedCandidate = computed(() =>
+  availableApps.value.find((app) => app.processName === selectedCandidateProcess.value)
+)
+
+const getCustomAppSettingKey = (id: string) => `${CUSTOM_APP_KEY_PREFIX}${id}`
+
+const normalizeProcess = (value: string) => value.trim().toLowerCase()
+
+const parseCustomApps = (rawValue: string): CustomSnapApp[] => {
+  if (!rawValue) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as Array<{
+      id?: string
+      name?: string
+      processName?: string
+      icon?: string
+    }>
+    const seen = new Set<string>()
+    const out: CustomSnapApp[] = []
+    parsed.forEach((item) => {
+      const id = (item.id ?? '').trim()
+      const processName = (item.processName ?? '').trim()
+      if (!id || !processName) {
+        return
+      }
+      const uniqueKey = `${id}#${normalizeProcess(processName)}`
+      if (seen.has(uniqueKey)) {
+        return
+      }
+      seen.add(uniqueKey)
+      out.push({
+        id,
+        name: (item.name ?? processName).trim() || processName,
+        processName,
+        icon: item.icon?.trim() || 'app',
+        enabled: false,
+        noClick: false,
+        clickOffsetX: '',
+        clickOffsetY: DEFAULT_CUSTOM_CLICK_OFFSET_Y,
+        defaultY: DEFAULT_CUSTOM_CLICK_OFFSET_Y,
+      })
+    })
+    return out
+  } catch {
+    return []
+  }
+}
+
+const saveCustomAppsConfig = async (apps: CustomSnapApp[]) => {
+  const payload = apps.map((app) => ({
+    id: app.id,
+    name: app.name,
+    processName: app.processName,
+    icon: app.icon ?? 'app',
+  }))
+  await updateSetting(CUSTOM_APPS_KEY, JSON.stringify(payload))
+}
+
+const getCandidateIcon = (icon?: string) => {
+  return icon && builtInIconMap[icon] ? builtInIconMap[icon] : AppWindow
+}
+
 const syncSnapFromSettings = async () => {
   try {
-    await SnapService.SyncFromSettings()
+    await snapService.SyncFromSettings()
   } catch (error) {
     console.error('Failed to sync snap service from settings:', error)
   }
 }
 
-// Refresh UI from settings (without triggering backend sync to avoid event loop)
 const refreshSettingsUI = async () => {
   try {
     const settings = await SettingsService.List(Category.CategorySnap)
+    const settingMap = new Map(settings.map((setting) => [setting.key, setting.value]))
+
     settings.forEach((setting) => {
-      // 处理布尔类型设置
       const boolRef = boolSettingsMap[setting.key]
       if (boolRef) {
         boolRef.value = setting.value === 'true'
         return
       }
-      // 处理不点击模式设置
       const noClickRef = noClickRefs[setting.key]
       if (noClickRef) {
         noClickRef.value = setting.value === 'true'
         return
       }
-      // 处理点击偏移量 X 设置
       const offsetXRef = clickOffsetXRefs[setting.key]
       if (offsetXRef) {
-        // X offset: empty means center
         offsetXRef.value = setting.value || ''
         return
       }
-      // 处理点击偏移量 Y 设置
       const offsetYRef = clickOffsetYRefs[setting.key]
       if (offsetYRef) {
-        // Y offset: use saved value or keep the default already set
         if (setting.value) {
           offsetYRef.value = setting.value
         }
         return
       }
-      // 处理其他类型设置
       if (setting.key === 'send_key_strategy') {
         sendKeyStrategy.value = setting.value
+      }
+    })
+
+    const customAppsConfig = parseCustomApps(settingMap.get(CUSTOM_APPS_KEY) ?? '')
+    customSnapApps.value = customAppsConfig.map((app) => {
+      const key = getCustomAppSettingKey(app.id)
+      const clickOffsetY = settingMap.get(`${key}_click_offset_y`) ?? ''
+      return {
+        ...app,
+        enabled: settingMap.get(key) === 'true',
+        noClick: settingMap.get(`${key}_no_click`) === 'true',
+        clickOffsetX: settingMap.get(`${key}_click_offset_x`) ?? '',
+        clickOffsetY: clickOffsetY || DEFAULT_CUSTOM_CLICK_OFFSET_Y,
       }
     })
   } catch (error) {
@@ -258,14 +440,11 @@ const refreshSettingsUI = async () => {
   }
 }
 
-// 加载设置（包括同步后端服务）
 const loadSettings = async () => {
   await refreshSettingsUI()
-  // 同步后端吸附服务（根据当前 settings 的多个开关状态决定启动/隐藏/吸附目标）
   await syncSnapFromSettings()
 }
 
-// 更新设置
 const updateSetting = async (key: string, value: string) => {
   try {
     await SettingsService.SetValue(key, value)
@@ -275,35 +454,30 @@ const updateSetting = async (key: string, value: string) => {
   }
 }
 
-// 处理 AI 发送按钮开关变化
 const handleAiSendButtonChange = async (val: boolean) => {
   const prev = showAiSendButton.value
   showAiSendButton.value = val
   try {
     await updateSetting('show_ai_send_button', String(val))
-    // Notify other windows (e.g., winsnap) about the settings change
     isLocalUpdate = true
-    await SnapService.NotifySettingsChanged()
+    await snapService.NotifySettingsChanged()
   } catch {
     showAiSendButton.value = prev
   }
 }
 
-// 处理 AI 编辑按钮开关变化
 const handleAiEditButtonChange = async (val: boolean) => {
   const prev = showAiEditButton.value
   showAiEditButton.value = val
   try {
     await updateSetting('show_ai_edit_button', String(val))
-    // Notify other windows (e.g., winsnap) about the settings change
     isLocalUpdate = true
-    await SnapService.NotifySettingsChanged()
+    await snapService.NotifySettingsChanged()
   } catch {
     showAiEditButton.value = prev
   }
 }
 
-// 处理吸附应用开关变化（每个开关独立，不互斥；所有开关共用一个吸附窗体）
 const handleSnapAppChange = async (key: string, refValue: { value: boolean }, val: boolean) => {
   const prev = refValue.value
   refValue.value = val
@@ -316,85 +490,215 @@ const handleSnapAppChange = async (key: string, refValue: { value: boolean }, va
   await syncSnapFromSettings()
 }
 
-// 处理发送按键模式变化
+const handleCustomSnapAppChange = async (app: CustomSnapApp, val: boolean) => {
+  const prev = app.enabled
+  app.enabled = val
+  try {
+    await updateSetting(getCustomAppSettingKey(app.id), String(val))
+  } catch {
+    app.enabled = prev
+    return
+  }
+  await syncSnapFromSettings()
+}
+
+const handleCustomInputModeChange = async (app: CustomSnapApp, mode: string) => {
+  const prev = app.noClick
+  const newValue = mode === 'no_click'
+  app.noClick = newValue
+  const key = getCustomAppSettingKey(app.id)
+  try {
+    await updateSetting(key + '_no_click', String(newValue))
+    isLocalUpdate = true
+    await snapService.NotifySettingsChanged()
+  } catch {
+    app.noClick = prev
+  }
+}
+
+const handleCustomClickOffsetXBlur = async (app: CustomSnapApp) => {
+  const sanitized = app.clickOffsetX.replace(/[^0-9]/g, '')
+  app.clickOffsetX = sanitized
+  const key = getCustomAppSettingKey(app.id)
+  try {
+    await updateSetting(key + '_click_offset_x', sanitized)
+    isLocalUpdate = true
+    await snapService.NotifySettingsChanged()
+  } catch (error) {
+    console.error('Failed to save custom click offset X:', error)
+  }
+}
+
+const handleCustomClickOffsetYBlur = async (app: CustomSnapApp) => {
+  const sanitized = app.clickOffsetY.replace(/[^0-9]/g, '')
+  const finalValue = sanitized && sanitized !== '0' ? sanitized : app.defaultY
+  app.clickOffsetY = finalValue
+  const key = getCustomAppSettingKey(app.id)
+  try {
+    const saveValue = finalValue === app.defaultY ? '' : finalValue
+    await updateSetting(key + '_click_offset_y', saveValue)
+    isLocalUpdate = true
+    await snapService.NotifySettingsChanged()
+  } catch (error) {
+    console.error('Failed to save custom click offset Y:', error)
+  }
+}
+
 const handleSendKeyChange = async (value: AcceptableValue) => {
   if (typeof value === 'string') {
     const prev = sendKeyStrategy.value
     sendKeyStrategy.value = value
     try {
       await updateSetting('send_key_strategy', value)
-      // Notify other windows about the settings change
       isLocalUpdate = true
-      await SnapService.NotifySettingsChanged()
+      await snapService.NotifySettingsChanged()
     } catch {
       sendKeyStrategy.value = prev
     }
   }
 }
 
-// 处理输入模式变化（点击模式/不点击模式）
 const handleInputModeChange = async (key: string, refValue: { value: boolean }, mode: string) => {
   const prev = refValue.value
   const newValue = mode === 'no_click'
   refValue.value = newValue
   try {
     await updateSetting(key + '_no_click', String(newValue))
-    // Notify other windows about the settings change (set flag to prevent self-refresh)
     isLocalUpdate = true
-    await SnapService.NotifySettingsChanged()
+    await snapService.NotifySettingsChanged()
   } catch {
     refValue.value = prev
   }
 }
 
-// 处理点击偏移量 X 变化（失去焦点时调用）
 const handleClickOffsetXBlur = async (key: string, refValue: { value: string }) => {
-  // Only allow numbers, empty means center
   const sanitized = refValue.value.replace(/[^0-9]/g, '')
   refValue.value = sanitized
   try {
     await updateSetting(key + '_click_offset_x', sanitized)
-    // Notify other windows about the settings change
     isLocalUpdate = true
-    await SnapService.NotifySettingsChanged()
+    await snapService.NotifySettingsChanged()
   } catch (error) {
     console.error('Failed to save click offset X:', error)
   }
 }
 
-// 处理点击偏移量 Y 变化（失去焦点时调用）
 const handleClickOffsetYBlur = async (key: string, refValue: { value: string }, defaultValue: string) => {
-  // Only allow numbers
   const sanitized = refValue.value.replace(/[^0-9]/g, '')
-  // If empty or zero, use default
   const finalValue = sanitized && sanitized !== '0' ? sanitized : defaultValue
   refValue.value = finalValue
   try {
-    // Save empty string to database if using default (so backend uses its default too)
     const saveValue = finalValue === defaultValue ? '' : finalValue
     await updateSetting(key + '_click_offset_y', saveValue)
-    // Notify other windows about the settings change
     isLocalUpdate = true
-    await SnapService.NotifySettingsChanged()
+    await snapService.NotifySettingsChanged()
   } catch (error) {
     console.error('Failed to save click offset Y:', error)
   }
 }
 
-// Event subscription for snap settings change (broadcast from backend)
-let unsubscribeSnapSettingsChanged: (() => void) | null = null
+const loadAvailableApps = async () => {
+  loadingAvailableApps.value = true
+  try {
+    const apps = await snapService.ListAvailableApps()
+    const selectedProcesses = new Set(customSnapApps.value.map((item) => normalizeProcess(item.processName)))
+    availableApps.value = apps.filter((app) => {
+      const processName = app.processName?.trim()
+      const name = app.name?.trim()
+      if (!processName || !name) {
+        return false
+      }
+      return !selectedProcesses.has(normalizeProcess(processName))
+    })
+  } catch (error) {
+    console.error('Failed to list running apps:', error)
+    availableApps.value = []
+  } finally {
+    loadingAvailableApps.value = false
+  }
+}
 
-// Flag to prevent self-triggered refresh
+const openCustomAppPicker = async () => {
+  customPickerOpen.value = true
+  customAppSearch.value = ''
+  selectedCandidateProcess.value = ''
+  await loadAvailableApps()
+}
+
+const handleConfirmAddCustomApp = async () => {
+  const selected = selectedCandidate.value
+  if (!selected) {
+    return
+  }
+  const normalizedProcess = normalizeProcess(selected.processName)
+  const matchedBuiltInKey = builtInProcessToAppKeyMap[normalizedProcess]
+  if (matchedBuiltInKey) {
+    const appLabelKey = builtInAppLabelByKey[matchedBuiltInKey]
+    const appLabel = appLabelKey ? t(appLabelKey) : selected.name
+    toast.error(t('settings.snap.customAppExistsBuiltIn', { app: appLabel }))
+    return
+  }
+  const existingCustom = customSnapApps.value.find(
+    (app) => normalizeProcess(app.processName) === normalizedProcess
+  )
+  if (existingCustom) {
+    toast.error(t('settings.snap.customAppExistsCustom', { name: existingCustom.name }))
+    return
+  }
+
+  const newApp: CustomSnapApp = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+    name: selected.name.trim(),
+    processName: selected.processName.trim(),
+    icon: selected.icon?.trim() || 'app',
+    enabled: true,
+    noClick: false,
+    clickOffsetX: '',
+    clickOffsetY: DEFAULT_CUSTOM_CLICK_OFFSET_Y,
+    defaultY: DEFAULT_CUSTOM_CLICK_OFFSET_Y,
+  }
+
+  const nextApps = [...customSnapApps.value, newApp]
+  try {
+    await saveCustomAppsConfig(nextApps)
+    await updateSetting(getCustomAppSettingKey(newApp.id), 'true')
+    customSnapApps.value = nextApps
+    customPickerOpen.value = false
+    await syncSnapFromSettings()
+  } catch (error) {
+    console.error('Failed to add custom snap app:', error)
+  }
+}
+
+const requestDeleteCustomApp = (app: CustomSnapApp) => {
+  deletingCustomApp.value = app
+  deleteDialogOpen.value = true
+}
+
+const handleConfirmDeleteCustomApp = async () => {
+  const target = deletingCustomApp.value
+  if (!target) {
+    return
+  }
+  const nextApps = customSnapApps.value.filter((app) => app.id !== target.id)
+  try {
+    await saveCustomAppsConfig(nextApps)
+    await updateSetting(getCustomAppSettingKey(target.id), 'false')
+    customSnapApps.value = nextApps
+    deleteDialogOpen.value = false
+    deletingCustomApp.value = null
+    await syncSnapFromSettings()
+  } catch (error) {
+    console.error('Failed to delete custom snap app:', error)
+  }
+}
+
+let unsubscribeSnapSettingsChanged: (() => void) | null = null
 let isLocalUpdate = false
 
-// 页面加载时获取设置
 onMounted(() => {
   void loadSettings()
-
-  // Listen for snap settings change event broadcast from backend (e.g., when winsnap window cancels snap)
-  // Only refresh UI without calling syncSnapFromSettings to avoid event loop
   unsubscribeSnapSettingsChanged = Events.On('snap:settings-changed', () => {
-    // Skip refresh if this was triggered by our own update
     if (isLocalUpdate) {
       isLocalUpdate = false
       return
@@ -411,14 +715,11 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <!-- 设置卡片 -->
     <SettingsCard :title="t('settings.snap.title')">
-      <!-- AI回复显示发送到聊天按钮 -->
       <SettingsItem :label="t('settings.snap.showAiSendButton')">
         <Switch :model-value="showAiSendButton" @update:model-value="handleAiSendButtonChange" />
       </SettingsItem>
 
-      <!-- 发送消息按键模式 -->
       <SettingsItem :label="t('settings.snap.sendKeyStrategy')">
         <Select :model-value="sendKeyStrategy" @update:model-value="handleSendKeyChange">
           <SelectTrigger class="w-54">
@@ -432,13 +733,11 @@ onUnmounted(() => {
         </Select>
       </SettingsItem>
 
-      <!-- AI回复显示编辑内容按钮 -->
       <SettingsItem :label="t('settings.snap.showAiEditButton')" :bordered="false">
         <Switch :model-value="showAiEditButton" @update:model-value="handleAiEditButtonChange" />
       </SettingsItem>
     </SettingsCard>
 
-    <!-- 吸附应用卡片 -->
     <SettingsCard :title="t('settings.snap.appsTitle')">
       <div v-for="(app, index) in snapApps" :key="app.key">
         <SettingsItem :bordered="index !== snapApps.length - 1 || app.value.value">
@@ -455,27 +754,23 @@ onUnmounted(() => {
             </div>
           </template>
         </SettingsItem>
-        <!-- 输入模式设置（仅当开关开启时显示） -->
         <div
           v-if="app.value.value"
           class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
           :class="{ 'border-b border-border': index !== snapApps.length - 1 }"
         >
-          <!-- 输入模式单选（部分应用不支持不点击模式） -->
           <RadioGroup
             v-if="app.hasNoClickOption"
             :model-value="app.noClick.value ? 'no_click' : 'click'"
             class="flex flex-col gap-2"
             @update:model-value="(mode: string) => handleInputModeChange(app.key, app.noClick, mode)"
           >
-            <!-- 不点击模式 -->
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${app.key}_no_click`" value="no_click" />
               <Label :for="`${app.key}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
                 {{ t('settings.snap.noClickMode') }}
               </Label>
             </div>
-            <!-- 点击模式 -->
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${app.key}_click`" value="click" />
               <Label :for="`${app.key}_click`" class="text-xs text-muted-foreground cursor-pointer">
@@ -483,7 +778,6 @@ onUnmounted(() => {
               </Label>
             </div>
           </RadioGroup>
-          <!-- 点击偏移量输入（不点击模式时隐藏；无不点击选项的应用始终显示） -->
           <div v-if="!app.hasNoClickOption || !app.noClick.value" class="flex items-center justify-between gap-4 pl-6">
             <div class="flex items-center gap-2">
               <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
@@ -505,6 +799,171 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <div class="border-t border-border">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div class="text-sm font-medium text-foreground">{{ t('settings.snap.customAppsTitle') }}</div>
+          <Button variant="outline" size="sm" class="h-7" @click="openCustomAppPicker">
+            <Plus class="size-3.5 mr-1" />
+            {{ t('settings.snap.addCustomApp') }}
+          </Button>
+        </div>
+
+        <div v-if="customSnapApps.length === 0" class="px-4 py-4 text-xs text-muted-foreground">
+          {{ t('settings.snap.customAppsEmpty') }}
+        </div>
+
+        <div v-for="(customApp, index) in customSnapApps" :key="customApp.id">
+          <SettingsItem :bordered="index !== customSnapApps.length - 1 || customApp.enabled">
+            <template #default>
+              <Switch
+                :model-value="customApp.enabled"
+                @update:model-value="(val: boolean) => handleCustomSnapAppChange(customApp, val)"
+              />
+            </template>
+            <template #label>
+              <div class="flex items-center gap-2 min-w-0">
+                <component :is="getCandidateIcon(customApp.icon)" class="size-5 text-muted-foreground shrink-0" />
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-foreground truncate">{{ customApp.name }}</span>
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                      @click="requestDeleteCustomApp(customApp)"
+                    >
+                      <Trash2 class="size-3.5" />
+                    </button>
+                  </div>
+                  <div class="text-xs text-muted-foreground truncate">{{ customApp.processName }}</div>
+                </div>
+              </div>
+            </template>
+          </SettingsItem>
+          <div
+            v-if="customApp.enabled"
+            class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
+            :class="{ 'border-b border-border': index !== customSnapApps.length - 1 }"
+          >
+            <RadioGroup
+              :model-value="customApp.noClick ? 'no_click' : 'click'"
+              class="flex flex-col gap-2"
+              @update:model-value="(mode: string) => handleCustomInputModeChange(customApp, mode)"
+            >
+              <div class="flex items-center gap-2">
+                <RadioGroupItem :id="`${customApp.id}_no_click`" value="no_click" />
+                <Label :for="`${customApp.id}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
+                  {{ t('settings.snap.noClickMode') }}
+                </Label>
+              </div>
+              <div class="flex items-center gap-2">
+                <RadioGroupItem :id="`${customApp.id}_click`" value="click" />
+                <Label :for="`${customApp.id}_click`" class="text-xs text-muted-foreground cursor-pointer">
+                  {{ t('settings.snap.clickMode') }}
+                </Label>
+              </div>
+            </RadioGroup>
+            <div v-if="!customApp.noClick" class="flex items-center justify-between gap-4 pl-6">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
+                <Input
+                  v-model="customApp.clickOffsetX"
+                  :placeholder="t('settings.snap.clickOffset.placeholderX')"
+                  class="w-16 h-7 text-xs text-center"
+                  @blur="handleCustomClickOffsetXBlur(customApp)"
+                />
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelY') }}</span>
+                <Input
+                  v-model="customApp.clickOffsetY"
+                  class="w-16 h-7 text-xs text-center"
+                  @blur="handleCustomClickOffsetYBlur(customApp)"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </SettingsCard>
   </div>
+
+  <Dialog v-model:open="customPickerOpen">
+    <DialogContent class="sm:max-w-[560px]">
+      <DialogHeader>
+        <DialogTitle>{{ t('settings.snap.customPickerTitle') }}</DialogTitle>
+        <DialogDescription>{{ t('settings.snap.customPickerDesc') }}</DialogDescription>
+      </DialogHeader>
+
+      <div class="space-y-3">
+        <div class="relative">
+          <Search class="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            v-model="customAppSearch"
+            :placeholder="t('settings.snap.customSearchPlaceholder')"
+            class="pl-9"
+          />
+        </div>
+
+        <div class="max-h-80 overflow-y-auto rounded-md border border-border">
+          <div
+            v-if="loadingAvailableApps"
+            class="px-3 py-8 text-center text-xs text-muted-foreground"
+          >
+            {{ t('settings.snap.customAppsLoading') }}
+          </div>
+          <div
+            v-else-if="filteredAvailableApps.length === 0"
+            class="px-3 py-8 text-center text-xs text-muted-foreground"
+          >
+            {{ t('settings.snap.customAppsNoResult') }}
+          </div>
+          <button
+            v-for="app in filteredAvailableApps"
+            :key="app.processName"
+            type="button"
+            class="w-full flex items-center gap-3 px-3 py-2.5 text-left border-b last:border-b-0 border-border transition-colors hover:bg-muted/40"
+            :class="selectedCandidateProcess === app.processName && 'bg-muted/60'"
+            @click="selectedCandidateProcess = app.processName"
+          >
+            <component :is="getCandidateIcon(app.icon)" class="size-5 text-muted-foreground shrink-0" />
+            <div class="min-w-0">
+              <div class="text-sm text-foreground truncate">{{ app.name }}</div>
+              <div class="text-xs text-muted-foreground truncate">{{ app.processName }}</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" @click="customPickerOpen = false">
+          {{ t('settings.snap.cancel') }}
+        </Button>
+        <Button :disabled="!selectedCandidate" @click="handleConfirmAddCustomApp">
+          {{ t('settings.snap.confirmAddCustomApp') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <AlertDialog v-model:open="deleteDialogOpen">
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>{{ t('settings.snap.deleteCustomConfirmTitle') }}</AlertDialogTitle>
+        <AlertDialogDescription>
+          {{
+            t('settings.snap.deleteCustomConfirmDesc', {
+              name: deletingCustomApp?.name ?? '',
+            })
+          }}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>{{ t('settings.snap.cancel') }}</AlertDialogCancel>
+        <AlertDialogAction @click.prevent="handleConfirmDeleteCustomApp">
+          {{ t('settings.snap.confirmDeleteCustomApp') }}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 </template>
