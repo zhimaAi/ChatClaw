@@ -27,6 +27,10 @@ export default {
       name: '知识库检索',
       description: '从知识库中检索相关内容',
     },
+    memoryRetriever: {
+      name: '记忆检索',
+      description: '从长期记忆中检索相关事实',
+    },
     execute: {
       name: '执行命令',
       description: '在系统终端中执行 Shell 命令',
@@ -129,6 +133,7 @@ export default {
     menu: {
       modelService: '模型服务',
       generalSettings: '常规设置',
+      memorySettings: '长期记忆',
       snapSettings: '吸附设置',
       tools: '功能工具',
       about: '关于我们',
@@ -138,6 +143,27 @@ export default {
       title: '常规设置',
       language: '语言',
       theme: '主题颜色',
+    },
+    // 长期记忆设置
+    memory: {
+      title: '长期记忆',
+      enable: '开启长期记忆',
+      enableHint: '开启后，AI 将在对话中自动提取并记住您的偏好、习惯和重要事实。',
+      extractModel: '记忆提取模型',
+      extractModelHint: '用于在每次对话后总结并提取有价值的记忆信息。',
+      embeddingModel: '记忆向量模型',
+      embeddingModelHint: '用于将记忆文本转换为向量，以便在对话中进行语义检索。',
+      embeddingDimension: '嵌入维度',
+      embeddingDimensionHint: '嵌入向量维度需与所选模型的输出一致。',
+      save: '保存设置',
+      saved: '设置已保存',
+      saveFailed: '保存设置失败',
+      rebuildWarning: '修改向量模型或维度后，所有已有记忆的向量数据将被异步重建。',
+      rebuilding: '正在重建记忆向量...',
+      rebuildSuccess: '记忆向量重建完成',
+      rebuildFailed: '记忆向量重建失败',
+      confirmRebuildTitle: '确认重建记忆向量',
+      confirmRebuildDesc: '您修改了向量模型或维度，这需要重新计算所有已有记忆的向量数据。此过程可能需要一些时间，是否继续？',
     },
     // 吸附设置
     snap: {

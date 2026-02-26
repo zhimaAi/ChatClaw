@@ -16,6 +16,7 @@ defineProps<{
 }>()
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
+import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
@@ -29,6 +30,7 @@ const settingsStore = useSettingsStore()
 const menuLabelKeys: Record<SettingsMenuItem, string> = {
   modelService: 'settings.menu.modelService',
   generalSettings: 'settings.menu.generalSettings',
+  memorySettings: 'settings.menu.memorySettings',
   snapSettings: 'settings.menu.snapSettings',
   tools: 'settings.menu.tools',
   about: 'settings.menu.about',
@@ -38,6 +40,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
 const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: ModelServiceSettings,
   generalSettings: GeneralSettings,
+  memorySettings: MemorySettings,
   snapSettings: SnapSettings,
   tools: ToolsSettings,
   about: AboutSettings,

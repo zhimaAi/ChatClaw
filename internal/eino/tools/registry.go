@@ -51,6 +51,9 @@ func NewToolRegistry() *ToolRegistry {
 		return NewWikipediaTool(ctx, nil)
 	})
 
+	// NOTE: MemoryRetriever is NOT registered here. Each conversation creates its
+	// own memoryRetrieverTool instance (via NewChatModelAgent) with the agent's ID.
+
 	return r
 }
 

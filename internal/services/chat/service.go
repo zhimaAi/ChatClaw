@@ -17,6 +17,7 @@ import (
 	"chatclaw/internal/eino/processor"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/retrieval"
 	"chatclaw/internal/sqlite"
 
@@ -340,8 +341,10 @@ func (s *ChatService) deleteMessagesAfter(ctx context.Context, db *bun.DB, conve
 
 // AgentExtras contains additional agent configuration not in einoagent.Config
 type AgentExtras struct {
+	AgentID        int64
 	LibraryIDs     []int64
 	MatchThreshold float64
+	MemoryEnabled  bool
 }
 
 // getAgentAndProviderConfig gets the agent and provider configuration for a conversation
@@ -449,6 +452,22 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	// out from the middleware-appended instructions (filesystem, skill, etc.).
 	instruction := fmt.Sprintf("# System Instruction\n\n%s", strings.TrimSpace(agent.Prompt))
 
+	// Check memory settings
+	var memoryEnabledStr string
+	_ = db.NewSelect().Table("settings").Column("value").Where("key = ?", "memory_enabled").Scan(ctx, &memoryEnabledStr)
+	memoryEnabled := memoryEnabledStr == "true"
+
+	if memoryEnabled {
+		// Inject Core Profile
+		// Use a short timeout to prevent blocking chat generation
+		cpCtx, cpCancel := context.WithTimeout(ctx, 1*time.Second)
+		var coreProfile string
+		if err := sqlite.DB().NewSelect().Table("core_profiles").Column("content").Where("agent_id = ?", conv.AgentID).Scan(cpCtx, &coreProfile); err == nil && coreProfile != "" {
+			instruction += "\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n" + coreProfile
+		}
+		cpCancel()
+	}
+
 	agentConfig := einoagent.Config{
 		Name:            agent.Name,
 		Instruction:     instruction,
@@ -478,8 +497,10 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	}
 
 	extras := AgentExtras{
+		AgentID:        conv.AgentID,
 		LibraryIDs:     convLibraryIDs,
 		MatchThreshold: agent.RetrievalMatchThreshold,
+		MemoryEnabled:  memoryEnabled,
 	}
 
 	return agentConfig, providerConfig, extras, nil
@@ -634,6 +655,20 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 				"You MUST use the library_retriever tool FIRST to search for answers before using any web search tools (duckduckgo_search, wikipedia_search, etc.). " +
 				"When calling library_retriever, ALWAYS provide 2-5 queries from different angles, using varied keywords and phrasings, to ensure comprehensive coverage. " +
 				"Only fall back to web search if the knowledge base returns no relevant results."
+		}
+	}
+
+	if agentExtras.MemoryEnabled {
+		memoryTool, toolErr := tools.NewMemoryRetrieverTool(ctx, &tools.MemoryRetrieverConfig{
+			AgentID:        agentExtras.AgentID,
+			TopK:           agentConfig.RetrievalTopK,
+			MatchThreshold: agentExtras.MatchThreshold,
+		})
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create memory retriever tool", "error", toolErr)
+		} else if memoryTool != nil {
+			extraTools = append(extraTools, memoryTool)
+			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
 		}
 	}
 
@@ -1152,6 +1187,15 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		Status:       StatusSuccess,
 		FinishReason: finishReason,
 	})
+
+	// 异步执行记忆提取
+	if agentExtras.MemoryEnabled {
+		go func() {
+			// 给一点延迟，确保主流程的事务和状态已完全落盘
+			time.Sleep(1 * time.Second)
+			memory.RunMemoryExtraction(context.Background(), s.app, conversationID)
+		}()
+	}
 }
 
 // loadMessagesForContext loads messages for agent context

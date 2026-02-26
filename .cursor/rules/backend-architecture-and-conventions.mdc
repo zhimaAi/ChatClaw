@@ -34,6 +34,27 @@ alwaysApply: false
 - 不要硬编码用户可见的文本，必须走 i18n
 - **不要在函数体内裸调 `syscall.NewCallback` / `windows.NewCallback`**——Go 在 Windows 上只有约 2000 个回调槽位且永不释放，必须用 `sync.Once` 保证只创建一次（详见 `docs/windows-syscall-callback-limit.md`）
 
+## 数据库模型时间戳
+
+所有 bun 模型的 `created_at` / `updated_at` **必须**通过 `bun.BeforeInsertHook` 钩子自动设置，使用 `sqlite.NowUTC()` 生成 UTC 时间字符串。**禁止**依赖 bun tag 的 `default:current_timestamp` 或 `nullzero`——SQLite 建表 DDL 不一定有 DEFAULT，且 bun 的 nullzero 会跳过零值导致字段缺失。
+
+```go
+// ✅ 正确——每个模型都要加 BeforeInsertHook
+var _ bun.BeforeInsertHook = (*myModel)(nil)
+
+func (*myModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+    now := sqlite.NowUTC()
+    query.Value("created_at", "?", now)
+    query.Value("updated_at", "?", now)
+    return nil
+}
+
+// ❌ 错误——仅靠 bun tag，实际插入时 created_at 为零值会触发 NOT NULL 约束
+type myModel struct {
+    CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+```
+
 ## 代码模式
 
 ```go
