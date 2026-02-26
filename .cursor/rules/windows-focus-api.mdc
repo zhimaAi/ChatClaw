@@ -77,3 +77,38 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
 ## 参考文档
 
 详细说明见 `docs/windows-focus-handling.md`
+
+## Snap 窗口监听安全规则（防止“界面假死”）
+
+### 触发背景
+
+在 `snap` 模式下，前端常用全局 capture 监听（`pointerdown`/`mousedown`）配合 `WakeAttached` 做窗口层级同步。  
+若在“取消吸附 / 重新吸附 / 关闭窗口 / Radix 弹层交互”期间仍触发 `WakeAttached`，Windows 可能出现：
+
+- 鼠标点击无响应（像被系统吞掉）
+- 需要按 `Win` 键才恢复交互
+
+### 必须遵守
+
+1. **仅在已附着时调用 `WakeAttached`**
+   - 监听回调第一行必须有 attached state guard（如 `if (!hasAttachedTarget) return`）。
+
+2. **必须排除操作按钮和弹层区域**
+   - Header 操作按钮（新建/取消吸附/重新吸附/关闭）必须加 `data-snap-action` 标记。
+   - 全局监听必须 `closest('[data-snap-action], ...radix selectors...')` 后直接 `return`。
+
+3. **禁止在“状态切换动作”里同步唤醒**
+   - 执行 `cancelSnap`、`findAndAttach`、`closeSnapWindow` 相关按钮点击时，不得触发额外 `WakeAttached`。
+   - 即：监听过滤优先级必须高于任何 z-order/焦点操作。
+
+4. **保持 no-activate 语义**
+   - 非必要路径禁止引入新的 `SetForegroundWindow`/强制激活调用。
+   - 仅允许在明确的“用户点击 winsnap 且 attached”路径调用 `WakeAttached`。
+
+### 提交前检查清单
+
+- 是否只有一个 snap 全局 pointer 监听入口？
+- 监听是否包含 attached guard？
+- Header 按钮是否都带 `data-snap-action`？
+- 监听过滤是否覆盖 Radix Popper/Dialog/Listbox？
+- 取消吸附后立即点击“吸附应用”是否不会触发 `WakeAttached`？

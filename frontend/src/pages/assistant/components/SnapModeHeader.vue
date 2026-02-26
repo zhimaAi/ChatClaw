@@ -85,6 +85,7 @@ const handleAgentChange = (value: any) => {
         <Tooltip>
           <TooltipTrigger as-child>
             <button
+              data-snap-action="new-conversation"
               class="rounded-md p-1 hover:bg-muted"
               type="button"
               @click="emit('newConversation')"
@@ -103,6 +104,7 @@ const handleAgentChange = (value: any) => {
         <Tooltip>
           <TooltipTrigger as-child>
             <button
+              data-snap-action="cancel-snap"
               class="rounded-md bg-muted p-1"
               type="button"
               @click="emit('cancelSnap')"
@@ -121,6 +123,7 @@ const handleAgentChange = (value: any) => {
         <Tooltip>
           <TooltipTrigger as-child>
             <button
+              data-snap-action="find-and-attach"
               class="rounded-md p-1 hover:bg-muted"
               type="button"
               @click="emit('findAndAttach')"
@@ -136,6 +139,7 @@ const handleAgentChange = (value: any) => {
 
       <!-- Close button -->
       <button
+        data-snap-action="close-window"
         class="rounded-md p-1 hover:bg-muted"
         :title="t('winsnap.closeWindow')"
         type="button"
