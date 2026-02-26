@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -25,23 +35,24 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
+const showRebuildConfirm = ref(false)
 
-// Settings state
 const memoryEnabled = ref(false)
-const extractSelectedKey = ref('') // providerId::modelId
-const embeddingSelectedKey = ref('') // providerId::modelId
+const extractSelectedKey = ref('')
+const embeddingSelectedKey = ref('')
 const embeddingDimension = ref('1536')
 
-// Provider/Model groups
+// Saved values for change detection
+const savedEmbeddingKey = ref('')
+const savedEmbeddingDimension = ref('1536')
+
 type Group = { provider: Provider; models: Model[] }
 const extractGroups = ref<Group[]>([])
 const embeddingGroups = ref<Group[]>([])
 
-// Load data
 const loadData = async () => {
   loading.value = true
   try {
-    // Load providers
     const providers = (await ProvidersService.ListProviders()) || []
     const enabledProviders = providers.filter((p) => p.enabled)
     
@@ -63,14 +74,12 @@ const loadData = async () => {
     for (const item of details) {
       if (!item.detail) continue
       
-      // Extract models (LLM)
       const llmGroup = item.detail.model_groups?.find((g) => g.type === 'llm')
       const llmModels = (llmGroup?.models || []).filter((m) => m.enabled)
       if (llmModels.length > 0) {
         extGroups.push({ provider: item.provider, models: llmModels })
       }
 
-      // Embedding models
       const embGroup = item.detail.model_groups?.find((g) => g.type === 'embedding')
       const embModels = (embGroup?.models || []).filter((m) => m.enabled)
       if (embModels.length > 0) {
@@ -81,7 +90,6 @@ const loadData = async () => {
     extractGroups.value = extGroups
     embeddingGroups.value = embGroups
 
-    // Load settings
     const [enabled, extProv, extMod, embProv, embMod, embDim] = await Promise.all([
       SettingsService.Get('memory_enabled'),
       SettingsService.Get('memory_extract_provider_id'),
@@ -98,11 +106,14 @@ const loadData = async () => {
     }
     
     if (embProv?.value && embMod?.value) {
-      embeddingSelectedKey.value = `${embProv.value}::${embMod.value}`
+      const key = `${embProv.value}::${embMod.value}`
+      embeddingSelectedKey.value = key
+      savedEmbeddingKey.value = key
     }
     
     if (embDim?.value) {
       embeddingDimension.value = embDim.value
+      savedEmbeddingDimension.value = embDim.value
     }
 
   } catch (error) {
@@ -124,8 +135,25 @@ const isValid = computed(() => {
   return Number.isFinite(dim) && dim > 0
 })
 
-const handleSave = async () => {
+const embeddingChanged = computed(() => {
+  return (
+    embeddingSelectedKey.value !== savedEmbeddingKey.value ||
+    embeddingDimension.value !== savedEmbeddingDimension.value
+  )
+})
+
+const handleSave = () => {
   if (!isValid.value || saving.value) return
+
+  if (memoryEnabled.value && embeddingChanged.value && savedEmbeddingKey.value !== '') {
+    showRebuildConfirm.value = true
+    return
+  }
+
+  doSave()
+}
+
+const doSave = async () => {
   saving.value = true
   
   try {
@@ -140,6 +168,9 @@ const handleSave = async () => {
       embedding_model_id: embMod || '',
       embedding_dimension: Number.parseInt(embeddingDimension.value || '1536', 10),
     })
+
+    savedEmbeddingKey.value = embeddingSelectedKey.value
+    savedEmbeddingDimension.value = embeddingDimension.value
     
     toast.success(t('settings.memory.saved'))
   } catch (error) {
@@ -148,6 +179,11 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const confirmRebuild = () => {
+  showRebuildConfirm.value = false
+  doSave()
 }
 
 function isProviderFree(g: Group): boolean {
@@ -253,5 +289,23 @@ function isProviderFree(g: Group): boolean {
         </Button>
       </div>
     </template>
+
+    <AlertDialog :open="showRebuildConfirm" @update:open="showRebuildConfirm = $event">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('settings.memory.confirmRebuildTitle') }}</AlertDialogTitle>
+          <AlertDialogDescription>{{ t('settings.memory.confirmRebuildDesc') }}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel @click="showRebuildConfirm = false">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-foreground text-background hover:bg-foreground/90"
+            @click="confirmRebuild"
+          >
+            {{ t('common.confirm') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>
