@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -208,11 +209,16 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 		var embedProvider providerRow
 		if err := mainDB.NewSelect().Table("providers").Column("type", "api_key", "api_endpoint", "extra_config").
 			Where("provider_id = ?", embedProviderID).Scan(ctx, &embedProvider); err == nil {
+			dim := 0
+			if d, e := strconv.Atoi(configMap["memory_embedding_dimension"]); e == nil && d > 0 {
+				dim = d
+			}
 			embedder, _ = embedding.NewEmbedder(ctx, &embedding.ProviderConfig{
 				ProviderType: embedProvider.Type,
 				APIKey:       embedProvider.APIKey,
 				APIEndpoint:  embedProvider.APIEndpoint,
 				ModelID:      embedModelID,
+				Dimension:    dim,
 				ExtraConfig:  embedProvider.ExtraConfig,
 			})
 		}

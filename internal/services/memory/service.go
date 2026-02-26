@@ -81,10 +81,15 @@ func NewMemoryService(app *application.App) *MemoryService {
 }
 
 func (s *MemoryService) GetCoreProfile(ctx context.Context, agentID int64) (string, error) {
+	return GetCoreProfileContent(ctx, agentID)
+}
+
+// GetCoreProfileContent returns the core profile text for an agent from memory DB.
+// Used by chat service to inject Core Profile via ADK middleware.
+func GetCoreProfileContent(ctx context.Context, agentID int64) (string, error) {
 	if db == nil {
 		return "", errs.New("error.memory_db_not_initialized")
 	}
-
 	var m CoreProfile
 	err := db.NewSelect().
 		Model(&m).
@@ -92,9 +97,8 @@ func (s *MemoryService) GetCoreProfile(ctx context.Context, agentID int64) (stri
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
-		return "", nil // Return empty string if not found
+		return "", nil
 	}
-
 	return m.Content, nil
 }
 
