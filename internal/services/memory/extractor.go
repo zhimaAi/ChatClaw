@@ -262,13 +262,9 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 		}
 
 		esTokens := tokenizer.TokenizeContent(es.Content)
-		if _, err := tx.ExecContext(ctx,
+		_, _ = tx.ExecContext(ctx,
 			`INSERT INTO event_streams_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
-			es.ID, esTokens, conv.AgentID); err != nil {
-			app.Logger.Error("[memory] FTS insert event_streams_fts failed", "id", es.ID, "error", err)
-		} else {
-			app.Logger.Info("[memory] FTS insert event_streams_fts ok", "rowid", es.ID, "tokens_len", len(esTokens))
-		}
+			es.ID, esTokens, conv.AgentID)
 
 		if embedder != nil {
 			vecs, err := embedder.EmbedStrings(ctx, []string{es.Content})
@@ -335,13 +331,9 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 			}
 
 			tfTokens := tokenizer.TokenizeContent(fact.Topic + " " + fact.Content)
-			if _, err := tx.ExecContext(ctx,
+			_, _ = tx.ExecContext(ctx,
 				`INSERT INTO thematic_facts_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
-				fact.ID, tfTokens, conv.AgentID); err != nil {
-				app.Logger.Error("[memory] FTS insert thematic_facts_fts failed", "id", fact.ID, "error", err)
-			} else {
-				app.Logger.Info("[memory] FTS insert thematic_facts_fts ok", "rowid", fact.ID, "tokens_len", len(tfTokens))
-			}
+				fact.ID, tfTokens, conv.AgentID)
 
 			if embedder != nil {
 				vecs, embErr := embedder.EmbedStrings(ctx, []string{fact.Topic + ": " + fact.Content})

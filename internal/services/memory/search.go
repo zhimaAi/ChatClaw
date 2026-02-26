@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -18,7 +17,6 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// RRF constant (same as knowledge base retrieval)
 const rrfK = 60
 
 type SearchResult struct {
@@ -27,10 +25,14 @@ type SearchResult struct {
 	Score   float64
 }
 
-// rankedItem is used internally for RRF calculation
 type rankedItem struct {
 	key  string // "thematic:<id>" or "event:<id>"
 	rank int
+}
+
+type scoredItem struct {
+	key   string
+	score float64
 }
 
 // SearchMemories performs hybrid FTS5 + vector search on thematic_facts and event_streams,
@@ -50,14 +52,12 @@ func SearchMemories(ctx context.Context, agentID int64, queries []string, topK i
 	var ftsResults, vecResults []rankedItem
 	var ftsErr, vecErr error
 
-	// Parallel: FTS5 search
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		ftsResults, ftsErr = ftsSearch(ctx, agentID, queries, fetchK)
 	}()
 
-	// Parallel: vector search
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -66,14 +66,11 @@ func SearchMemories(ctx context.Context, agentID int64, queries []string, topK i
 
 	wg.Wait()
 
-	// Log errors but don't fail — partial results are fine
 	if ftsErr != nil && vecErr != nil {
 		return nil, fmt.Errorf("both search methods failed: fts=%w, vec=%v", ftsErr, vecErr)
 	}
 
-	// RRF fusion
 	merged := rrfMerge(ftsResults, vecResults)
-
 	if len(merged) > topK {
 		merged = merged[:topK]
 	}
@@ -81,17 +78,16 @@ func SearchMemories(ctx context.Context, agentID int64, queries []string, topK i
 		return nil, nil
 	}
 
-	// Fetch content for merged results
 	return fetchContent(ctx, agentID, merged)
 }
 
 // ftsSearch performs FTS5 full-text search on both thematic_facts_fts and event_streams_fts.
-// Mirrors the knowledge base retrieval pattern: contentless FTS with rowid mapping.
+// Uses bun.DB.QueryContext (raw *sql.Rows) because bun's struct scanner
+// cannot map the FTS5 virtual-table `rowid` pseudo-column.
 func ftsSearch(ctx context.Context, agentID int64, queries []string, limit int) ([]rankedItem, error) {
 	var allParts []string
 	for _, q := range queries {
-		mq := tokenizer.BuildMatchQuery(q)
-		if mq != "" {
+		if mq := tokenizer.BuildMatchQuery(q); mq != "" {
 			allParts = append(allParts, mq)
 		}
 	}
@@ -101,32 +97,27 @@ func ftsSearch(ctx context.Context, agentID int64, queries []string, limit int) 
 	matchQuery := strings.Join(allParts, " OR ")
 	ftsQuery := fmt.Sprintf("(%s) AND agent_id:%d", matchQuery, agentID)
 
-	// Use bun.DB.QueryContext (returns *sql.Rows) instead of NewRaw().Scan()
-	// because bun's struct scanner cannot map FTS5's `rowid` pseudo-column.
 	var results []rankedItem
 	rank := 0
 
 	for _, table := range []struct {
-		fts    string
-		prefix string
+		fts, prefix string
 	}{
 		{"thematic_facts_fts", "thematic"},
 		{"event_streams_fts", "event"},
 	} {
-		query := fmt.Sprintf(
+		q := fmt.Sprintf(
 			`SELECT rowid, bm25(%s) AS score FROM %s WHERE %s MATCH ? ORDER BY score ASC LIMIT ?`,
 			table.fts, table.fts, table.fts,
 		)
-		rows, err := db.QueryContext(ctx, query, ftsQuery, limit)
+		rows, err := db.QueryContext(ctx, q, ftsQuery, limit)
 		if err != nil {
-			log.Printf("[memory] fts search %s failed: %v", table.fts, err)
 			continue
 		}
 		for rows.Next() {
 			var rowID int64
 			var score float64
 			if err := rows.Scan(&rowID, &score); err != nil {
-				log.Printf("[memory] fts %s scan error: %v", table.fts, err)
 				continue
 			}
 			rank++
@@ -141,13 +132,12 @@ func ftsSearch(ctx context.Context, agentID int64, queries []string, limit int) 
 	return results, nil
 }
 
-// vecSearch performs vector KNN search on thematic_facts_vec and event_streams_vec
+// vecSearch performs vector KNN search on thematic_facts_vec and event_streams_vec.
 func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []string, limit int) ([]rankedItem, error) {
 	if mainDB == nil {
 		return nil, nil
 	}
 
-	// Get embedding config
 	type settingRow struct {
 		Key   string
 		Value sql.NullString
@@ -199,7 +189,6 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 		return nil, nil
 	}
 
-	// Embed all queries and average
 	allVecs, err := embedder.EmbedStrings(ctx, queries)
 	if err != nil || len(allVecs) == 0 {
 		return nil, nil
@@ -210,8 +199,15 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 	var results []rankedItem
 	rank := 0
 
-	// Vector search on thematic_facts_vec
-	if tableExists(ctx, "thematic_facts_vec") {
+	for _, table := range []struct {
+		vecTable, srcTable, prefix string
+	}{
+		{"thematic_facts_vec", "thematic_facts", "thematic"},
+		{"event_streams_vec", "event_streams", "event"},
+	} {
+		if !tableExists(ctx, table.vecTable) {
+			continue
+		}
 		type vecRow struct {
 			ID       int64   `bun:"id"`
 			Distance float64 `bun:"distance"`
@@ -219,44 +215,17 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 		var rows []vecRow
 		if err := db.NewRaw(`
 			SELECT v.id, v.distance
-			FROM thematic_facts_vec v
-			WHERE v.embedding MATCH ? AND k = ?
-		`, vecStr, limit).Scan(ctx, &rows); err == nil {
-			// Filter by agent_id
-			for _, r := range rows {
-				var aid int64
-				if err := db.NewRaw(`SELECT agent_id FROM thematic_facts WHERE id = ?`, r.ID).Scan(ctx, &aid); err != nil || aid != agentID {
-					continue
-				}
-				rank++
-				results = append(results, rankedItem{
-					key:  fmt.Sprintf("thematic:%d", r.ID),
-					rank: rank,
-				})
-			}
-		}
-	}
-
-	// Vector search on event_streams_vec
-	if tableExists(ctx, "event_streams_vec") {
-		type vecRow struct {
-			ID       int64   `bun:"id"`
-			Distance float64 `bun:"distance"`
-		}
-		var rows []vecRow
-		if err := db.NewRaw(`
-			SELECT v.id, v.distance
-			FROM event_streams_vec v
+			FROM `+table.vecTable+` v
 			WHERE v.embedding MATCH ? AND k = ?
 		`, vecStr, limit).Scan(ctx, &rows); err == nil {
 			for _, r := range rows {
 				var aid int64
-				if err := db.NewRaw(`SELECT agent_id FROM event_streams WHERE id = ?`, r.ID).Scan(ctx, &aid); err != nil || aid != agentID {
+				if err := db.NewRaw(`SELECT agent_id FROM `+table.srcTable+` WHERE id = ?`, r.ID).Scan(ctx, &aid); err != nil || aid != agentID {
 					continue
 				}
 				rank++
 				results = append(results, rankedItem{
-					key:  fmt.Sprintf("event:%d", r.ID),
+					key:  fmt.Sprintf("%s:%d", table.prefix, r.ID),
 					rank: rank,
 				})
 			}
@@ -266,11 +235,9 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 	return results, nil
 }
 
-// rrfMerge combines FTS and vector results using Reciprocal Rank Fusion
-func rrfMerge(ftsResults, vecResults []rankedItem) []struct {
-	key   string
-	score float64
-} {
+// rrfMerge combines FTS and vector results using Reciprocal Rank Fusion.
+// Thematic facts receive a 1.3x boost per the design spec.
+func rrfMerge(ftsResults, vecResults []rankedItem) []scoredItem {
 	scores := make(map[string]float64)
 
 	for _, r := range ftsResults {
@@ -280,32 +247,19 @@ func rrfMerge(ftsResults, vecResults []rankedItem) []struct {
 		scores[r.key] += rrfScore(r.rank)
 	}
 
-	// Boost thematic facts (higher priority per design spec)
 	for k, s := range scores {
 		if strings.HasPrefix(k, "thematic:") {
 			scores[k] = s * 1.3
 		}
 	}
 
-	type scored struct {
-		key   string
-		score float64
-	}
-	var merged []struct {
-		key   string
-		score float64
-	}
+	merged := make([]scoredItem, 0, len(scores))
 	for k, s := range scores {
-		merged = append(merged, struct {
-			key   string
-			score float64
-		}{k, s})
+		merged = append(merged, scoredItem{k, s})
 	}
-
 	sort.Slice(merged, func(i, j int) bool {
 		return merged[i].score > merged[j].score
 	})
-
 	return merged
 }
 
@@ -313,11 +267,8 @@ func rrfScore(rank int) float64 {
 	return 1.0 / float64(rrfK+rank)
 }
 
-// fetchContent retrieves the actual content for merged results
-func fetchContent(ctx context.Context, agentID int64, merged []struct {
-	key   string
-	score float64
-}) ([]SearchResult, error) {
+// fetchContent retrieves the actual content for merged results.
+func fetchContent(ctx context.Context, agentID int64, merged []scoredItem) ([]SearchResult, error) {
 	results := make([]SearchResult, 0, len(merged))
 
 	for _, m := range merged {

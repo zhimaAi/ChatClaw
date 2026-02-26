@@ -61,11 +61,6 @@ func (t *memoryRetrieverTool) InvokableRun(ctx context.Context, argumentsInJSON 
 		return "", fmt.Errorf("queries cannot be empty")
 	}
 
-	// This is a simplified placeholder for the actual retrieval logic.
-	// In a real implementation, this would call memory.SearchMemories(ctx, t.config.AgentID, input.Queries, t.config.TopK, t.config.MatchThreshold)
-	// which would perform a vector search on thematic_facts_vec and event_streams_vec,
-	// apply time-decay weighting to event streams, and return the top K results.
-
 	results, err := memory.SearchMemories(ctx, t.config.AgentID, input.Queries, t.config.TopK, t.config.MatchThreshold)
 	if err != nil {
 		return "", fmt.Errorf("search memories failed: %w", err)
