@@ -301,6 +301,9 @@ const snapApps = computed(() => [
   },
 ])
 
+const customSnapAppsForDisplay = computed(() => [...customSnapApps.value].reverse())
+const mergedSnapAppCount = computed(() => customSnapAppsForDisplay.value.length + snapApps.value.length)
+
 const boolSettingsMap: Record<string, { value: boolean }> = {
   show_ai_send_button: showAiSendButton,
   show_ai_edit_button: showAiEditButton,
@@ -740,8 +743,89 @@ onUnmounted(() => {
     </SettingsCard>
 
     <SettingsCard :title="t('settings.snap.appsTitle')">
+      <template #header-right>
+        <Button variant="outline" size="sm" class="h-7" @click="openCustomAppPicker">
+          <Plus class="size-3.5 mr-1" />
+          {{ t('settings.snap.addCustomApp') }}
+        </Button>
+      </template>
+
+      <div v-for="(customApp, customIndex) in customSnapAppsForDisplay" :key="customApp.id">
+        <SettingsItem :bordered="customIndex !== mergedSnapAppCount - 1 || customApp.enabled">
+          <template #default>
+            <Switch
+              :model-value="customApp.enabled"
+              @update:model-value="(val: boolean) => handleCustomSnapAppChange(customApp, val)"
+            />
+          </template>
+          <template #label>
+            <div class="flex items-center gap-2 min-w-0">
+              <component :is="getCandidateIcon(customApp.icon)" class="size-5 text-muted-foreground shrink-0" />
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium text-foreground truncate">{{ customApp.name }}</span>
+                  <button
+                    type="button"
+                    class="inline-flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                    @click="requestDeleteCustomApp(customApp)"
+                  >
+                    <Trash2 class="size-3.5" />
+                  </button>
+                </div>
+                <div class="text-xs text-muted-foreground truncate">{{ customApp.processName }}</div>
+              </div>
+            </div>
+          </template>
+        </SettingsItem>
+        <div
+          v-if="customApp.enabled"
+          class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
+          :class="{ 'border-b border-border': customIndex !== mergedSnapAppCount - 1 }"
+        >
+          <RadioGroup
+            :model-value="customApp.noClick ? 'no_click' : 'click'"
+            class="flex flex-col gap-2"
+            @update:model-value="(mode: string) => handleCustomInputModeChange(customApp, mode)"
+          >
+            <div class="flex items-center gap-2">
+              <RadioGroupItem :id="`${customApp.id}_no_click`" value="no_click" />
+              <Label :for="`${customApp.id}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
+                {{ t('settings.snap.noClickMode') }}
+              </Label>
+            </div>
+            <div class="flex items-center gap-2">
+              <RadioGroupItem :id="`${customApp.id}_click`" value="click" />
+              <Label :for="`${customApp.id}_click`" class="text-xs text-muted-foreground cursor-pointer">
+                {{ t('settings.snap.clickMode') }}
+              </Label>
+            </div>
+          </RadioGroup>
+          <div v-if="!customApp.noClick" class="flex items-center justify-between gap-4 pl-6">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
+              <Input
+                v-model="customApp.clickOffsetX"
+                :placeholder="t('settings.snap.clickOffset.placeholderX')"
+                class="w-16 h-7 text-xs text-center"
+                @blur="handleCustomClickOffsetXBlur(customApp)"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelY') }}</span>
+              <Input
+                v-model="customApp.clickOffsetY"
+                class="w-16 h-7 text-xs text-center"
+                @blur="handleCustomClickOffsetYBlur(customApp)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-for="(app, index) in snapApps" :key="app.key">
-        <SettingsItem :bordered="index !== snapApps.length - 1 || app.value.value">
+        <SettingsItem
+          :bordered="customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1 || app.value.value"
+        >
           <template #default>
             <Switch
               :model-value="app.value.value"
@@ -758,7 +842,7 @@ onUnmounted(() => {
         <div
           v-if="app.value.value"
           class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
-          :class="{ 'border-b border-border': index !== snapApps.length - 1 }"
+          :class="{ 'border-b border-border': customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1 }"
         >
           <RadioGroup
             v-if="app.hasNoClickOption"
@@ -796,92 +880,6 @@ onUnmounted(() => {
                 class="w-16 h-7 text-xs text-center"
                 @blur="handleClickOffsetYBlur(app.key, app.clickOffsetY, app.defaultY)"
               />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="border-t border-border">
-        <div class="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div class="text-sm font-medium text-foreground">{{ t('settings.snap.customAppsTitle') }}</div>
-          <Button variant="outline" size="sm" class="h-7" @click="openCustomAppPicker">
-            <Plus class="size-3.5 mr-1" />
-            {{ t('settings.snap.addCustomApp') }}
-          </Button>
-        </div>
-
-        <div v-if="customSnapApps.length === 0" class="px-4 py-4 text-xs text-muted-foreground">
-          {{ t('settings.snap.customAppsEmpty') }}
-        </div>
-
-        <div v-for="(customApp, index) in customSnapApps" :key="customApp.id">
-          <SettingsItem :bordered="index !== customSnapApps.length - 1 || customApp.enabled">
-            <template #default>
-              <Switch
-                :model-value="customApp.enabled"
-                @update:model-value="(val: boolean) => handleCustomSnapAppChange(customApp, val)"
-              />
-            </template>
-            <template #label>
-              <div class="flex items-center gap-2 min-w-0">
-                <component :is="getCandidateIcon(customApp.icon)" class="size-5 text-muted-foreground shrink-0" />
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-foreground truncate">{{ customApp.name }}</span>
-                    <button
-                      type="button"
-                      class="inline-flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                      @click="requestDeleteCustomApp(customApp)"
-                    >
-                      <Trash2 class="size-3.5" />
-                    </button>
-                  </div>
-                  <div class="text-xs text-muted-foreground truncate">{{ customApp.processName }}</div>
-                </div>
-              </div>
-            </template>
-          </SettingsItem>
-          <div
-            v-if="customApp.enabled"
-            class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
-            :class="{ 'border-b border-border': index !== customSnapApps.length - 1 }"
-          >
-            <RadioGroup
-              :model-value="customApp.noClick ? 'no_click' : 'click'"
-              class="flex flex-col gap-2"
-              @update:model-value="(mode: string) => handleCustomInputModeChange(customApp, mode)"
-            >
-              <div class="flex items-center gap-2">
-                <RadioGroupItem :id="`${customApp.id}_no_click`" value="no_click" />
-                <Label :for="`${customApp.id}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
-                  {{ t('settings.snap.noClickMode') }}
-                </Label>
-              </div>
-              <div class="flex items-center gap-2">
-                <RadioGroupItem :id="`${customApp.id}_click`" value="click" />
-                <Label :for="`${customApp.id}_click`" class="text-xs text-muted-foreground cursor-pointer">
-                  {{ t('settings.snap.clickMode') }}
-                </Label>
-              </div>
-            </RadioGroup>
-            <div v-if="!customApp.noClick" class="flex items-center justify-between gap-4 pl-6">
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
-                <Input
-                  v-model="customApp.clickOffsetX"
-                  :placeholder="t('settings.snap.clickOffset.placeholderX')"
-                  class="w-16 h-7 text-xs text-center"
-                  @blur="handleCustomClickOffsetXBlur(customApp)"
-                />
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelY') }}</span>
-                <Input
-                  v-model="customApp.clickOffsetY"
-                  class="w-16 h-7 text-xs text-center"
-                  @blur="handleCustomClickOffsetYBlur(customApp)"
-                />
-              </div>
             </div>
           </div>
         </div>
