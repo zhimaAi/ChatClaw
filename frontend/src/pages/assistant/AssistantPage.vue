@@ -598,6 +598,16 @@ let unsubscribeSnapStateChanged: (() => void) | null = null
 let unsubscribeTextSelectionSnap: (() => void) | null = null
 let onPointerDown: ((e: globalThis.PointerEvent) => void) | null = null
 
+const wakeAttachedSkipSelector =
+  '[data-snap-action], [data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
+
+const shouldSkipWakeAttached = (e: globalThis.PointerEvent): boolean => {
+  if (e.button !== 0) return true
+  if (!hasAttachedTarget.value) return true
+  const target = e.target instanceof Element ? e.target : null
+  return !!target?.closest(wakeAttachedSkipSelector)
+}
+
 onMounted(() => {
   // In snap mode, default sidebar to collapsed
   if (isSnapMode.value) {
@@ -735,15 +745,7 @@ onMounted(() => {
     // WakeAttached manipulates native window z-order and focus, which interferes
     // with the overlay's event handling and can freeze the entire Windows UI.
     onPointerDown = (e: globalThis.PointerEvent) => {
-      if (e.button !== 0) return
-      const target = e.target as HTMLElement | null
-      if (
-        target?.closest(
-          '[data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
-        )
-      ) {
-        return
-      }
+      if (shouldSkipWakeAttached(e)) return
       void SnapService.WakeAttached()
     }
     window.addEventListener('pointerdown', onPointerDown, true)
