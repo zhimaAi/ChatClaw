@@ -300,13 +300,22 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(toolchainService))
 
 	// ========== macOS 应用菜单 ==========
-	// Set up standard macOS application menu so that system shortcuts work:
-	// Cmd+M (minimize), Cmd+H (hide), Cmd+Q (quit), Cmd+C/V/X (copy/paste/cut), etc.
 	if runtime.GOOS == "darwin" {
 		appMenu := app.NewMenu()
 		appMenu.AddRole(application.AppMenu)
 		appMenu.AddRole(application.EditMenu)
-		appMenu.AddRole(application.WindowMenu)
+		windowMenu := appMenu.AddSubmenu("Window")
+		windowMenu.Add("Minimize").
+			SetAccelerator("CmdOrCtrl+M").
+			OnClick(func(ctx *application.Context) {
+				if w := app.Window.Current(); w != nil {
+					w.Minimise()
+				}
+			})
+		windowMenu.AddRole(application.Zoom)
+		windowMenu.AddSeparator()
+		windowMenu.AddRole(application.Front)
+
 		app.Menu.Set(appMenu)
 	}
 

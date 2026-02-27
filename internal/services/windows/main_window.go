@@ -11,10 +11,6 @@ import (
 // - macOS: 红黄绿按钮在左侧
 // - Windows: 最小化/最大化/关闭按钮在右侧
 //
-// ⚠️ 已知问题 (Wails v3 alpha.40):
-// macOS frameless 窗口的 Minimise() 无效，前端暂时使用 Hide() 替代。
-// 详见: https://github.com/wailsapp/wails/issues/4294
-//
 // Windows 启动黑屏问题:
 // 在 Windows 上，webview 加载时会有短暂黑屏（窗口已显示但 HTML 未渲染完成）。
 // 解决方案：Windows 上初始隐藏窗口，待前端 Vue 应用挂载后再通过 AppService.ShowMainWindow() 显示。

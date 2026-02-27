@@ -34,28 +34,8 @@ const updateWindowState = async () => {
   isFullscreen.value = await Window.IsFullscreen()
 }
 
-/**
- * 最小化窗口
- *
- * ⚠️ Wails v3 Bug (截至 alpha.40 仍未修复):
- * 在 macOS 上设置 Frameless: true 时，Window.Minimise() 无效。
- * 原因是 pkg/application/webview_window_darwin.go 第 30 行缺少 NSWindowStyleMaskMiniaturizable。
- *
- * 临时解决方案：macOS 使用 Window.Hide() 隐藏到 Dock。
- *
- * 官方修复后恢复方法：
- * 删除 if/else 判断，直接使用 await Window.Minimise()
- *
- * @see https://github.com/wailsapp/wails/issues/4294
- */
 const handleMinimise = async () => {
-  if (isMac.value) {
-    // TODO: Wails v3 修复后改为 Window.Minimise()
-    // macOS frameless 窗口暂时使用 Hide 隐藏到 Dock（无动画效果）
-    await Window.Hide()
-  } else {
-    await Window.Minimise()
-  }
+  await Window.Minimise()
 }
 
 /**

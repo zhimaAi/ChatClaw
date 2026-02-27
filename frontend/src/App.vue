@@ -6,7 +6,7 @@ import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
-import { Events, System, Window } from '@wailsio/runtime'
+import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import MemoryPage from '@/pages/memory/MemoryPage.vue'
@@ -131,7 +131,6 @@ let unsubscribeTextSelection: (() => void) | null = null
 let onMouseDown: ((e: MouseEvent) => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
-let onKeyDownMacMinimize: ((e: KeyboardEvent) => void) | null = null
 
 // Whether in-app text selection popup is enabled (mirrors enable_selection_search setting)
 const selectionSearchEnabled = ref(false)
@@ -320,20 +319,6 @@ onMounted(async () => {
   })
   themeObserver.observe(document.documentElement, { attributes: true })
 
-  // macOS Cmd+M workaround:
-  // Wails v3 frameless windows lack NSWindowStyleMaskMiniaturizable, so the standard
-  // Cmd+M minimize shortcut does nothing. We intercept it here and call Window.Hide()
-  // (same as the yellow traffic-light button) to simulate minimize-to-dock behavior.
-  if (System.IsMac()) {
-    onKeyDownMacMinimize = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'm') {
-        e.preventDefault()
-        void Window.Hide()
-      }
-    }
-    window.addEventListener('keydown', onKeyDownMacMinimize, true)
-  }
-
   // Global IME guard:
   // When the user presses Enter while composing (IME), prevent any keydown.enter handlers
   // from treating it as a "submit/send" action. We do NOT preventDefault so IME can commit text.
@@ -385,10 +370,6 @@ onUnmounted(() => {
   if (onKeyDownCapture) {
     window.removeEventListener('keydown', onKeyDownCapture, true)
     onKeyDownCapture = null
-  }
-  if (onKeyDownMacMinimize) {
-    window.removeEventListener('keydown', onKeyDownMacMinimize, true)
-    onKeyDownMacMinimize = null
   }
   unsubscribeSelectionSettingChanged?.()
   unsubscribeSelectionSettingChanged = null

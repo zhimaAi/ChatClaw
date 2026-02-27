@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Trash2 } from 'lucide-vue-next'
-import IconMemory from '@/assets/icons/memory.svg'
+import LogoIcon from '@/assets/images/logo.svg'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -315,9 +315,9 @@ onMounted(() => {
             />
             <div
               v-else
-              class="grid size-5 shrink-0 place-items-center rounded bg-muted"
+              class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5"
             >
-              <IconMemory class="size-3 text-muted-foreground" />
+              <LogoIcon class="size-4 opacity-90" />
             </div>
             <span class="min-w-0 flex-1 truncate">{{ agent.name }}</span>
           </button>
