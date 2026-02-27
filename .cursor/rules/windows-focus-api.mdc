@@ -95,6 +95,7 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
 
 2. **必须排除操作按钮和弹层区域**
    - Header 操作按钮（新建/取消吸附/重新吸附/关闭）必须加 `data-snap-action` 标记。
+   - Header 可拖拽区域（`--wails-draggable: drag`）必须加 `data-snap-no-wake`，并在监听里优先跳过。
    - 全局监听必须 `closest('[data-snap-action], ...radix selectors...')` 后直接 `return`。
 
 3. **禁止在“状态切换动作”里同步唤醒**
@@ -105,10 +106,35 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
    - 非必要路径禁止引入新的 `SetForegroundWindow`/强制激活调用。
    - 仅允许在明确的“用户点击 winsnap 且 attached”路径调用 `WakeAttached`。
 
+5. **强制白名单触发（必须）**
+   - `WakeAttached` 必须采用白名单触发模型：
+     - 只允许在消息展示区和输入区触发（如带 `data-snap-wake` 标记的节点）。
+     - 头部、侧边栏、空白区、拖拽区、按钮区一律禁止触发。
+   - 前端实现上，优先使用“区域内显式绑定事件”（例如在 `ChatMessageList` / `ChatInputArea` 上绑定 `@pointerdown.capture`）；
+     禁止继续使用 window 级全局 `pointerdown` 捕获来触发 `WakeAttached`。
+   - 判断顺序必须为：
+     1) 先检查 attached 状态
+     2) 再检查黑名单（`data-snap-no-wake`、`data-snap-action`、Radix 弹层）
+   - 未命中白名单时必须直接 return，禁止兜底触发。
+
+6. **严重级别说明**
+   - 该类问题属于 P0 交互稳定性问题（可能造成系统级“鼠标点击无效、需按 Win 键恢复”）。
+   - 任何改动涉及 `WakeAttached` 触发范围时，必须显式说明“白名单区域”并做回归验证。
+
+7. **附着态禁止标题拖拽（必须）**
+   - 当 `hasAttachedTarget=true` 时，snap 标题区域必须设置 `--wails-draggable: no-drag`。
+   - 仅在未附着（standalone/hidden）时允许标题拖拽。
+   - 原因：附着态下原生拖拽可能与吸附跟随/焦点同步冲突，触发 Windows 假死。
+
 ### 提交前检查清单
 
 - 是否只有一个 snap 全局 pointer 监听入口？
 - 监听是否包含 attached guard？
 - Header 按钮是否都带 `data-snap-action`？
+- Header 可拖拽根节点是否带 `data-snap-no-wake`？
 - 监听过滤是否覆盖 Radix Popper/Dialog/Listbox？
+- 触发是否采用 `data-snap-wake` 白名单而不是黑名单兜底？
+- 白名单是否仅包含消息区和输入区？
+- 是否移除了 window 级 `pointerdown` 触发 `WakeAttached`？
+- 附着态下标题区域是否强制 `--wails-draggable: no-drag`？
 - 取消吸附后立即点击“吸附应用”是否不会触发 `WakeAttached`？

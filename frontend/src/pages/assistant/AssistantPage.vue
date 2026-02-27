@@ -596,16 +596,21 @@ let unsubscribeModelsChanged: (() => void) | null = null
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
 let unsubscribeTextSelectionSnap: (() => void) | null = null
-let onPointerDown: ((e: globalThis.PointerEvent) => void) | null = null
 
 const wakeAttachedSkipSelector =
-  '[data-snap-action], [data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
+  '[data-snap-no-wake], [data-snap-action], [data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
 
 const shouldSkipWakeAttached = (e: globalThis.PointerEvent): boolean => {
   if (e.button !== 0) return true
   if (!hasAttachedTarget.value) return true
   const target = e.target instanceof Element ? e.target : null
-  return !!target?.closest(wakeAttachedSkipSelector)
+  if (!target) return true
+  return !!target.closest(wakeAttachedSkipSelector)
+}
+
+const handleWakeAttachedPointerDown = (e: globalThis.PointerEvent) => {
+  if (shouldSkipWakeAttached(e)) return
+  void SnapService.WakeAttached()
 }
 
 onMounted(() => {
@@ -740,15 +745,8 @@ onMounted(() => {
       }
     })()
 
-    // When interacting with snap window while attached, bring both windows to front.
-    // Skip when a Radix UI overlay (Select, Tooltip, Popover, etc.) is open —
-    // WakeAttached manipulates native window z-order and focus, which interferes
-    // with the overlay's event handling and can freeze the entire Windows UI.
-    onPointerDown = (e: globalThis.PointerEvent) => {
-      if (shouldSkipWakeAttached(e)) return
-      void SnapService.WakeAttached()
-    }
-    window.addEventListener('pointerdown', onPointerDown, true)
+    // WakeAttached is now explicitly bound only on data-snap-wake regions
+    // (message area / input area), avoiding global pointer capture side effects.
   }
 
   // Listen for conversation changes from other assistant tabs.
@@ -808,10 +806,6 @@ onUnmounted(() => {
   unsubscribeSnapStateChanged = null
   unsubscribeTextSelectionSnap?.()
   unsubscribeTextSelectionSnap = null
-  if (onPointerDown) {
-    window.removeEventListener('pointerdown', onPointerDown, true)
-    onPointerDown = null
-  }
 })
 </script>
 
@@ -931,6 +925,7 @@ onUnmounted(() => {
       <!-- Chat messages area - show when we have an active conversation -->
       <ChatMessageList
         v-if="!isAgentEmpty && activeConversationId"
+        data-snap-wake="true"
         :conversation-id="activeConversationId"
         :tab-id="tabId"
         :mode="props.mode"
@@ -940,6 +935,7 @@ onUnmounted(() => {
         :show-ai-send-button="showAiSendButton"
         :show-ai-edit-button="showAiEditButton"
         class="min-w-0 flex-1 overflow-hidden"
+        @pointerdown.capture="handleWakeAttachedPointerDown"
         @edit-message="handleEditMessage"
         @snap-send-and-trigger="handleSendAndTrigger"
         @snap-send-to-edit="handleSendToEdit"
@@ -949,6 +945,7 @@ onUnmounted(() => {
       <!-- Input area: non-snap mode OR snap mode with no messages (centered empty state) -->
       <ChatInputArea
         v-if="!isAgentEmpty && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))"
+        data-snap-wake="true"
         :chat-input="chatInput"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"
@@ -963,6 +960,7 @@ onUnmounted(() => {
         :chat-messages="chatMessages"
         :active-agent-id="activeAgentId"
         :is-snap-mode="isSnapMode"
+        @pointerdown.capture="handleWakeAttachedPointerDown"
         @update:chat-input="chatInput = $event"
         @update:selected-model-key="selectedModelKey = $event"
         @update:enable-thinking="enableThinking = $event"
@@ -979,6 +977,7 @@ onUnmounted(() => {
     <!-- Input area (snap mode with messages: full-width at bottom) -->
     <ChatInputArea
       v-if="!isAgentEmpty && isSnapMode && (chatMessages.length > 0 || isGenerating)"
+      data-snap-wake="true"
       :chat-input="chatInput"
       :selected-model-key="selectedModelKey"
       :selected-model-info="selectedModelInfo"
@@ -993,6 +992,7 @@ onUnmounted(() => {
       :chat-messages="chatMessages"
       :active-agent-id="activeAgentId"
       :is-snap-mode="isSnapMode"
+      @pointerdown.capture="handleWakeAttachedPointerDown"
       @update:chat-input="chatInput = $event"
       @update:selected-model-key="selectedModelKey = $event"
       @update:enable-thinking="enableThinking = $event"

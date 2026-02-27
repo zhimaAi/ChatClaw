@@ -28,12 +28,8 @@ const (
 )
 
 // snapGap returns the pixel gap between the snap window and the target app.
-// Windows uses a smaller gap because its window borders already add visual spacing.
 func snapGap() int {
-	if runtime.GOOS == "windows" {
-		return 3
-	}
-	return 5 // macOS / other
+	return 0
 }
 
 type SnapStatus struct {
@@ -629,12 +625,12 @@ func (s *SnapService) step() {
 		if wasMinimized && !isMin && targetForRestore != "" && stateForRestore == SnapStateAttached {
 			go func() {
 				time.Sleep(80 * time.Millisecond) // allow restore layout to settle
-			_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
-				TargetProcessName: targetForRestore,
-				Gap:               snapGap(),
-				App:               s.app,
-				Window:            w,
-			})
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: targetForRestore,
+					Gap:               snapGap(),
+					App:               s.app,
+					Window:            w,
+				})
 			}()
 		}
 	}
@@ -829,12 +825,12 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		if target != "" && state == SnapStateAttached {
 			go func() {
 				time.Sleep(60 * time.Millisecond) // allow restore layout to settle
-			_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
-				TargetProcessName: target,
-				Gap:               snapGap(),
-				App:               s.app,
-				Window:            w,
-			})
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: target,
+					Gap:               snapGap(),
+					App:               s.app,
+					Window:            w,
+				})
 			}()
 		}
 	})
