@@ -344,6 +344,12 @@ export default {
       expand: 'Expand',
       newConversation: 'New Conversation',
     },
+    chatMode: {
+      chat: 'Chat Mode',
+      task: 'Task Mode',
+      chatDesc: 'Multi-turn Q&A or reasoning across scenarios',
+      taskDesc: 'Handle complex tasks and deliver results autonomously',
+    },
     chat: {
       selectModel: 'Select model',
       freeBadge: 'Free',
@@ -375,6 +381,10 @@ export default {
       toolResult: 'Result',
       toolQuery: 'Query: ',
       rawJson: 'Raw JSON',
+      retrievalKnowledge: 'Knowledge Retrieval',
+      retrievalMemory: 'Memory Retrieval',
+      retrievalScore: 'Relevance',
+      retrievalItems: '{count} result(s)',
       tokenUsage: 'In {input} · Out {output}',
     },
     menu: {

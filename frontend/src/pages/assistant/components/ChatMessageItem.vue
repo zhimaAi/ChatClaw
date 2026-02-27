@@ -10,6 +10,7 @@ import type { Message } from '@bindings/chatclaw/internal/services/chat'
 import LogoIcon from '@/assets/images/logo.svg'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolCallBlock from './ToolCallBlock.vue'
+import RetrievalBlock from './RetrievalBlock.vue'
 import MessageEditor from './MessageEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 
@@ -293,6 +294,11 @@ const handleCancelEdit = () => {
             v-if="segment.type === 'tools'"
             :tool-calls="segment.toolCalls"
             :is-streaming="isStreaming"
+          />
+          <!-- Retrieval segment -->
+          <RetrievalBlock
+            v-if="segment.type === 'retrieval'"
+            :items="segment.items"
           />
         </template>
 

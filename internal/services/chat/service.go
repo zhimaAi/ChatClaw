@@ -111,6 +111,12 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		return nil, err
 	}
 
+	if agentExtras.ChatMode == "chat" {
+		return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
+			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
+		})
+	}
+
 	return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
 		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
 	})
@@ -181,9 +187,16 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 		return nil, err
 	}
 
-	result, err := s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
-		s.runGenerationWithExistingHistory(genCtx, db, input.ConversationID, input.TabID, requestID, agentConfig, providerConfig, agentExtras)
-	})
+	var result *SendMessageResult
+	if agentExtras.ChatMode == "chat" {
+		result, err = s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
+			s.runChatModeWithExistingHistory(genCtx, db, input.ConversationID, input.TabID, requestID, agentConfig, providerConfig, agentExtras)
+		})
+	} else {
+		result, err = s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
+			s.runGenerationWithExistingHistory(genCtx, db, input.ConversationID, input.TabID, requestID, agentConfig, providerConfig, agentExtras)
+		})
+	}
 	if err != nil {
 		return nil, err
 	}

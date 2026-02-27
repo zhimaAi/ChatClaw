@@ -341,6 +341,12 @@ export default {
       expand: '展开',
       newConversation: '新会话',
     },
+    chatMode: {
+      chat: '聊天模式',
+      task: '任务模式',
+      chatDesc: '多场景下的多轮问答或思考推理',
+      taskDesc: '适合处理复杂任务并且自主交付结果',
+    },
     chat: {
       selectModel: '选择模型',
       freeBadge: '免费',
@@ -372,6 +378,10 @@ export default {
       toolResult: '结果',
       toolQuery: '查询：',
       rawJson: '原始 JSON',
+      retrievalKnowledge: '知识库检索',
+      retrievalMemory: '记忆检索',
+      retrievalScore: '相关度',
+      retrievalItems: '{count} 条结果',
       tokenUsage: '输入 {input} · 输出 {output}',
     },
     menu: {

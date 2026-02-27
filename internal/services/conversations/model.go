@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"chatclaw/internal/sqlite"
@@ -11,18 +12,38 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// ChatMode constants
+const (
+	ChatModeChat = "chat" // Direct LLM conversation with knowledge/memory retrieval
+	ChatModeTask = "task" // ReAct agent with tool calling
+)
+
+// NormalizeChatMode validates and canonicalizes chat mode values.
+// Empty values default to chat mode for backward compatibility.
+func NormalizeChatMode(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "", ChatModeChat:
+		return ChatModeChat, true
+	case ChatModeTask:
+		return ChatModeTask, true
+	default:
+		return "", false
+	}
+}
+
 // Conversation 会话 DTO（暴露给前端）
 type Conversation struct {
 	ID int64 `json:"id"`
 
-	AgentID       int64   `json:"agent_id"`
-	Name          string  `json:"name"`
-	LastMessage   string  `json:"last_message"`
-	IsPinned      bool    `json:"is_pinned"`
-	LLMProviderID string  `json:"llm_provider_id"`
-	LLMModelID    string  `json:"llm_model_id"`
-	LibraryIDs    []int64 `json:"library_ids"`
-	EnableThinking bool   `json:"enable_thinking"`
+	AgentID        int64   `json:"agent_id"`
+	Name           string  `json:"name"`
+	LastMessage    string  `json:"last_message"`
+	IsPinned       bool    `json:"is_pinned"`
+	LLMProviderID  string  `json:"llm_provider_id"`
+	LLMModelID     string  `json:"llm_model_id"`
+	LibraryIDs     []int64 `json:"library_ids"`
+	EnableThinking bool    `json:"enable_thinking"`
+	ChatMode       string  `json:"chat_mode"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -37,6 +58,7 @@ type CreateConversationInput struct {
 	LLMModelID     string  `json:"llm_model_id"`
 	LibraryIDs     []int64 `json:"library_ids"`
 	EnableThinking bool    `json:"enable_thinking"`
+	ChatMode       string  `json:"chat_mode"`
 }
 
 // UpdateConversationInput 更新会话的输入参数
@@ -48,6 +70,7 @@ type UpdateConversationInput struct {
 	LLMModelID     *string  `json:"llm_model_id"`
 	LibraryIDs     *[]int64 `json:"library_ids"`
 	EnableThinking *bool    `json:"enable_thinking"`
+	ChatMode       *string  `json:"chat_mode"`
 }
 
 // conversationModel 数据库模型
@@ -66,6 +89,7 @@ type conversationModel struct {
 	LLMModelID     string `bun:"llm_model_id,notnull"`
 	LibraryIDs     string `bun:"library_ids,notnull"` // JSON array stored as string
 	EnableThinking bool   `bun:"enable_thinking,notnull"`
+	ChatMode       string `bun:"chat_mode,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at
@@ -99,6 +123,11 @@ func (m *conversationModel) toDTO() Conversation {
 		libraryIDs = []int64{}
 	}
 
+	chatMode, ok := NormalizeChatMode(m.ChatMode)
+	if !ok {
+		chatMode = ChatModeChat
+	}
+
 	return Conversation{
 		ID: m.ID,
 
@@ -110,6 +139,7 @@ func (m *conversationModel) toDTO() Conversation {
 		LLMModelID:     m.LLMModelID,
 		LibraryIDs:     libraryIDs,
 		EnableThinking: m.EnableThinking,
+		ChatMode:       chatMode,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

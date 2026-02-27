@@ -31,6 +31,7 @@ export const ChatEventType = {
   CHUNK: 'chat:chunk',
   THINKING: 'chat:thinking',
   TOOL: 'chat:tool',
+  RETRIEVAL: 'chat:retrieval',
   COMPLETE: 'chat:complete',
   STOPPED: 'chat:stopped',
   ERROR: 'chat:error',
@@ -45,11 +46,19 @@ export interface ToolCallInfo {
   status: 'calling' | 'completed' | 'error'
 }
 
-// Message segment for interleaved thinking/content/tool-call display (ReAct paradigm)
+// Retrieval item info for display (chat mode knowledge/memory retrieval)
+export interface RetrievalItemInfo {
+  source: 'knowledge' | 'memory'
+  content: string
+  score: number
+}
+
+// Message segment for interleaved thinking/content/tool-call/retrieval display
 export type MessageSegment =
   | { type: 'thinking'; content: string }
   | { type: 'content'; content: string }
   | { type: 'tools'; toolCalls: ToolCallInfo[] }
+  | { type: 'retrieval'; items: RetrievalItemInfo[] }
 
 // Streaming message state (for the currently generating message)
 export interface StreamingMessageState {
@@ -178,6 +187,7 @@ export const useChatStore = defineStore('chat', () => {
               type: string
               content?: string
               tool_call_ids?: string[]
+              retrieval_items?: Array<{ source: string; content: string; score: number }>
             }>
             if (Array.isArray(rawSegments) && rawSegments.length > 0) {
               // Parse tool_calls from the message to build ToolCallInfo map
@@ -220,6 +230,13 @@ export const useChatStore = defineStore('chat', () => {
                     .map((id) => toolCallMap.get(id))
                     .filter((tc): tc is ToolCallInfo => tc !== undefined)
                   return { type: 'tools' as const, toolCalls }
+                } else if (seg.type === 'retrieval') {
+                  const items: RetrievalItemInfo[] = (seg.retrieval_items || []).map((item) => ({
+                    source: item.source as 'knowledge' | 'memory',
+                    content: item.content,
+                    score: item.score,
+                  }))
+                  return { type: 'retrieval' as const, items }
                 }
                 // Fallback for unknown segment types
                 return { type: 'content' as const, content: '' }
@@ -600,6 +617,25 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const handleChatRetrieval = (event: any) => {
+    const data = extractEventData(event)
+    if (!data) return
+
+    const { conversation_id, request_id, items } = data
+    const streaming = streamingByConversation.value[conversation_id]
+
+    if (!streaming || streaming.requestId !== request_id) return
+    if (!Array.isArray(items) || items.length === 0) return
+
+    const retrievalItems: RetrievalItemInfo[] = items.map((item: any) => ({
+      source: item.source as 'knowledge' | 'memory',
+      content: String(item.content ?? ''),
+      score: Number(item.score ?? 0),
+    }))
+
+    streaming.segments.push({ type: 'retrieval', items: retrievalItems })
+  }
+
   const handleChatComplete = (event: any) => {
     const data = extractEventData(event)
     if (!data) return
@@ -701,6 +737,8 @@ export const useChatStore = defineStore('chat', () => {
           return { type: 'thinking' as const, content: seg.content }
         } else if (seg.type === 'content') {
           return { type: 'content' as const, content: seg.content }
+        } else if (seg.type === 'retrieval') {
+          return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
         } else {
           return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
         }
@@ -763,6 +801,12 @@ export const useChatStore = defineStore('chat', () => {
       Events.On(ChatEventType.TOOL, (e: any) => {
         debug(ChatEventType.TOOL, extractEventData(e))
         handleChatTool(e)
+      })
+    )
+    unsubscribers.push(
+      Events.On(ChatEventType.RETRIEVAL, (e: any) => {
+        debug(ChatEventType.RETRIEVAL, extractEventData(e))
+        handleChatRetrieval(e)
       })
     )
     unsubscribers.push(

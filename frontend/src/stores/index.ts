@@ -5,6 +5,7 @@ export {
   MessageRole,
   ChatEventType,
   type ToolCallInfo,
+  type RetrievalItemInfo,
   type MessageSegment,
   type StreamingMessageState,
 } from './chat'

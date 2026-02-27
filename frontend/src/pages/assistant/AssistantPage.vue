@@ -162,6 +162,7 @@ function onSnapBtnPointerUp(e: PointerEvent) {
   if (!snapBtnDidDrag) sidebarCollapsed.value = !sidebarCollapsed.value
 }
 const chatInput = ref('')
+const chatMode = ref('chat')
 const enableThinking = ref(false)
 const libraries = ref<Library[]>([])
 const selectedLibraryIds = ref<number[]>([])
@@ -293,6 +294,8 @@ const handleNewConversation = () => {
   clearKnowledgeSelection()
   // Reset thinking mode to default (off) for new conversation
   enableThinking.value = false
+  // Reset chat mode to default (chat) for new conversation
+  chatMode.value = 'chat'
 }
 
 const handleNewConversationForAgent = (agentId: number) => {
@@ -324,6 +327,9 @@ const handleSelectConversation = (conversation: Conversation) => {
 
   // Set thinking mode from conversation
   enableThinking.value = conversation.enable_thinking || false
+
+  // Set chat mode from conversation
+  chatMode.value = conversation.chat_mode || 'chat'
 }
 
 const handleSend = async () => {
@@ -347,6 +353,7 @@ const handleSend = async () => {
           llm_model_id: modelId || '',
           library_ids: selectedLibraryIds.value,
           enable_thinking: enableThinking.value,
+          chat_mode: chatMode.value,
         })
       )
     } catch {
@@ -408,6 +415,12 @@ const clearLibrarySelection = async () => {
   await saveLibraryIdsToConversation()
 }
 
+// Remove a single library from selection
+const handleRemoveLibrary = async (id: number) => {
+  selectedLibraryIds.value = selectedLibraryIds.value.filter((lid) => lid !== id)
+  await saveLibraryIdsToConversation()
+}
+
 // Save thinking mode to current conversation
 const saveThinkingToConversation = async () => {
   if (!activeConversationId.value) return
@@ -426,6 +439,26 @@ const saveThinkingToConversation = async () => {
 // Watch thinking mode changes and save to conversation
 watch(enableThinking, () => {
   void saveThinkingToConversation()
+})
+
+// Save chat mode to current conversation
+const saveChatModeToConversation = async () => {
+  if (!activeConversationId.value) return
+  try {
+    await ConversationsService.UpdateConversation(
+      activeConversationId.value,
+      new UpdateConversationInput({
+        chat_mode: chatMode.value,
+      })
+    )
+  } catch (err) {
+    console.error('Failed to save chat mode to conversation:', err)
+  }
+}
+
+// Watch chat mode changes and save to conversation
+watch(chatMode, () => {
+  void saveChatModeToConversation()
 })
 
 // Save library_ids to current conversation
@@ -948,6 +981,7 @@ onUnmounted(() => {
       <ChatInputArea
         v-if="!isAgentEmpty && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))"
         :chat-input="chatInput"
+        :chat-mode="chatMode"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"
         :providers-with-models="providersWithModels"
@@ -962,6 +996,7 @@ onUnmounted(() => {
         :active-agent-id="activeAgentId"
         :is-snap-mode="isSnapMode"
         @update:chat-input="chatInput = $event"
+        @update:chat-mode="chatMode = $event"
         @update:selected-model-key="selectedModelKey = $event"
         @update:enable-thinking="enableThinking = $event"
         @update:selected-library-ids="selectedLibraryIds = $event"
@@ -970,6 +1005,7 @@ onUnmounted(() => {
         @library-selection-change="handleLibrarySelectionChange"
         @clear-library-selection="clearLibrarySelection"
         @load-libraries="loadLibrariesFn"
+        @remove-library="handleRemoveLibrary"
       />
     </section>
     </div><!-- End upper row -->
@@ -978,6 +1014,7 @@ onUnmounted(() => {
     <ChatInputArea
       v-if="!isAgentEmpty && isSnapMode && (chatMessages.length > 0 || isGenerating)"
       :chat-input="chatInput"
+      :chat-mode="chatMode"
       :selected-model-key="selectedModelKey"
       :selected-model-info="selectedModelInfo"
       :providers-with-models="providersWithModels"
@@ -992,6 +1029,7 @@ onUnmounted(() => {
       :active-agent-id="activeAgentId"
       :is-snap-mode="isSnapMode"
       @update:chat-input="chatInput = $event"
+      @update:chat-mode="chatMode = $event"
       @update:selected-model-key="selectedModelKey = $event"
       @update:enable-thinking="enableThinking = $event"
       @update:selected-library-ids="selectedLibraryIds = $event"
@@ -1000,6 +1038,7 @@ onUnmounted(() => {
       @library-selection-change="handleLibrarySelectionChange"
       @clear-library-selection="clearLibrarySelection"
       @load-libraries="loadLibrariesFn"
+      @remove-library="handleRemoveLibrary"
     />
     </div><!-- End main content wrapper -->
 
