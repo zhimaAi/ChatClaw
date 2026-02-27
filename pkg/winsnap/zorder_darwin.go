@@ -218,42 +218,82 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// ForegroundProcessName returns current foreground app name.
+// If current app is foreground, isSelf=true.
+func ForegroundProcessName() (processName string, isSelf bool, err error) {
+	if C.winsnap_is_self_frontmost() {
+		return "", true, nil
+	}
+	cname := C.winsnap_get_frontmost_app_name()
+	if cname == nil {
+		return "", false, nil
+	}
+	defer C.winsnap_free_cstring(cname)
+	return C.GoString(cname), false, nil
+}
+
+// FrontMostTargetProcessName returns the foreground target process among targetProcessNames.
+// If foreground app is not one of targets, found=false.
+// Returns ErrSelfIsFrontmost when our own app is foreground.
+func FrontMostTargetProcessName(targetProcessNames []string) (processName string, found bool, err error) {
+	if len(targetProcessNames) == 0 {
+		return "", false, nil
+	}
+
+	if C.winsnap_is_self_frontmost() {
+		return "", false, ErrSelfIsFrontmost
+	}
+
+	frontPID := C.winsnap_get_frontmost_app_pid()
+	if frontPID <= 0 {
+		return "", false, nil
+	}
+
+	for _, raw := range targetProcessNames {
+		n := normalizeMacTargetName(raw)
+		if n == "" {
+			continue
+		}
+		cname := C.CString(n)
+		targetPID := C.winsnap_find_pid_by_name_zorder(cname)
+		C.free(unsafe.Pointer(cname))
+		if targetPID > 0 && targetPID == frontPID {
+			if C.winsnap_pid_has_visible_window(targetPID) {
+				return raw, true, nil
+			}
+		}
+	}
+
+	return "", false, nil
+}
+
+// IsTargetProcessVisible reports whether target app currently has any visible window.
+func IsTargetProcessVisible(targetProcessName string) (bool, error) {
+	n := normalizeMacTargetName(targetProcessName)
+	if n == "" {
+		return false, nil
+	}
+	cname := C.CString(n)
+	pid := C.winsnap_find_pid_by_name_zorder(cname)
+	C.free(unsafe.Pointer(cname))
+	if pid <= 0 {
+		return false, nil
+	}
+	return bool(C.winsnap_pid_has_visible_window(pid)), nil
+}
+
 // TopMostVisibleProcessName returns the target application that is currently frontmost (if any),
 // or falls back to checking if any target app has a visible window.
 // On macOS, we prioritize the frontmost app among targets to ensure proper snap behavior
 // when the user switches between multiple target apps.
 // Returns ErrSelfIsFrontmost if our own app is frontmost (caller should preserve current state).
 func TopMostVisibleProcessName(targetProcessNames []string) (processName string, found bool, err error) {
-	if len(targetProcessNames) == 0 {
-		return "", false, nil
+	frontTarget, frontFound, frontErr := FrontMostTargetProcessName(targetProcessNames)
+	if frontErr != nil {
+		return "", false, frontErr
 	}
-
-	// If our own app is frontmost (user clicked on winsnap window), preserve current state
-	if C.winsnap_is_self_frontmost() {
-		return "", false, ErrSelfIsFrontmost
-	}
-
-	// First, check if the frontmost app is one of our target apps by comparing PIDs
-	// This is more reliable than name comparison as it avoids localized name mismatches
-	frontPID := C.winsnap_get_frontmost_app_pid()
-	if frontPID > 0 {
-		for _, raw := range targetProcessNames {
-			n := normalizeMacTargetName(raw)
-			if n == "" {
-				continue
-			}
-			cname := C.CString(n)
-			targetPID := C.winsnap_find_pid_by_name_zorder(cname)
-			C.free(unsafe.Pointer(cname))
-
-			// Check if frontmost app's PID matches this target's PID
-			if targetPID > 0 && targetPID == frontPID {
-				// Verify it has a visible window
-				if C.winsnap_pid_has_visible_window(targetPID) {
-					return raw, true, nil
-				}
-			}
-		}
+	if frontFound {
+		return frontTarget, true, nil
 	}
 
 	// Fallback: choose the top-most visible app among target apps instead of

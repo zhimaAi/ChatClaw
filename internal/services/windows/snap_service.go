@@ -3,7 +3,6 @@ package windows
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"runtime"
 	"sort"
 	"strconv"
@@ -62,6 +61,8 @@ const (
 	snapCustomAppsSettingKey = "snap_custom_apps"
 	snapCustomKeyPrefix      = "snap_custom_"
 	snapDragGuardUntilKey    = "snap_drag_guard_until_unix_ms"
+	nonTargetRescanAfter     = 1200 * time.Millisecond
+	nonTargetRescanInterval  = 1200 * time.Millisecond
 )
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
@@ -93,6 +94,12 @@ type SnapService struct {
 	loopCancel context.CancelFunc
 
 	status SnapStatus
+	switchRollbackFrom  string
+	switchRollbackTo    string
+	switchRollbackUntil time.Time
+	lastNonTargetFront  string
+	lastNonTargetSince  time.Time
+	lastNonTargetRescan time.Time
 }
 
 func NewSnapService(app *application.App, winSvc *WindowService) (*SnapService, error) {
@@ -350,14 +357,19 @@ func (s *SnapService) DetachToStandalone() error {
 	s.touchLocked("")
 	s.mu.Unlock()
 
-	// 4. Always stop polling loop in standalone mode.
-	// Re-attach should only happen on explicit user action.
-	s.mu.Lock()
-	cancel := s.loopCancel
-	s.loopCancel = nil
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	// 4. Keep polling when there are still enabled targets so standalone mode can
+	// automatically re-attach when another target app becomes foreground.
+	// Only stop polling when no targets are enabled at all.
+	if len(enabledTargets) == 0 {
+		s.mu.Lock()
+		cancel := s.loopCancel
+		s.loopCancel = nil
+		s.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+	} else {
+		_ = s.ensureRunning()
 	}
 
 	// 5. Emit state-changed event so frontend can update UI
@@ -582,6 +594,7 @@ func (s *SnapService) step() {
 	s.mu.Lock()
 	enabledTargets := append([]string(nil), s.enabledTargets...)
 	w := s.win
+	currentTarget := s.currentTarget
 	wasMinimized := s.lastWinsnapMinimized
 	targetForRestore := s.currentTarget
 	stateForRestore := s.status.State
@@ -637,6 +650,101 @@ func (s *SnapService) step() {
 				})
 			}()
 		}
+	}
+
+	frontTarget, frontFound, frontErr := winsnap.FrontMostTargetProcessName(enabledTargets)
+	if frontErr != nil {
+		// Check if our own app is frontmost (user interacting with our app's window)
+		// In this case, preserve current snap state - don't hide or change anything.
+		if frontErr == winsnap.ErrSelfIsFrontmost {
+			return
+		}
+		s.mu.Lock()
+		s.status.LastError = frontErr.Error()
+		s.touchLocked(frontErr.Error())
+		s.mu.Unlock()
+		return
+	}
+
+	// In attached state, use strict foreground-driven switching:
+	// - self foreground: keep current attachment (handled above by ErrSelfIsFrontmost)
+	// - target foreground: switch only when front target differs from current target
+	// - non-target/unknown foreground: keep current attachment, do not run fallback scan
+	//
+	// This avoids mis-switching when rapidly toggling between target and non-target apps.
+	if stateForRestore == SnapStateAttached && currentTarget != "" {
+		if frontFound && frontTarget != "" {
+			if strings.EqualFold(frontTarget, currentTarget) {
+				return
+			}
+			now := time.Now()
+			s.mu.Lock()
+			rollbackFrom := s.switchRollbackFrom
+			rollbackTo := s.switchRollbackTo
+			rollbackUntil := s.switchRollbackUntil
+			withinGuard := now.Before(rollbackUntil)
+			canRollback := withinGuard &&
+				strings.EqualFold(currentTarget, rollbackTo) &&
+				strings.EqualFold(frontTarget, rollbackFrom)
+			if canRollback {
+				s.switchRollbackFrom = ""
+				s.switchRollbackTo = ""
+				s.switchRollbackUntil = time.Time{}
+			}
+			if !canRollback && !withinGuard {
+				s.switchRollbackFrom = currentTarget
+				s.switchRollbackTo = frontTarget
+				s.switchRollbackUntil = now.Add(1200 * time.Millisecond)
+			}
+			s.mu.Unlock()
+
+			if canRollback {
+				s.attachTo(w, frontTarget)
+				return
+			}
+			if withinGuard {
+				return
+			}
+
+			s.attachTo(w, frontTarget)
+			return
+		}
+		// Foreground is not a snap target: if the SAME non-target foreground persists,
+		// do a low-frequency rescan to recover from accidental switches.
+		foregroundName, foregroundSelf, foregroundErr := winsnap.ForegroundProcessName()
+		if foregroundErr == nil && !foregroundSelf && strings.TrimSpace(foregroundName) != "" {
+			normalized := strings.ToLower(strings.TrimSpace(foregroundName))
+			now := time.Now()
+			shouldRescan := false
+			s.mu.Lock()
+			if strings.EqualFold(s.lastNonTargetFront, normalized) {
+				if !s.lastNonTargetSince.IsZero() &&
+					now.Sub(s.lastNonTargetSince) >= nonTargetRescanAfter &&
+					(s.lastNonTargetRescan.IsZero() || now.Sub(s.lastNonTargetRescan) >= nonTargetRescanInterval) {
+					s.lastNonTargetRescan = now
+					shouldRescan = true
+				}
+			} else {
+				s.lastNonTargetFront = normalized
+				s.lastNonTargetSince = now
+				s.lastNonTargetRescan = time.Time{}
+			}
+			s.mu.Unlock()
+			if shouldRescan {
+				target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
+				if err == nil && found && target != "" && !strings.EqualFold(target, currentTarget) {
+					s.attachTo(w, target)
+					return
+				}
+			}
+		}
+		// Keep current attachment when foreground is not a target app.
+		return
+	}
+
+	if frontFound && frontTarget != "" {
+		s.attachTo(w, frontTarget)
+		return
 	}
 
 	target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
@@ -709,6 +817,12 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 
 	s.currentTarget = ""
 	s.lastWinsnapMinimized = false
+	s.switchRollbackFrom = ""
+	s.switchRollbackTo = ""
+	s.switchRollbackUntil = time.Time{}
+	s.lastNonTargetFront = ""
+	s.lastNonTargetSince = time.Time{}
+	s.lastNonTargetRescan = time.Time{}
 	s.status.State = SnapStateHidden
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -780,6 +894,17 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.currentTarget = targetProcess
 	s.lastAttachedTarget = "" // Clear: now actively attached, no need to remember
 	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
+	s.lastNonTargetFront = ""
+	s.lastNonTargetSince = time.Time{}
+	s.lastNonTargetRescan = time.Time{}
+	if strings.EqualFold(s.switchRollbackTo, targetProcess) {
+		// Keep rollback window alive after switching to new target; it will be cleared
+		// once new target is confirmed as stable frontmost.
+	} else {
+		s.switchRollbackFrom = ""
+		s.switchRollbackTo = ""
+		s.switchRollbackUntil = time.Time{}
+	}
 	s.status.State = SnapStateAttached
 	s.status.TargetProcess = targetProcess
 	s.status.LastError = ""
@@ -1080,7 +1205,6 @@ func loadCustomSnapAppsFromSettings() []customSnapAppConfig {
 func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, offsetY int) {
 	key := snapKeyForTarget(targetProcess)
 	if key == "" {
-		fmt.Printf("[SNAP_DEBUG] snapKeyForTarget(%q) returned empty! Settings will NOT be loaded.\n", targetProcess)
 		return false, 0, 0
 	}
 	// Setting key format: snap_[app]_no_click, snap_[app]_click_offset_x/y
@@ -1088,13 +1212,10 @@ func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, off
 	noClick = settings.GetBool(key+"_no_click", defaultNoClickForKey(key))
 	offsetX = settings.GetInt(key+"_click_offset_x", 0)
 	offsetY = settings.GetInt(key+"_click_offset_y", 0)
-	fmt.Printf("[SNAP_DEBUG] getClickSettingsForTarget(%q): key=%q noClick=%v offsetX=%d offsetY(raw)=%d\n",
-		targetProcess, key, noClick, offsetX, offsetY)
 	// If not configured (0 or empty), fall back to per-app defaults to match frontend UX.
 	// This is important on macOS where the click implementation otherwise falls back to a generic value.
 	if offsetY <= 0 {
 		offsetY = defaultClickOffsetYForKey(key)
-		fmt.Printf("[SNAP_DEBUG]   offsetY fallback to default: %d\n", offsetY)
 	}
 	return noClick, offsetX, offsetY
 }

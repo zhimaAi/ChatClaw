@@ -10,6 +10,18 @@ func TopMostVisibleProcessName(_ []string) (string, bool, error) {
 	return "", false, ErrNotSupported
 }
 
+func ForegroundProcessName() (string, bool, error) {
+	return "", false, ErrNotSupported
+}
+
+func FrontMostTargetProcessName(_ []string) (string, bool, error) {
+	return "", false, ErrNotSupported
+}
+
+func IsTargetProcessVisible(_ string) (bool, error) {
+	return false, ErrNotSupported
+}
+
 func MoveOffscreen(_ *application.WebviewWindow) error {
 	return ErrNotSupported
 }
