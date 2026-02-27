@@ -182,9 +182,10 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
         />
 
         <div class="mt-3 flex items-center justify-between">
-          <div class="flex items-center gap-2">
+          <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
             <ChatModeSelector
               :model-value="chatMode"
+              :compact="isSnapMode"
               @update:model-value="(v) => emit('update:chatMode', v)"
             />
 
@@ -200,7 +201,7 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
                       <SelectTrigger
                         :class="cn(
                           'h-8 w-auto rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode ? 'min-w-0 max-w-[160px]' : 'min-w-[160px] max-w-[240px]'
+                          isSnapMode ? 'min-w-0 max-w-[120px]' : 'min-w-[160px] max-w-[240px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -211,7 +212,7 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
                           />
                           <span class="truncate">{{ selectedModelInfo.modelName }}</span>
                           <span
-                            v-if="selectedProviderIsFree"
+                            v-if="selectedProviderIsFree && !isSnapMode"
                             class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                           >
                             {{ t('assistant.chat.freeBadge') }}

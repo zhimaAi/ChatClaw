@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { cn } from '@/lib/utils'
 import {
   SelectRoot,
   SelectTrigger as SelectTriggerRaw,
@@ -14,6 +15,7 @@ import { Check } from 'lucide-vue-next'
 
 const props = defineProps<{
   modelValue: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,7 +37,10 @@ const modes = [
   >
     <SelectTriggerRaw as-child>
       <button
-        class="flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
+        :class="cn(
+          'flex h-8 items-center rounded-full border border-border bg-background text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none',
+          compact ? 'size-8 justify-center' : 'gap-1.5 px-3'
+        )"
       >
         <!-- Chat mode icon: speech bubble -->
         <svg
@@ -68,7 +73,7 @@ const modes = [
           <circle cx="12" cy="12" r="4" />
           <circle cx="12" cy="12" r="8" />
         </svg>
-        <span class="text-foreground">
+        <span v-if="!compact" class="text-foreground">
           {{ t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat') }}
         </span>
       </button>
