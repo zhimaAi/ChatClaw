@@ -235,9 +235,10 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
 
 			agentConfig.Instruction += "\n\n[IMPORTANT] Long-term memory is enabled. " +
-				"When the user's message involves anything personal (likes, dislikes, habits, experiences, opinions, projects, etc.) or could benefit from prior context, " +
-				"you MUST call memory_retriever BEFORE responding. " +
-				"Provide 2-5 queries with varied keywords."
+				"You MUST call memory_retriever at the START of EVERY conversation turn BEFORE composing your response. " +
+				"This is mandatory — do NOT skip it even if the question seems simple, factual, or unrelated to the user personally. " +
+				"Memory may contain relevant context, preferences, or prior discussions that improve your answer. " +
+				"Provide 2-5 queries with varied keywords covering the user's question and related topics."
 		}
 	}
 
@@ -258,9 +259,10 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 // --- streaming / event processing ---
 
 type segment struct {
-	Type        string   `json:"type"`
-	Content     string   `json:"content,omitempty"`
-	ToolCallIDs []string `json:"tool_call_ids,omitempty"`
+	Type           string          `json:"type"`
+	Content        string          `json:"content,omitempty"`
+	ToolCallIDs    []string        `json:"tool_call_ids,omitempty"`
+	RetrievalItems []RetrievalItem `json:"retrieval_items,omitempty"`
 }
 
 type streamState struct {
@@ -337,6 +339,15 @@ func (ss *streamState) addToolCallToSegments(toolCallID string) {
 		ss.segments[len(ss.segments)-1].ToolCallIDs = append(ss.segments[len(ss.segments)-1].ToolCallIDs, toolCallID)
 		ss.lastSegmentToolCallIDs[toolCallID] = true
 	}
+}
+
+func (ss *streamState) addRetrievalToSegments(items []RetrievalItem) {
+	if len(items) == 0 {
+		return
+	}
+	ss.segments = append(ss.segments, segment{Type: "retrieval", RetrievalItems: items})
+	ss.lastSegmentType = "retrieval"
+	ss.lastSegmentToolCallIDs = nil
 }
 
 func updateArgs(oldArgs, newArgs string) string {

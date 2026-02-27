@@ -6,20 +6,20 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
-	github.com/cloudwego/eino v0.7.32
-	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/embedding/ollama v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino v0.7.36
+	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/embedding/ollama v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260214075714-8f11ae8e65a2
 	github.com/cloudwego/eino-ext/components/model/claude v0.1.15
 	github.com/cloudwego/eino-ext/components/model/gemini v0.1.28
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
-	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260204064123-1f91f547c77e
-	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260204064123-1f91f547c77e
+	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260214075714-8f11ae8e65a2
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/eino-contrib/jsonschema v1.0.3

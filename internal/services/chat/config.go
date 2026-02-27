@@ -20,6 +20,7 @@ type AgentExtras struct {
 	LibraryIDs     []int64
 	MatchThreshold float64
 	MemoryEnabled  bool
+	ChatMode       string // "chat" or "task"
 }
 
 // getAgentAndProviderConfig gets the agent and provider configuration for a conversation
@@ -30,11 +31,12 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		LLMModelID     string `bun:"llm_model_id"`
 		LibraryIDs     string `bun:"library_ids"`
 		EnableThinking bool   `bun:"enable_thinking"`
+		ChatMode       string `bun:"chat_mode"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "enable_thinking").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "enable_thinking", "chat_mode").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -150,11 +152,20 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		s.app.Logger.Info("[chat] using library_ids", "library_ids", convLibraryIDs)
 	}
 
+	chatMode := conv.ChatMode
+	if chatMode == "" {
+		chatMode = "chat"
+	} else if chatMode != "chat" && chatMode != "task" {
+		s.app.Logger.Warn("[chat] invalid chat_mode found in conversation, fallback to chat", "conv", conversationID, "chat_mode", chatMode)
+		chatMode = "chat"
+	}
+
 	extras := AgentExtras{
 		AgentID:        conv.AgentID,
 		LibraryIDs:     convLibraryIDs,
 		MatchThreshold: agent.RetrievalMatchThreshold,
 		MemoryEnabled:  memoryEnabled,
+		ChatMode:       chatMode,
 	}
 
 	return agentConfig, providerConfig, extras, nil

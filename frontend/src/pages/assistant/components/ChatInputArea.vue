@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { ArrowUp, Square, Check, Lightbulb } from 'lucide-vue-next'
+import { ArrowUp, Square, Check, Lightbulb, X } from 'lucide-vue-next'
 import {
   Select,
   SelectContent,
@@ -26,6 +26,7 @@ import {
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
+import ChatModeSelector from './ChatModeSelector.vue'
 
 import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
@@ -33,6 +34,7 @@ import LogoIcon from '@/assets/images/logo.svg'
 
 const props = defineProps<{
   chatInput: string
+  chatMode: string
   selectedModelKey: string
   selectedModelInfo: { providerId: string; modelId: string; modelName: string } | null
   providersWithModels: ProviderWithModels[]
@@ -50,6 +52,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:chatInput': [value: string]
+  'update:chatMode': [value: string]
   'update:selectedModelKey': [value: string]
   'update:enableThinking': [value: boolean]
   'update:selectedLibraryIds': [value: number[]]
@@ -58,6 +61,7 @@ const emit = defineEmits<{
   librarySelectionChange: []
   clearLibrarySelection: []
   loadLibraries: []
+  removeLibrary: [id: number]
 }>()
 
 const { t } = useI18n()
@@ -73,6 +77,24 @@ const handleChatEnter = (event: KeyboardEvent) => {
 
   event.preventDefault()
   emit('send')
+}
+
+const MAX_VISIBLE_LIBRARIES = 3
+
+const selectedLibraries = computed(() =>
+  props.libraries.filter((lib) => props.selectedLibraryIds.includes(lib.id))
+)
+
+const visibleLibraries = computed(() =>
+  selectedLibraries.value.slice(0, MAX_VISIBLE_LIBRARIES)
+)
+
+const overflowCount = computed(() =>
+  Math.max(0, selectedLibraries.value.length - MAX_VISIBLE_LIBRARIES)
+)
+
+const handleRemoveLibrary = (id: number) => {
+  emit('removeLibrary', id)
 }
 
 const handleLibrarySelectionChange = () => {
@@ -124,6 +146,32 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
       <div
         class="w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
       >
+        <!-- Selected knowledge bases -->
+        <div
+          v-if="selectedLibraryIds.length > 0"
+          class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
+        >
+          <div
+            v-for="lib in visibleLibraries"
+            :key="lib.id"
+            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <button
+              class="rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 group-hover:opacity-100"
+              @click="handleRemoveLibrary(lib.id)"
+            >
+              <X class="size-3" />
+            </button>
+          </div>
+          <span
+            v-if="overflowCount > 0"
+            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+          >
+            +{{ overflowCount }}
+          </span>
+        </div>
+
         <textarea
           :value="chatInput"
           :placeholder="t('assistant.placeholders.inputPlaceholder')"
@@ -134,7 +182,13 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
         />
 
         <div class="mt-3 flex items-center justify-between">
-          <div class="flex items-center gap-2">
+          <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
+            <ChatModeSelector
+              :model-value="chatMode"
+              :compact="isSnapMode"
+              @update:model-value="(v) => emit('update:chatMode', v)"
+            />
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -147,7 +201,7 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
                       <SelectTrigger
                         :class="cn(
                           'h-8 w-auto rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode ? 'min-w-0 max-w-[160px]' : 'min-w-[160px] max-w-[240px]'
+                          isSnapMode ? 'min-w-0 max-w-[120px]' : 'min-w-[160px] max-w-[240px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -158,7 +212,7 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
                           />
                           <span class="truncate">{{ selectedModelInfo.modelName }}</span>
                           <span
-                            v-if="selectedProviderIsFree"
+                            v-if="selectedProviderIsFree && !isSnapMode"
                             class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                           >
                             {{ t('assistant.chat.freeBadge') }}
