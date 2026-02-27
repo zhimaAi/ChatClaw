@@ -37,9 +37,14 @@ var windowsExcludedProcessPrefixes = []string{
 	"windowsinternal.",
 }
 
+var windowsExcludedProcessExact = map[string]struct{}{
+	"wemail.exe": {},
+}
+
 type windowsAppItem struct {
 	ProcessNameB64 string `json:"ProcessNameB64"`
 	WindowTitleB64 string `json:"WindowTitleB64"`
+	IconDataB64    string `json:"IconDataB64"`
 }
 
 func decodeWindowsB64(value string) string {
@@ -123,12 +128,35 @@ func listRunningApps() ([]SnapAppCandidate, error) {
 	// Keep only processes that own a main window, which matches the
 	// "Apps" section in Windows Task Manager and excludes background services.
 	cmd := exec.Command("powershell", "-NoProfile", "-Command",
-		`$apps = Get-Process | `+
+		`Add-Type -AssemblyName System.Drawing; `+
+			`$apps = Get-Process | `+
 			`Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne "" } | `+
-			`Select-Object -Unique ProcessName,MainWindowTitle | `+
-			`ForEach-Object { [PSCustomObject]@{ `+
+			`Sort-Object ProcessName,Id -Unique | `+
+			`ForEach-Object { `+
+			`$iconDataB64 = ""; `+
+			`$exePath = $null; `+
+			`try { $exePath = $_.Path } catch {}; `+
+			`if (-not $exePath) { `+
+			`try { $exePath = (Get-CimInstance Win32_Process -Filter ("ProcessId=" + $_.Id) -ErrorAction SilentlyContinue).ExecutablePath } catch {} `+
+			`}; `+
+			`if ($exePath -and (Test-Path $exePath)) { `+
+			`try { `+
+			`$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exePath); `+
+			`if ($icon -ne $null) { `+
+			`$bitmap = $icon.ToBitmap(); `+
+			`$ms = New-Object System.IO.MemoryStream; `+
+			`$bitmap.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); `+
+			`$iconDataB64 = [Convert]::ToBase64String($ms.ToArray()); `+
+			`$ms.Dispose(); `+
+			`$bitmap.Dispose(); `+
+			`$icon.Dispose(); `+
+			`} `+
+			`} catch {} `+
+			`}; `+
+			`[PSCustomObject]@{ `+
 			`ProcessNameB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_.ProcessName)); `+
-			`WindowTitleB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_.MainWindowTitle)) `+
+			`WindowTitleB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($_.MainWindowTitle)); `+
+			`IconDataB64 = $iconDataB64 `+
 			`} }; `+
 			`$apps | ConvertTo-Json -Compress`)
 	output, err := cmd.Output()
@@ -161,6 +189,9 @@ func listRunningApps() ([]SnapAppCandidate, error) {
 			lowerProcess == "memory compression" {
 			continue
 		}
+		if _, excluded := windowsExcludedProcessExact[lowerProcess]; excluded {
+			continue
+		}
 		if _, isSelf := selfProcessNames[lowerProcess]; isSelf {
 			continue
 		}
@@ -180,11 +211,19 @@ func listRunningApps() ([]SnapAppCandidate, error) {
 		seen[lowerProcess] = struct{}{}
 
 		displayName := resolveWindowsDisplayName(processName)
+		iconKey := inferSnapIcon(displayName, processName)
+		icon := iconKey
+		if iconKey == "app" {
+			iconDataB64 := strings.TrimSpace(item.IconDataB64)
+			if iconDataB64 != "" {
+				icon = "data:image/png;base64," + iconDataB64
+			}
+		}
 
 		apps = append(apps, SnapAppCandidate{
 			Name:        displayName,
 			ProcessName: processName,
-			Icon:        inferSnapIcon(displayName, processName),
+			Icon:        icon,
 		})
 	}
 
