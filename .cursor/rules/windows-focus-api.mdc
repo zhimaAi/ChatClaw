@@ -121,10 +121,10 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
    - 该类问题属于 P0 交互稳定性问题（可能造成系统级“鼠标点击无效、需按 Win 键恢复”）。
    - 任何改动涉及 `WakeAttached` 触发范围时，必须显式说明“白名单区域”并做回归验证。
 
-7. **附着态禁止标题拖拽（必须）**
-   - 当 `hasAttachedTarget=true` 时，snap 标题区域必须设置 `--wails-draggable: no-drag`。
-   - 仅在未附着（standalone/hidden）时允许标题拖拽。
-   - 原因：附着态下原生拖拽可能与吸附跟随/焦点同步冲突，触发 Windows 假死。
+7. **Windows 下禁止 snap 标题拖拽（必须）**
+   - 在 Windows 平台，snap 标题区域必须固定 `--wails-draggable: no-drag`（不区分 attached/standalone）。
+   - 原因：取消吸附后（standalone）点击标题拖拽区也可能触发系统级假死。
+   - 若未来要恢复拖拽，必须先完成专项回归（含“点外部应用后回点标题区”场景）。
 
 ### 提交前检查清单
 
@@ -136,5 +136,5 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
 - 触发是否采用 `data-snap-wake` 白名单而不是黑名单兜底？
 - 白名单是否仅包含消息区和输入区？
 - 是否移除了 window 级 `pointerdown` 触发 `WakeAttached`？
-- 附着态下标题区域是否强制 `--wails-draggable: no-drag`？
+- Windows 下标题区域是否固定 `--wails-draggable: no-drag`？
 - 取消吸附后立即点击“吸附应用”是否不会触发 `WakeAttached`？
