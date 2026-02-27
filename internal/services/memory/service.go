@@ -218,19 +218,9 @@ func (s *MemoryService) UpdateThematicFact(ctx context.Context, id int64, topic,
 			return err
 		}
 
-		// FTS5: delete old, insert new
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-			existing.ID, oldTokens, existing.AgentID)
 		newTokens := tokenizer.TokenizeContent(topic + " " + content)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO thematic_facts_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
-			existing.ID, newTokens, existing.AgentID)
-
-		// Vector: delete old, re-embed asynchronously is not feasible here,
-		// so we delete the stale vector; it will be re-created on next extraction or rebuild.
-		_, _ = tx.ExecContext(ctx, `DELETE FROM thematic_facts_vec WHERE id = ?`, existing.ID)
-
+		replaceTFFTS(ctx, tx, existing.ID, existing.AgentID, oldTokens, newTokens)
+		deleteTFVec(ctx, tx, existing.ID)
 		return nil
 	})
 }
@@ -247,15 +237,13 @@ func (s *MemoryService) DeleteThematicFact(ctx context.Context, id int64) error 
 		}
 
 		oldTokens := tokenizer.TokenizeContent(existing.Topic + " " + existing.Content)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-			existing.ID, oldTokens, existing.AgentID)
+		deleteTFFTS(ctx, tx, existing.ID, existing.AgentID, oldTokens)
 
 		if _, err := tx.NewDelete().Model((*ThematicFact)(nil)).Where("id = ?", id).Exec(ctx); err != nil {
 			return err
 		}
 
-		_, _ = tx.ExecContext(ctx, `DELETE FROM thematic_facts_vec WHERE id = ?`, id)
+		deleteTFVec(ctx, tx, id)
 		return nil
 	})
 }
@@ -284,18 +272,9 @@ func (s *MemoryService) UpdateEventStream(ctx context.Context, id int64, content
 			return err
 		}
 
-		// FTS5: delete old, insert new
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-			existing.ID, oldTokens, existing.AgentID)
 		newTokens := tokenizer.TokenizeContent(content)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO event_streams_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
-			existing.ID, newTokens, existing.AgentID)
-
-		// Vector: delete stale entry
-		_, _ = tx.ExecContext(ctx, `DELETE FROM event_streams_vec WHERE id = ?`, existing.ID)
-
+		replaceESFTS(ctx, tx, existing.ID, existing.AgentID, oldTokens, newTokens)
+		deleteESVec(ctx, tx, existing.ID)
 		return nil
 	})
 }
@@ -312,15 +291,13 @@ func (s *MemoryService) DeleteEventStream(ctx context.Context, id int64) error {
 		}
 
 		oldTokens := tokenizer.TokenizeContent(existing.Content)
-		_, _ = tx.ExecContext(ctx,
-			`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-			existing.ID, oldTokens, existing.AgentID)
+		deleteESFTS(ctx, tx, existing.ID, existing.AgentID, oldTokens)
 
 		if _, err := tx.NewDelete().Model((*EventStream)(nil)).Where("id = ?", id).Exec(ctx); err != nil {
 			return err
 		}
 
-		_, _ = tx.ExecContext(ctx, `DELETE FROM event_streams_vec WHERE id = ?`, id)
+		deleteESVec(ctx, tx, id)
 		return nil
 	})
 }
@@ -333,21 +310,17 @@ func DeleteAgentMemories(ctx context.Context, agentID int64) error {
 	}
 
 	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete core profiles
 		if _, err := tx.NewDelete().Model((*CoreProfile)(nil)).Where("agent_id = ?", agentID).Exec(ctx); err != nil {
 			return err
 		}
 
-		// Delete thematic facts and their FTS/vector entries
 		var tfs []ThematicFact
 		if err := tx.NewSelect().Model(&tfs).Where("agent_id = ?", agentID).Scan(ctx); err != nil {
 			return err
 		}
 		for _, tf := range tfs {
 			tfTokens := tokenizer.TokenizeContent(tf.Topic + " " + tf.Content)
-			_, _ = tx.ExecContext(ctx,
-				`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-				tf.ID, tfTokens, tf.AgentID)
+			deleteTFFTS(ctx, tx, tf.ID, tf.AgentID, tfTokens)
 		}
 		if len(tfs) > 0 {
 			tfIDs := make([]int64, len(tfs))
@@ -362,16 +335,13 @@ func DeleteAgentMemories(ctx context.Context, agentID int64) error {
 			}
 		}
 
-		// Delete event streams and their FTS/vector entries
 		var ess []EventStream
 		if err := tx.NewSelect().Model(&ess).Where("agent_id = ?", agentID).Scan(ctx); err != nil {
 			return err
 		}
 		for _, es := range ess {
 			esTokens := tokenizer.TokenizeContent(es.Content)
-			_, _ = tx.ExecContext(ctx,
-				`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
-				es.ID, esTokens, es.AgentID)
+			deleteESFTS(ctx, tx, es.ID, es.AgentID, esTokens)
 		}
 		if len(ess) > 0 {
 			esIDs := make([]int64, len(ess))
@@ -388,4 +358,40 @@ func DeleteAgentMemories(ctx context.Context, agentID int64) error {
 
 		return nil
 	})
+}
+
+// --- FTS / vector index helpers ---
+
+func deleteTFFTS(ctx context.Context, tx bun.Tx, id, agentID int64, tokens string) {
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+		id, tokens, agentID)
+}
+
+func replaceTFFTS(ctx context.Context, tx bun.Tx, id, agentID int64, oldTokens, newTokens string) {
+	deleteTFFTS(ctx, tx, id, agentID, oldTokens)
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO thematic_facts_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
+		id, newTokens, agentID)
+}
+
+func deleteTFVec(ctx context.Context, tx bun.Tx, id int64) {
+	_, _ = tx.ExecContext(ctx, `DELETE FROM thematic_facts_vec WHERE id = ?`, id)
+}
+
+func deleteESFTS(ctx context.Context, tx bun.Tx, id, agentID int64, tokens string) {
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+		id, tokens, agentID)
+}
+
+func replaceESFTS(ctx context.Context, tx bun.Tx, id, agentID int64, oldTokens, newTokens string) {
+	deleteESFTS(ctx, tx, id, agentID, oldTokens)
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO event_streams_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
+		id, newTokens, agentID)
+}
+
+func deleteESVec(ctx context.Context, tx bun.Tx, id int64) {
+	_, _ = tx.ExecContext(ctx, `DELETE FROM event_streams_vec WHERE id = ?`, id)
 }
