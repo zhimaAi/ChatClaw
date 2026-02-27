@@ -61,8 +61,10 @@ const (
 	snapCustomAppsSettingKey = "snap_custom_apps"
 	snapCustomKeyPrefix      = "snap_custom_"
 	snapDragGuardUntilKey    = "snap_drag_guard_until_unix_ms"
-	nonTargetRescanAfter     = 1200 * time.Millisecond
-	nonTargetRescanInterval  = 1200 * time.Millisecond
+	wakeAttachedGuardAfterSwitch    = 1200 * time.Millisecond
+	attachedLowFreqRescanInterval   = 1200 * time.Millisecond
+	attachedLowFreqRescanSwitchHits = 2
+	attachedMinSwitchInterval       = 800 * time.Millisecond
 )
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
@@ -78,6 +80,7 @@ type SnapService struct {
 	winSvc *WindowService
 
 	mu sync.Mutex
+	attachMu sync.Mutex
 
 	enabledKeys    []string
 	enabledTargets []string
@@ -97,9 +100,11 @@ type SnapService struct {
 	switchRollbackFrom  string
 	switchRollbackTo    string
 	switchRollbackUntil time.Time
-	lastNonTargetFront  string
-	lastNonTargetSince  time.Time
-	lastNonTargetRescan time.Time
+	wakeAttachedGuardUntil time.Time
+	lastSwitchAt time.Time
+	lastAttachedRescanAt time.Time
+	attachedRescanCandidate string
+	attachedRescanHits      int
 }
 
 func NewSnapService(app *application.App, winSvc *WindowService) (*SnapService, error) {
@@ -149,9 +154,13 @@ func (s *SnapService) WakeAttached() error {
 	s.mu.Lock()
 	w := s.win
 	target := s.currentTarget
+	guardUntil := s.wakeAttachedGuardUntil
 	s.mu.Unlock()
 
 	if w == nil || target == "" {
+		return nil
+	}
+	if time.Now().Before(guardUntil) {
 		return nil
 	}
 	// Use WakeAttachedWindowWithRefocus to return focus to winsnap after syncing z-order
@@ -675,68 +684,63 @@ func (s *SnapService) step() {
 	if stateForRestore == SnapStateAttached && currentTarget != "" {
 		if frontFound && frontTarget != "" {
 			if strings.EqualFold(frontTarget, currentTarget) {
+				now := time.Now()
+				doRescan := false
+				s.mu.Lock()
+				if s.lastAttachedRescanAt.IsZero() || now.Sub(s.lastAttachedRescanAt) >= attachedLowFreqRescanInterval {
+					s.lastAttachedRescanAt = now
+					doRescan = true
+				}
+				s.mu.Unlock()
+				if doRescan {
+					// Low-frequency runtime consistency check: if state says we are attached
+					// to currentTarget but runtime geometry says target is obscured/non-adjacent,
+					// force a re-attach to currentTarget to realign controller and UI state.
+					if obscured, oerr := winsnap.IsTargetObscured(w, currentTarget); oerr == nil && obscured {
+						s.attachTo(w, currentTarget)
+						return
+					}
+
+					top, found, terr := winsnap.TopMostVisibleProcessName(enabledTargets)
+					if terr == nil && found && top != "" && !strings.EqualFold(top, currentTarget) {
+						s.mu.Lock()
+						if strings.EqualFold(s.attachedRescanCandidate, top) {
+							s.attachedRescanHits++
+						} else {
+							s.attachedRescanCandidate = top
+							s.attachedRescanHits = 1
+						}
+						ready := s.attachedRescanHits >= attachedLowFreqRescanSwitchHits
+						if ready {
+							s.attachedRescanCandidate = ""
+							s.attachedRescanHits = 0
+						}
+						canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+						s.mu.Unlock()
+						if ready && canSwitch {
+							s.attachTo(w, top)
+							return
+						}
+					} else {
+						s.mu.Lock()
+						s.attachedRescanCandidate = ""
+						s.attachedRescanHits = 0
+						s.mu.Unlock()
+					}
+				}
 				return
 			}
 			now := time.Now()
 			s.mu.Lock()
-			rollbackFrom := s.switchRollbackFrom
-			rollbackTo := s.switchRollbackTo
-			rollbackUntil := s.switchRollbackUntil
-			withinGuard := now.Before(rollbackUntil)
-			canRollback := withinGuard &&
-				strings.EqualFold(currentTarget, rollbackTo) &&
-				strings.EqualFold(frontTarget, rollbackFrom)
-			if canRollback {
-				s.switchRollbackFrom = ""
-				s.switchRollbackTo = ""
-				s.switchRollbackUntil = time.Time{}
-			}
-			if !canRollback && !withinGuard {
-				s.switchRollbackFrom = currentTarget
-				s.switchRollbackTo = frontTarget
-				s.switchRollbackUntil = now.Add(1200 * time.Millisecond)
-			}
+			canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+			s.attachedRescanCandidate = ""
+			s.attachedRescanHits = 0
 			s.mu.Unlock()
-
-			if canRollback {
-				s.attachTo(w, frontTarget)
+			if !canSwitch {
 				return
 			}
-			if withinGuard {
-				return
-			}
-
 			s.attachTo(w, frontTarget)
 			return
-		}
-		// Foreground is not a snap target: if the SAME non-target foreground persists,
-		// do a low-frequency rescan to recover from accidental switches.
-		foregroundName, foregroundSelf, foregroundErr := winsnap.ForegroundProcessName()
-		if foregroundErr == nil && !foregroundSelf && strings.TrimSpace(foregroundName) != "" {
-			normalized := strings.ToLower(strings.TrimSpace(foregroundName))
-			now := time.Now()
-			shouldRescan := false
-			s.mu.Lock()
-			if strings.EqualFold(s.lastNonTargetFront, normalized) {
-				if !s.lastNonTargetSince.IsZero() &&
-					now.Sub(s.lastNonTargetSince) >= nonTargetRescanAfter &&
-					(s.lastNonTargetRescan.IsZero() || now.Sub(s.lastNonTargetRescan) >= nonTargetRescanInterval) {
-					s.lastNonTargetRescan = now
-					shouldRescan = true
-				}
-			} else {
-				s.lastNonTargetFront = normalized
-				s.lastNonTargetSince = now
-				s.lastNonTargetRescan = time.Time{}
-			}
-			s.mu.Unlock()
-			if shouldRescan {
-				target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
-				if err == nil && found && target != "" && !strings.EqualFold(target, currentTarget) {
-					s.attachTo(w, target)
-					return
-				}
-			}
 		}
 		// Keep current attachment when foreground is not a target app.
 		return
@@ -820,9 +824,11 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 	s.switchRollbackFrom = ""
 	s.switchRollbackTo = ""
 	s.switchRollbackUntil = time.Time{}
-	s.lastNonTargetFront = ""
-	s.lastNonTargetSince = time.Time{}
-	s.lastNonTargetRescan = time.Time{}
+	s.wakeAttachedGuardUntil = time.Time{}
+	s.lastSwitchAt = time.Time{}
+	s.lastAttachedRescanAt = time.Time{}
+	s.attachedRescanCandidate = ""
+	s.attachedRescanHits = 0
 	s.status.State = SnapStateHidden
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -841,7 +847,11 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 }
 
 func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess string) {
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+
 	s.mu.Lock()
+	prevTarget := s.currentTarget
 	if s.currentTarget == targetProcess && s.ctrl != nil {
 		// Already attached to this target. The darwinFollower's activation observer
 		// (NSWorkspaceDidActivateApplicationNotification) handles z-order when
@@ -851,14 +861,26 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		// Ensure winsnap is visible (in case it was hidden by MoveOffscreen)
 		// This is needed because winsnap_order_above_target checks [selfWin isVisible]
 		_ = winsnap.EnsureWindowVisible(w)
-		return
+		// Verify runtime attachment consistency. If winsnap is not adjacent to
+		// the supposed target, force a controller rebuild to recover.
+		obscured, err := winsnap.IsTargetObscured(w, targetProcess)
+		if err == nil && !obscured {
+			return
+		}
+		s.mu.Lock()
+		if s.ctrl != nil {
+			_ = s.ctrl.Stop()
+			s.ctrl = nil
+		}
+		s.mu.Unlock()
+	} else {
+		// Stop current controller (if any) before switching target.
+		if s.ctrl != nil {
+			_ = s.ctrl.Stop()
+			s.ctrl = nil
+		}
+		s.mu.Unlock()
 	}
-	// Stop current controller (if any) before switching target.
-	if s.ctrl != nil {
-		_ = s.ctrl.Stop()
-		s.ctrl = nil
-	}
-	s.mu.Unlock()
 
 	// Restore winsnap if it was minimized (e.g. by Win+D); when a target becomes visible again, show the snap window.
 	if err := winsnap.EnsureWindowVisible(w); err == winsnap.ErrWinsnapWindowInvalid {
@@ -894,9 +916,15 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.currentTarget = targetProcess
 	s.lastAttachedTarget = "" // Clear: now actively attached, no need to remember
 	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
-	s.lastNonTargetFront = ""
-	s.lastNonTargetSince = time.Time{}
-	s.lastNonTargetRescan = time.Time{}
+	s.lastSwitchAt = time.Now()
+	s.lastAttachedRescanAt = time.Time{}
+	s.attachedRescanCandidate = ""
+	s.attachedRescanHits = 0
+	if prevTarget != "" && !strings.EqualFold(prevTarget, targetProcess) {
+		s.wakeAttachedGuardUntil = time.Now().Add(wakeAttachedGuardAfterSwitch)
+	} else {
+		s.wakeAttachedGuardUntil = time.Time{}
+	}
 	if strings.EqualFold(s.switchRollbackTo, targetProcess) {
 		// Keep rollback window alive after switching to new target; it will be cleared
 		// once new target is confirmed as stable frontmost.

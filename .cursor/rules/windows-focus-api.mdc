@@ -138,6 +138,15 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
    - 原因：从外部应用切回后，边缘 resize 与焦点线程链路并发时可稳定触发假死。
    - 若未来需要可调尺寸，必须采用“自定义 resize”方案，不得恢复原生边缘 resize。
 
+10. **吸附目标一致性规则（Windows，必须）**
+   - `currentTarget`（状态）与实际附着窗口（运行时控制器）必须保持一致。
+   - `attachTo` 必须串行化（单入口互斥）；禁止并发执行多个 attach 流程。
+   - 吸附态禁止高频全量回查目标（避免性能抖动）；仅允许低频纠偏。
+   - 目标切换必须有最短间隔（cooldown），防止 A/B 高频来回切换。
+   - 目标切换后短时间内，禁止触发 `WakeAttached` 唤醒链路，避免连锁焦点抖动。
+   - 低频纠偏必须包含“一致性校验”：若状态目标与实际附着不一致，优先重建到状态目标或前台目标。
+   - 调试日志默认禁止常驻输出；排查完成后必须移除/关闭临时探针打印。
+
 ### 复盘结论（主窗体/悬浮球/吸附窗差异）
 
 - 主窗体拖拽稳定：无吸附轮询、无目标窗口联动、无 `WakeAttached` 链路并发。
@@ -161,3 +170,6 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
 - `DetachToStandalone` 后是否确保停止 polling loop（不自动重吸附）？
 - Windows 下 `winsnap` 是否已禁用边缘 resize（`DisableResize=true`）？
 - 取消吸附后立即点击“吸附应用”是否不会触发 `WakeAttached`？
+- `attachTo` 是否保证串行执行（无并发 attach）？
+- 是否存在常驻探针日志（如 tick 级前台打印）未清理？
+- 吸附态是否只做低频纠偏而非高频全量回查？

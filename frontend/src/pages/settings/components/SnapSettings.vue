@@ -386,6 +386,11 @@ const getCandidateIcon = (icon?: string) => {
   return icon && builtInIconMap[icon] ? builtInIconMap[icon] : AppWindow
 }
 
+const isDataUrlIcon = (icon?: string) => {
+  const value = icon?.trim().toLowerCase()
+  return !!value && value.startsWith('data:image/')
+}
+
 const syncSnapFromSettings = async () => {
   try {
     await snapService.SyncFromSettings()
@@ -760,7 +765,17 @@ onUnmounted(() => {
           </template>
           <template #label>
             <div class="flex items-center gap-2 min-w-0">
-              <component :is="getCandidateIcon(customApp.icon)" class="size-5 text-muted-foreground shrink-0" />
+              <img
+                v-if="isDataUrlIcon(customApp.icon)"
+                :src="customApp.icon"
+                alt=""
+                class="size-5 shrink-0 rounded-sm object-contain"
+              />
+              <component
+                v-else
+                :is="getCandidateIcon(customApp.icon)"
+                class="size-5 text-muted-foreground shrink-0"
+              />
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-medium text-foreground truncate">{{ customApp.name }}</span>
@@ -925,7 +940,17 @@ onUnmounted(() => {
             :class="selectedCandidateProcess === app.processName && 'bg-muted/60'"
             @click="selectedCandidateProcess = app.processName"
           >
-            <component :is="getCandidateIcon(app.icon)" class="size-5 text-muted-foreground shrink-0" />
+            <img
+              v-if="isDataUrlIcon(app.icon)"
+              :src="app.icon"
+              alt=""
+              class="size-5 shrink-0 rounded-sm object-contain"
+            />
+            <component
+              v-else
+              :is="getCandidateIcon(app.icon)"
+              class="size-5 text-muted-foreground shrink-0"
+            />
             <div class="min-w-0">
               <div class="text-sm text-foreground truncate">{{ app.name }}</div>
               <div class="text-xs text-muted-foreground truncate">{{ app.processName }}</div>
