@@ -230,7 +230,7 @@ type AgentResult struct {
 // beforeChatModel, if non-nil, is called before every LLM invocation with
 // the complete message list that will be sent to the model, including the
 // system instruction, middleware additions, and all tool schemas.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
@@ -276,6 +276,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	}
 
 	agentConfig.Middlewares = BuildMiddlewares(ctx)
+	agentConfig.Middlewares = append(agentConfig.Middlewares, extraMiddlewares...)
 
 	// Append a logging middleware that fires before each LLM call.
 	if beforeChatModel != nil {

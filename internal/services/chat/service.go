@@ -17,6 +17,7 @@ import (
 	"chatclaw/internal/eino/processor"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/retrieval"
 	"chatclaw/internal/sqlite"
 
@@ -340,8 +341,10 @@ func (s *ChatService) deleteMessagesAfter(ctx context.Context, db *bun.DB, conve
 
 // AgentExtras contains additional agent configuration not in einoagent.Config
 type AgentExtras struct {
+	AgentID        int64
 	LibraryIDs     []int64
 	MatchThreshold float64
+	MemoryEnabled  bool
 }
 
 // getAgentAndProviderConfig gets the agent and provider configuration for a conversation
@@ -449,6 +452,11 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	// out from the middleware-appended instructions (filesystem, skill, etc.).
 	instruction := fmt.Sprintf("# System Instruction\n\n%s", strings.TrimSpace(agent.Prompt))
 
+	// Check memory settings (Core Profile is injected via ADK middleware in runGeneration)
+	var memoryEnabledStr string
+	_ = db.NewSelect().Table("settings").Column("value").Where("key = ?", "memory_enabled").Scan(ctx, &memoryEnabledStr)
+	memoryEnabled := memoryEnabledStr == "true"
+
 	agentConfig := einoagent.Config{
 		Name:            agent.Name,
 		Instruction:     instruction,
@@ -478,8 +486,10 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	}
 
 	extras := AgentExtras{
+		AgentID:        conv.AgentID,
 		LibraryIDs:     convLibraryIDs,
 		MatchThreshold: agent.RetrievalMatchThreshold,
+		MemoryEnabled:  memoryEnabled,
 	}
 
 	return agentConfig, providerConfig, extras, nil
@@ -637,10 +647,42 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		}
 	}
 
+	if agentExtras.MemoryEnabled {
+		memoryTool, toolErr := tools.NewMemoryRetrieverTool(ctx, &tools.MemoryRetrieverConfig{
+			AgentID:        agentExtras.AgentID,
+			TopK:           agentConfig.RetrievalTopK,
+			MatchThreshold: agentExtras.MatchThreshold,
+		})
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create memory retriever tool", "error", toolErr)
+		} else if memoryTool != nil {
+			extraTools = append(extraTools, memoryTool)
+			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
+
+			agentConfig.Instruction += "\n\n[IMPORTANT] Long-term memory is enabled. " +
+				"When the user's message involves anything personal (likes, dislikes, habits, experiences, opinions, projects, etc.) or could benefit from prior context, " +
+				"you MUST call memory_retriever BEFORE responding. " +
+				"Provide 2-5 queries with varied keywords."
+		}
+	}
+
+	// Build extra middlewares (e.g. memory Core Profile injection)
+	var extraMiddlewares []adk.AgentMiddleware
+	if agentExtras.MemoryEnabled {
+		cpCtx, cpCancel := context.WithTimeout(ctx, 2*time.Second)
+		coreProfile, _ := memory.GetCoreProfileContent(cpCtx, agentExtras.AgentID)
+		cpCancel()
+		if coreProfile != "" {
+			extraMiddlewares = append(extraMiddlewares, adk.AgentMiddleware{
+				AdditionalInstruction: "\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n" + coreProfile,
+			})
+		}
+	}
+
 	// Create agent (includes per-session browserTool; cleanup releases its Chrome process)
 	agentConfig.Provider = providerConfig
 	llmCallCount := 0
-	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools,
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools, extraMiddlewares,
 		func(_ context.Context, msgs []*schema.Message) {
 			llmCallCount++
 			// Log the full prompt context before each LLM call.
@@ -1152,6 +1194,15 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		Status:       StatusSuccess,
 		FinishReason: finishReason,
 	})
+
+	// 异步执行记忆提取
+	if agentExtras.MemoryEnabled {
+		go func() {
+			// 给一点延迟，确保主流程的事务和状态已完全落盘
+			time.Sleep(1 * time.Second)
+			memory.RunMemoryExtraction(context.Background(), s.app, conversationID)
+		}()
+	}
 }
 
 // loadMessagesForContext loads messages for agent context

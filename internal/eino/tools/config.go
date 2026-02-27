@@ -55,4 +55,5 @@ const (
 	ToolIDSequentialThinking = "sequential_thinking"
 	ToolIDWikipedia          = "wikipedia_search"
 	ToolIDLibraryRetriever   = "library_retriever"
+	ToolIDMemoryRetriever    = "memory_retriever"
 )

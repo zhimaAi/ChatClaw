@@ -9,6 +9,7 @@ import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
 import { Events, System, Window } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import MemoryPage from '@/pages/memory/MemoryPage.vue'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
@@ -88,6 +89,7 @@ function handleInAppPopupClick() {
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   knowledge: KnowledgePage,
+  memory: MemoryPage,
   settings: SettingsPage,
   multiask: MultiaskPage,
 }

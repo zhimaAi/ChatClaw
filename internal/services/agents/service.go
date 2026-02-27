@@ -14,6 +14,7 @@ import (
 	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/i18n"
+	"chatclaw/internal/services/memory"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
@@ -337,6 +338,12 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 	if rowsAffected == 0 {
 		return errs.Newf("error.agent_not_found", map[string]any{"ID": id})
 	}
+
+	// 跨库级联删除该 Agent 的长期记忆数据
+	if err := memory.DeleteAgentMemories(ctx, id); err != nil {
+		s.app.Logger.Warn("failed to delete agent memories", "agent_id", id, "error", err)
+	}
+
 	return nil
 }
 

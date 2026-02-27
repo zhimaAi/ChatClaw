@@ -14,6 +14,7 @@ import IconSidebarToggle from '@/assets/icons/sidebar-toggle.svg'
 import IconAddNewTab from '@/assets/icons/add-new-tab.svg'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
+import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
 import WindowControlButtons from './WindowControlButtons.vue'
@@ -30,6 +31,7 @@ import WindowControlButtons from './WindowControlButtons.vue'
 const moduleTabIcons: Partial<Record<NavModule, any>> = {
   assistant: IconAssistant,
   knowledge: IconKnowledge,
+  memory: IconMemory,
   multiask: IconMultiask,
   settings: IconSettings,
 }

@@ -39,6 +39,7 @@ const getToolDisplayName = (toolName: string) => {
     calculator: t('tools.calculator.name'),
     duckduckgo_search: t('tools.duckduckgo.name'),
     library_retriever: t('tools.libraryRetriever.name'),
+    memory_retriever: t('tools.memoryRetriever.name'),
     execute: t('tools.execute.name'),
     http_request: t('tools.httpRequest.name'),
     sequentialthinking: t('tools.sequentialThinking.name'),

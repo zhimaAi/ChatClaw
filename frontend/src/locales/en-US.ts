@@ -27,6 +27,10 @@ export default {
       name: 'Knowledge Search',
       description: 'Search relevant content from knowledge base',
     },
+    memoryRetriever: {
+      name: 'Memory Search',
+      description: 'Search relevant facts from long-term memory',
+    },
     execute: {
       name: 'Execute Command',
       description: 'Execute a shell command in the system terminal',
@@ -80,6 +84,7 @@ export default {
     assistant: 'AI Assistant',
     knowledge: 'Knowledge Base',
     multiask: 'Multi Ask',
+    memory: 'Memory',
     settings: 'Settings',
   },
   multiask: {
@@ -129,6 +134,7 @@ export default {
     menu: {
       modelService: 'Model Service',
       generalSettings: 'General Settings',
+      memorySettings: 'Long-term Memory',
       snapSettings: 'Snap Settings',
       tools: 'Tools',
       about: 'About Us',
@@ -138,6 +144,27 @@ export default {
       title: 'General Settings',
       language: 'Language',
       theme: 'Theme Color',
+    },
+    // Memory settings
+    memory: {
+      title: 'Long-term Memory',
+      enable: 'Enable Long-term Memory',
+      enableHint: 'When enabled, AI will automatically extract and remember your preferences, habits, and important facts during conversations.',
+      extractModel: 'Memory Extraction Model',
+      extractModelHint: 'Used to summarize and extract valuable memory information after each conversation.',
+      embeddingModel: 'Memory Embedding Model',
+      embeddingModelHint: 'Used to convert memory text into vectors for semantic retrieval during conversations.',
+      embeddingDimension: 'Embedding Dimension',
+      embeddingDimensionHint: 'Embedding vector dimension must match the selected model output.',
+      save: 'Save Settings',
+      saved: 'Settings saved',
+      saveFailed: 'Failed to save settings',
+      rebuildWarning: 'After changing the embedding model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuilding: 'Rebuilding memory vectors...',
+      rebuildSuccess: 'Memory vectors rebuilt successfully',
+      rebuildFailed: 'Failed to rebuild memory vectors',
+      confirmRebuildTitle: 'Confirm Rebuild Memory Vectors',
+      confirmRebuildDesc: 'You have changed the embedding model or dimension, which requires recalculating vector data for all existing memories. This process may take some time. Do you want to continue?',
     },
     // Snap settings
     snap: {
@@ -586,5 +613,19 @@ export default {
         failed: 'Failed to delete',
       },
     },
+  },
+  memory: {
+    title: 'Memory',
+    selectAgent: 'Select an agent to view its memory',
+    noData: 'No memory data',
+    basicInfo: 'Basic Info',
+    basicInfoDesc: 'Core user profile information',
+    basicInfoEmpty: 'No basic info yet',
+    topicSummary: 'Topic Summary',
+    topicSummaryDesc: 'Long-term summaries organized by topic',
+    topicSummaryEmpty: 'No topic summaries yet',
+    conversationLog: 'Conversation Log',
+    conversationLogDesc: 'Chronological conversation facts',
+    conversationLogEmpty: 'No conversation logs yet',
   },
 }
