@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -161,6 +162,167 @@ func (s *MemoryService) GetEventStreams(ctx context.Context, agentID int64) ([]E
 		result[i] = EventStreamDTO{ID: e.ID, Date: e.Date, Content: e.Content}
 	}
 	return result, nil
+}
+
+func (s *MemoryService) UpdateCoreProfile(ctx context.Context, agentID int64, content string) error {
+	if db == nil {
+		return errs.New("error.memory_db_not_initialized")
+	}
+
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return errs.New("error.memory_content_empty")
+	}
+
+	now := time.Now().UTC()
+	var cp CoreProfile
+	err := db.NewSelect().Model(&cp).Where("agent_id = ?", agentID).Limit(1).Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			cp = CoreProfile{AgentID: agentID, Content: content}
+			_, err = db.NewInsert().Model(&cp).Exec(ctx)
+			return err
+		}
+		return err
+	}
+
+	cp.Content = content
+	cp.UpdatedAt = now
+	_, err = db.NewUpdate().Model(&cp).WherePK().Exec(ctx)
+	return err
+}
+
+func (s *MemoryService) UpdateThematicFact(ctx context.Context, id int64, topic, content string) error {
+	if db == nil {
+		return errs.New("error.memory_db_not_initialized")
+	}
+
+	topic = strings.TrimSpace(topic)
+	content = strings.TrimSpace(content)
+	if topic == "" || content == "" {
+		return errs.New("error.memory_content_empty")
+	}
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var existing ThematicFact
+		if err := tx.NewSelect().Model(&existing).Where("id = ?", id).Scan(ctx); err != nil {
+			return err
+		}
+
+		oldTokens := tokenizer.TokenizeContent(existing.Topic + " " + existing.Content)
+
+		existing.Topic = topic
+		existing.Content = content
+		existing.UpdatedAt = time.Now().UTC()
+		if _, err := tx.NewUpdate().Model(&existing).WherePK().Exec(ctx); err != nil {
+			return err
+		}
+
+		// FTS5: delete old, insert new
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+			existing.ID, oldTokens, existing.AgentID)
+		newTokens := tokenizer.TokenizeContent(topic + " " + content)
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO thematic_facts_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
+			existing.ID, newTokens, existing.AgentID)
+
+		// Vector: delete old, re-embed asynchronously is not feasible here,
+		// so we delete the stale vector; it will be re-created on next extraction or rebuild.
+		_, _ = tx.ExecContext(ctx, `DELETE FROM thematic_facts_vec WHERE id = ?`, existing.ID)
+
+		return nil
+	})
+}
+
+func (s *MemoryService) DeleteThematicFact(ctx context.Context, id int64) error {
+	if db == nil {
+		return errs.New("error.memory_db_not_initialized")
+	}
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var existing ThematicFact
+		if err := tx.NewSelect().Model(&existing).Where("id = ?", id).Scan(ctx); err != nil {
+			return err
+		}
+
+		oldTokens := tokenizer.TokenizeContent(existing.Topic + " " + existing.Content)
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO thematic_facts_fts(thematic_facts_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+			existing.ID, oldTokens, existing.AgentID)
+
+		if _, err := tx.NewDelete().Model((*ThematicFact)(nil)).Where("id = ?", id).Exec(ctx); err != nil {
+			return err
+		}
+
+		_, _ = tx.ExecContext(ctx, `DELETE FROM thematic_facts_vec WHERE id = ?`, id)
+		return nil
+	})
+}
+
+func (s *MemoryService) UpdateEventStream(ctx context.Context, id int64, content string) error {
+	if db == nil {
+		return errs.New("error.memory_db_not_initialized")
+	}
+
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return errs.New("error.memory_content_empty")
+	}
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var existing EventStream
+		if err := tx.NewSelect().Model(&existing).Where("id = ?", id).Scan(ctx); err != nil {
+			return err
+		}
+
+		oldTokens := tokenizer.TokenizeContent(existing.Content)
+
+		existing.Content = content
+		existing.UpdatedAt = time.Now().UTC()
+		if _, err := tx.NewUpdate().Model(&existing).WherePK().Exec(ctx); err != nil {
+			return err
+		}
+
+		// FTS5: delete old, insert new
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+			existing.ID, oldTokens, existing.AgentID)
+		newTokens := tokenizer.TokenizeContent(content)
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO event_streams_fts(rowid, tokens, agent_id) VALUES (?, ?, ?)`,
+			existing.ID, newTokens, existing.AgentID)
+
+		// Vector: delete stale entry
+		_, _ = tx.ExecContext(ctx, `DELETE FROM event_streams_vec WHERE id = ?`, existing.ID)
+
+		return nil
+	})
+}
+
+func (s *MemoryService) DeleteEventStream(ctx context.Context, id int64) error {
+	if db == nil {
+		return errs.New("error.memory_db_not_initialized")
+	}
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var existing EventStream
+		if err := tx.NewSelect().Model(&existing).Where("id = ?", id).Scan(ctx); err != nil {
+			return err
+		}
+
+		oldTokens := tokenizer.TokenizeContent(existing.Content)
+		_, _ = tx.ExecContext(ctx,
+			`INSERT INTO event_streams_fts(event_streams_fts, rowid, tokens, agent_id) VALUES('delete', ?, ?, ?)`,
+			existing.ID, oldTokens, existing.AgentID)
+
+		if _, err := tx.NewDelete().Model((*EventStream)(nil)).Where("id = ?", id).Exec(ctx); err != nil {
+			return err
+		}
+
+		_, _ = tx.ExecContext(ctx, `DELETE FROM event_streams_vec WHERE id = ?`, id)
+		return nil
+	})
 }
 
 // DeleteAgentMemories deletes all memories associated with an agent.

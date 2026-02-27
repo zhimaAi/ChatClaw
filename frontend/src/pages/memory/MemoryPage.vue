@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Pencil, Trash2 } from 'lucide-vue-next'
 import IconMemory from '@/assets/icons/memory.svg'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
@@ -10,6 +11,23 @@ import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { MemoryService } from '@bindings/chatclaw/internal/services/memory'
 import type { ThematicFactDTO, EventStreamDTO } from '@bindings/chatclaw/internal/services/memory'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 defineProps<{
   tabId: string
@@ -29,6 +47,28 @@ const coreProfile = ref('')
 const thematicFacts = ref<ThematicFactDTO[]>([])
 const eventStreams = ref<EventStreamDTO[]>([])
 const memoryLoading = ref(false)
+
+// Edit state
+const editingCoreProfile = ref(false)
+const editCoreProfileContent = ref('')
+
+const editFactDialogOpen = ref(false)
+const editFactId = ref<number | null>(null)
+const editFactTopic = ref('')
+const editFactContent = ref('')
+
+const editEventDialogOpen = ref(false)
+const editEventId = ref<number | null>(null)
+const editEventContent = ref('')
+
+// Delete confirmation state
+const deleteFactDialogOpen = ref(false)
+const deleteFactId = ref<number | null>(null)
+
+const deleteEventDialogOpen = ref(false)
+const deleteEventId = ref<number | null>(null)
+
+const saving = ref(false)
 
 const memoryTabs: { key: MemoryTab; labelKey: string }[] = [
   { key: 'basicInfo', labelKey: 'memory.basicInfo' },
@@ -90,7 +130,121 @@ const loadMemory = async (agentId: number) => {
   }
 }
 
+// Core Profile edit
+const startEditCoreProfile = () => {
+  editCoreProfileContent.value = coreProfile.value
+  editingCoreProfile.value = true
+}
+
+const cancelEditCoreProfile = () => {
+  editingCoreProfile.value = false
+}
+
+const saveCoreProfile = async () => {
+  if (selectedAgentId.value == null) return
+  saving.value = true
+  try {
+    await MemoryService.UpdateCoreProfile(selectedAgentId.value, editCoreProfileContent.value)
+    coreProfile.value = editCoreProfileContent.value
+    editingCoreProfile.value = false
+    toast.success(t('memory.updateSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('memory.updateFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+// Thematic Fact edit / delete
+const startEditFact = (fact: ThematicFactDTO) => {
+  editFactId.value = fact.id
+  editFactTopic.value = fact.topic
+  editFactContent.value = fact.content
+  editFactDialogOpen.value = true
+}
+
+const saveThematicFact = async () => {
+  if (editFactId.value == null) return
+  saving.value = true
+  try {
+    await MemoryService.UpdateThematicFact(editFactId.value, editFactTopic.value, editFactContent.value)
+    const idx = thematicFacts.value.findIndex((f) => f.id === editFactId.value)
+    if (idx !== -1) {
+      thematicFacts.value[idx] = { ...thematicFacts.value[idx], topic: editFactTopic.value, content: editFactContent.value }
+    }
+    editFactDialogOpen.value = false
+    toast.success(t('memory.updateSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('memory.updateFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+const confirmDeleteFact = (id: number) => {
+  deleteFactId.value = id
+  deleteFactDialogOpen.value = true
+}
+
+const doDeleteFact = async () => {
+  if (deleteFactId.value == null) return
+  try {
+    await MemoryService.DeleteThematicFact(deleteFactId.value)
+    thematicFacts.value = thematicFacts.value.filter((f) => f.id !== deleteFactId.value)
+    toast.success(t('memory.deleteSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('memory.deleteFailed'))
+  } finally {
+    deleteFactDialogOpen.value = false
+  }
+}
+
+// Event Stream edit / delete
+const startEditEvent = (event: EventStreamDTO) => {
+  editEventId.value = event.id
+  editEventContent.value = event.content
+  editEventDialogOpen.value = true
+}
+
+const saveEventStream = async () => {
+  if (editEventId.value == null) return
+  saving.value = true
+  try {
+    await MemoryService.UpdateEventStream(editEventId.value, editEventContent.value)
+    const flat = eventStreams.value
+    const idx = flat.findIndex((e) => e.id === editEventId.value)
+    if (idx !== -1) {
+      flat[idx] = { ...flat[idx], content: editEventContent.value }
+    }
+    editEventDialogOpen.value = false
+    toast.success(t('memory.updateSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('memory.updateFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+const confirmDeleteEvent = (id: number) => {
+  deleteEventId.value = id
+  deleteEventDialogOpen.value = true
+}
+
+const doDeleteEvent = async () => {
+  if (deleteEventId.value == null) return
+  try {
+    await MemoryService.DeleteEventStream(deleteEventId.value)
+    eventStreams.value = eventStreams.value.filter((e) => e.id !== deleteEventId.value)
+    toast.success(t('memory.deleteSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('memory.deleteFailed'))
+  } finally {
+    deleteEventDialogOpen.value = false
+  }
+}
+
 watch(selectedAgentId, (id) => {
+  editingCoreProfile.value = false
   if (id != null) {
     void loadMemory(id)
   } else {
@@ -219,12 +373,47 @@ onMounted(() => {
               <div
                 class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
               >
-                <p v-if="coreProfile" class="whitespace-pre-wrap text-sm text-foreground">
-                  {{ coreProfile }}
-                </p>
-                <p v-else class="text-sm text-muted-foreground">
-                  {{ t('memory.basicInfoEmpty') }}
-                </p>
+                <template v-if="editingCoreProfile">
+                  <textarea
+                    v-model="editCoreProfileContent"
+                    class="min-h-[120px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      class="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+                      @click="cancelEditCoreProfile"
+                    >
+                      {{ t('memory.cancel') }}
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="saving"
+                      class="rounded-md bg-foreground px-3 py-1.5 text-xs text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                      @click="saveCoreProfile"
+                    >
+                      {{ t('memory.save') }}
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="flex items-start justify-between gap-2">
+                    <p v-if="coreProfile" class="flex-1 whitespace-pre-wrap text-sm text-foreground">
+                      {{ coreProfile }}
+                    </p>
+                    <p v-else class="flex-1 text-sm text-muted-foreground">
+                      {{ t('memory.basicInfoEmpty') }}
+                    </p>
+                    <button
+                      type="button"
+                      class="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      :title="t('memory.edit')"
+                      @click="startEditCoreProfile"
+                    >
+                      <Pencil class="size-3.5" />
+                    </button>
+                  </div>
+                </template>
               </div>
             </div>
 
@@ -243,10 +432,32 @@ onMounted(() => {
                 <div
                   v-for="fact in thematicFacts"
                   :key="fact.id"
-                  class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+                  class="group rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
                 >
-                  <div class="mb-1 text-xs font-medium text-muted-foreground">{{ fact.topic }}</div>
-                  <p class="whitespace-pre-wrap text-sm text-foreground">{{ fact.content }}</p>
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <div class="mb-1 text-xs font-medium text-muted-foreground">{{ fact.topic }}</div>
+                      <p class="whitespace-pre-wrap text-sm text-foreground">{{ fact.content }}</p>
+                    </div>
+                    <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        :title="t('memory.edit')"
+                        @click="startEditFact(fact)"
+                      >
+                        <Pencil class="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                        :title="t('memory.delete')"
+                        @click="confirmDeleteFact(fact.id)"
+                      >
+                        <Trash2 class="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -269,9 +480,29 @@ onMounted(() => {
                     <div
                       v-for="event in group.items"
                       :key="event.id"
-                      class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+                      class="group rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
                     >
-                      <p class="whitespace-pre-wrap text-sm text-foreground">{{ event.content }}</p>
+                      <div class="flex items-start justify-between gap-2">
+                        <p class="min-w-0 flex-1 whitespace-pre-wrap text-sm text-foreground">{{ event.content }}</p>
+                        <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            type="button"
+                            class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            :title="t('memory.edit')"
+                            @click="startEditEvent(event)"
+                          >
+                            <Pencil class="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                            :title="t('memory.delete')"
+                            @click="confirmDeleteEvent(event.id)"
+                          >
+                            <Trash2 class="size-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -281,5 +512,121 @@ onMounted(() => {
         </div>
       </template>
     </main>
+
+    <!-- Edit Thematic Fact Dialog -->
+    <Dialog v-model:open="editFactDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('memory.editThematicFact') }}</DialogTitle>
+        </DialogHeader>
+        <div class="flex flex-col gap-3 py-2">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium text-foreground">{{ t('memory.topic') }}</label>
+            <input
+              v-model="editFactTopic"
+              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium text-foreground">{{ t('memory.content') }}</label>
+            <textarea
+              v-model="editFactContent"
+              class="min-h-[120px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <button
+            type="button"
+            class="rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent"
+            @click="editFactDialogOpen = false"
+          >
+            {{ t('memory.cancel') }}
+          </button>
+          <button
+            type="button"
+            :disabled="saving || !editFactTopic.trim() || !editFactContent.trim()"
+            class="rounded-md bg-foreground px-3 py-1.5 text-sm text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+            @click="saveThematicFact"
+          >
+            {{ t('memory.save') }}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Edit Event Stream Dialog -->
+    <Dialog v-model:open="editEventDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('memory.editEventStream') }}</DialogTitle>
+        </DialogHeader>
+        <div class="py-2">
+          <textarea
+            v-model="editEventContent"
+            class="min-h-[120px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        <DialogFooter>
+          <button
+            type="button"
+            class="rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent"
+            @click="editEventDialogOpen = false"
+          >
+            {{ t('memory.cancel') }}
+          </button>
+          <button
+            type="button"
+            :disabled="saving || !editEventContent.trim()"
+            class="rounded-md bg-foreground px-3 py-1.5 text-sm text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+            @click="saveEventStream"
+          >
+            {{ t('memory.save') }}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Delete Thematic Fact Confirmation -->
+    <AlertDialog v-model:open="deleteFactDialogOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('memory.deleteConfirmTitle') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('memory.deleteThematicFactConfirm') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('memory.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-foreground text-background hover:bg-foreground/90"
+            @click.prevent="doDeleteFact"
+          >
+            {{ t('memory.delete') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Delete Event Stream Confirmation -->
+    <AlertDialog v-model:open="deleteEventDialogOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('memory.deleteConfirmTitle') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('memory.deleteEventStreamConfirm') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('memory.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-foreground text-background hover:bg-foreground/90"
+            @click.prevent="doDeleteEvent"
+          >
+            {{ t('memory.delete') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>
