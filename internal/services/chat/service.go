@@ -658,6 +658,11 @@ func (s *ChatService) runGenerationWithExistingHistory(ctx context.Context, db *
 		} else if memoryTool != nil {
 			extraTools = append(extraTools, memoryTool)
 			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
+
+			agentConfig.Instruction += "\n\n[IMPORTANT] Long-term memory is enabled. " +
+				"When the user's message involves anything personal (likes, dislikes, habits, experiences, opinions, projects, etc.) or could benefit from prior context, " +
+				"you MUST call memory_retriever BEFORE responding. " +
+				"Provide 2-5 queries with varied keywords."
 		}
 	}
 
