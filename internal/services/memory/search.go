@@ -19,6 +19,10 @@ import (
 
 const rrfK = 60
 
+// Fixed distance threshold for sqlite-vec recall.
+// Smaller distance means higher semantic similarity.
+const vecRecallDistanceThreshold = 0.45
+
 type SearchResult struct {
 	Type    string
 	Content string
@@ -41,6 +45,7 @@ func SearchMemories(ctx context.Context, agentID int64, queries []string, topK i
 	if db == nil {
 		return nil, errs.New("error.memory_db_not_initialized")
 	}
+	_ = matchThreshold
 	if topK <= 0 {
 		topK = 10
 	}
@@ -219,6 +224,9 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 			WHERE v.embedding MATCH ? AND k = ?
 		`, vecStr, limit).Scan(ctx, &rows); err == nil {
 			for _, r := range rows {
+				if r.Distance > vecRecallDistanceThreshold {
+					continue
+				}
 				var aid int64
 				if err := db.NewRaw(`SELECT agent_id FROM `+table.srcTable+` WHERE id = ?`, r.ID).Scan(ctx, &aid); err != nil || aid != agentID {
 					continue

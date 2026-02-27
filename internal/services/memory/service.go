@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -97,7 +99,10 @@ func GetCoreProfileContent(ctx context.Context, agentID int64) (string, error) {
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
-		return "", nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
 	}
 	return m.Content, nil
 }
@@ -127,7 +132,7 @@ func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]
 		OrderExpr("updated_at DESC").
 		Scan(ctx)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	result := make([]ThematicFactDTO, len(facts))
@@ -148,7 +153,7 @@ func (s *MemoryService) GetEventStreams(ctx context.Context, agentID int64) ([]E
 		OrderExpr("date DESC, id DESC").
 		Scan(ctx)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	result := make([]EventStreamDTO, len(events))

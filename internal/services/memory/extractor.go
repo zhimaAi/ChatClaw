@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,6 +36,11 @@ var trivialPhrases = map[string]bool{
 	"谢谢": true, "感谢": true, "明白": true, "ok": true, "okay": true,
 	"yes": true, "no": true, "sure": true, "thanks": true, "got it": true,
 	"go on": true, "continue": true, "next": true, "done": true,
+}
+
+type extractionMessageRow struct {
+	Role    string `bun:"role"`
+	Content string `bun:"content"`
 }
 
 // RunMemoryExtraction runs the asynchronous memory extraction process.
@@ -116,12 +122,8 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 		return fmt.Errorf("get conversation: %w", err)
 	}
 
-	// 5. Get recent messages (last 2: user + assistant)
-	type messageRow struct {
-		Role    string `bun:"role"`
-		Content string `bun:"content"`
-	}
-	var messages []messageRow
+	// 5. Only extract from the latest message pair: assistant (newest) + user (previous)
+	var messages []extractionMessageRow
 	if err := mainDB.NewSelect().Table("messages").Column("role", "content").
 		Where("conversation_id = ?", conversationID).
 		Where("status = ?", "success").
@@ -129,18 +131,18 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 		OrderExpr("id DESC").Limit(2).Scan(ctx, &messages); err != nil {
 		return fmt.Errorf("get messages: %w", err)
 	}
-
 	if len(messages) < 2 {
+		app.Logger.Info("[memory] extraction skipped: not enough messages")
 		return nil
 	}
-
-	// Reverse to chronological order
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
+	if messages[0].Role != "assistant" || messages[1].Role != "user" {
+		app.Logger.Info("[memory] extraction skipped: latest pair is not assistant-user")
+		return nil
 	}
+	assistantContent := messages[0].Content
 
 	// 6. Debounce: skip trivial or meaningless messages
-	userContent := strings.TrimSpace(messages[0].Content)
+	userContent := strings.TrimSpace(messages[1].Content)
 	if shouldSkipExtraction(userContent) {
 		app.Logger.Info("[memory] extraction skipped: trivial content")
 		return nil
@@ -167,7 +169,7 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 
 	sysMsg := &schema.Message{
 		Role:    schema.System,
-		Content: fmt.Sprintf(prompt, userContent, messages[1].Content),
+		Content: fmt.Sprintf(prompt, userContent, assistantContent),
 	}
 
 	resp, err := chatModel.Generate(ctx, []*schema.Message{sysMsg}, model.WithTemperature(0.1))
@@ -324,7 +326,7 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 				}
 			}
 			app.Logger.Info("[memory] thematic fact updated", "topic", tf.Topic)
-		} else {
+		} else if errors.Is(err, sql.ErrNoRows) {
 			// New topic: insert
 			fact := ThematicFact{
 				AgentID: conv.AgentID,
@@ -349,6 +351,8 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 				}
 			}
 			app.Logger.Info("[memory] thematic fact added", "topic", tf.Topic)
+		} else {
+			return err
 		}
 	}
 
