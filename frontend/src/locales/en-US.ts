@@ -381,6 +381,10 @@ export default {
       toolResult: 'Result',
       toolQuery: 'Query: ',
       rawJson: 'Raw JSON',
+      retrievalKnowledge: 'Knowledge Retrieval',
+      retrievalMemory: 'Memory Retrieval',
+      retrievalScore: 'Relevance',
+      retrievalItems: '{count} result(s)',
       tokenUsage: 'In {input} · Out {output}',
     },
     menu: {

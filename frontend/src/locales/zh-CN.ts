@@ -378,6 +378,10 @@ export default {
       toolResult: '结果',
       toolQuery: '查询：',
       rawJson: '原始 JSON',
+      retrievalKnowledge: '知识库检索',
+      retrievalMemory: '记忆检索',
+      retrievalScore: '相关度',
+      retrievalItems: '{count} 条结果',
       tokenUsage: '输入 {input} · 输出 {output}',
     },
     menu: {

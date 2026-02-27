@@ -191,13 +191,27 @@ type ChatErrorEvent struct {
 	ErrorData any    `json:"error_data,omitempty"`
 }
 
+// RetrievalItem represents a single retrieval result from knowledge base or memory.
+type RetrievalItem struct {
+	Source  string  `json:"source"` // "knowledge" or "memory"
+	Content string  `json:"content"`
+	Score   float64 `json:"score"`
+}
+
+// ChatRetrievalEvent event sent when retrieval results are available (chat mode).
+type ChatRetrievalEvent struct {
+	ChatEvent
+	Items []RetrievalItem `json:"items"`
+}
+
 // Event names
 const (
-	EventChatStart    = "chat:start"
-	EventChatChunk    = "chat:chunk"
-	EventChatThinking = "chat:thinking"
-	EventChatTool     = "chat:tool"
-	EventChatComplete = "chat:complete"
-	EventChatStopped  = "chat:stopped"
-	EventChatError    = "chat:error"
+	EventChatStart     = "chat:start"
+	EventChatChunk     = "chat:chunk"
+	EventChatThinking  = "chat:thinking"
+	EventChatTool      = "chat:tool"
+	EventChatRetrieval = "chat:retrieval"
+	EventChatComplete  = "chat:complete"
+	EventChatStopped   = "chat:stopped"
+	EventChatError     = "chat:error"
 )

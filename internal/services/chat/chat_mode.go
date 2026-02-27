@@ -115,10 +115,13 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		}
 	}
 
+	// Create stream state early so retrieval can write segments
+	ss := newStreamState(gc, assistantMsg)
+
 	// Build augmented system prompt with retrieval results
 	augmentedInstruction := agentConfig.Instruction
 	if userQuery != "" {
-		retrievalContext := s.buildRetrievalContext(ctx, gc, userQuery)
+		retrievalContext := s.buildRetrievalContext(ctx, gc, ss, assistantMsg.ID, userQuery)
 		if retrievalContext != "" {
 			augmentedInstruction += retrievalContext
 		}
@@ -151,9 +154,6 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		"messages", len(fullMessages),
 		"system_prompt", truncateRunes(augmentedInstruction, 2000),
 		"context", summarizeMessagesForLog(fullMessages, 20, llmLogMaxContent))
-
-	// Stream the response
-	ss := newStreamState(gc, assistantMsg)
 	stream, err := chatModel.Stream(ctx, fullMessages)
 	if err != nil {
 		errMsg := err.Error()
@@ -239,12 +239,14 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	}
 }
 
-// buildRetrievalContext performs knowledge-base and memory retrieval, then
-// returns an augmented instruction string to prepend to the system prompt.
-func (s *ChatService) buildRetrievalContext(ctx context.Context, gc *generationContext, userQuery string) string {
+// buildRetrievalContext performs knowledge-base and memory retrieval, emits a
+// chat:retrieval event to the frontend, writes a retrieval segment into ss,
+// and returns an augmented instruction string to prepend to the system prompt.
+func (s *ChatService) buildRetrievalContext(ctx context.Context, gc *generationContext, ss *streamState, messageID int64, userQuery string) string {
 	agentExtras := gc.agentExtras
 	agentConfig := gc.agentConfig
 	var parts []string
+	var retrievalItems []RetrievalItem
 
 	// Knowledge base retrieval
 	if len(agentExtras.LibraryIDs) > 0 {
@@ -254,6 +256,7 @@ func (s *ChatService) buildRetrievalContext(ctx context.Context, gc *generationC
 			sb.WriteString("\n\n# Reference Knowledge\nThe following information was retrieved from the knowledge base. Use it to answer the user's question:\n\n")
 			for i, r := range kbResults {
 				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+				retrievalItems = append(retrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
 			}
 			parts = append(parts, sb.String())
 			s.app.Logger.Info("[chat] chat_mode kb retrieval", "conv", gc.conversationID, "results", len(kbResults))
@@ -268,6 +271,7 @@ func (s *ChatService) buildRetrievalContext(ctx context.Context, gc *generationC
 			sb.WriteString("\n\n# User Memory\nThe following memories about the user were retrieved. Use them to personalize your response:\n\n")
 			for i, r := range memResults {
 				sb.WriteString(fmt.Sprintf("- [Memory %d] %s\n", i+1, r.Content))
+				retrievalItems = append(retrievalItems, RetrievalItem{Source: "memory", Content: r.Content, Score: r.Score})
 			}
 			parts = append(parts, sb.String())
 			s.app.Logger.Info("[chat] chat_mode memory retrieval", "conv", gc.conversationID, "results", len(memResults))
@@ -280,6 +284,15 @@ func (s *ChatService) buildRetrievalContext(ctx context.Context, gc *generationC
 		if coreProfile != "" {
 			parts = append(parts, "\n\n# User Core Profile\n"+coreProfile)
 		}
+	}
+
+	// Emit retrieval event and write segment so frontend can display the results
+	if len(retrievalItems) > 0 {
+		gc.emit(EventChatRetrieval, ChatRetrievalEvent{
+			ChatEvent: gc.chatEvent(messageID),
+			Items:     retrievalItems,
+		})
+		ss.addRetrievalToSegments(retrievalItems)
 	}
 
 	return strings.Join(parts, "")
