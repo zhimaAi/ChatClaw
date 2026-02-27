@@ -155,6 +155,9 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	chatMode := conv.ChatMode
 	if chatMode == "" {
 		chatMode = "chat"
+	} else if chatMode != "chat" && chatMode != "task" {
+		s.app.Logger.Warn("[chat] invalid chat_mode found in conversation, fallback to chat", "conv", conversationID, "chat_mode", chatMode)
+		chatMode = "chat"
 	}
 
 	extras := AgentExtras{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"chatclaw/internal/sqlite"
@@ -16,6 +17,19 @@ const (
 	ChatModeChat = "chat" // Direct LLM conversation with knowledge/memory retrieval
 	ChatModeTask = "task" // ReAct agent with tool calling
 )
+
+// NormalizeChatMode validates and canonicalizes chat mode values.
+// Empty values default to chat mode for backward compatibility.
+func NormalizeChatMode(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "", ChatModeChat:
+		return ChatModeChat, true
+	case ChatModeTask:
+		return ChatModeTask, true
+	default:
+		return "", false
+	}
+}
 
 // Conversation 会话 DTO（暴露给前端）
 type Conversation struct {
@@ -109,8 +123,8 @@ func (m *conversationModel) toDTO() Conversation {
 		libraryIDs = []int64{}
 	}
 
-	chatMode := m.ChatMode
-	if chatMode == "" {
+	chatMode, ok := NormalizeChatMode(m.ChatMode)
+	if !ok {
 		chatMode = ChatModeChat
 	}
 

@@ -145,9 +145,9 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		return nil, errs.Newf("error.agent_not_found", map[string]any{"ID": input.AgentID})
 	}
 
-	chatMode := strings.TrimSpace(input.ChatMode)
-	if chatMode == "" {
-		chatMode = ChatModeChat
+	chatMode, ok := NormalizeChatMode(input.ChatMode)
+	if !ok {
+		return nil, errs.Newf("error.conversation_chat_mode_invalid", map[string]any{"ChatMode": input.ChatMode})
 	}
 
 	m := &conversationModel{
@@ -257,7 +257,11 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 		}
 
 		if input.ChatMode != nil {
-			q = q.Set("chat_mode = ?", strings.TrimSpace(*input.ChatMode))
+			chatMode, ok := NormalizeChatMode(*input.ChatMode)
+			if !ok {
+				return errs.Newf("error.conversation_chat_mode_invalid", map[string]any{"ChatMode": *input.ChatMode})
+			}
+			q = q.Set("chat_mode = ?", chatMode)
 		}
 
 		res, err := q.Exec(ctx)
