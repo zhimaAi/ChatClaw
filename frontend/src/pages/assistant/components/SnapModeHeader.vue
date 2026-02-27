@@ -48,7 +48,7 @@ const handleAgentChange = (value: any) => {
   <div
     data-snap-no-wake="true"
     class="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-3"
-    :style="hasAttachedTarget ? '--wails-draggable: no-drag' : '--wails-draggable: drag'"
+    style="--wails-draggable: no-drag"
   >
     <!-- Left: Agent selector -->
     <div class="flex items-center gap-1" style="--wails-draggable: no-drag">

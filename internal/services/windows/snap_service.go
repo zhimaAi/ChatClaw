@@ -29,6 +29,9 @@ const (
 
 // snapGap returns the pixel gap between the snap window and the target app.
 func snapGap() int {
+	if runtime.GOOS == "darwin" {
+		return 3
+	}
 	return 0
 }
 
