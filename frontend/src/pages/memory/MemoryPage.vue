@@ -56,17 +56,20 @@ const eventsByDate = computed(() => {
 
 const loadAgents = async () => {
   loading.value = true
+  let selectedAgentChanged = false
   try {
     const list = await AgentsService.ListAgents()
     agents.value = list || []
     if (selectedAgentId.value == null && agents.value.length > 0) {
       selectedAgentId.value = agents.value[0].id
+      selectedAgentChanged = true
     }
   } catch (error) {
     toast.error(getErrorMessage(error) || 'Failed to load agents')
   } finally {
     loading.value = false
   }
+  return selectedAgentChanged
 }
 
 const loadMemory = async (agentId: number) => {
@@ -101,8 +104,8 @@ watch(
   () => navigationStore.activeModule,
   (module) => {
     if (module === 'memory') {
-      void loadAgents().then(() => {
-        if (selectedAgentId.value != null) {
+      void loadAgents().then((selectedAgentChanged) => {
+        if (!selectedAgentChanged && selectedAgentId.value != null) {
           void loadMemory(selectedAgentId.value)
         }
       })
