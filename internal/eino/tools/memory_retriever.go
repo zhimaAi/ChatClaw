@@ -40,7 +40,7 @@ type memoryRetrieverInput struct {
 func (t *memoryRetrieverTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "memory_retriever",
-		Desc: "Search and retrieve relevant information from the agent's long-term memory (thematic facts and event streams). Use this tool to recall user preferences, past conversations, and important facts.",
+		Desc: `Search the user's long-term memory. MUST be called before responding whenever the user's message involves anything personal or could benefit from prior context. Provide 2-5 queries with varied keywords.`,
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"queries": {
 				Type:     schema.Array,
