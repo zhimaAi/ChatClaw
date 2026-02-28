@@ -101,6 +101,7 @@ export default {
     retry: '重试',
     notConfigured: '暂未配置',
     longPressToDrag: '长按拖动排序',
+    modelSettings: '模型设置',
   },
   tabs: {
     newTab: '新标签页',

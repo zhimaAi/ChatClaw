@@ -101,6 +101,7 @@ export default {
     retry: 'Retry',
     notConfigured: 'Not configured',
     longPressToDrag: 'Long press to drag and reorder',
+    modelSettings: 'Model Settings',
   },
   tabs: {
     newTab: 'New Tab',

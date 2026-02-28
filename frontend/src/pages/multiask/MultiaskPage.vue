@@ -11,6 +11,7 @@ import ColumnToggle from './components/ColumnToggle.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import MessageInput from './components/MessageInput.vue'
 import ModelSettingsDialog from './components/ModelSettingsDialog.vue'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Settings } from 'lucide-vue-next'
 import { MultiaskService } from '../../../bindings/chatclaw/internal/services/multiask'
 import { useNavigationStore } from '@/stores'
@@ -861,13 +862,22 @@ onUnmounted(() => {
 
       <!-- 分栏切换与设置 -->
       <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          @click="isSettingsOpen = true"
-        >
-          <Settings class="size-4" />
-        </button>
+        <TooltipProvider :delay-duration="300">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="isSettingsOpen = true"
+              >
+                <Settings class="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {{ t('multiask.modelSettings') }}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <ColumnToggle v-model="columnCount" />
       </div>
     </div>
