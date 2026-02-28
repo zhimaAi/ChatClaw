@@ -2,9 +2,10 @@ package windows
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,12 +28,11 @@ const (
 )
 
 // snapGap returns the pixel gap between the snap window and the target app.
-// Windows uses a smaller gap because its window borders already add visual spacing.
 func snapGap() int {
 	if runtime.GOOS == "windows" {
-		return 3
+		return 0
 	}
-	return 5 // macOS / other
+	return 3
 }
 
 type SnapStatus struct {
@@ -43,6 +43,30 @@ type SnapStatus struct {
 	LastError       string    `json:"lastError,omitempty"`
 	UpdatedAtUnixMs int64     `json:"updatedAtUnixMs"`
 }
+
+type SnapAppCandidate struct {
+	Name        string `json:"name"`
+	ProcessName string `json:"processName"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+type customSnapAppConfig struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ProcessName string `json:"processName"`
+	Icon        string `json:"icon,omitempty"`
+}
+
+const (
+	snapCustomAppsSettingKey        = "snap_custom_apps"
+	snapCustomKeyPrefix             = "snap_custom_"
+	snapDragGuardUntilKey           = "snap_drag_guard_until_unix_ms"
+	wakeAttachedGuardAfterSwitch    = 1200 * time.Millisecond
+	attachedLowFreqRescanInterval   = 1200 * time.Millisecond
+	attachedLowFreqRescanSwitchHits = 5 // Increased from 3 to 5 for more stable switching
+	attachedMinSwitchInterval       = 800 * time.Millisecond
+	stepDebugPrintInterval          = 10 // Print debug info every N steps
+)
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
 // the top-most window among all enabled target applications.
@@ -57,6 +81,7 @@ type SnapService struct {
 	winSvc *WindowService
 
 	mu sync.Mutex
+	attachMu sync.Mutex
 
 	enabledKeys    []string
 	enabledTargets []string
@@ -73,6 +98,18 @@ type SnapService struct {
 	loopCancel context.CancelFunc
 
 	status SnapStatus
+	switchRollbackFrom  string
+	switchRollbackTo    string
+	switchRollbackUntil time.Time
+	wakeAttachedGuardUntil time.Time
+	lastSwitchAt time.Time
+	lastAttachedRescanAt time.Time
+	attachedRescanCandidate string
+	attachedRescanHits      int
+	obscuredCheckTarget     string // Last target name checked for obscured/non-adjacent state
+	obscuredCheckHits       int    // Consecutive obscured/non-adjacent hits for that target
+	stepCounter             int // Counter for debug printing
+	attachingLock           bool // Lock to prevent concurrent attaching
 }
 
 func NewSnapService(app *application.App, winSvc *WindowService) (*SnapService, error) {
@@ -102,6 +139,12 @@ func (s *SnapService) GetStatus() SnapStatus {
 	return s.status
 }
 
+// ListAvailableApps returns currently running foreground applications so frontend
+// can let users pick one as a custom snap target.
+func (s *SnapService) ListAvailableApps() ([]SnapAppCandidate, error) {
+	return listRunningApps()
+}
+
 // WakeAttached brings the attached target window and the winsnap window to the front,
 // then returns keyboard focus to the winsnap window.
 // This is called when user clicks on the winsnap window - we want to:
@@ -109,12 +152,20 @@ func (s *SnapService) GetStatus() SnapStatus {
 // 2. Return focus to winsnap so user can continue typing
 // If the winsnap window is invalid/closed, it will be recreated on the next loop tick.
 func (s *SnapService) WakeAttached() error {
+	if s.isDragGuardActive() {
+		return nil
+	}
+
 	s.mu.Lock()
 	w := s.win
 	target := s.currentTarget
+	guardUntil := s.wakeAttachedGuardUntil
 	s.mu.Unlock()
 
 	if w == nil || target == "" {
+		return nil
+	}
+	if time.Now().Before(guardUntil) {
 		return nil
 	}
 	// Use WakeAttachedWindowWithRefocus to return focus to winsnap after syncing z-order
@@ -151,6 +202,25 @@ func (s *SnapService) WakeWindow() {
 		targetToShow = lastAttached
 	}
 
+	// Get enabled targets to validate targetToShow
+	s.mu.Lock()
+	enabledTargets := append([]string(nil), s.enabledTargets...)
+	s.mu.Unlock()
+
+	// Validate targetToShow: only restore if it's still enabled
+	if targetToShow != "" {
+		isEnabled := false
+		for _, enabled := range enabledTargets {
+			if strings.EqualFold(enabled, targetToShow) {
+				isEnabled = true
+				break
+			}
+		}
+		if !isEnabled {
+			targetToShow = ""
+		}
+	}
+
 	// If window is nil or invalid, recreate it via WindowService.
 	if w == nil || w.NativeWindow() == nil || uintptr(w.NativeWindow()) == 0 {
 		// Show() will create the window if needed (FocusOnShow is false).
@@ -168,7 +238,7 @@ func (s *SnapService) WakeWindow() {
 			return
 		}
 
-		// Window recreated: try to restore attachment to last target
+		// Window recreated: try to restore attachment to last target (only if still enabled)
 		if targetToShow != "" {
 			// Show target window without activating
 			_ = winsnap.ShowTargetWindowNoActivate(w, targetToShow)
@@ -193,14 +263,26 @@ func (s *SnapService) WakeWindow() {
 	// Window exists
 
 	// If currently attached, show target window (no activate), focus on winsnap
+	// But first check if target is still enabled
 	if state == SnapStateAttached && target != "" {
-		_ = winsnap.ShowTargetWindowNoActivate(w, target)
-		_ = winsnap.WakeStandaloneWindow(w)
-		return
+		isTargetEnabled := false
+		for _, enabled := range enabledTargets {
+			if strings.EqualFold(enabled, target) {
+				isTargetEnabled = true
+				break
+			}
+		}
+		if isTargetEnabled {
+			_ = winsnap.ShowTargetWindowNoActivate(w, target)
+			_ = winsnap.WakeStandaloneWindow(w)
+			return
+		}
+		// Target is no longer enabled, fall through to detach
 	}
 
 	// If hidden but was previously attached to a target, try to restore attached state.
 	// This handles the case where user minimized everything and then uses text selection popup.
+	// Only restore if targetToShow is still enabled (already validated above).
 	if (state == SnapStateHidden || state == SnapStateStopped) && targetToShow != "" {
 		// Show target window without activating
 		err := winsnap.ShowTargetWindowNoActivate(w, targetToShow)
@@ -318,13 +400,12 @@ func (s *SnapService) DetachToStandalone() error {
 	s.status.EnabledTargets = append([]string(nil), enabledTargets...)
 	s.status.State = SnapStateStandalone
 	s.touchLocked("")
-	stillHasTargets := len(enabledTargets) > 0
 	s.mu.Unlock()
 
-	// 4. If no other targets are enabled, stop the polling loop entirely.
-	//    Otherwise keep it running so it can detect and re-attach when another
-	//    enabled app becomes foreground.
-	if !stillHasTargets {
+	// 4. Keep polling when there are still enabled targets so standalone mode can
+	// automatically re-attach when another target app becomes foreground.
+	// Only stop polling when no targets are enabled at all.
+	if len(enabledTargets) == 0 {
 		s.mu.Lock()
 		cancel := s.loopCancel
 		s.loopCancel = nil
@@ -332,10 +413,7 @@ func (s *SnapService) DetachToStandalone() error {
 		if cancel != nil {
 			cancel()
 		}
-	}
-	// If still has targets and loop is NOT running (shouldn't normally happen),
-	// ensure it is started.
-	if stillHasTargets {
+	} else {
 		_ = s.ensureRunning()
 	}
 
@@ -360,6 +438,11 @@ func (s *SnapService) FindSnapTarget() (string, error) {
 	var allTargets []string
 	for _, key := range allKeys {
 		allTargets = append(allTargets, snapTargetsForKey(key)...)
+	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName != "" {
+			allTargets = append(allTargets, app.ProcessName)
+		}
 	}
 	allTargets = uniqueStrings(allTargets)
 
@@ -495,6 +578,17 @@ func (s *SnapService) CloseSnapWindow() error {
 	// 1. Stop everything: polling loop + attach controller + hide window
 	_ = s.stop()
 
+	// IMPORTANT: CloseSnapWindow is a user-initiated "turn off" action from UI.
+	// Even if some snap toggles remain enabled in settings, we should NOT restart
+	// the polling loop here, otherwise the window may immediately "reopen" and
+	// re-attach, which feels like a restart to users.
+	//
+	// Also clear lastAttachedTarget so WakeWindow (used by text selection) will
+	// not restore attachment to an old target due to settings-cache race.
+	s.mu.Lock()
+	s.lastAttachedTarget = ""
+	s.mu.Unlock()
+
 	// 2. Re-read persistent settings — the caller only disabled the current
 	//    target's toggle; other apps may still be enabled.
 	enabledKeys, enabledTargets := readSnapTargetsFromSettings()
@@ -506,14 +600,7 @@ func (s *SnapService) CloseSnapWindow() error {
 	s.status.EnabledTargets = append([]string(nil), enabledTargets...)
 	s.mu.Unlock()
 
-	// 3. If other targets are still enabled, restart the polling loop.
-	//    The window (hidden by stop()) will reappear automatically when
-	//    one of those targets becomes the foreground window.
-	if len(enabledTargets) > 0 {
-		_ = s.ensureRunning()
-	}
-
-	// 4. Emit events so frontend updates UI
+	// 3. Emit events so frontend updates UI
 	s.app.Event.Emit("snap:state-changed", map[string]interface{}{
 		"state":         string(SnapStateStopped),
 		"targetProcess": "",
@@ -549,13 +636,50 @@ func (s *SnapService) loop(ctx context.Context) {
 }
 
 func (s *SnapService) step() {
+	if s.isDragGuardActive() {
+		return
+	}
+
+	// Re-read enabledTargets from settings on each step to ensure we have the latest list
+	// This fixes the issue where disabling a snap app toggle doesn't immediately update the list
+	enabledKeys, enabledTargetsFromSettings := readSnapTargetsFromSettings()
+
 	s.mu.Lock()
-	enabledTargets := append([]string(nil), s.enabledTargets...)
+	// Update enabledTargets if they changed
+	s.enabledKeys = enabledKeys
+	s.enabledTargets = enabledTargetsFromSettings
+	s.status.EnabledKeys = append([]string(nil), enabledKeys...)
+	s.status.EnabledTargets = append([]string(nil), enabledTargetsFromSettings...)
+	
+	enabledTargets := append([]string(nil), enabledTargetsFromSettings...)
 	w := s.win
+	currentTarget := s.currentTarget
 	wasMinimized := s.lastWinsnapMinimized
 	targetForRestore := s.currentTarget
 	stateForRestore := s.status.State
+	stepCounter := s.stepCounter
+	s.stepCounter++
+	if s.stepCounter >= stepDebugPrintInterval {
+		s.stepCounter = 0
+	}
 	s.mu.Unlock()
+
+	// Print debug info every N steps
+	if stepCounter == 0 {
+		frontTarget, _, _ := winsnap.FrontMostTargetProcessName(enabledTargets)
+		s.mu.Lock()
+		currentTargetForLog := s.currentTarget
+		stateForLog := s.status.State
+		s.mu.Unlock()
+		if s.app != nil && s.app.Logger != nil {
+			s.app.Logger.Info("SnapService step debug",
+				"frontTarget", frontTarget,
+				"currentTarget", currentTargetForLog,
+				"state", stateForLog,
+				"enabledTargets", enabledTargets,
+			)
+		}
+	}
 
 	if len(enabledTargets) == 0 {
 		// If toggles became empty while loop is still running, stop.
@@ -599,14 +723,220 @@ func (s *SnapService) step() {
 		if wasMinimized && !isMin && targetForRestore != "" && stateForRestore == SnapStateAttached {
 			go func() {
 				time.Sleep(80 * time.Millisecond) // allow restore layout to settle
-			_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
-				TargetProcessName: targetForRestore,
-				Gap:               snapGap(),
-				App:               s.app,
-				Window:            w,
-			})
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: targetForRestore,
+					Gap:               snapGap(),
+					App:               s.app,
+					Window:            w,
+				})
 			}()
 		}
+	}
+
+	frontTarget, frontFound, frontErr := winsnap.FrontMostTargetProcessName(enabledTargets)
+	if frontErr != nil {
+		// Check if our own app is frontmost (user interacting with our app's window)
+		// In this case, preserve current snap state - don't hide or change anything.
+		if frontErr == winsnap.ErrSelfIsFrontmost {
+			return
+		}
+		s.mu.Lock()
+		s.status.LastError = frontErr.Error()
+		s.touchLocked(frontErr.Error())
+		s.mu.Unlock()
+		return
+	}
+
+	// In attached state, use strict foreground-driven switching:
+	// - self foreground: keep current attachment (handled above by ErrSelfIsFrontmost)
+	// - target foreground: switch only when front target differs from current target
+	// - non-target/unknown foreground: keep current attachment, do not run fallback scan
+	//
+	// This avoids mis-switching when rapidly toggling between target and non-target apps.
+	if stateForRestore == SnapStateAttached && currentTarget != "" {
+		// Check if currentTarget is still in enabledTargets. If not, detach immediately.
+		// This handles the case when user disables a snap app toggle while it's currently attached.
+		isCurrentTargetEnabled := false
+		for _, enabled := range enabledTargets {
+			if strings.EqualFold(enabled, currentTarget) {
+				isCurrentTargetEnabled = true
+				break
+			}
+		}
+		if !isCurrentTargetEnabled {
+			// Current target is no longer enabled, detach immediately
+			// Stop controller and clear state, but preserve lastSwitchAt to prevent rapid switching
+			s.mu.Lock()
+			if s.ctrl != nil {
+				_ = s.ctrl.Stop()
+				s.ctrl = nil
+			}
+			oldState := s.status.State
+			oldTarget := s.status.TargetProcess
+			enabledTargets := append([]string(nil), s.enabledTargets...)
+			
+			// Clear lastAttachedTarget if it's no longer enabled
+			if s.lastAttachedTarget != "" {
+				isLastAttachedEnabled := false
+				for _, enabled := range enabledTargets {
+					if strings.EqualFold(enabled, s.lastAttachedTarget) {
+						isLastAttachedEnabled = true
+						break
+					}
+				}
+				if !isLastAttachedEnabled {
+					s.lastAttachedTarget = ""
+				}
+			}
+			
+			s.currentTarget = ""
+			s.lastWinsnapMinimized = false
+			s.switchRollbackFrom = ""
+			s.switchRollbackTo = ""
+			s.switchRollbackUntil = time.Time{}
+			s.wakeAttachedGuardUntil = time.Time{}
+			// Preserve lastSwitchAt to prevent rapid switching
+			// s.lastSwitchAt = time.Time{}
+			s.lastAttachedRescanAt = time.Time{}
+			s.attachedRescanCandidate = ""
+			s.attachedRescanHits = 0
+			s.status.State = SnapStateHidden
+			s.status.TargetProcess = ""
+			s.status.LastError = ""
+			s.touchLocked("")
+			s.mu.Unlock()
+			
+			_ = winsnap.MoveOffscreen(w)
+			
+			// Emit state-changed event if state actually changed
+			if oldState != SnapStateHidden || oldTarget != "" {
+				s.app.Event.Emit("snap:state-changed", map[string]interface{}{
+					"state":         string(SnapStateHidden),
+					"targetProcess": "",
+				})
+			}
+			return
+		}
+		if frontFound && frontTarget != "" {
+			if strings.EqualFold(frontTarget, currentTarget) {
+				now := time.Now()
+				doRescan := false
+				s.mu.Lock()
+				if s.lastAttachedRescanAt.IsZero() || now.Sub(s.lastAttachedRescanAt) >= attachedLowFreqRescanInterval {
+					s.lastAttachedRescanAt = now
+					doRescan = true
+				}
+				s.mu.Unlock()
+				if doRescan {
+					// First, verify currentTarget is still enabled before any re-attach
+					isCurrentTargetEnabled := false
+					for _, enabled := range enabledTargets {
+						if strings.EqualFold(enabled, currentTarget) {
+							isCurrentTargetEnabled = true
+							break
+						}
+					}
+					if !isCurrentTargetEnabled {
+						// Current target is no longer enabled, skip rescan
+						return
+					}
+
+					// Low-frequency runtime consistency check: if state says we are attached
+					// to currentTarget but runtime geometry says target is obscured/non-adjacent,
+					// force a re-attach to currentTarget to realign controller and UI state.
+					// To avoid acting on a single mis-detection, we require multiple consecutive
+					// obscured/non-adjacent results before triggering re-attach.
+					if obscured, oerr := winsnap.IsTargetObscured(w, currentTarget); oerr == nil {
+						s.mu.Lock()
+						if obscured {
+							if strings.EqualFold(s.obscuredCheckTarget, currentTarget) {
+								s.obscuredCheckHits++
+							} else {
+								s.obscuredCheckTarget = currentTarget
+								s.obscuredCheckHits = 1
+							}
+						} else {
+							// Reset counter when target is not obscured.
+							if strings.EqualFold(s.obscuredCheckTarget, currentTarget) {
+								s.obscuredCheckHits = 0
+							} else {
+								s.obscuredCheckTarget = currentTarget
+								s.obscuredCheckHits = 0
+							}
+						}
+						hits := s.obscuredCheckHits
+						canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+						attachingLocked := s.attachingLock
+						s.mu.Unlock()
+
+						if obscured {
+							// Only re-attach when obscured has been observed for enough consecutive checks.
+							if hits < attachedLowFreqRescanSwitchHits {
+								return
+							}
+							if canSwitch && !attachingLocked {
+								s.attachTo(w, currentTarget)
+							}
+							return
+						}
+					}
+
+					// Only check z-order if frontTarget is still currentTarget
+					// This prevents switching to other apps when currentTarget is foreground
+					// The rescan is only for detecting if currentTarget is obscured, not for switching to other apps
+					// If we want to switch to another app, it should be detected by frontTarget change, not by z-order
+					// So we skip the z-order check here to prevent flickering
+					// Reset candidate when frontTarget matches currentTarget
+					s.mu.Lock()
+					s.attachedRescanCandidate = ""
+					s.attachedRescanHits = 0
+					s.mu.Unlock()
+				}
+				return
+			}
+			now := time.Now()
+			s.mu.Lock()
+			canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+			attachingLocked := s.attachingLock
+
+			// Require frontTarget to be stable for multiple consecutive steps before switching.
+			// This prevents brief foreground flickers (e.g. Feishu stealing focus for a moment
+			// under DingTalk) from causing the snap window to rapidly jump between targets.
+			if strings.EqualFold(s.attachedRescanCandidate, frontTarget) {
+				s.attachedRescanHits++
+			} else {
+				s.attachedRescanCandidate = frontTarget
+				s.attachedRescanHits = 1
+			}
+			hits := s.attachedRescanHits
+			s.mu.Unlock()
+
+			if !canSwitch || attachingLocked {
+				return
+			}
+			// Only switch when the same frontTarget has been observed consistently enough times.
+			if hits < attachedLowFreqRescanSwitchHits {
+				return
+			}
+			s.attachTo(w, frontTarget)
+			return
+		}
+		// Keep current attachment when foreground is not a target app.
+		return
+	}
+
+	// In non-attached state (standalone/hidden), check switch interval before attaching
+	if frontFound && frontTarget != "" {
+		now := time.Now()
+		s.mu.Lock()
+		canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+		attachingLocked := s.attachingLock
+		s.mu.Unlock()
+		if !canSwitch || attachingLocked {
+			return
+		}
+		s.attachTo(w, frontTarget)
+		return
 	}
 
 	target, found, err := winsnap.TopMostVisibleProcessName(enabledTargets)
@@ -643,7 +973,31 @@ func (s *SnapService) step() {
 		s.hideOffscreen(w)
 		return
 	}
+
+	// Check switch interval before attaching to prevent rapid switching
+	now := time.Now()
+	s.mu.Lock()
+	canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
+	attachingLocked := s.attachingLock
+	s.mu.Unlock()
+	if !canSwitch || attachingLocked {
+		return
+	}
 	s.attachTo(w, target)
+}
+
+func (s *SnapService) isDragGuardActive() bool {
+	v, ok := settings.GetValue(snapDragGuardUntilKey)
+	if !ok {
+		return false
+	}
+
+	untilMs, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+	if err != nil || untilMs <= 0 {
+		return false
+	}
+
+	return time.Now().UnixMilli() < untilMs
 }
 
 func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
@@ -655,15 +1009,38 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 	}
 	oldState := s.status.State
 	oldTarget := s.status.TargetProcess
+	enabledTargets := append([]string(nil), s.enabledTargets...)
 
 	// Remember the last attached target for wake restoration.
 	// This allows WakeWindow to restore attached state instead of going standalone.
+	// Only remember if it's still enabled.
 	if oldState == SnapStateAttached && s.currentTarget != "" {
-		s.lastAttachedTarget = s.currentTarget
+		isCurrentTargetEnabled := false
+		for _, enabled := range enabledTargets {
+			if strings.EqualFold(enabled, s.currentTarget) {
+				isCurrentTargetEnabled = true
+				break
+			}
+		}
+		if isCurrentTargetEnabled {
+			s.lastAttachedTarget = s.currentTarget
+		} else {
+			// Clear lastAttachedTarget if it's no longer enabled
+			s.lastAttachedTarget = ""
+		}
 	}
 
 	s.currentTarget = ""
 	s.lastWinsnapMinimized = false
+	s.switchRollbackFrom = ""
+	s.switchRollbackTo = ""
+	s.switchRollbackUntil = time.Time{}
+	s.wakeAttachedGuardUntil = time.Time{}
+	// Don't clear lastSwitchAt here - preserve switch interval to prevent rapid switching
+	// s.lastSwitchAt = time.Time{}
+	s.lastAttachedRescanAt = time.Time{}
+	s.attachedRescanCandidate = ""
+	s.attachedRescanHits = 0
 	s.status.State = SnapStateHidden
 	s.status.TargetProcess = ""
 	s.status.LastError = ""
@@ -682,6 +1059,84 @@ func (s *SnapService) hideOffscreen(w *application.WebviewWindow) {
 }
 
 func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess string) {
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+
+	// Set attaching lock to prevent concurrent attaching
+	s.mu.Lock()
+	if s.attachingLock {
+		// Already attaching, skip
+		s.mu.Unlock()
+		return
+	}
+	s.attachingLock = true
+	prevTarget := s.currentTarget
+	prevState := s.status.State
+	s.mu.Unlock()
+
+	// Ensure lock is released even if attach fails
+	defer func() {
+		s.mu.Lock()
+		s.attachingLock = false
+		s.mu.Unlock()
+	}()
+
+	// Re-read enabledTargets from settings to ensure we have the latest list
+	// This fixes the issue where disabling a snap app toggle doesn't immediately stop attaching
+	_, enabledTargetsFromSettings := readSnapTargetsFromSettings()
+
+	// Check if targetProcess is still enabled before attaching
+	isEnabled := false
+	for _, enabled := range enabledTargetsFromSettings {
+		if strings.EqualFold(enabled, targetProcess) {
+			isEnabled = true
+			break
+		}
+	}
+	if !isEnabled {
+		// Target is no longer enabled, don't attach
+		return
+	}
+
+	// Check if target is currently foreground
+	frontTarget, frontFound, _ := winsnap.FrontMostTargetProcessName(enabledTargetsFromSettings)
+	isForeground := frontFound && strings.EqualFold(frontTarget, targetProcess)
+
+	// Get z-order info (top-most visible target)
+	topTarget, topFound, _ := winsnap.TopMostVisibleProcessName(enabledTargetsFromSettings)
+	zOrderInfo := "unknown"
+	if topFound && topTarget != "" {
+		zOrderInfo = topTarget
+		if strings.EqualFold(topTarget, targetProcess) {
+			zOrderInfo = targetProcess + " (top)"
+		}
+	}
+
+	// Get switch lock time info
+	s.mu.Lock()
+	lastSwitchAt := s.lastSwitchAt
+	now := time.Now()
+	switchLockTimeRemaining := time.Duration(0)
+	if !lastSwitchAt.IsZero() {
+		elapsed := now.Sub(lastSwitchAt)
+		if elapsed < attachedMinSwitchInterval {
+			switchLockTimeRemaining = attachedMinSwitchInterval - elapsed
+		}
+	}
+	s.mu.Unlock()
+
+	// Print switch debug info
+	if s.app != nil && s.app.Logger != nil {
+		s.app.Logger.Info("SnapService switch attach",
+			"state", prevState,
+			"targetProcess", targetProcess,
+			"isForeground", isForeground,
+			"enabledTargets", enabledTargetsFromSettings,
+			"zOrderInfo", zOrderInfo,
+			"switchLockTimeRemaining", switchLockTimeRemaining,
+		)
+	}
+
 	s.mu.Lock()
 	if s.currentTarget == targetProcess && s.ctrl != nil {
 		// Already attached to this target. The darwinFollower's activation observer
@@ -692,14 +1147,52 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		// Ensure winsnap is visible (in case it was hidden by MoveOffscreen)
 		// This is needed because winsnap_order_above_target checks [selfWin isVisible]
 		_ = winsnap.EnsureWindowVisible(w)
-		return
+		// Verify runtime attachment consistency. If winsnap is not adjacent to
+		// the supposed target, force a controller rebuild to recover.
+		// To reduce false positives from a single mis-detection, we require multiple
+		// consecutive obscured/non-adjacent results before tearing down the controller.
+		obscured, err := winsnap.IsTargetObscured(w, targetProcess)
+		if err == nil {
+			s.mu.Lock()
+			if obscured {
+				if strings.EqualFold(s.obscuredCheckTarget, targetProcess) {
+					s.obscuredCheckHits++
+				} else {
+					s.obscuredCheckTarget = targetProcess
+					s.obscuredCheckHits = 1
+				}
+			} else {
+				// Reset counter when target is confirmed adjacent (not obscured).
+				if strings.EqualFold(s.obscuredCheckTarget, targetProcess) {
+					s.obscuredCheckHits = 0
+				} else {
+					s.obscuredCheckTarget = targetProcess
+					s.obscuredCheckHits = 0
+				}
+			}
+			hits := s.obscuredCheckHits
+			s.mu.Unlock()
+
+			// If target is not obscured/non-adjacent, or obscured but not yet
+			// stable for enough checks, keep current controller as-is.
+			if !obscured || hits < attachedLowFreqRescanSwitchHits {
+				return
+			}
+		}
+		s.mu.Lock()
+		if s.ctrl != nil {
+			_ = s.ctrl.Stop()
+			s.ctrl = nil
+		}
+		s.mu.Unlock()
+	} else {
+		// Stop current controller (if any) before switching target.
+		if s.ctrl != nil {
+			_ = s.ctrl.Stop()
+			s.ctrl = nil
+		}
+		s.mu.Unlock()
 	}
-	// Stop current controller (if any) before switching target.
-	if s.ctrl != nil {
-		_ = s.ctrl.Stop()
-		s.ctrl = nil
-	}
-	s.mu.Unlock()
 
 	// Restore winsnap if it was minimized (e.g. by Win+D); when a target becomes visible again, show the snap window.
 	if err := winsnap.EnsureWindowVisible(w); err == winsnap.ErrWinsnapWindowInvalid {
@@ -735,6 +1228,21 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	s.currentTarget = targetProcess
 	s.lastAttachedTarget = "" // Clear: now actively attached, no need to remember
 	s.lastWinsnapMinimized, _ = winsnap.IsWindowMinimized(w)
+	now = time.Now() // Update now to current time for lastSwitchAt
+	s.lastSwitchAt = now // Always update lastSwitchAt when attaching to enforce min interval
+	s.lastAttachedRescanAt = time.Time{}
+	s.attachedRescanCandidate = ""
+	s.attachedRescanHits = 0
+	if prevTarget != "" && !strings.EqualFold(prevTarget, targetProcess) {
+		s.wakeAttachedGuardUntil = now.Add(wakeAttachedGuardAfterSwitch)
+	} else {
+		s.wakeAttachedGuardUntil = time.Time{}
+	}
+	// Clear rollback fields - rollback logic appears to be unused/removed
+	// Keeping fields for backward compatibility but clearing them
+	s.switchRollbackFrom = ""
+	s.switchRollbackTo = ""
+	s.switchRollbackUntil = time.Time{}
 	s.status.State = SnapStateAttached
 	s.status.TargetProcess = targetProcess
 	s.status.LastError = ""
@@ -799,12 +1307,12 @@ func (s *SnapService) installWindowHooksLocked(w *application.WebviewWindow) {
 		if target != "" && state == SnapStateAttached {
 			go func() {
 				time.Sleep(60 * time.Millisecond) // allow restore layout to settle
-			_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
-				TargetProcessName: target,
-				Gap:               snapGap(),
-				App:               s.app,
-				Window:            w,
-			})
+				_ = winsnap.SyncRightOfProcessNow(winsnap.AttachOptions{
+					TargetProcessName: target,
+					Gap:               snapGap(),
+					App:               s.app,
+					Window:            w,
+				})
 			}()
 		}
 	})
@@ -880,6 +1388,15 @@ func readSnapTargetsFromSettings() (enabledKeys []string, enabledTargets []strin
 		{key: "snap_feishu", targets: snapTargetsForKey("snap_feishu")},
 		{key: "snap_douyin", targets: snapTargetsForKey("snap_douyin")},
 	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName == "" {
+			continue
+		}
+		items = append(items, item{
+			key:     customSnapSettingKey(app.ID),
+			targets: []string{app.ProcessName},
+		})
+	}
 
 	for _, it := range items {
 		if !settings.GetBool(it.key, false) {
@@ -947,7 +1464,7 @@ func snapTargetsForKey(key string) []string {
 		case "snap_dingtalk":
 			return []string{"钉钉", "DingTalk", "dingtalk", "com.alibaba.DingTalkMac"}
 		case "snap_feishu":
-			return []string{"飞书", "Feishu", "feishu", "Lark", "lark", "com.bytedance.feishu", "com.bytedance.Lark"}
+			return []string{"飞书", "Feishu", "feishu", "Lark", "lark", "com.bytedance.feishu", "com.bytedance.Lark", "com.electron.lark"}
 		case "snap_douyin":
 			return []string{"抖音", "Douyin", "douyin"}
 		default:
@@ -970,7 +1487,74 @@ func snapKeyForTarget(targetProcess string) string {
 			}
 		}
 	}
+	for _, app := range loadCustomSnapAppsFromSettings() {
+		if app.ProcessName == "" {
+			continue
+		}
+		if strings.EqualFold(app.ProcessName, targetProcess) {
+			return customSnapSettingKey(app.ID)
+		}
+	}
 	return ""
+}
+
+func customSnapSettingKey(id string) string {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" {
+		return ""
+	}
+	return snapCustomKeyPrefix + trimmed
+}
+
+func loadCustomSnapAppsFromSettings() []customSnapAppConfig {
+	raw, ok := settings.GetValue(snapCustomAppsSettingKey)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var apps []customSnapAppConfig
+	if err := json.Unmarshal([]byte(raw), &apps); err != nil {
+		return nil
+	}
+
+	// Filter out any custom apps that duplicate built-in snap targets (e.g. older configs
+	// created before the UI started blocking built-in apps from being added as "custom").
+	// Otherwise, disabling a built-in toggle (like DingTalk) may still leave an enabled
+	// custom entry for the same process name, and the winsnap window will keep attaching.
+	builtIn := make(map[string]struct{}, 32)
+	for _, k := range []string{"snap_wechat", "snap_wecom", "snap_qq", "snap_dingtalk", "snap_feishu", "snap_douyin"} {
+		for _, t := range snapTargetsForKey(k) {
+			tt := strings.ToLower(strings.TrimSpace(t))
+			if tt == "" {
+				continue
+			}
+			builtIn[tt] = struct{}{}
+		}
+	}
+
+	out := make([]customSnapAppConfig, 0, len(apps))
+	seen := make(map[string]struct{}, len(apps))
+	for _, app := range apps {
+		id := strings.TrimSpace(app.ID)
+		processName := strings.TrimSpace(app.ProcessName)
+		if id == "" || processName == "" {
+			continue
+		}
+		if _, dup := builtIn[strings.ToLower(processName)]; dup {
+			continue
+		}
+		key := strings.ToLower(id) + "##" + strings.ToLower(processName)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, customSnapAppConfig{
+			ID:          id,
+			Name:        strings.TrimSpace(app.Name),
+			ProcessName: processName,
+			Icon:        strings.TrimSpace(app.Icon),
+		})
+	}
+	return out
 }
 
 // getClickSettingsForTarget returns the configured click settings for a target process
@@ -978,7 +1562,6 @@ func snapKeyForTarget(targetProcess string) string {
 func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, offsetY int) {
 	key := snapKeyForTarget(targetProcess)
 	if key == "" {
-		fmt.Printf("[SNAP_DEBUG] snapKeyForTarget(%q) returned empty! Settings will NOT be loaded.\n", targetProcess)
 		return false, 0, 0
 	}
 	// Setting key format: snap_[app]_no_click, snap_[app]_click_offset_x/y
@@ -986,13 +1569,10 @@ func getClickSettingsForTarget(targetProcess string) (noClick bool, offsetX, off
 	noClick = settings.GetBool(key+"_no_click", defaultNoClickForKey(key))
 	offsetX = settings.GetInt(key+"_click_offset_x", 0)
 	offsetY = settings.GetInt(key+"_click_offset_y", 0)
-	fmt.Printf("[SNAP_DEBUG] getClickSettingsForTarget(%q): key=%q noClick=%v offsetX=%d offsetY(raw)=%d\n",
-		targetProcess, key, noClick, offsetX, offsetY)
 	// If not configured (0 or empty), fall back to per-app defaults to match frontend UX.
 	// This is important on macOS where the click implementation otherwise falls back to a generic value.
 	if offsetY <= 0 {
 		offsetY = defaultClickOffsetYForKey(key)
-		fmt.Printf("[SNAP_DEBUG]   offsetY fallback to default: %d\n", offsetY)
 	}
 	return noClick, offsetX, offsetY
 }

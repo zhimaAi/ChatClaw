@@ -122,6 +122,14 @@ type EventStreamDTO struct {
 	Content string `json:"content"`
 }
 
+// EventStreamPageInput holds cursor-pagination parameters for event streams.
+type EventStreamPageInput struct {
+	AgentID    int64  `json:"agent_id"`
+	BeforeDate string `json:"before_date"`
+	BeforeID   int64  `json:"before_id"`
+	Limit      int    `json:"limit"`
+}
+
 func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]ThematicFactDTO, error) {
 	if db == nil {
 		return nil, errs.New("error.memory_db_not_initialized")
@@ -143,16 +151,33 @@ func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]
 	return result, nil
 }
 
-func (s *MemoryService) GetEventStreams(ctx context.Context, agentID int64) ([]EventStreamDTO, error) {
+// GetEventStreamsPage returns a cursor-paginated page of event streams.
+// Uses (date DESC, id DESC) ordering with a composite cursor (before_date, before_id).
+func (s *MemoryService) GetEventStreamsPage(ctx context.Context, input EventStreamPageInput) ([]EventStreamDTO, error) {
 	if db == nil {
 		return nil, errs.New("error.memory_db_not_initialized")
 	}
+	if input.AgentID <= 0 {
+		return nil, errs.New("error.agent_id_required")
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
 
 	var events []EventStream
-	err := db.NewSelect().Model(&events).
-		Where("agent_id = ?", agentID).
-		OrderExpr("date DESC, id DESC").
-		Scan(ctx)
+	q := db.NewSelect().Model(&events).
+		Where("agent_id = ?", input.AgentID)
+
+	if input.BeforeDate != "" && input.BeforeID > 0 {
+		q = q.Where("(date < ? OR (date = ? AND id < ?))", input.BeforeDate, input.BeforeDate, input.BeforeID)
+	}
+
+	err := q.OrderExpr("date DESC, id DESC").Limit(limit).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
