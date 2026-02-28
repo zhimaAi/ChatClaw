@@ -394,21 +394,24 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 
 # Execute Tool (synchronous)
 
-- Working directory: %s
-- Returns combined stdout/stderr output with exit code
-- Default timeout: 60 seconds. You can set `+"`timeout`"+` (max 300s) for commands that need more time (e.g. npm install).
-- **For short-lived commands only**: build, test, install, compile, lint, etc.
-- **Do NOT use execute for dev servers or long-running processes** — use execute_background instead.
-- Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool)
+- **action="run"** (default): execute a shell command synchronously in the working directory (%s).
+  - Returns combined stdout/stderr output with exit code.
+  - Default timeout: 60s. Set `+"`timeout`"+` (max 300s) for slow commands (e.g. npm install).
+  - **For short-lived commands only**: build, test, install, compile, lint, etc.
+  - **Do NOT use for dev servers or long-running processes** — use execute_background to start them.
+  - Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool).
+- **action="stop"**: synchronously kill a background process by pid and wait for it to fully exit. Returns success or error if the process cannot be killed within the timeout.
+  - Pass `+"`pid`"+` (from execute_background) and optional `+"`timeout`"+` (default 10s, max 300s).
+  - If the process does not exit in time, an error is returned so you can take further action.
+- **action="status"**: check if a background process is still alive and read its latest output.
+  - Pass `+"`pid`"+` (from execute_background).
 
-# Execute Background Tool (asynchronous)
+# Execute Background Tool (asynchronous, start only)
 
-- Use for **long-running processes** like dev servers ("npm run dev", "python manage.py runserver", etc.).
-- **action="start"**: launch a background process, returns pid and initial output. The process is auto-killed after timeout (default 300s, max 600s).
-- **action="status"**: check if a process is still alive and read its latest output. Pass the pid from start.
-- **action="stop"**: kill a background process. Pass the pid from start.
-- After starting a dev server, use action="status" to confirm it's running and check its output (e.g. what port it's listening on).
-- Lifecycle: start → (optional) status checks → stop (or auto-killed after timeout).
+- Use **only** for **starting** long-running processes like dev servers ("npm run dev", "python manage.py runserver", etc.).
+- Returns pid and initial output. The process is auto-killed after timeout (default 300s, max 600s).
+- After starting a dev server, use execute with action="status" to confirm it's running and check its output.
+- To stop a background process, use execute with action="stop" (do NOT use execute_background for stopping).
 `, workDir, workDir, workDir, workDir)
 
 	if osName == "windows" {
@@ -487,7 +490,6 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 		tools.NewPatchFileTool,
 		tools.NewGlobTool,
 		tools.NewGrepTool,
-		tools.NewExecuteTool,
 	}
 	for _, build := range builders {
 		t, err := build(cfg)
@@ -496,6 +498,13 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 			continue
 		}
 		fsTools = append(fsTools, t)
+	}
+
+	execTool, err := tools.NewExecuteTool(cfg, bgMgr)
+	if err != nil {
+		log.Printf("[agent] failed to create execute tool: %v", err)
+	} else {
+		fsTools = append(fsTools, execTool)
 	}
 
 	bgTool, err := tools.NewBgExecuteTool(cfg, bgMgr)

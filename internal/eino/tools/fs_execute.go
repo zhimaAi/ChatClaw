@@ -33,104 +33,181 @@ var BlockedCommands = []string{
 }
 
 type executeInput struct {
-	Command string `json:"command" jsonschema:"description=The shell command to execute."`
-	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Maximum seconds to wait (default 60, max 300). Set higher for slow commands like npm install."`
+	Action  string `json:"action,omitempty" jsonschema:"description=Action to perform: 'run' (default) to execute a shell command, 'stop' to synchronously kill a background process by pid and wait for it to exit, 'status' to check if a background process is still alive and read its latest output.,enum=run,enum=stop,enum=status"`
+	Command string `json:"command,omitempty" jsonschema:"description=The shell command to execute (required for action=run)."`
+	PID     int    `json:"pid,omitempty" jsonschema:"description=Process ID returned by execute_background (required for action=stop and action=status)."`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Maximum seconds to wait (default 60, max 300). For action=run: how long the command may run. For action=stop: how long to wait for the process to exit after sending kill signal."`
 }
 
 const (
 	defaultExecTimeout = 60
 	maxExecTimeout     = 300
+	defaultStopTimeout = 10
 )
 
-// NewExecuteTool creates an execute tool that runs shell commands synchronously.
-// When codex sandbox is enabled, commands are wrapped with codex sandbox.
-// Otherwise, commands run directly via the system shell.
-func NewExecuteTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewExecuteTool creates an execute tool that runs shell commands synchronously,
+// and also supports stopping/querying background processes managed by BgProcessManager.
+func NewExecuteTool(cfg *FsToolsConfig, bgMgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecute,
-		"Execute a shell command synchronously and return its output. Working directory is the configured workspace. Default timeout: 60s, max 300s. For long-running servers (npm run dev, etc.), use execute_background instead.",
+		"Execute a shell command synchronously (action='run', default), stop a background process (action='stop'), or check background process status (action='status'). Working directory is the configured workspace. Default timeout: 60s, max 300s. For long-running servers, use execute_background to start them, then use this tool with action='stop' or action='status' to manage them.",
 		func(ctx context.Context, input *executeInput) (string, error) {
-			if err := validateCommand(input.Command); err != nil {
-				return fmt.Sprintf("Command blocked: %s", err.Error()), nil
+			action := input.Action
+			if action == "" {
+				action = "run"
 			}
-
-			timeoutSec := input.Timeout
-			if timeoutSec <= 0 {
-				timeoutSec = defaultExecTimeout
+			switch action {
+			case "run":
+				return execRun(ctx, cfg, input)
+			case "stop":
+				return execStop(bgMgr, input)
+			case "status":
+				return execStatus(bgMgr, input.PID)
+			default:
+				return "Unknown action. Use 'run', 'stop', or 'status'.", nil
 			}
-			if timeoutSec > maxExecTimeout {
-				timeoutSec = maxExecTimeout
-			}
-			timeout := time.Duration(timeoutSec) * time.Second
-			execCtx, cancel := context.WithTimeout(ctx, timeout)
-			defer cancel()
-
-			workDir := cfg.WorkDir
-			if workDir == "" {
-				workDir = cfg.HomeDir
-			}
-
-			var cmd *exec.Cmd
-			if cfg.SandboxEnabled && cfg.CodexBin != "" {
-				cmd = buildCodexCommand(cfg, workDir, input.Command)
-			} else {
-				cmd = buildNativeCommand(input.Command)
-				cmd.Dir = workDir
-			}
-
-			setProcGroup(cmd)
-
-			var buf bytes.Buffer
-			cmd.Stdout = &buf
-			cmd.Stderr = &buf
-
-			if err := cmd.Start(); err != nil {
-				return fmt.Sprintf("failed to start command: %v\n[exit code: -1]", err), nil
-			}
-
-			waitDone := make(chan error, 1)
-			go func() { waitDone <- cmd.Wait() }()
-
-			var cmdErr error
-			timedOut := false
-			cancelled := false
-			select {
-			case cmdErr = <-waitDone:
-			case <-execCtx.Done():
-				timedOut = execCtx.Err() == context.DeadlineExceeded
-				cancelled = !timedOut
-				killProcessGroup(cmd)
-				cmdErr = <-waitDone
-			}
-
-			exitCode := 0
-			if cmd.ProcessState != nil {
-				exitCode = cmd.ProcessState.ExitCode()
-			}
-
-			const maxOutput = 128 * 1024
-			outputStr := buf.String()
-			if len(outputStr) > maxOutput {
-				outputStr = outputStr[:maxOutput]
-			}
-
-			if timedOut {
-				outputStr += fmt.Sprintf("\n[Command timed out after %s]", timeout)
-			} else if cancelled {
-				outputStr += "\n[Command cancelled]"
-			}
-
-			if cmdErr != nil && len(outputStr) == 0 {
-				outputStr = cmdErr.Error()
-			}
-
-			if outputStr == "" {
-				outputStr = fmt.Sprintf("[exit code: %d]", exitCode)
-			} else {
-				outputStr = fmt.Sprintf("%s\n[exit code: %d]", outputStr, exitCode)
-			}
-
-			return outputStr, nil
 		})
+}
+
+func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (string, error) {
+	if input.Command == "" {
+		return "Error: command is required for action=run.", nil
+	}
+	if err := validateCommand(input.Command); err != nil {
+		return fmt.Sprintf("Command blocked: %s", err.Error()), nil
+	}
+
+	timeoutSec := input.Timeout
+	if timeoutSec <= 0 {
+		timeoutSec = defaultExecTimeout
+	}
+	if timeoutSec > maxExecTimeout {
+		timeoutSec = maxExecTimeout
+	}
+	timeout := time.Duration(timeoutSec) * time.Second
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	workDir := cfg.WorkDir
+	if workDir == "" {
+		workDir = cfg.HomeDir
+	}
+
+	var cmd *exec.Cmd
+	if cfg.SandboxEnabled && cfg.CodexBin != "" {
+		cmd = buildCodexCommand(cfg, workDir, input.Command)
+	} else {
+		cmd = buildNativeCommand(input.Command)
+		cmd.Dir = workDir
+	}
+
+	setProcGroup(cmd)
+
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Sprintf("failed to start command: %v\n[exit code: -1]", err), nil
+	}
+
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- cmd.Wait() }()
+
+	var cmdErr error
+	timedOut := false
+	cancelled := false
+	select {
+	case cmdErr = <-waitDone:
+	case <-execCtx.Done():
+		timedOut = execCtx.Err() == context.DeadlineExceeded
+		cancelled = !timedOut
+		killProcessGroup(cmd)
+		cmdErr = <-waitDone
+	}
+
+	exitCode := 0
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+
+	const maxOutput = 128 * 1024
+	outputStr := buf.String()
+	if len(outputStr) > maxOutput {
+		outputStr = outputStr[:maxOutput]
+	}
+
+	if timedOut {
+		outputStr += fmt.Sprintf("\n[Command timed out after %s]", timeout)
+	} else if cancelled {
+		outputStr += "\n[Command cancelled]"
+	}
+
+	if cmdErr != nil && len(outputStr) == 0 {
+		outputStr = cmdErr.Error()
+	}
+
+	if outputStr == "" {
+		outputStr = fmt.Sprintf("[exit code: %d]", exitCode)
+	} else {
+		outputStr = fmt.Sprintf("%s\n[exit code: %d]", outputStr, exitCode)
+	}
+
+	return outputStr, nil
+}
+
+func execStop(mgr *BgProcessManager, input *executeInput) (string, error) {
+	if input.PID <= 0 {
+		return "Error: pid is required for action=stop.", nil
+	}
+	p := mgr.get(input.PID)
+	if p == nil {
+		return fmt.Sprintf("No background process found with pid=%d. It may have already exited.", input.PID), nil
+	}
+
+	timeoutSec := input.Timeout
+	if timeoutSec <= 0 {
+		timeoutSec = defaultStopTimeout
+	}
+	if timeoutSec > maxExecTimeout {
+		timeoutSec = maxExecTimeout
+	}
+
+	p.cancel()
+
+	select {
+	case <-p.done:
+		// Process exited successfully
+	case <-time.After(time.Duration(timeoutSec) * time.Second):
+		return fmt.Sprintf("Error: process %d did not exit within %ds after kill signal. The process may be stuck. Try 'kill -9 %d' via action=run, or investigate what is preventing it from exiting.", input.PID, timeoutSec, input.PID), nil
+	}
+
+	p.mu.Lock()
+	output := truncateOutput(p.buf.String())
+	code := p.exitCode
+	p.mu.Unlock()
+
+	return fmt.Sprintf("Process %d stopped successfully.\n%s\n[exit code: %d]", input.PID, output, code), nil
+}
+
+func execStatus(mgr *BgProcessManager, pid int) (string, error) {
+	if pid <= 0 {
+		return "Error: pid is required for action=status.", nil
+	}
+	p := mgr.get(pid)
+	if p == nil {
+		return fmt.Sprintf("No background process found with pid=%d. It may have already exited.", pid), nil
+	}
+
+	p.mu.Lock()
+	output := truncateOutput(p.buf.String())
+	exited := p.exited
+	code := p.exitCode
+	p.mu.Unlock()
+
+	if exited {
+		return fmt.Sprintf("Process %d has exited.\n%s\n[exit code: %d]", pid, output, code), nil
+	}
+	return fmt.Sprintf("Process %d is running.\nLatest output:\n%s", pid, output), nil
 }
 
 func validateCommand(command string) error {

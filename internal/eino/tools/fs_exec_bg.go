@@ -101,33 +101,24 @@ func (m *BgProcessManager) Cleanup() {
 }
 
 type bgExecInput struct {
-	Action  string `json:"action" jsonschema:"description=Action to perform: 'start' to launch a background command, 'stop' to kill a running process, 'status' to check if a process is still alive and read its latest output.,enum=start,enum=stop,enum=status"`
-	Command string `json:"command,omitempty" jsonschema:"description=Shell command to run (required for action=start)."`
-	PID     int    `json:"pid,omitempty" jsonschema:"description=Process ID returned by a previous start (required for action=stop and action=status)."`
-	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Max seconds the background process may live before being auto-killed (default 300, max 600). Only used with action=start."`
+	Command string `json:"command" jsonschema:"description=Shell command to run in the background (e.g. dev servers)."`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Max seconds the background process may live before being auto-killed (default 300, max 600)."`
 }
 
 // NewBgExecuteTool creates the execute_background tool.
+// It only starts background processes. Use the synchronous execute tool
+// with action='stop' or action='status' to manage running processes.
 func NewBgExecuteTool(cfg *FsToolsConfig, mgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecuteBackground,
-		"Run a command in the background (e.g. dev servers), stop it, or check its status. Use action='start' to launch, action='stop' to kill, action='status' to read output. The process is auto-killed after timeout seconds.",
+		"Start a long-running command in the background (e.g. dev servers). Returns the pid and initial output. The process is auto-killed after timeout seconds (default 300, max 600). To stop or check status of the process, use the execute tool with action='stop' or action='status'.",
 		func(ctx context.Context, input *bgExecInput) (string, error) {
-			switch input.Action {
-			case "start":
-				return bgStart(cfg, mgr, input)
-			case "stop":
-				return bgStop(mgr, input.PID)
-			case "status":
-				return bgStatus(mgr, input.PID)
-			default:
-				return "Unknown action. Use 'start', 'stop', or 'status'.", nil
-			}
+			return bgStart(cfg, mgr, input)
 		})
 }
 
 func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (string, error) {
 	if input.Command == "" {
-		return "Error: command is required for action=start.", nil
+		return "Error: command is required.", nil
 	}
 	if err := validateCommand(input.Command); err != nil {
 		return fmt.Sprintf("Command blocked: %s", err.Error()), nil
@@ -227,47 +218,6 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 		p.mu.Unlock()
 		return fmt.Sprintf("Background process started (pid=%d, auto-kill in %ds).\n%s", pid, timeoutSec, output), nil
 	}
-}
-
-func bgStop(mgr *BgProcessManager, pid int) (string, error) {
-	if pid <= 0 {
-		return "Error: pid is required for action=stop.", nil
-	}
-	p := mgr.get(pid)
-	if p == nil {
-		return fmt.Sprintf("No background process found with pid=%d. It may have already exited.", pid), nil
-	}
-
-	p.cancel()
-	<-p.done
-
-	p.mu.Lock()
-	output := truncateOutput(p.buf.String())
-	code := p.exitCode
-	p.mu.Unlock()
-
-	return fmt.Sprintf("Process %d stopped.\n%s\n[exit code: %d]", pid, output, code), nil
-}
-
-func bgStatus(mgr *BgProcessManager, pid int) (string, error) {
-	if pid <= 0 {
-		return "Error: pid is required for action=status.", nil
-	}
-	p := mgr.get(pid)
-	if p == nil {
-		return fmt.Sprintf("No background process found with pid=%d. It may have already exited.", pid), nil
-	}
-
-	p.mu.Lock()
-	output := truncateOutput(p.buf.String())
-	exited := p.exited
-	code := p.exitCode
-	p.mu.Unlock()
-
-	if exited {
-		return fmt.Sprintf("Process %d has exited.\n%s\n[exit code: %d]", pid, output, code), nil
-	}
-	return fmt.Sprintf("Process %d is running.\nLatest output:\n%s", pid, output), nil
 }
 
 func truncateOutput(s string) string {
