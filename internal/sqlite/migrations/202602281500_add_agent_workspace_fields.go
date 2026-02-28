@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/uptrace/bun"
 )
@@ -20,22 +21,19 @@ func init() {
 			if err := os.MkdirAll(defaultWorkDir, 0o755); err != nil {
 				return fmt.Errorf("create default work dir: %w", err)
 			}
+			escapedWorkDir := strings.ReplaceAll(defaultWorkDir, "'", "''")
 
 			sql := fmt.Sprintf(`
 ALTER TABLE agents ADD COLUMN sandbox_mode varchar(16) NOT NULL DEFAULT 'codex';
 ALTER TABLE agents ADD COLUMN sandbox_network boolean NOT NULL DEFAULT true;
 ALTER TABLE agents ADD COLUMN work_dir text NOT NULL DEFAULT '%s';
-`, defaultWorkDir)
+`, escapedWorkDir)
 
 			_, err = db.ExecContext(ctx, sql)
 			if err != nil {
 				return fmt.Errorf("add workspace columns to agents: %w", err)
 			}
 
-			// Remove old global workspace settings (if present from earlier migrations)
-			_, _ = db.ExecContext(ctx, `
-DELETE FROM settings WHERE key IN ('workspace_sandbox_mode','workspace_work_dir','workspace_sandbox_network');
-`)
 			return nil
 		},
 		func(ctx context.Context, db *bun.DB) error {

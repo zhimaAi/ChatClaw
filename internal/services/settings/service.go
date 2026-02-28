@@ -223,7 +223,16 @@ func (s *SettingsService) UpdateWorkspaceSettings(input UpdateWorkspaceSettingsI
 			}
 			rows, _ := result.RowsAffected()
 			if rows == 0 {
-				return errs.Newf("error.setting_not_found", map[string]any{"Key": u.Key})
+				category := inferCategoryFromKey(u.Key)
+				model := &settingModel{
+					Key:      u.Key,
+					Value:    toNullString(u.Val),
+					Type:     "string",
+					Category: string(category),
+				}
+				if _, err := tx.NewInsert().Model(model).Exec(ctx); err != nil {
+					return errs.Wrap("error.setting_write_failed", err)
+				}
 			}
 		}
 		return nil
@@ -232,7 +241,7 @@ func (s *SettingsService) UpdateWorkspaceSettings(input UpdateWorkspaceSettingsI
 	}
 
 	for _, u := range updates {
-		setCachedValue(u.Key, u.Val)
+		setCachedValueWithCategory(u.Key, u.Val, inferCategoryFromKey(u.Key))
 	}
 	return nil
 }

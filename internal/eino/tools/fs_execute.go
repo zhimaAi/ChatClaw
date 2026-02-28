@@ -144,8 +144,11 @@ func validateCommand(command string) error {
 
 func buildCodexCommand(cfg *FsToolsConfig, workDir, command string) *exec.Cmd {
 	platform := "macos"
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		platform = "linux"
+	case "windows":
+		platform = "windows"
 	}
 
 	args := []string{"sandbox", platform, "--full-auto"}
@@ -161,7 +164,19 @@ func buildCodexCommand(cfg *FsToolsConfig, workDir, command string) *exec.Cmd {
 	args = append(args, "-c",
 		fmt.Sprintf("sandbox_workspace_write.writable_roots=[%s]", strings.Join(roots, ",")))
 
-	args = append(args, "--", "sh", "-c", command)
+	if runtime.GOOS == "windows" {
+		wrappedCmd := "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
+			"$OutputEncoding = [System.Text.Encoding]::UTF8; " +
+			command
+		args = append(args,
+			"--",
+			"powershell.exe",
+			"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+			"-Command", wrappedCmd,
+		)
+	} else {
+		args = append(args, "--", "sh", "-c", command)
+	}
 
 	cmd := exec.Command(cfg.CodexBin, args...)
 	cmd.Dir = workDir
