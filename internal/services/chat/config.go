@@ -145,6 +145,8 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		SandboxMode:     agent.SandboxMode,
 		SandboxNetwork:  agent.SandboxNetwork,
 		WorkDir:         agent.WorkDir,
+		AgentID:         conv.AgentID,
+		ConversationID:  conversationID,
 	}
 
 	providerConfig := einoagent.ProviderConfig{

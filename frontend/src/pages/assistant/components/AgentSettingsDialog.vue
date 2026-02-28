@@ -243,6 +243,15 @@ const handlePickIcon = async () => {
   }
 }
 
+const isWindows = navigator.platform.toLowerCase().includes('win')
+const pathSep = isWindows ? '\\' : '/'
+
+const workDirHint = computed(() => {
+  const base = workDir.value || (isWindows ? 'C:\\Users\\xxx\\.chatclaw' : '~/.chatclaw')
+  const sep = pathSep
+  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep })
+})
+
 const handleSelectWorkDir = async () => {
   try {
     const result = await Dialogs.OpenFile({
@@ -701,6 +710,9 @@ const handleDelete = async () => {
                   </div>
                   <p class="text-xs text-muted-foreground">
                     {{ t('assistant.settings.workspace.workDirDesc') }}
+                  </p>
+                  <p class="text-xs font-mono text-muted-foreground/70">
+                    {{ workDirHint }}
                   </p>
                 </div>
               </div>

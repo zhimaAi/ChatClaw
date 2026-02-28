@@ -3,6 +3,8 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
@@ -61,7 +64,10 @@ type Config struct {
 
 	SandboxMode    string // "codex" or "native"
 	SandboxNetwork bool   // Allow network access in sandbox
-	WorkDir        string // Per-agent working directory
+	WorkDir        string // Per-agent working directory (base path; actual = WorkDir/sessions/<agent_hash>/<conv_hash>)
+
+	AgentID        int64 // Agent database ID (used to generate session subdirectory)
+	ConversationID int64 // Conversation database ID (used to generate session subdirectory)
 }
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
@@ -314,7 +320,9 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
 // the OS environment, working directory, sandbox constraints, and available tools.
-func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+// sessionsDir is the agent-level sessions directory (parent of the current conversation dir)
+// so the LLM knows where sibling conversations live.
+func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -335,6 +343,15 @@ func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled, sandbo
 - When the user mentions "working directory" or asks to write/create files, **always use the working directory** as the base path. For example: write_file(file_path="%s/foo.txt"), ls(path="%s").
 - When the user mentions "user directory" or "home directory", it refers to: %s
 `, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+
+	if sessionsDir != "" {
+		prompt += fmt.Sprintf(`
+# Session Directory Structure
+
+Each conversation has its own isolated working directory. The current conversation's directory is: %s
+The parent directory (%s) contains sibling conversations from the same AI assistant. If the user mentions files or work from a **previous conversation**, you can use ls and read_file to browse sibling directories under "%s" to locate those files. Write operations should still target the current working directory.
+`, workDir, sessionsDir, sessionsDir)
+	}
 
 	if sandboxEnabled {
 		networkDesc := "Network access is **disabled** for executed commands. Commands like curl, npm install, pip install will fail."
@@ -419,8 +436,19 @@ func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem
 
 	fsCfg := buildFsToolsConfig(config, memBackend)
 
+	// Compute the agent-level sessions directory (parent of the conversation dir)
+	// so the LLM can browse sibling conversations when needed.
+	var sessionsDir string
+	if config.AgentID > 0 {
+		base := config.WorkDir
+		if base == "" {
+			base = filepath.Join(fsCfg.HomeDir, ".chatclaw")
+		}
+		sessionsDir = filepath.Join(base, "sessions", idHash(config.AgentID))
+	}
+
 	// System prompt middleware — inject environment info and tool instructions.
-	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
+	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, sessionsDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
 	middlewares = append(middlewares, adk.AgentMiddleware{
 		AdditionalInstruction: systemPrompt,
 	})
@@ -480,6 +508,27 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 	return fsTools
 }
 
+// idHash returns a short (12-char) hex hash derived from a numeric ID.
+// This avoids exposing raw database primary keys in filesystem paths.
+func idHash(id int64) string {
+	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
+	return hex.EncodeToString(h[:6])
+}
+
+// buildSessionWorkDir constructs the per-conversation working directory under
+// the base work dir: <baseWorkDir>/sessions/<agentHash>/<convHash>.
+// When agentID or conversationID is 0 the corresponding level is omitted.
+func buildSessionWorkDir(baseWorkDir string, agentID, conversationID int64) string {
+	dir := filepath.Join(baseWorkDir, "sessions")
+	if agentID > 0 {
+		dir = filepath.Join(dir, idHash(agentID))
+	}
+	if conversationID > 0 {
+		dir = filepath.Join(dir, idHash(conversationID))
+	}
+	return dir
+}
+
 // buildFsToolsConfig constructs the shared config for all filesystem tools
 // using per-agent workspace settings from Config.
 func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
@@ -495,10 +544,12 @@ func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *
 		codexBin = resolveCodexBin()
 	}
 
-	workDir := config.WorkDir
-	if workDir == "" {
-		workDir = filepath.Join(homeDir, ".chatclaw")
+	baseWorkDir := config.WorkDir
+	if baseWorkDir == "" {
+		baseWorkDir = filepath.Join(homeDir, ".chatclaw")
 	}
+
+	workDir := buildSessionWorkDir(baseWorkDir, config.AgentID, config.ConversationID)
 	_ = os.MkdirAll(workDir, 0o755)
 
 	return &tools.FsToolsConfig{
