@@ -133,30 +133,11 @@ export default {
     // Settings menu
     menu: {
       modelService: 'Model Service',
-      workspace: 'Workspace',
       generalSettings: 'General Settings',
       memorySettings: 'Long-term Memory',
       snapSettings: 'Snap Settings',
       tools: 'Tools',
       about: 'About Us',
-    },
-    // Workspace settings
-    workspace: {
-      title: 'Workspace',
-      sandboxMode: 'Execution Mode',
-      modeCodex: 'Codex Sandbox',
-      modeNative: 'Native Execution',
-      codexDesc: 'Execute commands in an OS-level sandbox provided by OpenAI Codex CLI. Commands can only write files within the working directory; the rest of the filesystem is read-only.',
-      nativeDesc: 'Execute commands directly on the host machine without sandbox isolation. Commands have full permissions of the current user.',
-      workDir: 'Working Directory',
-      workDirDesc: 'The working directory for AI command execution. Generated code, downloaded files, etc. will be saved in this directory.',
-      changeDir: 'Change',
-      selectDir: 'Select Working Directory',
-      permissions: 'Sandbox Permissions',
-      networkAccess: 'Allow Network Access',
-      networkAccessDesc: 'When enabled, commands inside the sandbox can access the network (e.g. npm install, pip install). When disabled, commands cannot reach the network, which is more secure.',
-      saved: 'Workspace settings saved',
-      saveFailed: 'Failed to save workspace settings',
     },
     // General settings
     general: {
@@ -455,8 +436,22 @@ export default {
       tabs: {
         model: 'Model',
         prompt: 'Prompt',
+        workspace: 'Workspace',
         retrieval: 'Retrieval',
         delete: 'Delete',
+      },
+      workspace: {
+        sandboxMode: 'Execution Mode',
+        modeCodex: 'Codex Sandbox',
+        modeNative: 'Native Execution',
+        codexDesc: 'Execute commands in an OS-level sandbox provided by OpenAI Codex CLI. Commands can only write files within the working directory; the rest of the filesystem is read-only.',
+        nativeDesc: 'Execute commands directly on the host machine without sandbox isolation. Commands have full permissions of the current user.',
+        networkAccess: 'Allow Network Access',
+        networkAccessDesc: 'When enabled, commands inside the sandbox can access the network (e.g. npm install, pip install). When disabled, commands cannot reach the network, which is more secure.',
+        workDir: 'Working Directory',
+        workDirDesc: 'The working directory for AI command execution. Generated code, downloaded files, etc. will be saved in this directory.',
+        changeDir: 'Change',
+        selectDir: 'Select Working Directory',
       },
       model: {
         defaultModel: 'Default Model',

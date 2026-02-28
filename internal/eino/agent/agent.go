@@ -13,8 +13,6 @@ import (
 
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
-	"chatclaw/internal/sandbox"
-	"chatclaw/internal/services/settings"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -60,6 +58,10 @@ type Config struct {
 	ContextCount   int  // Max messages in context (0 or >=200 = unlimited)
 	RetrievalTopK  int  // Max document chunks to retrieve
 	EnableThinking bool // Thinking mode (for providers that support it)
+
+	SandboxMode    string // "codex" or "native"
+	SandboxNetwork bool   // Allow network access in sandbox
+	WorkDir        string // Per-agent working directory
 }
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
@@ -259,7 +261,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	memBackend := filesystem.NewInMemoryBackend()
 
 	// Build independent filesystem tools (ls, read_file, write_file, etc.).
-	fsTools := BuildFsTools(memBackend)
+	fsTools := BuildFsTools(config, memBackend)
 
 	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
@@ -284,7 +286,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		}
 	}
 
-	agentConfig.Middlewares = BuildMiddlewares(ctx, memBackend)
+	agentConfig.Middlewares = BuildMiddlewares(ctx, config, memBackend)
 	agentConfig.Middlewares = append(agentConfig.Middlewares, extraMiddlewares...)
 
 	if beforeChatModel != nil {
@@ -403,10 +405,10 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 //
 // Filesystem tools (ls, read_file, write_file, edit_file, patch_file, glob, grep, execute)
 // are registered as independent tools via BuildFsTools, not through the filesystem middleware.
-func BuildMiddlewares(ctx context.Context, memBackend *filesystem.InMemoryBackend) []adk.AgentMiddleware {
+func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem.InMemoryBackend) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
-	fsCfg := buildFsToolsConfig(memBackend)
+	fsCfg := buildFsToolsConfig(config, memBackend)
 
 	// System prompt middleware — inject environment info and tool instructions.
 	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
@@ -434,8 +436,8 @@ func BuildMiddlewares(ctx context.Context, memBackend *filesystem.InMemoryBacken
 // BuildFsTools creates all filesystem tools as independent tool instances.
 // These are registered alongside other tools in the agent config, decoupled
 // from the filesystem middleware.
-func BuildFsTools(memBackend *filesystem.InMemoryBackend) []tool.BaseTool {
-	cfg := buildFsToolsConfig(memBackend)
+func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend) []tool.BaseTool {
+	cfg := buildFsToolsConfig(config, memBackend)
 
 	var fsTools []tool.BaseTool
 	builders := []func(*tools.FsToolsConfig) (tool.BaseTool, error){
@@ -459,39 +461,32 @@ func BuildFsTools(memBackend *filesystem.InMemoryBackend) []tool.BaseTool {
 	return fsTools
 }
 
-// buildFsToolsConfig reads workspace settings and constructs the shared config
-// for all filesystem tools.
-func buildFsToolsConfig(memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
+// buildFsToolsConfig constructs the shared config for all filesystem tools
+// using per-agent workspace settings from Config.
+func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Printf("[agent] failed to get user home dir: %v", err)
 		homeDir = "/"
 	}
 
-	sandboxEnabled := false
+	sandboxEnabled := config.SandboxMode == "codex"
 	var codexBin string
-
-	if mode, ok := settings.GetValue("workspace_sandbox_mode"); ok && mode == "codex" {
-		sandboxEnabled = true
+	if sandboxEnabled {
 		codexBin = resolveCodexBin()
 	}
 
-	workDir := sandbox.DefaultWorkDir()
-	if dir, ok := settings.GetValue("workspace_work_dir"); ok && dir != "" {
-		workDir = dir
+	workDir := config.WorkDir
+	if workDir == "" {
+		workDir = filepath.Join(homeDir, ".chatclaw")
 	}
-	_ = sandbox.EnsureWorkDir(workDir)
-
-	sandboxNetworkEnabled := false
-	if enabled, ok := settings.GetValue("workspace_sandbox_network"); ok && enabled == "true" {
-		sandboxNetworkEnabled = true
-	}
+	_ = os.MkdirAll(workDir, 0o755)
 
 	return &tools.FsToolsConfig{
 		HomeDir:               homeDir,
 		WorkDir:               workDir,
 		SandboxEnabled:        sandboxEnabled,
-		SandboxNetworkEnabled: sandboxNetworkEnabled,
+		SandboxNetworkEnabled: config.SandboxNetwork,
 		CodexBin:              codexBin,
 		MemBackend:            memBackend,
 	}

@@ -67,6 +67,9 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		LLMMaxContextCount      int     `bun:"llm_max_context_count"`
 		RetrievalTopK           int     `bun:"retrieval_top_k"`
 		RetrievalMatchThreshold float64 `bun:"retrieval_match_threshold"`
+		SandboxMode             string  `bun:"sandbox_mode"`
+		SandboxNetwork          bool    `bun:"sandbox_network"`
+		WorkDir                 string  `bun:"work_dir"`
 	}
 	var agent agentRow
 	if err := db.NewSelect().
@@ -74,7 +77,8 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		Column("name", "prompt", "default_llm_provider_id", "default_llm_model_id",
 			"llm_temperature", "llm_top_p", "llm_max_tokens",
 			"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens",
-			"llm_max_context_count", "retrieval_top_k", "retrieval_match_threshold").
+			"llm_max_context_count", "retrieval_top_k", "retrieval_match_threshold",
+			"sandbox_mode", "sandbox_network", "work_dir").
 		Where("id = ?", conv.AgentID).
 		Scan(ctx, &agent); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -138,6 +142,9 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		ContextCount:    agent.LLMMaxContextCount,
 		RetrievalTopK:   agent.RetrievalTopK,
 		EnableThinking:  conv.EnableThinking,
+		SandboxMode:     agent.SandboxMode,
+		SandboxNetwork:  agent.SandboxNetwork,
+		WorkDir:         agent.WorkDir,
 	}
 
 	providerConfig := einoagent.ProviderConfig{

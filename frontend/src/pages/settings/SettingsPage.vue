@@ -18,7 +18,6 @@ import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
 import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
-import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
@@ -30,7 +29,6 @@ const settingsStore = useSettingsStore()
 // 菜单项对应的翻译 key
 const menuLabelKeys: Record<SettingsMenuItem, string> = {
   modelService: 'settings.menu.modelService',
-  workspace: 'settings.menu.workspace',
   generalSettings: 'settings.menu.generalSettings',
   memorySettings: 'settings.menu.memorySettings',
   snapSettings: 'settings.menu.snapSettings',
@@ -41,7 +39,6 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
 // 菜单项对应的内容组件（null 表示尚未实现）
 const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: ModelServiceSettings,
-  workspace: WorkspaceSettings,
   generalSettings: GeneralSettings,
   memorySettings: MemorySettings,
   snapSettings: SnapSettings,

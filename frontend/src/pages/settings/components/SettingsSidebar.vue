@@ -7,7 +7,6 @@ import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 
 // 导入图标（作为 Vue 组件）
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
-import WorkspaceIcon from '@/assets/icons/workspace.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
 import MemorySettingsIcon from '@/assets/icons/memory.svg'
 import SnapSettingsIcon from '@/assets/icons/snap-settings.svg'
@@ -28,7 +27,6 @@ interface MenuItem {
 
 const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
-  { id: 'workspace', labelKey: 'settings.menu.workspace', icon: WorkspaceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
