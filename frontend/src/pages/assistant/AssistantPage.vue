@@ -162,7 +162,7 @@ function onSnapBtnPointerUp(e: PointerEvent) {
   if (!snapBtnDidDrag) sidebarCollapsed.value = !sidebarCollapsed.value
 }
 const chatInput = ref('')
-const chatMode = ref('chat')
+const chatMode = ref('task')
 const enableThinking = ref(false)
 const libraries = ref<Library[]>([])
 const selectedLibraryIds = ref<number[]>([])
@@ -294,8 +294,8 @@ const handleNewConversation = () => {
   clearKnowledgeSelection()
   // Reset thinking mode to default (off) for new conversation
   enableThinking.value = false
-  // Reset chat mode to default (chat) for new conversation
-  chatMode.value = 'chat'
+  // Reset chat mode to default (task) for new conversation
+  chatMode.value = 'task'
 }
 
 const handleNewConversationForAgent = (agentId: number) => {
@@ -329,7 +329,7 @@ const handleSelectConversation = (conversation: Conversation) => {
   enableThinking.value = conversation.enable_thinking || false
 
   // Set chat mode from conversation
-  chatMode.value = conversation.chat_mode || 'chat'
+  chatMode.value = conversation.chat_mode || 'task'
 }
 
 const handleSend = async () => {
