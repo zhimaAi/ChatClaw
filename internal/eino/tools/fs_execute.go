@@ -45,7 +45,7 @@ func NewExecuteTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
 
 			var cmd *exec.Cmd
 			if cfg.SandboxEnabled && cfg.CodexBin != "" {
-				cmd = buildCodexCommand(cfg.CodexBin, input.Command, workDir)
+				cmd = buildCodexCommand(cfg.CodexBin, input.Command, workDir, cfg.SandboxNetworkEnabled)
 			} else {
 				cmd = buildNativeCommand(input.Command)
 				cmd.Dir = workDir
@@ -116,18 +116,17 @@ func validateCommand(command string) error {
 	return nil
 }
 
-func buildCodexCommand(codexBin, command, workDir string) *exec.Cmd {
+func buildCodexCommand(codexBin, command, workDir string, networkEnabled bool) *exec.Cmd {
 	platform := "macos"
 	if runtime.GOOS == "linux" {
 		platform = "linux"
 	}
 
-	args := []string{
-		"sandbox", platform,
-		"--full-auto",
-		"--",
-		"sh", "-c", command,
+	args := []string{"sandbox", platform, "--full-auto"}
+	if networkEnabled {
+		args = append(args, "-c", "sandbox_workspace_write.network_access=true")
 	}
+	args = append(args, "--", "sh", "-c", command)
 
 	cmd := exec.Command(codexBin, args...)
 	cmd.Dir = workDir

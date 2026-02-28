@@ -17,6 +17,8 @@ type FsToolsConfig struct {
 	WorkDir string
 	// SandboxEnabled restricts write operations to WorkDir when true.
 	SandboxEnabled bool
+	// SandboxNetworkEnabled allows network access inside the codex sandbox.
+	SandboxNetworkEnabled bool
 
 	// CodexBin is the path to the codex binary (empty if not available).
 	CodexBin string

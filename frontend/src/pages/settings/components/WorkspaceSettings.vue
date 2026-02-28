@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LoaderCircle, FolderOpen, ShieldCheck, Monitor } from 'lucide-vue-next'
+import { LoaderCircle, FolderOpen, ShieldCheck, Monitor, Globe } from 'lucide-vue-next'
 import { Dialogs } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { useAppStore } from '@/stores'
@@ -18,6 +19,7 @@ const loading = ref(false)
 const saving = ref(false)
 
 const sandboxMode = ref('codex')
+const sandboxNetwork = ref(false)
 const workDir = ref('')
 const defaultWorkDir = ref('')
 
@@ -34,13 +36,15 @@ const modeDescription = computed(() => {
 const loadData = async () => {
   loading.value = true
   try {
-    const [modeSetting, dirSetting] = await Promise.all([
+    const [modeSetting, dirSetting, networkSetting] = await Promise.all([
       SettingsService.Get('workspace_sandbox_mode'),
       SettingsService.Get('workspace_work_dir'),
+      SettingsService.Get('workspace_sandbox_network'),
     ])
 
     sandboxMode.value = modeSetting?.value || 'codex'
     workDir.value = dirSetting?.value || ''
+    sandboxNetwork.value = networkSetting?.value === 'true'
   } catch (error) {
     console.error('Failed to load workspace settings:', error)
   } finally {
@@ -79,6 +83,7 @@ const handleSave = async () => {
     await Promise.all([
       SettingsService.SetValue('workspace_sandbox_mode', sandboxMode.value),
       SettingsService.SetValue('workspace_work_dir', workDir.value),
+      SettingsService.SetValue('workspace_sandbox_network', sandboxNetwork.value ? 'true' : 'false'),
     ])
     toast.success(t('settings.workspace.saved'))
   } catch (error) {
@@ -131,6 +136,29 @@ const handleSave = async () => {
       <div class="px-4 pb-4">
         <p class="text-xs text-muted-foreground">
           {{ modeDescription }}
+        </p>
+      </div>
+
+      <!-- Sandbox Permissions (only when codex mode) -->
+      <div
+        v-if="sandboxMode === 'codex'"
+        class="border-b border-border p-4 dark:border-white/10"
+      >
+        <span class="mb-3 block text-sm font-medium text-foreground">
+          {{ t('settings.workspace.permissions') }}
+        </span>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <Globe class="size-4 text-muted-foreground" />
+            <span class="text-sm">{{ t('settings.workspace.networkAccess') }}</span>
+          </div>
+          <Switch
+            :checked="sandboxNetwork"
+            @update:checked="sandboxNetwork = $event"
+          />
+        </div>
+        <p class="mt-2 text-xs text-muted-foreground">
+          {{ t('settings.workspace.networkAccessDesc') }}
         </p>
       </div>
 
