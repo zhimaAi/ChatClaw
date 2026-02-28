@@ -83,142 +83,131 @@ const isChineseLocale = () => {
 }
 
 /**
- * 中文环境优先的模型（按优先级排序）
+ * 所有模型的基础配置（单一数据源，便于维护）
  */
-const chineseFirstModels: AIModel[] = [
-  {
+const allModels: Record<AIModel['id'], AIModel> = {
+  deepseek: {
     id: 'deepseek',
     name: 'deepseek',
     icon: 'model-deepseek',
     displayName: 'DeepSeek',
     url: 'https://chat.deepseek.com/',
   },
-  {
+  doubao: {
     id: 'doubao',
     name: 'doubao',
     icon: 'model-doubao',
     displayName: '豆包',
     url: 'https://www.doubao.com/chat/',
   },
-  {
+  qwen: {
     id: 'qwen',
     name: 'qwen',
     icon: 'model-qwen',
     displayName: '通义千问',
     url: 'https://www.qianwen.com/',
   },
-  {
+  kimi: {
     id: 'kimi',
     name: 'kimi',
     icon: 'model-kimi',
     displayName: 'Kimi',
     url: 'https://www.kimi.com/',
   },
-  {
+  yuanbao: {
     id: 'yuanbao',
     name: 'yuanbao',
     icon: 'model-yuanbao',
     displayName: '元宝',
     url: 'https://yuanbao.tencent.com/',
   },
-  {
+  glm: {
     id: 'glm',
     name: 'glm',
     icon: 'model-glm',
     displayName: 'GLM',
     url: 'https://www.zhipuai.cn/',
   },
-  {
+  openai: {
     id: 'openai',
     name: 'chatgpt',
     icon: 'model-chatgpt',
     displayName: 'ChatGPT',
     url: 'https://chatgpt.com/',
   },
-  {
+  google: {
     id: 'google',
     name: 'gemini',
     icon: 'model-gemini',
     displayName: 'Gemini',
     url: 'https://gemini.google.com/',
   },
-  {
+  anthropic: {
     id: 'anthropic',
     name: 'claude',
     icon: 'model-claude',
     displayName: 'Claude',
     url: 'https://claude.ai/',
   },
+}
+
+/**
+ * 中文环境优先的模型顺序（按优先级排序）
+ */
+const chineseFirstModelOrder: AIModel['id'][] = [
+  'deepseek',
+  'doubao',
+  'qwen',
+  'kimi',
+  'yuanbao',
+  'glm',
+  'openai',
+  'google',
+  'anthropic',
 ]
+
+/**
+ * 非中文环境优先的模型顺序（按优先级排序）
+ */
+const englishFirstModelOrder: AIModel['id'][] = [
+  'openai',
+  'google',
+  'anthropic',
+  'deepseek',
+  'doubao',
+  'qwen',
+  'kimi',
+  'yuanbao',
+  'glm',
+]
+
+
+/**
+ * 根据模型顺序和可选覆盖生成最终的模型数组
+ */
+const buildModelsByOrder = (
+  order: AIModel['id'][],
+  overrides?: Partial<Record<AIModel['id'], Partial<AIModel>>>
+): AIModel[] => {
+  return order
+    .map((id) => {
+      const base = allModels[id]
+      if (!base) return null
+      const override = overrides?.[id]
+      return override ? { ...base, ...override } : base
+    })
+    .filter((model): model is AIModel => model !== null)
+}
+
+/**
+ * 中文环境优先的模型（按优先级排序）
+ */
+const chineseFirstModels: AIModel[] = buildModelsByOrder(chineseFirstModelOrder)
 
 /**
  * 非中文环境优先的模型（按优先级排序）
  */
-const englishFirstModels: AIModel[] = [
-  {
-    id: 'openai',
-    name: 'chatgpt',
-    icon: 'model-chatgpt',
-    displayName: 'ChatGPT',
-    url: 'https://chatgpt.com/',
-  },
-  {
-    id: 'google',
-    name: 'gemini',
-    icon: 'model-gemini',
-    displayName: 'Gemini',
-    url: 'https://gemini.google.com/',
-  },
-  {
-    id: 'anthropic',
-    name: 'claude',
-    icon: 'model-claude',
-    displayName: 'Claude',
-    url: 'https://claude.ai/',
-  },
-  {
-    id: 'deepseek',
-    name: 'deepseek',
-    icon: 'model-deepseek',
-    displayName: 'DeepSeek',
-    url: 'https://chat.deepseek.com/',
-  },
-  {
-    id: 'doubao',
-    name: 'doubao',
-    icon: 'model-doubao',
-    displayName: '豆包',
-    url: 'https://www.doubao.com/chat/',
-  },
-  {
-    id: 'qwen',
-    name: 'qwen',
-    icon: 'model-qwen',
-    displayName: '通义千问',
-    url: 'https://www.qianwen.com/',
-  },
-  {
-    id: 'kimi',
-    name: 'kimi',
-    icon: 'model-kimi',
-    displayName: 'Kimi',
-    url: 'https://www.kimi.com/',
-  },
-  {
-    id: 'yuanbao',
-    name: 'yuanbao',
-    icon: 'model-yuanbao',
-    displayName: '元宝',
-    url: 'https://yuanbao.tencent.com/chat/naQivTmsDa',
-  },
-  {
-    id: 'glm',
-    name: 'glm',
-    icon: 'model-glm',
-    displayName: 'GLM',
-    url: 'https://www.zhipuai.cn/zh',
-  },
-]
+const englishFirstModels: AIModel[] = buildModelsByOrder(englishFirstModelOrder)
 
 /**
  * 获取默认模型列表（按语言环境排序）
