@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Trash2 } from 'lucide-vue-next'
 import LogoIcon from '@/assets/images/logo.svg'
@@ -11,6 +11,7 @@ import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { MemoryService } from '@bindings/chatclaw/internal/services/memory'
 import type { ThematicFactDTO, EventStreamDTO } from '@bindings/chatclaw/internal/services/memory'
+import { EventStreamPageInput } from '@bindings/chatclaw/internal/services/memory'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,16 @@ const coreProfile = ref('')
 const thematicFacts = ref<ThematicFactDTO[]>([])
 const eventStreams = ref<EventStreamDTO[]>([])
 const memoryLoading = ref(false)
+
+const EVENT_PAGE_SIZE = 50
+const eventBeforeID = ref<number>(0)
+const eventHasMore = ref(true)
+const eventLoadingMore = ref(false)
+let eventLoadToken = 0
+
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const loadMoreSentinelRef = ref<HTMLElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
 
 // Edit state
 const editingCoreProfile = ref(false)
@@ -114,19 +125,65 @@ const loadAgents = async () => {
 
 const loadMemory = async (agentId: number) => {
   memoryLoading.value = true
+  eventStreams.value = []
+  eventBeforeID.value = 0
+  eventHasMore.value = true
+  eventLoadToken += 1
   try {
-    const [profile, facts, events] = await Promise.all([
+    const [profile, facts] = await Promise.all([
       MemoryService.GetCoreProfile(agentId),
       MemoryService.GetThematicFacts(agentId),
-      MemoryService.GetEventStreams(agentId),
     ])
     coreProfile.value = profile || ''
     thematicFacts.value = facts || []
-    eventStreams.value = events || []
+    await loadMoreEvents(eventLoadToken)
   } catch (error) {
     toast.error(getErrorMessage(error) || 'Failed to load memory')
   } finally {
     memoryLoading.value = false
+  }
+}
+
+const loadMoreEvents = async (token?: number) => {
+  if (selectedAgentId.value == null) return
+  if (!eventHasMore.value) return
+  if (eventLoadingMore.value) return
+
+  const currentToken = token ?? eventLoadToken
+  const isFirst = eventStreams.value.length === 0
+  if (!isFirst) {
+    eventLoadingMore.value = true
+  }
+
+  try {
+    const result = await MemoryService.GetEventStreamsPage(new EventStreamPageInput({
+      agent_id: selectedAgentId.value,
+      before_id: eventBeforeID.value,
+      limit: EVENT_PAGE_SIZE,
+    }))
+    if (currentToken !== eventLoadToken) return
+
+    const incoming = result || []
+    const existingIDs = new Set(eventStreams.value.map((e) => e.id))
+    const merged: EventStreamDTO[] = []
+    for (const ev of incoming) {
+      if (!existingIDs.has(ev.id)) merged.push(ev)
+    }
+
+    if (merged.length > 0) {
+      eventStreams.value.push(...merged)
+      eventBeforeID.value = merged[merged.length - 1].id
+    }
+
+    eventHasMore.value = incoming.length >= EVENT_PAGE_SIZE
+    if (incoming.length > 0 && merged.length === 0) {
+      eventHasMore.value = false
+    }
+  } catch (error) {
+    console.error('Failed to load event streams:', error)
+    eventHasMore.value = false
+  } finally {
+    eventLoadingMore.value = false
   }
 }
 
@@ -251,6 +308,8 @@ watch(selectedAgentId, (id) => {
     coreProfile.value = ''
     thematicFacts.value = []
     eventStreams.value = []
+    eventBeforeID.value = 0
+    eventHasMore.value = true
   }
 })
 
@@ -266,6 +325,43 @@ watch(
     }
   },
 )
+
+const setupScrollObserver = async () => {
+  await nextTick()
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+  if (!scrollContainerRef.value || !loadMoreSentinelRef.value) return
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0]
+      if (!entry?.isIntersecting) return
+      if (activeMemoryTab.value !== 'conversationLog') return
+      void loadMoreEvents()
+    },
+    {
+      root: scrollContainerRef.value,
+      rootMargin: '200px',
+      threshold: 0,
+    },
+  )
+  loadMoreObserver.observe(loadMoreSentinelRef.value)
+}
+
+watch([scrollContainerRef, loadMoreSentinelRef], setupScrollObserver)
+watch(activeMemoryTab, (tab) => {
+  if (tab === 'conversationLog') {
+    void setupScrollObserver()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+})
 
 onMounted(() => {
   void loadAgents()
@@ -365,7 +461,7 @@ onMounted(() => {
         </div>
 
         <!-- Tab content -->
-        <div v-else class="flex-1 overflow-auto">
+        <div v-else ref="scrollContainerRef" class="flex-1 overflow-auto">
           <div class="mx-auto max-w-3xl p-6">
             <!-- Basic Info -->
             <div v-if="activeMemoryTab === 'basicInfo'">
@@ -506,6 +602,16 @@ onMounted(() => {
                     </div>
                   </div>
                 </div>
+
+                <div class="flex items-center justify-center py-2">
+                  <div v-if="eventLoadingMore" class="text-xs text-muted-foreground">
+                    {{ t('memory.loadingMore') }}
+                  </div>
+                  <div v-else-if="!eventHasMore" class="text-xs text-muted-foreground/60">
+                    {{ t('memory.noMore') }}
+                  </div>
+                </div>
+                <div ref="loadMoreSentinelRef" class="h-1 w-full" />
               </div>
             </div>
           </div>

@@ -653,5 +653,7 @@ export default {
     deleteFailed: 'Failed to delete',
     topic: 'Topic',
     content: 'Content',
+    loadingMore: 'Loading…',
+    noMore: 'No more',
   },
 }

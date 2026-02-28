@@ -122,6 +122,13 @@ type EventStreamDTO struct {
 	Content string `json:"content"`
 }
 
+// EventStreamPageInput holds cursor-pagination parameters for event streams.
+type EventStreamPageInput struct {
+	AgentID  int64 `json:"agent_id"`
+	BeforeID int64 `json:"before_id"`
+	Limit    int   `json:"limit"`
+}
+
 func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]ThematicFactDTO, error) {
 	if db == nil {
 		return nil, errs.New("error.memory_db_not_initialized")
@@ -153,6 +160,44 @@ func (s *MemoryService) GetEventStreams(ctx context.Context, agentID int64) ([]E
 		Where("agent_id = ?", agentID).
 		OrderExpr("date DESC, id DESC").
 		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]EventStreamDTO, len(events))
+	for i, e := range events {
+		result[i] = EventStreamDTO{ID: e.ID, Date: e.Date, Content: e.Content}
+	}
+	return result, nil
+}
+
+// GetEventStreamsPage returns a cursor-paginated page of event streams.
+// Uses id DESC ordering; before_id is the last id from the previous page.
+func (s *MemoryService) GetEventStreamsPage(ctx context.Context, input EventStreamPageInput) ([]EventStreamDTO, error) {
+	if db == nil {
+		return nil, errs.New("error.memory_db_not_initialized")
+	}
+	if input.AgentID <= 0 {
+		return nil, errs.New("error.agent_id_required")
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	var events []EventStream
+	q := db.NewSelect().Model(&events).
+		Where("agent_id = ?", input.AgentID)
+
+	if input.BeforeID > 0 {
+		q = q.Where("id < ?", input.BeforeID)
+	}
+
+	err := q.OrderExpr("id DESC").Limit(limit).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

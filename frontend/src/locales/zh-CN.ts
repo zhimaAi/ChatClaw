@@ -651,5 +651,7 @@ export default {
     deleteFailed: '删除失败',
     topic: '主题',
     content: '内容',
+    loadingMore: '加载中…',
+    noMore: '没有更多了',
   },
 }
