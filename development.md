@@ -78,9 +78,7 @@ wails3 task run:server
 ```bash
 # amd64
 wails3 task windows:build ARCH=amd64 DEV=false
-cd bin
-zip ChatClaw_windows_amd64.zip ChatClaw.exe
-cd ..
+cd bin && zip ChatClaw_windows_amd64.zip ChatClaw.exe && cd ..
 wails3 task windows:package ARCH=amd64 DEV=false
 ```
 
@@ -88,16 +86,12 @@ wails3 task windows:package ARCH=amd64 DEV=false
 
 ```bash
 # arm64
-wails3 task darwin:sign:notarize ARCH=arm64 DEV=false  # wails3 task darwin:sign ARCH=arm64 DEV=true
-cd bin
-tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
-cd ..
+wails3 task darwin:sign:notarize ARCH=arm64 DEV=false
+cd bin && tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw && cd ..
 
 # amd64
-wails3 task darwin:sign:notarize ARCH=amd64 DEV=false # wails3 task darwin:sign ARCH=amd64 DEV=true
-cd bin
-tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw
-cd ..
+wails3 task darwin:sign:notarize ARCH=amd64 DEV=false
+cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw &&cd ..
 
 # arm64+amd64
 wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
@@ -106,7 +100,8 @@ wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
 ## Linux Server 模式构建、打包
 
 ```bash
+docker login registry.cn-hangzhou.aliyuncs.com
 cd frontend && npm run build && cd ..
 wails3 task build:docker PLATFORM=multi
-docker push registry.cn-hangzhou.aliyuncs.com/chatwiki/chatclaw:latest
 ```
+
