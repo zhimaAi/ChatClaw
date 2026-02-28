@@ -21,6 +21,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+func defaultWorkDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".chatclaw")
+}
+
 // AgentsService 助手服务（暴露给前端调用）
 type AgentsService struct {
 	app *application.App
@@ -132,6 +140,10 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		EnableLLMMaxTokens:      false,
 		RetrievalMatchThreshold: 0.5,
 		RetrievalTopK:           20,
+
+		SandboxMode:    "codex",
+		SandboxNetwork: true,
+		WorkDir:        defaultWorkDir(),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -298,6 +310,20 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 			return nil, errs.New("error.agent_retrieval_topk_invalid")
 		}
 		q = q.Set("retrieval_top_k = ?", *input.RetrievalTopK)
+	}
+
+	if input.SandboxMode != nil {
+		mode := strings.TrimSpace(*input.SandboxMode)
+		if mode != "codex" && mode != "native" {
+			mode = "codex"
+		}
+		q = q.Set("sandbox_mode = ?", mode)
+	}
+	if input.SandboxNetwork != nil {
+		q = q.Set("sandbox_network = ?", *input.SandboxNetwork)
+	}
+	if input.WorkDir != nil {
+		q = q.Set("work_dir = ?", strings.TrimSpace(*input.WorkDir))
 	}
 
 	result, err := q.Exec(ctx)

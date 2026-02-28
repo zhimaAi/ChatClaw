@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Trash2 } from 'lucide-vue-next'
+import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LogoIcon from '@/assets/images/logo.svg'
@@ -38,7 +38,7 @@ import {
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
 
-type TabKey = 'model' | 'prompt' | 'retrieval' | 'delete'
+type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 
 const props = defineProps<{
   open: boolean
@@ -74,6 +74,11 @@ const retrievalTopK = ref<number[]>([20])
 const enableTemperature = ref(false)
 const enableTopP = ref(false)
 const enableMaxTokens = ref(false)
+
+// workspace tab fields
+const sandboxMode = ref('codex')
+const sandboxNetwork = ref(true)
+const workDir = ref('')
 
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
@@ -118,6 +123,10 @@ watch(
     modelChanged.value = false
     modelKey.value =
       modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : ''
+
+    sandboxMode.value = agent.sandbox_mode || 'codex'
+    sandboxNetwork.value = agent.sandbox_network ?? true
+    workDir.value = agent.work_dir ?? ''
   },
   { immediate: true }
 )
@@ -234,6 +243,34 @@ const handlePickIcon = async () => {
   }
 }
 
+const isWindows = navigator.platform.toLowerCase().includes('win')
+const pathSep = isWindows ? '\\' : '/'
+
+const workDirHint = computed(() => {
+  const base = workDir.value || (isWindows ? 'C:\\Users\\xxx\\.chatclaw' : '~/.chatclaw')
+  const sep = pathSep
+  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep })
+})
+
+const handleSelectWorkDir = async () => {
+  try {
+    const result = await Dialogs.OpenFile({
+      Title: t('assistant.settings.workspace.selectDir'),
+      CanChooseFiles: false,
+      CanChooseDirectories: true,
+      AllowsMultipleSelection: false,
+    })
+    if (result && typeof result === 'string') {
+      workDir.value = result
+    } else if (Array.isArray(result) && result.length > 0) {
+      workDir.value = result[0]
+    }
+  } catch (error) {
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to select directory:', error)
+  }
+}
+
 const handleSave = async () => {
   if (!props.agent || !isValid.value || saving.value) return
   saving.value = true
@@ -257,6 +294,9 @@ const handleSave = async () => {
       llm_max_tokens: maxTokens.value,
       retrieval_match_threshold: retrievalMatchThreshold.value,
       retrieval_top_k: retrievalTopK.value[0] ?? 20,
+      sandbox_mode: sandboxMode.value,
+      sandbox_network: sandboxNetwork.value,
+      work_dir: workDir.value,
     })
     if (!updated) {
       throw new Error(t('assistant.errors.updateFailed'))
@@ -290,7 +330,7 @@ const handleDelete = async () => {
 
 <template>
   <Dialog :open="open" @update:open="handleClose">
-    <DialogContent size="lg" class="gap-0 p-0">
+    <DialogContent size="xl" class="gap-0 p-0">
       <!-- 头部：标题（关闭按钮由 DialogContent 自带） -->
       <div class="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
         <div class="text-base font-semibold text-foreground">
@@ -299,7 +339,7 @@ const handleDelete = async () => {
       </div>
 
       <!-- 内容区：固定高度，内部不随 tab 抖动 -->
-      <div class="h-[464px] px-4 py-2">
+      <div class="h-[480px] px-4 py-2">
         <div class="flex h-full">
           <!-- 左侧 tabs（独立区域） -->
           <div class="w-[140px] shrink-0 border-r border-border pr-4">
@@ -334,6 +374,19 @@ const handleDelete = async () => {
                 :class="
                   cn(
                     'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                    tab === 'workspace'
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  )
+                "
+                @click="tab = 'workspace'"
+              >
+                {{ t('assistant.settings.tabs.workspace') }}
+              </button>
+              <button
+                :class="
+                  cn(
+                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
                     tab === 'retrieval'
                       ? 'bg-muted text-foreground'
                       : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
@@ -362,7 +415,7 @@ const handleDelete = async () => {
           <!-- 右侧卡片（明显边框，固定高度，不随 tab 抖动） -->
           <div class="min-w-0 flex-1 pl-4">
             <div
-              class="h-full overflow-auto rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+              class="h-full overflow-y-auto overflow-x-hidden rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
             >
               <!-- 模型设置 -->
               <div v-if="tab === 'model'" class="flex flex-col gap-5">
@@ -578,8 +631,89 @@ const handleDelete = async () => {
                     v-model="prompt"
                     :placeholder="t('assistant.fields.promptPlaceholder')"
                     maxlength="1000"
-                    class="min-h-[160px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="min-h-[200px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
+                </div>
+              </div>
+
+              <!-- 工作区设置 -->
+              <div v-else-if="tab === 'workspace'" class="flex min-w-0 flex-col gap-4">
+                <div class="flex flex-col gap-3">
+                  <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.workspace.sandboxMode') }}
+                  </div>
+                  <div class="flex gap-2">
+                    <button
+                      class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
+                      :class="
+                        sandboxMode === 'codex'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                      "
+                      @click="sandboxMode = 'codex'"
+                    >
+                      <ShieldCheck class="size-4" />
+                      {{ t('assistant.settings.workspace.modeCodex') }}
+                    </button>
+                    <button
+                      class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
+                      :class="
+                        sandboxMode === 'native'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                      "
+                      @click="sandboxMode = 'native'"
+                    >
+                      <Monitor class="size-4" />
+                      {{ t('assistant.settings.workspace.modeNative') }}
+                    </button>
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{
+                      sandboxMode === 'codex'
+                        ? t('assistant.settings.workspace.codexDesc')
+                        : t('assistant.settings.workspace.nativeDesc')
+                    }}
+                  </p>
+                </div>
+
+                <div v-if="sandboxMode === 'codex'" class="flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <Globe class="size-4 text-muted-foreground" />
+                      <span class="text-sm font-medium text-foreground">
+                        {{ t('assistant.settings.workspace.networkAccess') }}
+                      </span>
+                    </div>
+                    <Switch v-model="sandboxNetwork" />
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.workspace.networkAccessDesc') }}
+                  </p>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.workspace.workDir') }}
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.workspace.workDirDesc') }}
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
+                      :title="workDir || '~/.chatclaw'"
+                    >
+                      {{ workDir || '~/.chatclaw' }}
+                    </span>
+                    <Button variant="outline" size="sm" class="shrink-0" @click="handleSelectWorkDir">
+                      <FolderOpen class="mr-1.5 size-3.5" />
+                      {{ t('assistant.settings.workspace.changeDir') }}
+                    </Button>
+                  </div>
+                  <p class="break-all text-xs font-mono text-muted-foreground/70">
+                    {{ workDirHint }}
+                  </p>
                 </div>
               </div>
 

@@ -56,8 +56,9 @@ type toolSpec struct {
 }
 
 var registry = map[string]toolSpec{
-	"uv":  uvSpec(),
-	"bun": bunSpec(),
+	"uv":    uvSpec(),
+	"bun":   bunSpec(),
+	"codex": codexSpec(),
 }
 
 // ToolchainService manages external tool binaries (uv, bun) within the app data dir.
@@ -395,7 +396,6 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 	}
 
 	format := spec.archiveFormat(goos)
-	binaryInArchive := spec.binaryPathInArchive(goos, goarch)
 	binName := spec.binaryName(goos)
 	destPath := filepath.Join(binDir, binName)
 
@@ -404,12 +404,18 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 
 	switch format {
 	case "zip":
+		binaryInArchive := spec.binaryPathInArchive(goos, goarch)
 		if err := extractFromZip(data, binaryInArchive, tmpPath); err != nil {
 			return fmt.Errorf("extract zip: %w", err)
 		}
 	case "tar.gz":
+		binaryInArchive := spec.binaryPathInArchive(goos, goarch)
 		if err := extractFromTarGz(data, binaryInArchive, tmpPath); err != nil {
 			return fmt.Errorf("extract tar.gz: %w", err)
+		}
+	case "exe":
+		if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+			return fmt.Errorf("write exe: %w", err)
 		}
 	default:
 		return fmt.Errorf("unsupported format: %s", format)
@@ -502,6 +508,8 @@ func extractVersion(s string) string {
 	s = strings.TrimPrefix(s, "bun-v")
 	s = strings.TrimPrefix(s, "bun-")
 	s = strings.TrimPrefix(s, "uv ")
+	s = strings.TrimPrefix(s, "rust-v")
+	s = strings.TrimPrefix(s, "codex/")
 	s = strings.TrimPrefix(s, "v")
 	if idx := strings.IndexAny(s, " \t("); idx > 0 {
 		s = s[:idx]

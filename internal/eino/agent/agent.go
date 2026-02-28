@@ -3,6 +3,8 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,8 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
-	"chatclaw/internal/eino/filesystem"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
 
@@ -20,7 +22,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/skill"
 	"github.com/cloudwego/eino/components/model"
@@ -59,6 +61,13 @@ type Config struct {
 	ContextCount   int  // Max messages in context (0 or >=200 = unlimited)
 	RetrievalTopK  int  // Max document chunks to retrieve
 	EnableThinking bool // Thinking mode (for providers that support it)
+
+	SandboxMode    string // "codex" or "native"
+	SandboxNetwork bool   // Allow network access in sandbox
+	WorkDir        string // Per-agent working directory (base path; actual = WorkDir/sessions/<agent_hash>/<conv_hash>)
+
+	AgentID        int64 // Agent database ID (used to generate session subdirectory)
+	ConversationID int64 // Conversation database ID (used to generate session subdirectory)
 }
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
@@ -230,7 +239,7 @@ type AgentResult struct {
 // beforeChatModel, if non-nil, is called before every LLM invocation with
 // the complete message list that will be sent to the model, including the
 // system instruction, middleware additions, and all tool schemas.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
@@ -253,9 +262,17 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+1)
+	// Shared InMemoryBackend for reduction offloading — filesystem tools
+	// dispatch to it when they see virtual paths (/large_tool_result/*).
+	memBackend := filesystem.NewInMemoryBackend()
+
+	// Build independent filesystem tools (ls, read_file, write_file, etc.).
+	fsTools := BuildFsTools(config, memBackend, bgMgr)
+
+	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
 	baseTools = append(baseTools, browserTool)
+	baseTools = append(baseTools, fsTools...)
 	baseTools = append(baseTools, extraTools...)
 
 	agentConfig := &adk.ChatModelAgentConfig{
@@ -275,10 +292,9 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		}
 	}
 
-	agentConfig.Middlewares = BuildMiddlewares(ctx)
+	agentConfig.Middlewares = BuildMiddlewares(ctx, config, memBackend)
 	agentConfig.Middlewares = append(agentConfig.Middlewares, extraMiddlewares...)
 
-	// Append a logging middleware that fires before each LLM call.
 	if beforeChatModel != nil {
 		agentConfig.Middlewares = append(agentConfig.Middlewares, adk.AgentMiddleware{
 			BeforeChatModel: func(ctx context.Context, state *adk.ChatModelAgentState) error {
@@ -303,8 +319,10 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 }
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
-// the OS environment, home directory, and available filesystem/execute tools.
-func buildFilesystemSystemPrompt(baseDir string) string {
+// the OS environment, working directory, sandbox constraints, and available tools.
+// sessionsDir is the agent-level sessions directory (parent of the current conversation dir)
+// so the LLM knows where sibling conversations live.
+func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -320,29 +338,81 @@ func buildFilesystemSystemPrompt(baseDir string) string {
 - Operating System: %s
 - Shell: %s
 - Home directory: %s
-- All tools use real OS absolute paths. For example: ls(path="%s"), write_file(file_path="%s/foo.txt").
-- The execute tool runs commands with home directory as working directory.
+- **Working directory: %s**
+- All tools use real OS absolute paths.
+- When the user mentions "working directory" or asks to write/create files, **always use the working directory** as the base path. For example: write_file(file_path="%s/foo.txt"), ls(path="%s").
 - When the user mentions "user directory" or "home directory", it refers to: %s
+`, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 
+	if sessionsDir != "" {
+		prompt += fmt.Sprintf(`
+# Session Directory Structure
+
+Each conversation has its own isolated working directory. The current conversation's directory is: %s
+The parent directory (%s) contains sibling conversations from the same AI assistant. If the user mentions files or work from a **previous conversation**, you can use ls and read_file to browse sibling directories under "%s" to locate those files. Write operations should still target the current working directory.
+`, workDir, sessionsDir, sessionsDir)
+	}
+
+	if sandboxEnabled {
+		networkDesc := "Network access is **disabled** for executed commands. Commands like curl, npm install, pip install will fail."
+		if sandboxNetworkEnabled {
+			networkDesc = "Network access is **enabled** for executed commands (e.g. npm install, curl, pip install will work)."
+		}
+		prompt += fmt.Sprintf(`
+# Sandbox Mode
+
+You are running inside an OS-level sandbox. Understand these constraints **before** choosing commands:
+
+## Write Restrictions
+- All write operations are restricted to the working directory: %s
+- write_file, edit_file, patch_file can only write to paths within the working directory.
+- execute runs commands with the working directory as cwd; writing to paths outside it will be denied by the OS.
+- read_file, ls, glob, grep can read any path on the filesystem (read is unrestricted).
+
+## Network
+- %s
+
+## Best Practices in Sandbox
+- **Never use global installs** (e.g. "npm install -g", "pip install --user"). Global paths are outside the working directory and writes will be rejected. Use local/project-level installs instead (e.g. "npm install" in the project directory, "pip install --target .").
+- **Use npx / bunx** to run CLI tools without global installs (e.g. "npx create-vue@latest my-app" instead of installing @vue/cli globally).
+- **Always pass non-interactive flags** to avoid commands hanging on stdin: use "--yes", "--default", "-y", or pipe "echo" as needed (e.g. "npx create-vue@latest my-app --default", "npm init -y").
+- **All project files must be created inside the working directory.** Do not attempt to create files elsewhere.
+- If a command fails due to permission denied, it is likely trying to write outside the working directory. Retry with a local/project-scoped alternative.
+`, workDir, networkDesc)
+	}
+
+	prompt += fmt.Sprintf(`
 # Filesystem Tools
 
 - ls: list files in a directory (use absolute path, e.g. "%s")
 - read_file: read a file from the filesystem
-- write_file: write/create a file (prefer this over shell echo for creating files with code)
+- write_file: write/create a file (prefer this over shell echo for creating files with code). **Default to the working directory: %s**
 - edit_file: edit a file in the filesystem (string replacement based)
 - patch_file: apply line-based patch operations (insert/delete/replace by line numbers). More precise than edit_file for multi-line changes.
 - glob: find files matching a pattern (e.g., "%s/**/*.py")
 - grep: search for text within files (supports regex, context lines, case-insensitive, output modes)
 
-# Execute Tool
+# Execute Tool (synchronous)
 
-- Working directory: %s
-- Returns combined stdout/stderr output with exit code
-- Timeout: 60 seconds per command. Commands exceeding this limit are killed automatically.
-- **NEVER run long-running or persistent commands** (e.g. "php artisan serve", "npm run dev", "python manage.py runserver", "docker compose up", "tail -f", "watch"). These will block and timeout. If the user needs to start a server, instruct them to run it manually in a separate terminal.
-- For build commands that may take long, keep them focused (e.g. "npm run build" is fine, but avoid running dev servers).
-- Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool)
-`, osName, shell, baseDir, baseDir, baseDir, baseDir, baseDir, baseDir, baseDir)
+- **action="run"** (default): execute a shell command synchronously in the working directory (%s).
+  - Returns combined stdout/stderr output with exit code.
+  - Default timeout: 60s. Set `+"`timeout`"+` (max 300s) for slow commands (e.g. npm install).
+  - **For short-lived commands only**: build, test, install, compile, lint, etc.
+  - **Do NOT use for dev servers or long-running processes** — use execute_background to start them.
+  - Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool).
+- **action="stop"**: synchronously kill a background process by pid and wait for it to fully exit. Returns success or error if the process cannot be killed within the timeout.
+  - Pass `+"`pid`"+` (from execute_background) and optional `+"`timeout`"+` (default 10s, max 300s).
+  - If the process does not exit in time, an error is returned so you can take further action.
+- **action="status"**: check if a background process is still alive and read its latest output.
+  - Pass `+"`pid`"+` (from execute_background).
+
+# Execute Background Tool (asynchronous, start only)
+
+- Use **only** for **starting** long-running processes like dev servers ("npm run dev", "python manage.py runserver", etc.).
+- Returns pid and initial output. The process is auto-killed after timeout (default 300s, max 600s).
+- After starting a dev server, use execute with action="status" to confirm it's running and check its output.
+- To stop a background process, use execute with action="stop" (do NOT use execute_background for stopping).
+`, workDir, workDir, workDir, workDir)
 
 	if osName == "windows" {
 		prompt += `
@@ -358,70 +428,37 @@ func buildFilesystemSystemPrompt(baseDir string) string {
 }
 
 // BuildMiddlewares creates the agent middleware stack:
-//   - filesystem: file tools (ls, read_file, write_file, edit_file, glob, grep, execute)
-//   - reduction: clears old tool results + offloads large results to filesystem
+//   - system prompt: environment info + tool usage instructions (via AdditionalInstruction)
+//   - reduction: clears old tool results + offloads large results to InMemoryBackend
 //   - skill: on-demand skill loading from SKILL.md files
-func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
+//
+// Filesystem tools (ls, read_file, write_file, edit_file, patch_file, glob, grep, execute)
+// are registered as independent tools via BuildFsTools, not through the filesystem middleware.
+func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem.InMemoryBackend) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
-	fsBackend, err := filesystem.NewLocalBackend(&filesystem.LocalBackendConfig{
-		ShellPolicy: &filesystem.ShellPolicy{
-			BlockedCommands: []string{
-				"rm -rf /", "rm -rf /*", "mkfs", "dd if=",
-				":(){:|:&};:", "format c:", "format d:",
-			},
-		},
-	})
-	if err != nil {
-		log.Printf("[agent] failed to create local filesystem backend: %v", err)
-		reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{Backend: nil})
-		if err == nil {
-			middlewares = append(middlewares, reductionMw)
+	fsCfg := buildFsToolsConfig(config, memBackend)
+
+	// Compute the agent-level sessions directory (parent of the conversation dir)
+	// so the LLM can browse sibling conversations when needed.
+	var sessionsDir string
+	if config.AgentID > 0 {
+		base := config.WorkDir
+		if base == "" {
+			base = filepath.Join(fsCfg.HomeDir, ".chatclaw")
 		}
-		if skillMw, ok := buildSkillMiddleware(ctx); ok {
-			middlewares = append(middlewares, skillMw)
-		}
-		return middlewares
+		sessionsDir = filepath.Join(base, "sessions", idHash(config.AgentID))
 	}
 
-	customSystemPrompt := buildFilesystemSystemPrompt(fsBackend.BaseDir())
-
-	filesystemMw, err := fsmw.NewMiddleware(ctx, &fsmw.Config{
-		Backend:                          fsBackend,
-		WithoutLargeToolResultOffloading: true,
-		CustomSystemPrompt:               &customSystemPrompt,
+	// System prompt middleware — inject environment info and tool instructions.
+	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, sessionsDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
+	middlewares = append(middlewares, adk.AgentMiddleware{
+		AdditionalInstruction: systemPrompt,
 	})
-	if err != nil {
-		log.Printf("[agent] failed to create filesystem middleware: %v", err)
-	} else {
-		// Replace the built-in grep tool with our enhanced version and add patch_file.
-		grepTool, grepErr := filesystem.NewGrepTool(fsBackend)
-		if grepErr != nil {
-			log.Printf("[agent] failed to create grep tool: %v", grepErr)
-		} else {
-			// Remove the built-in grep tool (same name) so ours takes its place.
-			filtered := make([]tool.BaseTool, 0, len(filesystemMw.AdditionalTools))
-			for _, t := range filesystemMw.AdditionalTools {
-				info, infoErr := t.Info(ctx)
-				if infoErr != nil || info.Name != filesystem.GrepToolID {
-					filtered = append(filtered, t)
-				}
-			}
-			filesystemMw.AdditionalTools = append(filtered, grepTool)
-		}
 
-		patchTool, patchErr := filesystem.NewPatchTool(fsBackend)
-		if patchErr != nil {
-			log.Printf("[agent] failed to create patch_file tool: %v", patchErr)
-		} else {
-			filesystemMw.AdditionalTools = append(filesystemMw.AdditionalTools, patchTool)
-		}
-
-		middlewares = append(middlewares, filesystemMw)
-	}
-
+	// Reduction middleware — uses InMemoryBackend for large result offloading.
 	reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{
-		Backend: fsBackend,
+		Backend: memBackend,
 	})
 	if err != nil {
 		log.Printf("[agent] failed to create reduction middleware: %v", err)
@@ -434,6 +471,104 @@ func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	}
 
 	return middlewares
+}
+
+// BuildFsTools creates all filesystem tools as independent tool instances.
+// These are registered alongside other tools in the agent config, decoupled
+// from the filesystem middleware.
+// bgMgr is the shared BgProcessManager from ChatService — background processes
+// survive across individual generation rounds.
+func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *tools.BgProcessManager) []tool.BaseTool {
+	cfg := buildFsToolsConfig(config, memBackend)
+
+	var fsTools []tool.BaseTool
+	builders := []func(*tools.FsToolsConfig) (tool.BaseTool, error){
+		tools.NewLsTool,
+		tools.NewReadFileTool,
+		tools.NewWriteFileTool,
+		tools.NewEditFileTool,
+		tools.NewPatchFileTool,
+		tools.NewGlobTool,
+		tools.NewGrepTool,
+	}
+	for _, build := range builders {
+		t, err := build(cfg)
+		if err != nil {
+			log.Printf("[agent] failed to create fs tool: %v", err)
+			continue
+		}
+		fsTools = append(fsTools, t)
+	}
+
+	execTool, err := tools.NewExecuteTool(cfg, bgMgr)
+	if err != nil {
+		log.Printf("[agent] failed to create execute tool: %v", err)
+	} else {
+		fsTools = append(fsTools, execTool)
+	}
+
+	bgTool, err := tools.NewBgExecuteTool(cfg, bgMgr)
+	if err != nil {
+		log.Printf("[agent] failed to create execute_background tool: %v", err)
+	} else {
+		fsTools = append(fsTools, bgTool)
+	}
+
+	return fsTools
+}
+
+// idHash returns a short (12-char) hex hash derived from a numeric ID.
+// This avoids exposing raw database primary keys in filesystem paths.
+func idHash(id int64) string {
+	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
+	return hex.EncodeToString(h[:6])
+}
+
+// buildSessionWorkDir constructs the per-conversation working directory under
+// the base work dir: <baseWorkDir>/sessions/<agentHash>/<convHash>.
+// When agentID or conversationID is 0 the corresponding level is omitted.
+func buildSessionWorkDir(baseWorkDir string, agentID, conversationID int64) string {
+	dir := filepath.Join(baseWorkDir, "sessions")
+	if agentID > 0 {
+		dir = filepath.Join(dir, idHash(agentID))
+	}
+	if conversationID > 0 {
+		dir = filepath.Join(dir, idHash(conversationID))
+	}
+	return dir
+}
+
+// buildFsToolsConfig constructs the shared config for all filesystem tools
+// using per-agent workspace settings from Config.
+func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("[agent] failed to get user home dir: %v", err)
+		homeDir = "/"
+	}
+
+	sandboxEnabled := config.SandboxMode == "codex"
+	var codexBin string
+	if sandboxEnabled {
+		codexBin = resolveCodexBin()
+	}
+
+	baseWorkDir := config.WorkDir
+	if baseWorkDir == "" {
+		baseWorkDir = filepath.Join(homeDir, ".chatclaw")
+	}
+
+	workDir := buildSessionWorkDir(baseWorkDir, config.AgentID, config.ConversationID)
+	_ = os.MkdirAll(workDir, 0o755)
+
+	return &tools.FsToolsConfig{
+		HomeDir:               homeDir,
+		WorkDir:               workDir,
+		SandboxEnabled:        sandboxEnabled,
+		SandboxNetworkEnabled: config.SandboxNetwork,
+		CodexBin:              codexBin,
+		MemBackend:            memBackend,
+	}
 }
 
 // buildSkillMiddleware creates the skill middleware.
@@ -464,6 +599,23 @@ func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
 	}
 
 	return skillMw, true
+}
+
+// resolveCodexBin finds the codex binary in the toolchain bin directory.
+func resolveCodexBin() string {
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	binName := "codex"
+	if runtime.GOOS == "windows" {
+		binName = "codex.exe"
+	}
+	candidate := filepath.Join(cfgDir, "chatclaw", "bin", binName)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+	return ""
 }
 
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error

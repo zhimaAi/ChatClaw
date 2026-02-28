@@ -30,15 +30,23 @@ type activeGeneration struct {
 type ChatService struct {
 	app               *application.App
 	toolRegistry      *tools.ToolRegistry
+	bgProcessManager  *tools.BgProcessManager
 	activeGenerations sync.Map // map[int64]*activeGeneration
 }
 
 // NewChatService creates a new ChatService
 func NewChatService(app *application.App) *ChatService {
 	return &ChatService{
-		app:          app,
-		toolRegistry: tools.NewToolRegistry(),
+		app:              app,
+		toolRegistry:     tools.NewToolRegistry(),
+		bgProcessManager: tools.NewBgProcessManager(),
 	}
+}
+
+// Shutdown cleans up all resources held by the ChatService, including
+// killing any background processes started by execute_background.
+func (s *ChatService) Shutdown() {
+	s.bgProcessManager.Cleanup()
 }
 
 func (s *ChatService) db() (*bun.DB, error) {

@@ -164,7 +164,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 
 	agentConfig.Provider = providerConfig
 	llmCallCount := 0
-	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools, extraMiddlewares,
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraMiddlewares,
 		func(_ context.Context, msgs []*schema.Message) {
 			llmCallCount++
 			var systemPrompt string

@@ -448,8 +448,23 @@ export default {
       tabs: {
         model: '模型设置',
         prompt: '提示词设置',
+        workspace: '工作区',
         retrieval: '知识库检索',
         delete: '删除助手',
+      },
+      workspace: {
+        sandboxMode: '执行模式',
+        modeCodex: 'Codex 沙盒',
+        modeNative: '本机执行',
+        codexDesc: '使用 OpenAI Codex CLI 提供的 OS 级沙盒隔离执行命令。命令只能在工作目录内写入文件，外部文件系统为只读。',
+        nativeDesc: '直接在本机执行命令，无沙盒隔离。命令拥有当前用户的完整权限。',
+        networkAccess: '允许网络访问',
+        networkAccessDesc: '开启后，沙盒内的命令可以访问网络（如 npm install、pip install 等）。关闭时命令无法联网，更加安全。',
+        workDir: '工作目录',
+        workDirDesc: '所有会话输出和文件将保存在此目录中。每个对话会在 sessions/ 下创建一个子文件夹。',
+        workDirHint: '结构：{basePath}{sep}sessions{sep}agent_id{sep}conversation_id{sep}',
+        changeDir: '更改',
+        selectDir: '选择工作目录',
       },
       model: {
         defaultModel: '默认模型',
