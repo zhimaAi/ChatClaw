@@ -312,7 +312,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
 // the OS environment, working directory, sandbox constraints, and available tools.
-func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) string {
+func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -335,6 +335,10 @@ func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) s
 `, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 
 	if sandboxEnabled {
+		networkDesc := "Network access is **disabled** for executed commands."
+		if sandboxNetworkEnabled {
+			networkDesc = "Network access is **enabled** for executed commands (e.g. npm install, curl, etc. will work)."
+		}
 		prompt += fmt.Sprintf(`
 # Sandbox Mode
 
@@ -342,9 +346,9 @@ func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) s
 - read_file, ls, glob, grep can read any path on the filesystem.
 - write_file, edit_file, patch_file can only write to paths within the working directory.
 - execute runs commands with the working directory as cwd; writing to paths outside the working directory will be denied by the OS.
-- Network access is disabled for executed commands.
+- %s
 - Always create files and run commands within the working directory. Do not attempt to write outside it.
-`, workDir)
+`, workDir, networkDesc)
 	}
 
 	prompt += fmt.Sprintf(`
@@ -394,7 +398,7 @@ func BuildMiddlewares(ctx context.Context, memBackend *filesystem.InMemoryBacken
 	fsCfg := buildFsToolsConfig(memBackend)
 
 	// System prompt middleware — inject environment info and tool instructions.
-	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, fsCfg.SandboxEnabled)
+	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
 	middlewares = append(middlewares, adk.AgentMiddleware{
 		AdditionalInstruction: systemPrompt,
 	})
@@ -467,12 +471,18 @@ func buildFsToolsConfig(memBackend *filesystem.InMemoryBackend) *tools.FsToolsCo
 	}
 	_ = sandbox.EnsureWorkDir(workDir)
 
+	sandboxNetworkEnabled := false
+	if enabled, ok := settings.GetValue("workspace_sandbox_network"); ok && enabled == "true" {
+		sandboxNetworkEnabled = true
+	}
+
 	return &tools.FsToolsConfig{
-		HomeDir:        homeDir,
-		WorkDir:        workDir,
-		SandboxEnabled: sandboxEnabled,
-		CodexBin:       codexBin,
-		MemBackend:     memBackend,
+		HomeDir:               homeDir,
+		WorkDir:               workDir,
+		SandboxEnabled:        sandboxEnabled,
+		SandboxNetworkEnabled: sandboxNetworkEnabled,
+		CodexBin:              codexBin,
+		MemBackend:            memBackend,
 	}
 }
 
