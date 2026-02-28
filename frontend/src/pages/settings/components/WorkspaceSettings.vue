@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LoaderCircle, FolderOpen } from 'lucide-vue-next'
+import { LoaderCircle, FolderOpen, ShieldCheck, Monitor } from 'lucide-vue-next'
 import { Dialogs } from '@wailsio/runtime'
-import type { AcceptableValue } from 'reka-ui'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -29,18 +21,14 @@ const sandboxMode = ref('codex')
 const workDir = ref('')
 const defaultWorkDir = ref('')
 
-const sandboxOptions = [
-  { value: 'codex', labelKey: 'settings.workspace.modeCodex' },
-  { value: 'native', labelKey: 'settings.workspace.modeNative' },
-]
-
-const currentModeLabel = computed(() => {
-  const option = sandboxOptions.find((opt) => opt.value === sandboxMode.value)
-  return option ? t(option.labelKey) : ''
-})
-
 const displayWorkDir = computed(() => {
   return workDir.value || defaultWorkDir.value || '~/.chatclaw'
+})
+
+const modeDescription = computed(() => {
+  return sandboxMode.value === 'codex'
+    ? t('settings.workspace.codexDesc')
+    : t('settings.workspace.nativeDesc')
 })
 
 const loadData = async () => {
@@ -53,11 +41,6 @@ const loadData = async () => {
 
     sandboxMode.value = modeSetting?.value || 'codex'
     workDir.value = dirSetting?.value || ''
-
-    const home = await getHomeDir()
-    if (home) {
-      defaultWorkDir.value = home + '/.chatclaw'
-    }
   } catch (error) {
     console.error('Failed to load workspace settings:', error)
   } finally {
@@ -65,25 +48,9 @@ const loadData = async () => {
   }
 }
 
-async function getHomeDir(): Promise<string> {
-  try {
-    const setting = await SettingsService.Get('workspace_work_dir')
-    if (setting?.value) return ''
-    return ''
-  } catch {
-    return ''
-  }
-}
-
 onMounted(() => {
   loadData()
 })
-
-const handleModeChange = (value: AcceptableValue) => {
-  if (typeof value === 'string') {
-    sandboxMode.value = value
-  }
-}
 
 const handleSelectDir = async () => {
   if (!appStore.isGUIMode) return
@@ -131,26 +98,39 @@ const handleSave = async () => {
 
     <template v-else>
       <!-- Sandbox Mode -->
-      <SettingsItem :label="t('settings.workspace.sandboxMode')">
-        <Select :model-value="sandboxMode" @update:model-value="handleModeChange">
-          <SelectTrigger class="w-80">
-            <SelectValue>{{ currentModeLabel }}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem v-for="option in sandboxOptions" :key="option.value" :value="option.value">
-              {{ t(option.labelKey) }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+      <SettingsItem :label="t('settings.workspace.sandboxMode')" :bordered="false">
+        <div class="flex gap-2">
+          <button
+            class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
+            :class="
+              sandboxMode === 'codex'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+            "
+            @click="sandboxMode = 'codex'"
+          >
+            <ShieldCheck class="size-4" />
+            {{ t('settings.workspace.modeCodex') }}
+          </button>
+          <button
+            class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
+            :class="
+              sandboxMode === 'native'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+            "
+            @click="sandboxMode = 'native'"
+          >
+            <Monitor class="size-4" />
+            {{ t('settings.workspace.modeNative') }}
+          </button>
+        </div>
       </SettingsItem>
 
       <!-- Sandbox Mode Description -->
-      <div class="px-4 pb-3">
-        <p v-if="sandboxMode === 'codex'" class="text-xs text-muted-foreground">
-          {{ t('settings.workspace.codexDesc') }}
-        </p>
-        <p v-else class="text-xs text-muted-foreground">
-          {{ t('settings.workspace.nativeDesc') }}
+      <div class="px-4 pb-4">
+        <p class="text-xs text-muted-foreground">
+          {{ modeDescription }}
         </p>
       </div>
 
