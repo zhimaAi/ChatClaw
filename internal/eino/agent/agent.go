@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"chatclaw/internal/eino/filesystem"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/sandbox"
@@ -22,7 +21,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/skill"
 	"github.com/cloudwego/eino/components/model"
@@ -255,9 +254,17 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+1)
+	// Shared InMemoryBackend for reduction offloading — filesystem tools
+	// dispatch to it when they see virtual paths (/large_tool_result/*).
+	memBackend := filesystem.NewInMemoryBackend()
+
+	// Build independent filesystem tools (ls, read_file, write_file, etc.).
+	fsTools := BuildFsTools(memBackend)
+
+	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
 	baseTools = append(baseTools, browserTool)
+	baseTools = append(baseTools, fsTools...)
 	baseTools = append(baseTools, extraTools...)
 
 	agentConfig := &adk.ChatModelAgentConfig{
@@ -277,10 +284,9 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		}
 	}
 
-	agentConfig.Middlewares = BuildMiddlewares(ctx)
+	agentConfig.Middlewares = BuildMiddlewares(ctx, memBackend)
 	agentConfig.Middlewares = append(agentConfig.Middlewares, extraMiddlewares...)
 
-	// Append a logging middleware that fires before each LLM call.
 	if beforeChatModel != nil {
 		agentConfig.Middlewares = append(agentConfig.Middlewares, adk.AgentMiddleware{
 			BeforeChatModel: func(ctx context.Context, state *adk.ChatModelAgentState) error {
@@ -305,10 +311,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 }
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
-// the OS environment, working directory, and available filesystem/execute tools.
-//
-// workDir is the primary directory where files should be created/written.
-// When sandbox is enabled, it also serves as the sandbox writable root.
+// the OS environment, working directory, sandbox constraints, and available tools.
 func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
@@ -333,11 +336,14 @@ func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) s
 
 	if sandboxEnabled {
 		prompt += fmt.Sprintf(`
-# Sandbox
+# Sandbox Mode
 
-- Commands run inside an OS-level sandbox (Codex CLI, Seatbelt on macOS / Landlock on Linux).
-- The sandbox writable root is: %s
-- Files outside this directory are **read-only**. All write operations (write_file, edit_file, execute) should target paths within this directory.
+- You are running in sandbox mode. All write operations are restricted to the working directory: %s
+- read_file, ls, glob, grep can read any path on the filesystem.
+- write_file, edit_file, patch_file can only write to paths within the working directory.
+- execute runs commands with the working directory as cwd; writing to paths outside the working directory will be denied by the OS.
+- Network access is disabled for executed commands.
+- Always create files and run commands within the working directory. Do not attempt to write outside it.
 `, workDir)
 	}
 
@@ -376,93 +382,26 @@ func buildFilesystemSystemPrompt(homeDir, workDir string, sandboxEnabled bool) s
 }
 
 // BuildMiddlewares creates the agent middleware stack:
-//   - filesystem: file tools (ls, read_file, write_file, edit_file, glob, grep, execute)
-//   - reduction: clears old tool results + offloads large results to filesystem
+//   - system prompt: environment info + tool usage instructions (via AdditionalInstruction)
+//   - reduction: clears old tool results + offloads large results to InMemoryBackend
 //   - skill: on-demand skill loading from SKILL.md files
-func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
+//
+// Filesystem tools (ls, read_file, write_file, edit_file, patch_file, glob, grep, execute)
+// are registered as independent tools via BuildFsTools, not through the filesystem middleware.
+func BuildMiddlewares(ctx context.Context, memBackend *filesystem.InMemoryBackend) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
-	// Read workspace settings for sandbox configuration.
-	sandboxMode := filesystem.SandboxModeNone
-	var codexBin, sandboxDir string
+	fsCfg := buildFsToolsConfig(memBackend)
 
-	if mode, ok := settings.GetValue("workspace_sandbox_mode"); ok && mode == "codex" {
-		sandboxMode = filesystem.SandboxModeCodex
-	}
-	if dir, ok := settings.GetValue("workspace_work_dir"); ok && dir != "" {
-		sandboxDir = dir
-	} else {
-		sandboxDir = sandbox.DefaultWorkDir()
-	}
-	// Ensure the sandbox working directory exists.
-	_ = sandbox.EnsureWorkDir(sandboxDir)
-
-	// Resolve codex binary path from the toolchain bin directory.
-	if sandboxMode == filesystem.SandboxModeCodex {
-		codexBin = resolveCodexBin()
-	}
-
-	fsBackend, err := filesystem.NewLocalBackend(&filesystem.LocalBackendConfig{
-		ShellPolicy: &filesystem.ShellPolicy{
-			BlockedCommands: []string{
-				"rm -rf /", "rm -rf /*", "mkfs", "dd if=",
-				":(){:|:&};:", "format c:", "format d:",
-			},
-		},
-		SandboxMode: sandboxMode,
-		CodexBin:    codexBin,
-		SandboxDir:  sandboxDir,
+	// System prompt middleware — inject environment info and tool instructions.
+	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, fsCfg.SandboxEnabled)
+	middlewares = append(middlewares, adk.AgentMiddleware{
+		AdditionalInstruction: systemPrompt,
 	})
-	if err != nil {
-		log.Printf("[agent] failed to create local filesystem backend: %v", err)
-		reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{Backend: nil})
-		if err == nil {
-			middlewares = append(middlewares, reductionMw)
-		}
-		if skillMw, ok := buildSkillMiddleware(ctx); ok {
-			middlewares = append(middlewares, skillMw)
-		}
-		return middlewares
-	}
 
-	customSystemPrompt := buildFilesystemSystemPrompt(fsBackend.BaseDir(), fsBackend.EffectiveWorkDir(), fsBackend.IsSandboxEnabled())
-
-	filesystemMw, err := fsmw.NewMiddleware(ctx, &fsmw.Config{
-		Backend:                          fsBackend,
-		WithoutLargeToolResultOffloading: true,
-		CustomSystemPrompt:               &customSystemPrompt,
-	})
-	if err != nil {
-		log.Printf("[agent] failed to create filesystem middleware: %v", err)
-	} else {
-		// Replace the built-in grep tool with our enhanced version and add patch_file.
-		grepTool, grepErr := filesystem.NewGrepTool(fsBackend)
-		if grepErr != nil {
-			log.Printf("[agent] failed to create grep tool: %v", grepErr)
-		} else {
-			// Remove the built-in grep tool (same name) so ours takes its place.
-			filtered := make([]tool.BaseTool, 0, len(filesystemMw.AdditionalTools))
-			for _, t := range filesystemMw.AdditionalTools {
-				info, infoErr := t.Info(ctx)
-				if infoErr != nil || info.Name != filesystem.GrepToolID {
-					filtered = append(filtered, t)
-				}
-			}
-			filesystemMw.AdditionalTools = append(filtered, grepTool)
-		}
-
-		patchTool, patchErr := filesystem.NewPatchTool(fsBackend)
-		if patchErr != nil {
-			log.Printf("[agent] failed to create patch_file tool: %v", patchErr)
-		} else {
-			filesystemMw.AdditionalTools = append(filesystemMw.AdditionalTools, patchTool)
-		}
-
-		middlewares = append(middlewares, filesystemMw)
-	}
-
+	// Reduction middleware — uses InMemoryBackend for large result offloading.
 	reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{
-		Backend: fsBackend,
+		Backend: memBackend,
 	})
 	if err != nil {
 		log.Printf("[agent] failed to create reduction middleware: %v", err)
@@ -475,6 +414,66 @@ func BuildMiddlewares(ctx context.Context) []adk.AgentMiddleware {
 	}
 
 	return middlewares
+}
+
+// BuildFsTools creates all filesystem tools as independent tool instances.
+// These are registered alongside other tools in the agent config, decoupled
+// from the filesystem middleware.
+func BuildFsTools(memBackend *filesystem.InMemoryBackend) []tool.BaseTool {
+	cfg := buildFsToolsConfig(memBackend)
+
+	var fsTools []tool.BaseTool
+	builders := []func(*tools.FsToolsConfig) (tool.BaseTool, error){
+		tools.NewLsTool,
+		tools.NewReadFileTool,
+		tools.NewWriteFileTool,
+		tools.NewEditFileTool,
+		tools.NewPatchFileTool,
+		tools.NewGlobTool,
+		tools.NewGrepTool,
+		tools.NewExecuteTool,
+	}
+	for _, build := range builders {
+		t, err := build(cfg)
+		if err != nil {
+			log.Printf("[agent] failed to create fs tool: %v", err)
+			continue
+		}
+		fsTools = append(fsTools, t)
+	}
+	return fsTools
+}
+
+// buildFsToolsConfig reads workspace settings and constructs the shared config
+// for all filesystem tools.
+func buildFsToolsConfig(memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("[agent] failed to get user home dir: %v", err)
+		homeDir = "/"
+	}
+
+	sandboxEnabled := false
+	var codexBin string
+
+	if mode, ok := settings.GetValue("workspace_sandbox_mode"); ok && mode == "codex" {
+		sandboxEnabled = true
+		codexBin = resolveCodexBin()
+	}
+
+	workDir := sandbox.DefaultWorkDir()
+	if dir, ok := settings.GetValue("workspace_work_dir"); ok && dir != "" {
+		workDir = dir
+	}
+	_ = sandbox.EnsureWorkDir(workDir)
+
+	return &tools.FsToolsConfig{
+		HomeDir:        homeDir,
+		WorkDir:        workDir,
+		SandboxEnabled: sandboxEnabled,
+		CodexBin:       codexBin,
+		MemBackend:     memBackend,
+	}
 }
 
 // buildSkillMiddleware creates the skill middleware.

@@ -56,4 +56,14 @@ const (
 	ToolIDWikipedia          = "wikipedia_search"
 	ToolIDLibraryRetriever   = "library_retriever"
 	ToolIDMemoryRetriever    = "memory_retriever"
+
+	// Filesystem tool IDs — registered as independent tools, not via filesystem middleware.
+	ToolIDLs        = "ls"
+	ToolIDReadFile  = "read_file"
+	ToolIDWriteFile = "write_file"
+	ToolIDEditFile  = "edit_file"
+	ToolIDPatchFile = "patch_file"
+	ToolIDGlob      = "glob"
+	ToolIDGrep      = "grep"
+	ToolIDExecute   = "execute"
 )
