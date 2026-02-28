@@ -10,6 +10,18 @@ func TopMostVisibleProcessName(_ []string) (string, bool, error) {
 	return "", false, ErrNotSupported
 }
 
+func ForegroundProcessName() (string, bool, error) {
+	return "", false, ErrNotSupported
+}
+
+func FrontMostTargetProcessName(_ []string) (string, bool, error) {
+	return "", false, ErrNotSupported
+}
+
+func IsTargetProcessVisible(_ string) (bool, error) {
+	return false, ErrNotSupported
+}
+
 // MoveOffscreen hides the winsnap window on macOS.
 // Uses Hide() for reliable hiding instead of moving off-screen.
 func MoveOffscreen(window *application.WebviewWindow) error {

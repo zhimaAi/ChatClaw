@@ -15,6 +15,18 @@ static NSString *winsnap_trim(NSString *s) {
 	return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
+// Reverse-domain bundle id usually contains at least 3 segments, like cn.apifox.app.
+static bool winsnap_looks_like_bundle_id(NSString *s) {
+	if (!s || s.length == 0) return false;
+	if ([s rangeOfString:@" "].location != NSNotFound) return false;
+	NSArray<NSString *> *parts = [s componentsSeparatedByString:@"."];
+	if (parts.count < 3) return false;
+	for (NSString *p in parts) {
+		if (p.length == 0) return false;
+	}
+	return true;
+}
+
 static NSString *winsnap_normalize_target_name(const char *name) {
 	if (!name) return @"";
 	NSString *raw = [NSString stringWithUTF8String:name];
@@ -22,7 +34,7 @@ static NSString *winsnap_normalize_target_name(const char *name) {
 	if (t.length == 0) return @"";
 	t = [t lastPathComponent];
 	NSString *lower = [t lowercaseString];
-	if ([lower hasSuffix:@".app"]) {
+	if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(t)) {
 		t = [t substringToIndex:(t.length - 4)];
 		lower = [t lowercaseString];
 	}
@@ -39,10 +51,14 @@ static pid_t winsnap_find_pid_by_name_local(const char *name) {
 		if (!app || app.terminated) continue;
 		NSString *loc = winsnap_trim(app.localizedName);
 		NSString *exe = winsnap_trim(app.executableURL.lastPathComponent);
+		NSString *bid = winsnap_trim(app.bundleIdentifier);
 		if (loc.length && [loc caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 		if (exe.length && [exe caseInsensitiveCompare:target] == NSOrderedSame) {
+			return app.processIdentifier;
+		}
+		if (bid.length && [bid caseInsensitiveCompare:target] == NSOrderedSame) {
 			return app.processIdentifier;
 		}
 	}

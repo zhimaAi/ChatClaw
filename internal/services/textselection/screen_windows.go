@@ -3,7 +3,6 @@
 package textselection
 
 import (
-	"fmt"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -61,7 +60,6 @@ func getDPIScaleForPoint(x, y int32) float64 {
 	hMonitor := monitorFromPointPacked(x, y, monitorDefaultToNearest)
 
 	if hMonitor == 0 {
-		fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint: MonitorFromPoint returned NULL for (%d,%d), fallback to system DPI\n", x, y)
 		return getDPIScale() // fallback to system DPI
 	}
 
@@ -76,13 +74,11 @@ func getDPIScaleForPoint(x, y int32) float64 {
 		)
 		if ret == 0 && dpiX > 0 { // S_OK = 0
 			scale := float64(dpiX) / 96.0
-			fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint(%d,%d) → dpi=%d scale=%.2f\n", x, y, dpiX, scale)
 			return scale
 		}
 	}
 
 	// Fallback to system DPI
-	fmt.Printf("[MONITOR-DEBUG] getDPIScaleForPoint: GetDpiForMonitor failed for (%d,%d), fallback to system DPI\n", x, y)
 	return getDPIScale()
 }
 
@@ -93,7 +89,6 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 	hMonitor := monitorFromPointPacked(int32(x), int32(y), monitorDefaultToNearest)
 
 	if hMonitor == 0 {
-		fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint: MonitorFromPoint returned NULL for (%d,%d), using fallback\n", x, y)
 		// Fallback to default values
 		return WorkArea{X: 0, Y: 0, Width: 1920, Height: 1080}
 	}
@@ -103,7 +98,6 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 	mi.CbSize = uint32(unsafe.Sizeof(mi))
 	ret, _, _ := procGetMonitorInfoW.Call(hMonitor, uintptr(unsafe.Pointer(&mi)))
 	if ret == 0 {
-		fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint: GetMonitorInfoW failed for (%d,%d), using fallback\n", x, y)
 		// Fallback to default values
 		return WorkArea{X: 0, Y: 0, Width: 1920, Height: 1080}
 	}
@@ -114,7 +108,6 @@ func getWorkAreaAtPoint(x, y int) WorkArea {
 		Width:  int(mi.RcWork.Right - mi.RcWork.Left),
 		Height: int(mi.RcWork.Bottom - mi.RcWork.Top),
 	}
-	fmt.Printf("[MONITOR-DEBUG] getWorkAreaAtPoint(%d,%d) → workArea=(%d,%d,%d,%d)\n", x, y, wa.X, wa.Y, wa.Width, wa.Height)
 	return wa
 }
 
