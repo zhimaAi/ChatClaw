@@ -34,20 +34,33 @@ var BlockedCommands = []string{
 
 type executeInput struct {
 	Command string `json:"command" jsonschema:"description=The shell command to execute."`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Maximum seconds to wait (default 60, max 300). Set higher for slow commands like npm install."`
 }
 
-// NewExecuteTool creates an execute tool that runs shell commands.
+const (
+	defaultExecTimeout = 60
+	maxExecTimeout     = 300
+)
+
+// NewExecuteTool creates an execute tool that runs shell commands synchronously.
 // When codex sandbox is enabled, commands are wrapped with codex sandbox.
 // Otherwise, commands run directly via the system shell.
 func NewExecuteTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecute,
-		"Execute a shell command and return its output. Working directory is the configured workspace. Timeout: 60 seconds.",
+		"Execute a shell command synchronously and return its output. Working directory is the configured workspace. Default timeout: 60s, max 300s. For long-running servers (npm run dev, etc.), use execute_background instead.",
 		func(ctx context.Context, input *executeInput) (string, error) {
 			if err := validateCommand(input.Command); err != nil {
 				return fmt.Sprintf("Command blocked: %s", err.Error()), nil
 			}
 
-			timeout := 60 * time.Second
+			timeoutSec := input.Timeout
+			if timeoutSec <= 0 {
+				timeoutSec = defaultExecTimeout
+			}
+			if timeoutSec > maxExecTimeout {
+				timeoutSec = maxExecTimeout
+			}
+			timeout := time.Duration(timeoutSec) * time.Second
 			execCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 

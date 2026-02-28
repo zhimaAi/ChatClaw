@@ -233,7 +233,7 @@ type AgentResult struct {
 // beforeChatModel, if non-nil, is called before every LLM invocation with
 // the complete message list that will be sent to the model, including the
 // system instruction, middleware additions, and all tool schemas.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
@@ -261,7 +261,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	memBackend := filesystem.NewInMemoryBackend()
 
 	// Build independent filesystem tools (ls, read_file, write_file, etc.).
-	fsTools := BuildFsTools(config, memBackend)
+	fsTools := BuildFsTools(config, memBackend, bgMgr)
 
 	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
@@ -375,14 +375,23 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 - glob: find files matching a pattern (e.g., "%s/**/*.py")
 - grep: search for text within files (supports regex, context lines, case-insensitive, output modes)
 
-# Execute Tool
+# Execute Tool (synchronous)
 
 - Working directory: %s
 - Returns combined stdout/stderr output with exit code
-- Timeout: 60 seconds per command. Commands exceeding this limit are killed automatically.
-- **NEVER run long-running or persistent commands** (e.g. "php artisan serve", "npm run dev", "python manage.py runserver", "docker compose up", "tail -f", "watch"). These will block and timeout. If the user needs to start a server, instruct them to run it manually in a separate terminal.
-- For build commands that may take long, keep them focused (e.g. "npm run build" is fine, but avoid running dev servers).
+- Default timeout: 60 seconds. You can set `+"`timeout`"+` (max 300s) for commands that need more time (e.g. npm install).
+- **For short-lived commands only**: build, test, install, compile, lint, etc.
+- **Do NOT use execute for dev servers or long-running processes** — use execute_background instead.
 - Avoid using cat/head/tail (use read_file), find (use glob), grep command (use grep tool)
+
+# Execute Background Tool (asynchronous)
+
+- Use for **long-running processes** like dev servers ("npm run dev", "python manage.py runserver", etc.).
+- **action="start"**: launch a background process, returns pid and initial output. The process is auto-killed after timeout (default 300s, max 600s).
+- **action="status"**: check if a process is still alive and read its latest output. Pass the pid from start.
+- **action="stop"**: kill a background process. Pass the pid from start.
+- After starting a dev server, use action="status" to confirm it's running and check its output (e.g. what port it's listening on).
+- Lifecycle: start → (optional) status checks → stop (or auto-killed after timeout).
 `, workDir, workDir, workDir, workDir)
 
 	if osName == "windows" {
@@ -436,7 +445,9 @@ func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem
 // BuildFsTools creates all filesystem tools as independent tool instances.
 // These are registered alongside other tools in the agent config, decoupled
 // from the filesystem middleware.
-func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend) []tool.BaseTool {
+// bgMgr is the shared BgProcessManager from ChatService — background processes
+// survive across individual generation rounds.
+func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *tools.BgProcessManager) []tool.BaseTool {
 	cfg := buildFsToolsConfig(config, memBackend)
 
 	var fsTools []tool.BaseTool
@@ -458,6 +469,14 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend) []tool.
 		}
 		fsTools = append(fsTools, t)
 	}
+
+	bgTool, err := tools.NewBgExecuteTool(cfg, bgMgr)
+	if err != nil {
+		log.Printf("[agent] failed to create execute_background tool: %v", err)
+	} else {
+		fsTools = append(fsTools, bgTool)
+	}
+
 	return fsTools
 }
 

@@ -65,5 +65,6 @@ const (
 	ToolIDPatchFile = "patch_file"
 	ToolIDGlob      = "glob"
 	ToolIDGrep      = "grep"
-	ToolIDExecute   = "execute"
+	ToolIDExecute           = "execute"
+	ToolIDExecuteBackground = "execute_background"
 )
