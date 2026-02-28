@@ -58,12 +58,12 @@ type customSnapAppConfig struct {
 }
 
 const (
-	snapCustomAppsSettingKey = "snap_custom_apps"
-	snapCustomKeyPrefix      = "snap_custom_"
-	snapDragGuardUntilKey    = "snap_drag_guard_until_unix_ms"
+	snapCustomAppsSettingKey        = "snap_custom_apps"
+	snapCustomKeyPrefix             = "snap_custom_"
+	snapDragGuardUntilKey           = "snap_drag_guard_until_unix_ms"
 	wakeAttachedGuardAfterSwitch    = 1200 * time.Millisecond
 	attachedLowFreqRescanInterval   = 1200 * time.Millisecond
-	attachedLowFreqRescanSwitchHits = 3 // Increased from 2 to 3 for more stable switching
+	attachedLowFreqRescanSwitchHits = 5 // Increased from 3 to 5 for more stable switching
 	attachedMinSwitchInterval       = 800 * time.Millisecond
 	stepDebugPrintInterval          = 10 // Print debug info every N steps
 )
@@ -106,6 +106,8 @@ type SnapService struct {
 	lastAttachedRescanAt time.Time
 	attachedRescanCandidate string
 	attachedRescanHits      int
+	obscuredCheckTarget     string // Last target name checked for obscured/non-adjacent state
+	obscuredCheckHits       int    // Consecutive obscured/non-adjacent hits for that target
 	stepCounter             int // Counter for debug printing
 	attachingLock           bool // Lock to prevent concurrent attaching
 }
@@ -842,16 +844,41 @@ func (s *SnapService) step() {
 					// Low-frequency runtime consistency check: if state says we are attached
 					// to currentTarget but runtime geometry says target is obscured/non-adjacent,
 					// force a re-attach to currentTarget to realign controller and UI state.
-					// Check switch interval before re-attaching to prevent rapid switching
-					if obscured, oerr := winsnap.IsTargetObscured(w, currentTarget); oerr == nil && obscured {
+					// To avoid acting on a single mis-detection, we require multiple consecutive
+					// obscured/non-adjacent results before triggering re-attach.
+					if obscured, oerr := winsnap.IsTargetObscured(w, currentTarget); oerr == nil {
 						s.mu.Lock()
+						if obscured {
+							if strings.EqualFold(s.obscuredCheckTarget, currentTarget) {
+								s.obscuredCheckHits++
+							} else {
+								s.obscuredCheckTarget = currentTarget
+								s.obscuredCheckHits = 1
+							}
+						} else {
+							// Reset counter when target is not obscured.
+							if strings.EqualFold(s.obscuredCheckTarget, currentTarget) {
+								s.obscuredCheckHits = 0
+							} else {
+								s.obscuredCheckTarget = currentTarget
+								s.obscuredCheckHits = 0
+							}
+						}
+						hits := s.obscuredCheckHits
 						canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
 						attachingLocked := s.attachingLock
 						s.mu.Unlock()
-						if canSwitch && !attachingLocked {
-							s.attachTo(w, currentTarget)
+
+						if obscured {
+							// Only re-attach when obscured has been observed for enough consecutive checks.
+							if hits < attachedLowFreqRescanSwitchHits {
+								return
+							}
+							if canSwitch && !attachingLocked {
+								s.attachTo(w, currentTarget)
+							}
+							return
 						}
-						return
 					}
 
 					// Only check z-order if frontTarget is still currentTarget
@@ -871,10 +898,24 @@ func (s *SnapService) step() {
 			s.mu.Lock()
 			canSwitch := s.lastSwitchAt.IsZero() || now.Sub(s.lastSwitchAt) >= attachedMinSwitchInterval
 			attachingLocked := s.attachingLock
-			s.attachedRescanCandidate = ""
-			s.attachedRescanHits = 0
+
+			// Require frontTarget to be stable for multiple consecutive steps before switching.
+			// This prevents brief foreground flickers (e.g. Feishu stealing focus for a moment
+			// under DingTalk) from causing the snap window to rapidly jump between targets.
+			if strings.EqualFold(s.attachedRescanCandidate, frontTarget) {
+				s.attachedRescanHits++
+			} else {
+				s.attachedRescanCandidate = frontTarget
+				s.attachedRescanHits = 1
+			}
+			hits := s.attachedRescanHits
 			s.mu.Unlock()
+
 			if !canSwitch || attachingLocked {
+				return
+			}
+			// Only switch when the same frontTarget has been observed consistently enough times.
+			if hits < attachedLowFreqRescanSwitchHits {
 				return
 			}
 			s.attachTo(w, frontTarget)
@@ -1108,9 +1149,35 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		_ = winsnap.EnsureWindowVisible(w)
 		// Verify runtime attachment consistency. If winsnap is not adjacent to
 		// the supposed target, force a controller rebuild to recover.
+		// To reduce false positives from a single mis-detection, we require multiple
+		// consecutive obscured/non-adjacent results before tearing down the controller.
 		obscured, err := winsnap.IsTargetObscured(w, targetProcess)
-		if err == nil && !obscured {
-			return
+		if err == nil {
+			s.mu.Lock()
+			if obscured {
+				if strings.EqualFold(s.obscuredCheckTarget, targetProcess) {
+					s.obscuredCheckHits++
+				} else {
+					s.obscuredCheckTarget = targetProcess
+					s.obscuredCheckHits = 1
+				}
+			} else {
+				// Reset counter when target is confirmed adjacent (not obscured).
+				if strings.EqualFold(s.obscuredCheckTarget, targetProcess) {
+					s.obscuredCheckHits = 0
+				} else {
+					s.obscuredCheckTarget = targetProcess
+					s.obscuredCheckHits = 0
+				}
+			}
+			hits := s.obscuredCheckHits
+			s.mu.Unlock()
+
+			// If target is not obscured/non-adjacent, or obscured but not yet
+			// stable for enough checks, keep current controller as-is.
+			if !obscured || hits < attachedLowFreqRescanSwitchHits {
+				return
+			}
 		}
 		s.mu.Lock()
 		if s.ctrl != nil {
