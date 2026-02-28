@@ -36,11 +36,11 @@ type executeInput struct {
 	Action  string `json:"action,omitempty" jsonschema:"description=Action to perform: 'run' (default) to execute a shell command, 'stop' to synchronously kill a background process by pid and wait for it to exit, 'status' to check if a background process is still alive and read its latest output.,enum=run,enum=stop,enum=status"`
 	Command string `json:"command,omitempty" jsonschema:"description=The shell command to execute (required for action=run)."`
 	PID     int    `json:"pid,omitempty" jsonschema:"description=Process ID returned by execute_background (required for action=stop and action=status)."`
-	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Maximum seconds to wait (default 60, max 300). For action=run: how long the command may run. For action=stop: how long to wait for the process to exit after sending kill signal."`
+	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Maximum seconds to wait (default 30, max 300). For action=run: how long the command may run. For action=stop: how long to wait for the process to exit after sending kill signal."`
 }
 
 const (
-	defaultExecTimeout = 60
+	defaultExecTimeout = 30
 	maxExecTimeout     = 300
 	defaultStopTimeout = 10
 )
@@ -49,7 +49,7 @@ const (
 // and also supports stopping/querying background processes managed by BgProcessManager.
 func NewExecuteTool(cfg *FsToolsConfig, bgMgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecute,
-		"Execute a shell command synchronously (action='run', default), stop a background process (action='stop'), or check background process status (action='status'). Working directory is the configured workspace. Default timeout: 60s, max 300s. For long-running servers, use execute_background to start them, then use this tool with action='stop' or action='status' to manage them.",
+		"Execute a shell command synchronously (action='run', default), stop a background process (action='stop'), or check background process status (action='status'). Working directory is the configured workspace. Default timeout: 30s, max 300s. For long-running servers, use execute_background to start them, then use this tool with action='stop' or action='status' to manage them.",
 		func(ctx context.Context, input *executeInput) (string, error) {
 			action := input.Action
 			if action == "" {
