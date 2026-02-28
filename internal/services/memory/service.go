@@ -124,9 +124,10 @@ type EventStreamDTO struct {
 
 // EventStreamPageInput holds cursor-pagination parameters for event streams.
 type EventStreamPageInput struct {
-	AgentID  int64 `json:"agent_id"`
-	BeforeID int64 `json:"before_id"`
-	Limit    int   `json:"limit"`
+	AgentID    int64  `json:"agent_id"`
+	BeforeDate string `json:"before_date"`
+	BeforeID   int64  `json:"before_id"`
+	Limit      int    `json:"limit"`
 }
 
 func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]ThematicFactDTO, error) {
@@ -150,29 +151,8 @@ func (s *MemoryService) GetThematicFacts(ctx context.Context, agentID int64) ([]
 	return result, nil
 }
 
-func (s *MemoryService) GetEventStreams(ctx context.Context, agentID int64) ([]EventStreamDTO, error) {
-	if db == nil {
-		return nil, errs.New("error.memory_db_not_initialized")
-	}
-
-	var events []EventStream
-	err := db.NewSelect().Model(&events).
-		Where("agent_id = ?", agentID).
-		OrderExpr("date DESC, id DESC").
-		Scan(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]EventStreamDTO, len(events))
-	for i, e := range events {
-		result[i] = EventStreamDTO{ID: e.ID, Date: e.Date, Content: e.Content}
-	}
-	return result, nil
-}
-
 // GetEventStreamsPage returns a cursor-paginated page of event streams.
-// Uses id DESC ordering; before_id is the last id from the previous page.
+// Uses (date DESC, id DESC) ordering with a composite cursor (before_date, before_id).
 func (s *MemoryService) GetEventStreamsPage(ctx context.Context, input EventStreamPageInput) ([]EventStreamDTO, error) {
 	if db == nil {
 		return nil, errs.New("error.memory_db_not_initialized")
@@ -193,11 +173,11 @@ func (s *MemoryService) GetEventStreamsPage(ctx context.Context, input EventStre
 	q := db.NewSelect().Model(&events).
 		Where("agent_id = ?", input.AgentID)
 
-	if input.BeforeID > 0 {
-		q = q.Where("id < ?", input.BeforeID)
+	if input.BeforeDate != "" && input.BeforeID > 0 {
+		q = q.Where("(date < ? OR (date = ? AND id < ?))", input.BeforeDate, input.BeforeDate, input.BeforeID)
 	}
 
-	err := q.OrderExpr("id DESC").Limit(limit).Scan(ctx)
+	err := q.OrderExpr("date DESC, id DESC").Limit(limit).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

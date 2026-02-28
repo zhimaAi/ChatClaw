@@ -50,6 +50,7 @@ const eventStreams = ref<EventStreamDTO[]>([])
 const memoryLoading = ref(false)
 
 const EVENT_PAGE_SIZE = 50
+const eventBeforeDate = ref('')
 const eventBeforeID = ref<number>(0)
 const eventHasMore = ref(true)
 const eventLoadingMore = ref(false)
@@ -126,6 +127,7 @@ const loadAgents = async () => {
 const loadMemory = async (agentId: number) => {
   memoryLoading.value = true
   eventStreams.value = []
+  eventBeforeDate.value = ''
   eventBeforeID.value = 0
   eventHasMore.value = true
   eventLoadToken += 1
@@ -158,6 +160,7 @@ const loadMoreEvents = async (token?: number) => {
   try {
     const result = await MemoryService.GetEventStreamsPage(new EventStreamPageInput({
       agent_id: selectedAgentId.value,
+      before_date: eventBeforeDate.value,
       before_id: eventBeforeID.value,
       limit: EVENT_PAGE_SIZE,
     }))
@@ -172,7 +175,9 @@ const loadMoreEvents = async (token?: number) => {
 
     if (merged.length > 0) {
       eventStreams.value.push(...merged)
-      eventBeforeID.value = merged[merged.length - 1].id
+      const last = merged[merged.length - 1]
+      eventBeforeDate.value = last.date
+      eventBeforeID.value = last.id
     }
 
     eventHasMore.value = incoming.length >= EVENT_PAGE_SIZE
@@ -181,7 +186,6 @@ const loadMoreEvents = async (token?: number) => {
     }
   } catch (error) {
     console.error('Failed to load event streams:', error)
-    eventHasMore.value = false
   } finally {
     eventLoadingMore.value = false
   }
@@ -292,6 +296,14 @@ const doDeleteEvent = async () => {
   try {
     await MemoryService.DeleteEventStream(deleteEventId.value)
     eventStreams.value = eventStreams.value.filter((e) => e.id !== deleteEventId.value)
+    if (eventStreams.value.length > 0) {
+      const last = eventStreams.value[eventStreams.value.length - 1]
+      eventBeforeDate.value = last.date
+      eventBeforeID.value = last.id
+    } else {
+      eventBeforeDate.value = ''
+      eventBeforeID.value = 0
+    }
     toast.success(t('memory.deleteSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('memory.deleteFailed'))
@@ -308,6 +320,7 @@ watch(selectedAgentId, (id) => {
     coreProfile.value = ''
     thematicFacts.value = []
     eventStreams.value = []
+    eventBeforeDate.value = ''
     eventBeforeID.value = 0
     eventHasMore.value = true
   }
