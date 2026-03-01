@@ -174,6 +174,12 @@ func createClaudeChatModel(ctx context.Context, config Config) (model.ToolCallin
 	} else {
 		cfg.MaxTokens = 4096
 	}
+	if config.EnableThinking {
+		cfg.Thinking = &claude.Thinking{
+			Enable:       true,
+			BudgetTokens: cfg.MaxTokens,
+		}
+	}
 
 	return claude.NewChatModel(ctx, cfg)
 }
@@ -205,6 +211,11 @@ func createGeminiChatModel(ctx context.Context, config Config) (model.ToolCallin
 	if config.EnableTopP && config.TopP != nil {
 		topP := float32(*config.TopP)
 		cfg.TopP = &topP
+	}
+	if config.EnableThinking {
+		cfg.ThinkingConfig = &genai.ThinkingConfig{
+			IncludeThoughts: true,
+		}
 	}
 
 	return einogemini.NewChatModel(ctx, cfg)
