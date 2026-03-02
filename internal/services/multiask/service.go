@@ -104,8 +104,6 @@ func (s *MultiaskService) Initialize(windowTitle string) error {
 	return nil
 }
 
-// Standard Chrome User-Agent for sites that block embedded browsers
-const chromeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 // CreatePanel 创建 WebView 面板
 func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds PanelBounds) error {
@@ -140,6 +138,8 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 		"height", bounds.Height,
 	)
 
+    // Standard Chrome User-Agent for sites that block embedded browsers
+    chromeUserAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 	panel := s.manager.NewPanel(webviewpanel.WebviewPanelOptions{
 		Name:                   id,
 		X:                      bounds.X,
@@ -150,8 +150,8 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 		Visible:                &visible,
 		ZIndex:                 1,
 		UserAgent:              chromeUserAgent,
-		DevToolsEnabled:        boolPtr(true),
-		OpenInspectorOnStartup: true,
+		// DevToolsEnabled:        boolPtr(true),
+		// OpenInspectorOnStartup: true,
 	})
 
 	s.panels[id] = panel
@@ -790,8 +790,6 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
 	            window.location.href = a.href;
 	        }
 	    }, true);
-        document.body.style.backgroundColor = 'red';
-        document.body.style.border = '1px solid yellow';
 	})();
 	`
 	panel.ExecJS(navigationInterceptorJS)
