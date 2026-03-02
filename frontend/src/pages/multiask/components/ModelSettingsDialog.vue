@@ -69,11 +69,12 @@ const dragDirection = ref<'up' | 'down' | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 
 let dragClone: HTMLElement | null = null
-let dragOffsetX = 0
-let dragOffsetY = 0
+let dragStartX = 0
+let dragStartY = 0
+let cloneOriginX = 0
+let cloneOriginY = 0
 
 const onRowPointerDown = (index: number, event: PointerEvent) => {
-  // Skip if the event originated from the Switch toggle or its internals
   const target = event.target as HTMLElement
   if (target.closest('[data-no-drag]')) return
 
@@ -83,8 +84,10 @@ const onRowPointerDown = (index: number, event: PointerEvent) => {
   event.preventDefault()
 
   const rect = li.getBoundingClientRect()
-  dragOffsetX = event.clientX - rect.left
-  dragOffsetY = event.clientY - rect.top
+  dragStartX = event.clientX
+  dragStartY = event.clientY
+  cloneOriginX = rect.left
+  cloneOriginY = rect.top
 
   const clone = li.cloneNode(true) as HTMLElement
   Object.assign(clone.style, {
@@ -100,6 +103,8 @@ const onRowPointerDown = (index: number, event: PointerEvent) => {
     boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
     background: 'var(--popover)',
     cursor: 'grabbing',
+    transform: 'translate3d(0,0,0)',
+    transition: 'none',
     willChange: 'transform',
   })
   document.body.appendChild(clone)
@@ -114,8 +119,9 @@ const onRowPointerDown = (index: number, event: PointerEvent) => {
 const onPointerMove = (event: PointerEvent) => {
   if (draggedIndex.value === null || !dragClone) return
 
-  dragClone.style.left = `${event.clientX - dragOffsetX}px`
-  dragClone.style.top = `${event.clientY - dragOffsetY}px`
+  const dx = event.clientX - dragStartX
+  const dy = event.clientY - dragStartY
+  dragClone.style.transform = `translate3d(${dx}px,${dy}px,0)`
 
   const items = listRef.value?.querySelectorAll<HTMLElement>('[data-drag-item]')
   if (!items) return
@@ -189,7 +195,7 @@ onUnmounted(cleanupDrag)
             :key="model.id"
             data-drag-item
             :class="[
-              'group relative flex items-center justify-between p-2 transition-all rounded-md cursor-grab active:cursor-grabbing touch-none',
+              'group relative flex items-center justify-between p-2 transition-colors rounded-md cursor-grab active:cursor-grabbing touch-none',
               draggedIndex === index ? 'opacity-30 bg-muted/60' : 'hover:bg-muted/50'
             ]"
             @pointerdown="onRowPointerDown(index, $event)"
