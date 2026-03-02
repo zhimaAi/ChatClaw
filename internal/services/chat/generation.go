@@ -164,7 +164,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 
 	agentConfig.Provider = providerConfig
 	llmCallCount := 0
-	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, extraTools, extraMiddlewares,
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraMiddlewares,
 		func(_ context.Context, msgs []*schema.Message) {
 			llmCallCount++
 			var systemPrompt string
@@ -713,8 +713,53 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		}
 	}
 
+	// First pass: repair assistant tool_calls and collect which call IDs are
+	// actually retained so we can drop orphan tool-role messages afterwards.
+	type repairedInfo struct {
+		toolCalls []schema.ToolCall
+	}
+	repairedByIdx := make(map[int]*repairedInfo, len(models))
+	retainedCallIDs := make(map[string]bool)
+
+	for i, m := range models {
+		if m.Role != RoleAssistant || m.ToolCalls == "" || m.ToolCalls == "[]" {
+			continue
+		}
+		var toolCalls []schema.ToolCall
+		if err := json.Unmarshal([]byte(m.ToolCalls), &toolCalls); err != nil {
+			continue
+		}
+		repaired := make([]schema.ToolCall, 0, len(toolCalls))
+		for _, tc := range toolCalls {
+			if tc.ID == "" {
+				continue
+			}
+			if !answeredToolCallIDs[tc.ID] {
+				continue
+			}
+			if tc.Function.Name == "" {
+				if name, ok := toolNameByCallID[tc.ID]; ok {
+					tc.Function.Name = name
+				}
+			}
+			if tc.Function.Arguments == "" || !json.Valid([]byte(tc.Function.Arguments)) {
+				tc.Function.Arguments = "{}"
+			}
+			if tc.Function.Name == "" {
+				continue
+			}
+			repaired = append(repaired, tc)
+		}
+		if len(repaired) > 0 {
+			repairedByIdx[i] = &repairedInfo{toolCalls: repaired}
+			for _, tc := range repaired {
+				retainedCallIDs[tc.ID] = true
+			}
+		}
+	}
+
 	messages := make([]*schema.Message, 0, len(models))
-	for _, m := range models {
+	for i, m := range models {
 		var role schema.RoleType
 		switch m.Role {
 		case RoleUser:
@@ -724,6 +769,9 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		case RoleSystem:
 			role = schema.System
 		case RoleTool:
+			if m.ToolCallID == "" || !retainedCallIDs[m.ToolCallID] {
+				continue
+			}
 			role = schema.Tool
 		default:
 			continue
@@ -739,34 +787,8 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 			msg.Name = m.ToolCallName
 		}
 
-		if m.Role == RoleAssistant && m.ToolCalls != "" && m.ToolCalls != "[]" {
-			var toolCalls []schema.ToolCall
-			if err := json.Unmarshal([]byte(m.ToolCalls), &toolCalls); err == nil {
-				repaired := make([]schema.ToolCall, 0, len(toolCalls))
-				for _, tc := range toolCalls {
-					if tc.ID == "" {
-						continue
-					}
-					if !answeredToolCallIDs[tc.ID] {
-						continue
-					}
-					if tc.Function.Name == "" {
-						if name, ok := toolNameByCallID[tc.ID]; ok {
-							tc.Function.Name = name
-						}
-					}
-					if tc.Function.Arguments == "" || !json.Valid([]byte(tc.Function.Arguments)) {
-						tc.Function.Arguments = "{}"
-					}
-					if tc.Function.Name == "" {
-						continue
-					}
-					repaired = append(repaired, tc)
-				}
-				if len(repaired) > 0 {
-					msg.ToolCalls = repaired
-				}
-			}
+		if info, ok := repairedByIdx[i]; ok {
+			msg.ToolCalls = info.toolCalls
 		}
 
 		messages = append(messages, msg)

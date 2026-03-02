@@ -286,7 +286,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册会话服务
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
 	// 注册聊天服务
-	app.RegisterService(application.NewService(chat.NewChatService(app)))
+	chatService := chat.NewChatService(app)
+	app.RegisterService(application.NewService(chatService))
 	// 注册记忆服务
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
@@ -492,6 +493,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		chatService.Shutdown()
 		// Stop task manager before closing database
 		if tm := taskmanager.Get(); tm != nil {
 			tm.StopNow()

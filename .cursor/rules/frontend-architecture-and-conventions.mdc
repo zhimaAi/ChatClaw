@@ -32,6 +32,23 @@ Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 6. **翻译文本**：用 `const { t } = useI18n()`，key 格式 `模块.功能`
 7. **调用后端**：从 `@bindings/...` 导入，必须处理错误
 
+## shadcn-vue 组件用法规范
+
+shadcn-vue 组件基于 Radix Vue 封装，必须使用 Vue 标准的 `v-model` / `:model-value` + `@update:model-value` 来绑定值，**不要**使用 Radix 底层的原始 prop 名（如 `:checked`、`@update:checked`、`:pressed`、`@update:pressed` 等）。
+
+```vue
+<!-- ❌ BAD — 使用了 Radix 底层的 :checked / @update:checked -->
+<Switch :checked="value" @update:checked="value = $event" />
+
+<!-- ✅ GOOD — 使用 v-model -->
+<Switch v-model="value" />
+
+<!-- ✅ GOOD — 使用 :model-value + @update:model-value（需要自定义处理逻辑时） -->
+<Switch :model-value="value" @update:model-value="handleChange" />
+```
+
+此规则适用于所有 shadcn-vue 双向绑定组件（Switch、Checkbox、Select、Slider 等）。
+
 ## 禁止
 
 - 不要手动在 `src/components/ui/` 创建文件，必须用 shadcn CLI
@@ -39,6 +56,7 @@ Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 - 不要用相对路径 `../../`，用 `@/` 别名
 - 不要硬编码用户可见文本，必须走 i18n
 - 不要直接写颜色值如 `text-gray-500`，用语义变量 `text-muted-foreground`
+- 不要使用 Radix 底层 prop（如 `:checked`、`:pressed`），必须用 `v-model` 或 `:model-value`
 
 ## 代码模式
 

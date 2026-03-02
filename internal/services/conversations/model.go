@@ -19,10 +19,12 @@ const (
 )
 
 // NormalizeChatMode validates and canonicalizes chat mode values.
-// Empty values default to chat mode for backward compatibility.
+// Empty values default to task mode.
 func NormalizeChatMode(raw string) (string, bool) {
 	switch strings.TrimSpace(raw) {
-	case "", ChatModeChat:
+	case "":
+		return ChatModeTask, true
+	case ChatModeChat:
 		return ChatModeChat, true
 	case ChatModeTask:
 		return ChatModeTask, true
@@ -125,7 +127,7 @@ func (m *conversationModel) toDTO() Conversation {
 
 	chatMode, ok := NormalizeChatMode(m.ChatMode)
 	if !ok {
-		chatMode = ChatModeChat
+		chatMode = ChatModeTask
 	}
 
 	return Conversation{
