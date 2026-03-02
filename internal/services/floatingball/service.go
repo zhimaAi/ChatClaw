@@ -279,20 +279,15 @@ func (s *FloatingBallService) SetVisible(visible bool) error {
 	s.hovered = false
 	s.dragging = false
 	s.dragMoved = false
-	// do NOT reset dock/collapsed on non-initial show; preserve last state if available
-	if !s.hasLastState {
-		s.dock = DockNone
-		s.collapsed = false
-	} else {
-		s.dock = s.lastDock
-		s.collapsed = s.lastCollapsed
-	}
+	// New behavior: always start in non-docked, non-collapsed state when showing
+	// so the ball is fully visible and free-floating instead of half-hidden at edges.
+	s.dock = DockNone
+	s.collapsed = false
 
 	win.Show()
 	// 首次显示时，impl 可能还没 ready；用重试机制确保定位最终生效
 	s.scheduleRepositionLocked()
 	// 不抢占用户焦点：初始化/切换开启仅显示，不主动 Focus()
-	s.scheduleIdleDockLocked()
 	return nil
 }
 
@@ -332,45 +327,12 @@ func (s *FloatingBallService) Hover(entered bool) {
 		s.rehideTimer.Stop()
 		s.rehideTimer = nil
 	}
-
-	// Ignore very short leave right after enter *only if* we expanded from collapsed,
-	// otherwise users won't be able to move away quickly to re-hide.
-	if !entered && s.lastHoverEnterWasCollapsed && !s.lastHoverEnterAt.IsZero() && now.Sub(s.lastHoverEnterAt) <= 250*time.Millisecond {
-		s.debugLog("Hover:ignore_leave", map[string]any{
-			"enterAgeMs": now.Sub(s.lastHoverEnterAt).Milliseconds(),
-		})
-		s.hovered = true
-		return
-	}
-
+	// New behavior: hover 仅记录悬浮状态，不再触发贴边展开/回缩或自动半隐藏。
 	s.hovered = entered
-
-	// Dragging: ignore hover enter/leave side effects, otherwise mouseleave during drag
-	// may schedule a re-hide that teleports the window back to the docked edge.
-	if s.dragging {
-		s.debugLog("Hover:skip_dragging", map[string]any{})
-		return
-	}
-
 	if entered {
 		s.lastHoverEnterAt = now
 		s.lastHoverEnterWasCollapsed = s.collapsed
-		s.expandLocked()
-		return
 	}
-
-	// Mouse left: if not docked yet, wait idleDockDelay then dock+shrink
-	if s.dock == DockNone {
-		s.scheduleIdleDockLocked()
-		return
-	}
-
-	// Only auto re-hide when currently docked
-	s.rehideTimer = time.AfterFunc(rehideDebounce, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		s.rehideLocked()
-	})
 }
 
 // SetDragging 通知后端当前是否处于拖拽中。
@@ -485,30 +447,8 @@ func (s *FloatingBallService) SetAppActive(active bool) {
 	defer s.mu.Unlock()
 
 	s.appActive = active
-	if s.win == nil || !s.visible {
-		return
-	}
-
-	// 失去焦点：如果已经贴边，则立即缩小为把手，且关闭所有待执行的展开/回缩
-	if !active {
-		// Dragging: do not collapse during/around drag end, otherwise it may look like
-		// the window "teleports" back to the docked edge.
-		if s.dragging {
-			return
-		}
-		if s.rehideTimer != nil {
-			s.rehideTimer.Stop()
-			s.rehideTimer = nil
-		}
-		if s.idleDockTimer != nil {
-			s.idleDockTimer.Stop()
-			s.idleDockTimer = nil
-		}
-		if s.dock != DockNone {
-			_, relY := s.safeRelativePositionLocked()
-			s.collapseToYLocked(relY)
-		}
-	}
+	// New behavior: activation/blur only affect internal state; do not auto-dock
+	// or collapse the floating ball, so its position/size remain exactly as the user left.
 }
 
 // CloseFromUI 前端点击关闭按钮
@@ -848,40 +788,15 @@ func (s *FloatingBallService) snapAfterMoveAtLocked(relX, relY int) {
 		return
 	}
 
-	// Clamp Y into work area first (relative)
-	y := clamp(relY, 0, work.Height-height)
-
-	// Snap + collapse if near left/right edges (relative)
-	if relX <= edgeSnapGap {
-		s.dock = DockLeft
-		s.debugLog("snap:DockLeft", map[string]any{"relX": relX, "edgeSnapGap": edgeSnapGap})
-		// 仅贴边对齐（保持完整大小）；缩小交给失焦/鼠标移出/idle 逻辑
-		s.expandToYLocked(y)
-		s.scheduleIdleDockLocked()
-		return
-	}
-	if relX+width >= work.Width-edgeSnapGap {
-		s.dock = DockRight
-		s.debugLog("snap:DockRight", map[string]any{"relX": relX, "width": width, "workW": work.Width, "edgeSnapGap": edgeSnapGap})
-		// 仅贴边对齐（保持完整大小）；缩小交给失焦/鼠标移出/idle 逻辑
-		s.expandToYLocked(y)
-		s.scheduleIdleDockLocked()
-		return
-	}
-
-	// Not docked: keep within work area and clear dock state
+	// New behavior: do not snap/dock to screen edges or half-hide.
+	// Just clamp the final position into the visible work area so the ball
+	// stays fully visible at (roughly) the location where the user released it.
 	s.dock = DockNone
-	if s.collapsed {
-		s.debugLog("snap:undock_expand", map[string]any{"relX": relX, "relY": relY})
-		s.expandToYLocked(y)
-		return
-	}
+	s.collapsed = false
+	y := clamp(relY, 0, work.Height-height)
 	x := clamp(relX, 0, work.Width-width)
-	s.debugLog("snap:none", map[string]any{"x": x, "y": y, "relX": relX, "relY": relY})
+	s.debugLog("snap:free", map[string]any{"x": x, "y": y, "relX": relX, "relY": relY})
 	s.setRelativePositionLocked(x, y)
-
-	// 移动结束后，若鼠标未 hover，超过一段时间自动贴边缩小
-	s.scheduleIdleDockLocked()
 }
 
 func (s *FloatingBallService) resetToDefaultPositionLocked() {
@@ -895,9 +810,9 @@ func (s *FloatingBallService) resetToDefaultPositionLocked() {
 		"workArea": s.primaryWorkArea,
 		"workSource": s.primaryWorkAreaSource,
 	})
-	// Default position is at the right edge by design, so treat it as docked-right.
-	// This ensures idle auto-hide works without requiring an initial user move.
-	s.dock = DockRight
+	// New behavior: default position is still near the right edge, but we no longer
+	// treat it as a docked/half-hidden state so it won't auto-hide.
+	s.dock = DockNone
 	s.collapsed = false
 	s.setSizeLocked(ballSize, ballSize)
 	s.setRelativePositionLocked(x, y)
@@ -965,13 +880,11 @@ func (s *FloatingBallService) restoreOrDefaultLocked() {
 		s.debugLog("restore:last_state", map[string]any{
 			"x": s.lastRelX, "y": s.lastRelY, "dock": s.lastDock, "collapsed": s.lastCollapsed,
 		})
-		s.dock = s.lastDock
-		s.collapsed = s.lastCollapsed
-		if s.collapsed {
-			s.setSizeLocked(collapsedWidth, ballSize)
-		} else {
-			s.setSizeLocked(ballSize, ballSize)
-		}
+		// New behavior: after upgrade, we no longer restore dock/collapsed state.
+		// Only restore the last position and always use full ball size so it never stays half-hidden.
+		s.dock = DockNone
+		s.collapsed = false
+		s.setSizeLocked(ballSize, ballSize)
 		s.setRelativePositionLocked(s.lastRelX, s.lastRelY)
 		return
 	}

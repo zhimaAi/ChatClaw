@@ -30,7 +30,7 @@ import ChatModeSelector from './ChatModeSelector.vue'
 
 import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 
 const props = defineProps<{
   chatInput: string
@@ -65,6 +65,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const handleChatEnter = (event: KeyboardEvent) => {
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
@@ -137,7 +138,7 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
       "
     >
       <div v-if="chatMessages.length === 0 && !isGenerating" class="flex items-center gap-3">
-        <LogoIcon class="size-10 text-foreground" />
+        <img :src="logoSrc" class="size-10" alt="ChatClaw logo" />
         <div class="text-2xl font-semibold text-foreground">
           {{ t('app.title') }}
         </div>

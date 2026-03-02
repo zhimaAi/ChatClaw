@@ -7,10 +7,16 @@ import { onUnmounted } from 'vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import { Toaster } from '@/components/ui/toast'
 import { useLocaleSync } from '@/composables/useLocale'
+import { useThemeSync } from '@/composables/useThemeSync'
 
-// Sync locale when main window switches language
+// Sync locale and theme when main window switches settings
 const unsubLocale = useLocaleSync()
-onUnmounted(() => unsubLocale())
+const unsubTheme = useThemeSync()
+
+onUnmounted(() => {
+  unsubLocale()
+  unsubTheme()
+})
 </script>
 
 <template>

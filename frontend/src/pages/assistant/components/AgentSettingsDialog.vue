@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import SliderWithTicks from './SliderWithTicks.vue'
@@ -52,6 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -604,7 +605,7 @@ const handleDelete = async () => {
                     @click="handlePickIcon"
                   >
                     <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-                    <LogoIcon v-else class="size-icon-lg" />
+                    <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
                   </button>
                   <div class="text-xs text-muted-foreground">
                     {{ t('assistant.icon.hint') }}

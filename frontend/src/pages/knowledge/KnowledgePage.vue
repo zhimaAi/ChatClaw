@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings } from 'lucide-vue-next'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -21,6 +21,7 @@ import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
 import EditLibraryDialog from './components/EditLibraryDialog.vue'
 import LibraryContentArea from './components/LibraryContentArea.vue'
 import KnowledgeChatInput from './components/KnowledgeChatInput.vue'
+import FolderTreeItem from './components/FolderTreeItem.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -43,8 +44,9 @@ import {
 } from '@/components/ui/alert-dialog'
 
 import type { Library } from '@bindings/chatclaw/internal/services/library'
-import { LibraryService } from '@bindings/chatclaw/internal/services/library'
+import { LibraryService, type Folder } from '@bindings/chatclaw/internal/services/library'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { ChevronRight, ChevronDown } from 'lucide-vue-next'
 
 type LibraryTab = 'personal' | 'team'
 
@@ -61,6 +63,11 @@ const actionLibrary = ref<Library | null>(null)
 const libraries = ref<Library[]>([])
 const loading = ref(false)
 const selectedLibraryId = ref<number | null>(null)
+const libraryFolders = ref<Map<number, Folder[]>>(new Map())
+const expandedLibraries = ref<Set<number>>(new Set())
+const expandedFolders = ref<Set<number>>(new Set())
+// null = 全部, -1 = 未分组, >0 = 文件夹ID
+const selectedFolderId = ref<number | null>(null)
 
 const selectedLibrary = computed(
   () => libraries.value.find((l) => l.id === selectedLibraryId.value) || null
@@ -78,6 +85,10 @@ const loadLibraries = async () => {
     libraries.value = list || []
     if (selectedLibraryId.value == null && libraries.value.length > 0) {
       selectedLibraryId.value = libraries.value[0].id
+      // 自动展开第一个知识库
+      expandedLibraries.value.add(libraries.value[0].id)
+      // 加载第一个知识库的文件夹
+      await loadFoldersForLibrary(libraries.value[0].id)
     }
   } catch (error) {
     console.error('Failed to load libraries:', error)
@@ -86,6 +97,112 @@ const loadLibraries = async () => {
     loading.value = false
   }
 }
+
+const loadFoldersForLibrary = async (libraryId: number, force = false) => {
+  if (!force && libraryFolders.value.has(libraryId)) return
+  try {
+    const folders = await LibraryService.ListFolders(libraryId)
+    libraryFolders.value.set(libraryId, folders)
+  } catch (error) {
+    console.error('Failed to load folders:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.loadFailed'))
+  }
+}
+
+const toggleLibraryExpanded = async (libraryId: number) => {
+  if (expandedLibraries.value.has(libraryId)) {
+    expandedLibraries.value.delete(libraryId)
+  } else {
+    expandedLibraries.value.add(libraryId)
+    await loadFoldersForLibrary(libraryId)
+  }
+}
+
+const toggleFolderExpanded = (folderId: number) => {
+  if (expandedFolders.value.has(folderId)) {
+    expandedFolders.value.delete(folderId)
+  } else {
+    expandedFolders.value.add(folderId)
+  }
+}
+
+const handleFolderClick = (folderId: number | -1) => {
+  // -1 表示"未分组"，null 表示"全部"
+  selectedFolderId.value = folderId === -1 ? -1 : folderId
+}
+
+const handleLibraryClick = async (libraryId: number) => {
+  selectedLibraryId.value = libraryId
+  selectedFolderId.value = null // 重置文件夹选择
+  if (!expandedLibraries.value.has(libraryId)) {
+    expandedLibraries.value.add(libraryId)
+    await loadFoldersForLibrary(libraryId)
+  }
+}
+
+// 处理文件夹选择
+const handleFolderSelected = (folderId: number | null) => {
+  selectedFolderId.value = folderId
+  // 如果选择的是文件夹，确保父文件夹在侧边栏中展开
+  if (folderId && folderId > 0 && selectedLibrary.value) {
+    const folders = libraryFolders.value.get(selectedLibrary.value.id) || []
+    const findFolder = (folders: Folder[], id: number): Folder | null => {
+      for (const folder of folders) {
+        if (folder.id === id) return folder
+        if (folder.children) {
+          const found = findFolder(folder.children, id)
+          if (found) {
+            // 确保父文件夹展开
+            expandedFolders.value.add(folder.id)
+            return found
+          }
+        }
+      }
+      return null
+    }
+    findFolder(folders, folderId)
+  }
+}
+
+// 处理文件夹创建
+const handleFolderCreated = () => {
+  if (selectedLibrary.value) {
+    void loadFoldersForLibrary(selectedLibrary.value.id, true)
+  }
+}
+
+// 处理文件夹更新
+const handleFolderUpdated = () => {
+  if (selectedLibrary.value) {
+    void loadFoldersForLibrary(selectedLibrary.value.id, true)
+  }
+}
+
+// 处理文件夹删除
+const handleFolderDeleted = () => {
+  if (selectedLibrary.value) {
+    void loadFoldersForLibrary(selectedLibrary.value.id, true)
+  }
+}
+
+// 监听知识库删除，清理相关状态
+watch(
+  () => libraries.value.map((l) => l.id),
+  (newIds) => {
+    // 清理已删除知识库的文件夹数据
+    for (const [libId] of libraryFolders.value) {
+      if (!newIds.includes(libId)) {
+        libraryFolders.value.delete(libId)
+        expandedLibraries.value.delete(libId)
+      }
+    }
+    // 如果当前选中的知识库被删除，重置选择
+    if (selectedLibraryId.value && !newIds.includes(selectedLibraryId.value)) {
+      selectedLibraryId.value = newIds[0] ?? null
+      selectedFolderId.value = null
+    }
+  }
+)
 
 const ensureEmbeddingConfigured = async (): Promise<boolean> => {
   try {
@@ -114,12 +231,14 @@ const handleEmbeddingSettingsClick = () => {
   embeddingSettingsOpen.value = true
 }
 
-const handleCreated = (lib: Library) => {
+const handleCreated = async (lib: Library) => {
   // 立即插入列表（减少一次刷新等待），并选中
   libraries.value = [...libraries.value, lib].sort(
     (a, b) => b.sort_order - a.sort_order || b.id - a.id
   )
   selectedLibraryId.value = lib.id
+  expandedLibraries.value.add(lib.id)
+  await loadFoldersForLibrary(lib.id)
   toast.success(t('knowledge.create.success'))
 }
 
@@ -236,49 +355,108 @@ onMounted(() => {
         </div>
 
         <div v-else class="flex flex-col gap-1">
-          <button
-            v-for="lib in libraries"
-            :key="lib.id"
-            type="button"
-            :class="
-              cn(
-                'group flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
-                selectedLibraryId === lib.id
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-foreground hover:bg-accent/50'
-              )
-            "
-            @click="selectedLibraryId = lib.id"
-          >
-            <span class="min-w-0 flex-1 truncate">{{ lib.name }}</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
-                :title="t('knowledge.item.menu')"
-                @click.stop
+          <div v-for="lib in libraries" :key="lib.id" class="flex flex-col gap-0.5">
+            <!-- 知识库项 -->
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                @click="toggleLibraryExpanded(lib.id)"
               >
-                <MoreHorizontal class="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" class="w-40">
-                <DropdownMenuItem class="gap-2" @select="handleOpenRename(lib)">
-                  <IconRename class="size-4 text-muted-foreground" />
-                  {{ t('knowledge.item.rename') }}
-                </DropdownMenuItem>
-                <DropdownMenuItem class="gap-2" @select="handleOpenEdit(lib)">
-                  <IconLibSettings class="size-4 text-muted-foreground" />
-                  {{ t('knowledge.item.settings') }}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  class="gap-2 text-muted-foreground focus:text-foreground"
-                  @select="handleOpenDelete(lib)"
+                <ChevronRight
+                  :class="cn(
+                    'size-3.5 transition-transform',
+                    expandedLibraries.has(lib.id) && 'rotate-90'
+                  )"
+                />
+              </button>
+              <button
+                type="button"
+                :class="
+                  cn(
+                    'group flex h-10 flex-1 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
+                    selectedLibraryId === lib.id
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-foreground hover:bg-accent/50'
+                  )
+                "
+                @click="handleLibraryClick(lib.id)"
+              >
+                <span class="min-w-0 flex-1 truncate" :title="lib.name">
+                  {{ lib.name }}
+                </span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                    :title="t('knowledge.item.menu')"
+                    @click.stop
+                  >
+                    <MoreHorizontal class="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="w-40">
+                    <DropdownMenuItem class="gap-2" @select="handleOpenRename(lib)">
+                      <IconRename class="size-4 text-muted-foreground" />
+                      {{ t('knowledge.item.rename') }}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem class="gap-2" @select="handleOpenEdit(lib)">
+                      <IconLibSettings class="size-4 text-muted-foreground" />
+                      {{ t('knowledge.item.settings') }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      class="gap-2 text-muted-foreground focus:text-foreground"
+                      @select="handleOpenDelete(lib)"
+                    >
+                      <IconDelete class="size-4" />
+                      {{ t('knowledge.item.delete') }}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </button>
+            </div>
+            <!-- 文件夹树 -->
+            <div
+              v-if="expandedLibraries.has(lib.id)"
+              class="ml-4 flex flex-col gap-0.5"
+            >
+              <!-- 未分组选项 -->
+              <div class="flex items-center gap-1">
+                <div class="size-6 shrink-0" />
+                <button
+                  type="button"
+                  :class="
+                    cn(
+                      'flex h-8 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs transition-colors',
+                        selectedFolderId === -1 && selectedLibraryId === lib.id
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    )
+                  "
+                  @click.stop="handleFolderClick(-1)"
                 >
-                  <IconDelete class="size-4" />
-                  {{ t('knowledge.item.delete') }}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </button>
+                  <span
+                    class="min-w-0 flex-1 truncate"
+                    :title="t('knowledge.folder.uncategorized')"
+                  >
+                    {{ t('knowledge.folder.uncategorized') }}
+                  </span>
+                </button>
+              </div>
+              <!-- 文件夹列表 -->
+              <template v-if="libraryFolders.has(lib.id)">
+                <FolderTreeItem
+                  v-for="folder in libraryFolders.get(lib.id) || []"
+                  :key="folder.id"
+                  :folder="folder"
+                  :selected-folder-id="selectedFolderId"
+                  :selected-library-id="lib.id"
+                  :expanded-folders="expandedFolders"
+                  @toggle-expanded="toggleFolderExpanded"
+                  @folder-click="handleFolderClick"
+                />
+              </template>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
@@ -324,7 +502,16 @@ onMounted(() => {
       </div>
 
       <!-- 知识库内容管理 -->
-      <LibraryContentArea v-else :key="selectedLibrary.id" :library="selectedLibrary" />
+      <LibraryContentArea
+        v-else
+        :key="`${selectedLibrary.id}-${selectedFolderId}`"
+        :library="selectedLibrary"
+        :selected-folder-id="selectedFolderId"
+        @folder-selected="handleFolderSelected"
+        @folder-created="handleFolderCreated"
+        @folder-updated="handleFolderUpdated"
+        @folder-deleted="handleFolderDeleted"
+      />
 
       <!-- Bottom chat input shortcut (hidden when no libraries exist) -->
       <KnowledgeChatInput v-if="!isLibraryEmpty" :selected-library-id="selectedLibraryId" :tab-id="tabId" />

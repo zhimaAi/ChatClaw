@@ -17,7 +17,7 @@ import DoubaoIcon from '@/assets/icons/providers/doubao.svg'
 import BaiduIcon from '@/assets/icons/providers/baidu.svg'
 import GrokIcon from '@/assets/icons/providers/grok.svg'
 import OllamaIcon from '@/assets/icons/providers/ollama.svg'
-import AppLogoIcon from '@/assets/images/logo.svg'
+import { getLogoDataUrl } from '@/composables/useLogo'
 
 // AI 模型图标（用于多问页面）
 import ChatgptModelIcon from '@/assets/icons/models/chatgpt-icon.svg'
@@ -59,8 +59,6 @@ const builtinIcons: Record<string, SvgComponent> = {
   baidu: BaiduIcon,
   grok: GrokIcon,
   ollama: OllamaIcon,
-  // Use app logo for ChatClaw to avoid cropped/incomplete rendering.
-  chatclaw: AppLogoIcon,
   // AI 模型图标（用于多问页面，使用 model- 前缀区分）
   'model-chatgpt': ChatgptModelIcon,
   'model-claude': ClaudeModelIcon,
@@ -96,7 +94,14 @@ const iconComponent = computed(() => {
 // 获取 Data URL 图标
 const iconUrl = computed(() => {
   const icon = props.icon?.trim()
-  if (icon && isDataUrl(icon)) {
+  if (!icon) return null
+
+  // ChatClaw provider: use theme-aware PNG logo instead of SVG component.
+  if (icon === 'chatclaw') {
+    return getLogoDataUrl()
+  }
+
+  if (isDataUrl(icon)) {
     return icon
   }
   return null
