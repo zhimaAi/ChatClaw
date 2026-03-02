@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FolderOpen } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 
@@ -74,23 +75,25 @@ onMounted(() => {
         />
       </SettingsItem>
 
-      <SettingsItem :bordered="false">
-        <template #label>
-          <div class="flex flex-col gap-1">
-            <span class="text-sm font-medium text-foreground">{{ t('settings.skills.directory') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('settings.skills.directoryHint') }}</span>
-          </div>
-        </template>
-        <div class="flex shrink-0 items-center gap-2">
-          <span class="text-sm text-muted-foreground">{{ skillsDir }}</span>
+      <div
+        class="flex flex-col gap-1 p-4"
+      >
+        <span class="text-sm font-medium text-foreground">{{ t('settings.skills.directory') }}</span>
+        <span class="text-xs text-muted-foreground">{{ t('settings.skills.directoryHint') }}</span>
+        <div class="flex w-full items-center gap-2 pt-0.5">
+          <Input
+            :model-value="skillsDir"
+            readonly
+            class="flex-1 min-w-0 cursor-default bg-muted/30"
+          />
           <button
-            class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             @click="handleOpenSkillsDir"
           >
             <FolderOpen class="size-4" />
           </button>
         </div>
-      </SettingsItem>
+      </div>
     </SettingsCard>
   </div>
 </template>
