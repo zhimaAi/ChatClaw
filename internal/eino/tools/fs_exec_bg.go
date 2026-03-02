@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -96,7 +97,10 @@ func (m *BgProcessManager) Cleanup() {
 
 	for _, p := range snapshot {
 		p.cancel()
-		<-p.done
+		select {
+		case <-p.done:
+		case <-time.After(10 * time.Second):
+		}
 	}
 }
 
@@ -149,14 +153,29 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 
 	setProcGroup(cmd)
 
-	buf := &safeBuffer{}
-	cmd.Stdout = buf
-	cmd.Stderr = buf
+	// Use os.Pipe so we can force-close pipes after killing to avoid
+	// cmd.Wait hanging when orphaned children keep the write end open.
+	pr, pw, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		bgCancel()
+		return fmt.Sprintf("Failed to create pipe: %v", pipeErr), nil
+	}
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
 	if err := cmd.Start(); err != nil {
 		bgCancel()
+		pw.Close()
+		pr.Close()
 		return fmt.Sprintf("Failed to start: %v", err), nil
 	}
+
+	pw.Close()
+
+	buf := &safeBuffer{}
+	go func() {
+		_, _ = io.Copy(buf, pr)
+	}()
 
 	pid := cmd.Process.Pid
 	done := make(chan struct{})
@@ -183,15 +202,24 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 
 		select {
 		case <-waitCh:
-			// Process exited on its own
 		case <-bgCtx.Done():
 			killProcessGroup(cmd)
-			<-waitCh
+			pr.Close()
+			select {
+			case <-waitCh:
+			case <-time.After(5 * time.Second):
+			}
 		case <-timer.C:
 			killProcessGroup(cmd)
-			<-waitCh
+			pr.Close()
+			select {
+			case <-waitCh:
+			case <-time.After(5 * time.Second):
+			}
 			_, _ = p.buf.Write([]byte(fmt.Sprintf("\n[Process auto-killed after %ds timeout]", timeoutSec)))
 		}
+
+		pr.Close()
 
 		p.mu.Lock()
 		p.exited = true

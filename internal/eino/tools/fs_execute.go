@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -102,13 +104,32 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 
 	setProcGroup(cmd)
 
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	// Use os.Pipe so we can force-close the write end after killing the
+	// process group. If we let Go create internal pipes (cmd.Stdout = &buf),
+	// cmd.Wait will hang forever when background children (e.g. "npm run
+	// dev &") inherit and keep the pipe open after the parent is killed.
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return fmt.Sprintf("failed to create pipe: %v\n[exit code: -1]", err), nil
+	}
+	cmd.Stdout = pw
+	cmd.Stderr = pw
 
 	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
 		return fmt.Sprintf("failed to start command: %v\n[exit code: -1]", err), nil
 	}
+
+	// Close our copy of the write end so reads see EOF once all children close theirs.
+	pw.Close()
+
+	var buf bytes.Buffer
+	readDone := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&buf, pr)
+		close(readDone)
+	}()
 
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
@@ -122,7 +143,20 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 		timedOut = execCtx.Err() == context.DeadlineExceeded
 		cancelled = !timedOut
 		killProcessGroup(cmd)
-		cmdErr = <-waitDone
+		// After killing, close the read end to unblock io.Copy (and thus
+		// cmd.Wait) even if orphaned children still hold the write end.
+		pr.Close()
+		select {
+		case cmdErr = <-waitDone:
+		case <-time.After(5 * time.Second):
+		}
+	}
+
+	// Ensure the reader goroutine finishes.
+	pr.Close()
+	select {
+	case <-readDone:
+	case <-time.After(2 * time.Second):
 	}
 
 	exitCode := 0
