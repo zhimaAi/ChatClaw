@@ -136,11 +136,20 @@ export const useNavigationStore = defineStore('navigation', () => {
 
   /**
    * 点击左侧导航菜单时调用
-   * - AI助手：总是创建新标签页
+   * - AI助手：如果已有标签页则切换到最右侧的，否则创建新标签页
    * - 知识库、多问、设置：如果已存在则切换，否则创建
    */
   const navigateToModule = (module: NavModule) => {
     activeModule.value = module
+
+    if (module === 'assistant') {
+      const assistantTabs = tabs.value.filter((tab) => tab.module === 'assistant')
+      if (assistantTabs.length > 0) {
+        const rightmostTab = assistantTabs[assistantTabs.length - 1]
+        activeTabId.value = rightmostTab.id
+        return
+      }
+    }
 
     // 检查是否为单标签模块
     if (singleTabModules.includes(module)) {
