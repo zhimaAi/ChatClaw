@@ -13,8 +13,11 @@
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",
+    "@vue-office/docx": "^1.6.3",
+    "@vue-office/excel": "^1.7.14",
     "@vueuse/core": "^14.2.0",
     "@wailsio/runtime": "latest",
+    "bestofdview": "^0.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.1",

@@ -23,11 +23,12 @@ type Document struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	LibraryID    int64  `json:"library_id"`
-	OriginalName string `json:"original_name"`
-	ThumbIcon    string `json:"thumb_icon"`
-	FileSize     int64  `json:"file_size"`
-	ContentHash  string `json:"content_hash"`
+	LibraryID    int64   `json:"library_id"`
+	FolderID     *int64  `json:"folder_id"` // nil 表示未分组
+	OriginalName string  `json:"original_name"`
+	ThumbIcon    string  `json:"thumb_icon"`
+	FileSize     int64   `json:"file_size"`
+	ContentHash  string  `json:"content_hash"`
 
 	Extension  string `json:"extension"`
 	MimeType   string `json:"mime_type"`
@@ -55,6 +56,7 @@ type Document struct {
 type UploadInput struct {
 	LibraryID int64    `json:"library_id"`
 	FilePaths []string `json:"file_paths"`
+	FolderID  *int64   `json:"folder_id,omitempty"` // nil 表示未分组，可选字段
 }
 
 // UploadProgressEvent 上传进度事件（发送给前端）
@@ -74,12 +76,14 @@ type RenameInput struct {
 // - BeforeID: 返回 id < before_id 的数据（按 id DESC）
 // - Limit: 每次返回条数（建议 100）
 // - SortBy: 排序方式（"created_desc" 或 "created_asc"），默认 "created_desc"
+// - FolderID: 文件夹ID过滤（0 表示不过滤，-1 表示仅未分组，>0 表示指定文件夹）
 type ListDocumentsPageInput struct {
 	LibraryID int64  `json:"library_id"`
 	Keyword   string `json:"keyword"`
 	BeforeID  int64  `json:"before_id"`
 	Limit     int    `json:"limit"`
 	SortBy    string `json:"sort_by"`
+	FolderID  int64  `json:"folder_id"` // 0=不过滤, -1=仅未分组, >0=指定文件夹
 }
 
 // ProgressEvent 进度事件数据（发送给前端）
@@ -109,12 +113,13 @@ type documentModel struct {
 	CreatedAt time.Time `bun:"created_at,notnull"`
 	UpdatedAt time.Time `bun:"updated_at,notnull"`
 
-	LibraryID    int64  `bun:"library_id,notnull"`
-	OriginalName string `bun:"original_name,notnull"`
-	NameTokens   string `bun:"name_tokens,notnull"`
-	ThumbIcon    string `bun:"thumb_icon"`
-	FileSize     int64  `bun:"file_size,notnull"`
-	ContentHash  string `bun:"content_hash,notnull"`
+	LibraryID    int64   `bun:"library_id,notnull"`
+	FolderID     *int64  `bun:"folder_id"`
+	OriginalName string  `bun:"original_name,notnull"`
+	NameTokens   string  `bun:"name_tokens,notnull"`
+	ThumbIcon    string  `bun:"thumb_icon"`
+	FileSize     int64   `bun:"file_size,notnull"`
+	ContentHash  string  `bun:"content_hash,notnull"`
 
 	Extension  string `bun:"extension,notnull"`
 	MimeType   string `bun:"mime_type,notnull"`
@@ -162,6 +167,7 @@ func (m *documentModel) toDTO() Document {
 		UpdatedAt: m.UpdatedAt,
 
 		LibraryID:    m.LibraryID,
+		FolderID:     m.FolderID,
 		OriginalName: m.OriginalName,
 		ThumbIcon:    m.ThumbIcon,
 		FileSize:     m.FileSize,

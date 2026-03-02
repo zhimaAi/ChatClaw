@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -188,6 +191,16 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 			Model(&models).
 			Where("d.library_id = ?", input.LibraryID)
 
+		// Apply folder filter
+		if input.FolderID == -1 {
+			// -1: 仅未分组（folder_id IS NULL）
+			q = q.Where("d.folder_id IS NULL")
+		} else if input.FolderID > 0 {
+			// >0: 指定文件夹
+			q = q.Where("d.folder_id = ?", input.FolderID)
+		}
+		// 0: 不过滤（显示所有）
+
 		if input.SortBy == "created_asc" {
 			// Ascending order: before_id acts as "after_id" (return rows with id > before_id)
 			if input.BeforeID > 0 {
@@ -218,6 +231,39 @@ func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Doc
 		out = append(out, doc)
 	}
 	return out, nil
+}
+
+// GetDocument 获取单个文档详情
+func (s *DocumentService) GetDocument(id int64) (*Document, error) {
+	if id <= 0 {
+		return nil, errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return nil, errs.Wrap("error.document_read_failed", err)
+	}
+
+	doc := m.toDTO()
+	// 检查本地文件是否存在
+	if doc.LocalPath != "" {
+		if _, err := os.Stat(doc.LocalPath); os.IsNotExist(err) {
+			doc.FileMissing = true
+		}
+	}
+
+	return &doc, nil
 }
 
 // ListDocuments 获取知识库的文档列表
@@ -327,7 +373,7 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 	emitUploadProgress()
 
 	for _, srcPath := range input.FilePaths {
-		doc, err := s.uploadSingleFile(ctx, db, input.LibraryID, libraryDir, srcPath)
+		doc, err := s.uploadSingleFile(ctx, db, input.LibraryID, input.FolderID, libraryDir, srcPath)
 		done++
 		emitUploadProgress()
 		if err != nil {
@@ -355,7 +401,7 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 }
 
 // uploadSingleFile 上传单个文件
-func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libraryID int64, libraryDir, srcPath string) (*Document, error) {
+func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libraryID int64, folderID *int64, libraryDir, srcPath string) (*Document, error) {
 	// 检查文件是否存在
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
@@ -413,6 +459,7 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 	// 插入数据库记录
 	m := &documentModel{
 		LibraryID:       libraryID,
+		FolderID:        folderID,
 		OriginalName:    originalName,
 		NameTokens:      tokenizer.TokenizeName(originalName),
 		ThumbIcon:       "",
@@ -646,6 +693,213 @@ func (s *DocumentService) DeleteDocument(id int64) error {
 	}
 
 	return nil
+}
+
+// OpenDocument 打开文档（本地文件用系统默认应用，网页用浏览器）
+func (s *DocumentService) OpenDocument(id int64) error {
+	if id <= 0 {
+		return errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 查询文档
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return errs.Wrap("error.document_read_failed", err)
+	}
+
+	// 根据来源类型打开
+	if m.SourceType == "web" && m.WebURL != "" {
+		// 网页：使用浏览器打开
+		if err := s.app.Browser.OpenURL(m.WebURL); err != nil {
+			return errs.Wrap("error.browser_open_failed", err)
+		}
+	} else if m.SourceType == "local" && m.LocalPath != "" {
+		// 本地文件：使用系统默认应用打开
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "windows":
+			cmd = exec.Command("cmd", "/c", "start", "", m.LocalPath)
+		case "darwin":
+			cmd = exec.Command("open", m.LocalPath)
+		case "linux":
+			cmd = exec.Command("xdg-open", m.LocalPath)
+		default:
+			return errs.New("error.unsupported_platform")
+		}
+		if err := cmd.Run(); err != nil {
+			return errs.Wrap("error.file_open_failed", err)
+		}
+	} else {
+		return errs.New("error.document_cannot_open")
+	}
+
+	return nil
+}
+
+// GetDocumentPath 获取文档文件路径（用于前端查看）
+func (s *DocumentService) GetDocumentPath(id int64) (string, error) {
+	if id <= 0 {
+		return "", errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 查询文档
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return "", errs.Wrap("error.document_read_failed", err)
+	}
+
+	// 根据来源类型返回路径
+	if m.SourceType == "web" && m.WebURL != "" {
+		return m.WebURL, nil
+	} else if m.SourceType == "local" && m.LocalPath != "" {
+		// 检查文件是否存在
+		if _, err := os.Stat(m.LocalPath); os.IsNotExist(err) {
+			return "", errs.New("error.document_file_missing")
+		}
+		return m.LocalPath, nil
+	}
+
+	return "", errs.New("error.document_cannot_open")
+}
+
+// GetDocumentContent 获取文档文件内容（用于前端查看文本类文件）
+func (s *DocumentService) GetDocumentContent(id int64) (string, error) {
+	if id <= 0 {
+		return "", errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 查询文档
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return "", errs.Wrap("error.document_read_failed", err)
+	}
+
+	// 只支持本地文本类文件
+	if m.SourceType != "local" || m.LocalPath == "" {
+		return "", errs.New("error.document_content_not_available")
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(m.LocalPath); os.IsNotExist(err) {
+		return "", errs.New("error.document_file_missing")
+	}
+
+	// 只读取文本类文件（限制大小，避免读取大文件）
+	const maxSize = 10 * 1024 * 1024 // 10MB
+	info, err := os.Stat(m.LocalPath)
+	if err != nil {
+		return "", errs.Wrap("error.file_stat_failed", err)
+	}
+	if info.Size() > maxSize {
+		return "", errs.New("error.file_too_large")
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(m.LocalPath)
+	if err != nil {
+		return "", errs.Wrap("error.file_read_failed", err)
+	}
+
+	// 检查是否为文本文件（简单检查）
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(m.LocalPath), "."))
+	textExts := map[string]bool{
+		"txt":  true,
+		"md":   true,
+		"csv":  true,
+		"html": true,
+		"htm":  true,
+	}
+	if !textExts[ext] {
+		return "", errs.New("error.document_content_not_available")
+	}
+
+	return string(content), nil
+}
+
+// GetDocumentBytes 获取文档文件二进制内容（base64 编码，用于前端预览 Office 文件）
+func (s *DocumentService) GetDocumentBytes(id int64) (string, error) {
+	if id <= 0 {
+		return "", errs.New("error.document_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 查询文档
+	var m documentModel
+	if err := db.NewSelect().Model(&m).Where("id = ?", id).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errs.Newf("error.document_not_found", map[string]any{"ID": id})
+		}
+		return "", errs.Wrap("error.document_read_failed", err)
+	}
+
+	// 只支持本地文件
+	if m.SourceType != "local" || m.LocalPath == "" {
+		return "", errs.New("error.document_content_not_available")
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(m.LocalPath); os.IsNotExist(err) {
+		return "", errs.New("error.document_file_missing")
+	}
+
+	// 限制文件大小（50MB，Office 文件可能较大）
+	const maxSize = 50 * 1024 * 1024 // 50MB
+	info, err := os.Stat(m.LocalPath)
+	if err != nil {
+		return "", errs.Wrap("error.file_stat_failed", err)
+	}
+	if info.Size() > maxSize {
+		return "", errs.New("error.file_too_large")
+	}
+
+	// 读取文件内容
+	content, err := os.ReadFile(m.LocalPath)
+	if err != nil {
+		return "", errs.Wrap("error.file_read_failed", err)
+	}
+
+	// 返回 base64 编码
+	return base64.StdEncoding.EncodeToString(content), nil
 }
 
 // calculateFileHash 计算文件 SHA256 哈希

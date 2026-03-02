@@ -17,7 +17,7 @@ import { Events } from '@wailsio/runtime'
 import { useAppStore } from '@/stores'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
-import LogoIcon from '@/assets/images/logo.svg'
+import logoAppIcon from '@/assets/images/logo-app-colored.png'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -111,7 +111,7 @@ async function handleAutoUpdateChange(value: boolean) {
       <div
         class="flex size-icon-box shrink-0 items-center justify-center rounded-icon-box border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
       >
-        <LogoIcon class="size-icon-lg" />
+        <img :src="logoAppIcon" class="size-icon-lg" alt="ChatClaw logo" />
       </div>
 
       <!-- App name and copyright -->

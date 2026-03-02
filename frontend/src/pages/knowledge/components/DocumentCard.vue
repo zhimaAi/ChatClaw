@@ -8,6 +8,7 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
+  FolderPlus,
 } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import {
@@ -28,6 +29,9 @@ import IconHtml from '@/assets/icons/file-html.svg'
 import IconCsv from '@/assets/icons/file-csv.svg'
 import IconOfd from '@/assets/icons/file-ofd.svg'
 import IconDocumentCover from '@/assets/icons/document-cover.svg'
+import { DocumentService } from '@bindings/chatclaw/internal/services/document'
+import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 
 export type DocumentStatus = 'pending' | 'parsing' | 'learning' | 'completed' | 'failed'
 
@@ -37,6 +41,10 @@ export interface Document {
   name: string
   fileType: string
   createdAt: string
+  // Last updated time of the document (ISO string from backend)
+  updatedAt?: string
+  // Folder ID this document belongs to (null = uncategorized)
+  folderId?: number | null
   status: DocumentStatus
   progress?: number
   thumbIcon?: string // base64 data URI from backend
@@ -52,6 +60,9 @@ const emit = defineEmits<{
   (e: 'rename', doc: Document): void
   (e: 'relearn', doc: Document): void
   (e: 'delete', doc: Document): void
+  (e: 'move-to-folder', doc: Document): void
+  (e: 'detail', doc: Document): void
+  (e: 'view', doc: Document): void
 }>()
 
 const { t } = useI18n()
@@ -247,11 +258,17 @@ onUnmounted(() => {
   cancelCloseErrorTip()
   detachRepositionListeners()
 })
+
+const handleCardClick = () => {
+  // Emit view event to open in internal viewer
+  emit('view', props.document)
+}
 </script>
 
 <template>
   <div
-    class="group relative flex h-[182px] w-[166px] flex-col rounded-xl border border-border bg-card transition-shadow hover:shadow-md dark:hover:shadow-none dark:hover:ring-1 dark:hover:ring-white/10"
+    class="group relative flex h-[182px] w-[166px] flex-col rounded-xl border border-border bg-card transition-shadow hover:shadow-md dark:hover:shadow-none dark:hover:ring-1 dark:hover:ring-white/10 cursor-pointer"
+    @click="handleCardClick"
   >
     <!-- 缩略图区域 -->
     <div
@@ -338,18 +355,27 @@ onUnmounted(() => {
       >
         <MoreHorizontal class="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" class="w-32">
-        <DropdownMenuItem class="gap-2" @select="emit('rename', document)">
+      <DropdownMenuContent align="end" class="w-auto min-w-fit">
+        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('detail', document)">
+          <FileText class="size-4 text-muted-foreground" />
+          {{ t('knowledge.detail.title') }}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('rename', document)">
           <IconRename class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.menu.rename') }}
         </DropdownMenuItem>
-        <DropdownMenuItem class="gap-2" @select="emit('relearn', document)">
+        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('relearn', document)">
           <RefreshCw class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.menu.relearn') }}
         </DropdownMenuItem>
+        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('move-to-folder', document)">
+          <FolderPlus class="size-4 text-muted-foreground" />
+          {{ t('knowledge.content.moveToFolder.title') }}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          class="gap-2 text-muted-foreground focus:text-foreground"
+          class="gap-2 whitespace-nowrap text-muted-foreground focus:text-foreground"
           @select="emit('delete', document)"
         >
           <IconDelete class="size-4" />
