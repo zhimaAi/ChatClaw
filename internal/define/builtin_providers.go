@@ -25,7 +25,7 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 1, APIEndpoint: "https://api.openai.com/v1"},
 	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 2, APIEndpoint: ""},
 	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 3, APIEndpoint: "https://api.anthropic.com/v1"},
-	{ProviderID: "google", Name: "Google Gemini", Type: "gemini", Icon: "google", SortOrder: 4, APIEndpoint: "https://generativelanguage.googleapis.com/v1beta"},
+	{ProviderID: "google", Name: "Google Gemini", Type: "gemini", Icon: "google", SortOrder: 4, APIEndpoint: "https://generativelanguage.googleapis.com"},
 	{ProviderID: "grok", Name: "Grok", Type: "openai", Icon: "grok", SortOrder: 5, APIEndpoint: "https://api.x.ai/v1"},
 	{ProviderID: "deepseek", Name: "DeepSeek", Type: "openai", Icon: "deepseek", SortOrder: 6, APIEndpoint: "https://api.deepseek.com/v1"},
 	{ProviderID: "zhipu", Name: "智谱 GLM", Type: "openai", Icon: "zhipu", SortOrder: 7, APIEndpoint: "https://open.bigmodel.cn/api/paas/v4"},
@@ -59,6 +59,7 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20251001", Name: "Claude Haiku 4.5", Type: "llm", SortOrder: 102},
 
 	// Google
+	{ProviderID: "google", ModelID: "gemini-3.1-pro-preview", Name: "Gemini 3.1 Pro", Type: "llm", SortOrder: 99},
 	{ProviderID: "google", ModelID: "gemini-3-pro-preview", Name: "Gemini 3 Pro", Type: "llm", SortOrder: 100},
 	{ProviderID: "google", ModelID: "gemini-3-flash-preview", Name: "Gemini 3 Flash", Type: "llm", SortOrder: 101},
 	{ProviderID: "google", ModelID: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Type: "llm", SortOrder: 102},

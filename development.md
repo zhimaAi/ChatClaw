@@ -91,7 +91,7 @@ cd bin && tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS C
 
 # amd64
 wails3 task darwin:sign:notarize ARCH=amd64 DEV=false
-cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw &&cd ..
+cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw && cd ..
 
 # arm64+amd64
 wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false

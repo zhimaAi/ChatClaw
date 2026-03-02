@@ -29,9 +29,10 @@ var reembedMu sync.Mutex
 type Category string
 
 const (
-	CategoryGeneral Category = "general" // 常规设置
-	CategorySnap    Category = "snap"    // 吸附设置
-	CategoryTools   Category = "tools"   // 功能工具
+	CategoryGeneral   Category = "general"   // 常规设置
+	CategorySnap      Category = "snap"      // 吸附设置
+	CategoryTools     Category = "tools"     // 功能工具
+	CategoryWorkspace Category = "workspace" // 工作区设置
 )
 
 type Setting struct {
@@ -171,7 +172,92 @@ func inferCategoryFromKey(key string) Category {
 	if strings.HasPrefix(key, "tools_") || strings.HasPrefix(key, "tray_") || strings.HasPrefix(key, "float_") || strings.HasPrefix(key, "selection_") {
 		return CategoryTools
 	}
+	if strings.HasPrefix(key, "workspace_") {
+		return CategoryWorkspace
+	}
 	return CategoryGeneral
+}
+
+// UpdateWorkspaceSettingsInput holds workspace configuration fields.
+type UpdateWorkspaceSettingsInput struct {
+	SandboxMode string `json:"sandbox_mode"` // "codex" or "native"
+	WorkDir     string `json:"work_dir"`
+}
+
+// UpdateWorkspaceSettings saves workspace sandbox mode and working directory.
+func (s *SettingsService) UpdateWorkspaceSettings(input UpdateWorkspaceSettingsInput) error {
+	mode := strings.TrimSpace(input.SandboxMode)
+	if mode == "" {
+		mode = "codex"
+	}
+	if mode != "codex" && mode != "native" {
+		return errs.Newf("error.setting_invalid_value", map[string]any{"Key": "workspace_sandbox_mode"})
+	}
+
+	workDir := strings.TrimSpace(input.WorkDir)
+
+	db, err := dbForWrite()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	updates := []struct {
+		Key string
+		Val string
+	}{
+		{Key: "workspace_sandbox_mode", Val: mode},
+		{Key: "workspace_work_dir", Val: workDir},
+	}
+
+	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		for _, u := range updates {
+			result, err := tx.NewUpdate().
+				Model((*settingModel)(nil)).
+				Set("value = ?", u.Val).
+				Where("key = ?", u.Key).
+				Exec(ctx)
+			if err != nil {
+				return errs.Wrap("error.setting_write_failed", err)
+			}
+			rows, _ := result.RowsAffected()
+			if rows == 0 {
+				category := inferCategoryFromKey(u.Key)
+				model := &settingModel{
+					Key:      u.Key,
+					Value:    toNullString(u.Val),
+					Type:     "string",
+					Category: string(category),
+				}
+				if _, err := tx.NewInsert().Model(model).Exec(ctx); err != nil {
+					return errs.Wrap("error.setting_write_failed", err)
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	for _, u := range updates {
+		setCachedValueWithCategory(u.Key, u.Val, inferCategoryFromKey(u.Key))
+	}
+	return nil
+}
+
+// GetWorkspaceSettings returns the current workspace configuration.
+func (s *SettingsService) GetWorkspaceSettings() (*UpdateWorkspaceSettingsInput, error) {
+	mode, _ := GetValue("workspace_sandbox_mode")
+	if mode == "" {
+		mode = "codex"
+	}
+	workDir, _ := GetValue("workspace_work_dir")
+
+	return &UpdateWorkspaceSettingsInput{
+		SandboxMode: mode,
+		WorkDir:     workDir,
+	}, nil
 }
 
 // toNullString converts a string to sql.NullString

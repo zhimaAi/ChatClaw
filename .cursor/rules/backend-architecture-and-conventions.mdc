@@ -34,6 +34,42 @@ alwaysApply: false
 - 不要硬编码用户可见的文本，必须走 i18n
 - **不要在函数体内裸调 `syscall.NewCallback` / `windows.NewCallback`**——Go 在 Windows 上只有约 2000 个回调槽位且永不释放，必须用 `sync.Once` 保证只创建一次（详见 `docs/windows-syscall-callback-limit.md`）
 
+## 更新内置供应商 / 模型
+
+当需要新增、修改或移除内置 AI 供应商或模型时，**必须**按以下两步操作：
+
+1. **修改配置**：编辑 `internal/define/builtin_providers.go`，在 `BuiltinProviders` / `BuiltinModels` 切片中增删改条目。
+2. **新建迁移文件**：在 `internal/sqlite/migrations/` 中创建迁移文件，调用已有的通用同步函数：
+
+```go
+package migrations
+
+import (
+    "context"
+    "github.com/uptrace/bun"
+)
+
+func init() {
+    Migrations.MustRegister(
+        func(ctx context.Context, db *bun.DB) error {
+            return SyncBuiltinProvidersAndModels(ctx, db)
+        },
+        func(ctx context.Context, db *bun.DB) error {
+            return nil
+        },
+    )
+}
+```
+
+`SyncBuiltinProvidersAndModels`（定义在 `sync_builtin.go`）会自动：
+
+- 新增不存在的供应商/模型
+- 更新已存在的内置供应商/模型的元数据（保留用户的 api_key、enabled 等设置）
+- 如果用户已手动添加了同名 model_id，会将其标记为内置并更新元数据
+- 将已从配置中移除的旧内置模型标记为非内置（不删除）
+
+**禁止**在迁移文件中手写 INSERT/UPDATE SQL 来逐条添加模型。
+
 ## 数据库模型时间戳
 
 所有 bun 模型的 `created_at` / `updated_at` **必须**通过 `bun.BeforeInsertHook` 钩子自动设置，使用 `sqlite.NowUTC()` 生成 UTC 时间字符串。**禁止**依赖 bun tag 的 `default:current_timestamp` 或 `nullzero`——SQLite 建表 DDL 不一定有 DEFAULT，且 bun 的 nullzero 会跳过零值导致字段缺失。

@@ -64,6 +64,13 @@ export function useModelSelection() {
           console.warn('Failed to load provider models:', s.reason)
         }
       }
+      // Sort free providers to the end so user-configured (stronger) models come first.
+      ok.sort((a, b) => {
+        const aFree = Boolean((a.provider as { is_free?: boolean }).is_free)
+        const bFree = Boolean((b.provider as { is_free?: boolean }).is_free)
+        if (aFree === bFree) return 0
+        return aFree ? 1 : -1
+      })
       providersWithModels.value = ok
 
       // If some providers failed but we still have models, keep UI usable and show a gentle hint.
