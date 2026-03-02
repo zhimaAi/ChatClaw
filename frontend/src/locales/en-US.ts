@@ -467,6 +467,7 @@ export default {
         workDirDesc: 'All session outputs and files will be saved in this directory. Each conversation creates a subfolder under sessions/.',
         workDirHint: 'Structure: {basePath}{sep}sessions{sep}agent_id{sep}conversation_id{sep}',
         changeDir: 'Change',
+        resetDir: 'Reset to default',
         selectDir: 'Select Working Directory',
       },
       model: {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen } from 'lucide-vue-next'
+import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen, RotateCcw } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import LogoIcon from '@/assets/images/logo.svg'
@@ -79,6 +79,7 @@ const enableMaxTokens = ref(false)
 const sandboxMode = ref('codex')
 const sandboxNetwork = ref(true)
 const workDir = ref('')
+const defaultWorkDir = ref('')
 
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
@@ -92,8 +93,10 @@ watch(
   (open) => {
     if (!open) return
     tab.value = 'model'
-    // lazy load models for selection
     void loadModels()
+    void AgentsService.GetDefaultWorkDir().then((dir) => {
+      defaultWorkDir.value = dir
+    })
   }
 )
 
@@ -247,9 +250,9 @@ const isWindows = navigator.platform.toLowerCase().includes('win')
 const pathSep = isWindows ? '\\' : '/'
 
 const workDirHint = computed(() => {
-  const base = workDir.value || (isWindows ? 'C:\\Users\\xxx\\.chatclaw' : '~/.chatclaw')
-  const sep = pathSep
-  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep })
+  const base = workDir.value || defaultWorkDir.value
+  if (!base) return ''
+  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep: pathSep })
 })
 
 const handleSelectWorkDir = async () => {
@@ -339,7 +342,7 @@ const handleDelete = async () => {
       </div>
 
       <!-- 内容区：固定高度，内部不随 tab 抖动 -->
-      <div class="h-[480px] px-4 py-2">
+      <div class="h-[480px] overflow-hidden px-4 py-2">
         <div class="flex h-full">
           <!-- 左侧 tabs（独立区域） -->
           <div class="w-[140px] shrink-0 border-r border-border pr-4">
@@ -699,19 +702,28 @@ const handleDelete = async () => {
                   <p class="text-xs text-muted-foreground">
                     {{ t('assistant.settings.workspace.workDirDesc') }}
                   </p>
-                  <div class="flex items-center gap-2">
+                  <div class="flex min-w-0 items-center gap-2">
                     <span
                       class="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
-                      :title="workDir || '~/.chatclaw'"
+                      :title="workDir || defaultWorkDir"
                     >
-                      {{ workDir || '~/.chatclaw' }}
+                      {{ workDir || defaultWorkDir }}
                     </span>
                     <Button variant="outline" size="sm" class="shrink-0" @click="handleSelectWorkDir">
                       <FolderOpen class="mr-1.5 size-3.5" />
                       {{ t('assistant.settings.workspace.changeDir') }}
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="-ml-1 -mr-1.5 shrink-0 text-muted-foreground"
+                      :title="t('assistant.settings.workspace.resetDir')"
+                      @click="workDir = defaultWorkDir"
+                    >
+                      <RotateCcw class="size-3.5" />
+                    </Button>
                   </div>
-                  <p class="break-all text-xs font-mono text-muted-foreground/70">
+                  <p class="overflow-hidden break-all text-xs font-mono text-muted-foreground/70">
                     {{ workDirHint }}
                   </p>
                 </div>

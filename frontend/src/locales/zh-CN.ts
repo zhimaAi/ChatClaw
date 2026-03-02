@@ -464,6 +464,7 @@ export default {
         workDirDesc: '所有会话输出和文件将保存在此目录中。每个对话会在 sessions/ 下创建一个子文件夹。',
         workDirHint: '结构：{basePath}{sep}sessions{sep}agent_id{sep}conversation_id{sep}',
         changeDir: '更改',
+        resetDir: '恢复默认目录',
         selectDir: '选择工作目录',
       },
       model: {
