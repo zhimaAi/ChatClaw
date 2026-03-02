@@ -23,6 +23,7 @@ import (
 	"chatclaw/internal/services/greet"
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/library"
+	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
@@ -196,6 +197,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("sqlite init: %w", err)
 	}
 
+	// 初始化记忆数据库
+	if err := memory.InitDB(app); err != nil {
+		return nil, nil, fmt.Errorf("memory db init: %w", err)
+	}
+
 	// ChatClaw: default enabled, auto-generate API key at startup
 	if err := providers.EnsureChatClawInitialized(); err != nil {
 		app.Logger.Warn("EnsureChatClawInitialized failed (non-fatal)", "error", err)
@@ -280,7 +286,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册会话服务
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
 	// 注册聊天服务
-	app.RegisterService(application.NewService(chat.NewChatService(app)))
+	chatService := chat.NewChatService(app)
+	app.RegisterService(application.NewService(chatService))
+	// 注册记忆服务
+	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
@@ -292,13 +301,22 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(toolchainService))
 
 	// ========== macOS 应用菜单 ==========
-	// Set up standard macOS application menu so that system shortcuts work:
-	// Cmd+M (minimize), Cmd+H (hide), Cmd+Q (quit), Cmd+C/V/X (copy/paste/cut), etc.
 	if runtime.GOOS == "darwin" {
 		appMenu := app.NewMenu()
 		appMenu.AddRole(application.AppMenu)
 		appMenu.AddRole(application.EditMenu)
-		appMenu.AddRole(application.WindowMenu)
+		windowMenu := appMenu.AddSubmenu("Window")
+		windowMenu.Add("Minimize").
+			SetAccelerator("CmdOrCtrl+M").
+			OnClick(func(ctx *application.Context) {
+				if w := app.Window.Current(); w != nil {
+					w.Minimise()
+				}
+			})
+		windowMenu.AddRole(application.Zoom)
+		windowMenu.AddSeparator()
+		windowMenu.AddRole(application.Front)
+
 		app.Menu.Set(appMenu)
 	}
 
@@ -475,10 +493,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		chatService.Shutdown()
 		// Stop task manager before closing database
 		if tm := taskmanager.Get(); tm != nil {
 			tm.StopNow()
 		}
+		memory.CloseDB()
 		sqlite.Close()
 		// Close log file last so all shutdown logs are captured.
 		logCleanup()

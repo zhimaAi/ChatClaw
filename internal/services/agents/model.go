@@ -29,6 +29,10 @@ type Agent struct {
 	RetrievalMatchThreshold   float64 `json:"retrieval_match_threshold"`
 	RetrievalTopK             int     `json:"retrieval_top_k"`
 
+	SandboxMode    string `json:"sandbox_mode"`
+	SandboxNetwork bool   `json:"sandbox_network"`
+	WorkDir        string `json:"work_dir"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -56,6 +60,10 @@ type UpdateAgentInput struct {
 	EnableLLMMaxTokens      *bool    `json:"enable_llm_max_tokens"`
 	RetrievalMatchThreshold *float64 `json:"retrieval_match_threshold"`
 	RetrievalTopK           *int     `json:"retrieval_top_k"`
+
+	SandboxMode    *string `json:"sandbox_mode"`
+	SandboxNetwork *bool   `json:"sandbox_network"`
+	WorkDir        *string `json:"work_dir"`
 }
 
 type agentModel struct {
@@ -80,6 +88,10 @@ type agentModel struct {
 	EnableLLMMaxTokens      bool    `bun:"enable_llm_max_tokens,notnull"`
 	RetrievalMatchThreshold float64 `bun:"retrieval_match_threshold,notnull"`
 	RetrievalTopK           int     `bun:"retrieval_top_k,notnull"`
+
+	SandboxMode    string `bun:"sandbox_mode,notnull"`
+	SandboxNetwork bool   `bun:"sandbox_network,notnull"`
+	WorkDir        string `bun:"work_dir,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
@@ -119,6 +131,10 @@ func (m *agentModel) toDTO() Agent {
 		EnableLLMMaxTokens:      m.EnableLLMMaxTokens,
 		RetrievalMatchThreshold: m.RetrievalMatchThreshold,
 		RetrievalTopK:           m.RetrievalTopK,
+
+		SandboxMode:    m.SandboxMode,
+		SandboxNetwork: m.SandboxNetwork,
+		WorkDir:        m.WorkDir,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

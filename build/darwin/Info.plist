@@ -9,7 +9,7 @@
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.sesame.ChatClaw</string>
+		<string>com.sesame.chatclaw</string>
 		<key>CFBundleName</key>
 		<string>ChatClaw</string>
 		<key>CFBundlePackageType</key>

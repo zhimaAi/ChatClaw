@@ -88,6 +88,18 @@ static NSString *winsnap_trim(NSString *s) {
 	return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
+// Reverse-domain bundle id usually contains at least 3 segments, like cn.apifox.app.
+static bool winsnap_looks_like_bundle_id(NSString *s) {
+	if (!s || s.length == 0) return false;
+	if ([s rangeOfString:@" "].location != NSNotFound) return false;
+	NSArray<NSString *> *parts = [s componentsSeparatedByString:@"."];
+	if (parts.count < 3) return false;
+	for (NSString *p in parts) {
+		if (p.length == 0) return false;
+	}
+	return true;
+}
+
 static NSString *winsnap_normalize_name(const char *name) {
 	if (!name) return @"";
 	NSString *raw = [NSString stringWithUTF8String:name];
@@ -96,7 +108,7 @@ static NSString *winsnap_normalize_name(const char *name) {
 	// Drop path components if user passes a full path.
 	t = [t lastPathComponent];
 	// Drop .app suffix if present.
-	if ([[t lowercaseString] hasSuffix:@".app"]) {
+	if ([[t lowercaseString] hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(t)) {
 		t = [t substringToIndex:(t.length - 4)];
 	}
 	// Drop .exe suffix if user passes Windows-style process name.
@@ -649,6 +661,23 @@ import (
 	"unsafe"
 )
 
+func looksLikeBundleID(name string) bool {
+	n := strings.TrimSpace(name)
+	if n == "" || strings.Contains(n, " ") {
+		return false
+	}
+	parts := strings.Split(n, ".")
+	if len(parts) < 3 {
+		return false
+	}
+	for _, p := range parts {
+		if strings.TrimSpace(p) == "" {
+			return false
+		}
+	}
+	return true
+}
+
 type darwinFollower struct {
 	mu     sync.Mutex
 	f      *C.WinsnapFollower
@@ -784,7 +813,7 @@ func normalizeMacTargetName(name string) string {
 	n = n[strings.LastIndex(n, "/")+1:]
 	// Drop common .app suffix to match localizedName.
 	ln := strings.ToLower(n)
-	if strings.HasSuffix(ln, ".app") {
+	if strings.HasSuffix(ln, ".app") && !looksLikeBundleID(n) {
 		n = strings.TrimSpace(n[:len(n)-4])
 		ln = strings.ToLower(n)
 	}

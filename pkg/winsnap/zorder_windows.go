@@ -25,6 +25,82 @@ var (
 	enumResult  string
 )
 
+var procGetForegroundWindowZOrder = modUser32.NewProc("GetForegroundWindow")
+
+// ForegroundProcessName returns current foreground process executable name.
+// If current app is foreground, isSelf=true.
+func ForegroundProcessName() (processName string, isSelf bool, err error) {
+	foregroundHWND, _, _ := procGetForegroundWindowZOrder.Call()
+	if foregroundHWND == 0 {
+		return "", false, nil
+	}
+	foregroundPID, ferr := getWindowProcessID(windows.HWND(foregroundHWND))
+	if ferr != nil || foregroundPID == 0 {
+		return "", false, ferr
+	}
+	if foregroundPID == windows.GetCurrentProcessId() {
+		return "", true, nil
+	}
+	foregroundEXE, eerr := getProcessImageBaseName(foregroundPID)
+	if eerr != nil {
+		return "", false, eerr
+	}
+	return foregroundEXE, false, nil
+}
+
+func buildWindowsTargetSet(targetProcessNames []string) map[string]struct{} {
+	targets := make(map[string]struct{}, len(targetProcessNames))
+	for _, raw := range targetProcessNames {
+		for _, n := range expandWindowsTargetNames(raw) {
+			if n == "" {
+				continue
+			}
+			targets[strings.ToLower(n)] = struct{}{}
+		}
+	}
+	return targets
+}
+
+func frontMostTargetFromSet(targets map[string]struct{}) (processName string, found bool, err error) {
+	if len(targets) == 0 {
+		return "", false, nil
+	}
+	foregroundEXE, isSelf, ferr := ForegroundProcessName()
+	if ferr != nil || foregroundEXE == "" && !isSelf {
+		return "", false, nil
+	}
+	if isSelf {
+		return "", false, ErrSelfIsFrontmost
+	}
+	if _, ok := targets[strings.ToLower(foregroundEXE)]; !ok {
+		return "", false, nil
+	}
+	return foregroundEXE, true, nil
+}
+
+// FrontMostTargetProcessName returns the foreground target process among targetProcessNames.
+// If foreground app is not one of targets, found=false.
+// Returns ErrSelfIsFrontmost when our own app is foreground.
+func FrontMostTargetProcessName(targetProcessNames []string) (processName string, found bool, err error) {
+	targets := buildWindowsTargetSet(targetProcessNames)
+	return frontMostTargetFromSet(targets)
+}
+
+// IsTargetProcessVisible reports whether target process currently has a visible main window.
+func IsTargetProcessVisible(targetProcessName string) (bool, error) {
+	targetNames := expandWindowsTargetNames(targetProcessName)
+	if len(targetNames) == 0 {
+		return false, nil
+	}
+	for _, name := range targetNames {
+		h, err := findMainWindowByProcessName(name)
+		if err == nil && h != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // enumWindowsProc is the single, reusable EnumWindows callback.
 func enumWindowsProc(hwnd uintptr, _ uintptr) uintptr {
 	h := windows.HWND(hwnd)
@@ -54,17 +130,18 @@ func TopMostVisibleProcessName(targetProcessNames []string) (processName string,
 		return "", false, nil
 	}
 
-	targets := make(map[string]struct{}, len(targetProcessNames))
-	for _, raw := range targetProcessNames {
-		for _, n := range expandWindowsTargetNames(raw) {
-			if n == "" {
-				continue
-			}
-			targets[strings.ToLower(n)] = struct{}{}
-		}
-	}
+	targets := buildWindowsTargetSet(targetProcessNames)
 	if len(targets) == 0 {
 		return "", false, nil
+	}
+
+	// Prefer the true foreground application when it belongs to targets.
+	frontmost, frontFound, frontErr := frontMostTargetFromSet(targets)
+	if frontErr != nil {
+		return "", false, frontErr
+	}
+	if frontFound {
+		return frontmost, true, nil
 	}
 
 	// Serialise access to the shared callback state.

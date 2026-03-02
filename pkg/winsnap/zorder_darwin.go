@@ -16,6 +16,18 @@ static char* winsnap_strdup_nsstring(NSString *s) {
 	return strdup(utf8);
 }
 
+// Reverse-domain bundle id usually contains at least 3 segments, like cn.apifox.app.
+static bool winsnap_looks_like_bundle_id(NSString *s) {
+	if (!s || s.length == 0) return false;
+	if ([s rangeOfString:@" "].location != NSNotFound) return false;
+	NSArray<NSString *> *parts = [s componentsSeparatedByString:@"."];
+	if (parts.count < 3) return false;
+	for (NSString *p in parts) {
+		if (p.length == 0) return false;
+	}
+	return true;
+}
+
 // Check if frontmost app is our own app
 static bool winsnap_is_self_frontmost() {
 	@autoreleasepool {
@@ -109,7 +121,56 @@ static bool winsnap_pid_has_visible_window(pid_t pid) {
 	return found;
 }
 
-// Find pid by app name (localized name or executable name)
+// Return the top-most visible pid among given target pids.
+// It scans on-screen windows in z-order and returns the first matching pid.
+static pid_t winsnap_topmost_visible_target_pid(const pid_t *pids, int count) {
+	if (!pids || count <= 0) return 0;
+	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+	if (!list) return 0;
+
+	pid_t found = 0;
+	CFIndex n = CFArrayGetCount(list);
+	for (CFIndex i = 0; i < n; i++) {
+		CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(list, i);
+		CFNumberRef pidRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowOwnerPID);
+		if (!pidRef) continue;
+		pid_t wpid = 0;
+		CFNumberGetValue(pidRef, kCFNumberIntType, &wpid);
+		if (wpid <= 0) continue;
+
+		bool pidMatched = false;
+		for (int j = 0; j < count; j++) {
+			if (pids[j] == wpid) {
+				pidMatched = true;
+				break;
+			}
+		}
+		if (!pidMatched) continue;
+
+		// Only consider normal windows (layer 0)
+		CFNumberRef layerRef = (CFNumberRef)CFDictionaryGetValue(dict, kCGWindowLayer);
+		if (layerRef) {
+			int layer = 0;
+			CFNumberGetValue(layerRef, kCFNumberIntType, &layer);
+			if (layer != 0) continue;
+		}
+
+		// Skip tiny windows
+		CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(dict, kCGWindowBounds);
+		if (!bounds) continue;
+		CGRect cgRect;
+		if (!CGRectMakeWithDictionaryRepresentation(bounds, &cgRect)) continue;
+		if (cgRect.size.width < 100 || cgRect.size.height < 100) continue;
+
+		found = wpid;
+		break;
+	}
+
+	CFRelease(list);
+	return found;
+}
+
+// Find pid by app identifier (localized name / executable name / bundle id)
 static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 	if (!name) return 0;
 	NSString *target = [NSString stringWithUTF8String:name];
@@ -118,7 +179,7 @@ static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 	// Normalize: drop path, .app, .exe suffixes
 	target = [target lastPathComponent];
 	NSString *lower = [target lowercaseString];
-	if ([lower hasSuffix:@".app"]) {
+	if ([lower hasSuffix:@".app"] && !winsnap_looks_like_bundle_id(target)) {
 		target = [target substringToIndex:(target.length - 4)];
 	}
 	lower = [target lowercaseString];
@@ -130,10 +191,14 @@ static pid_t winsnap_find_pid_by_name_zorder(const char *name) {
 		if (!app || app.terminated) continue;
 		NSString *loc = app.localizedName;
 		NSString *exe = app.executableURL.lastPathComponent;
+		NSString *bid = app.bundleIdentifier;
 		if (loc.length && [[loc lowercaseString] isEqualToString:[target lowercaseString]]) {
 			return app.processIdentifier;
 		}
 		if (exe.length && [[exe lowercaseString] isEqualToString:[target lowercaseString]]) {
+			return app.processIdentifier;
+		}
+		if (bid.length && [[bid lowercaseString] isEqualToString:[target lowercaseString]]) {
 			return app.processIdentifier;
 		}
 	}
@@ -153,46 +218,88 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// ForegroundProcessName returns current foreground app name.
+// If current app is foreground, isSelf=true.
+func ForegroundProcessName() (processName string, isSelf bool, err error) {
+	if C.winsnap_is_self_frontmost() {
+		return "", true, nil
+	}
+	cname := C.winsnap_get_frontmost_app_name()
+	if cname == nil {
+		return "", false, nil
+	}
+	defer C.winsnap_free_cstring(cname)
+	return C.GoString(cname), false, nil
+}
+
+// FrontMostTargetProcessName returns the foreground target process among targetProcessNames.
+// If foreground app is not one of targets, found=false.
+// Returns ErrSelfIsFrontmost when our own app is foreground.
+func FrontMostTargetProcessName(targetProcessNames []string) (processName string, found bool, err error) {
+	if len(targetProcessNames) == 0 {
+		return "", false, nil
+	}
+
+	if C.winsnap_is_self_frontmost() {
+		return "", false, ErrSelfIsFrontmost
+	}
+
+	frontPID := C.winsnap_get_frontmost_app_pid()
+	if frontPID <= 0 {
+		return "", false, nil
+	}
+
+	for _, raw := range targetProcessNames {
+		n := normalizeMacTargetName(raw)
+		if n == "" {
+			continue
+		}
+		cname := C.CString(n)
+		targetPID := C.winsnap_find_pid_by_name_zorder(cname)
+		C.free(unsafe.Pointer(cname))
+		if targetPID > 0 && targetPID == frontPID {
+			if C.winsnap_pid_has_visible_window(targetPID) {
+				return raw, true, nil
+			}
+		}
+	}
+
+	return "", false, nil
+}
+
+// IsTargetProcessVisible reports whether target app currently has any visible window.
+func IsTargetProcessVisible(targetProcessName string) (bool, error) {
+	n := normalizeMacTargetName(targetProcessName)
+	if n == "" {
+		return false, nil
+	}
+	cname := C.CString(n)
+	pid := C.winsnap_find_pid_by_name_zorder(cname)
+	C.free(unsafe.Pointer(cname))
+	if pid <= 0 {
+		return false, nil
+	}
+	return bool(C.winsnap_pid_has_visible_window(pid)), nil
+}
+
 // TopMostVisibleProcessName returns the target application that is currently frontmost (if any),
 // or falls back to checking if any target app has a visible window.
 // On macOS, we prioritize the frontmost app among targets to ensure proper snap behavior
 // when the user switches between multiple target apps.
 // Returns ErrSelfIsFrontmost if our own app is frontmost (caller should preserve current state).
 func TopMostVisibleProcessName(targetProcessNames []string) (processName string, found bool, err error) {
-	if len(targetProcessNames) == 0 {
-		return "", false, nil
+	frontTarget, frontFound, frontErr := FrontMostTargetProcessName(targetProcessNames)
+	if frontErr != nil {
+		return "", false, frontErr
+	}
+	if frontFound {
+		return frontTarget, true, nil
 	}
 
-	// If our own app is frontmost (user clicked on winsnap window), preserve current state
-	if C.winsnap_is_self_frontmost() {
-		return "", false, ErrSelfIsFrontmost
-	}
-
-	// First, check if the frontmost app is one of our target apps by comparing PIDs
-	// This is more reliable than name comparison as it avoids localized name mismatches
-	frontPID := C.winsnap_get_frontmost_app_pid()
-	if frontPID > 0 {
-		for _, raw := range targetProcessNames {
-			n := normalizeMacTargetName(raw)
-			if n == "" {
-				continue
-			}
-			cname := C.CString(n)
-			targetPID := C.winsnap_find_pid_by_name_zorder(cname)
-			C.free(unsafe.Pointer(cname))
-
-			// Check if frontmost app's PID matches this target's PID
-			if targetPID > 0 && targetPID == frontPID {
-				// Verify it has a visible window
-				if C.winsnap_pid_has_visible_window(targetPID) {
-					return raw, true, nil
-				}
-			}
-		}
-	}
-
-	// Fallback: Check each target app to see if it has a visible window on screen
-	// This handles cases where frontmost app is not a target but a target app is visible
+	// Fallback: choose the top-most visible app among target apps instead of
+	// returning the first visible one by target list order.
+	pidToTarget := make(map[C.pid_t]string, len(targetProcessNames))
+	pids := make([]C.pid_t, 0, len(targetProcessNames))
 	for _, raw := range targetProcessNames {
 		n := normalizeMacTargetName(raw)
 		if n == "" {
@@ -205,11 +312,23 @@ func TopMostVisibleProcessName(targetProcessNames []string) (processName string,
 		if pid <= 0 {
 			continue
 		}
-
-		// Check if this app has a visible window
-		if C.winsnap_pid_has_visible_window(pid) {
-			return raw, true, nil
+		if _, exists := pidToTarget[pid]; exists {
+			continue
 		}
+		pidToTarget[pid] = raw
+		pids = append(pids, pid)
+	}
+
+	if len(pids) == 0 {
+		return "", false, nil
+	}
+
+	topPID := C.winsnap_topmost_visible_target_pid((*C.pid_t)(unsafe.Pointer(&pids[0])), C.int(len(pids)))
+	if topPID <= 0 {
+		return "", false, nil
+	}
+	if raw, ok := pidToTarget[topPID]; ok {
+		return raw, true, nil
 	}
 	return "", false, nil
 }

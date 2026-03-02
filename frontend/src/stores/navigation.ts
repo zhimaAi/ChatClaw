@@ -9,7 +9,7 @@ const createTabId = () => `tab-${uuidv4()}`
 /**
  * 导航模块类型
  */
-export type NavModule = 'assistant' | 'knowledge' | 'multiask' | 'settings'
+export type NavModule = 'assistant' | 'knowledge' | 'memory' | 'multiask' | 'settings'
 
 /**
  * 标签页类型
@@ -61,6 +61,7 @@ export interface PendingChatData {
 const moduleLabels: Record<NavModule, string> = {
   assistant: 'nav.assistant',
   knowledge: 'nav.knowledge',
+  memory: 'nav.memory',
   multiask: 'nav.multiask',
   settings: 'nav.settings',
 }
@@ -69,7 +70,7 @@ const moduleLabels: Record<NavModule, string> = {
  * 只允许单个标签页的模块列表
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
-const singleTabModules: NavModule[] = ['knowledge', 'multiask', 'settings']
+const singleTabModules: NavModule[] = ['knowledge', 'memory', 'multiask', 'settings']
 
 /**
  * 导航状态管理

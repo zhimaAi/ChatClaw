@@ -48,6 +48,11 @@ func SyncAttachedZOrderNoActivate(_ *application.WebviewWindow, _ string) error 
 	return nil
 }
 
+// IsTargetObscured is not supported on this platform.
+func IsTargetObscured(_ *application.WebviewWindow, _ string) (bool, error) {
+	return false, nil
+}
+
 // ShowTargetWindowNoActivate is not supported on this platform.
 // Returns nil to allow caller to proceed without error.
 func ShowTargetWindowNoActivate(_ *application.WebviewWindow, _ string) error {

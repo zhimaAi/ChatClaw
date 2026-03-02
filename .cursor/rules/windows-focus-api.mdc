@@ -77,3 +77,99 @@ procSetWindowPos.Call(hwnd, 0, x, y, 0, 0, flags)
 ## 参考文档
 
 详细说明见 `docs/windows-focus-handling.md`
+
+## Snap 窗口监听安全规则（防止“界面假死”）
+
+### 触发背景
+
+在 `snap` 模式下，前端常用全局 capture 监听（`pointerdown`/`mousedown`）配合 `WakeAttached` 做窗口层级同步。  
+若在“取消吸附 / 重新吸附 / 关闭窗口 / Radix 弹层交互”期间仍触发 `WakeAttached`，Windows 可能出现：
+
+- 鼠标点击无响应（像被系统吞掉）
+- 需要按 `Win` 键才恢复交互
+
+### 必须遵守
+
+1. **仅在已附着时调用 `WakeAttached`**
+   - 监听回调第一行必须有 attached state guard（如 `if (!hasAttachedTarget) return`）。
+
+2. **必须排除操作按钮和弹层区域**
+   - Header 操作按钮（新建/取消吸附/重新吸附/关闭）必须加 `data-snap-action` 标记。
+   - Header 可拖拽区域（`--wails-draggable: drag`）必须加 `data-snap-no-wake`，并在监听里优先跳过。
+   - 全局监听必须 `closest('[data-snap-action], ...radix selectors...')` 后直接 `return`。
+
+3. **禁止在“状态切换动作”里同步唤醒**
+   - 执行 `cancelSnap`、`findAndAttach`、`closeSnapWindow` 相关按钮点击时，不得触发额外 `WakeAttached`。
+   - 即：监听过滤优先级必须高于任何 z-order/焦点操作。
+
+4. **保持 no-activate 语义**
+   - 非必要路径禁止引入新的 `SetForegroundWindow`/强制激活调用。
+   - 仅允许在明确的“用户点击 winsnap 且 attached”路径调用 `WakeAttached`。
+
+5. **强制白名单触发（必须）**
+   - `WakeAttached` 必须采用白名单触发模型：
+     - 只允许在消息展示区和输入区触发（如带 `data-snap-wake` 标记的节点）。
+     - 头部、侧边栏、空白区、拖拽区、按钮区一律禁止触发。
+   - 前端实现上，优先使用“区域内显式绑定事件”（例如在 `ChatMessageList` / `ChatInputArea` 上绑定 `@pointerdown.capture`）；
+     禁止继续使用 window 级全局 `pointerdown` 捕获来触发 `WakeAttached`。
+   - 判断顺序必须为：
+     1) 先检查 attached 状态
+     2) 再检查黑名单（`data-snap-no-wake`、`data-snap-action`、Radix 弹层）
+   - 未命中白名单时必须直接 return，禁止兜底触发。
+
+6. **严重级别说明**
+   - 该类问题属于 P0 交互稳定性问题（可能造成系统级“鼠标点击无效、需按 Win 键恢复”）。
+   - 任何改动涉及 `WakeAttached` 触发范围时，必须显式说明“白名单区域”并做回归验证。
+
+7. **标题拖拽最终方案（Windows，必须）**
+   - 标题栏所有节点统一保持 `--wails-draggable: no-drag`，禁止使用原生 `--wails-draggable: drag`。
+   - 拖拽改为“前端 pointer 事件 + `Window.Position/Window.SetPosition`”的自定义移动方案。
+   - 可拖拽区域为“标题栏空白区”；交互控件区域（按钮/下拉）必须排除拖拽触发。
+   - 拖拽开始时必须写入短时保护窗口（`snap_drag_guard_until_unix_ms`），拖拽结束清理。
+   - 后端在保护窗口内必须短路 `step()` 与 `WakeAttached()`，避免焦点链路并发。
+
+8. **取消吸附后禁止自动重吸附（必须）**
+   - `DetachToStandalone` 后必须停止 snap polling loop。
+   - 重新吸附只能由显式用户动作触发（如点击“重新吸附”后 `SyncFromSettings`）。
+   - 目的：避免 standalone 拖拽期间与后台 attach 轮询并发冲突导致假死。
+
+9. **窗口边缘 resize 规则（Windows，必须）**
+   - `winsnap` 窗口必须禁用原生边缘 resize（`DisableResize=true`）。
+   - 原因：从外部应用切回后，边缘 resize 与焦点线程链路并发时可稳定触发假死。
+   - 若未来需要可调尺寸，必须采用“自定义 resize”方案，不得恢复原生边缘 resize。
+
+10. **吸附目标一致性规则（Windows，必须）**
+   - `currentTarget`（状态）与实际附着窗口（运行时控制器）必须保持一致。
+   - `attachTo` 必须串行化（单入口互斥）；禁止并发执行多个 attach 流程。
+   - 吸附态禁止高频全量回查目标（避免性能抖动）；仅允许低频纠偏。
+   - 目标切换必须有最短间隔（cooldown），防止 A/B 高频来回切换。
+   - 目标切换后短时间内，禁止触发 `WakeAttached` 唤醒链路，避免连锁焦点抖动。
+   - 低频纠偏必须包含“一致性校验”：若状态目标与实际附着不一致，优先重建到状态目标或前台目标。
+   - 调试日志默认禁止常驻输出；排查完成后必须移除/关闭临时探针打印。
+
+### 复盘结论（主窗体/悬浮球/吸附窗差异）
+
+- 主窗体拖拽稳定：无吸附轮询、无目标窗口联动、无 `WakeAttached` 链路并发。
+- 悬浮球稳定：全链路为自定义拖拽 + `DisableResize=true`，不走高风险原生链路。
+- 吸附窗风险高：除拖拽外还叠加 `step()/attach/wake` 焦点链路；跨应用切回时最易触发时序冲突。
+- 因此吸附窗必须采用“自定义拖拽 + 禁止原生 resize + 拖拽保护窗口 + standalone 停轮询”的组合约束，缺一不可。
+
+### 提交前检查清单
+
+- 是否只有一个 snap 全局 pointer 监听入口？
+- 监听是否包含 attached guard？
+- Header 按钮是否都带 `data-snap-action`？
+- Header 根节点是否保持 `data-snap-no-wake` 且不触发 `WakeAttached`？
+- 监听过滤是否覆盖 Radix Popper/Dialog/Listbox？
+- 触发是否采用 `data-snap-wake` 白名单而不是黑名单兜底？
+- 白名单是否仅包含消息区和输入区？
+- 是否移除了 window 级 `pointerdown` 触发 `WakeAttached`？
+- 标题栏是否仅使用“自定义拖拽”（pointer + `Window.SetPosition`）？
+- 拖拽区是否正确排除了按钮/下拉等交互控件？
+- 拖拽时是否设置了 `snap_drag_guard_until_unix_ms`，并在后端短路 `step/WakeAttached`？
+- `DetachToStandalone` 后是否确保停止 polling loop（不自动重吸附）？
+- Windows 下 `winsnap` 是否已禁用边缘 resize（`DisableResize=true`）？
+- 取消吸附后立即点击“吸附应用”是否不会触发 `WakeAttached`？
+- `attachTo` 是否保证串行执行（无并发 attach）？
+- 是否存在常驻探针日志（如 tick 级前台打印）未清理？
+- 吸附态是否只做低频纠偏而非高频全量回查？

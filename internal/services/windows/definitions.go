@@ -21,6 +21,9 @@ func DefaultDefinitions() []WindowDefinition {
 					// Use frameless mode — the custom SnapModeHeader provides its own
 					// drag region and close button; no native title bar needed.
 					Frameless: true,
+					// Prevent native edge-resize on Windows. We use fixed winsnap size and
+					// custom drag logic in the header to avoid focus/input deadlocks.
+					DisableResize: runtime.GOOS == "windows",
 					// Let z-order follow the attached target window (not global top-most).
 					// - Windows: we insert after the target hwnd (see pkg/winsnap/winsnap_windows.go)
 					// - macOS: we order above the target window number on activation (see pkg/winsnap/winsnap_darwin.go)
