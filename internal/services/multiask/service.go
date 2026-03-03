@@ -140,7 +140,14 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 
     // Standard Chrome User-Agent for sites that block embedded browsers
     chromeUserAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-	panel := s.manager.NewPanel(webviewpanel.WebviewPanelOptions{
+    navigatorJS := fmt.Sprintf(`(function(){
+        document.body.style.backgroundColor = 'red';
+        document.body.style.border = '1px solid yellow';
+        const ua = %q;
+        Object.defineProperty(navigator, 'userAgent', { get: function() { return ua; } });
+        Object.defineProperty(navigator, 'appVersion', { get: function() { return ua; } });
+    })();`, chromeUserAgent)
+    panel := s.manager.NewPanel(webviewpanel.WebviewPanelOptions{
 		Name:                   id,
 		X:                      bounds.X,
 		Y:                      bounds.Y,
@@ -150,10 +157,12 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 		Visible:                &visible,
 		ZIndex:                 1,
 		UserAgent:              chromeUserAgent,
+        // JS:                     navigatorJS,
 		// DevToolsEnabled:        boolPtr(true),
 		// OpenInspectorOnStartup: true,
 	})
 
+    panel.ExecJS(navigatorJS)
 	s.panels[id] = panel
 	s.app.Logger.Info("[MultiaskService] Panel created successfully", "id", id)
 	return nil
