@@ -220,7 +220,7 @@ func (p *windowsPanelImpl) setupChromium() {
 	if hr != 0 && hr != 1 {
 		fmt.Printf("CoInitializeEx failed with hr=0x%x\n", hr)
 	}
-	
+
 	p.chromium = edge.NewChromium()
 	// Use a dedicated user data folder per panel to avoid environment conflicts
 	if p.panel != nil {
@@ -247,6 +247,16 @@ func (p *windowsPanelImpl) setupChromium() {
 
 	// Embed the WebView2 into our child window
 	p.chromium.Embed(p.hwnd)
+	controller := p.chromium.GetController()
+	if controller != nil {
+		core := p.chromium.GetCoreWebView2()
+		if core != nil {
+			settings, _ := core.GetSettings()
+			if p.panel.options.UserAgent != "" {
+				settings.PutUserAgent(p.panel.options.UserAgent)
+			}
+		}
+	}
 	// 注意：如果此时子 HWND 还不可见，GetClientRect 可能返回 0，导致 WebView2 实际尺寸为 0。
 	// 我们会在真正 show 后再补一次 Resize()，这里先做一次“尽力而为”。
 	p.chromium.Resize()
