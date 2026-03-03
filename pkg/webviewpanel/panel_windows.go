@@ -220,7 +220,7 @@ func (p *windowsPanelImpl) setupChromium() {
 	if hr != 0 && hr != 1 {
 		fmt.Printf("CoInitializeEx failed with hr=0x%x\n", hr)
 	}
-	
+
 	p.chromium = edge.NewChromium()
 	// Use a dedicated user data folder per panel to avoid environment conflicts
 	if p.panel != nil {
@@ -231,6 +231,15 @@ func (p *windowsPanelImpl) setupChromium() {
 		panelID := fmt.Sprintf("panel-%d", p.panel.id)
 		p.chromium.DataPath = filepath.Join(base, "chatclaw-panels", panelID)
 	}
+
+	// Set custom User-Agent via browser arguments if specified
+	if p.panel.options.UserAgent != "" {
+		p.chromium.AdditionalBrowserArgs = append(
+			p.chromium.AdditionalBrowserArgs,
+			"--user-agent="+p.panel.options.UserAgent,
+		)
+	}
+
 	// Prevent os.Exit on WebView2 errors; log instead
 	p.chromium.SetErrorCallback(func(err error) {
 		fmt.Printf("[WebView2] panel error: %v\n", err)
@@ -238,6 +247,16 @@ func (p *windowsPanelImpl) setupChromium() {
 
 	// Embed the WebView2 into our child window
 	p.chromium.Embed(p.hwnd)
+	if p.panel.options.UserAgent != "" {
+		controller := p.chromium.GetController()
+		if controller != nil {
+			core, _ := controller.GetCoreWebView2() // GetCoreWebView2 returns (core, error); discard error here
+			if core != nil {
+				settings, _ := core.GetSettings() // GetSettings returns (settings, error); discard error here
+				settings.PutUserAgent(p.panel.options.UserAgent)
+			}
+		}
+	}
 	// 注意：如果此时子 HWND 还不可见，GetClientRect 可能返回 0，导致 WebView2 实际尺寸为 0。
 	// 我们会在真正 show 后再补一次 Resize()，这里先做一次“尽力而为”。
 	p.chromium.Resize()

@@ -208,6 +208,17 @@ void wvpanel_focus(wvpanel_handle panel) {
     }
 }
 
+void wvpanel_set_user_agent(wvpanel_handle panel, const char* ua) {
+    @autoreleasepool {
+        if (panel == NULL || ua == NULL) return;
+        WVPPanel *p = (__bridge WVPPanel*)panel;
+        if (p.webview == nil) return;
+        NSString *userAgent = [NSString stringWithUTF8String:ua];
+        if (userAgent == nil || userAgent.length == 0) return;
+        p.webview.customUserAgent = userAgent;
+    }
+}
+
 static void _wvpanel_find_largest_wkwebview(NSView *root,
                                            NSView *content,
                                            bool insidePanelContainer,

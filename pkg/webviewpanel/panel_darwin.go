@@ -32,6 +32,13 @@ func (p *darwinPanelImpl) create() {
 		return
 	}
 
+	// Set custom User-Agent before loading content (important for browser detection)
+	if opts.UserAgent != "" {
+		cua := C.CString(opts.UserAgent)
+		C.wvpanel_set_user_agent(p.handle, cua)
+		C.free(unsafe.Pointer(cua))
+	}
+
 	// Initial content
 	if opts.HTML != "" {
 		ch := C.CString(opts.HTML)

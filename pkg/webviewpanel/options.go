@@ -78,6 +78,11 @@ type WebviewPanelOptions struct {
 
 	// OpenInspectorOnStartup will open the inspector when the panel is first shown.
 	OpenInspectorOnStartup bool
+
+	// UserAgent is a custom User-Agent string for this panel.
+	// If empty, the default WebView User-Agent is used.
+	// Set this to a standard browser UA to bypass browser detection on some sites.
+	UserAgent string
 }
 
 // AnchorType defines how a panel is anchored within its parent window.
