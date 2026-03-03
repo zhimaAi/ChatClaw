@@ -127,10 +127,11 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		}
 	}
 
-	s.app.Logger.Info("[llm] chat_mode start", "conv", conversationID, "tab", gc.tabID, "req", gc.requestID,
-		"provider_id", providerConfig.ProviderID, "provider_type", providerConfig.Type,
-		"model", agentConfig.ModelID, "messages", len(messages),
-		"instruction", truncateRunes(augmentedInstruction, llmLogMaxInstruction))
+	s.app.Logger.Info("[chat] chat_mode start", "conv", conversationID, "req", gc.requestID,
+		"model", agentConfig.ModelID, "messages", len(messages))
+	if len(messages) <= 1 {
+		s.app.Logger.Info("[chat] system_prompt", "instruction", augmentedInstruction)
+	}
 
 	agentConfig.Instruction = augmentedInstruction
 	agentConfig.Provider = providerConfig
@@ -150,10 +151,6 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	})
 	fullMessages = append(fullMessages, messages...)
 
-	s.app.Logger.Info("[llm] chat_mode before_call", "conv", conversationID, "req", gc.requestID,
-		"messages", len(fullMessages),
-		"system_prompt", truncateRunes(augmentedInstruction, 2000),
-		"context", summarizeMessagesForLog(fullMessages, 20, llmLogMaxContent))
 	stream, err := chatModel.Stream(ctx, fullMessages)
 	if err != nil {
 		errMsg := err.Error()
@@ -215,7 +212,6 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 
 	if ctx.Err() != nil {
 		s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusCancelled, "", "cancelled", ss.inputTokens, ss.outputTokens)
-		s.app.Logger.Info("[llm] chat_mode complete", "conv", conversationID, "status", StatusCancelled)
 		gc.emit(EventChatStopped, ChatStoppedEvent{
 			ChatEvent: gc.chatEvent(assistantMsg.ID),
 			Status:    StatusCancelled,
@@ -225,16 +221,10 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 
 	if streamFailed {
 		s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusError, streamErrMsg, "", ss.inputTokens, ss.outputTokens)
-		s.app.Logger.Info("[llm] chat_mode complete", "conv", conversationID, "tab", gc.tabID, "req", gc.requestID,
-			"status", StatusError, "error", streamErrMsg, "input_tokens", ss.inputTokens, "output_tokens", ss.outputTokens)
 		return
 	}
 
 	s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
-
-	s.app.Logger.Info("[llm] chat_mode complete", "conv", conversationID, "tab", gc.tabID, "req", gc.requestID,
-		"status", StatusSuccess, "finish", ss.finishReason, "input_tokens", ss.inputTokens,
-		"output_tokens", ss.outputTokens, "content_len", len(ss.contentBuilder.String()))
 
 	gc.emit(EventChatComplete, ChatCompleteEvent{
 		ChatEvent:    gc.chatEvent(assistantMsg.ID),

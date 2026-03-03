@@ -6,20 +6,20 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
-	github.com/cloudwego/eino v0.7.36
-	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/embedding/ollama v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino v0.8.0-beta.1
+	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/document/transformer/splitter/semantic v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/embedding/ollama v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/model/claude v0.1.15
 	github.com/cloudwego/eino-ext/components/model/gemini v0.1.28
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
-	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260214075714-8f11ae8e65a2
-	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260214075714-8f11ae8e65a2
+	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260302070227-13ce9b3fa975
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/eino-contrib/jsonschema v1.0.3
@@ -40,6 +40,7 @@ require (
 	golang.org/x/sys v0.40.0
 	golang.org/x/text v0.33.0
 	google.golang.org/genai v1.44.0
+	gopkg.in/yaml.v3 v3.0.1
 	maragu.dev/goqite v0.3.1
 )
 
@@ -75,6 +76,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
@@ -182,5 +184,4 @@ require (
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
