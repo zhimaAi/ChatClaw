@@ -104,6 +104,8 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		return
 	}
 
+	messages = patchToolCallsForChatMode(messages)
+
 	// Determine the user query for retrieval
 	userQuery := latestUserContent
 	if userQuery == "" && len(messages) > 0 {
@@ -363,6 +365,31 @@ func (s *ChatService) retrieveFromMemory(ctx context.Context, agentID int64, que
 	out := make([]retrievalResult, 0, len(results))
 	for _, r := range results {
 		out = append(out, retrievalResult{Content: r.Content, Score: r.Score})
+	}
+	return out
+}
+
+// patchToolCallsForChatMode removes tool-call artifacts from the message
+// history so that it can be sent to a plain chat model without triggering API
+// errors like "tool_calls must be followed by tool messages".
+// It drops all tool-role messages and clears ToolCalls on assistant messages,
+// skipping assistant messages that become empty after stripping.
+func patchToolCallsForChatMode(msgs []*schema.Message) []*schema.Message {
+	out := make([]*schema.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Role == schema.Tool {
+			continue
+		}
+		if m.Role == schema.Assistant && len(m.ToolCalls) > 0 {
+			if m.Content == "" {
+				continue
+			}
+			cleaned := *m
+			cleaned.ToolCalls = nil
+			out = append(out, &cleaned)
+			continue
+		}
+		out = append(out, m)
 	}
 	return out
 }
