@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
+    "strings"
 	"chatclaw/pkg/webviewpanel"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -140,7 +140,7 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 
     // Standard Chrome User-Agent for sites that block embedded browsers
     chromeUserAgent := ""
-    if url.Contains("yuanbao.tencent.com") {
+    if strings.Contains(url, "yuanbao.tencent.com") {
         chromeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
     panel := s.manager.NewPanel(webviewpanel.WebviewPanelOptions{
