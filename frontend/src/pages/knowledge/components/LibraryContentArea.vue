@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
-import { Search, Upload, Plus, ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-vue-next'
+import { Search, Upload, Plus, ArrowDownNarrowWide, ArrowUpNarrowWide, FolderPlus } from 'lucide-vue-next'
 import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,9 +19,20 @@ import {
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import DocumentCard from './DocumentCard.vue'
+import FolderCard from './FolderCard.vue'
 import RenameDocumentDialog from './RenameDocumentDialog.vue'
+import MoveDocumentDialog from './MoveDocumentDialog.vue'
+import DocumentDetailDialog from './DocumentDetailDialog.vue'
+import { useNavigationStore } from '@/stores/navigation'
+import CreateFolderDialog from './CreateFolderDialog.vue'
+import RenameFolderDialog from './RenameFolderDialog.vue'
+import DeleteFolderDialog from './DeleteFolderDialog.vue'
 import type { Document, DocumentStatus } from './DocumentCard.vue'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
+import {
+  LibraryService,
+  type Folder,
+} from '@bindings/chatclaw/internal/services/library'
 import {
   DocumentService,
   type Document as BackendDocument,
@@ -48,9 +59,18 @@ interface ThumbnailEvent {
 
 const props = defineProps<{
   library: Library
+  selectedFolderId?: number | null
+}>()
+
+const emit = defineEmits<{
+  'folder-selected': [folderId: number | null]
+  'folder-created': []
+  'folder-updated': []
+  'folder-deleted': []
 }>()
 
 const { t } = useI18n()
+const navigationStore = useNavigationStore()
 
 const searchQuery = ref('')
 const sortBy = ref<'created_desc' | 'created_asc'>('created_desc')
@@ -58,6 +78,10 @@ const deleteDialogOpen = ref(false)
 const documentToDelete = ref<Document | null>(null)
 const renameDialogOpen = ref(false)
 const documentToRename = ref<Document | null>(null)
+const moveDocumentDialogOpen = ref(false)
+const documentToMove = ref<Document | null>(null)
+const documentDetailDialogOpen = ref(false)
+const documentToDetail = ref<Document | null>(null)
 const documents = ref<Document[]>([])
 const isLoading = ref(false)
 const isLoadingMore = ref(false)
@@ -66,6 +90,35 @@ const beforeID = ref<number>(0)
 const PAGE_SIZE = 100
 let loadToken = 0
 
+// Folder related state
+const folders = ref<Folder[]>([])
+// null = 全部, -1 = 未分组, >0 = 文件夹ID
+const activeFolderId = ref<number | null>(null)
+const createFolderDialogOpen = ref(false)
+const renameFolderDialogOpen = ref(false)
+const deleteFolderDialogOpen = ref(false)
+const folderToRename = ref<Folder | null>(null)
+const folderToDelete = ref<Folder | null>(null)
+
+// 文件夹查找缓存 Map（优化性能，避免重复递归查找）
+const folderMapCache = ref<Map<number, Folder>>(new Map())
+
+// 构建文件夹 Map 缓存（一次性构建，避免重复递归）
+const buildFolderMap = (folders: Folder[], map: Map<number, Folder> = new Map()): Map<number, Folder> => {
+  for (const folder of folders) {
+    map.set(folder.id, folder)
+    if (folder.children && folder.children.length > 0) {
+      buildFolderMap(folder.children, map)
+    }
+  }
+  return map
+}
+
+// 监听文件夹变化，更新缓存
+watch(folders, (newFolders) => {
+  folderMapCache.value = buildFolderMap(newFolders)
+}, { deep: true })
+
 const isUploading = ref(false)
 const uploadTotal = ref(0)
 const uploadDone = ref(0)
@@ -73,6 +126,9 @@ const isDragOver = ref(false)
 let unsubscribeUploadProgress: (() => void) | null = null
 let unsubscribeUploaded: (() => void) | null = null
 let unsubscribeFileDrop: (() => void) | null = null
+
+const dropTargetRef = ref<HTMLElement | null>(null)
+let dragDepth = 0
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
@@ -114,11 +170,23 @@ const convertDocument = (doc: BackendDocument): Document => {
     name: doc.original_name,
     fileType: doc.extension,
     createdAt: doc.created_at,
+    updatedAt: doc.updated_at,
+    folderId: doc.folder_id,
     status,
     progress,
     errorMessage,
     thumbIcon: doc.thumb_icon || undefined,
     fileMissing: doc.file_missing || false,
+  }
+}
+
+const loadFolders = async () => {
+  if (!props.library?.id) return
+  try {
+    folders.value = await LibraryService.ListFolders(props.library.id)
+  } catch (error) {
+    console.error('Failed to load folders:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.loadFailed'))
   }
 }
 
@@ -155,6 +223,9 @@ const loadMore = async (token?: number) => {
       before_id: beforeID.value,
       limit: PAGE_SIZE,
       sort_by: sortBy.value,
+      // 0 = no folder filter (show all), -1 = only uncategorized, >0 = specific folder
+      folder_id:
+        activeFolderId.value === null ? 0 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
     })
     if (currentToken !== loadToken) return
 
@@ -189,15 +260,176 @@ const loadMore = async (token?: number) => {
   }
 }
 
-// 监听知识库变化，重新加载文档
+// 监听知识库变化，重新加载文档和文件夹
 watch(
   () => props.library?.id,
   () => {
     searchQuery.value = ''
+    activeFolderId.value = props.selectedFolderId ?? null
+    void loadFolders()
     resetAndLoad()
   },
   { immediate: true }
 )
+
+// 监听外部传入的 selectedFolderId
+watch(
+  () => props.selectedFolderId,
+  (newId) => {
+    activeFolderId.value = newId ?? null
+  }
+)
+
+// 监听文件夹变化，重新加载文档
+watch(activeFolderId, () => {
+  // 如果选择的是文件夹，则加载该文件夹下的文档
+  // 如果选择的是"全部"（null），则显示所有文件夹和文档
+  resetAndLoad()
+})
+
+// 使用缓存 Map 快速查找文件夹（O(1) 时间复杂度，替代递归查找）
+const findFolderById = (id: number): Folder | null => {
+  return folderMapCache.value.get(id) || null
+}
+
+// 计算要显示的文件夹列表
+const displayFolders = computed(() => {
+  // 如果 activeFolderId 为 null，显示根文件夹
+  if (activeFolderId.value === null) {
+    return folders.value
+  }
+  // 如果 activeFolderId 不为 null，显示当前文件夹的子文件夹
+  if (activeFolderId.value > 0) {
+    const currentFolder = findFolderById(activeFolderId.value)
+    return currentFolder?.children || []
+  }
+  // activeFolderId 为 -1（未分组）时，不显示文件夹
+  return []
+})
+
+// 统计每个文件夹下的文档数量及最新文档更新时间（基于当前已加载的文档）
+const folderStatsMap = computed(() => {
+  const map = new Map<
+    number,
+    {
+      docCount: number
+      latestDocUpdatedAt?: string
+    }
+  >()
+
+  for (const doc of documents.value) {
+    const folderId = doc.folderId
+    if (!folderId || folderId <= 0) continue
+
+    const existing = map.get(folderId) || { docCount: 0, latestDocUpdatedAt: undefined }
+    existing.docCount += 1
+
+    if (doc.updatedAt) {
+      const current = existing.latestDocUpdatedAt
+      if (!current) {
+        existing.latestDocUpdatedAt = doc.updatedAt
+      } else if (new Date(doc.updatedAt).getTime() > new Date(current).getTime()) {
+        existing.latestDocUpdatedAt = doc.updatedAt
+      }
+    }
+
+    map.set(folderId, existing)
+  }
+
+  return map
+})
+
+const formatDate = (dateStr: string | null | undefined) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}/${month}/${day}`
+}
+
+const getFolderItemCount = (folder: Folder): number => {
+  const subFolderCount = folder.children?.length ?? 0
+  const stats = folderStatsMap.value.get(folder.id)
+  const docCount = stats?.docCount ?? 0
+  return subFolderCount + docCount
+}
+
+const getFolderLatestUpdatedAt = (folder: Folder): string | undefined => {
+  // Prefer the latest between folder.updated_at and its documents' updated_at
+  const stats = folderStatsMap.value.get(folder.id)
+  const candidates: string[] = []
+  if (folder.updated_at) {
+    candidates.push(String(folder.updated_at as unknown as string))
+  }
+  if (stats?.latestDocUpdatedAt) {
+    candidates.push(stats.latestDocUpdatedAt)
+  }
+  if (candidates.length === 0) return undefined
+
+  let latest: string | undefined
+  let latestTs = 0
+  for (const value of candidates) {
+    const ts = new Date(value).getTime()
+    if (Number.isNaN(ts)) continue
+    if (ts > latestTs) {
+      latestTs = ts
+      latest = value
+    }
+  }
+
+  return latest ? formatDate(latest) : undefined
+}
+
+// 处理文件夹点击
+const handleFolderClick = (folder: Folder) => {
+  activeFolderId.value = folder.id
+  // 通知父组件文件夹选择变化
+  emit('folder-selected', folder.id)
+}
+
+// 处理文件夹重命名
+const handleFolderRename = (folder: Folder) => {
+  folderToRename.value = folder
+  renameFolderDialogOpen.value = true
+}
+
+// 处理文件夹删除
+const handleFolderDelete = (folder: Folder) => {
+  folderToDelete.value = folder
+  deleteFolderDialogOpen.value = true
+}
+
+// 处理文件夹创建
+const handleFolderCreated = (createdFolder: Folder) => {
+  void loadFolders()
+  emit('folder-created')
+  // 刷新文档列表，以便显示新创建的文件夹（如果当前在文件夹内部）
+  void resetAndLoad()
+  // 如果创建的是子文件夹，自动选中新创建的文件夹
+  if (createdFolder.parent_id) {
+    activeFolderId.value = createdFolder.id
+    emit('folder-selected', createdFolder.id)
+  }
+}
+
+// 处理文件夹更新
+const handleFolderUpdated = () => {
+  void loadFolders()
+  emit('folder-updated')
+}
+
+// 处理文件夹删除完成
+const handleFolderDeleted = () => {
+  void loadFolders()
+  const deletedFolderId = folderToDelete.value?.id
+  if (deletedFolderId !== undefined && activeFolderId.value === deletedFolderId) {
+    activeFolderId.value = null
+    emit('folder-selected', null)
+  }
+  emit('folder-deleted')
+}
 
 // 搜索防抖
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -242,10 +474,12 @@ const handleAddDocument = async () => {
       uploadDone.value = 0
       await nextTick()
 
-      // 上传文件
+      // 上传文件，传入当前选中的文件夹 ID
+      const folderId = activeFolderId.value && activeFolderId.value > 0 ? activeFolderId.value : null
       const uploaded = await DocumentService.UploadDocuments({
         library_id: props.library.id,
         file_paths: result,
+        folder_id: folderId,
       })
 
       // 上传完成后统一刷新第一页（只渲染 100 条，避免一次性渲染 500 卡片导致卡顿）
@@ -274,9 +508,12 @@ const handleFileDrop = async (filePaths: string[]) => {
     uploadDone.value = 0
     await nextTick()
 
+    // 上传文件，传入当前选中的文件夹 ID
+    const folderId = activeFolderId.value && activeFolderId.value > 0 ? activeFolderId.value : null
     const uploaded = await DocumentService.UploadDocuments({
       library_id: props.library.id,
       file_paths: filePaths,
+      folder_id: folderId,
     })
 
     await resetAndLoad()
@@ -292,6 +529,21 @@ const handleFileDrop = async (filePaths: string[]) => {
 const handleRename = (doc: Document) => {
   documentToRename.value = doc
   renameDialogOpen.value = true
+}
+
+const handleMoveToFolder = (doc: Document) => {
+  documentToMove.value = doc
+  moveDocumentDialogOpen.value = true
+}
+
+const handleDetail = (doc: Document) => {
+  documentToDetail.value = doc
+  documentDetailDialogOpen.value = true
+}
+
+const handleView = (doc: Document) => {
+  // Open document in a new tab instead of dialog
+  navigationStore.openDocumentViewer(doc.id, doc.name)
 }
 
 const confirmRename = async (doc: Document | null, newName: string) => {
@@ -366,6 +618,62 @@ const confirmDelete = async () => {
   }
 }
 
+// 仅在拖拽文件时显示遮罩
+const isFileDragEvent = (event: DragEvent) =>
+  !!event.dataTransfer && Array.from(event.dataTransfer.types).includes('Files')
+
+const resetDragState = () => {
+  dragDepth = 0
+  isDragOver.value = false
+}
+
+const handleDragEnter = (event: DragEvent) => {
+  if (!isFileDragEvent(event)) return
+  event.preventDefault()
+  dragDepth += 1
+  isDragOver.value = true
+}
+
+const handleDragOverEvent = (event: DragEvent) => {
+  if (!isFileDragEvent(event)) return
+  event.preventDefault()
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  if (!isFileDragEvent(event)) return
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) {
+    isDragOver.value = false
+  }
+}
+
+const handleDropEvent = (event: DragEvent) => {
+  if (!isFileDragEvent(event)) return
+  event.preventDefault()
+  resetDragState()
+}
+
+const handleGlobalDragEnd = () => {
+  resetDragState()
+}
+
+const addDragListeners = (el: HTMLElement | null) => {
+  if (!el) return
+  el.addEventListener('dragenter', handleDragEnter)
+  el.addEventListener('dragover', handleDragOverEvent)
+  el.addEventListener('dragleave', handleDragLeave)
+  el.addEventListener('drop', handleDropEvent)
+}
+
+const removeDragListeners = (el: HTMLElement | null) => {
+  if (!el) return
+  el.removeEventListener('dragenter', handleDragEnter)
+  el.removeEventListener('dragover', handleDragOverEvent)
+  el.removeEventListener('dragleave', handleDragLeave)
+  el.removeEventListener('drop', handleDropEvent)
+}
+
 // 监听文档进度事件
 let unsubscribeProgress: (() => void) | null = null
 let unsubscribeThumbnail: (() => void) | null = null
@@ -396,6 +704,22 @@ onMounted(() => {
 
   // sentinel 在列表非空时才渲染，所以需要监听 ref 变化
   watch([scrollContainerRef, loadMoreSentinelRef], setupObserver, { immediate: true })
+
+  // 监听拖拽目标元素变化，绑定/解绑原生拖拽事件
+  watch(
+    () => dropTargetRef.value,
+    (el, prevEl) => {
+      if (prevEl) {
+        removeDragListeners(prevEl)
+      }
+      if (el) {
+        addDragListeners(el)
+      }
+    },
+    { immediate: true }
+  )
+
+  window.addEventListener('dragend', handleGlobalDragEnd)
 
   // 监听缩略图更新事件
   unsubscribeThumbnail = Events.On('document:thumbnail', (event: { data: ThumbnailEvent }) => {
@@ -522,14 +846,35 @@ onUnmounted(() => {
   if (searchTimeout) {
     clearTimeout(searchTimeout)
   }
+
+  window.removeEventListener('dragend', handleGlobalDragEnd)
+  if (dropTargetRef.value) {
+    removeDragListeners(dropTargetRef.value)
+  }
 })
 </script>
 
 <template>
-  <div class="relative flex min-h-0 flex-1 flex-col" data-file-drop-target>
+  <div
+    ref="dropTargetRef"
+    class="relative flex min-h-0 flex-1 flex-col"
+    data-file-drop-target
+  >
     <!-- 头部区域 -->
     <div class="flex h-12 items-center justify-between px-4">
-      <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
+      <div class="flex items-center gap-3">
+        <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
+        <!-- 创建文件夹按钮 -->
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-6"
+          :title="t('knowledge.folder.create')"
+          @click="createFolderDialogOpen = true"
+        >
+          <FolderPlus class="size-4 text-muted-foreground" />
+        </Button>
+      </div>
       <div class="flex items-center gap-1.5">
         <!-- 搜索框 -->
         <div class="relative w-40">
@@ -620,12 +965,24 @@ onUnmounted(() => {
         </Button>
       </div>
 
-      <!-- 文档网格 -->
+      <!-- 文件夹和文档网格 -->
       <div v-else>
         <div
           class="grid auto-rows-max gap-4"
           style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
         >
+          <!-- 文件夹卡片（仅在显示"全部"时显示） -->
+          <FolderCard
+            v-for="folder in displayFolders"
+            :key="`folder-${folder.id}`"
+            :folder="folder"
+            :document-count="getFolderItemCount(folder)"
+            :latest-updated-at="getFolderLatestUpdatedAt(folder)"
+            @click="handleFolderClick"
+            @rename="handleFolderRename"
+            @delete="handleFolderDelete"
+          />
+          <!-- 文档卡片 -->
           <DocumentCard
             v-for="doc in filteredDocuments"
             :key="doc.id"
@@ -633,6 +990,9 @@ onUnmounted(() => {
             @rename="handleRename"
             @relearn="handleRelearn"
             @delete="handleOpenDelete"
+            @move-to-folder="handleMoveToFolder"
+            @detail="handleDetail"
+            @view="handleView"
           />
         </div>
 
@@ -655,6 +1015,49 @@ onUnmounted(() => {
       v-model:open="renameDialogOpen"
       :document="documentToRename"
       @confirm="confirmRename"
+    />
+
+    <!-- 移动到文件夹对话框 -->
+    <MoveDocumentDialog
+      v-model:open="moveDocumentDialogOpen"
+      :document="documentToMove"
+      :folders="folders"
+      @moved="
+        () => {
+          // 如果当前过滤条件与目标文件夹不符，从列表中移除
+          resetAndLoad()
+        }
+      "
+    />
+
+    <!-- 文档详情对话框 -->
+    <DocumentDetailDialog
+      v-model:open="documentDetailDialogOpen"
+      :document="documentToDetail"
+      :folders="folders"
+      @relearn="handleRelearn"
+      @move-to-folder="handleMoveToFolder"
+      @rename="handleRename"
+      @delete="handleOpenDelete"
+    />
+
+    <!-- 文件夹管理对话框 -->
+    <CreateFolderDialog
+      v-model:open="createFolderDialogOpen"
+      :library-id="library.id"
+      :folders="folders"
+      :default-parent-id="activeFolderId"
+      @created="handleFolderCreated"
+    />
+    <RenameFolderDialog
+      v-model:open="renameFolderDialogOpen"
+      :folder="folderToRename"
+      @updated="handleFolderUpdated"
+    />
+    <DeleteFolderDialog
+      v-model:open="deleteFolderDialogOpen"
+      :folder="folderToDelete"
+      @deleted="handleFolderDeleted"
     />
 
     <!-- 删除确认对话框 -->
@@ -680,8 +1083,8 @@ onUnmounted(() => {
       </AlertDialogContent>
     </AlertDialog>
 
-    <!-- Drag-and-drop overlay (shown when Wails adds .file-drop-target-active) -->
-    <div class="drop-overlay pointer-events-none">
+    <!-- Drag-and-drop overlay -->
+    <div v-show="isDragOver" class="drop-overlay pointer-events-none">
       <div class="flex flex-col items-center gap-2">
         <Upload class="size-10 text-primary" />
         <p class="text-sm font-medium text-primary">
@@ -696,12 +1099,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Drag overlay: hidden by default, shown when Wails adds file-drop-target-active */
+/* Drag overlay: visibility is controlled by Vue via v-show */
 .drop-overlay {
   position: absolute;
   inset: 0;
   z-index: 50;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   border-radius: inherit;
@@ -709,10 +1112,5 @@ onUnmounted(() => {
   background: hsl(var(--background) / 0.92);
   backdrop-filter: blur(4px);
   transition: opacity 0.15s ease;
-}
-
-/* When Wails detects a file drag over the drop target */
-[data-file-drop-target].file-drop-target-active .drop-overlay {
-  display: flex;
 }
 </style>

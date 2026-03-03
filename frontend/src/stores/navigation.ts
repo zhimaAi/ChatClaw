@@ -9,7 +9,7 @@ const createTabId = () => `tab-${uuidv4()}`
 /**
  * 导航模块类型
  */
-export type NavModule = 'assistant' | 'knowledge' | 'memory' | 'multiask' | 'settings'
+export type NavModule = 'assistant' | 'knowledge' | 'memory' | 'multiask' | 'settings' | 'document'
 
 /**
  * 标签页类型
@@ -34,6 +34,8 @@ export interface Tab {
   iconIsDefault?: boolean
   /** 关联的模块 */
   module: NavModule
+  /** 模块特定的数据（例如文档查看器的文档ID） */
+  data?: DocumentViewerData
 }
 
 /**
@@ -64,6 +66,7 @@ const moduleLabels: Record<NavModule, string> = {
   memory: 'nav.memory',
   multiask: 'nav.multiask',
   settings: 'nav.settings',
+  document: 'nav.document',
 }
 
 /**
@@ -71,6 +74,14 @@ const moduleLabels: Record<NavModule, string> = {
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
 const singleTabModules: NavModule[] = ['knowledge', 'memory', 'multiask', 'settings']
+
+/**
+ * Document viewer tab data
+ */
+export interface DocumentViewerData {
+  documentId: number
+  documentName: string
+}
 
 /**
  * 导航状态管理
@@ -136,11 +147,20 @@ export const useNavigationStore = defineStore('navigation', () => {
 
   /**
    * 点击左侧导航菜单时调用
-   * - AI助手：总是创建新标签页
+   * - AI助手：如果已有标签页则切换到最右侧的，否则创建新标签页
    * - 知识库、多问、设置：如果已存在则切换，否则创建
    */
   const navigateToModule = (module: NavModule) => {
     activeModule.value = module
+
+    if (module === 'assistant') {
+      const assistantTabs = tabs.value.filter((tab) => tab.module === 'assistant')
+      if (assistantTabs.length > 0) {
+        const rightmostTab = assistantTabs[assistantTabs.length - 1]
+        activeTabId.value = rightmostTab.id
+        return
+      }
+    }
 
     // 检查是否为单标签模块
     if (singleTabModules.includes(module)) {
@@ -334,6 +354,31 @@ export const useNavigationStore = defineStore('navigation', () => {
     return data
   }
 
+  /**
+   * Create a new document viewer tab
+   */
+  const openDocumentViewer = (documentId: number, documentName: string): string => {
+    // Check if document is already open in a tab
+    const existingTab = tabs.value.find(
+      (tab) => tab.module === 'document' && tab.data?.documentId === documentId
+    )
+    if (existingTab) {
+      activeTabId.value = existingTab.id
+      return existingTab.id
+    }
+
+    // Create new tab
+    const tabId = addTab({
+      module: 'document',
+      title: documentName,
+      data: {
+        documentId,
+        documentName,
+      },
+    })
+    return tabId
+  }
+
   return {
     activeModule,
     sidebarCollapsed,
@@ -355,5 +400,6 @@ export const useNavigationStore = defineStore('navigation', () => {
     refreshAssistantDefaultIcons,
     setPendingChatAndOpenAssistant,
     consumePendingChatData,
+    openDocumentViewer,
   }
 })

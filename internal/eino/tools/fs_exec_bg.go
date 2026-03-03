@@ -150,6 +150,7 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 		cmd = buildNativeCommand(input.Command)
 		cmd.Dir = workDir
 	}
+	applyToolchainEnv(cmd, cfg.ToolchainBinDir)
 
 	setProcGroup(cmd)
 

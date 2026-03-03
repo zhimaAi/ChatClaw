@@ -29,6 +29,11 @@ func defaultWorkDir() string {
 	return filepath.Join(home, ".chatclaw")
 }
 
+// GetDefaultWorkDir returns the default working directory path for agents.
+func (s *AgentsService) GetDefaultWorkDir() string {
+	return defaultWorkDir()
+}
+
 // AgentsService 助手服务（暴露给前端调用）
 type AgentsService struct {
 	app *application.App

@@ -23,6 +23,10 @@ type FsToolsConfig struct {
 	// CodexBin is the path to the codex binary (empty if not available).
 	CodexBin string
 
+	// ToolchainBinDir is the directory containing managed tool binaries (uv, bun, etc.).
+	// When non-empty, it is prepended to PATH for executed commands.
+	ToolchainBinDir string
+
 	// MemBackend is the shared InMemoryBackend used by reduction middleware
 	// for offloading large tool results. read_file dispatches to it for
 	// virtual paths (e.g. /large_tool_result/*).

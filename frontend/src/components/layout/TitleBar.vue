@@ -91,7 +91,7 @@ const handleToggleSidebar = () => {
  * 新建一个 AI助手 标签页（右侧 + 按钮）
  */
 const handleAddAssistantTab = () => {
-  navigationStore.navigateToModule('assistant')
+  navigationStore.addTab({ module: 'assistant', titleKey: 'nav.assistant' })
 }
 
 /**

@@ -16,6 +16,7 @@ import (
 
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/toolchain"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -68,6 +69,8 @@ type Config struct {
 
 	AgentID        int64 // Agent database ID (used to generate session subdirectory)
 	ConversationID int64 // Conversation database ID (used to generate session subdirectory)
+
+	ToolchainBinDir string // Directory containing managed tool binaries (uv, bun, etc.)
 }
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
@@ -333,7 +336,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 // the OS environment, working directory, sandbox constraints, and available tools.
 // sessionsDir is the agent-level sessions directory (parent of the current conversation dir)
 // so the LLM knows where sibling conversations live.
-func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -435,6 +438,47 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 `
 	}
 
+	if toolchainBinDir != "" {
+		installed := toolchain.InstalledSnapshot()
+		var toolSections string
+
+		if installed["uv"] {
+			toolSections += `
+## uv — Fast Python Package Manager & Runner
+- **Always prefer uv over system python/pip/pip3/python3.** Even if the user has Python installed, use uv for better reproducibility and speed.
+- Create a new Python project: ` + "`uv init my-project`" + `
+- Run a Python script (auto-installs dependencies): ` + "`uv run script.py`" + `
+- Add a dependency: ` + "`uv add requests`" + `
+- Create a virtual environment: ` + "`uv venv`" + `
+- Install from requirements.txt: ` + "`uv pip install -r requirements.txt`" + `
+`
+		}
+
+		if installed["bun"] {
+			toolSections += `
+## bun — Fast JavaScript Runtime & Package Manager
+- **Always prefer bun over system node/npm/npx.** Even if the user has Node.js installed, use bun for faster execution and installs.
+- Initialize a project: ` + "`bun init`" + `
+- Install dependencies: ` + "`bun install`" + `
+- Run a script: ` + "`bun run script.ts`" + ` (supports TypeScript natively)
+- Add a dependency: ` + "`bun add express`" + `
+- Execute a package binary: ` + "`bunx create-vite my-app`" + `
+`
+		}
+
+		if toolSections != "" {
+			prompt += fmt.Sprintf(`
+# Pre-installed Development Tools
+
+The following tools are **pre-installed and already on PATH** (in %s). You can call them directly by name.
+%s
+## Important
+- These tools are managed by the application and guaranteed to be available. Do NOT ask the user to install Python, Node.js, pip, or npm — use uv and bun instead.
+- If a task requires Python work, default to uv. If it requires JavaScript/TypeScript work, default to bun.
+`, toolchainBinDir, toolSections)
+		}
+	}
+
 	return prompt
 }
 
@@ -462,7 +506,7 @@ func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem
 	}
 
 	// System prompt middleware — inject environment info and tool instructions.
-	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, sessionsDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
+	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, sessionsDir, fsCfg.ToolchainBinDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
 	middlewares = append(middlewares, adk.AgentMiddleware{
 		AdditionalInstruction: systemPrompt,
 	})
@@ -562,6 +606,10 @@ func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *
 	var codexBin string
 	if sandboxEnabled {
 		codexBin = resolveCodexBin()
+		if codexBin == "" {
+			sandboxEnabled = false
+			log.Printf("[agent] codex sandbox requested but codex not installed, falling back to native execution")
+		}
 	}
 
 	baseWorkDir := config.WorkDir
@@ -578,6 +626,7 @@ func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *
 		SandboxEnabled:        sandboxEnabled,
 		SandboxNetworkEnabled: config.SandboxNetwork,
 		CodexBin:              codexBin,
+		ToolchainBinDir:       config.ToolchainBinDir,
 		MemBackend:            memBackend,
 	}
 }

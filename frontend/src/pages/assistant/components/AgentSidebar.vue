@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import LogoIcon from '@/assets/images/logo.svg'
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSettings from '@/assets/icons/settings.svg'
@@ -23,6 +22,7 @@ import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
 import { Pin, PinOff, MoreHorizontal } from 'lucide-vue-next'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import type { Conversation } from '@bindings/chatclaw/internal/services/conversations'
+import { useThemeLogo } from '@/composables/useLogo'
 
 type ListMode = 'personal' | 'team'
 
@@ -54,6 +54,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const handleAgentClick = (agentId: number) => {
   emit('update:activeAgentId', agentId)
@@ -150,7 +151,7 @@ const handleListModeChange = (mode: ListMode) => {
               class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
             >
               <img v-if="a.icon" :src="a.icon" class="size-6 object-contain" />
-              <LogoIcon v-else class="size-6 opacity-90" />
+              <img v-else :src="logoSrc" class="size-6 opacity-90" alt="ChatClaw logo" />
             </div>
 
             <div class="min-w-0 flex-1">

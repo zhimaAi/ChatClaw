@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Trash2 } from 'lucide-vue-next'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -105,6 +105,8 @@ const eventsByDate = computed(() => {
   }
   return groups
 })
+
+const { logoSrc } = useThemeLogo()
 
 const loadAgents = async () => {
   loading.value = true
@@ -426,7 +428,7 @@ onMounted(() => {
               v-else
               class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5"
             >
-              <LogoIcon class="size-4 opacity-90" />
+              <img :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
             </div>
             <span class="min-w-0 flex-1 truncate">{{ agent.name }}</span>
           </button>

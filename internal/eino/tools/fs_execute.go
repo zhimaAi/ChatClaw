@@ -101,6 +101,7 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 		cmd = buildNativeCommand(input.Command)
 		cmd.Dir = workDir
 	}
+	applyToolchainEnv(cmd, cfg.ToolchainBinDir)
 
 	setProcGroup(cmd)
 
@@ -309,4 +310,26 @@ func buildNativeCommand(command string) *exec.Cmd {
 	default:
 		return exec.Command("/bin/bash", "-l", "-c", command)
 	}
+}
+
+// applyToolchainEnv prepends the toolchain bin directory to PATH so that
+// managed binaries (uv, bun, etc.) are discoverable by executed commands.
+func applyToolchainEnv(cmd *exec.Cmd, binDir string) {
+	if binDir == "" {
+		return
+	}
+	env := os.Environ()
+	pathKey := "PATH"
+	found := false
+	for i, e := range env {
+		if strings.HasPrefix(e, pathKey+"=") {
+			env[i] = pathKey + "=" + binDir + string(filepath.ListSeparator) + e[len(pathKey)+1:]
+			found = true
+			break
+		}
+	}
+	if !found {
+		env = append(env, pathKey+"="+binDir)
+	}
+	cmd.Env = env
 }

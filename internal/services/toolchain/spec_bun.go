@@ -35,6 +35,12 @@ func bunSpec() toolSpec {
 				version, target,
 			)
 		},
+		aliases: func(goos string) []string {
+			if goos == "windows" {
+				return []string{"bunx.exe"}
+			}
+			return []string{"bunx"}
+		},
 	}
 }
 
