@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNavigationStore } from '@/stores'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 
 const props = defineProps<{
   /** Currently selected library ID from the knowledge page */
@@ -27,6 +27,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 const navigationStore = useNavigationStore()
 
 // Whether this tab is currently active
@@ -175,7 +176,7 @@ onMounted(async () => {
                       class="h-8 w-auto min-w-[100px] max-w-[160px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
                     >
                       <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
-                        <LogoIcon class="size-3.5 shrink-0 text-foreground" />
+                        <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
                         <span class="truncate">{{ activeAgent.name }}</span>
                       </div>
                       <span v-else class="text-muted-foreground">

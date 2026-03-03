@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
 import { FloatingBallService } from '@bindings/chatclaw/internal/services/floatingball'
-import LogoIcon from '@/assets/images/logo.svg'
+import logoFloatingball from '@/assets/images/logo-floatingball.png'
 
 const debugDrag = () => {
   try {
@@ -366,10 +366,14 @@ watch(
           ]"
           style="--wails-draggable: no-drag"
         >
-          <LogoIcon
+          <img
             :key="collapsed ? 'collapsed' : 'expanded'"
+            :src="logoFloatingball"
             :class="collapsed ? 'h-7 w-7' : 'h-11 w-11'"
-            class="block text-blue-400"
+            class="block"
+            alt="ChatClaw floating icon"
+            draggable="false"
+            @dragstart.prevent
             style="transform: translateZ(0); backface-visibility: hidden"
           />
         </div>

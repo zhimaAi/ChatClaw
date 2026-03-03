@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import {
@@ -25,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const name = ref('')
 const prompt = ref('')
@@ -92,7 +93,7 @@ const handleCreate = () => {
             @click="handlePickIcon"
           >
             <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-            <LogoIcon v-else class="size-icon-lg" />
+            <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
           </button>
           <div class="text-xs text-muted-foreground">
             {{ t('assistant.icon.hint') }}

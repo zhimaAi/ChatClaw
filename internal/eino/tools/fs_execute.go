@@ -7,26 +7,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 )
-
-// writableRoots lists home-relative directories that common package managers
-// need write access to. These are added to the codex sandbox whitelist via
-// sandbox_workspace_write.writable_roots so that tools like npm, bun, pip,
-// yarn, etc. can use their caches without hitting "Operation not permitted".
-var writableRoots = []string{
-	".npm",
-	".bun",
-	".cache",
-	".local",
-	".yarn",
-}
 
 // BlockedCommands are shell commands that are always rejected.
 var BlockedCommands = []string{
@@ -47,9 +33,8 @@ const (
 	defaultStopTimeout = 10
 )
 
-// NewExecuteTool creates an execute tool that runs shell commands synchronously,
-// and also supports stopping/querying background processes managed by BgProcessManager.
-func NewExecuteTool(cfg *FsToolsConfig, bgMgr *BgProcessManager) (tool.BaseTool, error) {
+// NewExecuteTool creates an execute tool backed by Backend.
+func NewExecuteTool(b *Backend, bgMgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecute,
 		"Execute a shell command synchronously (action='run', default), stop a background process (action='stop'), or check background process status (action='status'). Working directory is the configured workspace. Default timeout: 30s, max 300s. For long-running servers, use execute_background to start them, then use this tool with action='stop' or action='status' to manage them.",
 		func(ctx context.Context, input *executeInput) (string, error) {
@@ -59,7 +44,7 @@ func NewExecuteTool(cfg *FsToolsConfig, bgMgr *BgProcessManager) (tool.BaseTool,
 			}
 			switch action {
 			case "run":
-				return execRun(ctx, cfg, input)
+				return execRun(ctx, b, input)
 			case "stop":
 				return execStop(bgMgr, input)
 			case "status":
@@ -70,7 +55,7 @@ func NewExecuteTool(cfg *FsToolsConfig, bgMgr *BgProcessManager) (tool.BaseTool,
 		})
 }
 
-func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (string, error) {
+func execRun(ctx context.Context, b *Backend, input *executeInput) (string, error) {
 	if input.Command == "" {
 		return "Error: command is required for action=run.", nil
 	}
@@ -89,25 +74,16 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	workDir := cfg.WorkDir
-	if workDir == "" {
-		workDir = cfg.HomeDir
-	}
-
 	var cmd *exec.Cmd
-	if cfg.SandboxEnabled && cfg.CodexBin != "" {
-		cmd = buildCodexCommand(cfg, workDir, input.Command)
+	if b.SandboxEnabled() {
+		cmd = b.buildCodexCommand(input.Command)
 	} else {
-		cmd = buildNativeCommand(input.Command)
-		cmd.Dir = workDir
+		cmd = buildNativeShellCommand(input.Command)
+		cmd.Dir = b.WorkDir()
 	}
-
+	b.applyToolchainEnv(cmd)
 	setProcGroup(cmd)
 
-	// Use os.Pipe so we can force-close the write end after killing the
-	// process group. If we let Go create internal pipes (cmd.Stdout = &buf),
-	// cmd.Wait will hang forever when background children (e.g. "npm run
-	// dev &") inherit and keep the pipe open after the parent is killed.
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return fmt.Sprintf("failed to create pipe: %v\n[exit code: -1]", err), nil
@@ -120,8 +96,6 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 		pr.Close()
 		return fmt.Sprintf("failed to start command: %v\n[exit code: -1]", err), nil
 	}
-
-	// Close our copy of the write end so reads see EOF once all children close theirs.
 	pw.Close()
 
 	var buf bytes.Buffer
@@ -143,8 +117,6 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 		timedOut = execCtx.Err() == context.DeadlineExceeded
 		cancelled = !timedOut
 		killProcessGroup(cmd)
-		// After killing, close the read end to unblock io.Copy (and thus
-		// cmd.Wait) even if orphaned children still hold the write end.
 		pr.Close()
 		select {
 		case cmdErr = <-waitDone:
@@ -152,7 +124,6 @@ func execRun(ctx context.Context, cfg *FsToolsConfig, input *executeInput) (stri
 		}
 	}
 
-	// Ensure the reader goroutine finishes.
 	pr.Close()
 	select {
 	case <-readDone:
@@ -210,7 +181,6 @@ func execStop(mgr *BgProcessManager, input *executeInput) (string, error) {
 
 	select {
 	case <-p.done:
-		// Process exited successfully
 	case <-time.After(time.Duration(timeoutSec) * time.Second):
 		return fmt.Sprintf("Error: process %d did not exit within %ds after kill signal. The process may be stuck. Try 'kill -9 %d' via action=run, or investigate what is preventing it from exiting.", input.PID, timeoutSec, input.PID), nil
 	}
@@ -251,62 +221,4 @@ func validateCommand(command string) error {
 		}
 	}
 	return nil
-}
-
-func buildCodexCommand(cfg *FsToolsConfig, workDir, command string) *exec.Cmd {
-	platform := "macos"
-	switch runtime.GOOS {
-	case "linux":
-		platform = "linux"
-	case "windows":
-		platform = "windows"
-	}
-
-	args := []string{"sandbox", platform, "--full-auto"}
-
-	if cfg.SandboxNetworkEnabled {
-		args = append(args, "-c", "sandbox_workspace_write.network_access=true")
-	}
-
-	roots := make([]string, 0, len(writableRoots))
-	for _, rel := range writableRoots {
-		roots = append(roots, fmt.Sprintf("%q", filepath.Join(cfg.HomeDir, rel)))
-	}
-	args = append(args, "-c",
-		fmt.Sprintf("sandbox_workspace_write.writable_roots=[%s]", strings.Join(roots, ",")))
-
-	if runtime.GOOS == "windows" {
-		wrappedCmd := "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
-			"$OutputEncoding = [System.Text.Encoding]::UTF8; " +
-			command
-		args = append(args,
-			"--",
-			"powershell.exe",
-			"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-			"-Command", wrappedCmd,
-		)
-	} else {
-		args = append(args, "--", "sh", "-c", command)
-	}
-
-	cmd := exec.Command(cfg.CodexBin, args...)
-	cmd.Dir = workDir
-	return cmd
-}
-
-func buildNativeCommand(command string) *exec.Cmd {
-	switch runtime.GOOS {
-	case "windows":
-		wrappedCmd := "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " +
-			"$OutputEncoding = [System.Text.Encoding]::UTF8; " +
-			command
-		return exec.Command("powershell.exe",
-			"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-			"-Command", wrappedCmd,
-		)
-	case "darwin":
-		return exec.Command("/bin/zsh", "-l", "-c", command)
-	default:
-		return exec.Command("/bin/bash", "-l", "-c", command)
-	}
 }

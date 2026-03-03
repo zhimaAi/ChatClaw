@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 )
@@ -16,21 +16,20 @@ type writeFileInput struct {
 	Content  string `json:"content" jsonschema:"description=The content to write to the file."`
 }
 
-// NewWriteFileTool creates a write_file tool that writes to the real filesystem.
-// In sandbox mode, paths are restricted to the working directory.
-func NewWriteFileTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewWriteFileTool creates a write_file tool backed by Backend.
+func NewWriteFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDWriteFile,
 		"Create or overwrite a file with the given content. Use absolute paths. Prefer this over shell echo for creating files.",
 		func(ctx context.Context, input *writeFileInput) (string, error) {
-			filePath, err := cfg.ResolveWritePath(input.FilePath)
+			filePath, err := b.ResolveWritePath(input.FilePath)
 			if err != nil {
 				return "", err
 			}
-			if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-				return "", fmt.Errorf("failed to create directory: %w", err)
-			}
-			if err := os.WriteFile(filePath, []byte(input.Content), 0o644); err != nil {
-				return "", fmt.Errorf("failed to write file: %w", err)
+			if err := b.Write(ctx, &filesystem.WriteRequest{
+				FilePath: filePath,
+				Content:  input.Content,
+			}); err != nil {
+				return "", err
 			}
 			return fmt.Sprintf("Updated file %s", input.FilePath), nil
 		})
@@ -43,45 +42,22 @@ type editFileInput struct {
 	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"description=If true replace all occurrences. Default false (single occurrence only)."`
 }
 
-// NewEditFileTool creates an edit_file tool that performs string replacement on disk.
-func NewEditFileTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewEditFileTool creates an edit_file tool backed by Backend.
+func NewEditFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDEditFile,
 		"Edit a file by replacing exact string matches. If replace_all is false and old_string appears more than once, the call fails (set replace_all=true to replace all).",
 		func(ctx context.Context, input *editFileInput) (string, error) {
-			if input.OldString == "" {
-				return "", fmt.Errorf("old_string cannot be empty")
-			}
-			if input.OldString == input.NewString {
-				return "", fmt.Errorf("old_string and new_string are identical")
-			}
-
-			filePath, err := cfg.ResolveWritePath(input.FilePath)
+			filePath, err := b.ResolveWritePath(input.FilePath)
 			if err != nil {
 				return "", err
 			}
-
-			data, err := os.ReadFile(filePath)
-			if err != nil {
-				return "", fmt.Errorf("failed to read file: %w", err)
-			}
-
-			content := string(data)
-			count := strings.Count(content, input.OldString)
-			if count == 0 {
-				return "", fmt.Errorf("old_string not found in file")
-			}
-			if !input.ReplaceAll && count > 1 {
-				return "", fmt.Errorf("old_string found %d times, use replace_all=true to replace all occurrences", count)
-			}
-
-			var newContent string
-			if input.ReplaceAll {
-				newContent = strings.ReplaceAll(content, input.OldString, input.NewString)
-			} else {
-				newContent = strings.Replace(content, input.OldString, input.NewString, 1)
-			}
-			if err := os.WriteFile(filePath, []byte(newContent), 0o644); err != nil {
-				return "", fmt.Errorf("failed to write file: %w", err)
+			if err := b.Edit(ctx, &filesystem.EditRequest{
+				FilePath:   filePath,
+				OldString:  input.OldString,
+				NewString:  input.NewString,
+				ReplaceAll: input.ReplaceAll,
+			}); err != nil {
+				return "", err
 			}
 			return fmt.Sprintf("Successfully replaced the string in '%s'", input.FilePath), nil
 		})
@@ -99,8 +75,8 @@ type patchOpInput struct {
 	Content   []string `json:"content,omitempty" jsonschema:"description=Lines of new content (without trailing newlines). Required for insert and replace. Ignored for delete."`
 }
 
-// NewPatchFileTool creates a patch_file tool for line-based file patching.
-func NewPatchFileTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewPatchFileTool creates a patch_file tool backed by Backend.
+func NewPatchFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDPatchFile,
 		`Apply line-based patch operations to a file. Each operation specifies an action (insert, delete, or replace) and a line range.
 This is more efficient than edit_file when you need to modify specific line ranges, especially for multi-line insertions, deletions, or replacements.
@@ -120,7 +96,7 @@ Tips:
 				return "", fmt.Errorf("operations list must not be empty")
 			}
 
-			absPath, err := cfg.ResolveWritePath(input.FilePath)
+			absPath, err := b.ResolveWritePath(input.FilePath)
 			if err != nil {
 				return "", err
 			}

@@ -22,8 +22,6 @@ const (
 )
 
 // safeBuffer is a concurrency-safe byte buffer.
-// cmd.Stdout/Stderr write to it from the OS thread while bgStatus reads
-// from the user-facing goroutine — they must not race on the underlying slice.
 type safeBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -41,7 +39,6 @@ func (b *safeBuffer) String() string {
 	return b.buf.String()
 }
 
-// Ensure safeBuffer satisfies io.Writer so it can be assigned to cmd.Stdout.
 var _ io.Writer = (*safeBuffer)(nil)
 
 type bgProcess struct {
@@ -51,13 +48,12 @@ type bgProcess struct {
 	buf      *safeBuffer
 	cancel   context.CancelFunc
 	done     chan struct{}
-	mu       sync.Mutex // protects exited / exitCode only
+	mu       sync.Mutex
 	exited   bool
 	exitCode int
 }
 
 // BgProcessManager tracks background processes spawned by execute_background.
-// Call Cleanup() when the agent session ends to kill all remaining processes.
 type BgProcessManager struct {
 	mu    sync.Mutex
 	procs map[int]*bgProcess
@@ -109,18 +105,16 @@ type bgExecInput struct {
 	Timeout int    `json:"timeout,omitempty" jsonschema:"description=Max seconds the background process may live before being auto-killed (default 300, max 600)."`
 }
 
-// NewBgExecuteTool creates the execute_background tool.
-// It only starts background processes. Use the synchronous execute tool
-// with action='stop' or action='status' to manage running processes.
-func NewBgExecuteTool(cfg *FsToolsConfig, mgr *BgProcessManager) (tool.BaseTool, error) {
+// NewBgExecuteTool creates the execute_background tool backed by Backend.
+func NewBgExecuteTool(b *Backend, mgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecuteBackground,
 		"Start a long-running command in the background (e.g. dev servers). Returns the pid and initial output. The process is auto-killed after timeout seconds (default 300, max 600). To stop or check status of the process, use the execute tool with action='stop' or action='status'.",
 		func(ctx context.Context, input *bgExecInput) (string, error) {
-			return bgStart(cfg, mgr, input)
+			return bgStart(b, mgr, input)
 		})
 }
 
-func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (string, error) {
+func bgStart(b *Backend, mgr *BgProcessManager, input *bgExecInput) (string, error) {
 	if input.Command == "" {
 		return "Error: command is required.", nil
 	}
@@ -136,25 +130,18 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 		timeoutSec = maxBgTimeout
 	}
 
-	workDir := cfg.WorkDir
-	if workDir == "" {
-		workDir = cfg.HomeDir
-	}
-
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 
 	var cmd *exec.Cmd
-	if cfg.SandboxEnabled && cfg.CodexBin != "" {
-		cmd = buildCodexCommand(cfg, workDir, input.Command)
+	if b.SandboxEnabled() {
+		cmd = b.buildCodexCommand(input.Command)
 	} else {
-		cmd = buildNativeCommand(input.Command)
-		cmd.Dir = workDir
+		cmd = buildNativeShellCommand(input.Command)
+		cmd.Dir = b.WorkDir()
 	}
-
+	b.applyToolchainEnv(cmd)
 	setProcGroup(cmd)
 
-	// Use os.Pipe so we can force-close pipes after killing to avoid
-	// cmd.Wait hanging when orphaned children keep the write end open.
 	pr, pw, pipeErr := os.Pipe()
 	if pipeErr != nil {
 		bgCancel()
@@ -169,7 +156,6 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 		pr.Close()
 		return fmt.Sprintf("Failed to start: %v", err), nil
 	}
-
 	pw.Close()
 
 	buf := &safeBuffer{}
@@ -190,7 +176,6 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 	}
 	mgr.add(p)
 
-	// Background goroutine: wait for process exit or cancellation.
 	go func() {
 		defer close(done)
 
@@ -230,17 +215,14 @@ func bgStart(cfg *FsToolsConfig, mgr *BgProcessManager, input *bgExecInput) (str
 		mgr.remove(pid)
 	}()
 
-	// Wait a few seconds to collect startup output.
 	select {
 	case <-done:
-		// Process already exited during startup wait
 		p.mu.Lock()
 		output := truncateOutput(p.buf.String())
 		code := p.exitCode
 		p.mu.Unlock()
 		return fmt.Sprintf("Process exited immediately.\n%s\n[exit code: %d]", output, code), nil
 	case <-time.After(bgStartupWait):
-		// Still running — good, return initial output
 		p.mu.Lock()
 		output := truncateOutput(p.buf.String())
 		p.mu.Unlock()

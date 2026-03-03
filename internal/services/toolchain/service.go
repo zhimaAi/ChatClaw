@@ -53,6 +53,10 @@ type toolSpec struct {
 	binaryName          func(goos string) string
 	versionArgs         []string
 	downloadURL         func(version, goos, goarch string) string
+	// aliases returns extra names that should be symlinked (Unix) or copied
+	// (Windows) to the main binary after installation. For example, bun
+	// needs a "bunx" alias so that "bunx <pkg>" works the same as "bun x <pkg>".
+	aliases func(goos string) []string
 }
 
 var registry = map[string]toolSpec{
@@ -155,6 +159,7 @@ func (s *ToolchainService) InstallTool(name string) (*ToolStatus, error) {
 	s.app.Logger.Info("toolchain: installed successfully",
 		"tool", name, "version", latestVersion)
 
+	MarkInstalled(name)
 	st := s.getStatus(name)
 	s.emitStatus(name)
 	return &st, nil
@@ -184,6 +189,20 @@ func (s *ToolchainService) EnsureAll() {
 	}
 	wg.Wait()
 	s.app.Logger.Info("toolchain: all tools checked")
+	s.syncState()
+}
+
+// syncState refreshes the package-level state snapshot from actual binary checks.
+func (s *ToolchainService) syncState() {
+	binDir := s.BinDir()
+	installed := make(map[string]bool, len(registry))
+	for name, spec := range registry {
+		binPath := filepath.Join(binDir, spec.binaryName(runtime.GOOS))
+		if s.getInstalledVersion(binPath, spec.versionArgs) != "" {
+			installed[name] = true
+		}
+	}
+	SetState(binDir, installed)
 }
 
 // ---- Internal helpers ----
@@ -429,6 +448,18 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 		return fmt.Errorf("rename: %w", err)
 	}
 
+	if spec.aliases != nil {
+		for _, alias := range spec.aliases(goos) {
+			aliasPath := filepath.Join(binDir, alias)
+			_ = os.Remove(aliasPath)
+			if goos == "windows" {
+				copyFile(destPath, aliasPath)
+			} else {
+				os.Symlink(binName, aliasPath)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -502,6 +533,26 @@ func extractFromTarGz(data []byte, targetPath, destPath string) error {
 
 // ---- Utilities ----
 
+// copyFile copies src to dst (used on Windows to create binary aliases).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return os.Chmod(dst, 0o755)
+}
+
 // extractVersion normalises a tag/version string: strips leading "v", "bun-v", etc.
 func extractVersion(s string) string {
 	s = strings.TrimSpace(s)
@@ -509,6 +560,8 @@ func extractVersion(s string) string {
 	s = strings.TrimPrefix(s, "bun-")
 	s = strings.TrimPrefix(s, "uv ")
 	s = strings.TrimPrefix(s, "rust-v")
+	s = strings.TrimPrefix(s, "codex-cli/")
+	s = strings.TrimPrefix(s, "codex-cli ")
 	s = strings.TrimPrefix(s, "codex/")
 	s = strings.TrimPrefix(s, "v")
 	if idx := strings.IndexAny(s, " \t("); idx > 0 {

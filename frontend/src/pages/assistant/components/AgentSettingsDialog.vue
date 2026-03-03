@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen } from 'lucide-vue-next'
+import { Events } from '@wailsio/runtime'
+import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen, RotateCcw, AlertTriangle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import LogoIcon from '@/assets/images/logo.svg'
+import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import SliderWithTicks from './SliderWithTicks.vue'
@@ -37,6 +38,7 @@ import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
+import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 
 type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 
@@ -52,6 +54,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -79,6 +82,8 @@ const enableMaxTokens = ref(false)
 const sandboxMode = ref('codex')
 const sandboxNetwork = ref(true)
 const workDir = ref('')
+const defaultWorkDir = ref('')
+const codexInstalled = ref(false)
 
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
@@ -92,10 +97,31 @@ watch(
   (open) => {
     if (!open) return
     tab.value = 'model'
-    // lazy load models for selection
     void loadModels()
+    void AgentsService.GetDefaultWorkDir().then((dir) => {
+      defaultWorkDir.value = dir
+    })
+    void ToolchainService.GetToolStatus('codex').then((status) => {
+      codexInstalled.value = status?.installed ?? false
+    })
   }
 )
+
+let unsubscribeToolchain: (() => void) | null = null
+
+onMounted(() => {
+  unsubscribeToolchain = Events.On('toolchain:status', (event: any) => {
+    const data = event?.data?.[0] ?? event?.data ?? event
+    if (data && data.name === 'codex') {
+      codexInstalled.value = !!data.installed
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeToolchain?.()
+  unsubscribeToolchain = null
+})
 
 watch(
   () => props.agent,
@@ -247,9 +273,9 @@ const isWindows = navigator.platform.toLowerCase().includes('win')
 const pathSep = isWindows ? '\\' : '/'
 
 const workDirHint = computed(() => {
-  const base = workDir.value || (isWindows ? 'C:\\Users\\xxx\\.chatclaw' : '~/.chatclaw')
-  const sep = pathSep
-  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep })
+  const base = workDir.value || defaultWorkDir.value
+  if (!base) return ''
+  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep: pathSep })
 })
 
 const handleSelectWorkDir = async () => {
@@ -339,7 +365,7 @@ const handleDelete = async () => {
       </div>
 
       <!-- 内容区：固定高度，内部不随 tab 抖动 -->
-      <div class="h-[480px] px-4 py-2">
+      <div class="h-[480px] overflow-hidden px-4 py-2">
         <div class="flex h-full">
           <!-- 左侧 tabs（独立区域） -->
           <div class="w-[140px] shrink-0 border-r border-border pr-4">
@@ -604,7 +630,7 @@ const handleDelete = async () => {
                     @click="handlePickIcon"
                   >
                     <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-                    <LogoIcon v-else class="size-icon-lg" />
+                    <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
                   </button>
                   <div class="text-xs text-muted-foreground">
                     {{ t('assistant.icon.hint') }}
@@ -675,6 +701,15 @@ const handleDelete = async () => {
                         : t('assistant.settings.workspace.nativeDesc')
                     }}
                   </p>
+                  <div
+                    v-if="sandboxMode === 'codex' && !codexInstalled"
+                    class="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5 dark:border-white/10 dark:bg-white/5"
+                  >
+                    <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <p class="text-xs text-muted-foreground">
+                      {{ t('assistant.settings.workspace.codexNotInstalled') }}
+                    </p>
+                  </div>
                 </div>
 
                 <div v-if="sandboxMode === 'codex'" class="flex flex-col gap-2">
@@ -699,19 +734,28 @@ const handleDelete = async () => {
                   <p class="text-xs text-muted-foreground">
                     {{ t('assistant.settings.workspace.workDirDesc') }}
                   </p>
-                  <div class="flex items-center gap-2">
+                  <div class="flex min-w-0 items-center gap-2">
                     <span
                       class="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
-                      :title="workDir || '~/.chatclaw'"
+                      :title="workDir || defaultWorkDir"
                     >
-                      {{ workDir || '~/.chatclaw' }}
+                      {{ workDir || defaultWorkDir }}
                     </span>
                     <Button variant="outline" size="sm" class="shrink-0" @click="handleSelectWorkDir">
                       <FolderOpen class="mr-1.5 size-3.5" />
                       {{ t('assistant.settings.workspace.changeDir') }}
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="-ml-1 -mr-1.5 shrink-0 text-muted-foreground"
+                      :title="t('assistant.settings.workspace.resetDir')"
+                      @click="workDir = defaultWorkDir"
+                    >
+                      <RotateCcw class="size-3.5" />
+                    </Button>
                   </div>
-                  <p class="break-all text-xs font-mono text-muted-foreground/70">
+                  <p class="overflow-hidden break-all text-xs font-mono text-muted-foreground/70">
                     {{ workDirHint }}
                   </p>
                 </div>

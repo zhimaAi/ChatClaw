@@ -49,6 +49,12 @@ func uvSpec() toolSpec {
 				version, target, ext,
 			)
 		},
+		aliases: func(goos string) []string {
+			if goos == "windows" {
+				return []string{"uvx.exe"}
+			}
+			return []string{"uvx"}
+		},
 	}
 }
 

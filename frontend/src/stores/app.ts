@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { AppService } from '@bindings/chatclaw/internal/services/app'
+import { Events } from '@wailsio/runtime'
 
 export type Theme = 'light' | 'dark' | 'system'
 export type RunMode = 'gui' | 'server'
@@ -41,7 +42,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 设置主题
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = (newTheme: Theme, options?: { broadcast?: boolean }) => {
     theme.value = newTheme
     localStorage.setItem('theme', newTheme)
     applyTheme(newTheme)
@@ -49,6 +50,15 @@ export const useAppStore = defineStore('app', () => {
     void SettingsService.SetValue('theme', newTheme).catch((e: unknown) => {
       console.warn('Failed to persist theme to backend settings:', e)
     })
+
+    // Broadcast theme change to other windows by default.
+    if (options?.broadcast !== false) {
+      try {
+        Events.Emit('theme:changed', { theme: newTheme })
+      } catch (e) {
+        console.warn('Failed to emit theme:changed event:', e)
+      }
+    }
   }
 
   // Fetch run mode from backend (should be called once at app startup)
