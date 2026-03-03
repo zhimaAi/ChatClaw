@@ -146,38 +146,20 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		Status:    StatusStreaming,
 	})
 
-	messages, err := s.loadMessagesForContext(ctx, db, conversationID, agentConfig.ContextCount)
+	// Agent mode loads all messages — context window management is handled
+	// by the Summarization middleware which compresses history automatically.
+	messages, err := s.loadMessagesForContext(ctx, db, conversationID, 0)
 	if err != nil {
 		gc.emitError("error.chat_messages_failed", nil)
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")
 		return
 	}
 
-	s.app.Logger.Info("[llm] start", "conv", conversationID, "tab", gc.tabID, "req", gc.requestID,
-		"provider_id", providerConfig.ProviderID, "provider_type", providerConfig.Type,
-		"model", agentConfig.ModelID, "endpoint", providerConfig.APIEndpoint, "messages", len(messages),
-		"instruction", truncateRunes(agentConfig.Instruction, llmLogMaxInstruction))
-	s.app.Logger.Info("[llm] context", "conv", conversationID, "req", gc.requestID, "context", summarizeMessagesForLog(messages, 12, llmLogMaxContent))
-
-	// Build extra tools and middlewares
-	extraTools, extraMiddlewares := s.buildExtras(ctx, gc)
+	// Build extra tools and handlers
+	extraTools, extraHandlers := s.buildExtras(ctx, gc)
 
 	agentConfig.Provider = providerConfig
-	llmCallCount := 0
-	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraMiddlewares,
-		func(_ context.Context, msgs []*schema.Message) {
-			llmCallCount++
-			var systemPrompt string
-			for _, m := range msgs {
-				if m.Role == schema.System {
-					systemPrompt += m.Content
-				}
-			}
-			s.app.Logger.Info("[llm] before_call", "conv", conversationID, "req", gc.requestID,
-				"call", llmCallCount, "messages", len(msgs),
-				"system_prompt", truncateRunes(systemPrompt, 2000),
-				"context", summarizeMessagesForLog(msgs, 20, llmLogMaxContent))
-		})
+	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraHandlers, s.app.Logger, len(messages))
 	if err != nil {
 		gc.emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
@@ -200,12 +182,12 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	}
 }
 
-// buildExtras creates extra tools and middlewares based on agent configuration.
-func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([]tool.BaseTool, []adk.AgentMiddleware) {
+// buildExtras creates extra tools and handlers based on agent configuration.
+func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([]tool.BaseTool, []adk.ChatModelAgentMiddleware) {
 	agentConfig := &gc.agentConfig
 	agentExtras := gc.agentExtras
 	var extraTools []tool.BaseTool
-	var extraMiddlewares []adk.AgentMiddleware
+	var extraHandlers []adk.ChatModelAgentMiddleware
 
 	if len(agentExtras.LibraryIDs) > 0 {
 		retrieverTool, toolErr := s.createLibraryRetrieverTool(ctx, gc.db, agentExtras.LibraryIDs, agentConfig.RetrievalTopK, agentExtras.MatchThreshold)
@@ -247,13 +229,13 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		coreProfile, _ := memory.GetCoreProfileContent(cpCtx, agentExtras.AgentID)
 		cpCancel()
 		if coreProfile != "" {
-			extraMiddlewares = append(extraMiddlewares, adk.AgentMiddleware{
-				AdditionalInstruction: "\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n" + coreProfile,
-			})
+			extraHandlers = append(extraHandlers, einoagent.NewInstructionHandler(
+				"\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n"+coreProfile,
+			))
 		}
 	}
 
-	return extraTools, extraMiddlewares
+	return extraTools, extraHandlers
 }
 
 // --- streaming / event processing ---
@@ -491,9 +473,6 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 
 	if ctx.Err() != nil {
 		s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusCancelled, "", "cancelled", ss.inputTokens, ss.outputTokens)
-		s.app.Logger.Info("[llm] complete", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID,
-			"status", StatusCancelled, "finish", "cancelled", "input_tokens", ss.inputTokens,
-			"output_tokens", ss.outputTokens, "content_len", len(ss.contentBuilder.String()), "thinking_len", len(ss.thinkingBuilder.String()))
 		gc.emit(EventChatStopped, ChatStoppedEvent{
 			ChatEvent: gc.chatEvent(assistantMsg.ID),
 			Status:    StatusCancelled,
@@ -502,12 +481,6 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 	}
 
 	s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
-
-	s.app.Logger.Info("[llm] complete", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID,
-		"status", StatusSuccess, "finish", ss.finishReason, "input_tokens", ss.inputTokens,
-		"output_tokens", ss.outputTokens, "content_len", len(ss.contentBuilder.String()),
-		"thinking_len", len(ss.thinkingBuilder.String()), "tool_calls_len", len(ss.toolCallsStr()))
-	s.app.Logger.Info("[llm] output", "conv", gc.conversationID, "req", gc.requestID, "output", truncateRunes(ss.contentBuilder.String(), llmLogMaxOutput))
 
 	gc.emit(EventChatComplete, ChatCompleteEvent{
 		ChatEvent: gc.chatEvent(assistantMsg.ID),
@@ -582,7 +555,6 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 				}
 			}
 		}
-		s.app.Logger.Info("[llm] tool_result", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "tool", toolName, "call_id", msg.ToolCallID, "result_len", len(msg.Content), "result", truncateRunes(msg.Content, llmLogMaxToolResult))
 		gc.emit(EventChatTool, ChatToolEvent{
 			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
 			Type:       "result",
@@ -661,7 +633,6 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 		if args != "" && !json.Valid([]byte(args)) {
 			s.app.Logger.Warn("[chat] tool arguments not valid JSON", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "tool", toolName, "call_id", resolvedID, "args", args)
 		}
-		s.app.Logger.Info("[llm] tool_call", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "tool", toolName, "call_id", resolvedID, "args", truncateRunes(args, 300))
 		gc.emit(EventChatTool, ChatToolEvent{
 			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
 			Type:       "call",
@@ -672,8 +643,12 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 	}
 }
 
-// loadMessagesForContext loads messages for agent context.
-// contextCount: maximum number of messages to include (0 or >=200 means unlimited)
+// loadMessagesForContext loads messages for agent/chat context.
+// contextCount: maximum number of messages to include (0 or >=200 means unlimited).
+//
+// Tool-call repair (dangling tool calls without responses) is handled by the
+// PatchToolCalls middleware at the agent level, so this function only performs
+// basic deserialization.
 func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int) ([]*schema.Message, error) {
 	var models []messageModel
 
@@ -700,66 +675,8 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		}
 	}
 
-	toolNameByCallID := make(map[string]string)
-	answeredToolCallIDs := make(map[string]bool)
-	for _, m := range models {
-		if m.Role == RoleTool && m.ToolCallID != "" {
-			answeredToolCallIDs[m.ToolCallID] = true
-			if m.ToolCallName != "" {
-				if _, ok := toolNameByCallID[m.ToolCallID]; !ok {
-					toolNameByCallID[m.ToolCallID] = m.ToolCallName
-				}
-			}
-		}
-	}
-
-	// First pass: repair assistant tool_calls and collect which call IDs are
-	// actually retained so we can drop orphan tool-role messages afterwards.
-	type repairedInfo struct {
-		toolCalls []schema.ToolCall
-	}
-	repairedByIdx := make(map[int]*repairedInfo, len(models))
-	retainedCallIDs := make(map[string]bool)
-
-	for i, m := range models {
-		if m.Role != RoleAssistant || m.ToolCalls == "" || m.ToolCalls == "[]" {
-			continue
-		}
-		var toolCalls []schema.ToolCall
-		if err := json.Unmarshal([]byte(m.ToolCalls), &toolCalls); err != nil {
-			continue
-		}
-		repaired := make([]schema.ToolCall, 0, len(toolCalls))
-		for _, tc := range toolCalls {
-			if tc.ID == "" {
-				continue
-			}
-			if !answeredToolCallIDs[tc.ID] {
-				continue
-			}
-			if tc.Function.Name == "" {
-				if name, ok := toolNameByCallID[tc.ID]; ok {
-					tc.Function.Name = name
-				}
-			}
-			if tc.Function.Arguments == "" || !json.Valid([]byte(tc.Function.Arguments)) {
-				tc.Function.Arguments = "{}"
-			}
-			if tc.Function.Name == "" {
-				continue
-			}
-			repaired = append(repaired, tc)
-		}
-		if len(repaired) > 0 {
-			repairedByIdx[i] = &repairedInfo{toolCalls: repaired}
-			for _, tc := range repaired {
-				retainedCallIDs[tc.ID] = true
-			}
-		}
-	}
-
 	messages := make([]*schema.Message, 0, len(models))
-	for i, m := range models {
+	for _, m := range models {
 		var role schema.RoleType
 		switch m.Role {
 		case RoleUser:
@@ -769,9 +686,6 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		case RoleSystem:
 			role = schema.System
 		case RoleTool:
-			if m.ToolCallID == "" || !retainedCallIDs[m.ToolCallID] {
-				continue
-			}
 			role = schema.Tool
 		default:
 			continue
@@ -787,8 +701,11 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 			msg.Name = m.ToolCallName
 		}
 
-		if info, ok := repairedByIdx[i]; ok {
-			msg.ToolCalls = info.toolCalls
+		if m.Role == RoleAssistant && m.ToolCalls != "" && m.ToolCalls != "[]" {
+			var toolCalls []schema.ToolCall
+			if err := json.Unmarshal([]byte(m.ToolCalls), &toolCalls); err == nil {
+				msg.ToolCalls = toolCalls
+			}
 		}
 
 		messages = append(messages, msg)
@@ -809,7 +726,7 @@ func (s *ChatService) updateMessageStatus(db *bun.DB, messageID int64, status, e
 		Set("finish_reason = ?", finishReason).
 		Where("id = ?", messageID).
 		Exec(ctx); err != nil {
-		s.app.Logger.Error("update message status failed", "messageID", messageID, "error", err)
+		s.app.Logger.Error("[chat] update message status failed", "messageID", messageID, "error", err)
 	}
 }
 
@@ -831,6 +748,6 @@ func (s *ChatService) updateMessageFinal(db *bun.DB, messageID int64, content, t
 		Set("output_tokens = ?", outputTokens).
 		Where("id = ?", messageID).
 		Exec(ctx); err != nil {
-		s.app.Logger.Error("update message final failed", "messageID", messageID, "error", err)
+		s.app.Logger.Error("[chat] update message final failed", "messageID", messageID, "error", err)
 	}
 }
