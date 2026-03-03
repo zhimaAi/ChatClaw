@@ -369,9 +369,9 @@ type instructionHandler struct {
 	instruction string
 }
 
-func (h *instructionHandler) BeforeAgent(_ context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
+func (h *instructionHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
 	runCtx.Instruction += h.instruction
-	return nil, runCtx, nil
+	return ctx, runCtx, nil
 }
 
 // NewInstructionHandler creates a handler that appends the given text to the
