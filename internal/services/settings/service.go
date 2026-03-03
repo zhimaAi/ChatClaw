@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -33,6 +35,7 @@ const (
 	CategorySnap      Category = "snap"      // 吸附设置
 	CategoryTools     Category = "tools"     // 功能工具
 	CategoryWorkspace Category = "workspace" // 工作区设置
+	CategorySkills    Category = "skills"    // 技能设置
 )
 
 type Setting struct {
@@ -175,6 +178,9 @@ func inferCategoryFromKey(key string) Category {
 	if strings.HasPrefix(key, "workspace_") {
 		return CategoryWorkspace
 	}
+	if strings.HasPrefix(key, "skills_") {
+		return CategorySkills
+	}
 	return CategoryGeneral
 }
 
@@ -258,6 +264,15 @@ func (s *SettingsService) GetWorkspaceSettings() (*UpdateWorkspaceSettingsInput,
 		SandboxMode: mode,
 		WorkDir:     workDir,
 	}, nil
+}
+
+// GetSkillsDir returns the fixed skills directory path ($HOME/.chatclaw/skills).
+func (s *SettingsService) GetSkillsDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", errs.Wrap("error.setting_read_failed", err)
+	}
+	return filepath.Join(homeDir, ".chatclaw", "skills"), nil
 }
 
 // toNullString converts a string to sql.NullString

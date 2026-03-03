@@ -37,9 +37,9 @@ func bunSpec() toolSpec {
 		},
 		aliases: func(goos string) []string {
 			if goos == "windows" {
-				return []string{"bunx.exe"}
+				return []string{"bunx.exe", "npx.exe"}
 			}
-			return []string{"bunx"}
+			return []string{"bunx", "npx"}
 		},
 	}
 }

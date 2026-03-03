@@ -164,12 +164,22 @@ type localSkillHandler struct {
 }
 
 func (h *localSkillHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
-	instruction := `
+	var instruction string
+	if isZhCN() {
+		instruction = `
+# 技能
+
+你可以使用 "skill" 工具。当任务匹配某个可用技能时，
+调用 skill(skill="<skill_name>") 来加载详细说明后再继续。
+始终阅读技能内容并严格遵循其说明。`
+	} else {
+		instruction = `
 # Skills
 
 You have access to a "skill" tool. When a task matches one of the available skills,
 call skill(skill="<skill_name>") to load detailed instructions before proceeding.
 Always read the skill content and follow its instructions carefully.`
+	}
 
 	runCtx.Instruction = runCtx.Instruction + instruction
 	runCtx.Tools = append(runCtx.Tools, &localSkillTool{handler: h})

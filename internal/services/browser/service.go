@@ -2,7 +2,11 @@ package browser
 
 import (
 	"net/url"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
+
 	"chatclaw/internal/errs"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -34,6 +38,34 @@ func (s *BrowserService) OpenURL(url string) error {
 	}
 
 	if err := s.app.Browser.OpenURL(u); err != nil {
+		return errs.Wrap("error.browser_open_failed", err)
+	}
+	return nil
+}
+
+// OpenDirectory opens a directory in the system file manager.
+// It creates the directory if it doesn't exist.
+func (s *BrowserService) OpenDirectory(dir string) error {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return errs.New("error.browser_url_required")
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return errs.Wrap("error.browser_open_failed", err)
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
+
+	if err := cmd.Start(); err != nil {
 		return errs.Wrap("error.browser_open_failed", err)
 	}
 	return nil

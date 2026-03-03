@@ -5,12 +5,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
@@ -31,15 +33,15 @@ import (
 var UnlimitedIterations = math.MaxInt32
 
 const (
-	appDataDir     = ".chatclaw"   // top-level app data directory under $HOME
-	einoMetaDir    = ".eino"       // per-session metadata directory under WorkDir
-	sessionsSubdir = "sessions"    // subdirectory for per-agent/conversation working dirs
-	reductionDir   = "reduction"   // reduction middleware offload directory
-	tasksDir       = "tasks"       // plantask middleware data directory
+	appDataDir     = ".chatclaw"        // top-level app data directory under $HOME
+	einoMetaDir    = ".eino"            // per-session metadata directory under WorkDir
+	sessionsSubdir = "sessions"         // subdirectory for per-agent/conversation working dirs
+	reductionDir   = "reduction"        // reduction middleware offload directory
+	tasksDir       = "tasks"            // plantask middleware data directory
 	transcriptFile = "transcript.jsonl" // summarization transcript filename
 	skillsRelDir   = ".agents/skills"   // skills directory relative to $HOME
-	codexBinName   = "codex"       // codex sandbox binary name (without .exe)
-	sandboxCodex   = "codex"       // SandboxMode value for codex sandbox
+	codexBinName   = "codex"            // codex sandbox binary name (without .exe)
+	sandboxCodex   = "codex"            // SandboxMode value for codex sandbox
 )
 
 // ProviderConfig contains the configuration for a provider.
@@ -131,6 +133,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               baseTools,
 				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(logger)},
+				UnknownToolsHandler: unknownToolsHandler(baseTools, logger),
 			},
 		}
 	}
@@ -385,6 +388,24 @@ func (h *instructionHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatMo
 // (e.g. memory core profile) using the same mechanism.
 func NewInstructionHandler(instruction string) adk.ChatModelAgentMiddleware {
 	return &instructionHandler{instruction: instruction}
+}
+
+// unknownToolsHandler returns a handler for tool calls where the model hallucinates
+// a tool name that doesn't exist. Instead of crashing the agent loop, it returns
+// an informative error message so the model can self-correct and retry.
+func unknownToolsHandler(registeredTools []tool.BaseTool, logger *slog.Logger) func(ctx context.Context, name, input string) (string, error) {
+	var toolNames []string
+	for _, t := range registeredTools {
+		info, _ := t.Info(context.Background())
+		if info != nil {
+			toolNames = append(toolNames, info.Name)
+		}
+	}
+	return func(ctx context.Context, name, input string) (string, error) {
+		logger.Warn("[agent] unknown tool called", "tool", name)
+		return fmt.Sprintf("Error: tool %q does not exist. Available tools: %s. Please use one of the available tools.",
+			name, strings.Join(toolNames, ", ")), nil
+	}
 }
 
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
