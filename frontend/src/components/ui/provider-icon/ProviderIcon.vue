@@ -25,7 +25,10 @@ import ClaudeModelIcon from '@/assets/icons/models/claude-icon.svg'
 import DeepseekModelIcon from '@/assets/icons/models/deepseek-icon.svg'
 import DoubaoModelIcon from '@/assets/icons/models/doubao-icon.svg'
 import GeminiModelIcon from '@/assets/icons/models/gemini-icon.svg'
+import GlmModelIcon from '@/assets/icons/models/glm-icon.svg'
+import KimiModelIcon from '@/assets/icons/models/kimi-icon.svg'
 import QwenModelIcon from '@/assets/icons/models/qwen-icon.svg'
+import YuanbaoModelIcon from '@/assets/icons/models/yuanbao-icon.svg'
 
 interface Props {
   /**
@@ -65,7 +68,10 @@ const builtinIcons: Record<string, SvgComponent> = {
   'model-deepseek': DeepseekModelIcon,
   'model-doubao': DoubaoModelIcon,
   'model-gemini': GeminiModelIcon,
+  'model-glm': GlmModelIcon,
+  'model-kimi': KimiModelIcon,
   'model-qwen': QwenModelIcon,
+  'model-yuanbao': YuanbaoModelIcon,
 }
 
 /**

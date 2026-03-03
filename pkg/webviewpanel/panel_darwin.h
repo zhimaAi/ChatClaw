@@ -25,6 +25,10 @@ void wvpanel_set_zoom(wvpanel_handle panel, double zoom);
 double wvpanel_get_zoom(wvpanel_handle panel);
 void wvpanel_focus(wvpanel_handle panel);
 
+// Set custom User-Agent for the panel's webview.
+// Must be called before loading URL for best compatibility.
+void wvpanel_set_user_agent(wvpanel_handle panel, const char* ua);
+
 // Focus the main (host) WKWebView in the given NSWindow.
 // This is used as a workaround for focus issues when switching between
 // embedded WKWebViews (panels) and the host webview.
