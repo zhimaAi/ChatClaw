@@ -66,7 +66,7 @@ const selectedLibraryId = ref<number | null>(null)
 const libraryFolders = ref<Map<number, Folder[]>>(new Map())
 const expandedLibraries = ref<Set<number>>(new Set())
 const expandedFolders = ref<Set<number>>(new Set())
-// null = 全部, -1 = 未分组, >0 = 文件夹ID
+// null = 根目录, -1 = 未分组, >0 = 文件夹ID
 const selectedFolderId = ref<number | null>(null)
 
 const selectedLibrary = computed(
@@ -85,6 +85,8 @@ const loadLibraries = async () => {
     libraries.value = list || []
     if (selectedLibraryId.value == null && libraries.value.length > 0) {
       selectedLibraryId.value = libraries.value[0].id
+      // 默认展示根目录（文件夹 + 未分组文件）
+      selectedFolderId.value = null
       // 自动展开第一个知识库
       expandedLibraries.value.add(libraries.value[0].id)
       // 加载第一个知识库的文件夹
@@ -127,13 +129,14 @@ const toggleFolderExpanded = (folderId: number) => {
 }
 
 const handleFolderClick = (folderId: number | -1) => {
-  // -1 表示"未分组"，null 表示"全部"
+  // -1 表示"未分组"
   selectedFolderId.value = folderId === -1 ? -1 : folderId
 }
 
 const handleLibraryClick = async (libraryId: number) => {
   selectedLibraryId.value = libraryId
-  selectedFolderId.value = null // 重置文件夹选择
+  // 切换知识库时默认展示该库根目录（文件夹 + 未分组文件）
+  selectedFolderId.value = null
   if (!expandedLibraries.value.has(libraryId)) {
     expandedLibraries.value.add(libraryId)
     await loadFoldersForLibrary(libraryId)

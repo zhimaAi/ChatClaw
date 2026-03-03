@@ -17,6 +17,16 @@ import IconKnowledge from '@/assets/icons/knowledge.svg'
 import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+// File-type icons for document viewer tabs
+import IconPdf from '@/assets/icons/file-pdf.svg'
+import IconWord from '@/assets/icons/file-word.svg'
+import IconExcel from '@/assets/icons/file-excel.svg'
+import IconText from '@/assets/icons/file-text.svg'
+import IconMarkdown from '@/assets/icons/file-markdown.svg'
+import IconHtml from '@/assets/icons/file-html.svg'
+import IconCsv from '@/assets/icons/file-csv.svg'
+import IconOfd from '@/assets/icons/file-ofd.svg'
+import { FileText } from 'lucide-vue-next'
 import WindowControlButtons from './WindowControlButtons.vue'
 
 /**
@@ -63,6 +73,42 @@ const shouldUseModuleIcon = (tab: { module: NavModule; icon?: string }) => {
   if (!moduleTabIcons[tab.module]) return false
   if (tab.module === 'assistant') return !tab.icon
   return true
+}
+
+/**
+ * Resolve document viewer tab icon component based on file extension.
+ * Falls back to a generic file icon when no specific match is found.
+ */
+const getDocumentTabIconComponent = (tab: { module: NavModule; data?: any; title?: string }) => {
+  if (tab.module !== 'document') return null
+
+  const name: string = tab.data?.documentName || tab.title || ''
+  const ext = name.toLowerCase().split('.').pop() || ''
+
+  switch (ext) {
+    case 'pdf':
+      return IconPdf
+    case 'doc':
+    case 'docx':
+      return IconWord
+    case 'xls':
+    case 'xlsx':
+      return IconExcel
+    case 'txt':
+      return IconText
+    case 'md':
+    case 'markdown':
+      return IconMarkdown
+    case 'html':
+    case 'htm':
+      return IconHtml
+    case 'csv':
+      return IconCsv
+    case 'ofd':
+      return IconOfd
+    default:
+      return FileText
+  }
 }
 
 /**
@@ -168,7 +214,11 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
             @click="handleTabClick(tab.id)"
           >
             <div class="flex items-center gap-2">
-              <!-- 标签页图标：优先使用模块对应的 SVG 图标，其次使用图片 URL，最后 fallback -->
+              <!-- 标签页图标：
+                   1. 模块级 SVG 图标（助手/知识库等）
+                   2. 文档标签：根据文件类型使用对应的小图标
+                   3. 其他模块使用自定义图片 URL
+                   4. 最后退化为通用占位圆形 -->
               <div
                 v-if="shouldUseModuleIcon(tab)"
                 class="flex size-5 shrink-0 items-center justify-center"
@@ -183,6 +233,15 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
                 class="flex size-5 shrink-0 items-center justify-center"
               >
                 <img :src="tab.icon" alt="" class="size-full object-contain" />
+              </div>
+              <div
+                v-else-if="tab.module === 'document'"
+                class="flex size-5 shrink-0 items-center justify-center"
+              >
+                <component
+                  :is="getDocumentTabIconComponent(tab)"
+                  class="size-3.5 overflow-visible text-muted-foreground"
+                />
               </div>
               <div
                 v-else

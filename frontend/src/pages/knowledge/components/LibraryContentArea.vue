@@ -184,6 +184,8 @@ const loadFolders = async () => {
   if (!props.library?.id) return
   try {
     folders.value = await LibraryService.ListFolders(props.library.id)
+    // 每次文件夹结构变化时，同步刷新统计信息，确保"X项"显示准确
+    void loadFolderStats()
   } catch (error) {
     console.error('Failed to load folders:', error)
     toast.error(getErrorMessage(error) || t('knowledge.loadFailed'))
@@ -198,6 +200,8 @@ const resetAndLoad = async () => {
   beforeID.value = 0
   hasMore.value = true // Always allow the first request to go through
   await loadMore(loadToken)
+  // 重置并重新加载列表后，同步刷新文件夹统计
+  void loadFolderStats()
 }
 
 const loadMore = async (token?: number) => {
@@ -223,9 +227,9 @@ const loadMore = async (token?: number) => {
       before_id: beforeID.value,
       limit: PAGE_SIZE,
       sort_by: sortBy.value,
-      // 0 = no folder filter (show all), -1 = only uncategorized, >0 = specific folder
+      // Root (null) should show only uncategorized (folder_id IS NULL), not documents from subfolders
       folder_id:
-        activeFolderId.value === null ? 0 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
+        activeFolderId.value === null ? -1 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
     })
     if (currentToken !== loadToken) return
 
@@ -282,8 +286,8 @@ watch(
 
 // 监听文件夹变化，重新加载文档
 watch(activeFolderId, () => {
-  // 如果选择的是文件夹，则加载该文件夹下的文档
-  // 如果选择的是"全部"（null），则显示所有文件夹和文档
+  // If a folder is selected, load documents in that folder.
+  // If root (null) is selected, show root folders and uncategorized documents only.
   resetAndLoad()
 })
 
@@ -307,37 +311,42 @@ const displayFolders = computed(() => {
   return []
 })
 
-// 统计每个文件夹下的文档数量及最新文档更新时间（基于当前已加载的文档）
-const folderStatsMap = computed(() => {
-  const map = new Map<
+// 后端提供的文件夹统计信息（文档数量 & 最近更新时间）
+const folderStatsMap = ref<
+  Map<
     number,
     {
       docCount: number
       latestDocUpdatedAt?: string
     }
-  >()
+  >
+>(new Map())
 
-  for (const doc of documents.value) {
-    const folderId = doc.folderId
-    if (!folderId || folderId <= 0) continue
-
-    const existing = map.get(folderId) || { docCount: 0, latestDocUpdatedAt: undefined }
-    existing.docCount += 1
-
-    if (doc.updatedAt) {
-      const current = existing.latestDocUpdatedAt
-      if (!current) {
-        existing.latestDocUpdatedAt = doc.updatedAt
-      } else if (new Date(doc.updatedAt).getTime() > new Date(current).getTime()) {
-        existing.latestDocUpdatedAt = doc.updatedAt
+const loadFolderStats = async () => {
+  if (!props.library?.id) return
+  try {
+    const stats = await LibraryService.GetFolderStats(props.library.id)
+    const map = new Map<
+      number,
+      {
+        docCount: number
+        latestDocUpdatedAt?: string
       }
+    >()
+
+    for (const item of stats) {
+      if (!item.folder_id || item.folder_id <= 0) continue
+      map.set(item.folder_id, {
+        docCount: item.doc_count ?? 0,
+        latestDocUpdatedAt: item.latest_doc_updated_at as unknown as string | undefined,
+      })
     }
 
-    map.set(folderId, existing)
+    folderStatsMap.value = map
+  } catch (error) {
+    console.error('Failed to load folder stats:', error)
   }
-
-  return map
-})
+}
 
 const formatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return ''
@@ -543,7 +552,7 @@ const handleDetail = (doc: Document) => {
 
 const handleView = (doc: Document) => {
   // Open document in a new tab instead of dialog
-  navigationStore.openDocumentViewer(doc.id, doc.name)
+  navigationStore.openDocumentViewer(doc.id, doc.name, doc.thumbIcon)
 }
 
 const confirmRename = async (doc: Document | null, newName: string) => {
@@ -607,6 +616,8 @@ const confirmDelete = async () => {
   try {
     await DocumentService.DeleteDocument(documentToDelete.value.id)
     documents.value = documents.value.filter((d) => d.id !== documentToDelete.value?.id)
+    // 删除文档后刷新文件夹统计，保持"X项"准确
+    void loadFolderStats()
 
     toast.success(t('knowledge.content.delete.success'))
   } catch (error) {
@@ -735,6 +746,11 @@ onMounted(() => {
       ...documents.value[index],
       thumbIcon: thumbnail.thumb_icon || undefined,
     }
+    // Sync opened document tab icon (if any) to match the card thumbnail.
+    navigationStore.updateDocumentTabIconByDocumentId(
+      thumbnail.document_id,
+      thumbnail.thumb_icon || undefined
+    )
   })
 
   unsubscribeProgress = Events.On('document:progress', (event: { data: ProgressEvent }) => {
