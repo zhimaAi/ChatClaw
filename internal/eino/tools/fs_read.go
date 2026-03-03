@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 )
@@ -19,20 +18,11 @@ type readFileInput struct {
 	Limit    int    `json:"limit,omitempty" jsonschema:"description=Maximum number of lines to read. Default 200."`
 }
 
-// NewReadFileTool creates a read_file tool that dispatches between the
-// in-memory virtual filesystem (for reduction offloaded results) and the
-// real local filesystem.
+// NewReadFileTool creates a read_file tool that reads from the local filesystem.
 func NewReadFileTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDReadFile,
 		"Read file content with optional line offset and limit. Use absolute paths.",
 		func(ctx context.Context, input *readFileInput) (string, error) {
-			if cfg.IsVirtualPath(input.FilePath) {
-				return cfg.MemBackend.Read(ctx, &filesystem.ReadRequest{
-					FilePath: input.FilePath,
-					Offset:   input.Offset,
-					Limit:    input.Limit,
-				})
-			}
 			return readLocalFile(cfg, input)
 		})
 }

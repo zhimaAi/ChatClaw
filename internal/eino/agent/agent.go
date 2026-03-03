@@ -7,12 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
@@ -24,13 +25,15 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/filesystem"
+	"github.com/cloudwego/eino/adk/middlewares/patchtoolcalls"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
-	"github.com/cloudwego/eino/adk/middlewares/skill"
+	"github.com/cloudwego/eino/adk/middlewares/summarization"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"google.golang.org/genai"
+	"gopkg.in/yaml.v3"
 )
 
 // UnlimitedIterations removes the ReAct loop iteration limit (eino defaults to 20).
@@ -232,11 +235,6 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 	return ollama.NewChatModel(ctx, cfg)
 }
 
-// BeforeChatModelFunc is called before each LLM invocation with the complete
-// message list (system prompt + history + user message) that will be sent.
-// This is useful for logging the full prompt context.
-type BeforeChatModelFunc func(ctx context.Context, messages []*schema.Message)
-
 // AgentResult holds the created agent and a cleanup function that should be
 // called (typically via defer) when the agent is no longer needed. Cleanup
 // releases per-session resources such as headless Chrome processes.
@@ -250,18 +248,13 @@ type AgentResult struct {
 // (tabs) do not share or interfere with each other's browser sessions.
 // The caller MUST call result.Cleanup() when the agent is no longer needed.
 //
-// beforeChatModel, if non-nil, is called before every LLM invocation with
-// the complete message list that will be sent to the model, including the
-// system instruction, middleware additions, and all tool schemas.
-func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, beforeChatModel BeforeChatModelFunc) (*AgentResult, error) {
+// logger is used for structured logging throughout the agent lifecycle.
+func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraMiddlewares []adk.AgentMiddleware, logger *slog.Logger) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a per-session browserTool. It is lazily initialized (Chrome only
-	// starts if the LLM actually calls the tool), so the cost of creating one
-	// per conversation is negligible.
 	browserTool, err := tools.NewBrowserTool(ctx, &tools.BrowserConfig{
 		Headless:         true,
 		ExtractChatModel: chatModel,
@@ -270,18 +263,13 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		return nil, errs.Wrap("error.chat_browser_tool_failed", err)
 	}
 
-	// Get shared tools from the registry, excluding browserTool (it's per-session).
 	enabledTools, err := toolRegistry.GetEnabledToolsExcluding(ctx, nil, tools.ToolIDBrowserUse)
 	if err != nil {
+		browserTool.Close()
 		return nil, errs.Wrap("error.chat_tools_failed", err)
 	}
 
-	// Shared InMemoryBackend for reduction offloading — filesystem tools
-	// dispatch to it when they see virtual paths (/large_tool_result/*).
-	memBackend := filesystem.NewInMemoryBackend()
-
-	// Build independent filesystem tools (ls, read_file, write_file, etc.).
-	fsTools := BuildFsTools(config, memBackend, bgMgr)
+	fsTools := BuildFsTools(config, bgMgr, logger)
 
 	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
 	baseTools = append(baseTools, enabledTools...)
@@ -301,22 +289,14 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		agentConfig.ToolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               baseTools,
-				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware()},
+				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(logger)},
 			},
 		}
 	}
 
-	agentConfig.Middlewares = BuildMiddlewares(ctx, config, memBackend)
+	agentConfig.Middlewares = buildSimpleMiddlewares(config, logger)
 	agentConfig.Middlewares = append(agentConfig.Middlewares, extraMiddlewares...)
-
-	if beforeChatModel != nil {
-		agentConfig.Middlewares = append(agentConfig.Middlewares, adk.AgentMiddleware{
-			BeforeChatModel: func(ctx context.Context, state *adk.ChatModelAgentState) error {
-				beforeChatModel(ctx, state.Messages)
-				return nil
-			},
-		})
-	}
+	agentConfig.Handlers = buildHandlers(ctx, config, chatModel, logger)
 
 	agent, err := adk.NewChatModelAgent(ctx, agentConfig)
 	if err != nil {
@@ -334,8 +314,6 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 // buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
 // the OS environment, working directory, sandbox constraints, and available tools.
-// sessionsDir is the agent-level sessions directory (parent of the current conversation dir)
-// so the LLM knows where sibling conversations live.
 func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
@@ -482,20 +460,12 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 	return prompt
 }
 
-// BuildMiddlewares creates the agent middleware stack:
-//   - system prompt: environment info + tool usage instructions (via AdditionalInstruction)
-//   - reduction: clears old tool results + offloads large results to InMemoryBackend
-//   - skill: on-demand skill loading from SKILL.md files
-//
-// Filesystem tools (ls, read_file, write_file, edit_file, patch_file, glob, grep, execute)
-// are registered as independent tools via BuildFsTools, not through the filesystem middleware.
-func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem.InMemoryBackend) []adk.AgentMiddleware {
+// buildSimpleMiddlewares creates lightweight AgentMiddleware items: system prompt injection.
+func buildSimpleMiddlewares(config Config, logger *slog.Logger) []adk.AgentMiddleware {
 	var middlewares []adk.AgentMiddleware
 
-	fsCfg := buildFsToolsConfig(config, memBackend)
+	fsCfg := buildFsToolsConfig(config, logger)
 
-	// Compute the agent-level sessions directory (parent of the conversation dir)
-	// so the LLM can browse sibling conversations when needed.
 	var sessionsDir string
 	if config.AgentID > 0 {
 		base := config.WorkDir
@@ -505,36 +475,153 @@ func BuildMiddlewares(ctx context.Context, config Config, memBackend *filesystem
 		sessionsDir = filepath.Join(base, "sessions", idHash(config.AgentID))
 	}
 
-	// System prompt middleware — inject environment info and tool instructions.
 	systemPrompt := buildFilesystemSystemPrompt(fsCfg.HomeDir, fsCfg.WorkDir, sessionsDir, fsCfg.ToolchainBinDir, fsCfg.SandboxEnabled, fsCfg.SandboxNetworkEnabled)
 	middlewares = append(middlewares, adk.AgentMiddleware{
 		AdditionalInstruction: systemPrompt,
 	})
 
-	// Reduction middleware — uses InMemoryBackend for large result offloading.
-	reductionMw, err := reduction.NewToolResultMiddleware(ctx, &reduction.ToolResultConfig{
-		Backend: memBackend,
-	})
-	if err != nil {
-		log.Printf("[agent] failed to create reduction middleware: %v", err)
-	} else {
-		middlewares = append(middlewares, reductionMw)
-	}
-
-	if skillMw, ok := buildSkillMiddleware(ctx); ok {
-		middlewares = append(middlewares, skillMw)
-	}
-
 	return middlewares
 }
 
+// buildHandlers creates ChatModelAgentMiddleware handlers:
+//   - patchtoolcalls: patches dangling tool calls in message history
+//   - reduction: two-phase tool result compression (truncation + clearing)
+//   - summarization: automatic conversation history summarization
+//   - skill: on-demand skill loading from SKILL.md files
+func buildHandlers(ctx context.Context, config Config, chatModel model.BaseChatModel, logger *slog.Logger) []adk.ChatModelAgentMiddleware {
+	var handlers []adk.ChatModelAgentMiddleware
+
+	if h := buildPatchToolCallsHandler(ctx, logger); h != nil {
+		handlers = append(handlers, h)
+	}
+
+	reductionDir := reductionRootDir(config, logger)
+	if h := buildReductionHandler(ctx, reductionDir, logger); h != nil {
+		handlers = append(handlers, h)
+	}
+
+	transcriptPath := transcriptFilePath(config, logger)
+	if h := buildSummarizationHandler(ctx, chatModel, transcriptPath, logger); h != nil {
+		handlers = append(handlers, h)
+	}
+
+	if h := buildSkillHandler(ctx, logger); h != nil {
+		handlers = append(handlers, h)
+	}
+
+	return handlers
+}
+
+// buildPatchToolCallsHandler creates the middleware that patches dangling tool
+// calls in message history — tool calls without corresponding tool result
+// messages get a placeholder response so providers don't reject them.
+func buildPatchToolCallsHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
+	mw, err := patchtoolcalls.New(ctx, nil)
+	if err != nil {
+		logger.Warn("[agent] failed to create patchtoolcalls handler", "error", err)
+		return nil
+	}
+	return mw
+}
+
+// reductionRootDir returns the on-disk directory used by reduction middleware
+// to offload truncated/cleared tool results. Files written here are plain text
+// and can be read back via the standard read_file tool.
+func reductionRootDir(config Config, logger *slog.Logger) string {
+	fsCfg := buildFsToolsConfig(config, logger)
+	dir := filepath.Join(fsCfg.WorkDir, ".eino", "reduction")
+	_ = os.MkdirAll(dir, 0o755)
+	return dir
+}
+
+// transcriptFilePath returns the on-disk path where the summarization
+// middleware reminds the LLM to read full conversation history.
+func transcriptFilePath(config Config, logger *slog.Logger) string {
+	fsCfg := buildFsToolsConfig(config, logger)
+	dir := filepath.Join(fsCfg.WorkDir, ".eino")
+	_ = os.MkdirAll(dir, 0o755)
+	return filepath.Join(dir, "transcript.jsonl")
+}
+
+// diskBackend implements reduction.Backend by writing files to the local
+// filesystem. Offloaded content can be read back via the standard read_file tool.
+type diskBackend struct{}
+
+func (d *diskBackend) Write(_ context.Context, req *filesystem.WriteRequest) error {
+	dir := filepath.Dir(req.FilePath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	return os.WriteFile(req.FilePath, []byte(req.Content), 0o644)
+}
+
+// buildReductionHandler creates the v0.8 reduction middleware (ChatModelAgentMiddleware).
+// Two-phase: truncation (after tool call) + clearing (before model invocation).
+// RootDir points to a real disk directory so offloaded content can be read
+// back via the standard read_file tool without virtual path dispatch.
+func buildReductionHandler(ctx context.Context, rootDir string, logger *slog.Logger) adk.ChatModelAgentMiddleware {
+	reductionCfg := &reduction.Config{
+		Backend:           &diskBackend{},
+		RootDir:           rootDir,
+		MaxLengthForTrunc: 30000,
+		MaxTokensForClear: 50000,
+	}
+
+	mw, err := reduction.New(ctx, reductionCfg)
+	if err != nil {
+		logger.Warn("[agent] failed to create reduction handler", "error", err)
+		return nil
+	}
+	return mw
+}
+
+// buildSummarizationHandler creates the v0.8 summarization middleware.
+// Compresses conversation history when token count exceeds threshold.
+// TranscriptFilePath tells the LLM where to find the full history if needed.
+func buildSummarizationHandler(ctx context.Context, chatModel model.BaseChatModel, transcriptPath string, logger *slog.Logger) adk.ChatModelAgentMiddleware {
+	sumCfg := &summarization.Config{
+		Model: chatModel,
+		Trigger: &summarization.TriggerCondition{
+			ContextTokens: 100000,
+		},
+		TranscriptFilePath: transcriptPath,
+	}
+
+	mw, err := summarization.New(ctx, sumCfg)
+	if err != nil {
+		logger.Warn("[agent] failed to create summarization handler", "error", err)
+		return nil
+	}
+	return mw
+}
+
+// buildSkillHandler creates the skill middleware using a local filesystem backend.
+func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Warn("[agent] failed to get home dir for skills", "error", err)
+		return nil
+	}
+
+	skillsDir := filepath.Join(homeDir, ".agents", "skills")
+	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
+		logger.Warn("[agent] failed to create skills directory", "dir", skillsDir, "error", err)
+		return nil
+	}
+
+	backend := &localSkillBackend{baseDir: skillsDir}
+
+	mw, err := newSkillChatModelAgentMiddleware(ctx, backend, logger)
+	if err != nil {
+		logger.Warn("[agent] failed to create skill handler", "error", err)
+		return nil
+	}
+	return mw
+}
+
 // BuildFsTools creates all filesystem tools as independent tool instances.
-// These are registered alongside other tools in the agent config, decoupled
-// from the filesystem middleware.
-// bgMgr is the shared BgProcessManager from ChatService — background processes
-// survive across individual generation rounds.
-func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *tools.BgProcessManager) []tool.BaseTool {
-	cfg := buildFsToolsConfig(config, memBackend)
+func BuildFsTools(config Config, bgMgr *tools.BgProcessManager, logger *slog.Logger) []tool.BaseTool {
+	cfg := buildFsToolsConfig(config, logger)
 
 	var fsTools []tool.BaseTool
 	builders := []func(*tools.FsToolsConfig) (tool.BaseTool, error){
@@ -549,7 +636,7 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 	for _, build := range builders {
 		t, err := build(cfg)
 		if err != nil {
-			log.Printf("[agent] failed to create fs tool: %v", err)
+			logger.Warn("[agent] failed to create fs tool", "error", err)
 			continue
 		}
 		fsTools = append(fsTools, t)
@@ -557,14 +644,14 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 
 	execTool, err := tools.NewExecuteTool(cfg, bgMgr)
 	if err != nil {
-		log.Printf("[agent] failed to create execute tool: %v", err)
+		logger.Warn("[agent] failed to create execute tool", "error", err)
 	} else {
 		fsTools = append(fsTools, execTool)
 	}
 
 	bgTool, err := tools.NewBgExecuteTool(cfg, bgMgr)
 	if err != nil {
-		log.Printf("[agent] failed to create execute_background tool: %v", err)
+		logger.Warn("[agent] failed to create execute_background tool", "error", err)
 	} else {
 		fsTools = append(fsTools, bgTool)
 	}
@@ -573,15 +660,12 @@ func BuildFsTools(config Config, memBackend *filesystem.InMemoryBackend, bgMgr *
 }
 
 // idHash returns a short (12-char) hex hash derived from a numeric ID.
-// This avoids exposing raw database primary keys in filesystem paths.
 func idHash(id int64) string {
 	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
 	return hex.EncodeToString(h[:6])
 }
 
-// buildSessionWorkDir constructs the per-conversation working directory under
-// the base work dir: <baseWorkDir>/sessions/<agentHash>/<convHash>.
-// When agentID or conversationID is 0 the corresponding level is omitted.
+// buildSessionWorkDir constructs the per-conversation working directory.
 func buildSessionWorkDir(baseWorkDir string, agentID, conversationID int64) string {
 	dir := filepath.Join(baseWorkDir, "sessions")
 	if agentID > 0 {
@@ -593,12 +677,11 @@ func buildSessionWorkDir(baseWorkDir string, agentID, conversationID int64) stri
 	return dir
 }
 
-// buildFsToolsConfig constructs the shared config for all filesystem tools
-// using per-agent workspace settings from Config.
-func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *tools.FsToolsConfig {
+// buildFsToolsConfig constructs the shared config for all filesystem tools.
+func buildFsToolsConfig(config Config, logger *slog.Logger) *tools.FsToolsConfig {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("[agent] failed to get user home dir: %v", err)
+		logger.Warn("[agent] failed to get user home dir", "error", err)
 		homeDir = "/"
 	}
 
@@ -608,7 +691,7 @@ func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *
 		codexBin = resolveCodexBin()
 		if codexBin == "" {
 			sandboxEnabled = false
-			log.Printf("[agent] codex sandbox requested but codex not installed, falling back to native execution")
+			logger.Warn("[agent] codex sandbox requested but codex not installed, falling back to native execution")
 		}
 	}
 
@@ -627,38 +710,7 @@ func buildFsToolsConfig(config Config, memBackend *filesystem.InMemoryBackend) *
 		SandboxNetworkEnabled: config.SandboxNetwork,
 		CodexBin:              codexBin,
 		ToolchainBinDir:       config.ToolchainBinDir,
-		MemBackend:            memBackend,
 	}
-}
-
-// buildSkillMiddleware creates the skill middleware.
-// Skills are stored under $HOME/.agents/skills/<skill-name>/SKILL.md.
-func buildSkillMiddleware(ctx context.Context) (adk.AgentMiddleware, bool) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Printf("[agent] failed to get home dir for skills: %v", err)
-		return adk.AgentMiddleware{}, false
-	}
-
-	skillsDir := filepath.Join(homeDir, ".agents", "skills")
-	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-		log.Printf("[agent] failed to create skills directory %s: %v", skillsDir, err)
-		return adk.AgentMiddleware{}, false
-	}
-
-	skillBackend, err := skill.NewLocalBackend(&skill.LocalBackendConfig{BaseDir: skillsDir})
-	if err != nil {
-		log.Printf("[agent] failed to create skill backend: %v", err)
-		return adk.AgentMiddleware{}, false
-	}
-
-	skillMw, err := skill.New(ctx, &skill.Config{Backend: skillBackend, UseChinese: true})
-	if err != nil {
-		log.Printf("[agent] failed to create skill middleware: %v", err)
-		return adk.AgentMiddleware{}, false
-	}
-
-	return skillMw, true
 }
 
 // resolveCodexBin finds the codex binary in the toolchain bin directory.
@@ -680,13 +732,13 @@ func resolveCodexBin() string {
 
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
 // message as a tool result, allowing the ReAct loop to continue.
-func ErrorCatchingToolMiddleware() compose.ToolMiddleware {
+func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 	return compose.ToolMiddleware{
 		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.ToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
-					log.Printf("[agent] tool %q error: %v", input.Name, err)
+					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
 					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
 				}
 				return output, nil
@@ -696,7 +748,7 @@ func ErrorCatchingToolMiddleware() compose.ToolMiddleware {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.StreamToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
-					log.Printf("[agent] streaming tool %q error: %v", input.Name, err)
+					logger.Warn("[agent] streaming tool error", "tool", input.Name, "error", err)
 					return &compose.StreamToolOutput{
 						Result: schema.StreamReaderFromArray([]string{"Error: " + err.Error()}),
 					}, nil
@@ -705,4 +757,185 @@ func ErrorCatchingToolMiddleware() compose.ToolMiddleware {
 			}
 		},
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Local skill backend — reads SKILL.md files from local filesystem directly.
+// Replaces the removed skill.NewLocalBackend from v0.7.
+// ---------------------------------------------------------------------------
+
+type localSkillBackend struct {
+	baseDir string
+}
+
+type skillFrontMatter struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+type localSkill struct {
+	Name          string
+	Description   string
+	Content       string
+	BaseDirectory string
+}
+
+func (b *localSkillBackend) list() ([]localSkill, error) {
+	entries, err := os.ReadDir(b.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read skills directory: %w", err)
+	}
+
+	var skills []localSkill
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillPath := filepath.Join(b.baseDir, entry.Name(), "SKILL.md")
+		if _, statErr := os.Stat(skillPath); os.IsNotExist(statErr) {
+			continue
+		}
+
+		data, readErr := os.ReadFile(skillPath)
+		if readErr != nil {
+			continue
+		}
+
+		fm, content, parseErr := parseSkillFrontmatter(string(data))
+		if parseErr != nil {
+			continue
+		}
+
+		absDir, _ := filepath.Abs(filepath.Dir(skillPath))
+		skills = append(skills, localSkill{
+			Name:          fm.Name,
+			Description:   fm.Description,
+			Content:       strings.TrimSpace(content),
+			BaseDirectory: absDir,
+		})
+	}
+	return skills, nil
+}
+
+func parseSkillFrontmatter(data string) (*skillFrontMatter, string, error) {
+	const delimiter = "---"
+	data = strings.TrimSpace(data)
+
+	if !strings.HasPrefix(data, delimiter) {
+		return nil, "", fmt.Errorf("file does not start with frontmatter delimiter")
+	}
+
+	rest := data[len(delimiter):]
+	endIdx := strings.Index(rest, "\n"+delimiter)
+	if endIdx == -1 {
+		return nil, "", fmt.Errorf("frontmatter closing delimiter not found")
+	}
+
+	frontmatter := strings.TrimSpace(rest[:endIdx])
+	content := rest[endIdx+len("\n"+delimiter):]
+	if strings.HasPrefix(content, "\n") {
+		content = content[1:]
+	}
+
+	var fm skillFrontMatter
+	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal frontmatter: %w", err)
+	}
+
+	return &fm, content, nil
+}
+
+// newSkillChatModelAgentMiddleware creates a skill handler that integrates with
+// the v0.8 ChatModelAgentMiddleware pattern. It registers a "skill" tool and
+// injects a system prompt about available skills.
+func newSkillChatModelAgentMiddleware(_ context.Context, backend *localSkillBackend, _ *slog.Logger) (adk.ChatModelAgentMiddleware, error) {
+	skills, err := backend.list()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list skills: %w", err)
+	}
+
+	if len(skills) == 0 {
+		return nil, nil
+	}
+
+	var descBuilder strings.Builder
+	descBuilder.WriteString("Load a skill by name. Available skills:\n")
+	for _, s := range skills {
+		descBuilder.WriteString(fmt.Sprintf("- %s: %s\n", s.Name, s.Description))
+	}
+
+	skillMap := make(map[string]localSkill, len(skills))
+	for _, s := range skills {
+		skillMap[s.Name] = s
+	}
+
+	return &localSkillHandler{
+		backend:  backend,
+		skillMap: skillMap,
+		desc:     descBuilder.String(),
+	}, nil
+}
+
+type localSkillHandler struct {
+	adk.BaseChatModelAgentMiddleware
+	backend  *localSkillBackend
+	skillMap map[string]localSkill
+	desc     string
+}
+
+func (h *localSkillHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
+	instruction := `
+# Skills
+
+You have access to a "skill" tool. When a task matches one of the available skills,
+call skill(skill="<skill_name>") to load detailed instructions before proceeding.
+Always read the skill content and follow its instructions carefully.`
+
+	runCtx.Instruction = runCtx.Instruction + instruction
+	runCtx.Tools = append(runCtx.Tools, &localSkillTool{handler: h})
+	return ctx, runCtx, nil
+}
+
+type localSkillTool struct {
+	handler *localSkillHandler
+}
+
+func (t *localSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "skill",
+		Desc: t.handler.desc,
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"skill": {
+				Type:     schema.String,
+				Desc:     "The skill name to load.",
+				Required: true,
+			},
+		}),
+	}, nil
+}
+
+type skillInput struct {
+	Skill string `json:"skill"`
+}
+
+func (t *localSkillTool) InvokableRun(_ context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
+	var input skillInput
+	if err := json.Unmarshal([]byte(argumentsInJSON), &input); err != nil {
+		return "", fmt.Errorf("failed to parse skill input: %w", err)
+	}
+
+	skill, ok := t.handler.skillMap[input.Skill]
+	if !ok {
+		return fmt.Sprintf("Skill %q not found. Available: %s", input.Skill, strings.Join(mapKeys(t.handler.skillMap), ", ")), nil
+	}
+
+	return fmt.Sprintf("# Skill: %s\nBase directory: %s\n\n%s", skill.Name, skill.BaseDirectory, skill.Content), nil
+}
+
+func mapKeys[K comparable, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/cloudwego/eino/adk/filesystem"
 )
 
 // FsToolsConfig holds shared configuration for all filesystem tools.
@@ -26,18 +24,6 @@ type FsToolsConfig struct {
 	// ToolchainBinDir is the directory containing managed tool binaries (uv, bun, etc.).
 	// When non-empty, it is prepended to PATH for executed commands.
 	ToolchainBinDir string
-
-	// MemBackend is the shared InMemoryBackend used by reduction middleware
-	// for offloading large tool results. read_file dispatches to it for
-	// virtual paths (e.g. /large_tool_result/*).
-	MemBackend *filesystem.InMemoryBackend
-}
-
-const virtualPathPrefix = "/large_tool_result/"
-
-// IsVirtualPath returns true if the path belongs to the in-memory virtual filesystem.
-func (c *FsToolsConfig) IsVirtualPath(p string) bool {
-	return strings.HasPrefix(p, virtualPathPrefix)
 }
 
 // ResolvePath converts a path to an absolute filesystem path.
