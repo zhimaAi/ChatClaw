@@ -187,8 +187,13 @@ func New() (logger *slog.Logger, cleanup func(), err error) {
 		writer = w
 	}
 
+	level := slog.LevelInfo
+	if define.IsDev() {
+		level = slog.LevelInfo
+	}
+
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: level,
 	})
 	logger = slog.New(handler)
 

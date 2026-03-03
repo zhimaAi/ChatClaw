@@ -3,7 +3,7 @@ package conversations
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -117,7 +117,7 @@ func (m *conversationModel) toDTO() Conversation {
 	var libraryIDs []int64
 	if m.LibraryIDs != "" && m.LibraryIDs != "[]" {
 		if err := json.Unmarshal([]byte(m.LibraryIDs), &libraryIDs); err != nil {
-			log.Printf("[conversations] failed to parse library_ids for conversation %d: %v", m.ID, err)
+			slog.Warn("[conversations] failed to parse library_ids", "conversation_id", m.ID, "error", err)
 			libraryIDs = []int64{}
 		}
 	}

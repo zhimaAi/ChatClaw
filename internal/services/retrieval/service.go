@@ -3,7 +3,7 @@ package retrieval
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -97,10 +97,10 @@ func (s *Service) Search(ctx context.Context, input SearchInput) ([]SearchResult
 	wg.Wait()
 
 	if vecErr != nil {
-		log.Printf("[retrieval] vector search error: %v", vecErr)
+		slog.Warn("[retrieval] vector search error", "error", vecErr)
 	}
 	if ftsErr != nil {
-		log.Printf("[retrieval] full-text search error: %v", ftsErr)
+		slog.Warn("[retrieval] full-text search error", "error", ftsErr)
 	}
 
 	// RRF fusion

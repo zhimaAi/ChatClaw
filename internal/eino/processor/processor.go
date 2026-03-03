@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -221,7 +221,7 @@ func (p *Processor) ProcessDocument(
 	raptorEnabled := libraryConfig != nil &&
 		libraryConfig.RaptorLLMProviderID != "" &&
 		libraryConfig.RaptorLLMModelID != ""
-	log.Printf("[Split] semanticEnabled=%v, raptorEnabled=%v", semanticEnabled, raptorEnabled)
+	slog.Info("[processor] split config", "semantic", semanticEnabled, "raptor", raptorEnabled)
 	splitStart := time.Now()
 	if semanticEnabled {
 		ext := strings.ToLower(filepath.Ext(localPath))
@@ -255,7 +255,7 @@ func (p *Processor) ProcessDocument(
 	if splittingDone != nil {
 		close(splittingDone)
 	}
-	log.Printf("[Split] Completed in %v, got %d chunks", time.Since(splitStart), len(chunks))
+	slog.Info("[processor] split completed", "elapsed", time.Since(splitStart), "chunks", len(chunks))
 	if err != nil {
 		result.Error = wrapPhase(PhaseSplitting, fmt.Errorf("分割失败: %w", err))
 		return result, result.Error
@@ -289,7 +289,7 @@ func (p *Processor) ProcessDocument(
 	}
 
 	// 阶段 4：嵌入 level-0 节点（内存中）
-	log.Printf("[Embedding] Starting embedding for %d level-0 nodes", len(level0))
+	slog.Info("[processor] embedding level-0 nodes", "count", len(level0))
 	embedStart := time.Now()
 	if onProgress != nil {
 		onProgress("embedding", 10)
@@ -302,7 +302,7 @@ func (p *Processor) ProcessDocument(
 		result.Error = wrapPhase(PhaseEmbedding, fmt.Errorf("嵌入失败: %w", err))
 		return result, result.Error
 	}
-	log.Printf("[Embedding] Level-0 embedding completed in %v", time.Since(embedStart))
+	slog.Info("[processor] level-0 embedding completed", "elapsed", time.Since(embedStart))
 
 	if onProgress != nil {
 		onProgress("embedding", 80)
@@ -311,16 +311,16 @@ func (p *Processor) ProcessDocument(
 	// 阶段 5：可选构建 RAPTOR（RAPTOR LLM 配置开启时）
 	allNodes := level0
 	if raptorEnabled {
-		log.Printf("[RAPTOR] Starting RAPTOR tree building for %d nodes", len(allNodes))
+		slog.Info("[processor] RAPTOR tree building", "nodes", len(allNodes))
 		raptorStart := time.Now()
 		planned, err := p.buildRaptorPlan(ctx, libraryConfig, allNodes, embedder, getProviderInfo)
 		if err != nil {
-			log.Printf("[RAPTOR] FAILED: %v", err)
+			slog.Error("[processor] RAPTOR failed", "error", err)
 			result.Error = wrapPhase(PhaseRaptor, fmt.Errorf("RAPTOR 构建失败: %w", err))
 			return result, result.Error
 		}
 		allNodes = planned
-		log.Printf("[RAPTOR] Completed in %v, total nodes: %d", time.Since(raptorStart), len(allNodes))
+		slog.Info("[processor] RAPTOR completed", "elapsed", time.Since(raptorStart), "total_nodes", len(allNodes))
 	}
 
 	// 确保所有节点都有 content_tokens（摘要节点也需要）
@@ -343,7 +343,7 @@ func (p *Processor) ProcessDocument(
 	// 更新文档统计信息
 	if err := p.updateDocumentStats(ctx, docID, result.WordTotal, result.SplitTotal); err != nil {
 		// Non-fatal error, log and continue
-		log.Printf("[Processor] WARNING: update document stats failed docID=%d error=%v", docID, err)
+		slog.Warn("[processor] update document stats failed", "doc_id", docID, "error", err)
 	}
 
 	return result, nil
@@ -459,11 +459,11 @@ func (p *Processor) createEmbedder(ctx context.Context, config *EmbeddingConfig)
 // embedNodes 为节点生成嵌入向量并存储
 func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embedder embedding.Embedder, onProgress func(int)) error {
 	if len(nodes) == 0 {
-		log.Printf("[Embedding] No nodes to embed")
+		slog.Debug("[processor] no nodes to embed")
 		return nil
 	}
 
-	log.Printf("[Embedding] Starting embedding for %d nodes", len(nodes))
+	slog.Info("[processor] embedding nodes", "count", len(nodes))
 
 	// 批量嵌入以提高效率
 	// 注意：通义千问等部分 API 限制 batch size 最大为 10
@@ -482,21 +482,19 @@ func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embed
 			contents[j] = node.Content
 		}
 
-		log.Printf("[Embedding] Processing batch %d-%d/%d", i+1, end, len(nodes))
+		slog.Debug("[processor] embedding batch", "from", i+1, "to", end, "total", len(nodes))
 
-		// 生成嵌入
 		vectors, err := embedder.EmbedStrings(ctx, contents)
 		if err != nil {
-			log.Printf("[Embedding] FAILED batch %d-%d: %v", i+1, end, err)
+			slog.Error("[processor] embedding batch failed", "from", i+1, "to", end, "error", err)
 			return fmt.Errorf("嵌入批次（从 %d 开始）: %w", i, err)
 		}
 
-		log.Printf("[Embedding] Got %d vectors, dimension=%d", len(vectors), func() int {
-			if len(vectors) > 0 {
-				return len(vectors[0])
-			}
-			return 0
-		}())
+		dim := 0
+		if len(vectors) > 0 {
+			dim = len(vectors[0])
+		}
+		slog.Debug("[processor] embedding batch result", "vectors", len(vectors), "dimension", dim)
 
 		// 存储向量
 		for j, node := range batch {
@@ -516,7 +514,7 @@ func (p *Processor) embedNodes(ctx context.Context, nodes []*DocumentNode, embed
 		}
 	}
 
-	log.Printf("[Embedding] Completed: stored %d vectors for %d nodes", storedCount, len(nodes))
+	slog.Info("[processor] embedding completed", "stored", storedCount, "nodes", len(nodes))
 	return nil
 }
 
@@ -540,9 +538,9 @@ func (p *Processor) storeVector(ctx context.Context, nodeID int64, vector []floa
 
 	// 调试日志：输出向量存储结果
 	if err != nil {
-		log.Printf("[Vector] FAILED to store vector for node %d: %v", nodeID, err)
+		slog.Warn("[processor] store vector failed", "node_id", nodeID, "error", err)
 	} else {
-		log.Printf("[Vector] SUCCESS stored vector for node %d, dimension=%d", nodeID, len(vector))
+		slog.Debug("[processor] stored vector", "node_id", nodeID, "dimension", len(vector))
 	}
 
 	return err

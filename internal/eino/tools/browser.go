@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strings"
 	"sync"
@@ -324,7 +324,7 @@ func (b *browserTool) actionGoToURL(ctx context.Context, urlStr string) (string,
 
 	if err := chromedp.Run(opCtx.ctx, chromedp.Navigate(urlStr)); err != nil {
 		// Cross-origin target swap may destroy the old target. Try recovery.
-		log.Printf("[browser] Navigate to %s failed: %v, recovering...", urlStr, err)
+		slog.Warn("[browser] navigate failed, recovering", "url", urlStr, "error", err)
 		if recErr := b.recoverOp(ctx, opCtx); recErr != nil {
 			return "", fmt.Errorf("navigation failed: %w (recovery: %v)", err, recErr)
 		}
@@ -349,7 +349,7 @@ func (b *browserTool) actionClick(ctx context.Context, ref int) (string, error) 
 	// For <a href="..."> links, navigate directly to avoid Chrome cross-origin
 	// target swap that destroys the old target on same-tab navigation.
 	if href, ok := b.lastSnap.refHrefs[ref]; ok && href != "" {
-		log.Printf("[browser] ref %d has href, navigating to %s instead of clicking", ref, href)
+		slog.Debug("[browser] ref has href, navigating instead of clicking", "ref", ref, "href", href)
 		return b.actionGoToURL(ctx, href)
 	}
 
@@ -645,7 +645,7 @@ func (b *browserTool) recoverActiveTarget() (context.Context, error) {
 		return nil, fmt.Errorf("no suitable page target found for recovery (saw %d targets)", len(targets))
 	}
 
-	log.Printf("[browser] recovering target: old=%s new=%s", oldActive, newID)
+	slog.Debug("[browser] recovering target", "old", oldActive, "new", newID)
 
 	newTabCtx, newTabCancel := chromedp.NewContext(b.allocCtx, chromedp.WithTargetID(newID))
 
@@ -684,9 +684,9 @@ func (b *browserTool) recoverOp(reqCtx context.Context, h *opHandle) error {
 // (e.g. cross-origin target swap), it attempts target recovery transparently.
 func (b *browserTool) waitPageReady(reqCtx context.Context, h *opHandle) {
 	if err := chromedp.Run(h.ctx, chromedp.WaitReady("body", chromedp.ByQuery)); err != nil {
-		log.Printf("[browser] WaitReady failed: %v, attempting recovery...", err)
+		slog.Warn("[browser] WaitReady failed, attempting recovery", "error", err)
 		if recErr := b.recoverOp(reqCtx, h); recErr != nil {
-			log.Printf("[browser] recovery failed: %v", recErr)
+			slog.Warn("[browser] recovery failed", "error", recErr)
 			return
 		}
 		_ = chromedp.Run(h.ctx, chromedp.WaitReady("body", chromedp.ByQuery))

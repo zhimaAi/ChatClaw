@@ -561,6 +561,7 @@ func extractVersion(s string) string {
 	s = strings.TrimPrefix(s, "uv ")
 	s = strings.TrimPrefix(s, "rust-v")
 	s = strings.TrimPrefix(s, "codex-cli/")
+	s = strings.TrimPrefix(s, "codex-cli ")
 	s = strings.TrimPrefix(s, "codex/")
 	s = strings.TrimPrefix(s, "v")
 	if idx := strings.IndexAny(s, " \t("); idx > 0 {

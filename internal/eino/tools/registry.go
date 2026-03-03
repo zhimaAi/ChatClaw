@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -138,7 +138,7 @@ func (r *ToolRegistry) GetEnabledToolsExcluding(ctx context.Context, config *Too
 			t, err := r.getOrCreate(ctx, id)
 			if err != nil {
 				// Log warning but continue - don't fail the whole operation for one tool
-				log.Printf("[tools] warning: failed to create tool %s (skipping): %v", id, err)
+				slog.Warn("[tools] failed to create tool, skipping", "tool", id, "error", err)
 				continue
 			}
 			if t != nil {
