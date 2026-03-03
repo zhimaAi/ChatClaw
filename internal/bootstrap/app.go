@@ -37,6 +37,7 @@ import (
 	"chatclaw/internal/taskmanager"
 	"chatclaw/pkg/winutil"
 
+	"github.com/cloudwego/eino/adk"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -222,6 +223,13 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 使用 DB 中持久化的 language 覆盖启动语言（保证重启后语言一致）
 	if lang, ok := settings.GetValue("language"); ok && strings.TrimSpace(lang) != "" {
 		i18n.SetLocale(lang)
+	}
+
+	// Sync ADK built-in prompt language with app locale.
+	if i18n.GetLocale() == i18n.LocaleZhCN {
+		_ = adk.SetLanguage(adk.LanguageChinese)
+	} else {
+		_ = adk.SetLanguage(adk.LanguageEnglish)
 	}
 
 	// 初始化任务管理器（基于 goqite 的持久化消息队列）

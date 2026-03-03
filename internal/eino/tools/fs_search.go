@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/cloudwego/eino/adk/filesystem"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 )
@@ -17,65 +16,33 @@ type globInput struct {
 	Path    string `json:"path,omitempty" jsonschema:"description=Directory to search in. Defaults to home directory."`
 }
 
-// NewGlobTool creates a glob tool that finds files matching a pattern on disk.
-func NewGlobTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewGlobTool creates a glob tool backed by Backend.
+func NewGlobTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDGlob,
 		"Find files matching a glob pattern. Returns absolute file paths, one per line.",
 		func(ctx context.Context, input *globInput) (string, error) {
-			basePath, err := cfg.ResolvePath(input.Path)
+			basePath, err := b.ResolvePath(input.Path)
 			if err != nil {
 				return "", err
 			}
 
-			pattern := input.Pattern
-			if pattern == "" {
-				pattern = "*"
-			}
-
-			var matches []string
-			if strings.Contains(pattern, "**") {
-				matches, err = globRecursive(basePath, pattern)
-			} else {
-				matches, err = filepath.Glob(filepath.Join(basePath, pattern))
-			}
+			results, err := b.GlobInfo(ctx, &filesystem.GlobInfoRequest{
+				Pattern: input.Pattern,
+				Path:    basePath,
+			})
 			if err != nil {
 				return "", fmt.Errorf("glob failed: %w", err)
 			}
-
-			if len(matches) == 0 {
+			if len(results) == 0 {
 				return "(no matches found)", nil
 			}
-			return strings.Join(matches, "\n"), nil
+
+			paths := make([]string, len(results))
+			for i, r := range results {
+				paths[i] = r.Path
+			}
+			return strings.Join(paths, "\n"), nil
 		})
-}
-
-func globRecursive(basePath, pattern string) ([]string, error) {
-	var matches []string
-	const maxResults = 500
-
-	regexPattern := regexp.QuoteMeta(pattern)
-	regexPattern = strings.ReplaceAll(regexPattern, `\*\*`, `.*`)
-	regexPattern = strings.ReplaceAll(regexPattern, `\*`, `[^/]*`)
-	regexPattern = strings.ReplaceAll(regexPattern, `\?`, `.`)
-	re, err := regexp.Compile("^" + regexPattern + "$")
-	if err != nil {
-		return nil, fmt.Errorf("invalid glob pattern: %w", err)
-	}
-
-	err = filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		relPath, _ := filepath.Rel(basePath, path)
-		if re.MatchString(filepath.ToSlash(relPath)) {
-			matches = append(matches, path)
-		}
-		if len(matches) >= maxResults {
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	return matches, err
 }
 
 type grepInput struct {
@@ -90,8 +57,10 @@ type grepInput struct {
 	OutputMode         string `json:"output_mode,omitempty" jsonschema:"description=Output mode: content (default shows matching lines with context) or files_with_matches (file paths only) or count (match count summary).,enum=content,enum=files_with_matches,enum=count"`
 }
 
-// NewGrepTool creates an enhanced grep tool that searches files on disk.
-func NewGrepTool(cfg *FsToolsConfig) (tool.BaseTool, error) {
+// NewGrepTool creates a grep tool backed by Backend.
+// This uses Backend.GrepRaw for the core matching, then applies context lines,
+// output formatting, and pagination locally for richer output than the base interface.
+func NewGrepTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDGrep,
 		`Search for a pattern in files.
 
@@ -116,130 +85,24 @@ Examples:
 			if input.Pattern == "" {
 				return "", fmt.Errorf("pattern must not be empty")
 			}
-			return grepEnhanced(cfg, input)
+			return grepEnhanced(b, ctx, input)
 		})
 }
 
-func grepEnhanced(cfg *FsToolsConfig, input *grepInput) (string, error) {
-	basePath, err := cfg.ResolvePath(input.Path)
+func grepEnhanced(b *Backend, ctx context.Context, input *grepInput) (string, error) {
+	basePath, err := b.ResolvePath(input.Path)
 	if err != nil {
 		return "", err
 	}
 
-	maxMatches := input.MaxMatches
-	if maxMatches <= 0 {
-		maxMatches = 100
-	}
-	contextBefore := input.ContextBefore
-	if contextBefore < 0 {
-		contextBefore = 0
-	}
-	contextAfter := input.ContextAfter
-	if contextAfter < 0 {
-		contextAfter = 0
-	}
-
-	patternStr := input.Pattern
-	if input.IgnoreCase {
-		patternStr = "(?i)" + patternStr
-	}
-	re, regexErr := regexp.Compile(patternStr)
-	useLiteral := regexErr != nil
-	literalPattern := input.Pattern
-	if useLiteral && input.IgnoreCase {
-		literalPattern = strings.ToLower(input.Pattern)
-	}
-
-	type matchEntry struct {
-		path    string
-		line    int
-		content string
-		before  []string
-		after   []string
-	}
-
-	var allMatches []matchEntry
-	seenFiles := map[string]int{}
-
-	info, err := os.Stat(basePath)
+	matches, err := b.GrepRaw(ctx, &filesystem.GrepRequest{
+		Pattern:         input.Pattern,
+		Path:            basePath,
+		Glob:            input.Glob,
+		CaseInsensitive: input.IgnoreCase,
+	})
 	if err != nil {
-		return "", fmt.Errorf("path not found: %w", err)
-	}
-
-	var walkFunc func(path string, info os.FileInfo, walkErr error) error
-	walkFunc = func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
-			return nil
-		}
-		if input.Glob != "" {
-			matched, matchErr := filepath.Match(input.Glob, filepath.Base(path))
-			if matchErr != nil || !matched {
-				return nil
-			}
-		}
-		if IsBinaryFile(path) {
-			return nil
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil
-		}
-		lines := strings.Split(string(data), "\n")
-
-		for i, line := range lines {
-			matched := false
-			if useLiteral {
-				if input.IgnoreCase {
-					matched = strings.Contains(strings.ToLower(line), literalPattern)
-				} else {
-					matched = strings.Contains(line, input.Pattern)
-				}
-			} else {
-				matched = re.MatchString(line)
-			}
-			if !matched {
-				continue
-			}
-
-			seenFiles[path]++
-
-			if input.OutputMode == "files_with_matches" || input.OutputMode == "count" {
-				continue
-			}
-
-			entry := matchEntry{path: path, line: i + 1, content: line}
-			if contextBefore > 0 {
-				start := i - contextBefore
-				if start < 0 {
-					start = 0
-				}
-				entry.before = lines[start:i]
-			}
-			if contextAfter > 0 {
-				end := i + 1 + contextAfter
-				if end > len(lines) {
-					end = len(lines)
-				}
-				entry.after = lines[i+1 : end]
-			}
-
-			allMatches = append(allMatches, entry)
-			if len(allMatches) >= maxMatches {
-				return filepath.SkipAll
-			}
-		}
-		return nil
-	}
-
-	if !info.IsDir() {
-		if err := walkFunc(basePath, info, nil); err != nil {
-			return "", err
-		}
-	} else {
-		if err := filepath.Walk(basePath, walkFunc); err != nil {
-			return "", fmt.Errorf("grep failed: %w", err)
-		}
+		return "", err
 	}
 
 	outputMode := input.OutputMode
@@ -249,58 +112,88 @@ func grepEnhanced(cfg *FsToolsConfig, input *grepInput) (string, error) {
 
 	switch outputMode {
 	case "count":
-		total := 0
-		for _, c := range seenFiles {
-			total += c
+		fileCount := map[string]int{}
+		for _, m := range matches {
+			fileCount[m.Path]++
 		}
-		return fmt.Sprintf("%d matches in %d files", total, len(seenFiles)), nil
+		return fmt.Sprintf("%d matches in %d files", len(matches), len(fileCount)), nil
 
 	case "files_with_matches":
-		if len(seenFiles) == 0 {
+		if len(matches) == 0 {
 			return "(no matches found)", nil
 		}
+		seen := map[string]bool{}
 		var files []string
-		for f := range seenFiles {
-			files = append(files, f)
+		for _, m := range matches {
+			if !seen[m.Path] {
+				seen[m.Path] = true
+				files = append(files, m.Path)
+			}
 		}
 		return strings.Join(files, "\n"), nil
 
 	default:
-		if len(allMatches) == 0 {
+		if len(matches) == 0 {
 			return "(no matches found)", nil
 		}
+
+		maxMatches := input.MaxMatches
+		if maxMatches <= 0 {
+			maxMatches = 100
+		}
+		if len(matches) > maxMatches {
+			matches = matches[:maxMatches]
+		}
+
+		contextBefore := input.ContextBefore
+		if contextBefore < 0 {
+			contextBefore = 0
+		}
+		contextAfter := input.ContextAfter
+		if contextAfter < 0 {
+			contextAfter = 0
+		}
+
 		var sb strings.Builder
 		lastFile := ""
-		for idx, m := range allMatches {
-			if m.path != lastFile {
+		for idx, m := range matches {
+			if m.Path != lastFile {
 				if lastFile != "" {
 					sb.WriteString("\n")
 				}
-				sb.WriteString(m.path)
+				sb.WriteString(m.Path)
 				sb.WriteString("\n")
-				lastFile = m.path
+				lastFile = m.Path
 			} else if idx > 0 && (contextBefore > 0 || contextAfter > 0) {
 				sb.WriteString("--\n")
 			}
-			for j, cl := range m.before {
-				lineNum := m.line - len(m.before) + j
-				if input.IncludeLineNumbers {
-					sb.WriteString(fmt.Sprintf("%d-", lineNum))
+
+			if contextBefore > 0 || contextAfter > 0 {
+				contextLines := readContextLines(m.Path, m.Line, contextBefore, contextAfter)
+				for _, cl := range contextLines.before {
+					if input.IncludeLineNumbers {
+						sb.WriteString(fmt.Sprintf("%d-", cl.num))
+					}
+					sb.WriteString(cl.text)
+					sb.WriteString("\n")
 				}
-				sb.WriteString(cl)
+				if input.IncludeLineNumbers {
+					sb.WriteString(fmt.Sprintf("%d:", m.Line))
+				}
+				sb.WriteString(m.Content)
 				sb.WriteString("\n")
-			}
-			if input.IncludeLineNumbers {
-				sb.WriteString(fmt.Sprintf("%d:", m.line))
-			}
-			sb.WriteString(m.content)
-			sb.WriteString("\n")
-			for j, cl := range m.after {
-				lineNum := m.line + 1 + j
-				if input.IncludeLineNumbers {
-					sb.WriteString(fmt.Sprintf("%d-", lineNum))
+				for _, cl := range contextLines.after {
+					if input.IncludeLineNumbers {
+						sb.WriteString(fmt.Sprintf("%d-", cl.num))
+					}
+					sb.WriteString(cl.text)
+					sb.WriteString("\n")
 				}
-				sb.WriteString(cl)
+			} else {
+				if input.IncludeLineNumbers {
+					sb.WriteString(fmt.Sprintf("%d:", m.Line))
+				}
+				sb.WriteString(m.Content)
 				sb.WriteString("\n")
 			}
 		}
@@ -308,3 +201,58 @@ func grepEnhanced(cfg *FsToolsConfig, input *grepInput) (string, error) {
 	}
 }
 
+type contextLine struct {
+	num  int
+	text string
+}
+
+type contextResult struct {
+	before []contextLine
+	after  []contextLine
+}
+
+func readContextLines(path string, matchLine, before, after int) contextResult {
+	var result contextResult
+
+	data, err := readFileLines(path)
+	if err != nil || len(data) == 0 {
+		return result
+	}
+
+	lineIdx := matchLine - 1
+	if before > 0 {
+		start := lineIdx - before
+		if start < 0 {
+			start = 0
+		}
+		for i := start; i < lineIdx; i++ {
+			result.before = append(result.before, contextLine{num: i + 1, text: data[i]})
+		}
+	}
+	if after > 0 {
+		end := lineIdx + 1 + after
+		if end > len(data) {
+			end = len(data)
+		}
+		for i := lineIdx + 1; i < end; i++ {
+			result.after = append(result.after, contextLine{num: i + 1, text: data[i]})
+		}
+	}
+	return result
+}
+
+func readFileLines(path string) ([]string, error) {
+	data, err := readFileBytes(path)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(string(data), "\n"), nil
+}
+
+func readFileBytes(path string) ([]byte, error) {
+	return readFileBytesOS(path)
+}
+
+func readFileBytesOS(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
