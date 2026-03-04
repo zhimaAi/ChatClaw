@@ -151,29 +151,11 @@ const showStatus = computed(
     props.message.status === MessageStatus.ERROR || props.message.status === MessageStatus.CANCELLED
 )
 
-const hiddenToolNames = new Set(['confirm_execution'])
-
-const filterHiddenTools = (segs: MessageSegment[]): MessageSegment[] => {
-  const out: MessageSegment[] = []
-  for (const seg of segs) {
-    if (seg.type !== 'tools') {
-      out.push(seg)
-      continue
-    }
-    const visible = seg.toolCalls.filter((tc) => !hiddenToolNames.has(tc.toolName))
-    if (visible.length > 0) {
-      out.push({ ...seg, toolCalls: visible })
-    }
-  }
-  return out
-}
-
 // Compute display segments: from props (streaming/persisted) or fallback from message data
 const displaySegments = computed((): MessageSegment[] => {
   // Priority 1: Use provided segments if available
   if (props.segments && props.segments.length > 0) {
-    const filtered = filterHiddenTools(props.segments)
-    if (filtered.length > 0) return filtered
+    return props.segments
   }
   
   // Priority 2: For streaming without segments, build from individual streaming props
@@ -189,7 +171,7 @@ const displaySegments = computed((): MessageSegment[] => {
     if (props.streamingToolCalls && props.streamingToolCalls.length > 0) {
       segs.push({ type: 'tools', toolCalls: props.streamingToolCalls })
     }
-    if (segs.length > 0) return filterHiddenTools(segs)
+    if (segs.length > 0) return segs
   }
   
   // Priority 3: Fallback for historical messages - construct from message data
@@ -210,7 +192,7 @@ const displaySegments = computed((): MessageSegment[] => {
     segs.push({ type: 'tools', toolCalls: toolCalls.value })
   }
   
-  return filterHiddenTools(segs)
+  return segs
 })
 
 // Check if a given index is the last content segment (for cursor display)

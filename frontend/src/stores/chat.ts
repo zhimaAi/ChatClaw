@@ -542,9 +542,6 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    // Hide confirm_execution from UI — only the interrupt prompt text is shown
-    if (tool_name === 'confirm_execution') return
-
     // Helper: add a new tool call to segments
     const addToolCallToSegments = (toolCall: ToolCallInfo) => {
       const lastSeg = streaming.segments[streaming.segments.length - 1]
