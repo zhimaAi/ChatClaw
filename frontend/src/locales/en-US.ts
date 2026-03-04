@@ -66,6 +66,7 @@ export default {
     glob: { name: 'Glob Match' },
     grep: { name: 'Text Search' },
     executeBackground: { name: 'Execute Background' },
+    confirmExecution: { name: 'Confirm Execution' },
     taskCreate: { name: 'Create Task' },
     taskGet: { name: 'Get Task' },
     taskUpdate: { name: 'Update Task' },

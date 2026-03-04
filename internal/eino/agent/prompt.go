@@ -127,6 +127,44 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 		}
 	}
 
+	if zh {
+		prompt += `
+# 危险命令确认
+
+在执行任何可能造成破坏性影响的 shell 命令之前，你**必须**先调用 confirm_execution 工具，将完整命令传入，等待用户确认后再执行。
+
+以下类型的命令需要确认:
+- 递归删除 (rm -rf, rm -r, rmdir)
+- 磁盘格式化 (mkfs, dd if=, format)
+- 需要提权的命令 (sudo)
+- 系统关机/重启 (shutdown, reboot, halt)
+- 批量进程终止 (kill -9, killall)
+- 危险权限修改 (chmod -R 777)
+- 写入设备文件 (> /dev/)
+
+**工作流程**: 先调用 confirm_execution(command="你要执行的命令") → 获得用户确认 → 再调用 execute 执行命令。
+**绝对不要**跳过确认直接执行上述类型的命令。
+`
+	} else {
+		prompt += `
+# Dangerous Command Confirmation
+
+Before executing any potentially destructive shell command, you **must** call the confirm_execution tool first, passing the exact command, and wait for user confirmation before executing it.
+
+The following types of commands require confirmation:
+- Recursive deletion (rm -rf, rm -r, rmdir)
+- Disk formatting (mkfs, dd if=, format)
+- Privilege escalation (sudo)
+- System shutdown/reboot (shutdown, reboot, halt)
+- Batch process termination (kill -9, killall)
+- Dangerous permission changes (chmod -R 777)
+- Writing to device files (> /dev/)
+
+**Workflow**: Call confirm_execution(command="your command") → get user confirmation → then call execute to run the command.
+**Never** skip confirmation and directly execute the above types of commands.
+`
+	}
+
 	if osName == "windows" {
 		if zh {
 			prompt += `

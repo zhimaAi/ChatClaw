@@ -16,6 +16,7 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/uptrace/bun"
 )
@@ -200,7 +201,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 }
 
 // resumeGeneration continues a previously interrupted generation.
-func (s *ChatService) resumeGeneration(gen *activeGeneration, conversationID int64) {
+func (s *ChatService) resumeGeneration(gen *activeGeneration, conversationID int64, approved bool) {
 	db, err := s.db()
 	if err != nil {
 		s.app.Logger.Error("[chat] resume: failed to get db", "conv", conversationID, "error", err)
@@ -248,7 +249,8 @@ func (s *ChatService) resumeGeneration(gen *activeGeneration, conversationID int
 		}
 	}
 
-	iter, resumeErr := gen.runner.Resume(ctx, gen.checkpointID)
+	iter, resumeErr := gen.runner.Resume(ctx, gen.checkpointID,
+		adk.WithToolOptions([]tool.Option{einoagent.WithInterruptApproval(approved)}))
 	if resumeErr != nil {
 		s.app.Logger.Error("[chat] resume failed", "conv", conversationID, "error", resumeErr)
 		gc.emitError("error.chat_generation_failed", map[string]any{"Error": resumeErr.Error()})
@@ -615,8 +617,8 @@ func (s *ChatService) consumeEventIter(ctx context.Context, gc *generationContex
 // message and pausing until the user replies.
 func (s *ChatService) handleInterrupt(_ context.Context, gc *generationContext, ss *streamState, assistantMsg *messageModel, event *adk.AgentEvent) processStreamResult {
 	promptText := "A potentially dangerous operation requires your confirmation. Please reply **confirm** to proceed or **reject** to cancel."
-	if info, ok := event.Action.Interrupted.Data.(*einoagent.InterruptInfo); ok && info.Command != "" {
-		promptText = einoagent.FormatInterruptPrompt(info)
+	if cmdInfo := extractInterruptCommand(event); cmdInfo != nil {
+		promptText = einoagent.FormatInterruptPrompt(cmdInfo)
 	}
 
 	existingContent := ss.contentBuilder.String()
@@ -639,6 +641,36 @@ func (s *ChatService) handleInterrupt(_ context.Context, gc *generationContext, 
 	s.app.Logger.Info("[chat] generation interrupted, waiting for user confirmation", "conv", gc.conversationID)
 
 	return processStreamResult{interrupted: true}
+}
+
+// extractInterruptCommand walks the interrupt event data to find the
+// InterruptInfo payload (command) from the ToolsNode rerun extra map.
+func extractInterruptCommand(event *adk.AgentEvent) *einoagent.InterruptInfo {
+	if event.Action == nil || event.Action.Interrupted == nil {
+		return nil
+	}
+
+	cmInfo, ok := event.Action.Interrupted.Data.(*adk.ChatModelAgentInterruptInfo)
+	if !ok || cmInfo == nil || cmInfo.Info == nil {
+		return nil
+	}
+
+	toolExtra, ok := cmInfo.Info.RerunNodesExtra["ToolNode"]
+	if !ok {
+		return nil
+	}
+
+	rerunExtra, ok := toolExtra.(*compose.ToolsInterruptAndRerunExtra)
+	if !ok || rerunExtra == nil {
+		return nil
+	}
+
+	for _, extra := range rerunExtra.RerunExtraMap {
+		if info, ok := extra.(*einoagent.InterruptInfo); ok && info.Command != "" {
+			return info
+		}
+	}
+	return nil
 }
 
 func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generationContext, ss *streamState, msgOutput *adk.MessageVariant) {

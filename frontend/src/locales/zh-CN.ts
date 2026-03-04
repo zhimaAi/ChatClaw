@@ -66,6 +66,7 @@ export default {
     glob: { name: '文件匹配' },
     grep: { name: '文本搜索' },
     executeBackground: { name: '后台执行' },
+    confirmExecution: { name: '确认执行' },
     taskCreate: { name: '创建任务' },
     taskGet: { name: '获取任务' },
     taskUpdate: { name: '更新任务' },

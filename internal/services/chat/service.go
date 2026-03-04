@@ -196,51 +196,13 @@ func (s *ChatService) handleResumeMessage(conversationID int64, gen *activeGener
 	dbCancel()
 
 	approved := isApproval(content)
-	if !approved {
-		gen.mu.Lock()
-		cleanup := gen.agentCleanup
-		gen.agentCleanup = nil
-		gen.mu.Unlock()
-
-		if cleanup != nil {
-			cleanup()
-		}
-		gen.cancel()
-		s.activeGenerations.Delete(conversationID)
-
-		assistantMsg := &messageModel{
-			ConversationID: conversationID,
-			Role:           RoleAssistant,
-			Content:        "Operation cancelled by user.",
-			Status:         StatusSuccess,
-			ToolCalls:      "[]",
-		}
-		dbCtx2, dbCancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-		if _, insertErr := db.NewInsert().Model(assistantMsg).Exec(dbCtx2); insertErr != nil {
-			s.app.Logger.Error("[chat] failed to save cancellation message", "conv", conversationID, "error", insertErr)
-		}
-		dbCancel2()
-
-		s.app.Event.Emit(EventChatComplete, ChatCompleteEvent{
-			ChatEvent: ChatEvent{
-				ConversationID: conversationID,
-				TabID:          gen.tabID,
-				RequestID:      gen.requestID,
-				Ts:             time.Now().UnixMilli(),
-			},
-			Status:       StatusSuccess,
-			FinishReason: "cancelled_by_user",
-		})
-
-		return &SendMessageResult{RequestID: gen.requestID, MessageID: userMsg.ID}, nil
-	}
 
 	gen.mu.Lock()
 	gen.interrupted = false
 	gen.mu.Unlock()
 
 	go func() {
-		s.resumeGeneration(gen, conversationID)
+		s.resumeGeneration(gen, conversationID, approved)
 	}()
 
 	return &SendMessageResult{RequestID: gen.requestID, MessageID: userMsg.ID}, nil

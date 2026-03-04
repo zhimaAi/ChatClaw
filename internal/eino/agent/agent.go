@@ -118,7 +118,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	// are handled internally by deep.Config.Backend/Shell.
 	bgTool, bgErr := tools.NewBgExecuteTool(backend, bgMgr)
 
-	userTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+2)
+	userTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+3)
 	userTools = append(userTools, enabledTools...)
 	userTools = append(userTools, browserTool)
 	if bgErr == nil {
@@ -126,6 +126,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	} else {
 		logger.Warn("[agent] failed to create execute_background tool", "error", bgErr)
 	}
+	userTools = append(userTools, NewConfirmExecutionTool())
 	userTools = append(userTools, extraTools...)
 
 	var toolsConfig adk.ToolsConfig
@@ -209,9 +210,6 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 			handlers = append(handlers, h)
 		}
 	}
-
-	// Interrupt handler for dangerous shell commands.
-	handlers = append(handlers, NewInterruptHandler(logger))
 
 	// Logging handler goes last so BeforeAgent sees the fully-assembled instruction.
 	handlers = append(handlers, newLoggingHandler(logger, messageCount <= 1))
@@ -370,14 +368,30 @@ func unknownToolsHandler(registeredTools []tool.BaseTool, logger *slog.Logger) f
 	}
 }
 
+// isInterruptErr returns true if the error is an interrupt signal that must
+// propagate to the ADK framework rather than being caught.
+func isInterruptErr(err error) bool {
+	if _, ok := compose.IsInterruptRerunError(err); ok {
+		return true
+	}
+	if _, ok := compose.ExtractInterruptInfo(err); ok {
+		return true
+	}
+	return false
+}
+
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
 // message as a tool result, allowing the ReAct loop to continue.
+// Interrupt signals are not caught — they must propagate to the ADK framework.
 func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 	return compose.ToolMiddleware{
 		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.ToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
+					if isInterruptErr(err) {
+						return nil, err
+					}
 					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
 					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
 				}
@@ -388,6 +402,9 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.StreamToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
+					if isInterruptErr(err) {
+						return nil, err
+					}
 					logger.Warn("[agent] streaming tool error", "tool", input.Name, "error", err)
 					return &compose.StreamToolOutput{
 						Result: schema.StreamReaderFromArray([]string{"Error: " + err.Error()}),
