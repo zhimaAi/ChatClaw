@@ -76,26 +76,71 @@ func (s *SkillsService) installSkill(slug, version, source string) error {
 		return fmt.Errorf("failed to get version files: %w", err)
 	}
 
-	destDir := filepath.Join(s.skillsDir, slug)
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create skill directory: %w", err)
+	skillsBaseDir, err := filepath.Abs(s.skillsDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve skills directory: %w", err)
 	}
+
+	destDir, err := resolvePathUnderBase(skillsBaseDir, slug)
+	if err != nil {
+		return fmt.Errorf("invalid skill slug %q: %w", slug, err)
+	}
+
+	stagingPrefix := ".install-" + sanitizePathPart(slug) + "-"
+	stagingDir, err := os.MkdirTemp(skillsBaseDir, stagingPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to create install staging directory: %w", err)
+	}
+	cleanupStaging := true
+	defer func() {
+		if cleanupStaging {
+			_ = os.RemoveAll(stagingDir)
+		}
+	}()
 
 	for _, f := range files {
 		content, dlErr := s.getFileContent(slug, version, f.Path)
 		if dlErr != nil {
-			_ = os.RemoveAll(destDir)
 			return fmt.Errorf("failed to download %s: %w", f.Path, dlErr)
 		}
 
-		filePath := filepath.Join(destDir, f.Path)
-		if dir := filepath.Dir(filePath); dir != destDir {
-			_ = os.MkdirAll(dir, 0o755)
+		filePath, pathErr := resolvePathUnderBase(stagingDir, f.Path)
+		if pathErr != nil {
+			return fmt.Errorf("invalid skill file path %q: %w", f.Path, pathErr)
+		}
+		if dir := filepath.Dir(filePath); dir != stagingDir {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return fmt.Errorf("failed to create directory for %s: %w", f.Path, err)
+			}
 		}
 		if err := os.WriteFile(filePath, content, 0o644); err != nil {
-			_ = os.RemoveAll(destDir)
 			return fmt.Errorf("failed to write %s: %w", f.Path, err)
 		}
+	}
+
+	backupDir := ""
+	if _, statErr := os.Stat(destDir); statErr == nil {
+		backupDir = filepath.Join(
+			skillsBaseDir,
+			fmt.Sprintf(".backup-%s-%d", sanitizePathPart(slug), time.Now().UnixNano()),
+		)
+		if err := os.Rename(destDir, backupDir); err != nil {
+			return fmt.Errorf("failed to backup existing skill directory: %w", err)
+		}
+	} else if !os.IsNotExist(statErr) {
+		return fmt.Errorf("failed to access existing skill directory: %w", statErr)
+	}
+
+	if err := os.Rename(stagingDir, destDir); err != nil {
+		if backupDir != "" {
+			_ = os.Rename(backupDir, destDir)
+		}
+		return fmt.Errorf("failed to activate installed skill files: %w", err)
+	}
+	cleanupStaging = false
+
+	if backupDir != "" {
+		_ = os.RemoveAll(backupDir)
 	}
 
 	db := s.db()
@@ -148,15 +193,35 @@ func (s *SkillsService) UninstallSkill(slug string) error {
 }
 
 func (s *SkillsService) EnableSkill(slug string) error {
-	_, err := s.db().ExecContext(context.Background(),
+	res, err := s.db().ExecContext(context.Background(),
 		`UPDATE installed_skills SET enabled = 1 WHERE slug = ?`, slug)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("skill not found: %s", slug)
+	}
+	return nil
 }
 
 func (s *SkillsService) DisableSkill(slug string) error {
-	_, err := s.db().ExecContext(context.Background(),
+	res, err := s.db().ExecContext(context.Background(),
 		`UPDATE installed_skills SET enabled = 0 WHERE slug = ?`, slug)
-	return err
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return fmt.Errorf("skill not found: %s", slug)
+	}
+	return nil
 }
 
 func (s *SkillsService) ListInstalledSkills(filter string) ([]InstalledSkill, error) {
@@ -455,4 +520,44 @@ func parseSkillFrontmatter(data string) (*skillFrontMatter, string, error) {
 	}
 
 	return &fm, content, nil
+}
+
+func resolvePathUnderBase(baseDir, relativePath string) (string, error) {
+	if strings.TrimSpace(relativePath) == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+
+	cleanRelative := filepath.Clean(filepath.FromSlash(relativePath))
+	if cleanRelative == "." {
+		return "", fmt.Errorf("path must point to a file or directory")
+	}
+	if filepath.IsAbs(cleanRelative) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if cleanRelative == ".." || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal not allowed")
+	}
+
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve base directory: %w", err)
+	}
+	absPath, err := filepath.Abs(filepath.Join(absBase, cleanRelative))
+	if err != nil {
+		return "", fmt.Errorf("resolve absolute path: %w", err)
+	}
+
+	if absPath != absBase && !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes base directory")
+	}
+	return absPath, nil
+}
+
+func sanitizePathPart(input string) string {
+	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_")
+	sanitized := replacer.Replace(strings.TrimSpace(input))
+	if sanitized == "" {
+		return "skill"
+	}
+	return sanitized
 }

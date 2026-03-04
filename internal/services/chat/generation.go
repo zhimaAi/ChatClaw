@@ -12,7 +12,6 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/memory"
-	"chatclaw/internal/services/skills"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -226,13 +225,18 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	}
 
 	if agentConfig.SkillsEnabled {
-		skillsSvc := skills.NewSkillsService(s.app)
-		skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{SkillsService: skillsSvc})
-		if toolErr != nil {
-			s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
+		if s.skillsService == nil {
+			s.app.Logger.Warn("[chat] skills service is not initialized, skip skill management tools")
 		} else {
-			extraTools = append(extraTools, skillTools...)
-			s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
+			skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{
+				SkillsService: s.skillsService,
+			})
+			if toolErr != nil {
+				s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
+			} else {
+				extraTools = append(extraTools, skillTools...)
+				s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
+			}
 		}
 	}
 
@@ -249,14 +253,14 @@ type segment struct {
 }
 
 type streamState struct {
-	gc             *generationContext
-	assistantMsg   *messageModel
-	contentBuilder strings.Builder
+	gc              *generationContext
+	assistantMsg    *messageModel
+	contentBuilder  strings.Builder
 	thinkingBuilder strings.Builder
-	toolCallsJSON  []byte
-	finishReason   string
-	inputTokens    int
-	outputTokens   int
+	toolCallsJSON   []byte
+	finishReason    string
+	inputTokens     int
+	outputTokens    int
 
 	segments               []segment
 	lastSegmentType        string
@@ -265,7 +269,7 @@ type streamState struct {
 	// Tool call delta tracking
 	toolStatesByKey map[string]*toolCallState
 	toolOrder       []string
-	indexKeyMap      map[int]string
+	indexKeyMap     map[int]string
 }
 
 type toolCallState struct {
@@ -484,8 +488,8 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 	s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
 
 	gc.emit(EventChatComplete, ChatCompleteEvent{
-		ChatEvent: gc.chatEvent(assistantMsg.ID),
-		Status:    StatusSuccess,
+		ChatEvent:    gc.chatEvent(assistantMsg.ID),
+		Status:       StatusSuccess,
 		FinishReason: ss.finishReason,
 	})
 }
