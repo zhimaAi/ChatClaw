@@ -11,6 +11,7 @@ const props = defineProps<{
   mode?: 'main' | 'snap'
   agentName?: string
   agentIcon?: string
+  sandboxMode?: string
   hasAttachedTarget?: boolean
   showAiSendButton?: boolean
   showAiEditButton?: boolean
@@ -206,6 +207,7 @@ watch(
           :mode="mode"
           :agent-name="agentName"
           :agent-icon="agentIcon"
+          :sandbox-mode="sandboxMode"
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
@@ -238,6 +240,7 @@ watch(
           :mode="mode"
           :agent-name="agentName"
           :agent-icon="agentIcon"
+          :sandbox-mode="sandboxMode"
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
