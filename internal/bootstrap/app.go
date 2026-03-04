@@ -294,6 +294,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
 	// 注册会话服务
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
+	// 注册 Skill 管理服务
+	skillsService := skills.NewSkillsService(app)
+	app.RegisterService(application.NewService(skillsService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
@@ -305,10 +308,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
-	// 注册 Skill 管理服务
-	skillsService := skills.NewSkillsService(app)
-	app.RegisterService(application.NewService(skillsService))
-	chatService.SetSkillsService(skillsService)
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
