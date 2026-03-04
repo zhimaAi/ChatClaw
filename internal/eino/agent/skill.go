@@ -2,36 +2,42 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"chatclaw/internal/eino/tools"
+	"chatclaw/internal/sqlite"
+
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/adk/filesystem"
+	"github.com/cloudwego/eino/adk/middlewares/skill"
 	"gopkg.in/yaml.v3"
 )
 
-// buildSkillHandler creates the skill middleware using a local filesystem backend.
-func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
-	homeDir, err := os.UserHomeDir()
+const skillFileName = "SKILL.md"
+
+// buildSkillHandler creates the skill middleware using the SDK's skill package.
+// It uses a filtering backend that only loads skills enabled in the DB.
+func buildSkillHandler(ctx context.Context, b *tools.Backend, logger *slog.Logger) adk.ChatModelAgentMiddleware {
+	baseDir := filepath.Join(b.HomeDir(), ".chatclaw", "skills")
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		logger.Warn("[agent] failed to create skills directory", "dir", baseDir, "error", err)
+		return nil
+	}
+	enabledSlugs := queryEnabledSlugs(logger)
+
+	backend, err := newFilteringSkillBackend(ctx, b, baseDir, enabledSlugs)
 	if err != nil {
-		logger.Warn("[agent] failed to get home dir for skills", "error", err)
+		logger.Warn("[agent] failed to create skill backend", "error", err)
 		return nil
 	}
 
-	skillsDir := filepath.Join(homeDir, skillsRelDir)
-	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
-		logger.Warn("[agent] failed to create skills directory", "dir", skillsDir, "error", err)
-		return nil
-	}
-
-	backend := &localSkillBackend{baseDir: skillsDir}
-
-	mw, err := newSkillChatModelAgentMiddleware(ctx, backend, logger)
+	mw, err := skill.NewChatModelAgentMiddleware(ctx, &skill.Config{
+		Backend: backend,
+	})
 	if err != nil {
 		logger.Warn("[agent] failed to create skill handler", "error", err)
 		return nil
@@ -39,193 +45,142 @@ func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAg
 	return mw
 }
 
-// ---------------------------------------------------------------------------
-// Local skill backend — reads SKILL.md files from local filesystem directly.
-// Replaces the removed skill.NewLocalBackend from v0.7.
-// ---------------------------------------------------------------------------
-
-type localSkillBackend struct {
-	baseDir string
-}
-
-type skillFrontMatter struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-}
-
-type localSkill struct {
-	Name          string
-	Description   string
-	Content       string
-	BaseDirectory string
-}
-
-func (b *localSkillBackend) list() ([]localSkill, error) {
-	entries, err := os.ReadDir(b.baseDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read skills directory: %w", err)
+// queryEnabledSlugs returns the set of enabled skill slugs from the DB.
+// If the DB is unavailable, returns nil (load all skills as fallback).
+func queryEnabledSlugs(logger *slog.Logger) map[string]bool {
+	db := sqlite.DB()
+	if db == nil {
+		return nil
 	}
 
-	var skills []localSkill
+	rows, err := db.QueryContext(context.Background(), `SELECT slug FROM installed_skills WHERE enabled = 1`)
+	if err != nil {
+		logger.Warn("[agent] failed to query enabled skills", "error", err)
+		return nil
+	}
+	defer rows.Close()
+
+	slugs := make(map[string]bool)
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			continue
+		}
+		slugs[slug] = true
+	}
+	return slugs
+}
+
+// filteringSkillBackend implements skill.Backend and filters by enabled slugs.
+type filteringSkillBackend struct {
+	fsBackend    filesystem.Backend
+	baseDir      string
+	enabledSlugs map[string]bool // nil = load all
+}
+
+func newFilteringSkillBackend(ctx context.Context, fs filesystem.Backend, baseDir string, enabledSlugs map[string]bool) (skill.Backend, error) {
+	return &filteringSkillBackend{
+		fsBackend:    fs,
+		baseDir:      baseDir,
+		enabledSlugs: enabledSlugs,
+	}, nil
+}
+
+func (b *filteringSkillBackend) List(ctx context.Context) ([]skill.FrontMatter, error) {
+	skills, err := b.list(ctx)
+	if err != nil {
+		return nil, err
+	}
+	matters := make([]skill.FrontMatter, 0, len(skills))
+	for _, s := range skills {
+		matters = append(matters, s.FrontMatter)
+	}
+	return matters, nil
+}
+
+func (b *filteringSkillBackend) Get(ctx context.Context, name string) (skill.Skill, error) {
+	skills, err := b.list(ctx)
+	if err != nil {
+		return skill.Skill{}, err
+	}
+	for _, s := range skills {
+		if s.Name == name {
+			return s, nil
+		}
+	}
+	return skill.Skill{}, nil
+}
+
+func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error) {
+	entries, err := b.fsBackend.GlobInfo(ctx, &filesystem.GlobInfoRequest{
+		Pattern: "*/" + skillFileName,
+		Path:    b.baseDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var skills []skill.Skill
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+		filePath := entry.Path
+		if !filepath.IsAbs(filePath) {
+			filePath = filepath.Join(b.baseDir, filePath)
 		}
-		skillPath := filepath.Join(b.baseDir, entry.Name(), "SKILL.md")
-		if _, statErr := os.Stat(skillPath); os.IsNotExist(statErr) {
-			continue
-		}
-
-		data, readErr := os.ReadFile(skillPath)
-		if readErr != nil {
+		slug := filepath.Base(filepath.Dir(filePath))
+		if b.enabledSlugs != nil && !b.enabledSlugs[slug] {
 			continue
 		}
 
-		fm, content, parseErr := parseSkillFrontmatter(string(data))
-		if parseErr != nil {
+		s, loadErr := b.loadSkill(ctx, filePath)
+		if loadErr != nil {
 			continue
 		}
-
-		absDir, _ := filepath.Abs(filepath.Dir(skillPath))
-		skills = append(skills, localSkill{
-			Name:          fm.Name,
-			Description:   fm.Description,
-			Content:       strings.TrimSpace(content),
-			BaseDirectory: absDir,
-		})
+		skills = append(skills, s)
 	}
 	return skills, nil
 }
 
-func parseSkillFrontmatter(data string) (*skillFrontMatter, string, error) {
+func (b *filteringSkillBackend) loadSkill(ctx context.Context, path string) (skill.Skill, error) {
+	data, err := b.fsBackend.Read(ctx, &filesystem.ReadRequest{
+		FilePath: path,
+	})
+	if err != nil {
+		return skill.Skill{}, err
+	}
+
+	fm, content, err := parseSkillFrontmatter(data)
+	if err != nil {
+		return skill.Skill{}, err
+	}
+
+	absDir, _ := filepath.Abs(filepath.Dir(path))
+	return skill.Skill{
+		FrontMatter:   fm,
+		Content:       strings.TrimSpace(content),
+		BaseDirectory: absDir,
+	}, nil
+}
+
+func parseSkillFrontmatter(data string) (skill.FrontMatter, string, error) {
 	const delimiter = "---"
 	data = strings.TrimSpace(data)
 
 	if !strings.HasPrefix(data, delimiter) {
-		return nil, "", fmt.Errorf("file does not start with frontmatter delimiter")
+		return skill.FrontMatter{}, "", fmt.Errorf("file does not start with frontmatter delimiter")
 	}
 
 	rest := data[len(delimiter):]
 	endIdx := strings.Index(rest, "\n"+delimiter)
 	if endIdx == -1 {
-		return nil, "", fmt.Errorf("frontmatter closing delimiter not found")
+		return skill.FrontMatter{}, "", fmt.Errorf("frontmatter closing delimiter not found")
 	}
 
 	frontmatter := strings.TrimSpace(rest[:endIdx])
-	content := rest[endIdx+len("\n"+delimiter):]
-	if strings.HasPrefix(content, "\n") {
-		content = content[1:]
-	}
+	content := strings.TrimPrefix(rest[endIdx+len("\n"+delimiter):], "\n")
 
-	var fm skillFrontMatter
+	var fm skill.FrontMatter
 	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
-		return nil, "", fmt.Errorf("failed to unmarshal frontmatter: %w", err)
+		return skill.FrontMatter{}, "", fmt.Errorf("failed to unmarshal frontmatter: %w", err)
 	}
-
-	return &fm, content, nil
-}
-
-// newSkillChatModelAgentMiddleware creates a skill handler that integrates with
-// the v0.8 ChatModelAgentMiddleware pattern. It registers a "skill" tool and
-// injects a system prompt about available skills.
-func newSkillChatModelAgentMiddleware(_ context.Context, backend *localSkillBackend, _ *slog.Logger) (adk.ChatModelAgentMiddleware, error) {
-	skills, err := backend.list()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list skills: %w", err)
-	}
-
-	if len(skills) == 0 {
-		return nil, nil
-	}
-
-	var descBuilder strings.Builder
-	descBuilder.WriteString("Load a skill by name. Available skills:\n")
-	for _, s := range skills {
-		descBuilder.WriteString(fmt.Sprintf("- %s: %s\n", s.Name, s.Description))
-	}
-
-	skillMap := make(map[string]localSkill, len(skills))
-	for _, s := range skills {
-		skillMap[s.Name] = s
-	}
-
-	return &localSkillHandler{
-		backend:  backend,
-		skillMap: skillMap,
-		desc:     descBuilder.String(),
-	}, nil
-}
-
-type localSkillHandler struct {
-	adk.BaseChatModelAgentMiddleware
-	backend  *localSkillBackend
-	skillMap map[string]localSkill
-	desc     string
-}
-
-func (h *localSkillHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
-	var instruction string
-	if isZhCN() {
-		instruction = `
-# 技能
-
-你可以使用 "skill" 工具。当任务匹配某个可用技能时，
-调用 skill(skill="<skill_name>") 来加载详细说明后再继续。
-始终阅读技能内容并严格遵循其说明。`
-	} else {
-		instruction = `
-# Skills
-
-You have access to a "skill" tool. When a task matches one of the available skills,
-call skill(skill="<skill_name>") to load detailed instructions before proceeding.
-Always read the skill content and follow its instructions carefully.`
-	}
-
-	runCtx.Instruction = runCtx.Instruction + instruction
-	runCtx.Tools = append(runCtx.Tools, &localSkillTool{handler: h})
-	return ctx, runCtx, nil
-}
-
-type localSkillTool struct {
-	handler *localSkillHandler
-}
-
-func (t *localSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return &schema.ToolInfo{
-		Name: "skill",
-		Desc: t.handler.desc,
-		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"skill": {
-				Type:     schema.String,
-				Desc:     "The skill name to load.",
-				Required: true,
-			},
-		}),
-	}, nil
-}
-
-type skillInput struct {
-	Skill string `json:"skill"`
-}
-
-func (t *localSkillTool) InvokableRun(_ context.Context, argumentsInJSON string, _ ...tool.Option) (string, error) {
-	var input skillInput
-	if err := json.Unmarshal([]byte(argumentsInJSON), &input); err != nil {
-		return "", fmt.Errorf("failed to parse skill input: %w", err)
-	}
-
-	skill, ok := t.handler.skillMap[input.Skill]
-	if !ok {
-		return fmt.Sprintf("Skill %q not found. Available: %s", input.Skill, strings.Join(mapKeys(t.handler.skillMap), ", ")), nil
-	}
-
-	return fmt.Sprintf("# Skill: %s\nBase directory: %s\n\n%s", skill.Name, skill.BaseDirectory, skill.Content), nil
-}
-
-func mapKeys[K comparable, V any](m map[K]V) []K {
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
+	return fm, content, nil
 }

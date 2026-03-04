@@ -40,11 +40,17 @@ type memoryRetrieverInput struct {
 func (t *memoryRetrieverTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "memory_retriever",
-		Desc: `Search the user's long-term memory. MUST be called before responding whenever the user's message involves anything personal or could benefit from prior context. Provide 2-5 queries with varied keywords.`,
+		Desc: selectDesc(
+			`Search the user's long-term memory. MUST be called before responding whenever the user's message involves anything personal or could benefit from prior context. Provide 2-5 queries with varied keywords.`,
+			`搜索用户长期记忆。当用户消息涉及个人信息或可从先前上下文获益时，必须在回复前调用。提供 2-5 个不同角度的查询关键词。`,
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"queries": {
-				Type:     schema.Array,
-				Desc:     "One or more search queries to find relevant content from the agent's long-term memory. ALWAYS provide 2-5 queries from different angles or with different keywords for comprehensive results.",
+				Type: schema.Array,
+				Desc: selectDesc(
+					"One or more search queries to find relevant content from the agent's long-term memory. ALWAYS provide 2-5 queries from different angles or with different keywords for comprehensive results.",
+					"一个或多个搜索查询，用于从智能体长期记忆中查找相关内容。请始终提供 2-5 个不同角度或不同关键词的查询以获得全面结果。",
+				),
 				Required: true,
 			},
 		}),

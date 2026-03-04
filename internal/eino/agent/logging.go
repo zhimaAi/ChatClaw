@@ -21,7 +21,14 @@ func newLoggingHandler(logger *slog.Logger, logPrompt bool) adk.ChatModelAgentMi
 }
 
 func (h *loggingHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelAgentContext) (context.Context, *adk.ChatModelAgentContext, error) {
-	h.logger.Info("[agent] run started", "tools", len(runCtx.Tools))
+	toolNames := make([]string, 0, len(runCtx.Tools))
+	for _, t := range runCtx.Tools {
+		info, _ := t.Info(ctx)
+		if info != nil && info.Name != "" {
+			toolNames = append(toolNames, info.Name)
+		}
+	}
+	h.logger.Info("[agent] run started", "tools", toolNames)
 	if h.logPrompt {
 		h.logger.Info("[agent] system_prompt", "instruction", runCtx.Instruction)
 	}

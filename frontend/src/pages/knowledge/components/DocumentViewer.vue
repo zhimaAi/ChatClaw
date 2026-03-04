@@ -149,6 +149,23 @@ const loadDocument = async () => {
             bytes[i] = binaryString.charCodeAt(i)
           }
           
+          // Validate OFD file header (OFD files are ZIP archives)
+          // Check ZIP signature: PK (0x50 0x4B) at the beginning
+          if (bytes.length < 4) {
+            renderError.value = t('knowledge.viewer.loadFailedUseExternal')
+            loading.value = false
+            return
+          }
+          const header = new Uint8Array(bytes.buffer.slice(0, 4))
+          const isValidZip = header[0] === 0x50 && header[1] === 0x4B && 
+                            (header[2] === 0x03 || header[2] === 0x05 || header[2] === 0x07) &&
+                            (header[3] === 0x04 || header[3] === 0x06 || header[3] === 0x08)
+          if (!isValidZip) {
+            renderError.value = t('knowledge.viewer.loadFailedUseExternal')
+            loading.value = false
+            return
+          }
+          
           // Create Blob and generate blob URL for OFD
           const blob = new Blob([bytes.buffer], { type: 'application/ofd' })
           // Clean up previous blob URL if exists
@@ -156,10 +173,17 @@ const loadDocument = async () => {
             URL.revokeObjectURL(blobUrl.value)
           }
           blobUrl.value = URL.createObjectURL(blob)
+        } else {
+          // No content available
+          renderError.value = t('knowledge.viewer.loadFailedUseExternal')
+          loading.value = false
+          return
         }
       } catch (err) {
         console.warn('Failed to load document bytes for OFD preview:', err)
-        error.value = getErrorMessage(err) || t('knowledge.viewer.loadFailed')
+        renderError.value = t('knowledge.viewer.loadFailedUseExternal')
+        loading.value = false
+        return
       }
     }
     
@@ -624,7 +648,8 @@ const handleOpenExternally = async () => {
               class="h-full w-full"
               @error="(err: any) => {
                 console.error('OFD render error:', err)
-                renderError = t('knowledge.viewer.corruptedOrWrongType', { type: 'OFD' })
+                renderError = t('knowledge.viewer.loadFailedUseExternal')
+                loading = false
               }"
             />
           </div>

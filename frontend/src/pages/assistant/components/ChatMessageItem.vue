@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type } from 'lucide-vue-next'
+import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type, ShieldCheck, Monitor } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
 import type { Message } from '@bindings/chatclaw/internal/services/chat'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useThemeLogo } from '@/composables/useLogo'
 import ThinkingBlock from './ThinkingBlock.vue'
 import ToolCallBlock from './ToolCallBlock.vue'
@@ -28,6 +29,7 @@ const props = defineProps<{
   // Agent info for assistant message header
   agentName?: string
   agentIcon?: string
+  sandboxMode?: string
   // Snap mode props
   mode?: 'main' | 'snap'
   hasAttachedTarget?: boolean
@@ -367,6 +369,19 @@ onUnmounted(() => {
             <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
           </div>
           <span class="text-xs font-medium text-muted-foreground">{{ agentName || 'Assistant' }}</span>
+          <TooltipProvider v-if="sandboxMode" :delay-duration="300">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="inline-flex items-center text-muted-foreground/70">
+                  <ShieldCheck v-if="sandboxMode === 'codex'" class="size-3.5" />
+                  <Monitor v-else class="size-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {{ sandboxMode === 'codex' ? t('assistant.workspaceDrawer.sandboxTooltip') : t('assistant.workspaceDrawer.nativeTooltip') }}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <template v-for="(segment, idx) in displaySegments" :key="idx">
           <!-- Thinking segment -->

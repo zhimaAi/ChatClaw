@@ -27,6 +27,7 @@ import (
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
+	"chatclaw/internal/services/skills"
 	"chatclaw/internal/services/textselection"
 	"chatclaw/internal/services/toolchain"
 	"chatclaw/internal/services/tray"
@@ -293,6 +294,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
 	// 注册会话服务
 	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
+	// 注册 Skill 管理服务
+	skillsService := skills.NewSkillsService(app)
+	app.RegisterService(application.NewService(skillsService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
@@ -450,6 +454,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		floatingBallService.InitFromSettings()
 		// Ensure external toolchain binaries (uv, bun) are installed/updated in background.
 		go toolchainService.EnsureAll()
+		// Ensure builtin skills are installed in background.
+		go skillsService.EnsureBuiltinSkills()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端

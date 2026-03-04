@@ -12,6 +12,7 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/memory"
+	"chatclaw/internal/services/skills"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -201,11 +202,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		} else if retrieverTool != nil {
 			extraTools = append(extraTools, retrieverTool)
 			s.app.Logger.Info("[chat] library retriever tool created", "libraries", len(agentExtras.LibraryIDs), "topK", agentConfig.RetrievalTopK, "threshold", agentExtras.MatchThreshold)
-
-			agentConfig.Instruction += "\n\n[IMPORTANT] A private knowledge base is attached to this conversation. " +
-				"You MUST use the library_retriever tool FIRST to search for answers before using any web search tools (duckduckgo_search, wikipedia_search, etc.). " +
-				"When calling library_retriever, ALWAYS provide 2-5 queries from different angles, using varied keywords and phrasings, to ensure comprehensive coverage. " +
-				"Only fall back to web search if the knowledge base returns no relevant results."
 		}
 	}
 
@@ -220,12 +216,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		} else if memoryTool != nil {
 			extraTools = append(extraTools, memoryTool)
 			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
-
-			agentConfig.Instruction += "\n\n[IMPORTANT] Long-term memory is enabled. " +
-				"You MUST call memory_retriever at the START of EVERY conversation turn BEFORE composing your response. " +
-				"This is mandatory — do NOT skip it even if the question seems simple, factual, or unrelated to the user personally. " +
-				"Memory may contain relevant context, preferences, or prior discussions that improve your answer. " +
-				"Provide 2-5 queries with varied keywords covering the user's question and related topics."
 		}
 	}
 
@@ -237,6 +227,19 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 			extraHandlers = append(extraHandlers, einoagent.NewInstructionHandler(
 				"\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n"+coreProfile,
 			))
+		}
+	}
+
+	if agentConfig.SkillsEnabled {
+		skillsSvc := skills.NewSkillsService(s.app)
+		skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{
+			SkillsService: skillsSvc,
+		})
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, skillTools...)
+			s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
 		}
 	}
 
