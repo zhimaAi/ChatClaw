@@ -44,6 +44,7 @@ const blobUrl = ref<string>('')
 const loading = ref(false)
 const error = ref<string>('')
 const viewerType = ref<'iframe' | 'text' | 'html' | 'markdown' | 'csv' | 'docx' | 'xlsx' | 'ofd' | 'unsupported'>('unsupported')
+const renderError = ref<string>('') // Error during rendering (e.g., corrupted file, wrong type)
 
 const close = () => emit('update:open', false)
 
@@ -106,6 +107,7 @@ const loadDocument = async () => {
   fileContent.value = ''
   fileBuffer.value = null
   fileDataUrl.value = ''
+  renderError.value = ''
   // Clean up previous blob URL if exists
   if (blobUrl.value) {
     URL.revokeObjectURL(blobUrl.value)
@@ -174,6 +176,15 @@ const loadDocument = async () => {
             bytes[i] = binaryString.charCodeAt(i)
           }
           
+          // Validate PDF file header (%PDF-)
+          const header = new Uint8Array(bytes.buffer.slice(0, 5))
+          const pdfHeader = String.fromCharCode(...header)
+          if (!pdfHeader.startsWith('%PDF')) {
+            renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: 'PDF' })
+            loading.value = false
+            return
+          }
+          
           // Create Blob and generate blob URL
           const blob = new Blob([bytes.buffer], { type: 'application/pdf' })
           // Clean up previous blob URL if exists
@@ -184,7 +195,7 @@ const loadDocument = async () => {
         }
       } catch (err) {
         console.warn('Failed to load document bytes for PDF preview:', err)
-        error.value = getErrorMessage(err) || t('knowledge.viewer.loadFailed')
+        renderError.value = getErrorMessage(err) || t('knowledge.viewer.corruptedOrWrongType', { type: 'PDF' })
       }
     }
     
@@ -196,6 +207,17 @@ const loadDocument = async () => {
           const response = await fetch(path)
           if (response.ok) {
             fileBuffer.value = await response.arrayBuffer()
+            // Validate file header to check if it's actually a valid Office file
+            if (fileBuffer.value) {
+              const header = new Uint8Array(fileBuffer.value.slice(0, 4))
+              const isValidDocx = viewerType.value === 'docx' && 
+                (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) // ZIP signature (DOCX is a ZIP)
+              const isValidXlsx = viewerType.value === 'xlsx' && 
+                (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) // ZIP signature (XLSX is a ZIP)
+              if (!isValidDocx && !isValidXlsx) {
+                renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
+              }
+            }
           } else {
             throw new Error('Failed to load file content')
           }
@@ -215,6 +237,17 @@ const loadDocument = async () => {
                 bytes[i] = binaryString.charCodeAt(i)
               }
               fileBuffer.value = bytes.buffer
+              // Validate file header
+              if (fileBuffer.value) {
+                const header = new Uint8Array(fileBuffer.value.slice(0, 4))
+                const isValidDocx = viewerType.value === 'docx' && 
+                  (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
+                const isValidXlsx = viewerType.value === 'xlsx' && 
+                  (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
+                if (!isValidDocx && !isValidXlsx) {
+                  renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
+                }
+              }
             } catch (apiErr: any) {
               // If GetDocumentBytes is not available, try file:// URL fallback
               if (apiErr?.message?.includes('not a function') || apiErr?.message?.includes('undefined')) {
@@ -232,6 +265,17 @@ const loadDocument = async () => {
                 const response = await fetch(localFileUrl)
                 if (response.ok) {
                   fileBuffer.value = await response.arrayBuffer()
+                  // Validate file header
+                  if (fileBuffer.value) {
+                    const header = new Uint8Array(fileBuffer.value.slice(0, 4))
+                    const isValidDocx = viewerType.value === 'docx' && 
+                      (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
+                    const isValidXlsx = viewerType.value === 'xlsx' && 
+                      (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
+                    if (!isValidDocx && !isValidXlsx) {
+                      renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
+                    }
+                  }
                 } else {
                   throw new Error('Failed to load file via file:// URL')
                 }
@@ -242,14 +286,12 @@ const loadDocument = async () => {
           } catch (fetchErr) {
             // If loading fails, show error and suggest opening externally
             console.warn('Failed to load file:', fetchErr)
-            error.value = t('knowledge.viewer.fileAccessRestricted') || '无法访问文件，请使用外部应用打开'
-            viewerType.value = 'unsupported'
+            renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
           }
         }
       } catch (err) {
         console.error('Failed to load Office file:', err)
-        error.value = getErrorMessage(err) || t('knowledge.viewer.loadFailed')
-        viewerType.value = 'unsupported'
+        renderError.value = getErrorMessage(err) || t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
       }
     }
     // For text-based files, try to load content from backend
@@ -304,6 +346,7 @@ watch(
     blobUrl.value = ''
   }
   error.value = ''
+  renderError.value = ''
     }
   }
 )
@@ -452,10 +495,24 @@ const handleOpenExternally = async () => {
 
         <!-- DOCX viewer (vue-office) -->
         <div v-else-if="viewerType === 'docx'" class="flex-1 overflow-auto">
+          <div v-if="renderError" class="flex flex-col items-center justify-center py-12 gap-4">
+            <div class="text-sm text-muted-foreground text-center">
+              {{ renderError }}
+            </div>
+            <Button variant="outline" @click="handleOpenExternally">
+              <ExternalLink class="size-4 mr-2" />
+              {{ t('knowledge.viewer.openExternally') }}
+            </Button>
+          </div>
           <VueOfficeDocx
-            v-if="fileBuffer"
+            v-else-if="fileBuffer"
             :src="fileBuffer"
             style="height: 100%;"
+            @rendered="renderError = ''"
+            @error="(err: any) => {
+              console.error('DOCX render error:', err)
+              renderError = t('knowledge.viewer.corruptedOrWrongType', { type: 'DOCX' })
+            }"
           />
           <div v-else class="flex flex-col items-center justify-center py-12 gap-4">
             <div class="text-sm text-muted-foreground text-center">
@@ -470,10 +527,24 @@ const handleOpenExternally = async () => {
 
         <!-- XLSX viewer (vue-office) -->
         <div v-else-if="viewerType === 'xlsx'" class="flex-1 overflow-auto">
+          <div v-if="renderError" class="flex flex-col items-center justify-center py-12 gap-4">
+            <div class="text-sm text-muted-foreground text-center">
+              {{ renderError }}
+            </div>
+            <Button variant="outline" @click="handleOpenExternally">
+              <ExternalLink class="size-4 mr-2" />
+              {{ t('knowledge.viewer.openExternally') }}
+            </Button>
+          </div>
           <VueOfficeExcel
-            v-if="fileBuffer"
+            v-else-if="fileBuffer"
             :src="fileBuffer"
             style="height: 100%;"
+            @rendered="renderError = ''"
+            @error="(err: any) => {
+              console.error('XLSX render error:', err)
+              renderError = t('knowledge.viewer.corruptedOrWrongType', { type: 'XLSX' })
+            }"
           />
           <div v-else class="flex flex-col items-center justify-center py-12 gap-4">
             <div class="text-sm text-muted-foreground text-center">
@@ -489,7 +560,7 @@ const handleOpenExternally = async () => {
         <!-- PDF viewer (iframe) -->
         <div v-else-if="viewerType === 'iframe'" class="flex-1 overflow-hidden relative">
           <!-- Loading overlay for PDF -->
-          <div v-if="loading || (!fileUrl && !error)" class="absolute inset-0 flex flex-col items-center justify-center bg-background gap-4 z-10">
+          <div v-if="loading || (!fileUrl && !error && !renderError)" class="absolute inset-0 flex flex-col items-center justify-center bg-background gap-4 z-10">
             <div class="size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
             <div class="flex flex-col items-center gap-2">
               <div class="text-sm font-medium text-foreground">{{ t('knowledge.loading') }}</div>
@@ -501,11 +572,24 @@ const handleOpenExternally = async () => {
               </div>
             </div>
           </div>
+          <!-- Error state for PDF -->
+          <div v-if="renderError" class="absolute inset-0 flex flex-col items-center justify-center bg-background gap-4 z-10">
+            <div class="text-sm text-muted-foreground text-center">
+              {{ renderError }}
+            </div>
+            <Button variant="outline" @click="handleOpenExternally">
+              <ExternalLink class="size-4 mr-2" />
+              {{ t('knowledge.viewer.openExternally') }}
+            </Button>
+          </div>
           <iframe
-            v-if="fileUrl"
+            v-if="fileUrl && !renderError"
             :src="fileUrl"
             class="w-full h-full border-0"
             :title="document?.name"
+            @error="() => {
+              renderError = t('knowledge.viewer.corruptedOrWrongType', { type: 'PDF' })
+            }"
           />
         </div>
 
@@ -524,11 +608,24 @@ const handleOpenExternally = async () => {
               </div>
             </div>
           </div>
-          <div v-if="blobUrl" class="flex-1 overflow-hidden">
+          <div v-if="renderError" class="absolute inset-0 flex flex-col items-center justify-center bg-background gap-4 z-10">
+            <div class="text-sm text-muted-foreground text-center">
+              {{ renderError }}
+            </div>
+            <Button variant="outline" @click="handleOpenExternally">
+              <ExternalLink class="size-4 mr-2" />
+              {{ t('knowledge.viewer.openExternally') }}
+            </Button>
+          </div>
+          <div v-else-if="blobUrl" class="flex-1 overflow-hidden">
             <OfdView
               :show-open-file-button="false"
               :ofd-link="blobUrl"
               class="h-full w-full"
+              @error="(err: any) => {
+                console.error('OFD render error:', err)
+                renderError = t('knowledge.viewer.corruptedOrWrongType', { type: 'OFD' })
+              }"
             />
           </div>
           <div v-else-if="!loading" class="flex flex-col items-center justify-center py-12 gap-4">

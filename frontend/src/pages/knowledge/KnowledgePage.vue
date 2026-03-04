@@ -66,7 +66,7 @@ const selectedLibraryId = ref<number | null>(null)
 const libraryFolders = ref<Map<number, Folder[]>>(new Map())
 const expandedLibraries = ref<Set<number>>(new Set())
 const expandedFolders = ref<Set<number>>(new Set())
-// null = 全部, -1 = 未分组, >0 = 文件夹ID
+// null = 根目录, -1 = 未分组, >0 = 文件夹ID
 const selectedFolderId = ref<number | null>(null)
 
 const selectedLibrary = computed(
@@ -85,6 +85,8 @@ const loadLibraries = async () => {
     libraries.value = list || []
     if (selectedLibraryId.value == null && libraries.value.length > 0) {
       selectedLibraryId.value = libraries.value[0].id
+      // 默认展示根目录（文件夹 + 未分组文件）
+      selectedFolderId.value = null
       // 自动展开第一个知识库
       expandedLibraries.value.add(libraries.value[0].id)
       // 加载第一个知识库的文件夹
@@ -126,14 +128,17 @@ const toggleFolderExpanded = (folderId: number) => {
   }
 }
 
-const handleFolderClick = (folderId: number | -1) => {
-  // -1 表示"未分组"，null 表示"全部"
+const handleFolderClick = (folderId: number | -1, libraryId: number) => {
+  // 切换文件夹时，始终同步当前知识库，避免出现“文件夹属于库 B，但右侧仍显示库 A”的情况
+  selectedLibraryId.value = libraryId
+  // -1 表示"未分组"
   selectedFolderId.value = folderId === -1 ? -1 : folderId
 }
 
 const handleLibraryClick = async (libraryId: number) => {
   selectedLibraryId.value = libraryId
-  selectedFolderId.value = null // 重置文件夹选择
+  // 切换知识库时默认展示该库根目录（文件夹 + 未分组文件）
+  selectedFolderId.value = null
   if (!expandedLibraries.value.has(libraryId)) {
     expandedLibraries.value.add(libraryId)
     await loadFoldersForLibrary(libraryId)
@@ -427,12 +432,12 @@ onMounted(() => {
                   :class="
                     cn(
                       'flex h-8 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs transition-colors',
-                        selectedFolderId === -1 && selectedLibraryId === lib.id
+                      selectedFolderId === -1 && selectedLibraryId === lib.id
                         ? 'bg-accent text-accent-foreground'
                         : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                     )
                   "
-                  @click.stop="handleFolderClick(-1)"
+                  @click.stop="handleFolderClick(-1, lib.id)"
                 >
                   <span
                     class="min-w-0 flex-1 truncate"
@@ -452,7 +457,7 @@ onMounted(() => {
                   :selected-library-id="lib.id"
                   :expanded-folders="expandedFolders"
                   @toggle-expanded="toggleFolderExpanded"
-                  @folder-click="handleFolderClick"
+                  @folder-click="(folderId) => handleFolderClick(folderId, lib.id)"
                 />
               </template>
             </div>

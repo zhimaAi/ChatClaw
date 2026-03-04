@@ -762,6 +762,7 @@ export default {
         success: 'Moved successfully',
         failed: 'Failed to move',
       },
+      navigateToFolder: 'Navigate to Folder',
       openFailed: 'Failed to open document',
     },
     folder: {
@@ -783,6 +784,13 @@ export default {
       deleteCancel: 'Cancel',
       deleteConfirm: 'Delete',
       deleteSuccess: 'Deleted',
+      move: {
+        title: 'Move Folder',
+        selectFolder: 'Select Target Folder',
+        moveToHere: 'Move here',
+        success: 'Moved successfully',
+        failed: 'Failed to move',
+      },
       deleteFailed: 'Failed to delete',
       nameRequired: 'Folder name cannot be empty',
       nameTooLong: 'Folder name cannot exceed 50 characters',
@@ -829,6 +837,7 @@ export default {
       contentNotAvailable: 'Content is not available for viewing. Please open externally.',
       unsupported: 'File type "{type}" is not supported for viewing. Please open externally.',
       localFileNote: 'This file needs to be opened with an external application.',
+      corruptedOrWrongType: 'The document may be corrupted or the file type does not match (actual content does not match {type} format). Cannot preview. Please open externally.',
     },
   },
   memory: {

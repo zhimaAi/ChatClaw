@@ -52,6 +52,8 @@ export interface PendingChatData {
   agentId?: number
   /** Whether thinking mode is enabled */
   enableThinking?: boolean
+  /** Chat mode: 'chat' or 'task' */
+  chatMode?: string
   /** Target tab ID that should consume this data */
   targetTabId: string
 }
@@ -351,13 +353,21 @@ export const useNavigationStore = defineStore('navigation', () => {
   /**
    * Create a new document viewer tab
    */
-  const openDocumentViewer = (documentId: number, documentName: string): string => {
+  const openDocumentViewer = (
+    documentId: number,
+    documentName: string,
+    documentThumbIcon?: string
+  ): string => {
     // Check if document is already open in a tab
     const existingTab = tabs.value.find(
       (tab) => tab.module === 'document' && tab.data?.documentId === documentId
     )
     if (existingTab) {
       activeTabId.value = existingTab.id
+      // Normalize legacy default icon and refresh icon if thumbnail is now available.
+      if (documentThumbIcon) {
+        updateTabIcon(existingTab.id, documentThumbIcon, { isDefault: false })
+      }
       return existingTab.id
     }
 
@@ -365,12 +375,24 @@ export const useNavigationStore = defineStore('navigation', () => {
     const tabId = addTab({
       module: 'document',
       title: documentName,
+      icon: documentThumbIcon,
+      iconIsDefault: false,
       data: {
         documentId,
         documentName,
       },
     })
     return tabId
+  }
+
+  /**
+   * Update the icon of an existing document viewer tab by document ID.
+   * This is used to refresh the tab icon when thumbnail events arrive.
+   */
+  const updateDocumentTabIconByDocumentId = (documentId: number, icon?: string) => {
+    const tab = tabs.value.find((t) => t.module === 'document' && t.data?.documentId === documentId)
+    if (!tab) return
+    updateTabIcon(tab.id, icon, { isDefault: false })
   }
 
   return {
@@ -395,5 +417,6 @@ export const useNavigationStore = defineStore('navigation', () => {
     setPendingChatAndOpenAssistant,
     consumePendingChatData,
     openDocumentViewer,
+    updateDocumentTabIconByDocumentId,
   }
 })

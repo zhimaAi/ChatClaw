@@ -760,6 +760,7 @@ export default {
         success: '移动成功',
         failed: '移动失败',
       },
+      navigateToFolder: '跳转到文件夹',
       openFailed: '打开文档失败',
     },
     folder: {
@@ -781,6 +782,13 @@ export default {
       deleteCancel: '取消',
       deleteConfirm: '删除',
       deleteSuccess: '删除成功',
+      move: {
+        title: '移动文件夹',
+        selectFolder: '选择目标文件夹',
+        moveToHere: '移动到此',
+        success: '移动成功',
+        failed: '移动失败',
+      },
       deleteFailed: '删除失败',
       nameRequired: '文件夹名称不能为空',
       nameTooLong: '文件夹名称不能超过50个字符',
@@ -827,6 +835,7 @@ export default {
       contentNotAvailable: '内容无法查看，请使用外部应用打开。',
       unsupported: '文件类型 "{type}" 不支持查看，请使用外部应用打开。',
       localFileNote: '此文件需要使用外部应用打开。',
+      corruptedOrWrongType: '文档可能已损坏或文件类型不匹配（实际内容与 {type} 格式不符），无法预览。请使用外部应用打开。',
     },
   },
   memory: {

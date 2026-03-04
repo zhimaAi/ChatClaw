@@ -685,6 +685,10 @@ onMounted(() => {
       if (pendingData.enableThinking != null) {
         enableThinking.value = pendingData.enableThinking
       }
+      // Apply chat mode
+      if (pendingData.chatMode) {
+        chatMode.value = pendingData.chatMode
+      }
       // Apply chat input and auto-send
       if (pendingData.chatInput) {
         chatInput.value = pendingData.chatInput
