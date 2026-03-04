@@ -101,6 +101,18 @@ const statusText = computed(() => {
   }
   return t('knowledge.content.status.pending')
 })
+
+const handleMoveToFolder = () => {
+  if (!props.document) return
+  close() // Close detail dialog first
+  emit('move-to-folder', props.document)
+}
+
+const handleRename = () => {
+  if (!props.document) return
+  close() // Close detail dialog first
+  emit('rename', props.document)
+}
 </script>
 
 <template>
@@ -187,11 +199,11 @@ const statusText = computed(() => {
             <RefreshCw class="size-4" />
             {{ t('knowledge.detail.actions.relearn') }}
           </Button>
-          <Button variant="outline" size="sm" class="gap-2" @click="emit('move-to-folder', document!)">
+          <Button variant="outline" size="sm" class="gap-2" @click="handleMoveToFolder">
             <FolderPlus class="size-4" />
             {{ t('knowledge.detail.actions.moveToFolder') }}
           </Button>
-          <Button variant="outline" size="sm" class="gap-2" @click="emit('rename', document!)">
+          <Button variant="outline" size="sm" class="gap-2" @click="handleRename">
             <Pencil class="size-4" />
             {{ t('knowledge.detail.actions.rename') }}
           </Button>

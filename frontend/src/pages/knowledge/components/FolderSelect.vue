@@ -93,13 +93,13 @@ const displayText = computed(() => {
               >
                 <div class="size-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem @select="emit('rename-folder', folder)">
+              <DropdownMenuContent align="end" class="w-auto min-w-max">
+                <DropdownMenuItem class="whitespace-nowrap" @select="emit('rename-folder', folder)">
                   {{ t('knowledge.folder.rename') }}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  class="text-muted-foreground focus:text-foreground"
+                  class="whitespace-nowrap text-muted-foreground focus:text-foreground"
                   @select="emit('delete-folder', folder)"
                 >
                   {{ t('knowledge.folder.delete') }}

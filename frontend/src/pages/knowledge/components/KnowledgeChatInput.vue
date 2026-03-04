@@ -18,6 +18,7 @@ import { useNavigationStore } from '@/stores'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { useThemeLogo } from '@/composables/useLogo'
+import ChatModeSelector from '@/pages/assistant/components/ChatModeSelector.vue'
 
 const props = defineProps<{
   /** Currently selected library ID from the knowledge page */
@@ -52,6 +53,7 @@ const {
 // Local state
 const chatInput = ref('')
 const enableThinking = ref(false)
+const chatMode = ref('task')
 
 // Computed: active agent
 const activeAgent = computed(() => {
@@ -99,6 +101,7 @@ const handleSend = () => {
     selectedModelKey: selectedModelKey.value,
     agentId: activeAgentId.value ?? undefined,
     enableThinking: enableThinking.value,
+    chatMode: chatMode.value,
   })
 
   // Clear input after sending
@@ -162,6 +165,12 @@ onMounted(async () => {
 
       <div class="mt-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
+          <!-- Chat mode selector -->
+          <ChatModeSelector
+            :model-value="chatMode"
+            @update:model-value="(v) => (chatMode = v)"
+          />
+
           <!-- Agent selector -->
           <TooltipProvider>
             <Tooltip>
