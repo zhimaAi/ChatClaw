@@ -196,6 +196,7 @@ export default {
       title: '技能',
       enable: '启用技能',
       enableHint: '开启后，AI 助手在对话时会自动加载并使用已安装的技能。',
+      pageDesc: '浏览和管理 AI 能力',
       directory: '技能加载目录',
       directoryHint: '将下载好的技能文件夹放入该目录，AI 对话时会自动识别并加载。',
       tabInstalled: '已安装',
@@ -242,6 +243,8 @@ export default {
       version: '版本',
       selectFile: '选择左侧文件查看内容',
       binaryFile: '二进制文件，无法预览',
+      rateLimited: '请求过于频繁，请稍后再试',
+      loadFailed: '加载失败，请稍后重试',
     },
     // 吸附设置
     snap: {

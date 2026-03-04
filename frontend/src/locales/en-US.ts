@@ -196,6 +196,7 @@ export default {
       title: 'Skills',
       enable: 'Enable Skills',
       enableHint: 'When enabled, the AI assistant will automatically load and use installed skills during conversations.',
+      pageDesc: 'Browse and manage AI capabilities',
       directory: 'Skills Directory',
       directoryHint: 'Place downloaded skill folders into this directory. They will be automatically detected and loaded during AI conversations.',
       tabInstalled: 'Installed',
@@ -242,6 +243,8 @@ export default {
       version: 'Version',
       selectFile: 'Select a file from the left panel to view its content',
       binaryFile: 'Binary file, cannot preview',
+      rateLimited: 'Too many requests, please try again later',
+      loadFailed: 'Failed to load, please try again later',
     },
     // Snap settings
     snap: {

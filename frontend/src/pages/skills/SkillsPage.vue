@@ -256,6 +256,9 @@ async function handleDelete() {
 async function loadMarketSkills(append = false) {
   if (marketLoading.value) return
   marketLoading.value = true
+  if (!append) {
+    marketSkills.value = []
+  }
   try {
     const result = await SkillsService.ExploreSkills(
       25,
@@ -272,7 +275,12 @@ async function loadMarketSkills(append = false) {
       marketHasMore.value = !!result.nextCursor
     }
   } catch (error) {
-    console.error('Failed to load market skills:', error)
+    const msg = getErrorMessage(error)
+    if (msg && (msg.includes('429') || msg.toLowerCase().includes('rate'))) {
+      toast.error(t('settings.skills.rateLimited'))
+    } else {
+      toast.error(t('settings.skills.loadFailed'))
+    }
   } finally {
     marketLoading.value = false
   }
@@ -289,7 +297,12 @@ async function handleSearch() {
   try {
     searchResults.value = await SkillsService.SearchSkills(query, 30)
   } catch (error) {
-    console.error('Failed to search skills:', error)
+    const msg = getErrorMessage(error)
+    if (msg && (msg.includes('429') || msg.toLowerCase().includes('rate'))) {
+      toast.error(t('settings.skills.rateLimited'))
+    } else {
+      toast.error(t('settings.skills.loadFailed'))
+    }
   } finally {
     isSearching.value = false
   }
@@ -382,13 +395,22 @@ async function showMarketDetail(skill: RemoteSkill) {
     ])
     if (detail.status === 'fulfilled') {
       detailMeta.value = detail.value
+    } else {
+      const msg = detail.reason?.toString() || ''
+      if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
+        toast.error(t('settings.skills.rateLimited'))
+      }
     }
     if (files.status === 'fulfilled') {
       detailFiles.value = files.value
-      // Auto-select SKILL.md
       if (files.value.length > 0) {
         const skillMd = files.value.find((f) => f.path === 'SKILL.md')
         await selectFile(skillMd ? skillMd.path : files.value[0].path)
+      }
+    } else {
+      const msg = files.reason?.toString() || ''
+      if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
+        toast.error(t('settings.skills.rateLimited'))
       }
     }
   } catch {
@@ -481,10 +503,24 @@ const detailSlug = computed(() => {
   return detailRemoteSkill.value?.slug || ''
 })
 
+// Strip YAML frontmatter (--- ... ---) from markdown content
+function stripFrontmatter(content: string): string {
+  const trimmed = content.trimStart()
+  if (!trimmed.startsWith('---')) return content
+  const rest = trimmed.slice(3)
+  const endIdx = rest.indexOf('\n---')
+  if (endIdx === -1) return content
+  return rest.slice(endIdx + 4).trimStart()
+}
+
 // Rendered file content
 const renderedFileContent = computed(() => {
   if (!selectedFilePath.value || isBinaryFile(selectedFilePath.value)) return null
-  return fileContent.value
+  let content = fileContent.value
+  if (isMarkdownFile(selectedFilePath.value)) {
+    content = stripFrontmatter(content)
+  }
+  return content
 })
 
 const isSelectedFileMarkdown = computed(() => isMarkdownFile(selectedFilePath.value))
@@ -526,11 +562,11 @@ watch(activeTab, (tab) => {
 
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
-    <!-- Header bar -->
-    <div class="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
+    <!-- Header bar (hidden in detail view) -->
+    <div v-if="detailView === 'none'" class="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
       <div class="flex items-center gap-2">
         <span class="text-sm font-medium text-foreground">{{ t('settings.skills.title') }}</span>
-        <span class="text-xs text-muted-foreground">{{ t('settings.skills.enableHint') }}</span>
+        <span class="text-xs text-muted-foreground">{{ t('settings.skills.pageDesc') }}</span>
       </div>
       <div class="flex items-center gap-1">
         <button
@@ -559,18 +595,23 @@ watch(activeTab, (tab) => {
     <!-- ==================== DETAIL VIEW ==================== -->
     <template v-if="detailView !== 'none'">
       <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <!-- Detail top bar -->
-        <div class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-          <!-- Left: back + info -->
+        <!-- Row 1: back button -->
+        <div class="flex shrink-0 items-center border-b border-border px-4 py-2">
           <button
-            class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            class="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             @click="goBackFromDetail"
           >
             <ChevronLeft class="size-4" />
+            {{ activeTab === 'installed' ? t('settings.skills.tabInstalled') : t('settings.skills.tabMarket') }}
           </button>
+        </div>
+
+        <!-- Row 2: skill info + actions -->
+        <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+          <!-- Left: name, description, stats -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span class="truncate text-sm font-medium text-foreground">{{ detailName }}</span>
+              <span class="text-base font-semibold text-foreground">{{ detailName }}</span>
               <Badge
                 v-if="detailView === 'installed' && detailSkill"
                 variant="secondary"
@@ -578,83 +619,89 @@ watch(activeTab, (tab) => {
               >
                 {{ sourceLabel(detailSkill.source) }}
               </Badge>
-              <!-- Market stats inline -->
-              <template v-if="detailView === 'market' && detailMeta">
-                <span v-if="detailMeta.ownerName" class="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  <img v-if="detailMeta.ownerImage" :src="detailMeta.ownerImage" class="size-4 rounded-full" alt="" />
-                  <User v-else class="size-3.5" />
-                  {{ detailMeta.ownerName }}
-                </span>
-                <span v-if="detailMeta.downloads" class="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  <Download class="size-3" />
-                  {{ formatNumber(detailMeta.downloads) }}
-                </span>
-                <span v-if="detailMeta.stars" class="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  <Star class="size-3" />
-                  {{ formatNumber(detailMeta.stars) }}
-                </span>
-              </template>
             </div>
-            <p v-if="detailDescription" class="mt-0.5 truncate text-xs text-muted-foreground">
+            <p v-if="detailDescription" class="mt-1 text-xs leading-relaxed text-muted-foreground">
               {{ detailDescription }}
             </p>
+            <!-- Market stats -->
+            <div v-if="detailView === 'market' && detailMeta" class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span v-if="detailMeta.ownerName" class="flex items-center gap-1">
+                <img v-if="detailMeta.ownerImage" :src="detailMeta.ownerImage" class="size-4 rounded-full" alt="" />
+                <User v-else class="size-3.5" />
+                {{ detailMeta.ownerName }}
+              </span>
+              <span v-if="detailMeta.downloads" class="flex items-center gap-1">
+                <Download class="size-3" />
+                {{ formatNumber(detailMeta.downloads) }}
+              </span>
+              <span v-if="detailMeta.stars" class="flex items-center gap-1">
+                <Star class="size-3" />
+                {{ formatNumber(detailMeta.stars) }}
+              </span>
+              <span v-if="detailMeta.installs" class="flex items-center gap-1">
+                <Package class="size-3" />
+                {{ formatNumber(detailMeta.installs) }}
+              </span>
+            </div>
           </div>
 
-          <!-- Right: version + actions -->
-          <div class="flex shrink-0 items-center gap-2">
+          <!-- Right: version + action buttons -->
+          <div class="flex shrink-0 flex-col items-end gap-2">
             <span v-if="detailVersion" class="text-xs text-muted-foreground">v{{ detailVersion }}</span>
 
-            <!-- Installed: open dir + delete -->
-            <template v-if="detailView === 'installed' && detailSkill">
-              <button
-                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                @click="handleOpenSkillDir(detailSkill.slug)"
-              >
-                <FolderOpen class="size-3.5" />
-                {{ t('settings.skills.openDir') }}
-              </button>
-              <button
-                v-if="detailSkill.source === 'market'"
-                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
-                @click="confirmDelete(detailSkill)"
-              >
-                <Trash2 class="size-3.5" />
-                {{ t('settings.skills.delete') }}
-              </button>
-            </template>
-
-            <!-- Market: install / installed / open dir -->
-            <template v-if="detailView === 'market'">
-              <template v-if="detailIsInstalled">
+            <div class="flex items-center gap-2">
+              <!-- Installed: open dir + delete -->
+              <template v-if="detailView === 'installed' && detailSkill">
                 <button
                   class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  @click="handleOpenSkillDir(detailSlug)"
+                  @click="handleOpenSkillDir(detailSkill.slug)"
                 >
                   <FolderOpen class="size-3.5" />
                   {{ t('settings.skills.openDir') }}
                 </button>
-                <span class="rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-                  {{ t('settings.skills.installed') }}
-                </span>
-              </template>
-              <template v-else-if="detailRemoteSkill">
                 <button
-                  v-if="installingSet.has(detailRemoteSkill.slug)"
-                  class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-                  disabled
+                  v-if="detailSkill.source === 'market'"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
+                  @click="confirmDelete(detailSkill)"
                 >
-                  <Loader2 class="size-3 animate-spin" />
-                  {{ t('settings.skills.installing') }}
-                </button>
-                <button
-                  v-else
-                  class="cursor-pointer rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80"
-                  @click="handleInstall(detailRemoteSkill)"
-                >
-                  {{ t('settings.skills.install') }}
+                  <Trash2 class="size-3.5" />
+                  {{ t('settings.skills.delete') }}
                 </button>
               </template>
-            </template>
+
+              <!-- Market: install / installed / open dir -->
+              <template v-if="detailView === 'market'">
+                <template v-if="detailIsInstalled">
+                  <button
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="handleOpenSkillDir(detailSlug)"
+                  >
+                    <FolderOpen class="size-3.5" />
+                    {{ t('settings.skills.openDir') }}
+                  </button>
+                  <span class="rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                    {{ t('settings.skills.installed') }}
+                  </span>
+                </template>
+                <template v-else-if="detailRemoteSkill">
+                  <button
+                    v-if="installingSet.has(detailRemoteSkill.slug)"
+                    class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+                    disabled
+                  >
+                    <Loader2 class="size-3 animate-spin" />
+                    {{ t('settings.skills.installing') }}
+                  </button>
+                  <button
+                    v-else
+                    class="cursor-pointer rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80"
+                    @click="handleInstall(detailRemoteSkill)"
+                  >
+                    {{ t('settings.skills.install') }}
+                  </button>
+                </template>
+              </template>
+            </div>
           </div>
         </div>
 
@@ -668,6 +715,7 @@ watch(activeTab, (tab) => {
             <div
               v-for="file in detailFiles"
               :key="file.path"
+              :title="file.path + '  ' + formatFileSize(file.size)"
               :class="
                 cn(
                   'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-accent/50',
@@ -688,7 +736,7 @@ watch(activeTab, (tab) => {
           </aside>
 
           <!-- Right: file content -->
-          <main class="flex min-w-0 flex-1 flex-col overflow-auto">
+          <main class="skill-file-viewer flex min-w-0 flex-1 flex-col overflow-auto">
             <div v-if="fileLoading" class="flex flex-1 items-center justify-center">
               <Loader2 class="size-5 animate-spin text-muted-foreground" />
             </div>
@@ -701,7 +749,7 @@ watch(activeTab, (tab) => {
             <div v-else-if="isSelectedFileMarkdown" class="p-4">
               <MarkdownRenderer :content="renderedFileContent || ''" />
             </div>
-            <div v-else class="p-0">
+            <div v-else>
               <MarkdownRenderer :content="fileContentAsMarkdown" />
             </div>
           </main>
@@ -970,3 +1018,130 @@ watch(activeTab, (tab) => {
     </AlertDialog>
   </div>
 </template>
+
+<style>
+.skill-file-viewer .markdown-content > :first-child {
+  margin-top: 0 !important;
+}
+
+.skill-file-viewer .code-block-wrapper {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+
+.skill-file-viewer .code-block-wrapper > div:first-child {
+  display: none !important;
+}
+
+.skill-file-viewer .code-block-wrapper pre {
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.skill-file-viewer .code-block-wrapper pre code.hljs {
+  background: transparent !important;
+}
+
+/* Light-theme hljs overrides (github-light palette) */
+.skill-file-viewer .hljs {
+  color: #24292e;
+}
+.skill-file-viewer .hljs-comment,
+.skill-file-viewer .hljs-quote {
+  color: #6a737d;
+  font-style: italic;
+}
+.skill-file-viewer .hljs-keyword,
+.skill-file-viewer .hljs-selector-tag,
+.skill-file-viewer .hljs-type {
+  color: #d73a49;
+}
+.skill-file-viewer .hljs-string,
+.skill-file-viewer .hljs-addition {
+  color: #032f62;
+}
+.skill-file-viewer .hljs-number,
+.skill-file-viewer .hljs-literal,
+.skill-file-viewer .hljs-symbol,
+.skill-file-viewer .hljs-bullet {
+  color: #005cc5;
+}
+.skill-file-viewer .hljs-title,
+.skill-file-viewer .hljs-section {
+  color: #6f42c1;
+}
+.skill-file-viewer .hljs-built_in,
+.skill-file-viewer .hljs-name {
+  color: #005cc5;
+}
+.skill-file-viewer .hljs-attr,
+.skill-file-viewer .hljs-attribute {
+  color: #6f42c1;
+}
+.skill-file-viewer .hljs-variable,
+.skill-file-viewer .hljs-template-variable {
+  color: #e36209;
+}
+.skill-file-viewer .hljs-regexp,
+.skill-file-viewer .hljs-link {
+  color: #032f62;
+}
+.skill-file-viewer .hljs-deletion {
+  color: #b31d28;
+}
+.skill-file-viewer .hljs-meta {
+  color: #6a737d;
+}
+
+/* Dark mode: revert to dark-friendly palette */
+.dark .skill-file-viewer .hljs {
+  color: #e1e4e8;
+}
+.dark .skill-file-viewer .hljs-comment,
+.dark .skill-file-viewer .hljs-quote {
+  color: #8b949e;
+}
+.dark .skill-file-viewer .hljs-keyword,
+.dark .skill-file-viewer .hljs-selector-tag,
+.dark .skill-file-viewer .hljs-type {
+  color: #ff7b72;
+}
+.dark .skill-file-viewer .hljs-string,
+.dark .skill-file-viewer .hljs-addition {
+  color: #a5d6ff;
+}
+.dark .skill-file-viewer .hljs-number,
+.dark .skill-file-viewer .hljs-literal,
+.dark .skill-file-viewer .hljs-symbol,
+.dark .skill-file-viewer .hljs-bullet {
+  color: #79c0ff;
+}
+.dark .skill-file-viewer .hljs-title,
+.dark .skill-file-viewer .hljs-section {
+  color: #d2a8ff;
+}
+.dark .skill-file-viewer .hljs-built_in,
+.dark .skill-file-viewer .hljs-name {
+  color: #79c0ff;
+}
+.dark .skill-file-viewer .hljs-attr,
+.dark .skill-file-viewer .hljs-attribute {
+  color: #d2a8ff;
+}
+.dark .skill-file-viewer .hljs-variable,
+.dark .skill-file-viewer .hljs-template-variable {
+  color: #ffa657;
+}
+.dark .skill-file-viewer .hljs-regexp,
+.dark .skill-file-viewer .hljs-link {
+  color: #a5d6ff;
+}
+.dark .skill-file-viewer .hljs-deletion {
+  color: #ffa198;
+}
+.dark .skill-file-viewer .hljs-meta {
+  color: #8b949e;
+}
+</style>
