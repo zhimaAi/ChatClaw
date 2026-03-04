@@ -746,7 +746,10 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 	}
 
 	if msg.Role == schema.Tool {
-		toolName := msg.Name
+		toolName := msg.ToolName
+		if toolName == "" {
+			toolName = msg.Name
+		}
 		if toolName == "" && msg.ToolCallID != "" {
 			for _, key := range ss.toolOrder {
 				st := ss.toolStatesByKey[key]
