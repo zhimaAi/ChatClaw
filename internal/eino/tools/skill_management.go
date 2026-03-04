@@ -55,10 +55,13 @@ type skillSearchInput struct {
 func (t *skillSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_search",
-		Desc: "Search skills in the marketplace by keyword. Use when the user wants to find or discover new skills.",
+		Desc: selectDesc(
+			"Search skills in the marketplace by keyword. Use when the user wants to find or discover new skills.",
+			"在技能市场中按关键词搜索技能。当用户想查找或发现新技能时使用。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"query": {Type: schema.String, Desc: "Search query (e.g. 'pdf', 'twitter')", Required: true},
-			"limit": {Type: schema.Integer, Desc: "Max results (default 20)", Required: false},
+			"query": {Type: schema.String, Desc: selectDesc("Search query (e.g. 'pdf', 'twitter')", "搜索关键词（如 'pdf'、'twitter'）"), Required: true},
+			"limit": {Type: schema.Integer, Desc: selectDesc("Max results (default 20)", "最大结果数（默认 20）"), Required: false},
 		}),
 	}, nil
 }
@@ -103,9 +106,12 @@ type skillListTool struct {
 func (t *skillListTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_list",
-		Desc: "List installed skills with their enabled status. Use before enabling, disabling, or uninstalling.",
+		Desc: selectDesc(
+			"List installed skills with their enabled status. Use before enabling, disabling, or uninstalling.",
+			"列出已安装技能及其启用状态。在启用、禁用或卸载前使用。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"filter": {Type: schema.String, Desc: "Optional: 'all', 'builtin', 'market', 'local' (default: all)", Required: false},
+			"filter": {Type: schema.String, Desc: selectDesc("Optional: 'all', 'builtin', 'market', 'local' (default: all)", "可选：'all'、'builtin'、'market'、'local'（默认 all）"), Required: false},
 		}),
 	}, nil
 }
@@ -159,10 +165,13 @@ type skillInstallInput struct {
 func (t *skillInstallTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_install",
-		Desc: "Install a skill from the marketplace. Use skill_search first to find the slug.",
+		Desc: selectDesc(
+			"Install a skill from the marketplace. Use skill_search first to find the slug.",
+			"从技能市场安装技能。请先用 skill_search 查找 slug。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"slug":    {Type: schema.String, Desc: "Skill slug (e.g. 'intel-search')", Required: true},
-			"version": {Type: schema.String, Desc: "Version (default: latest)", Required: false},
+			"slug":    {Type: schema.String, Desc: selectDesc("Skill slug (e.g. 'intel-search')", "技能 slug（如 'intel-search'）"), Required: true},
+			"version": {Type: schema.String, Desc: selectDesc("Version (default: latest)", "版本（默认最新）"), Required: false},
 		}),
 	}, nil
 }
@@ -196,9 +205,12 @@ type skillUninstallInput struct {
 func (t *skillUninstallTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_uninstall",
-		Desc: "Uninstall a skill. Only market and local skills can be uninstalled; builtin skills cannot.",
+		Desc: selectDesc(
+			"Uninstall a skill. Only market and local skills can be uninstalled; builtin skills cannot.",
+			"卸载技能。仅市场技能和本地技能可卸载，内置技能不可卸载。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"slug": {Type: schema.String, Desc: "Skill slug to uninstall", Required: true},
+			"slug": {Type: schema.String, Desc: selectDesc("Skill slug to uninstall", "要卸载的技能 slug"), Required: true},
 		}),
 	}, nil
 }
@@ -232,9 +244,12 @@ type skillEnableInput struct {
 func (t *skillEnableTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_enable",
-		Desc: "Enable an installed skill so the AI can use it.",
+		Desc: selectDesc(
+			"Enable an installed skill so the AI can use it.",
+			"启用已安装的技能，使 AI 可以使用它。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"slug": {Type: schema.String, Desc: "Skill slug to enable", Required: true},
+			"slug": {Type: schema.String, Desc: selectDesc("Skill slug to enable", "要启用的技能 slug"), Required: true},
 		}),
 	}, nil
 }
@@ -268,9 +283,12 @@ type skillDisableInput struct {
 func (t *skillDisableTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_disable",
-		Desc: "Disable an installed skill so the AI will not load it.",
+		Desc: selectDesc(
+			"Disable an installed skill so the AI will not load it.",
+			"禁用已安装的技能，AI 将不再加载它。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"slug": {Type: schema.String, Desc: "Skill slug to disable", Required: true},
+			"slug": {Type: schema.String, Desc: selectDesc("Skill slug to disable", "要禁用的技能 slug"), Required: true},
 		}),
 	}, nil
 }
@@ -304,9 +322,12 @@ type skillOpenFolderInput struct {
 func (t *skillOpenFolderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "skill_open_folder",
-		Desc: "Open the skill's directory in the system file manager. Use when the user wants to view or edit skill files.",
+		Desc: selectDesc(
+			"Open the skill's directory in the system file manager. Use when the user wants to view or edit skill files.",
+			"在系统文件管理器中打开技能目录。当用户想查看或编辑技能文件时使用。",
+		),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"slug": {Type: schema.String, Desc: "Skill slug", Required: true},
+			"slug": {Type: schema.String, Desc: selectDesc("Skill slug", "技能 slug"), Required: true},
 		}),
 	}, nil
 }
