@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon } from 'lucide-vue-next'
+import { onMounted, onUnmounted } from 'vue'
 import {
   Select,
   SelectContent,
@@ -135,6 +136,51 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
 }
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const inputContainerRef = ref<HTMLDivElement | null>(null)
+const isDragging = ref(false)
+
+const MAX_IMAGES = 4
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
+const MAX_TOTAL_SIZE = 8 * 1024 * 1024 // 8MB
+
+// Common function to validate and process image files
+const processImageFiles = (files: FileList | File[]): File[] | null => {
+  const fileArray = Array.from(files)
+  
+  // Filter only image files
+  const imageFiles = fileArray.filter(file => file.type.startsWith('image/'))
+  
+  if (imageFiles.length === 0) {
+    toast.error(t('assistant.errors.invalidImageType'))
+    return null
+  }
+
+  // Check total count (including existing pending images)
+  const currentCount = props.pendingImages.length
+  if (currentCount + imageFiles.length > MAX_IMAGES) {
+    toast.error(t('assistant.errors.tooManyImages', { max: MAX_IMAGES }))
+    return null
+  }
+
+  // Validate each file
+  let totalSize = props.pendingImages.reduce((sum, img) => sum + img.size, 0)
+  
+  for (const file of imageFiles) {
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error(t('assistant.errors.imageTooLarge', { max: '2MB' }))
+      return null
+    }
+    totalSize += file.size
+  }
+
+  if (totalSize > MAX_TOTAL_SIZE) {
+    toast.error(t('assistant.errors.imagesTotalTooLarge', { max: '8MB' }))
+    return null
+  }
+
+  return imageFiles
+}
 
 const handleSelectImagesClick = () => {
   fileInputRef.value?.click()
@@ -145,45 +191,93 @@ const handleFilesSelected = async (event: Event) => {
   const files = target.files
   if (!files || files.length === 0) return
 
-  const MAX_IMAGES = 4
-  const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
-  const MAX_TOTAL_SIZE = 8 * 1024 * 1024 // 8MB
-
-  if (files.length > MAX_IMAGES) {
-    toast.error(t('assistant.errors.tooManyImages', { max: MAX_IMAGES }))
-    return
+  const validFiles = processImageFiles(files)
+  if (validFiles) {
+    emit('addImages', validFiles)
   }
-
-  const fileArray = Array.from(files)
-  let totalSize = 0
-
-  for (const file of fileArray) {
-    if (!file.type.startsWith('image/')) {
-      toast.error(t('assistant.errors.invalidImageType'))
-      return
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      toast.error(t('assistant.errors.imageTooLarge', { max: '2MB' }))
-      return
-    }
-    totalSize += file.size
-  }
-
-  if (totalSize > MAX_TOTAL_SIZE) {
-    toast.error(t('assistant.errors.imagesTotalTooLarge', { max: '8MB' }))
-    return
-  }
-
-  emit('addImages', files)
+  
   // Reset input so same file can be selected again
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
   }
 }
 
+// Handle paste event on textarea
+const handlePaste = async (event: ClipboardEvent) => {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const imageFiles: File[] = []
+  
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        imageFiles.push(file)
+      }
+    }
+  }
+
+  if (imageFiles.length > 0) {
+    event.preventDefault() // Prevent pasting image data into textarea
+    const validFiles = processImageFiles(imageFiles)
+    if (validFiles) {
+      emit('addImages', validFiles)
+    }
+  }
+}
+
+// Handle drag and drop events
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+    isDragging.value = true
+  }
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  // Only set isDragging to false if we're leaving the container
+  const relatedTarget = event.relatedTarget as HTMLElement
+  if (!inputContainerRef.value?.contains(relatedTarget)) {
+    isDragging.value = false
+  }
+}
+
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  isDragging.value = false
+
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const validFiles = processImageFiles(files)
+  if (validFiles) {
+    emit('addImages', validFiles)
+  }
+}
+
 const handleRemoveImage = (id: string) => {
   emit('removeImage', id)
 }
+
+// Setup event listeners
+onMounted(() => {
+  if (textareaRef.value) {
+    textareaRef.value.addEventListener('paste', handlePaste)
+  }
+})
+
+onUnmounted(() => {
+  if (textareaRef.value) {
+    textareaRef.value.removeEventListener('paste', handlePaste)
+  }
+})
 </script>
 
 <template>
@@ -211,7 +305,14 @@ const handleRemoveImage = (id: string) => {
       </div>
 
       <div
-        class="w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+        ref="inputContainerRef"
+        :class="cn(
+          'w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
+          isDragging && 'ring-2 ring-primary/50 border-primary/50'
+        )"
+        @dragover="handleDragOver"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop"
       >
         <!-- Image preview area -->
         <div v-if="pendingImages.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
@@ -257,6 +358,7 @@ const handleRemoveImage = (id: string) => {
         </div>
 
         <textarea
+          ref="textareaRef"
           :value="chatInput"
           :placeholder="t('assistant.placeholders.inputPlaceholder')"
           class="min-h-[64px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"

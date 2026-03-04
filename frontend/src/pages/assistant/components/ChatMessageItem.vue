@@ -470,11 +470,12 @@ onUnmounted(() => {
         />
         <!-- Normal display mode -->
         <div v-else class="flex flex-col gap-2">
+          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
           <!-- Image previews -->
           <div
             v-if="images.length > 0"
             ref="imageContainerRef"
-            class="mb-2 flex flex-wrap gap-2"
+            class="mt-2 flex flex-wrap gap-2"
           >
             <div
               v-for="(img, idx) in images"
@@ -498,7 +499,6 @@ onUnmounted(() => {
               />
             </div>
           </div>
-          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
         </div>
       </div>
 
