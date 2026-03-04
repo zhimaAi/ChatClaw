@@ -19,7 +19,10 @@ type globInput struct {
 // NewGlobTool creates a glob tool backed by Backend.
 func NewGlobTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDGlob,
-		"Find files matching a glob pattern. Returns absolute file paths, one per line.",
+		selectDesc(
+			"Find files matching a glob pattern (e.g. '**/*.py', '*.go'). Returns absolute file paths. Use instead of shell find command.",
+			"按 glob 模式查找文件（如 '**/*.py'、'*.go'）。返回绝对路径。替代 shell 的 find 命令。",
+		),
 		func(ctx context.Context, input *globInput) (string, error) {
 			basePath, err := b.ResolvePath(input.Path)
 			if err != nil {
@@ -62,7 +65,8 @@ type grepInput struct {
 // output formatting, and pagination locally for richer output than the base interface.
 func NewGrepTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDGrep,
-		`Search for a pattern in files.
+		selectDesc(
+			`Search for a pattern in files. Use instead of shell grep command. Supports regex, context lines, case-insensitive, output modes.
 
 Usage:
 - The pattern parameter is the text to search for. Treated as regex; falls back to literal match on invalid regex.
@@ -81,6 +85,17 @@ Examples:
 - Search Go files only: grep(pattern="func", glob="*.go")
 - Show context: grep(pattern="error", context_before=3, context_after=3, include_line_numbers=true)
 - Case-insensitive: grep(pattern="readme", ignore_case=true, output_mode="files_with_matches")`,
+			`在文件中搜索模式。替代 shell 的 grep 命令。支持正则、上下文行、忽略大小写、多种输出模式。
+
+用法：
+- pattern：要搜索的文本。按正则处理；正则无效时退化为字面匹配。
+- path：限定搜索的目录或文件（默认主目录）。
+- glob：文件名 glob 过滤（如 "*.go"、"*.ts"）。
+- ignore_case：启用忽略大小写。
+- context_before / context_after：显示匹配行前后上下文（类似 grep -B / -A）。
+- include_line_numbers：每行前加行号。
+- output_mode：输出格式："content"（默认）、"files_with_matches"、"count"。`,
+		),
 		func(ctx context.Context, input *grepInput) (string, error) {
 			if input.Pattern == "" {
 				return "", fmt.Errorf("pattern must not be empty")

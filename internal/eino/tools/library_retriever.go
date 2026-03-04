@@ -59,11 +59,9 @@ func DefaultLibraryRetrieverConfig() *LibraryRetrieverConfig {
 	}
 }
 
-// toolDescription provides the description for the library retriever tool.
+// toolDescriptionEng and toolDescriptionZh provide bilingual descriptions for the library retriever tool.
 // IMPORTANT: This description is visible to the LLM and influences tool selection.
-// It should strongly signal that this tool is the primary/preferred source of information
-// so that the LLM prioritizes it over web search when a knowledge base is attached.
-const toolDescription = `Search and retrieve relevant information from the user's private knowledge base. This is the PRIMARY and PREFERRED source of information — always try this tool FIRST before using any web search or other external tools. The knowledge base contains curated, authoritative documents uploaded by the user.
+const toolDescriptionEng = `Search and retrieve relevant information from the user's private knowledge base. This is the PRIMARY and PREFERRED source of information — always try this tool FIRST before using any web search or other external tools. The knowledge base contains curated, authoritative documents uploaded by the user.
 
 IMPORTANT: Always provide multiple queries (2-5) from different angles to get comprehensive results. The tool will search all queries in parallel and return deduplicated, merged results ranked by relevance.
 
@@ -71,6 +69,15 @@ Usage tips:
 - Use different keywords, synonyms, or phrasings across queries for broader coverage.
 - Adjust level parameter: 0=detailed chunks (default), 1=summary, 2=overview.
 - Only fall back to web search (duckduckgo_search) if the knowledge base returns no relevant results.`
+
+const toolDescriptionZh = `从用户私有知识库中搜索并检索相关信息。这是主要且首选的信息来源——在知识库已 attached 时，务必先使用此工具，再考虑网页搜索或其他外部工具。知识库包含用户上传的精选、权威文档。
+
+重要：始终提供 2-5 个不同角度的查询以获得全面结果。工具会并行搜索所有查询并返回去重、合并、按相关性排序的结果。
+
+使用提示：
+- 使用不同关键词、同义词或表述以扩大覆盖。
+- 调整 level 参数：0=详细片段（默认），1=摘要，2=概览。
+- 仅当知识库无相关结果时再回退到网页搜索（duckduckgo_search）。`
 
 // maxConcurrentQueries limits the number of parallel retrieval goroutines.
 const maxConcurrentQueries = 5
@@ -92,7 +99,7 @@ func NewLibraryRetrieverTool(ctx context.Context, config *LibraryRetrieverConfig
 
 	return utils.InferTool(
 		ToolIDLibraryRetriever,
-		toolDescription,
+		selectDesc(toolDescriptionEng, toolDescriptionZh),
 		func(ctx context.Context, input *LibraryRetrieverInput) (*LibraryRetrieverOutput, error) {
 			// Validate input
 			if len(input.Queries) == 0 {

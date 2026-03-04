@@ -19,7 +19,10 @@ type writeFileInput struct {
 // NewWriteFileTool creates a write_file tool backed by Backend.
 func NewWriteFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDWriteFile,
-		"Create or overwrite a file with the given content. Use absolute paths. Prefer this over shell echo for creating files.",
+		selectDesc(
+			"Create or overwrite a file with the given content. Use absolute paths. Prefer this over shell echo for creating files. Default to working directory when user asks to create files.",
+			"创建或覆盖文件。使用绝对路径。创建文件时优先使用此工具而非 shell echo。用户要求创建文件时默认使用工作目录。",
+		),
 		func(ctx context.Context, input *writeFileInput) (string, error) {
 			filePath, err := b.ResolveWritePath(input.FilePath)
 			if err != nil {
@@ -45,7 +48,10 @@ type editFileInput struct {
 // NewEditFileTool creates an edit_file tool backed by Backend.
 func NewEditFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDEditFile,
-		"Edit a file by replacing exact string matches. If replace_all is false and old_string appears more than once, the call fails (set replace_all=true to replace all).",
+		selectDesc(
+			"Edit a file by replacing exact string matches. If replace_all is false and old_string appears more than once, the call fails (set replace_all=true to replace all).",
+			"通过精确字符串替换编辑文件。若 replace_all 为 false 且 old_string 出现多次，调用会失败（设置 replace_all=true 可全部替换）。",
+		),
 		func(ctx context.Context, input *editFileInput) (string, error) {
 			filePath, err := b.ResolveWritePath(input.FilePath)
 			if err != nil {
@@ -78,7 +84,8 @@ type patchOpInput struct {
 // NewPatchFileTool creates a patch_file tool backed by Backend.
 func NewPatchFileTool(b *Backend) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDPatchFile,
-		`Apply line-based patch operations to a file. Each operation specifies an action (insert, delete, or replace) and a line range.
+		selectDesc(
+			`Apply line-based patch operations to a file. Each operation specifies an action (insert, delete, or replace) and a line range.
 This is more efficient than edit_file when you need to modify specific line ranges, especially for multi-line insertions, deletions, or replacements.
 
 Line numbers are 1-based. Multiple operations can be applied in a single call — they are automatically applied from bottom to top so line numbers stay stable.
@@ -91,6 +98,18 @@ Actions:
 Tips:
 - Always read_file first to know current line numbers before patching.
 - Combine multiple operations in one call for atomic multi-site edits.`,
+			`对文件执行基于行的补丁操作。每个操作指定动作（insert、delete、replace）和行范围。
+修改特定行范围时比 edit_file 更高效，尤其适合多行插入、删除或替换。
+
+行号从 1 开始。单次调用可执行多个操作——会自底向上应用以保持行号稳定。
+
+动作：
+- "insert"：在 start_line 之前插入新行。start_line = total_lines + 1 可追加到末尾。end_line 忽略。
+- "delete"：删除 start_line 到 end_line（含）的行。
+- "replace"：用 content 行替换 start_line 到 end_line（含）的行。
+
+提示：打补丁前先用 read_file 确认当前行号；单次调用可组合多个操作实现原子多位置编辑。`,
+		),
 		func(ctx context.Context, input *patchFileInput) (string, error) {
 			if len(input.Operations) == 0 {
 				return "", fmt.Errorf("operations list must not be empty")

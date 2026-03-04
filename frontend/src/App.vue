@@ -6,6 +6,7 @@ import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
+import SkillsPage from '@/pages/skills/SkillsPage.vue'
 import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
@@ -90,6 +91,7 @@ function handleInAppPopupClick() {
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   knowledge: KnowledgePage,
+  skills: SkillsPage,
   memory: MemoryPage,
   settings: SettingsPage,
   multiask: MultiaskPage,

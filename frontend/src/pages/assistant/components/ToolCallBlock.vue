@@ -34,17 +34,38 @@ const formatJson = (json?: string) => {
 }
 
 const getToolDisplayName = (toolName: string) => {
-  // Map tool IDs to display names
+  // Map tool IDs to display names (keys must match backend tool Name exactly)
   const nameMap: Record<string, string> = {
     calculator: t('tools.calculator.name'),
     duckduckgo_search: t('tools.duckduckgo.name'),
     library_retriever: t('tools.libraryRetriever.name'),
     memory_retriever: t('tools.memoryRetriever.name'),
     execute: t('tools.execute.name'),
+    execute_background: t('tools.executeBackground.name'),
     http_request: t('tools.httpRequest.name'),
-    sequentialthinking: t('tools.sequentialThinking.name'),
+    sequential_thinking: t('tools.sequentialThinking.name'),
+    sequentialthinking: t('tools.sequentialThinking.name'), // eino-ext may use either
     wikipedia_search: t('tools.wikipedia.name'),
     browser_use: t('tools.browserUse.name'),
+    ls: t('tools.ls.name'),
+    read_file: t('tools.readFile.name'),
+    write_file: t('tools.writeFile.name'),
+    edit_file: t('tools.editFile.name'),
+    patch_file: t('tools.patchFile.name'),
+    glob: t('tools.glob.name'),
+    grep: t('tools.grep.name'),
+    skill_search: t('tools.skillSearch.name'),
+    skill_list: t('tools.skillList.name'),
+    skill_install: t('tools.skillInstall.name'),
+    skill_uninstall: t('tools.skillUninstall.name'),
+    skill_enable: t('tools.skillEnable.name'),
+    skill_disable: t('tools.skillDisable.name'),
+    skill_open_folder: t('tools.skillOpenFolder.name'),
+    TaskCreate: t('tools.taskCreate.name'),
+    TaskGet: t('tools.taskGet.name'),
+    TaskUpdate: t('tools.taskUpdate.name'),
+    TaskList: t('tools.taskList.name'),
+    skill: t('tools.skill.name'),
   }
   return nameMap[toolName] ?? toolName
 }

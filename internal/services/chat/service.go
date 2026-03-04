@@ -11,6 +11,7 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/skills"
 	"chatclaw/internal/sqlite"
 
 	"github.com/google/uuid"
@@ -31,6 +32,7 @@ type ChatService struct {
 	app               *application.App
 	toolRegistry      *tools.ToolRegistry
 	bgProcessManager  *tools.BgProcessManager
+	skillsService     *skills.SkillsService
 	activeGenerations sync.Map // map[int64]*activeGeneration
 }
 
@@ -41,6 +43,11 @@ func NewChatService(app *application.App) *ChatService {
 		toolRegistry:     tools.NewToolRegistry(),
 		bgProcessManager: tools.NewBgProcessManager(),
 	}
+}
+
+// SetSkillsService injects the shared skills service instance.
+func (s *ChatService) SetSkillsService(skillsSvc *skills.SkillsService) {
+	s.skillsService = skillsSvc
 }
 
 // Shutdown cleans up all resources held by the ChatService, including

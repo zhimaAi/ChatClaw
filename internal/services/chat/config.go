@@ -10,6 +10,7 @@ import (
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/toolchain"
 
 	"github.com/uptrace/bun"
@@ -149,6 +150,7 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		AgentID:         conv.AgentID,
 		ConversationID:  conversationID,
 		ToolchainBinDir: toolchain.BinDirIfReady(),
+		SkillsEnabled:   settings.GetBool("skills_enabled", true),
 	}
 
 	providerConfig := einoagent.ProviderConfig{
