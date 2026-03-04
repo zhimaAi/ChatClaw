@@ -718,6 +718,8 @@ const confirmDelete = async () => {
     void loadFolderStats()
 
     toast.success(t('knowledge.content.delete.success'))
+    // 删除成功后关闭详情弹窗
+    documentDetailDialogOpen.value = false
   } catch (error) {
     console.error('Failed to delete document:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.delete.failed'))

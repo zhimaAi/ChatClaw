@@ -848,6 +848,7 @@ export default {
       unsupported: '文件类型 "{type}" 不支持查看，请使用外部应用打开。',
       localFileNote: '此文件需要使用外部应用打开。',
       corruptedOrWrongType: '文档可能已损坏或文件类型不匹配（实际内容与 {type} 格式不符），无法预览。请使用外部应用打开。',
+      loadFailedUseExternal: '加载失败，请使用外部打开',
     },
   },
   memory: {

@@ -849,7 +849,9 @@ export default {
       contentNotAvailable: 'Content is not available for viewing. Please open externally.',
       unsupported: 'File type "{type}" is not supported for viewing. Please open externally.',
       localFileNote: 'This file needs to be opened with an external application.',
-      corruptedOrWrongType: 'The document may be corrupted or the file type does not match (actual content does not match {type} format). Cannot preview. Please open externally.',
+      corruptedOrWrongType:
+        'The document may be corrupted or the file type does not match (actual content does not match {type} format). Cannot preview. Please open externally.',
+      loadFailedUseExternal: 'Failed to load. Please open externally.',
     },
   },
   memory: {
