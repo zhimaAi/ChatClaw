@@ -62,8 +62,7 @@ hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('yml', yaml)
 hljs.registerLanguage('dockerfile', dockerfile)
 
-// Import highlight.js styles (using a dark theme that works well with both modes)
-import 'highlight.js/styles/github-dark.css'
+// hljs token styles are in index.css (light/dark switched via .dark class)
 
 const props = defineProps<{
   content: string
@@ -89,11 +88,12 @@ const renderer: Partial<import('marked').RendererObject> = {
     const currentIndex = blockIndex++
 
     return `
-      <div class="code-block-wrapper group relative my-3 overflow-hidden rounded-lg border border-border bg-zinc-950">
-        <div class="flex items-center justify-between border-b border-border/50 bg-zinc-900 px-4 py-2">
-          <span class="text-xs text-zinc-400">${displayLang}</span>
+      <div class="code-block-wrapper group relative my-3 overflow-hidden rounded-lg border border-border" style="background:var(--code-block-bg)">
+        <div class="flex items-center justify-between border-b border-border/50 px-4 py-2" style="background:var(--code-block-header-bg)">
+          <span class="text-xs" style="color:var(--code-block-header-text)">${displayLang}</span>
           <button
-            class="copy-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            class="copy-btn flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+            style="color:var(--code-block-header-text)"
             data-code="${encodeURIComponent(text)}"
             data-index="${currentIndex}"
           >
@@ -318,6 +318,11 @@ const handleClick = (event: MouseEvent) => {
 
 .code-block-wrapper pre {
   max-width: 100%;
+}
+
+.code-block-wrapper .copy-btn:hover {
+  background: var(--code-block-btn-hover-bg);
+  color: var(--code-block-btn-hover-text);
 }
 
 /* Streaming blinking cursor (injected via v-html) */

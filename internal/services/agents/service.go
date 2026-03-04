@@ -2,12 +2,15 @@ package agents
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,12 +137,12 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		Icon:   icon,
 
 		// 允许为空：用户可在「模型设置」里选择
-		DefaultLLMProviderID: "",
-		DefaultLLMModelID:    "",
-		LLMTemperature:       0.5,
-		LLMTopP:              1.0,
-		LLMMaxContextCount:   50,
-		LLMMaxTokens:         1000,
+		DefaultLLMProviderID:    "",
+		DefaultLLMModelID:       "",
+		LLMTemperature:          0.5,
+		LLMTopP:                 1.0,
+		LLMMaxContextCount:      50,
+		LLMMaxTokens:            1000,
 		EnableLLMTemperature:    false,
 		EnableLLMTopP:           false,
 		EnableLLMMaxTokens:      false,
@@ -376,6 +379,98 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 	}
 
 	return nil
+}
+
+// FileEntry represents a file or directory in the workspace tree.
+type FileEntry struct {
+	Name     string      `json:"name"`
+	Path     string      `json:"path"`
+	IsDir    bool        `json:"is_dir"`
+	Children []FileEntry `json:"children,omitempty"`
+}
+
+const workspaceTreeMaxDepth = 3
+
+// idHash produces the same 12-hex-char directory name used by the agent runtime
+// (see internal/eino/agent/agent.go idHash).
+func idHash(id int64) string {
+	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
+	return hex.EncodeToString(h[:6])
+}
+
+// GetWorkspaceDir returns the resolved workspace directory for a given agent and conversation.
+func (s *AgentsService) GetWorkspaceDir(agentID int64, conversationID int64) (string, error) {
+	agent, err := s.GetAgent(agentID)
+	if err != nil {
+		return "", err
+	}
+	workDir := agent.WorkDir
+	if workDir == "" {
+		workDir = defaultWorkDir()
+	}
+	dir := filepath.Join(workDir, "sessions", idHash(agentID))
+	if conversationID > 0 {
+		dir = filepath.Join(dir, idHash(conversationID))
+	}
+	return dir, nil
+}
+
+// ListWorkspaceFiles returns the directory tree for the given agent+conversation workspace.
+func (s *AgentsService) ListWorkspaceFiles(agentID int64, conversationID int64) ([]FileEntry, error) {
+	dir, err := s.GetWorkspaceDir(agentID, conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	info, statErr := os.Stat(dir)
+	if statErr != nil {
+		// A missing workspace directory is expected before any file output is generated.
+		if errors.Is(statErr, os.ErrNotExist) {
+			return []FileEntry{}, nil
+		}
+		return nil, errs.Wrap("error.agent_list_files_failed", statErr)
+	}
+	if !info.IsDir() {
+		return nil, errs.New("error.agent_workspace_dir_invalid")
+	}
+
+	entries, err := readDirTree(dir, workspaceTreeMaxDepth)
+	if err != nil {
+		return nil, errs.Wrap("error.agent_list_files_failed", err)
+	}
+	return entries, nil
+}
+
+// readDirTree recursively reads a directory tree up to maxDepth levels.
+func readDirTree(dir string, maxDepth int) ([]FileEntry, error) {
+	if maxDepth <= 0 {
+		return []FileEntry{}, nil
+	}
+	dirEntries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]FileEntry, 0, len(dirEntries))
+	for _, de := range dirEntries {
+		name := de.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		entry := FileEntry{
+			Name:  name,
+			Path:  filepath.Join(dir, name),
+			IsDir: de.IsDir(),
+		}
+		if de.IsDir() {
+			children, err := readDirTree(filepath.Join(dir, name), maxDepth-1)
+			if err == nil {
+				entry.Children = children
+			}
+		}
+		result = append(result, entry)
+	}
+	return result, nil
 }
 
 func ensureLLMModelExists(ctx context.Context, db *bun.DB, providerID, modelID string) error {

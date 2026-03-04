@@ -45,6 +45,7 @@ type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 const props = defineProps<{
   open: boolean
   agent: Agent | null
+  initialTab?: string
 }>()
 
 const emit = defineEmits<{
@@ -96,7 +97,10 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    tab.value = 'model'
+    const validTabs: TabKey[] = ['model', 'prompt', 'workspace', 'retrieval', 'delete']
+    tab.value = (props.initialTab && validTabs.includes(props.initialTab as TabKey))
+      ? (props.initialTab as TabKey)
+      : 'model'
     void loadModels()
     void AgentsService.GetDefaultWorkDir().then((dir) => {
       defaultWorkDir.value = dir
