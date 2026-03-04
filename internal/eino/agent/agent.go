@@ -89,9 +89,10 @@ type AgentResult struct {
 }
 
 // NewChatModelAgent creates a DeepAgent with built-in WriteTodos, TaskTool,
-// and a general-purpose SubAgent, backed by the project's filesystem Backend.
-// messageCount is the number of historical messages in the conversation;
-// pass 1 (first user message only) to enable one-time system prompt logging.
+// a general-purpose SubAgent, and a plan-execute SubAgent, backed by the
+// project's filesystem Backend. messageCount is the number of historical
+// messages in the conversation; pass 1 (first user message only) to enable
+// one-time system prompt logging.
 func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
@@ -144,16 +145,18 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	handlers := buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
 
 	var subAgents []adk.Agent
-	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, logger); peErr != nil {
+	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, backend, logger); peErr != nil {
 		logger.Warn("[agent] failed to create plan-execute subagent, skipping", "error", peErr)
 	} else {
 		subAgents = append(subAgents, peAgent)
 	}
 
+	instruction := config.Instruction
+
 	deepCfg := &deep.Config{
 		Name:         config.Name,
 		Description:  "AI Assistant",
-		Instruction:  config.Instruction,
+		Instruction:  instruction,
 		ChatModel:    chatModel,
 		MaxIteration: UnlimitedIterations,
 		Backend:      backend,
@@ -411,7 +414,14 @@ func (a *namedAgent) Description(_ context.Context) string  { return a.desc }
 //
 // Architecture: Planner (generate plan) → Executor (execute steps with tools)
 //               → Replanner (evaluate progress, replan or finish)
-func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, logger *slog.Logger) (adk.Agent, error) {
+//
+// NOTE: Planner and Replanner internally use tool_choice=required, which is
+// incompatible with models that only support tool_choice=auto (e.g. models
+// with built-in thinking mode like GLM-5). In such cases the Plan-Execute
+// SubAgent will fail at runtime and the error is returned to the main agent.
+func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, backend *tools.Backend, logger *slog.Logger) (adk.Agent, error) {
+	executorToolsConfig := buildExecutorToolsConfig(toolsConfig, backend, logger)
+
 	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
 		ToolCallingChatModel: chatModel,
 	})
@@ -421,7 +431,7 @@ func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingCh
 
 	executor, err := planexecute.NewExecutor(ctx, &planexecute.ExecutorConfig{
 		Model:         chatModel,
-		ToolsConfig:   toolsConfig,
+		ToolsConfig:   executorToolsConfig,
 		MaxIterations: planExecuteExecutorMaxIter,
 	})
 	if err != nil {
@@ -451,17 +461,53 @@ func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingCh
 	return &namedAgent{Agent: agent, name: "plan-execute", desc: desc}, nil
 }
 
+// buildExecutorToolsConfig merges the main agent's user tools with filesystem
+// tools so the Plan-Execute Executor can read/write files and run commands
+// using the same Backend (and sandbox) as the main agent.
+func buildExecutorToolsConfig(base adk.ToolsConfig, backend *tools.Backend, logger *slog.Logger) adk.ToolsConfig {
+	type toolFactory struct {
+		name string
+		fn   func() (tool.BaseTool, error)
+	}
+	factories := []toolFactory{
+		{"read_file", func() (tool.BaseTool, error) { return tools.NewReadFileTool(backend) }},
+		{"ls", func() (tool.BaseTool, error) { return tools.NewLsTool(backend) }},
+		{"write_file", func() (tool.BaseTool, error) { return tools.NewWriteFileTool(backend) }},
+		{"edit_file", func() (tool.BaseTool, error) { return tools.NewEditFileTool(backend) }},
+		{"patch_file", func() (tool.BaseTool, error) { return tools.NewPatchFileTool(backend) }},
+		{"glob", func() (tool.BaseTool, error) { return tools.NewGlobTool(backend) }},
+		{"grep", func() (tool.BaseTool, error) { return tools.NewGrepTool(backend) }},
+		{"execute", func() (tool.BaseTool, error) { return tools.NewExecuteTool(backend, nil) }},
+	}
+
+	var fsTools []tool.BaseTool
+	for _, f := range factories {
+		t, err := f.fn()
+		if err != nil {
+			logger.Warn("[agent] plan-execute: failed to create filesystem tool", "tool", f.name, "error", err)
+			continue
+		}
+		fsTools = append(fsTools, t)
+	}
+
+	merged := make([]tool.BaseTool, 0, len(base.Tools)+len(fsTools))
+	merged = append(merged, base.Tools...)
+	merged = append(merged, fsTools...)
+
+	return adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools:               merged,
+			ToolCallMiddlewares: base.ToolCallMiddlewares,
+			UnknownToolsHandler: base.UnknownToolsHandler,
+		},
+	}
+}
+
 func selectPlanExecuteDescription() string {
 	if isZhCN() {
-		return "基于「规划-执行-反思」范式的智能体，适用于需要多步骤推理和结构化规划的复杂任务。" +
-			"它先将目标拆解为有序步骤，逐步执行并利用可用工具完成每一步，然后反思执行结果并动态调整计划。" +
-			"适合以下场景：多步骤调研与分析、需要系统性规划的复杂问题、涉及多个工具协同的任务、" +
-			"需要根据中间结果动态调整策略的工作流。（工具：与主代理相同）"
+		return "基于「规划→执行→反思→调整」循环的智能体。先生成完整计划，逐步执行，每步反思并自动修正后续计划。适用于目标宏大的多步骤任务和深度调研。（工具：与主代理相同）"
 	}
-	return "Agent based on the plan-execute-replan paradigm for complex tasks requiring multi-step reasoning and structured planning. " +
-		"It decomposes objectives into ordered steps, executes each step using available tools, then reflects on results and dynamically adjusts the plan. " +
-		"Best for: multi-step research & analysis, complex problems needing systematic planning, tasks involving multiple tool coordination, " +
-		"workflows that require dynamic strategy adjustment based on intermediate results. (Tools: same as main agent)"
+	return "Agent using a plan→execute→reflect→replan loop. Generates a full plan first, executes step by step, reflects after each step and auto-corrects the remaining plan. Best for large multi-step tasks and deep research. (Tools: same as main agent)"
 }
 
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error

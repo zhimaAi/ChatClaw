@@ -264,49 +264,43 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 
 	if zh {
 		prompt += `
-# 任务委派策略
+# 任务委派操作指南
 
-你有一个 'task' 工具可以启动子代理来处理独立的复杂任务。请在以下场景中**主动**使用它：
-
-## 适合委派给子代理的场景
-- **代码搜索与探索**：搜索关键字、查找文件、探索代码结构等
-- **多步骤研究**：需要多次读取文件、搜索、汇总结论的研究任务
-- **独立子任务**：一个复杂请求中可以拆分出来的独立部分（例如"给 A 模块加功能同时修复 B 模块的 bug"，可以并行委派）
-- **重复性操作**：需要在多个文件中执行类似操作的批量任务
-- **后台计算**：数据格式化、汇总报告、批量验证等计算密集型工作
-
-## 不适合委派的场景
-- 简单的单步操作（如读取一个文件、执行一条命令）
-- 需要和用户交互确认的任务
-- 前后步骤高度依赖的串行任务
+## 何时优先委派（而非自己做）
+当任务满足以下**任一**条件时，应优先使用 task 工具委派给子代理，而不是用 write_todos 列清单自己做：
+- 任务需要 **5 步以上**的工具调用才能完成（如写代码 + 安装依赖 + 执行 + 调试 + 输出文件）
+- 任务目标明确且可以**完整描述给子代理**，不需要与用户反复确认
+- 任务涉及**试错和调试**（如生成视频/图片/代码项目），子代理可以在隔离上下文中自主迭代
 
 ## 委派要点
 - 优先并行：当有多个独立子任务时，同时启动多个子代理
-- 描述清晰：给子代理提供清晰的任务描述、预期输出格式
+- 描述清晰：给子代理提供清晰的任务描述、预期输出格式和工作目录路径
 - 结果汇总：子代理返回后，将结果整合并以清晰的方式呈现给用户
+- 简单的单步操作（如读取一个文件、执行一条命令）不需要委派，直接自己做
+
+## 子代理选择
+- 需要多步骤规划的复杂任务（调研、分析、方案设计、内容创作、代码项目等）→ task(plan-execute)
+- 代码搜索、简单查找、独立小任务 → task(general-purpose)
 `
 	} else {
 		prompt += `
-# Task Delegation Strategy
+# Task Delegation Tips
 
-You have a 'task' tool to launch subagents for independent complex tasks. **Proactively** use it in these scenarios:
+## When to Prefer Delegation (over doing it yourself)
+When a task meets **any** of the following conditions, prefer delegating via the task tool rather than using write_todos and doing it yourself:
+- The task requires **5 or more** tool calls to complete (e.g. write code + install deps + execute + debug + output file)
+- The task goal is clear and can be **fully described to a subagent** without needing back-and-forth with the user
+- The task involves **trial and error** (e.g. generating video/images/code projects) where the subagent can iterate autonomously in an isolated context
 
-## Good candidates for delegation
-- **Code search & exploration**: searching keywords, finding files, exploring code structure
-- **Multi-step research**: tasks requiring multiple file reads, searches, and synthesized conclusions
-- **Independent subtasks**: parts of a complex request that can be split and run in parallel (e.g. "add feature to module A and fix bug in module B" — delegate both in parallel)
-- **Repetitive operations**: batch tasks requiring similar operations across multiple files
-- **Background computation**: data formatting, report summarization, batch validation
-
-## Not suitable for delegation
-- Simple single-step operations (reading one file, running one command)
-- Tasks requiring user interaction or confirmation
-- Highly sequential tasks with strong inter-step dependencies
-
-## Delegation tips
+## Tips
 - Prefer parallel: launch multiple subagents simultaneously for independent subtasks
-- Be specific: provide clear task descriptions and expected output format
+- Be specific: provide clear task descriptions, expected output format, and working directory path
 - Synthesize results: after subagents return, integrate and present results clearly to the user
+- Simple single-step operations (reading one file, running one command) don't need delegation — do them yourself
+
+## SubAgent Selection
+- Complex tasks requiring multi-step planning (research, analysis, strategy design, content creation, code projects, etc.) → task(plan-execute)
+- Code search, simple lookups, independent small tasks → task(general-purpose)
 `
 	}
 
