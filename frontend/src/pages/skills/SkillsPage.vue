@@ -122,6 +122,10 @@ const selectedFilePath = ref('')
 const fileContent = ref('')
 const fileLoading = ref(false)
 
+// Guard against stale async results when navigating quickly
+let detailLoadVersion = 0
+let fileLoadVersion = 0
+
 const sortOptions = [
   { value: 'trending', key: 'settings.skills.sortTrending' },
   { value: 'downloads', key: 'settings.skills.sortDownloads' },
@@ -337,26 +341,34 @@ async function selectFile(path: string) {
     return
   }
 
+  const version = ++fileLoadVersion
   fileLoading.value = true
   try {
+    let content = ''
     if (detailView.value === 'installed' && detailSkill.value) {
-      fileContent.value = await SkillsService.ReadSkillFile(detailSkill.value.slug, path)
+      content = await SkillsService.ReadSkillFile(detailSkill.value.slug, path)
     } else if (detailView.value === 'market' && detailRemoteSkill.value) {
-      fileContent.value = await SkillsService.GetRemoteSkillFile(
+      content = await SkillsService.GetRemoteSkillFile(
         detailRemoteSkill.value.slug,
         detailRemoteSkill.value.version || 'latest',
         path,
       )
     }
+    if (version !== fileLoadVersion) return
+    fileContent.value = content
   } catch {
+    if (version !== fileLoadVersion) return
     fileContent.value = ''
   } finally {
-    fileLoading.value = false
+    if (version === fileLoadVersion) {
+      fileLoading.value = false
+    }
   }
 }
 
 // --- Detail: open ---
 async function showInstalledDetail(skill: InstalledSkill) {
+  const version = ++detailLoadVersion
   detailView.value = 'installed'
   detailSkill.value = skill
   detailRemoteSkill.value = null
@@ -366,20 +378,25 @@ async function showInstalledDetail(skill: InstalledSkill) {
   fileContent.value = ''
   detailLoading.value = true
   try {
-    detailFiles.value = await SkillsService.ListSkillFiles(skill.slug)
-    // Auto-select SKILL.md
-    if (detailFiles.value.length > 0) {
-      const skillMd = detailFiles.value.find((f) => f.path === 'SKILL.md')
-      await selectFile(skillMd ? skillMd.path : detailFiles.value[0].path)
+    const files = await SkillsService.ListSkillFiles(skill.slug)
+    if (version !== detailLoadVersion) return
+    detailFiles.value = files
+    if (files.length > 0) {
+      const skillMd = files.find((f) => f.path === 'SKILL.md')
+      await selectFile(skillMd ? skillMd.path : files[0].path)
     }
   } catch {
+    if (version !== detailLoadVersion) return
     detailFiles.value = []
   } finally {
-    detailLoading.value = false
+    if (version === detailLoadVersion) {
+      detailLoading.value = false
+    }
   }
 }
 
 async function showMarketDetail(skill: RemoteSkill) {
+  const version = ++detailLoadVersion
   detailView.value = 'market'
   detailRemoteSkill.value = skill
   detailSkill.value = null
@@ -393,6 +410,7 @@ async function showMarketDetail(skill: RemoteSkill) {
       SkillsService.GetSkillDetail(skill.slug),
       SkillsService.GetRemoteSkillFiles(skill.slug, skill.version || 'latest'),
     ])
+    if (version !== detailLoadVersion) return
     if (detail.status === 'fulfilled') {
       detailMeta.value = detail.value
     } else {
@@ -416,7 +434,9 @@ async function showMarketDetail(skill: RemoteSkill) {
   } catch {
     // ignore
   } finally {
-    detailLoading.value = false
+    if (version === detailLoadVersion) {
+      detailLoading.value = false
+    }
   }
 }
 
@@ -430,6 +450,8 @@ async function handleOpenSkillDir(slug: string) {
 }
 
 function goBackFromDetail() {
+  ++detailLoadVersion
+  ++fileLoadVersion
   detailView.value = 'none'
   detailSkill.value = null
   detailRemoteSkill.value = null
@@ -637,10 +659,6 @@ watch(activeTab, (tab) => {
               <span v-if="detailMeta.stars" class="flex items-center gap-1">
                 <Star class="size-3" />
                 {{ formatNumber(detailMeta.stars) }}
-              </span>
-              <span v-if="detailMeta.installs" class="flex items-center gap-1">
-                <Package class="size-3" />
-                {{ formatNumber(detailMeta.installs) }}
               </span>
             </div>
           </div>
@@ -942,6 +960,7 @@ watch(activeTab, (tab) => {
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-foreground">{{ skill.displayName || skill.slug }}</span>
+                    <span v-if="skill.displayName && skill.displayName !== skill.slug" class="text-[10px] text-muted-foreground/60">{{ skill.slug }}</span>
                     <span v-if="skill.version" class="text-[10px] text-muted-foreground">v{{ skill.version }}</span>
                   </div>
                   <p v-if="skill.summary" class="mt-1 line-clamp-2 text-xs text-muted-foreground">
