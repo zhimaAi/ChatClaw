@@ -107,6 +107,7 @@ export default {
     retry: 'Retry',
     notConfigured: 'Not configured',
     longPressToDrag: 'Long press to drag and reorder',
+    modelSettings: 'Model Settings',
   },
   tabs: {
     newTab: 'New Tab',
@@ -136,6 +137,7 @@ export default {
       modelService: 'Model Service',
       generalSettings: 'General Settings',
       memorySettings: 'Long-term Memory',
+      skills: 'Skills',
       snapSettings: 'Snap Settings',
       tools: 'Tools',
       about: 'About Us',
@@ -187,6 +189,14 @@ export default {
       rebuildFailed: 'Failed to rebuild memory vectors',
       confirmRebuildTitle: 'Confirm Rebuild Memory Vectors',
       confirmRebuildDesc: 'You have changed the embedding model or dimension, which requires recalculating vector data for all existing memories. This process may take some time. Do you want to continue?',
+    },
+    // Skills settings
+    skills: {
+      title: 'Skills',
+      enable: 'Enable Skills',
+      enableHint: 'When enabled, the AI assistant will automatically load and use installed skills during conversations.',
+      directory: 'Skills Directory',
+      directoryHint: 'Place downloaded skill folders into this directory. They will be automatically detected and loaded during AI conversations.',
     },
     // Snap settings
     snap: {

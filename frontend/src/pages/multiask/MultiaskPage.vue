@@ -10,6 +10,9 @@ import ModelSelector from './components/ModelSelector.vue'
 import ColumnToggle from './components/ColumnToggle.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import MessageInput from './components/MessageInput.vue'
+import ModelSettingsDialog from './components/ModelSettingsDialog.vue'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Settings } from 'lucide-vue-next'
 import { MultiaskService } from '../../../bindings/chatclaw/internal/services/multiask'
 import { useNavigationStore } from '@/stores'
 
@@ -33,6 +36,8 @@ const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
  */
 const STORAGE_KEY_MODEL_ORDER = 'chatclaw:multiask:model-order'
 const STORAGE_KEY_SELECTED_MODELS = 'chatclaw:multiask:selected-models'
+const STORAGE_KEY_ENABLED_MODELS = 'chatclaw:multiask:enabled-models'
+const STORAGE_KEY_DISABLED_MODELS = 'chatclaw:multiask:disabled-models'
 
 /**
  * 服务是否已初始化
@@ -83,100 +88,122 @@ const isChineseLocale = () => {
 }
 
 /**
- * 中文环境优先的模型（按优先级排序）
+ * 所有模型的基础配置（单一数据源，便于维护）
  */
-const chineseFirstModels: AIModel[] = [
-  {
+const allModels: Record<AIModel['id'], AIModel> = {
+  deepseek: {
     id: 'deepseek',
     name: 'deepseek',
     icon: 'model-deepseek',
     displayName: 'DeepSeek',
     url: 'https://chat.deepseek.com/',
   },
-  {
+  doubao: {
     id: 'doubao',
     name: 'doubao',
     icon: 'model-doubao',
     displayName: '豆包',
     url: 'https://www.doubao.com/chat/',
   },
-  {
+  qwen: {
     id: 'qwen',
     name: 'qwen',
     icon: 'model-qwen',
     displayName: '通义千问',
     url: 'https://www.qianwen.com/',
   },
-  {
+  kimi: {
+    id: 'kimi',
+    name: 'kimi',
+    icon: 'model-kimi',
+    displayName: 'Kimi',
+    url: 'https://www.kimi.com/',
+  },
+  yuanbao: {
+    id: 'yuanbao',
+    name: 'yuanbao',
+    icon: 'model-yuanbao',
+    displayName: '元宝',
+    url: 'https://yuanbao.tencent.com/',
+  },
+  openai: {
     id: 'openai',
     name: 'chatgpt',
     icon: 'model-chatgpt',
     displayName: 'ChatGPT',
     url: 'https://chatgpt.com/',
   },
-  {
+  google: {
     id: 'google',
     name: 'gemini',
     icon: 'model-gemini',
     displayName: 'Gemini',
     url: 'https://gemini.google.com/',
   },
-  {
+  anthropic: {
     id: 'anthropic',
     name: 'claude',
     icon: 'model-claude',
     displayName: 'Claude',
     url: 'https://claude.ai/',
   },
+}
+
+/**
+ * 中文环境优先的模型顺序（按优先级排序）
+ */
+const chineseFirstModelOrder: AIModel['id'][] = [
+  'deepseek',
+  'doubao',
+  'qwen',
+  'kimi',
+  'yuanbao',
+  'openai',
+  'google',
+  'anthropic',
 ]
+
+/**
+ * 非中文环境优先的模型顺序（按优先级排序）
+ */
+const englishFirstModelOrder: AIModel['id'][] = [
+  'openai',
+  'google',
+  'anthropic',
+  'deepseek',
+  'doubao',
+  'qwen',
+  'kimi',
+  'yuanbao',
+]
+
+
+/**
+ * 根据模型顺序和可选覆盖生成最终的模型数组
+ */
+const buildModelsByOrder = (
+  order: AIModel['id'][],
+  overrides?: Partial<Record<AIModel['id'], Partial<AIModel>>>
+): AIModel[] => {
+  return order
+    .map((id) => {
+      const base = allModels[id]
+      if (!base) return null
+      const override = overrides?.[id]
+      return override ? { ...base, ...override } : base
+    })
+    .filter((model): model is AIModel => model !== null)
+}
+
+/**
+ * 中文环境优先的模型（按优先级排序）
+ */
+const chineseFirstModels: AIModel[] = buildModelsByOrder(chineseFirstModelOrder)
 
 /**
  * 非中文环境优先的模型（按优先级排序）
  */
-const englishFirstModels: AIModel[] = [
-  {
-    id: 'openai',
-    name: 'chatgpt',
-    icon: 'model-chatgpt',
-    displayName: 'ChatGPT',
-    url: 'https://chatgpt.com/',
-  },
-  {
-    id: 'google',
-    name: 'gemini',
-    icon: 'model-gemini',
-    displayName: 'Gemini',
-    url: 'https://gemini.google.com/',
-  },
-  {
-    id: 'anthropic',
-    name: 'claude',
-    icon: 'model-claude',
-    displayName: 'Claude',
-    url: 'https://claude.ai/',
-  },
-  {
-    id: 'deepseek',
-    name: 'deepseek',
-    icon: 'model-deepseek',
-    displayName: 'DeepSeek',
-    url: 'https://chat.deepseek.com/',
-  },
-  {
-    id: 'doubao',
-    name: 'doubao',
-    icon: 'model-doubao',
-    displayName: '豆包',
-    url: 'https://www.doubao.com/chat/',
-  },
-  {
-    id: 'qwen',
-    name: 'qwen',
-    icon: 'model-qwen',
-    displayName: '通义千问',
-    url: 'https://www.qianwen.com/',
-  },
-]
+const englishFirstModels: AIModel[] = buildModelsByOrder(englishFirstModelOrder)
 
 /**
  * 获取默认模型列表（按语言环境排序）
@@ -212,6 +239,47 @@ const saveCustomOrder = (models: AIModel[]) => {
     localStorage.setItem(STORAGE_KEY_MODEL_ORDER, JSON.stringify(order))
   } catch (err) {
     console.warn('[MultiaskPage] Failed to save custom order:', err)
+  }
+}
+
+/**
+ * 从 localStorage 读取关闭的模型 ID（支持从旧的 enabled-models 迁移）
+ */
+const loadDisabledModels = (allModelsList: AIModel[]): string[] => {
+  try {
+    const disabledSaved = localStorage.getItem(STORAGE_KEY_DISABLED_MODELS)
+    if (disabledSaved) {
+      const ids = JSON.parse(disabledSaved) as string[]
+      if (Array.isArray(ids)) {
+        return ids
+      }
+    }
+
+    // 从旧的 enabled-models 迁移
+    const enabledSaved = localStorage.getItem(STORAGE_KEY_ENABLED_MODELS)
+    if (enabledSaved) {
+      const enabledIds = JSON.parse(enabledSaved) as string[]
+      if (Array.isArray(enabledIds)) {
+        const disabledIds = allModelsList.map(m => m.id).filter(id => !enabledIds.includes(id))
+        localStorage.setItem(STORAGE_KEY_DISABLED_MODELS, JSON.stringify(disabledIds))
+        localStorage.removeItem(STORAGE_KEY_ENABLED_MODELS)
+        return disabledIds
+      }
+    }
+  } catch (err) {
+    console.warn('[MultiaskPage] Failed to load disabled models:', err)
+  }
+  return []
+}
+
+/**
+ * 保存关闭的模型 ID 到 localStorage
+ */
+const saveDisabledModels = (ids: string[]) => {
+  try {
+    localStorage.setItem(STORAGE_KEY_DISABLED_MODELS, JSON.stringify(ids))
+  } catch (err) {
+    console.warn('[MultiaskPage] Failed to save disabled models:', err)
   }
 }
 
@@ -305,9 +373,71 @@ const getInitialSelectedIds = () => {
 const availableModels = ref<AIModel[]>(getInitialModels())
 
 /**
+ * 隐藏的模型 ID 列表
+ */
+const disabledModelIds = ref<string[]>(
+  loadDisabledModels(availableModels.value)
+)
+
+/**
+ * 开启的模型 ID 列表（通过剔除隐藏模型计算得出）
+ */
+const enabledModelIds = computed(() => {
+  return availableModels.value.map(m => m.id).filter(id => !disabledModelIds.value.includes(id))
+})
+
+/**
+ * 显示在选择器中的可用模型（已开启的）
+ */
+const visibleAvailableModels = computed(() => {
+  return availableModels.value.filter((model) => enabledModelIds.value.includes(model.id))
+})
+
+/**
  * 选中的模型 ID 列表
  */
 const selectedModelIds = ref<string[]>(getInitialSelectedIds())
+
+/**
+ * 设置弹窗状态
+ */
+const isSettingsOpen = ref(false)
+
+/**
+ * 是否应该显示原生面板（当前标签页激活且没有打开遮挡的弹窗）
+ */
+const shouldShowPanels = computed(() => isTabActive.value && !isSettingsOpen.value)
+
+/**
+ * 处理设置保存
+ */
+const handleSaveSettings = async (models: AIModel[], enabledIds: string[]) => {
+  availableModels.value = models
+  saveCustomOrder(models)
+
+  // 通过开启的模型列表，计算出被隐藏的模型
+  const disabledIds = models.map(m => m.id).filter(id => !enabledIds.includes(id))
+  disabledModelIds.value = disabledIds
+  saveDisabledModels(disabledIds)
+
+  // 确保选中的模型都在开启列表中
+  const newSelectedIds = selectedModelIds.value.filter((id) => enabledIds.includes(id))
+
+  // 如果选中的都被关闭了，至少选一个（如果有开启的话）
+  if (newSelectedIds.length === 0 && enabledIds.length > 0) {
+    newSelectedIds.push(enabledIds[0])
+  }
+
+  if (newSelectedIds.length !== selectedModelIds.value.length) {
+    selectedModelIds.value = newSelectedIds
+    columnCount.value = newSelectedIds.length
+    saveSelectedModels(newSelectedIds)
+  }
+
+  // 等待 DOM 更新后重新计算并更新所有 WebView 位置
+  await nextTick()
+  await updateAllPanelBounds()
+}
 
 /**
  * 当前分栏数（1/2/3列）
@@ -344,22 +474,8 @@ const createdPanelIds = ref<Set<string>>(new Set())
  * 获取选中的模型详情
  */
 const selectedModels = computed(() => {
-  return availableModels.value.filter((model) => selectedModelIds.value.includes(model.id))
+  return visibleAvailableModels.value.filter((model) => selectedModelIds.value.includes(model.id))
 })
-
-/**
- * 处理模型排序变化（拖拽排序）
- * 保存自定义顺序到 localStorage
- * 并更新 WebView 面板位置
- */
-const handleReorderModels = async (reorderedModels: AIModel[]) => {
-  availableModels.value = reorderedModels
-  saveCustomOrder(reorderedModels)
-
-  // 等待 DOM 更新后重新计算并更新所有 WebView 位置
-  await nextTick()
-  await updateAllPanelBounds()
-}
 
 /**
  * 更新所有可见面板的 WebView 位置
@@ -483,6 +599,11 @@ const createPanel = async (
     )
     createdPanelIds.value.add(panelId)
     console.log(`[MultiaskPage] Successfully created panel: ${panelId}`)
+
+    // 如果当前不应该显示面板，则立即隐藏
+    if (!shouldShowPanels.value) {
+      await hidePanel(model.id)
+    }
   } catch (err) {
     console.error(`[MultiaskPage] Failed to create panel ${panelId}:`, err)
   }
@@ -656,13 +777,15 @@ watch(
       if (!oldIds.has(model.id)) {
         const panelId = getPanelId(model.id)
         if (createdPanelIds.value.has(panelId)) {
-          await showPanel(model.id)
-          // 更新位置
-          const panelRef = chatPanelRefs.value[model.id]
-          if (panelRef?.getBounds) {
-            const bounds = panelRef.getBounds()
-            if (bounds) {
-              await updatePanelBounds(model.id, bounds)
+          if (shouldShowPanels.value) {
+            await showPanel(model.id)
+            // 更新位置
+            const panelRef = chatPanelRefs.value[model.id]
+            if (panelRef?.getBounds) {
+              const bounds = panelRef.getBounds()
+              if (bounds) {
+                await updatePanelBounds(model.id, bounds)
+              }
             }
           }
         }
@@ -673,16 +796,16 @@ watch(
 )
 
 /**
- * Monitor tab active state to hide/show native WebView panels.
- * Native WebViews are rendered outside the DOM tree, so v-show cannot hide them.
- * We need to call backend methods to explicitly hide/show them when switching tabs.
+ * Monitor shouldShowPanels state to hide/show native WebView panels.
+ * Native WebViews are rendered outside the DOM tree, so they block dialogs.
+ * We need to call backend methods to explicitly hide/show them.
  */
-watch(isTabActive, async (active, wasActive) => {
-  if (active === wasActive) return
+watch(shouldShowPanels, async (shouldShow, wasShowing) => {
+  if (shouldShow === wasShowing) return
   
-  if (active) {
-    // Tab is now active - show all visible panels
-    console.log('[MultiaskPage] Tab activated, showing all panels')
+  if (shouldShow) {
+    // Should show - show all visible panels
+    console.log('[MultiaskPage] Panels should show, showing all panels')
     for (const model of visibleModels.value) {
       await showPanel(model.id)
       // Update bounds in case layout changed while hidden
@@ -695,8 +818,8 @@ watch(isTabActive, async (active, wasActive) => {
       }
     }
   } else {
-    // Tab is now hidden - hide all panels
-    console.log('[MultiaskPage] Tab deactivated, hiding all panels')
+    // Should hide - hide all panels
+    console.log('[MultiaskPage] Panels should hide, hiding all panels')
     for (const panelId of createdPanelIds.value) {
       try {
         await MultiaskService.HidePanel(panelId)
@@ -723,14 +846,31 @@ onUnmounted(() => {
     >
       <!-- 模型选择器 -->
       <ModelSelector
-        :models="availableModels"
+        :models="visibleAvailableModels"
         :selected-ids="selectedModelIds"
         @toggle="handleToggleModel"
-        @reorder="handleReorderModels"
       />
 
-      <!-- 分栏切换 -->
-      <ColumnToggle v-model="columnCount" />
+      <!-- 分栏切换与设置 -->
+      <div class="flex items-center gap-2">
+        <TooltipProvider :delay-duration="300">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="isSettingsOpen = true"
+              >
+                <Settings class="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {{ t('multiask.modelSettings') }}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <ColumnToggle v-model="columnCount" />
+      </div>
     </div>
 
     <!-- 聊天面板区域 -->
@@ -766,5 +906,13 @@ onUnmounted(() => {
         />
       </div>
     </div>
+
+    <!-- 模型设置弹窗 -->
+    <ModelSettingsDialog
+      v-model:open="isSettingsOpen"
+      :models="availableModels"
+      :enabled-ids="enabledModelIds"
+      @save="handleSaveSettings"
+    />
   </div>
 </template>

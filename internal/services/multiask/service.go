@@ -1,11 +1,11 @@
 package multiask
 
 import (
+	"chatclaw/pkg/webviewpanel"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
-
-	"chatclaw/pkg/webviewpanel"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -137,20 +137,32 @@ func (s *MultiaskService) CreatePanel(id, name, displayName, url string, bounds 
 		"height", bounds.Height,
 	)
 
+	// Standard Chrome User-Agent for sites that block embedded browsers
+	chromeUserAgent := ""
+	if strings.Contains(url, "yuanbao.tencent.com") {
+		chromeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	}
 	panel := s.manager.NewPanel(webviewpanel.WebviewPanelOptions{
-		Name:    id,
-		X:       bounds.X,
-		Y:       bounds.Y,
-		Width:   bounds.Width,
-		Height:  bounds.Height,
-		URL:     url,
-		Visible: &visible,
-		ZIndex:  1,
+		Name:      id,
+		X:         bounds.X,
+		Y:         bounds.Y,
+		Width:     bounds.Width,
+		Height:    bounds.Height,
+		URL:       url,
+		Visible:   &visible,
+		ZIndex:    1,
+		UserAgent: chromeUserAgent,
+		// DevToolsEnabled:        boolPtr(true),
+		// OpenInspectorOnStartup: true,
 	})
 
 	s.panels[id] = panel
 	s.app.Logger.Info("[MultiaskService] Panel created successfully", "id", id)
 	return nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 // UpdatePanelBounds 更新面板位置和大小
@@ -298,8 +310,11 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
     const isQwen = hostname.includes('qianwen.com') || hostname.includes('tongyi.aliyun.com');
     const isClaude = hostname.includes('claude.ai');
     const isDeepSeek = hostname.includes('deepseek.com');
+    const isKimi = hostname.includes('kimi.com');
+    const isYuanbao = hostname.includes('yuanbao.tencent.com');
+    const isGLM = hostname.includes('zhipuai.cn');
     
-    console.log('[ChatClaw] Detected site:', { hostname, isChatGPT, isDoubao, isQwen, isClaude, isDeepSeek });
+    console.log('[ChatClaw] Detected site:', { hostname, isChatGPT, isDoubao, isQwen, isClaude, isDeepSeek, isKimi, isYuanbao, isGLM });
     
     // 根据网站选择不同的输入框选择器
     let inputSelectors = [];
@@ -410,6 +425,61 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
             '[class*="InputArea"] button',
             'div[class*="chat-input"] button',
             '[class*="send"] button',
+            'button:has(svg)',
+        ];
+    } else if (isKimi) {
+        inputSelectors = [
+            // Kimi 输入框
+            'div[contenteditable="true"]',
+            'textarea[placeholder*="输入"]',
+            'textarea[placeholder*="问"]',
+            '[class*="editor"] div[contenteditable]',
+            '[class*="input"] textarea',
+            'textarea',
+        ];
+        sendButtonSelectors = [
+            // Kimi 发送按钮
+            'button[class*="send"]',
+            '[class*="send"] button',
+            'button:has(svg[class*="send"])',
+            'button[aria-label*="发送"]',
+            'button[aria-label*="Send"]',
+            'button:has(svg)',
+        ];
+    } else if (isYuanbao) {
+        inputSelectors = [
+            // 腾讯元宝输入框
+            'textarea[placeholder*="输入"]',
+            'textarea[placeholder*="问"]',
+            'div[contenteditable="true"]',
+            '[class*="input"] textarea',
+            '[class*="editor"] div[contenteditable]',
+            'textarea',
+        ];
+        sendButtonSelectors = [
+            // 元宝发送按钮
+            'button[class*="send"]',
+            '[class*="send"] button',
+            'button[aria-label*="发送"]',
+            'button[type="submit"]',
+            'button:has(svg)',
+        ];
+    } else if (isGLM) {
+        inputSelectors = [
+            // 智谱 GLM / z.ai 输入框
+            'textarea[placeholder*="输入"]',
+            'textarea[placeholder*="问"]',
+            'div[contenteditable="true"]',
+            '[class*="chat-input"] textarea',
+            '[class*="input"] textarea',
+            'textarea',
+        ];
+        sendButtonSelectors = [
+            // GLM 发送按钮
+            'button[class*="send"]',
+            '[class*="send"] button',
+            'button[aria-label*="发送"]',
+            'button[type="submit"]',
             'button:has(svg)',
         ];
     } else {
@@ -637,9 +707,9 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
                 return;
             }
             
-            // 豆包、DeepSeek 优先使用 Enter 键发送
-            if (isDoubao || isDeepSeek) {
-                console.log('[ChatClaw] Using Enter key to send (Doubao/DeepSeek)...');
+            // 豆包、DeepSeek、Kimi、元宝、GLM 优先使用 Enter 键发送
+            if (isDoubao || isDeepSeek || isKimi || isYuanbao || isGLM) {
+                console.log('[ChatClaw] Using Enter key to send (Doubao/DeepSeek/Kimi/Yuanbao/GLM)...');
                 input.focus();
                 
                 // 模拟 Enter 键按下
@@ -712,6 +782,19 @@ func (s *MultiaskService) SendMessageToPanel(id, message string) error {
 })();
 `, message)
 
+	navigationInterceptorJS := `
+	(function() {
+	    window.open = function(url) { window.location.href = url; return window; };
+	    document.addEventListener('click', (e) => {
+	        let a = e.target.closest('a');
+	        if (a && a.target === '_blank') {
+	            e.preventDefault();
+	            window.location.href = a.href;
+	        }
+	    }, true);
+	})();
+	`
+	panel.ExecJS(navigationInterceptorJS)
 	panel.ExecJS(js)
 	return nil
 }

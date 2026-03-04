@@ -8,6 +8,7 @@ export type SettingsMenuItem =
   | 'modelService'
   | 'generalSettings'
   | 'memorySettings'
+  | 'skills'
   | 'snapSettings'
   | 'tools'
   | 'about'

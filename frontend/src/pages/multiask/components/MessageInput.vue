@@ -4,7 +4,6 @@
  * 仅支持文本输入和发送
  */
 import { computed, ref } from 'vue'
-import { cn } from '@/lib/utils'
 
 interface Props {
   placeholder?: string
@@ -60,46 +59,41 @@ defineExpose({ focus })
 </script>
 
 <template>
+  <!-- 高度与原先一致：padding + 约 48px 输入区 + 约 32px 按钮行 -->
   <div
-    class="flex w-full flex-col gap-4 rounded-2xl border-2 border-border bg-background px-3 py-2.5 shadow-sm"
+    class="relative flex min-h-[116px] w-full flex-col rounded-2xl border-2 border-border bg-background px-3 py-2.5 shadow-sm"
   >
-    <!-- 输入区域 -->
+    <!-- 输入区域：保持原 min-h，右侧留出发送按钮空间 -->
     <textarea
       ref="inputRef"
       v-model="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
-      rows="2"
-      class="min-h-[48px] w-full resize-none bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      class="min-h-[48px] min-w-0 flex-1 resize-none bg-transparent pr-11 text-base text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
       @keydown="handleKeydown"
     />
 
-    <!-- 工具栏 -->
-    <div class="flex items-center justify-end">
-      <!-- 发送按钮 -->
-      <button
-        type="button"
-        :class="
-          cn(
-            'flex size-8 items-center justify-center rounded-full p-[5px] transition-colors',
-            canSend
-              ? 'cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'cursor-not-allowed bg-[#d8dde5] text-white'
-          )
-        "
-        :disabled="!canSend"
-        @click="handleSend"
-      >
-        <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" class="size-[22px]">
-          <path
-            d="M11 18V4M11 4L5 10M11 4L17 10"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-    </div>
+    <!-- 发送按钮：绝对定位，不占用盒子高度 -->
+    <button
+      type="button"
+      class="absolute bottom-2.5 right-2.5 flex size-8 items-center justify-center rounded-full p-[5px] transition-colors"
+      :class="
+        canSend
+          ? 'cursor-pointer bg-primary text-primary-foreground hover:bg-primary/90'
+          : 'cursor-not-allowed bg-[#d8dde5] text-white'
+      "
+      :disabled="!canSend"
+      @click="handleSend"
+    >
+      <svg viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" class="size-[22px]">
+        <path
+          d="M11 18V4M11 4L5 10M11 4L17 10"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </button>
   </div>
 </template>

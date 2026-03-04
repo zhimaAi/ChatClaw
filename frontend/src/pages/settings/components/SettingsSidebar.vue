@@ -9,6 +9,7 @@ import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
 import MemorySettingsIcon from '@/assets/icons/memory.svg'
+import SkillsIcon from '@/assets/icons/skills.svg'
 import SnapSettingsIcon from '@/assets/icons/snap-settings.svg'
 import ToolsIcon from '@/assets/icons/tools.svg'
 import AboutIcon from '@/assets/icons/about.svg'
@@ -29,6 +30,7 @@ const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
+  { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
   { id: 'tools', labelKey: 'settings.menu.tools', icon: ToolsIcon, guiOnly: true },
   { id: 'about', labelKey: 'settings.menu.about', icon: AboutIcon },
