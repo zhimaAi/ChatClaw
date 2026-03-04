@@ -160,6 +160,8 @@ func (s *SkillsService) DisableSkill(slug string) error {
 }
 
 func (s *SkillsService) ListInstalledSkills(filter string) ([]InstalledSkill, error) {
+	_ = s.SyncInstalledSkills()
+
 	db := s.db()
 	ctx := context.Background()
 
@@ -385,9 +387,6 @@ func skillFileLess(a, b string) int {
 
 // RefreshSkills syncs the filesystem and returns the full installed list.
 func (s *SkillsService) RefreshSkills() ([]InstalledSkill, error) {
-	if err := s.SyncInstalledSkills(); err != nil {
-		return nil, err
-	}
 	return s.ListInstalledSkills("all")
 }
 

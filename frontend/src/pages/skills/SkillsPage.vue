@@ -874,8 +874,8 @@ watch(activeTab, (tab) => {
                     @update:model-value="() => handleToggleSkill(skill)"
                   />
                   <button
-                    v-if="skill.source === 'market'"
-                    class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                    v-if="skill.source === 'market' || skill.source === 'local'"
+                    class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                     @click="confirmDelete(skill)"
                   >
                     <Trash2 class="size-3.5" />
