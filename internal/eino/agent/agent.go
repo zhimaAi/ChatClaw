@@ -39,7 +39,7 @@ const (
 	reductionDir   = "reduction"        // reduction middleware offload directory
 	tasksDir       = "tasks"            // plantask middleware data directory
 	transcriptFile = "transcript.jsonl" // summarization transcript filename
-	skillsRelDir   = ".agents/skills"   // skills directory relative to $HOME
+	skillsRelDir   = ".chatclaw/skills"  // skills directory relative to $HOME
 	codexBinName   = "codex"            // codex sandbox binary name (without .exe)
 	sandboxCodex   = "codex"            // SandboxMode value for codex sandbox
 )
@@ -79,6 +79,7 @@ type Config struct {
 	ConversationID int64 // Conversation database ID (used to generate session subdirectory)
 
 	ToolchainBinDir string // Directory containing managed tool binaries (uv, bun, etc.)
+	SkillsEnabled   bool   // Global skills toggle from settings
 }
 
 // AgentResult holds the created agent and a cleanup function that should be
@@ -197,8 +198,10 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 		handlers = append(handlers, h)
 	}
 
-	if h := buildSkillHandler(ctx, logger); h != nil {
-		handlers = append(handlers, h)
+	if config.SkillsEnabled {
+		if h := buildSkillHandler(ctx, logger); h != nil {
+			handlers = append(handlers, h)
+		}
 	}
 
 	// Logging handler goes last so BeforeAgent sees the fully-assembled instruction.

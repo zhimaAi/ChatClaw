@@ -14,6 +14,7 @@ import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
+import IconSkills from '@/assets/icons/skills.svg'
 import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
@@ -46,6 +47,11 @@ const allTopNavItems: NavItem[] = [
     key: 'knowledge',
     labelKey: 'nav.knowledge',
     icon: IconKnowledge,
+  },
+  {
+    key: 'skills',
+    labelKey: 'nav.skills',
+    icon: IconSkills,
   },
   {
     key: 'memory',

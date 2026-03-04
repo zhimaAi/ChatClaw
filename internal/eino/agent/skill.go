@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"chatclaw/internal/sqlite"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -16,6 +18,7 @@ import (
 )
 
 // buildSkillHandler creates the skill middleware using a local filesystem backend.
+// It queries the DB for enabled skills and only loads those.
 func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -29,7 +32,9 @@ func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAg
 		return nil
 	}
 
-	backend := &localSkillBackend{baseDir: skillsDir}
+	enabledSlugs := queryEnabledSlugs(logger)
+
+	backend := &localSkillBackend{baseDir: skillsDir, enabledSlugs: enabledSlugs}
 
 	mw, err := newSkillChatModelAgentMiddleware(ctx, backend, logger)
 	if err != nil {
@@ -39,13 +44,40 @@ func buildSkillHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAg
 	return mw
 }
 
+// queryEnabledSlugs returns the set of enabled skill slugs from the DB.
+// If the DB is unavailable, returns nil (load all skills as fallback).
+func queryEnabledSlugs(logger *slog.Logger) map[string]bool {
+	db := sqlite.DB()
+	if db == nil {
+		return nil
+	}
+
+	rows, err := db.QueryContext(context.Background(), `SELECT slug FROM installed_skills WHERE enabled = 1`)
+	if err != nil {
+		logger.Warn("[agent] failed to query enabled skills", "error", err)
+		return nil
+	}
+	defer rows.Close()
+
+	slugs := make(map[string]bool)
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			continue
+		}
+		slugs[slug] = true
+	}
+	return slugs
+}
+
 // ---------------------------------------------------------------------------
 // Local skill backend — reads SKILL.md files from local filesystem directly.
 // Replaces the removed skill.NewLocalBackend from v0.7.
 // ---------------------------------------------------------------------------
 
 type localSkillBackend struct {
-	baseDir string
+	baseDir      string
+	enabledSlugs map[string]bool // nil = load all (fallback when DB unavailable)
 }
 
 type skillFrontMatter struct {
@@ -69,6 +101,9 @@ func (b *localSkillBackend) list() ([]localSkill, error) {
 	var skills []localSkill
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			continue
+		}
+		if b.enabledSlugs != nil && !b.enabledSlugs[entry.Name()] {
 			continue
 		}
 		skillPath := filepath.Join(b.baseDir, entry.Name(), "SKILL.md")

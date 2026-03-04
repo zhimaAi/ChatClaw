@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
-import DefaultTabIcon from '@/assets/images/tab-default.png'
 import { getLogoDataUrl } from '@/composables/useLogo'
 
 const createTabId = () => `tab-${uuidv4()}`
@@ -9,7 +8,7 @@ const createTabId = () => `tab-${uuidv4()}`
 /**
  * 导航模块类型
  */
-export type NavModule = 'assistant' | 'knowledge' | 'memory' | 'multiask' | 'settings' | 'document'
+export type NavModule = 'assistant' | 'knowledge' | 'memory' | 'multiask' | 'settings' | 'document' | 'skills'
 
 /**
  * 标签页类型
@@ -67,13 +66,14 @@ const moduleLabels: Record<NavModule, string> = {
   multiask: 'nav.multiask',
   settings: 'nav.settings',
   document: 'nav.document',
+  skills: 'nav.skills',
 }
 
 /**
  * 只允许单个标签页的模块列表
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
-const singleTabModules: NavModule[] = ['knowledge', 'memory', 'multiask', 'settings']
+const singleTabModules: NavModule[] = ['knowledge', 'memory', 'multiask', 'settings', 'skills']
 
 /**
  * Document viewer tab data
@@ -118,22 +118,16 @@ export const useNavigationStore = defineStore('navigation', () => {
 
   /**
    * Unified icon resolution strategy.
-   * - Assistant tabs: icon defaults to undefined so the title bar renders the
-   *   side-nav SVG fallback; the legacy default PNG is also treated as "no icon".
-   * - Other modules: icon falls back to DefaultTabIcon.
+   * All modules use their SVG icon from moduleTabIcons in TitleBar.vue.
+   * The icon field here is only used for assistant tabs with custom agent icons.
    */
   const resolveTabIcon = (
-    module: NavModule,
+    _module: NavModule,
     icon?: string,
     options?: { isDefault?: boolean }
   ): { icon: string | undefined; iconIsDefault: boolean } => {
-    if (module === 'assistant') {
-      // Legacy default PNG → treat as empty; empty string → treat as empty.
-      const resolved = icon && icon !== DefaultTabIcon ? icon : undefined
-      return { icon: resolved, iconIsDefault: options?.isDefault ?? false }
-    }
     return {
-      icon: icon ?? DefaultTabIcon,
+      icon: icon || undefined,
       iconIsDefault: options?.isDefault ?? icon == null,
     }
   }
