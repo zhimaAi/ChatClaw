@@ -51,6 +51,13 @@ export default {
       name: '浏览器',
       description: '使用浏览器浏览网页并交互',
     },
+    skillSearch: { name: '技能搜索' },
+    skillList: { name: '技能列表' },
+    skillInstall: { name: '安装技能' },
+    skillUninstall: { name: '卸载技能' },
+    skillEnable: { name: '启用技能' },
+    skillDisable: { name: '禁用技能' },
+    skillOpenFolder: { name: '打开技能目录' },
   },
   winsnap: {
     title: 'ChatClaw',

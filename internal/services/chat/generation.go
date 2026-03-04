@@ -12,6 +12,7 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/memory"
+	"chatclaw/internal/services/skills"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -232,6 +233,18 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 			extraHandlers = append(extraHandlers, einoagent.NewInstructionHandler(
 				"\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n"+coreProfile,
 			))
+		}
+	}
+
+	if agentConfig.SkillsEnabled {
+		skillsSvc := skills.NewSkillsService(s.app)
+		skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{SkillsService: skillsSvc})
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, skillTools...)
+			s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
+			agentConfig.Instruction += "\n\n# Skill Management\nYou have skill management tools: skill_search, skill_list, skill_install, skill_uninstall, skill_enable, skill_disable, skill_open_folder. Use them when the user asks to search, install, uninstall, enable, disable, or open skills."
 		}
 	}
 

@@ -45,6 +45,13 @@ const getToolDisplayName = (toolName: string) => {
     sequentialthinking: t('tools.sequentialThinking.name'),
     wikipedia_search: t('tools.wikipedia.name'),
     browser_use: t('tools.browserUse.name'),
+    skill_search: t('tools.skillSearch.name'),
+    skill_list: t('tools.skillList.name'),
+    skill_install: t('tools.skillInstall.name'),
+    skill_uninstall: t('tools.skillUninstall.name'),
+    skill_enable: t('tools.skillEnable.name'),
+    skill_disable: t('tools.skillDisable.name'),
+    skill_open_folder: t('tools.skillOpenFolder.name'),
   }
   return nameMap[toolName] ?? toolName
 }

@@ -133,8 +133,8 @@ func (s *SkillsService) UninstallSkill(slug string) error {
 	if err != nil {
 		return fmt.Errorf("skill not found: %w", err)
 	}
-	if source != "market" {
-		return fmt.Errorf("only market skills can be uninstalled")
+	if source == "builtin" {
+		return fmt.Errorf("builtin skills cannot be uninstalled")
 	}
 
 	destDir := filepath.Join(s.skillsDir, slug)

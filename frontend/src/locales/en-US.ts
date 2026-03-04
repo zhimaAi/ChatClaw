@@ -51,6 +51,13 @@ export default {
       name: 'Browser',
       description: 'Browse and interact with web pages',
     },
+    skillSearch: { name: 'Skill Search' },
+    skillList: { name: 'Skill List' },
+    skillInstall: { name: 'Install Skill' },
+    skillUninstall: { name: 'Uninstall Skill' },
+    skillEnable: { name: 'Enable Skill' },
+    skillDisable: { name: 'Disable Skill' },
+    skillOpenFolder: { name: 'Open Skill Folder' },
   },
   winsnap: {
     title: 'ChatClaw',
