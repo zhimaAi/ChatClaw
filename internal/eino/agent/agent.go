@@ -23,6 +23,7 @@ import (
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/summarization"
 	"github.com/cloudwego/eino/adk/prebuilt/deep"
+	"github.com/cloudwego/eino/adk/prebuilt/planexecute"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -142,6 +143,13 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	handlers := buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
 
+	var subAgents []adk.Agent
+	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, logger); peErr != nil {
+		logger.Warn("[agent] failed to create plan-execute subagent, skipping", "error", peErr)
+	} else {
+		subAgents = append(subAgents, peAgent)
+	}
+
 	deepCfg := &deep.Config{
 		Name:         config.Name,
 		Description:  "AI Assistant",
@@ -152,6 +160,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		Shell:        backend,
 		ToolsConfig:  toolsConfig,
 		Handlers:     handlers,
+		SubAgents:    subAgents,
 	}
 
 	agent, err := deep.New(ctx, deepCfg)
@@ -378,6 +387,81 @@ func isInterruptErr(err error) bool {
 		return true
 	}
 	return false
+}
+
+const (
+	planExecuteMaxIterations   = 8
+	planExecuteExecutorMaxIter = 10
+)
+
+// namedAgent wraps an adk.Agent with a custom name and description so that
+// the DeepAgent TaskTool can display meaningful info to the main agent LLM.
+type namedAgent struct {
+	adk.Agent
+	name string
+	desc string
+}
+
+func (a *namedAgent) Name(_ context.Context) string        { return a.name }
+func (a *namedAgent) Description(_ context.Context) string  { return a.desc }
+
+// buildPlanExecuteSubAgent creates a Plan-Execute agent that can be registered
+// as a DeepAgent SubAgent. The main agent delegates complex multi-step tasks
+// to this agent via the built-in TaskTool.
+//
+// Architecture: Planner (generate plan) → Executor (execute steps with tools)
+//               → Replanner (evaluate progress, replan or finish)
+func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, logger *slog.Logger) (adk.Agent, error) {
+	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
+		ToolCallingChatModel: chatModel,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create planner: %w", err)
+	}
+
+	executor, err := planexecute.NewExecutor(ctx, &planexecute.ExecutorConfig{
+		Model:         chatModel,
+		ToolsConfig:   toolsConfig,
+		MaxIterations: planExecuteExecutorMaxIter,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create executor: %w", err)
+	}
+
+	replanner, err := planexecute.NewReplanner(ctx, &planexecute.ReplannerConfig{
+		ChatModel: chatModel,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create replanner: %w", err)
+	}
+
+	agent, err := planexecute.New(ctx, &planexecute.Config{
+		Planner:       planner,
+		Executor:      executor,
+		Replanner:     replanner,
+		MaxIterations: planExecuteMaxIterations,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create plan-execute agent: %w", err)
+	}
+
+	desc := selectPlanExecuteDescription()
+
+	logger.Info("[agent] plan-execute subagent created successfully")
+	return &namedAgent{Agent: agent, name: "plan-execute", desc: desc}, nil
+}
+
+func selectPlanExecuteDescription() string {
+	if isZhCN() {
+		return "基于「规划-执行-反思」范式的智能体，适用于需要多步骤推理和结构化规划的复杂任务。" +
+			"它先将目标拆解为有序步骤，逐步执行并利用可用工具完成每一步，然后反思执行结果并动态调整计划。" +
+			"适合以下场景：多步骤调研与分析、需要系统性规划的复杂问题、涉及多个工具协同的任务、" +
+			"需要根据中间结果动态调整策略的工作流。（工具：与主代理相同）"
+	}
+	return "Agent based on the plan-execute-replan paradigm for complex tasks requiring multi-step reasoning and structured planning. " +
+		"It decomposes objectives into ordered steps, executes each step using available tools, then reflects on results and dynamically adjusts the plan. " +
+		"Best for: multi-step research & analysis, complex problems needing systematic planning, tasks involving multiple tool coordination, " +
+		"workflows that require dynamic strategy adjustment based on intermediate results. (Tools: same as main agent)"
 }
 
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
