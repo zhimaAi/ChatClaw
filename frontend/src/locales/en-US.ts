@@ -496,6 +496,7 @@ export default {
       toolCalling: 'Calling',
       toolCompleted: 'Completed',
       toolError: 'Failed',
+      lines: 'lines',
       toolArgs: 'Arguments',
       toolResult: 'Result',
       toolQuery: 'Query: ',

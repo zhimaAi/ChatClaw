@@ -493,6 +493,7 @@ export default {
       toolCalling: '执行中',
       toolCompleted: '已完成',
       toolError: '执行失败',
+      lines: '行',
       toolArgs: '参数',
       toolResult: '结果',
       toolQuery: '查询：',
