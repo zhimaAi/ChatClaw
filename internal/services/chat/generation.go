@@ -366,10 +366,9 @@ type streamState struct {
 	lastSegmentToolCallIDs map[string]bool
 
 	// Tool call delta tracking
-	toolStatesByKey   map[string]*toolCallState
-	toolOrder         []string
-	indexKeyMap       map[int]string
-	hiddenToolCallIDs map[string]bool
+	toolStatesByKey map[string]*toolCallState
+	toolOrder       []string
+	indexKeyMap     map[int]string
 }
 
 type toolCallState struct {
@@ -380,12 +379,11 @@ type toolCallState struct {
 
 func newStreamState(gc *generationContext, assistantMsg *messageModel) *streamState {
 	return &streamState{
-		gc:                gc,
-		assistantMsg:      assistantMsg,
-		toolStatesByKey:   make(map[string]*toolCallState),
-		toolOrder:         make([]string, 0),
-		indexKeyMap:       make(map[int]string),
-		hiddenToolCallIDs: make(map[string]bool),
+		gc:              gc,
+		assistantMsg:    assistantMsg,
+		toolStatesByKey: make(map[string]*toolCallState),
+		toolOrder:       make([]string, 0),
+		indexKeyMap:     make(map[int]string),
 	}
 }
 
@@ -512,9 +510,6 @@ func (ss *streamState) updateToolStates(toolCalls []schema.ToolCall) {
 		}
 		if tc.Function.Name != "" {
 			st.name = tc.Function.Name
-			if isHiddenTool(st.name) && st.id != "" {
-				ss.hiddenToolCallIDs[st.id] = true
-			}
 		}
 		st.args = updateArgs(st.args, tc.Function.Arguments)
 	}
@@ -760,7 +755,7 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 			}
 		}
 
-		if isHiddenTool(toolName) || ss.hiddenToolCallIDs[msg.ToolCallID] {
+		if isHiddenTool(toolName) {
 			return
 		}
 
