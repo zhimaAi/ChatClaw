@@ -140,6 +140,7 @@ export default {
       skills: '技能',
       snapSettings: '吸附设置',
       tools: '功能工具',
+      chatwiki: '绑定ChatWiki',
       about: '关于我们',
     },
     // 常规设置
@@ -240,6 +241,35 @@ export default {
       deleteCustomConfirmDesc: '确认删除「{name}」的吸附配置吗？',
       confirmDeleteCustomApp: '确认删除',
       cancel: '取消',
+    },
+    // 绑定 ChatWiki
+    chatwiki: {
+      title: 'ChatWiki',
+      description: '授权绑定ChatWiki，获取机器人和对应的知识库',
+      notBound: '暂未绑定',
+      addBinding: '新增绑定',
+      applications: '应用',
+      knowledgeBases: '知识库',
+      notAuthorized: '暂未授权绑定',
+      loginCloud: '登录 ChatWiki Cloud',
+      connectOpenSource: '连接到你自己的开源版',
+      openSourceUrlLabel: '开源版服务地址',
+      openSourceUrlPlaceholder: '例如 https://your-chatwiki.example.com',
+      goToAuth: '前往授权',
+      invalidUrl: '请输入有效的服务地址',
+      back: '返回',
+      // Binding flow
+      loggingIn: '正在登录...',
+      waitingAuth: '等待授权...',
+      remainingTime: '剩余时间: {seconds}秒',
+      cancel: '取消',
+      authFailed: '授权失败',
+      timeoutReason: 'TimeOut',
+      retry: '重试',
+      authSuccess: '授权成功',
+      startUsingHint: '点击下方「开始」继续使用 ChatClaw 桌面端',
+      startUsing: '开始使用',
+      freeVersion: '免费版',
     },
     // 功能工具设置
     tools: {

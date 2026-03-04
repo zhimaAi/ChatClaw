@@ -140,6 +140,7 @@ export default {
       skills: 'Skills',
       snapSettings: 'Snap Settings',
       tools: 'Tools',
+      chatwiki: 'Bind ChatWiki',
       about: 'About Us',
     },
     // General settings
@@ -240,6 +241,35 @@ export default {
       deleteCustomConfirmDesc: 'Delete snap config for "{name}"?',
       confirmDeleteCustomApp: 'Delete',
       cancel: 'Cancel',
+    },
+    // Bind ChatWiki
+    chatwiki: {
+      title: 'ChatWiki',
+      description: 'Bind ChatWiki to get robots and corresponding knowledge bases.',
+      notBound: 'Not bound',
+      addBinding: 'Add binding',
+      applications: 'Applications',
+      knowledgeBases: 'Knowledge bases',
+      notAuthorized: 'Not yet authorized',
+      loginCloud: 'Log in to ChatWiki Cloud',
+      connectOpenSource: 'Connect to your own open-source version',
+      openSourceUrlLabel: 'Open-source service URL',
+      openSourceUrlPlaceholder: 'e.g. https://your-chatwiki.example.com',
+      goToAuth: 'Go to authorize',
+      invalidUrl: 'Please enter a valid service URL',
+      back: 'Back',
+      // Binding flow
+      loggingIn: 'Logging in...',
+      waitingAuth: 'Waiting for authorization...',
+      remainingTime: 'Remaining: {seconds}s',
+      cancel: 'Cancel',
+      authFailed: 'Authorization failed',
+      timeoutReason: 'TimeOut',
+      retry: 'Retry',
+      authSuccess: 'Authorization successful',
+      startUsingHint: 'Click "Start" below to continue using ChatClaw Desktop.',
+      startUsing: 'Start using',
+      freeVersion: 'Free',
     },
     // Tools settings
     tools: {
