@@ -65,7 +65,6 @@ const (
 	attachedLowFreqRescanInterval   = 1200 * time.Millisecond
 	attachedLowFreqRescanSwitchHits = 5 // Increased from 3 to 5 for more stable switching
 	attachedMinSwitchInterval       = 800 * time.Millisecond
-	stepDebugPrintInterval          = 10 // Print debug info every N steps
 )
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
@@ -108,7 +107,6 @@ type SnapService struct {
 	attachedRescanHits      int
 	obscuredCheckTarget     string // Last target name checked for obscured/non-adjacent state
 	obscuredCheckHits       int    // Consecutive obscured/non-adjacent hits for that target
-	stepCounter             int // Counter for debug printing
 	attachingLock           bool // Lock to prevent concurrent attaching
 }
 
@@ -657,29 +655,7 @@ func (s *SnapService) step() {
 	wasMinimized := s.lastWinsnapMinimized
 	targetForRestore := s.currentTarget
 	stateForRestore := s.status.State
-	stepCounter := s.stepCounter
-	s.stepCounter++
-	if s.stepCounter >= stepDebugPrintInterval {
-		s.stepCounter = 0
-	}
 	s.mu.Unlock()
-
-	// Print debug info every N steps
-	if stepCounter == 0 {
-		frontTarget, _, _ := winsnap.FrontMostTargetProcessName(enabledTargets)
-		s.mu.Lock()
-		currentTargetForLog := s.currentTarget
-		stateForLog := s.status.State
-		s.mu.Unlock()
-		if s.app != nil && s.app.Logger != nil {
-			s.app.Logger.Info("SnapService step debug",
-				"frontTarget", frontTarget,
-				"currentTarget", currentTargetForLog,
-				"state", stateForLog,
-				"enabledTargets", enabledTargets,
-			)
-		}
-	}
 
 	if len(enabledTargets) == 0 {
 		// If toggles became empty while loop is still running, stop.

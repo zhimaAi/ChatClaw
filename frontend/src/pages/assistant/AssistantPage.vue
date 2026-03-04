@@ -170,6 +170,18 @@ const renameConversationOpen = ref(false)
 const deleteConversationOpen = ref(false)
 const actionConversation = ref<Conversation | null>(null)
 
+// Pending images for message
+interface PendingImage {
+  id: string
+  file: File
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+const pendingImages = ref<PendingImage[]>([])
+
 // Computed
 const activeAgent = computed(() => {
   if (activeAgentId.value == null) return null
@@ -199,9 +211,10 @@ const chatMessages = computed(() => {
 })
 
 const canSend = computed(() => {
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
   return (
     !!activeAgentId.value &&
-    chatInput.value.trim() !== '' &&
+    hasContent &&
     !!selectedModelInfo.value &&
     !isGenerating.value
   )
@@ -212,7 +225,8 @@ const sendDisabledReason = computed(() => {
   if (isGenerating.value) return ''
   if (!activeAgentId.value) return t('assistant.placeholders.createAgentFirst')
   if (!selectedModelKey.value) return t('assistant.placeholders.selectModelFirst')
-  if (!chatInput.value.trim()) return t('assistant.placeholders.enterToSend')
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
+  if (!hasContent) return t('assistant.placeholders.enterToSend')
   return ''
 })
 
@@ -290,6 +304,7 @@ const handleNewConversation = () => {
   }
   activeConversationId.value = null
   chatInput.value = ''
+  pendingImages.value = []
   // Clear knowledge base selection for new conversation
   clearKnowledgeSelection()
   // Reset thinking mode to default (off) for new conversation
@@ -336,7 +351,9 @@ const handleSend = async () => {
   if (!canSend.value || !activeAgentId.value) return
 
   const messageContent = chatInput.value.trim()
+  const imagesToSend = [...pendingImages.value]
   chatInput.value = ''
+  pendingImages.value = []
 
   // If no active conversation, create one first
   if (!activeConversationId.value) {
@@ -347,8 +364,8 @@ const handleSend = async () => {
       await createConversation(
         new CreateConversationInput({
           agent_id: activeAgentId.value,
-          name: messageContent.slice(0, 50), // First message becomes conversation name (truncated)
-          last_message: messageContent,
+          name: messageContent.slice(0, 50) || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''), // First message becomes conversation name (truncated)
+          last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''),
           llm_provider_id: providerId || '',
           llm_model_id: modelId || '',
           library_ids: selectedLibraryIds.value,
@@ -359,7 +376,7 @@ const handleSend = async () => {
     } catch {
       // Error already handled in composable
       return
-    }
+}
   }
 
   // Now send the message via ChatService
@@ -376,14 +393,14 @@ const handleSend = async () => {
         handleConversationUpdated(updated)
       }
 
-      await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId)
+      await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId, imagesToSend)
 
       // Update conversation's last_message
       try {
         const updated2 = await ConversationsService.UpdateConversation(
           activeConversationId.value,
           new UpdateConversationInput({
-            last_message: messageContent,
+            last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''),
           })
         )
         if (updated2) {
@@ -419,6 +436,56 @@ const clearLibrarySelection = async () => {
 const handleRemoveLibrary = async (id: number) => {
   selectedLibraryIds.value = selectedLibraryIds.value.filter((lid) => lid !== id)
   await saveLibraryIdsToConversation()
+}
+
+// Handle image selection
+const handleAddImages = async (files: FileList | File[]) => {
+  const fileArray = Array.from(files)
+  const MAX_IMAGES = 4
+  const currentCount = pendingImages.value.length
+
+  if (currentCount + fileArray.length > MAX_IMAGES) {
+    toast.error(t('assistant.errors.tooManyImages', { max: MAX_IMAGES }))
+    return
+  }
+
+  for (const file of fileArray) {
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          // Extract base64 without data: prefix
+          const base64Match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
+          if (base64Match) {
+            resolve(base64Match[1])
+          } else {
+            reject(new Error('Invalid image data'))
+          }
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const dataUrl = `data:${file.type};base64,${base64}`
+      pendingImages.value.push({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+        mimeType: file.type,
+        base64,
+        dataUrl,
+        fileName: file.name,
+        size: file.size,
+      })
+    } catch (error) {
+      console.error('Failed to read image:', error)
+      toast.error(t('assistant.errors.imageReadFailed'))
+    }
+  }
+}
+
+const handleRemoveImage = (id: string) => {
+  pendingImages.value = pendingImages.value.filter((img) => img.id !== id)
 }
 
 // Save thinking mode to current conversation
@@ -998,6 +1065,7 @@ onUnmounted(() => {
         :chat-messages="chatMessages"
         :active-agent-id="activeAgentId"
         :is-snap-mode="isSnapMode"
+        :pending-images="pendingImages"
         @pointerdown.capture="handleWakeAttachedPointerDown"
         @update:chat-input="chatInput = $event"
         @update:chat-mode="chatMode = $event"
@@ -1010,6 +1078,9 @@ onUnmounted(() => {
         @clear-library-selection="clearLibrarySelection"
         @load-libraries="loadLibrariesFn"
         @remove-library="handleRemoveLibrary"
+        @add-images="handleAddImages"
+        @remove-image="handleRemoveImage"
+        @clear-images="pendingImages = []"
       />
     </section>
     </div><!-- End upper row -->
@@ -1033,6 +1104,7 @@ onUnmounted(() => {
       :chat-messages="chatMessages"
       :active-agent-id="activeAgentId"
       :is-snap-mode="isSnapMode"
+      :pending-images="pendingImages"
       @pointerdown.capture="handleWakeAttachedPointerDown"
       @update:chat-input="chatInput = $event"
       @update:chat-mode="chatMode = $event"
@@ -1045,6 +1117,9 @@ onUnmounted(() => {
       @clear-library-selection="clearLibrarySelection"
       @load-libraries="loadLibrariesFn"
       @remove-library="handleRemoveLibrary"
+      @add-images="handleAddImages"
+      @remove-image="handleRemoveImage"
+      @clear-images="pendingImages = []"
     />
     </div><!-- End main content wrapper -->
 

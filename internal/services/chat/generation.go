@@ -69,7 +69,7 @@ func (g *generationContext) chatEvent(messageID int64) ChatEvent {
 }
 
 // runGeneration inserts the user message then delegates to runGenerationCore.
-func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
+func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent, imagesJSON string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
 	gc := &generationContext{
 		service:        s,
 		db:             db,
@@ -81,12 +81,16 @@ func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversatio
 		agentExtras:    agentExtras,
 	}
 
+	if imagesJSON == "" {
+		imagesJSON = "[]"
+	}
 	userMsg := &messageModel{
 		ConversationID: conversationID,
 		Role:           RoleUser,
 		Content:        userContent,
 		Status:         StatusSuccess,
 		ToolCalls:      "[]",
+		ImagesJSON:     imagesJSON,
 	}
 
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -131,6 +135,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		ModelID:        agentConfig.ModelID,
 		Status:         StatusStreaming,
 		ToolCalls:      "[]",
+		ImagesJSON:     "[]",
 	}
 
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -148,7 +153,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 
 	// Agent mode loads all messages — context window management is handled
 	// by the Summarization middleware which compresses history automatically.
-	messages, err := s.loadMessagesForContext(ctx, db, conversationID, 0)
+	messages, err := s.loadMessagesForContext(ctx, db, conversationID, 0, providerConfig.ProviderID, agentConfig.ModelID)
 	if err != nil {
 		gc.emitError("error.chat_messages_failed", nil)
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")
@@ -248,14 +253,14 @@ type segment struct {
 }
 
 type streamState struct {
-	gc             *generationContext
-	assistantMsg   *messageModel
-	contentBuilder strings.Builder
+	gc              *generationContext
+	assistantMsg    *messageModel
+	contentBuilder  strings.Builder
 	thinkingBuilder strings.Builder
-	toolCallsJSON  []byte
-	finishReason   string
-	inputTokens    int
-	outputTokens   int
+	toolCallsJSON   []byte
+	finishReason    string
+	inputTokens     int
+	outputTokens    int
 
 	segments               []segment
 	lastSegmentType        string
@@ -264,7 +269,7 @@ type streamState struct {
 	// Tool call delta tracking
 	toolStatesByKey map[string]*toolCallState
 	toolOrder       []string
-	indexKeyMap      map[int]string
+	indexKeyMap     map[int]string
 }
 
 type toolCallState struct {
@@ -483,8 +488,8 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 	s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
 
 	gc.emit(EventChatComplete, ChatCompleteEvent{
-		ChatEvent: gc.chatEvent(assistantMsg.ID),
-		Status:    StatusSuccess,
+		ChatEvent:    gc.chatEvent(assistantMsg.ID),
+		Status:       StatusSuccess,
 		FinishReason: ss.finishReason,
 	})
 }
@@ -643,14 +648,68 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 	}
 }
 
+// supportsMultimodal checks if a model supports multimodal (vision) capabilities.
+func supportsMultimodal(providerID, modelID string) bool {
+	modelIDLower := strings.ToLower(modelID)
+	providerIDLower := strings.ToLower(providerID)
+
+	// OpenAI models with vision support
+	if providerIDLower == "openai" || providerIDLower == "azure" {
+		if strings.Contains(modelIDLower, "gpt-4") && !strings.Contains(modelIDLower, "gpt-4o-mini") {
+			return true
+		}
+		if strings.Contains(modelIDLower, "gpt-5") {
+			return true
+		}
+		if strings.Contains(modelIDLower, "vision") {
+			return true
+		}
+	}
+
+	// Anthropic Claude models support vision
+	if providerIDLower == "anthropic" {
+		if strings.Contains(modelIDLower, "claude") {
+			return true
+		}
+	}
+
+	// Google Gemini models support vision
+	if providerIDLower == "google" || providerIDLower == "gemini" {
+		return true
+	}
+
+	// 通义千问 VL (Vision-Language) models support vision
+	if providerIDLower == "qwen" {
+		if strings.Contains(modelIDLower, "vl") || strings.Contains(modelIDLower, "vision") {
+			return true
+		}
+		// Note: qwen-plus, qwen-max, qwen-flash, qwen-long are text-only models
+		// Only qwen-vl-* models support vision
+	}
+
+	// DeepSeek models with vision
+	if providerIDLower == "deepseek" {
+		if strings.Contains(modelIDLower, "vision") {
+			return true
+		}
+	}
+
+	// Default: assume text-only
+	return false
+}
+
 // loadMessagesForContext loads messages for agent/chat context.
 // contextCount: maximum number of messages to include (0 or >=200 means unlimited).
+// providerID and modelID are used to check if the model supports multimodal capabilities.
 //
 // Tool-call repair (dangling tool calls without responses) is handled by the
 // PatchToolCalls middleware at the agent level, so this function only performs
 // basic deserialization.
-func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int) ([]*schema.Message, error) {
+func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int, providerID, modelID string) ([]*schema.Message, error) {
 	var models []messageModel
+
+	// Check if the model supports multimodal capabilities
+	supportsMultimodal := supportsMultimodal(providerID, modelID)
 
 	needLimit := contextCount > 0 && contextCount < 200
 
@@ -692,8 +751,77 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 		}
 
 		msg := &schema.Message{
-			Role:    role,
-			Content: m.Content,
+			Role: role,
+		}
+
+		// Handle user messages with images (multimodal)
+		if m.Role == RoleUser {
+			var images []ImagePayload
+			if m.ImagesJSON != "" && m.ImagesJSON != "[]" {
+				if err := json.Unmarshal([]byte(m.ImagesJSON), &images); err != nil {
+					s.app.Logger.Warn("[chat] failed to parse images_json", "msg_id", m.ID, "error", err)
+				}
+			}
+
+			// Filter out images if model doesn't support multimodal
+			if !supportsMultimodal && len(images) > 0 {
+				s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
+				images = nil
+			}
+
+			hasText := strings.TrimSpace(m.Content) != ""
+			if !hasText && len(images) == 0 {
+				// Skip empty messages
+				continue
+			}
+
+			// Log whether images are being passed to the model
+			if len(images) > 0 {
+				s.app.Logger.Info("[chat] passing images to model", "msg_id", m.ID, "image_count", len(images))
+			} else {
+				s.app.Logger.Info("[chat] no images to pass to model", "msg_id", m.ID)
+			}
+
+			// If there are images, use multi-content form
+			if len(images) > 0 {
+				var parts []schema.MessageInputPart
+				if hasText {
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: m.Content,
+					})
+				}
+
+				for _, img := range images {
+					if img.Source != "inline_base64" || img.Base64 == "" || img.MimeType == "" {
+						continue
+					}
+					// Use Base64Data and MIMEType instead of URL for data URLs (recommended by Eino docs)
+					base64Data := img.Base64
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeImageURL,
+						Image: &schema.MessageInputImage{
+							MessagePartCommon: schema.MessagePartCommon{
+								Base64Data: &base64Data,
+								MIMEType:   img.MimeType,
+							},
+						},
+					})
+				}
+
+				if len(parts) > 0 {
+					msg.UserInputMultiContent = parts
+				} else {
+					// Fallback to text-only if no valid parts
+					msg.Content = m.Content
+				}
+			} else {
+				// No images, use simple content
+				msg.Content = m.Content
+			}
+		} else {
+			// Non-user messages: use simple content
+			msg.Content = m.Content
 		}
 
 		if m.Role == RoleTool {

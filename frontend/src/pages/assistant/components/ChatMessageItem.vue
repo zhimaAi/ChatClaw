@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ import ToolCallBlock from './ToolCallBlock.vue'
 import RetrievalBlock from './RetrievalBlock.vue'
 import MessageEditor from './MessageEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import ImagePreviewDialog from './ImagePreviewDialog.vue'
 
 const props = defineProps<{
   message: Message
@@ -47,6 +48,10 @@ const { logoSrc } = useThemeLogo()
 const isEditing = ref(false)
 const copied = ref(false)
 const showErrorDetail = ref(false)
+const imagePreviewOpen = ref(false)
+const imagePreviewIndex = ref(0)
+const imageContainerRef = ref<HTMLDivElement | null>(null)
+const imageObserver = ref<IntersectionObserver | null>(null)
 
 // Determine content to display (streaming or final) — used only for non-segment fallback & copy
 const displayContent = computed(() => {
@@ -130,6 +135,34 @@ const isUser = computed(() => props.message.role === MessageRole.USER)
 const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
 const isSnapMode = computed(() => props.mode === 'snap')
+
+// Parse images from images_json
+interface ImagePayload {
+  id?: string
+  kind: string
+  source: string
+  mime_type: string
+  base64: string
+  data_url?: string
+  file_name?: string
+  size?: number
+}
+
+const images = computed<ImagePayload[]>(() => {
+  if (!props.message.images_json) return []
+  try {
+    const parsed = JSON.parse(props.message.images_json)
+    if (Array.isArray(parsed)) {
+      return parsed.map((img: ImagePayload) => ({
+        ...img,
+        data_url: img.data_url || `data:${img.mime_type};base64,${img.base64}`,
+      }))
+    }
+    return []
+  } catch {
+    return []
+  }
+})
 
 // Token usage display: only show when not streaming and has token data
 const hasTokenUsage = computed(() => {
@@ -246,6 +279,65 @@ const handleSaveEdit = (newContent: string) => {
 const handleCancelEdit = () => {
   isEditing.value = false
 }
+
+const openImagePreview = (index: number) => {
+  imagePreviewIndex.value = index
+  imagePreviewOpen.value = true
+}
+
+// Lazy loading setup with Intersection Observer
+const observeLazyImages = () => {
+  if (!imageObserver.value || !imageContainerRef.value) return
+  const lazyImages = imageContainerRef.value.querySelectorAll('img[data-src]')
+  lazyImages.forEach((img) => {
+    imageObserver.value?.observe(img)
+  })
+}
+
+onMounted(() => {
+  // Create Intersection Observer for lazy loading images
+  imageObserver.value = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target as HTMLImageElement
+          const dataSrc = img.dataset.src
+          if (dataSrc && !img.src) {
+            img.src = dataSrc
+            img.removeAttribute('data-src')
+          }
+          imageObserver.value?.unobserve(img)
+        }
+      })
+    },
+    {
+      rootMargin: '100px', // Start loading 100px before image enters viewport
+      threshold: 0.01,
+    }
+  )
+
+  // Observe all lazy images after DOM update
+  nextTick(() => {
+    observeLazyImages()
+  })
+
+  // Watch for image changes and observe new images
+  watch(
+    () => images.value.length,
+    () => {
+      nextTick(() => {
+        observeLazyImages()
+      })
+    }
+  )
+})
+
+onUnmounted(() => {
+  if (imageObserver.value) {
+    imageObserver.value.disconnect()
+    imageObserver.value = null
+  }
+})
 </script>
 
 <template>
@@ -362,7 +454,37 @@ const handleCancelEdit = () => {
           @cancel="handleCancelEdit"
         />
         <!-- Normal display mode -->
-        <p v-else class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+        <div v-else class="flex flex-col gap-2">
+          <!-- Image previews -->
+          <div
+            v-if="images.length > 0"
+            ref="imageContainerRef"
+            class="mb-2 flex flex-wrap gap-2"
+          >
+            <div
+              v-for="(img, idx) in images"
+              :key="img.id || img.file_name || img.base64.slice(0, 20)"
+              class="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-md border border-border bg-muted/40 transition-opacity hover:opacity-90"
+              @click="openImagePreview(idx)"
+            >
+              <!-- Load first 3 images immediately, rest lazy load -->
+              <img
+                v-if="idx < 3"
+                :src="img.data_url || `data:${img.mime_type};base64,${img.base64}`"
+                class="h-full w-full object-cover"
+                :alt="img.file_name || 'Image'"
+              />
+              <img
+                v-else
+                :data-src="img.data_url || `data:${img.mime_type};base64,${img.base64}`"
+                class="h-full w-full object-cover"
+                :alt="img.file_name || 'Image'"
+                loading="lazy"
+              />
+            </div>
+          </div>
+          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+        </div>
       </div>
 
       <!-- Other roles: plain text -->
@@ -446,5 +568,12 @@ const handleCancelEdit = () => {
         </div>
       </div>
     </div>
+
+    <!-- Image preview dialog -->
+    <ImagePreviewDialog
+      v-model:open="imagePreviewOpen"
+      :images="images"
+      :initial-index="imagePreviewIndex"
+    />
   </div>
 </template>

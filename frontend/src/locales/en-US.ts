@@ -348,6 +348,7 @@ export default {
     },
   },
   assistant: {
+    imageMessage: 'Image message',
     icon: {
       hint: 'Click to replace. Recommended 100×100px, <= 100KB',
       pickTitle: 'Select Icon File',
@@ -402,6 +403,7 @@ export default {
       freeBadge: 'Free',
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
+      selectImages: 'Select images',
       selectImage: 'Select image',
       clearSelected: 'Clear selected',
       selectedCount: '{count} knowledge base(s) selected',
@@ -472,6 +474,11 @@ export default {
       deleteConversationFailed: 'Failed to delete conversation',
       sendFailed: 'Failed to send message',
       resendFailed: 'Failed to resend',
+      tooManyImages: 'Too many images (max {max})',
+      invalidImageType: 'Invalid image type',
+      imageTooLarge: 'Image too large (max {max})',
+      imagesTotalTooLarge: 'Total image size too large (max {max})',
+      imageReadFailed: 'Failed to read image',
     },
     toasts: {
       created: 'Agent created',

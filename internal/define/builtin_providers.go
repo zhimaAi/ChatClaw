@@ -29,7 +29,7 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "grok", Name: "Grok", Type: "openai", Icon: "grok", SortOrder: 5, APIEndpoint: "https://api.x.ai/v1"},
 	{ProviderID: "deepseek", Name: "DeepSeek", Type: "openai", Icon: "deepseek", SortOrder: 6, APIEndpoint: "https://api.deepseek.com/v1"},
 	{ProviderID: "zhipu", Name: "智谱 GLM", Type: "openai", Icon: "zhipu", SortOrder: 7, APIEndpoint: "https://open.bigmodel.cn/api/paas/v4"},
-	{ProviderID: "qwen", Name: "通义千问", Type: "openai", Icon: "qwen", SortOrder: 8, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+	{ProviderID: "qwen", Name: "通义千问", Type: "qwen", Icon: "qwen", SortOrder: 8, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 9, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
 	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 10, APIEndpoint: "https://qianfan.baidubce.com/v2"},
 	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},

@@ -345,6 +345,7 @@ export default {
     },
   },
   assistant: {
+    imageMessage: '图片消息',
     icon: {
       hint: '点击替换，建议尺寸为100*100px，大小不超过100kb',
       pickTitle: '选择图标文件',
@@ -399,6 +400,7 @@ export default {
       freeBadge: '免费',
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
+      selectImages: '选择图片',
       selectImage: '选择图片',
       clearSelected: '清空选中',
       selectedCount: '已选 {count} 个知识库',
@@ -469,6 +471,11 @@ export default {
       deleteConversationFailed: '删除会话失败',
       sendFailed: '发送消息失败',
       resendFailed: '重新发送失败',
+      tooManyImages: '图片数量过多',
+      invalidImageType: '无效的图片类型',
+      imageTooLarge: '图片过大',
+      imagesTotalTooLarge: '图片总大小过大',
+      imageReadFailed: '图片读取失败',
     },
     toasts: {
       created: '助手创建成功',

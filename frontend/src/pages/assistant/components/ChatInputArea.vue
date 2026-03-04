@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { ArrowUp, Square, Check, Lightbulb, X } from 'lucide-vue-next'
+import { toast } from '@/components/ui/toast'
+import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon } from 'lucide-vue-next'
 import {
   Select,
   SelectContent,
@@ -32,6 +33,16 @@ import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/pr
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
 
+interface PendingImage {
+  id: string
+  file: File
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+
 const props = defineProps<{
   chatInput: string
   chatMode: string
@@ -48,6 +59,7 @@ const props = defineProps<{
   chatMessages: any[]
   activeAgentId: number | null
   isSnapMode?: boolean
+  pendingImages: PendingImage[]
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +74,9 @@ const emit = defineEmits<{
   clearLibrarySelection: []
   loadLibraries: []
   removeLibrary: [id: number]
+  addImages: [files: FileList | File[]]
+  removeImage: [id: string]
+  clearImages: []
 }>()
 
 const { t } = useI18n()
@@ -118,6 +133,57 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
   const p = pw.provider as { is_free?: boolean }
   return Boolean(p.is_free)
 }
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+const handleSelectImagesClick = () => {
+  fileInputRef.value?.click()
+}
+
+const handleFilesSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+  if (!files || files.length === 0) return
+
+  const MAX_IMAGES = 4
+  const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
+  const MAX_TOTAL_SIZE = 8 * 1024 * 1024 // 8MB
+
+  if (files.length > MAX_IMAGES) {
+    toast.error(t('assistant.errors.tooManyImages', { max: MAX_IMAGES }))
+    return
+  }
+
+  const fileArray = Array.from(files)
+  let totalSize = 0
+
+  for (const file of fileArray) {
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('assistant.errors.invalidImageType'))
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error(t('assistant.errors.imageTooLarge', { max: '2MB' }))
+      return
+    }
+    totalSize += file.size
+  }
+
+  if (totalSize > MAX_TOTAL_SIZE) {
+    toast.error(t('assistant.errors.imagesTotalTooLarge', { max: '8MB' }))
+    return
+  }
+
+  emit('addImages', files)
+  // Reset input so same file can be selected again
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
+
+const handleRemoveImage = (id: string) => {
+  emit('removeImage', id)
+}
 </script>
 
 <template>
@@ -147,6 +213,23 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
       <div
         class="w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
       >
+        <!-- Image preview area -->
+        <div v-if="pendingImages.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
+          <div
+            v-for="img in pendingImages"
+            :key="img.id"
+            class="group relative h-16 w-16 overflow-hidden rounded-md border border-border bg-muted/40"
+          >
+            <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
+            <button
+              class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+              @click="handleRemoveImage(img.id)"
+            >
+              <X class="size-3" />
+            </button>
+          </div>
+        </div>
+
         <!-- Selected knowledge bases -->
         <div
           v-if="selectedLibraryIds.length > 0"
@@ -286,6 +369,15 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
               </Tooltip>
             </TooltipProvider>
 
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept="image/*"
+              multiple
+              class="hidden"
+              @change="handleFilesSelected"
+            />
+
             <!-- Knowledge base multi-select using reka-ui Select with multiple -->
             <SelectRoot
               :model-value="selectedLibraryIds"
@@ -357,6 +449,25 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
                 </SelectContentRaw>
               </SelectPortal>
             </SelectRoot>
+
+            <!-- Image selection button -->
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                    @click="handleSelectImagesClick"
+                  >
+                    <ImageIcon class="size-4 text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ t('assistant.chat.selectImages') }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
 
           </div>
