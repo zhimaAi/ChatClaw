@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
+import { FolderPlus } from 'lucide-vue-next'
 import type { Folder as FolderType } from '@bindings/chatclaw/internal/services/library'
 
 const { t } = useI18n()
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   (e: 'click', folder: FolderType): void
   (e: 'rename', folder: FolderType): void
   (e: 'delete', folder: FolderType): void
+  (e: 'move', folder: FolderType): void
 }>()
 
 const handleCardClick = () => {
@@ -58,6 +60,10 @@ const handleCardClick = () => {
         <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('rename', folder)">
           <IconRename class="size-4 text-muted-foreground" />
           {{ t('knowledge.folder.rename') }}
+        </DropdownMenuItem>
+        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('move', folder)">
+          <FolderPlus class="size-4 text-muted-foreground" />
+          {{ t('knowledge.folder.move.title') }}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

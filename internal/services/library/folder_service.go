@@ -423,6 +423,110 @@ func (s *LibraryService) DeleteFolder(input DeleteFolderInput) error {
 	return nil
 }
 
+// MoveFolder 移动文件夹到其他文件夹
+func (s *LibraryService) MoveFolder(input MoveFolderInput) (*Folder, error) {
+	if input.ID <= 0 {
+		return nil, errs.New("error.folder_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 查询要移动的文件夹信息
+	var folder libraryFolderModel
+	if err := db.NewSelect().Model(&folder).Where("id = ?", input.ID).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Newf("error.folder_not_found", map[string]any{"ID": input.ID})
+		}
+		return nil, errs.Wrap("error.folder_read_failed", err)
+	}
+
+	// 如果目标 parent_id 不为空，验证目标文件夹存在且属于同一知识库
+	if input.ParentID != nil && *input.ParentID > 0 {
+		var targetFolder libraryFolderModel
+		if err := db.NewSelect().Model(&targetFolder).
+			Where("id = ?", *input.ParentID).
+			Scan(ctx); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errs.Newf("error.folder_not_found", map[string]any{"ID": *input.ParentID})
+			}
+			return nil, errs.Wrap("error.folder_read_failed", err)
+		}
+
+		// 验证目标文件夹属于同一知识库
+		if targetFolder.LibraryID != folder.LibraryID {
+			return nil, errs.New("error.folder_library_mismatch")
+		}
+
+		// 检查是否会造成循环引用：不能移动到自己的子文件夹中
+		var checkCycle func(folderID int64, targetID int64, depth int) bool
+		checkCycle = func(folderID int64, targetID int64, depth int) bool {
+			if depth > 100 { // prevent infinite loops
+				return true
+			}
+			if folderID == targetID {
+				return true
+			}
+			var parent libraryFolderModel
+			if err := db.NewSelect().Model(&parent).Where("id = ?", folderID).Scan(ctx); err != nil {
+				return false
+			}
+			if parent.ParentID != nil && *parent.ParentID > 0 {
+				return checkCycle(*parent.ParentID, targetID, depth+1)
+			}
+			return false
+		}
+
+		if checkCycle(*input.ParentID, input.ID, 0) {
+			return nil, errs.New("error.folder_move_cycle_detected")
+		}
+	}
+
+	// 检查目标位置是否已有同名文件夹
+	var nameCount int
+	query := db.NewSelect().
+		Table("library_folders").
+		ColumnExpr("COUNT(1)").
+		Where("library_id = ?", folder.LibraryID).
+		Where("name = ?", folder.Name).
+		Where("id != ?", input.ID)
+	if input.ParentID != nil && *input.ParentID > 0 {
+		query = query.Where("parent_id = ?", *input.ParentID)
+	} else {
+		query = query.Where("parent_id IS NULL")
+	}
+	if err := query.Scan(ctx, &nameCount); err != nil {
+		return nil, errs.Wrap("error.folder_move_failed", err)
+	}
+	if nameCount > 0 {
+		return nil, errs.Newf("error.folder_name_duplicate", map[string]any{"Name": folder.Name})
+	}
+
+	// 更新文件夹的 parent_id
+	var parentIDValue interface{}
+	if input.ParentID != nil && *input.ParentID > 0 {
+		parentIDValue = *input.ParentID
+	} else {
+		parentIDValue = nil
+	}
+
+	folder.ParentID = input.ParentID
+	if _, err := db.NewUpdate().Model(&folder).
+		Column("parent_id", "updated_at").
+		Where("id = ?", input.ID).
+		Exec(ctx); err != nil {
+		return nil, errs.Wrap("error.folder_move_failed", err)
+	}
+
+	dto := folder.toDTO()
+	return &dto, nil
+}
+
 // MoveDocumentToFolder 移动文档到文件夹
 func (s *LibraryService) MoveDocumentToFolder(input MoveDocumentToFolderInput) error {
 	if input.DocumentID <= 0 {

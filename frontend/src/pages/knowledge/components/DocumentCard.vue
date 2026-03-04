@@ -63,6 +63,7 @@ const emit = defineEmits<{
   (e: 'move-to-folder', doc: Document): void
   (e: 'detail', doc: Document): void
   (e: 'view', doc: Document): void
+  (e: 'navigate-to-folder', doc: Document): void
 }>()
 
 const { t } = useI18n()
@@ -373,7 +374,15 @@ const handleCardClick = () => {
           <FolderPlus class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.moveToFolder.title') }}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          v-if="document.folderId !== null && document.folderId !== undefined"
+          class="gap-2 whitespace-nowrap"
+          @select="emit('navigate-to-folder', document)"
+        >
+          <FolderPlus class="size-4 text-muted-foreground" />
+          {{ t('knowledge.content.navigateToFolder') }}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator v-if="document.folderId !== null && document.folderId !== undefined" />
         <DropdownMenuItem
           class="gap-2 whitespace-nowrap text-muted-foreground focus:text-foreground"
           @select="emit('delete', document)"

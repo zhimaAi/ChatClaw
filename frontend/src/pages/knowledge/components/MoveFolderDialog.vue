@@ -1,0 +1,275 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ArrowLeft, ChevronRight, LoaderCircle, Folder as FolderIcon } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
+import { LibraryService, MoveFolderInput } from '@bindings/chatclaw/internal/services/library'
+import type { Folder } from '@bindings/chatclaw/internal/services/library'
+import { cn } from '@/lib/utils'
+
+const props = defineProps<{
+  open: boolean
+  folder: Folder | null
+  folders: Folder[]
+}>()
+
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+  moved: []
+}>()
+
+const { t } = useI18n()
+const moving = ref(false)
+
+type Location =
+  | { kind: 'root' }
+  | { kind: 'folder'; id: number }
+
+const location = ref<Location>({ kind: 'root' })
+
+type FolderIndexItem = {
+  folder: Folder
+  parentId: number | null
+}
+
+// Build a fast index for breadcrumb navigation.
+const folderIndex = computed(() => {
+  const index = new Map<number, FolderIndexItem>()
+  const walk = (items: Folder[], parentId: number | null) => {
+    for (const f of items) {
+      index.set(f.id, { folder: f, parentId })
+      if (f.children && f.children.length > 0) {
+        walk(f.children, f.id)
+      }
+    }
+  }
+  walk(props.folders, null)
+  return index
+})
+
+// 检查文件夹是否是目标文件夹或其子文件夹（避免循环引用）
+const isDescendantOf = (folderId: number, targetId: number): boolean => {
+  if (folderId === targetId) return true
+  const item = folderIndex.value.get(folderId)
+  if (!item || !item.parentId) return false
+  return isDescendantOf(item.parentId, targetId)
+}
+
+const currentFolder = computed(() => {
+  if (location.value.kind !== 'folder') return null
+  return folderIndex.value.get(location.value.id)?.folder ?? null
+})
+
+const canGoBack = computed(() => location.value.kind !== 'root')
+
+const goBack = () => {
+  if (!canGoBack.value || moving.value) return
+  if (location.value.kind === 'folder') {
+    const parentId = folderIndex.value.get(location.value.id)?.parentId ?? null
+    location.value = parentId ? { kind: 'folder', id: parentId } : { kind: 'root' }
+  }
+}
+
+type Crumb = {
+  key: string
+  label: string
+  title?: string
+  to: Location
+}
+
+const breadcrumbs = computed<Crumb[]>(() => {
+  const root: Crumb = {
+    key: 'root',
+    label: t('knowledge.content.moveToFolder.root'),
+    to: { kind: 'root' },
+  }
+
+  if (location.value.kind === 'root') return [root]
+
+  // folder path
+  const pathIds: number[] = []
+  let cursor: number | null = location.value.id
+  while (cursor) {
+    pathIds.push(cursor)
+    cursor = folderIndex.value.get(cursor)?.parentId ?? null
+  }
+  pathIds.reverse()
+
+  const pathCrumbs: Crumb[] = pathIds.map((id) => {
+    const name = folderIndex.value.get(id)?.folder?.name ?? String(id)
+    return {
+      key: `folder-${id}`,
+      label: name,
+      title: name,
+      to: { kind: 'folder', id },
+    }
+  })
+
+  return [root, ...pathCrumbs]
+})
+
+const listFolders = computed<Folder[]>(() => {
+  if (!props.folder) return []
+  
+  let folders: Folder[] = []
+  if (location.value.kind === 'folder') {
+    folders = currentFolder.value?.children ?? []
+  } else if (location.value.kind === 'root') {
+    folders = props.folders
+  }
+  
+  // 过滤掉要移动的文件夹本身及其子文件夹
+  return folders.filter((f) => {
+    if (!props.folder) return true
+    return !isDescendantOf(f.id, props.folder.id)
+  })
+})
+
+const canMoveHere = computed(() => {
+  if (!props.folder || moving.value) return false
+  if (location.value.kind === 'root') return true
+  
+  // 检查目标文件夹不是要移动的文件夹本身或其子文件夹
+  if (location.value.kind === 'folder') {
+    return !isDescendantOf(location.value.id, props.folder.id)
+  }
+  
+  return false
+})
+
+const close = () => emit('update:open', false)
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return
+    location.value = { kind: 'root' }
+    moving.value = false
+  }
+)
+
+const handleMove = async () => {
+  if (!props.folder || moving.value) return
+  if (!canMoveHere.value) return
+  
+  moving.value = true
+  try {
+    let parentID: number | null = null
+    if (location.value.kind === 'folder') {
+      parentID = location.value.id
+    } else if (location.value.kind === 'root') {
+      parentID = null
+    }
+
+    await LibraryService.MoveFolder(
+      new MoveFolderInput({
+        id: props.folder.id,
+        parent_id: parentID,
+      })
+    )
+    emit('moved')
+    toast.success(t('knowledge.folder.move.success'))
+    close()
+  } catch (error) {
+    console.error('Failed to move folder:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.folder.move.failed'))
+  } finally {
+    moving.value = false
+  }
+}
+</script>
+
+<template>
+  <Dialog :open="open" @update:open="close">
+    <DialogContent size="md">
+      <DialogHeader>
+        <DialogTitle>{{ t('knowledge.folder.move.title') }}</DialogTitle>
+      </DialogHeader>
+
+      <div class="flex flex-col gap-4 py-4">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-sm font-medium text-foreground">
+            {{ t('knowledge.folder.move.selectFolder') }}
+          </label>
+
+          <div class="rounded-md border border-border">
+            <!-- Explorer-like header: back + breadcrumbs -->
+            <div class="flex items-center gap-2 border-b border-border px-2 py-2">
+              <button
+                type="button"
+                :disabled="!canGoBack || moving"
+                class="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                :title="t('knowledge.content.moveToFolder.back')"
+                @click="goBack"
+              >
+                <ArrowLeft class="size-4" />
+              </button>
+
+              <nav class="min-w-0 flex flex-1 items-center gap-1 text-xs text-muted-foreground">
+                <template v-for="(c, idx) in breadcrumbs" :key="c.key">
+                  <span v-if="idx !== 0" class="px-0.5 text-muted-foreground/60">/</span>
+                  <button
+                    type="button"
+                    class="min-w-0 max-w-[160px] truncate rounded px-1 py-0.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    :class="idx === breadcrumbs.length - 1 && 'text-foreground'"
+                    :title="c.title || c.label"
+                    :disabled="moving"
+                    @click="location = c.to"
+                  >
+                    {{ c.label }}
+                  </button>
+                </template>
+              </nav>
+            </div>
+
+            <!-- Explorer-like list -->
+            <div class="max-h-[300px] overflow-y-auto">
+              <div class="flex flex-col">
+                <template v-for="folder in listFolders" :key="folder.id">
+                  <button
+                    type="button"
+                    :disabled="moving"
+                    class="flex h-10 items-center gap-3 px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    @click="location = { kind: 'folder', id: folder.id }"
+                  >
+                    <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
+                    <span class="min-w-0 flex-1 truncate" :title="folder.name">
+                      {{ folder.name }}
+                    </span>
+                    <ChevronRight class="size-4 shrink-0 text-muted-foreground/70" />
+                  </button>
+                </template>
+
+                <div
+                  v-if="listFolders.length === 0"
+                  class="px-3 py-3 text-xs text-muted-foreground"
+                >
+                  {{ t('knowledge.content.moveToFolder.empty') }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" :disabled="moving" @click="close">
+          {{ t('knowledge.create.cancel') }}
+        </Button>
+        <Button :disabled="!canMoveHere" @click="handleMove">
+          <LoaderCircle v-if="moving" class="mr-2 size-4 animate-spin" />
+          {{ t('knowledge.folder.move.moveToHere') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>
