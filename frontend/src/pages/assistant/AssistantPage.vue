@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { PanelRight } from 'lucide-vue-next'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
 import IconSidebarExpand from '@/assets/icons/sidebar-expand.svg'
@@ -15,6 +16,7 @@ import RenameConversationDialog from './components/RenameConversationDialog.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import AgentSidebar from './components/AgentSidebar.vue'
 import ChatInputArea from './components/ChatInputArea.vue'
+import WorkspaceDrawer from './components/WorkspaceDrawer.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore } from '@/stores'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
@@ -123,7 +125,9 @@ const listMode = ref<ListMode>('personal')
 const createOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsAgent = ref<Agent | null>(null)
+const settingsInitialTab = ref<string>('')
 const sidebarCollapsed = ref(false)
+const workspaceDrawerOpen = ref(false)
 
 // Snap mode: draggable floating expand button
 const snapBtnTop = ref(8) // initial top offset in px
@@ -242,9 +246,16 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
   }
 }
 
-const openSettings = (agent: Agent) => {
+const openSettings = (agent: Agent, initialTab?: string) => {
   settingsAgent.value = agent
+  settingsInitialTab.value = initialTab || ''
   settingsOpen.value = true
+}
+
+const handleOpenWorkspaceSettings = () => {
+  if (activeAgent.value) {
+    openSettings(activeAgent.value, 'workspace')
+  }
 }
 
 const handleUpdated = (updated: Agent) => {
@@ -685,6 +696,10 @@ onMounted(() => {
       if (pendingData.enableThinking != null) {
         enableThinking.value = pendingData.enableThinking
       }
+      // Apply chat mode
+      if (pendingData.chatMode) {
+        chatMode.value = pendingData.chatMode
+      }
       // Apply chat input and auto-send
       if (pendingData.chatInput) {
         chatInput.value = pendingData.chatInput
@@ -935,6 +950,22 @@ onUnmounted(() => {
 
     <!-- Right side: Chat area -->
     <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only) -->
+      <div
+        v-if="!isAgentEmpty && !isSnapMode && activeConversationId && chatMode === 'task'"
+        class="flex shrink-0 items-center justify-end px-2 pt-1"
+      >
+        <Button
+          size="icon"
+          variant="ghost"
+          class="size-7"
+          :title="t('assistant.workspaceDrawer.title')"
+          @click="workspaceDrawerOpen = !workspaceDrawerOpen"
+        >
+          <PanelRight :class="cn('size-4', workspaceDrawerOpen ? 'text-foreground' : 'text-muted-foreground')" />
+        </Button>
+      </div>
+
       <!-- Agent list empty state -->
       <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
         <div class="flex flex-col items-center gap-4">
@@ -964,6 +995,7 @@ onUnmounted(() => {
         :mode="props.mode"
         :agent-name="activeAgent?.name"
         :agent-icon="activeAgent?.icon"
+        :sandbox-mode="activeAgent?.sandbox_mode"
         :has-attached-target="hasAttachedTarget"
         :show-ai-send-button="showAiSendButton"
         :show-ai-edit-button="showAiEditButton"
@@ -1008,6 +1040,16 @@ onUnmounted(() => {
         @remove-library="handleRemoveLibrary"
       />
     </section>
+
+    <!-- Workspace drawer panel (task mode only) -->
+    <WorkspaceDrawer
+      v-if="!isSnapMode && activeConversationId && chatMode === 'task'"
+      :open="workspaceDrawerOpen"
+      :agent="activeAgent"
+      :conversation-id="activeConversationId"
+      @update:open="workspaceDrawerOpen = $event"
+      @open-workspace-settings="handleOpenWorkspaceSettings"
+    />
     </div><!-- End upper row -->
 
     <!-- Input area (snap mode with messages: full-width at bottom) -->
@@ -1049,6 +1091,7 @@ onUnmounted(() => {
     <AgentSettingsDialog
       v-model:open="settingsOpen"
       :agent="settingsAgent"
+      :initial-tab="settingsInitialTab"
       @updated="handleUpdated"
       @deleted="handleDeleted"
     />

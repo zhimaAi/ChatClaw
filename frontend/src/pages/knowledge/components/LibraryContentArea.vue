@@ -7,6 +7,12 @@ import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -27,6 +33,7 @@ import { useNavigationStore } from '@/stores/navigation'
 import CreateFolderDialog from './CreateFolderDialog.vue'
 import RenameFolderDialog from './RenameFolderDialog.vue'
 import DeleteFolderDialog from './DeleteFolderDialog.vue'
+import MoveFolderDialog from './MoveFolderDialog.vue'
 import type { Document, DocumentStatus } from './DocumentCard.vue'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import {
@@ -97,8 +104,10 @@ const activeFolderId = ref<number | null>(null)
 const createFolderDialogOpen = ref(false)
 const renameFolderDialogOpen = ref(false)
 const deleteFolderDialogOpen = ref(false)
+const moveFolderDialogOpen = ref(false)
 const folderToRename = ref<Folder | null>(null)
 const folderToDelete = ref<Folder | null>(null)
+const folderToMove = ref<Folder | null>(null)
 
 // 文件夹查找缓存 Map（优化性能，避免重复递归查找）
 const folderMapCache = ref<Map<number, Folder>>(new Map())
@@ -184,6 +193,8 @@ const loadFolders = async () => {
   if (!props.library?.id) return
   try {
     folders.value = await LibraryService.ListFolders(props.library.id)
+    // 每次文件夹结构变化时，同步刷新统计信息，确保"X项"显示准确
+    void loadFolderStats()
   } catch (error) {
     console.error('Failed to load folders:', error)
     toast.error(getErrorMessage(error) || t('knowledge.loadFailed'))
@@ -198,6 +209,8 @@ const resetAndLoad = async () => {
   beforeID.value = 0
   hasMore.value = true // Always allow the first request to go through
   await loadMore(loadToken)
+  // 重置并重新加载列表后，同步刷新文件夹统计
+  void loadFolderStats()
 }
 
 const loadMore = async (token?: number) => {
@@ -223,9 +236,9 @@ const loadMore = async (token?: number) => {
       before_id: beforeID.value,
       limit: PAGE_SIZE,
       sort_by: sortBy.value,
-      // 0 = no folder filter (show all), -1 = only uncategorized, >0 = specific folder
+      // Root (null) should show only uncategorized (folder_id IS NULL), not documents from subfolders
       folder_id:
-        activeFolderId.value === null ? 0 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
+        activeFolderId.value === null ? -1 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
     })
     if (currentToken !== loadToken) return
 
@@ -282,8 +295,8 @@ watch(
 
 // 监听文件夹变化，重新加载文档
 watch(activeFolderId, () => {
-  // 如果选择的是文件夹，则加载该文件夹下的文档
-  // 如果选择的是"全部"（null），则显示所有文件夹和文档
+  // If a folder is selected, load documents in that folder.
+  // If root (null) is selected, show root folders and uncategorized documents only.
   resetAndLoad()
 })
 
@@ -291,6 +304,11 @@ watch(activeFolderId, () => {
 const findFolderById = (id: number): Folder | null => {
   return folderMapCache.value.get(id) || null
 }
+
+// 计算是否正在搜索
+const isSearching = computed(() => {
+  return searchQuery.value.trim().length > 0
+})
 
 // 计算要显示的文件夹列表
 const displayFolders = computed(() => {
@@ -307,37 +325,93 @@ const displayFolders = computed(() => {
   return []
 })
 
-// 统计每个文件夹下的文档数量及最新文档更新时间（基于当前已加载的文档）
-const folderStatsMap = computed(() => {
-  const map = new Map<
+// 构建面包屑路径数组
+const breadcrumbPath = computed(() => {
+  if (!props.library?.name) return []
+
+  const path: Array<{ name: string; id: number | null }> = [
+    { name: props.library.name, id: null }
+  ]
+
+  // 根目录或未分组：仅显示知识库名
+  if (!activeFolderId.value || activeFolderId.value <= 0) {
+    return path
+  }
+
+  const names: Array<{ name: string; id: number }> = []
+  let cursorId: number | null = activeFolderId.value
+
+  while (cursorId && cursorId > 0) {
+    const folder = folderMapCache.value.get(cursorId)
+    if (!folder) break
+    names.push({ name: folder.name, id: folder.id })
+    const parentId = (folder.parent_id as unknown as number | null) ?? null
+    cursorId = parentId && parentId > 0 ? parentId : null
+  }
+
+  names.reverse()
+  return [...path, ...names]
+})
+
+// 当前标题面包屑：知识库名 + 文件夹路径（用于 title 属性）
+const currentBreadcrumbTitle = computed(() => {
+  const path = breadcrumbPath.value
+  if (path.length === 0) return ''
+  if (path.length === 1) return path[0].name
+  return path.map(p => p.name).join(' / ')
+})
+
+// 计算要显示的面包屑项（路径过长时，只显示首尾，中间用省略号）
+const visibleBreadcrumbs = computed(() => {
+  const path = breadcrumbPath.value
+  if (path.length <= 4) {
+    // 路径不长，全部显示
+    return path.map((item, idx) => ({ ...item, visible: true, index: idx, isEllipsis: false }))
+  }
+  // 路径过长，只显示首尾
+  const result: Array<{ name: string; id: number | null; visible: boolean; index: number; isEllipsis: boolean }> = []
+  result.push({ ...path[0], visible: true, index: 0, isEllipsis: false })
+  result.push({ name: '...', id: null, visible: true, index: -1, isEllipsis: true })
+  result.push({ ...path[path.length - 1], visible: true, index: path.length - 1, isEllipsis: false })
+  return result
+})
+
+// 后端提供的文件夹统计信息（文档数量 & 最近更新时间）
+const folderStatsMap = ref<
+  Map<
     number,
     {
       docCount: number
       latestDocUpdatedAt?: string
     }
-  >()
+  >
+>(new Map())
 
-  for (const doc of documents.value) {
-    const folderId = doc.folderId
-    if (!folderId || folderId <= 0) continue
-
-    const existing = map.get(folderId) || { docCount: 0, latestDocUpdatedAt: undefined }
-    existing.docCount += 1
-
-    if (doc.updatedAt) {
-      const current = existing.latestDocUpdatedAt
-      if (!current) {
-        existing.latestDocUpdatedAt = doc.updatedAt
-      } else if (new Date(doc.updatedAt).getTime() > new Date(current).getTime()) {
-        existing.latestDocUpdatedAt = doc.updatedAt
+const loadFolderStats = async () => {
+  if (!props.library?.id) return
+  try {
+    const stats = await LibraryService.GetFolderStats(props.library.id)
+    const map = new Map<
+      number,
+      {
+        docCount: number
+        latestDocUpdatedAt?: string
       }
+    >()
+
+    for (const item of stats) {
+      if (!item.folder_id || item.folder_id <= 0) continue
+      map.set(item.folder_id, {
+        docCount: item.doc_count ?? 0,
+        latestDocUpdatedAt: item.latest_doc_updated_at as unknown as string | undefined,
+      })
     }
 
-    map.set(folderId, existing)
+    folderStatsMap.value = map
+  } catch (error) {
+    console.error('Failed to load folder stats:', error)
   }
-
-  return map
-})
+}
 
 const formatDate = (dateStr: string | null | undefined) => {
   if (!dateStr) return ''
@@ -401,6 +475,12 @@ const handleFolderDelete = (folder: Folder) => {
   deleteFolderDialogOpen.value = true
 }
 
+// 处理文件夹移动
+const handleFolderMove = (folder: Folder) => {
+  folderToMove.value = folder
+  moveFolderDialogOpen.value = true
+}
+
 // 处理文件夹创建
 const handleFolderCreated = (createdFolder: Folder) => {
   void loadFolders()
@@ -418,6 +498,18 @@ const handleFolderCreated = (createdFolder: Folder) => {
 const handleFolderUpdated = () => {
   void loadFolders()
   emit('folder-updated')
+}
+
+// 处理文件夹移动完成
+const handleFolderMoved = () => {
+  void loadFolders()
+  emit('folder-updated')
+  // 如果移动的是当前文件夹，需要更新 activeFolderId
+  if (folderToMove.value && activeFolderId.value === folderToMove.value.id) {
+    // 移动后，文件夹的 parent_id 会变化，但 id 不变，所以不需要特别处理
+    // 但如果移动到根目录，可能需要刷新显示
+    void resetAndLoad()
+  }
 }
 
 // 处理文件夹删除完成
@@ -543,7 +635,22 @@ const handleDetail = (doc: Document) => {
 
 const handleView = (doc: Document) => {
   // Open document in a new tab instead of dialog
-  navigationStore.openDocumentViewer(doc.id, doc.name)
+  navigationStore.openDocumentViewer(doc.id, doc.name, doc.thumbIcon)
+}
+
+// 处理跳转到文档所在文件夹
+const handleNavigateToFolder = (doc: Document) => {
+  if (doc.folderId && doc.folderId > 0) {
+    activeFolderId.value = doc.folderId
+    emit('folder-selected', doc.folderId)
+    // 清除搜索，显示文件夹内容
+    searchQuery.value = ''
+  } else {
+    // 跳转到未分组
+    activeFolderId.value = -1
+    emit('folder-selected', -1)
+    searchQuery.value = ''
+  }
 }
 
 const confirmRename = async (doc: Document | null, newName: string) => {
@@ -607,8 +714,12 @@ const confirmDelete = async () => {
   try {
     await DocumentService.DeleteDocument(documentToDelete.value.id)
     documents.value = documents.value.filter((d) => d.id !== documentToDelete.value?.id)
+    // 删除文档后刷新文件夹统计，保持"X项"准确
+    void loadFolderStats()
 
     toast.success(t('knowledge.content.delete.success'))
+    // 删除成功后关闭详情弹窗
+    documentDetailDialogOpen.value = false
   } catch (error) {
     console.error('Failed to delete document:', error)
     toast.error(getErrorMessage(error) || t('knowledge.content.delete.failed'))
@@ -735,6 +846,11 @@ onMounted(() => {
       ...documents.value[index],
       thumbIcon: thumbnail.thumb_icon || undefined,
     }
+    // Sync opened document tab icon (if any) to match the card thumbnail.
+    navigationStore.updateDocumentTabIconByDocumentId(
+      thumbnail.document_id,
+      thumbnail.thumb_icon || undefined
+    )
   })
 
   unsubscribeProgress = Events.On('document:progress', (event: { data: ProgressEvent }) => {
@@ -861,21 +977,51 @@ onUnmounted(() => {
     data-file-drop-target
   >
     <!-- 头部区域 -->
-    <div class="flex h-12 items-center justify-between px-4">
-      <div class="flex items-center gap-3">
-        <h2 class="text-base font-medium text-foreground">{{ library.name }}</h2>
-        <!-- 创建文件夹按钮 -->
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-6"
-          :title="t('knowledge.folder.create')"
-          @click="createFolderDialogOpen = true"
+    <div class="flex h-12 items-center justify-between gap-4 px-4">
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <!-- 面包屑导航（Windows 资源管理器样式：路径过长时中间省略） -->
+        <nav
+          class="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-base font-medium text-foreground"
+          :title="currentBreadcrumbTitle"
         >
-          <FolderPlus class="size-4 text-muted-foreground" />
-        </Button>
+          <template v-for="(item, idx) in visibleBreadcrumbs" :key="`${item.id ?? 'root'}-${idx}`">
+            <span v-if="idx > 0 && !item.isEllipsis" class="shrink-0 px-1 text-muted-foreground/60">/</span>
+            <button
+              v-if="item.id !== null && !item.isEllipsis"
+              type="button"
+              class="shrink-0 truncate rounded px-1 py-0.5 text-sm transition-colors hover:bg-accent/50 hover:text-foreground"
+              :class="item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'"
+              :title="item.name"
+              @click="
+                () => {
+                  if (item.id !== null) {
+                    activeFolderId = item.id
+                    emit('folder-selected', item.id)
+                  }
+                }
+              "
+            >
+              {{ item.name }}
+            </button>
+            <span
+              v-else-if="!item.isEllipsis"
+              class="shrink-0 truncate text-sm"
+              :class="item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'"
+              :title="item.name"
+            >
+              {{ item.name }}
+            </span>
+            <span
+              v-else
+              class="shrink-0 px-1 text-muted-foreground/60"
+              :title="currentBreadcrumbTitle"
+            >
+              {{ item.name }}
+            </span>
+          </template>
+        </nav>
       </div>
-      <div class="flex items-center gap-1.5">
+      <div class="flex shrink-0 items-center gap-1.5">
         <!-- 搜索框 -->
         <div class="relative w-40">
           <Search
@@ -906,16 +1052,36 @@ onUnmounted(() => {
           />
           <ArrowUpNarrowWide v-else class="size-4 text-muted-foreground" />
         </Button>
-        <!-- 添加文档按钮 -->
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-6"
-          :title="t('knowledge.content.addDocument')"
-          @click="handleAddDocument"
-        >
-          <IconUploadFile class="size-4 text-muted-foreground" />
-        </Button>
+        <!-- 添加文件 / 文件夹菜单 -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-6"
+              :title="t('knowledge.content.addDocument')"
+            >
+              <Plus class="size-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-36">
+            <DropdownMenuItem class="gap-2" @select="handleAddDocument">
+              <IconUploadFile class="size-4 text-muted-foreground" />
+              <span>{{ t('knowledge.content.addDocument') }}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              class="gap-2"
+              @select="
+                () => {
+                  createFolderDialogOpen = true
+                }
+              "
+            >
+              <FolderPlus class="size-4 text-muted-foreground" />
+              <span>{{ t('knowledge.folder.create') }}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
 
@@ -947,9 +1113,9 @@ onUnmounted(() => {
         <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
       </div>
 
-      <!-- 空状态 -->
+      <!-- 空状态（没有文件也没有文件夹时才显示） -->
       <div
-        v-else-if="filteredDocuments.length === 0"
+        v-else-if="filteredDocuments.length === 0 && (displayFolders.length === 0 || searchQuery.trim())"
         class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"
       >
         <Upload class="size-10 opacity-40" />
@@ -971,7 +1137,7 @@ onUnmounted(() => {
           class="grid auto-rows-max gap-4"
           style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
         >
-          <!-- 文件夹卡片（仅在显示"全部"时显示） -->
+          <!-- 文件夹卡片（仅在显示"全部"时且未搜索时显示） -->
           <FolderCard
             v-for="folder in displayFolders"
             :key="`folder-${folder.id}`"
@@ -981,18 +1147,22 @@ onUnmounted(() => {
             @click="handleFolderClick"
             @rename="handleFolderRename"
             @delete="handleFolderDelete"
+            @move="handleFolderMove"
+            v-show="!searchQuery.trim()"
           />
           <!-- 文档卡片 -->
           <DocumentCard
             v-for="doc in filteredDocuments"
             :key="doc.id"
             :document="doc"
+            :is-searching="isSearching"
             @rename="handleRename"
             @relearn="handleRelearn"
             @delete="handleOpenDelete"
             @move-to-folder="handleMoveToFolder"
             @detail="handleDetail"
             @view="handleView"
+            @navigate-to-folder="handleNavigateToFolder"
           />
         </div>
 
@@ -1058,6 +1228,12 @@ onUnmounted(() => {
       v-model:open="deleteFolderDialogOpen"
       :folder="folderToDelete"
       @deleted="handleFolderDeleted"
+    />
+    <MoveFolderDialog
+      v-model:open="moveFolderDialogOpen"
+      :folder="folderToMove"
+      :folders="folders"
+      @moved="handleFolderMoved"
     />
 
     <!-- 删除确认对话框 -->

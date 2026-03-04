@@ -48,6 +48,12 @@ type MoveDocumentToFolderInput struct {
 	FolderID   *int64 `json:"folder_id"` // nil 或 0 表示移到"未分组"
 }
 
+// MoveFolderInput 移动文件夹的输入参数
+type MoveFolderInput struct {
+	ID       int64  `json:"id"`        // 要移动的文件夹ID
+	ParentID *int64 `json:"parent_id"` // nil 表示移到根目录
+}
+
 // libraryFolderModel 数据库模型
 type libraryFolderModel struct {
 	bun.BaseModel `bun:"table:library_folders,alias:lf"`

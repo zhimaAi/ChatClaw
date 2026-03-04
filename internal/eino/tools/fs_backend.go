@@ -444,7 +444,7 @@ func (b *Backend) Delete(_ context.Context, req *plantask.DeleteRequest) error {
 // writableRoots lists home-relative directories that common package managers
 // need write access to.
 var writableRoots = []string{
-	".npm", ".bun", ".cache", ".local", ".yarn",
+	".npm", ".bun", ".cache", ".local", ".yarn", ".openclaw",
 }
 
 func (b *Backend) buildCodexCommand(command string) *exec.Cmd {
