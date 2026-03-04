@@ -12,6 +12,7 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/memory"
+	"chatclaw/internal/services/skills"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -225,18 +226,15 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	}
 
 	if agentConfig.SkillsEnabled {
-		if s.skillsService == nil {
-			s.app.Logger.Warn("[chat] skills service is not initialized, skip skill management tools")
+		skillsSvc := skills.NewSkillsService(s.app)
+		skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{
+			SkillsService: skillsSvc,
+		})
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
 		} else {
-			skillTools, toolErr := tools.NewSkillManagementTools(&tools.SkillManagementConfig{
-				SkillsService: s.skillsService,
-			})
-			if toolErr != nil {
-				s.app.Logger.Warn("[chat] failed to create skill management tools", "error", toolErr)
-			} else {
-				extraTools = append(extraTools, skillTools...)
-				s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
-			}
+			extraTools = append(extraTools, skillTools...)
+			s.app.Logger.Info("[chat] skill management tools added", "count", len(skillTools))
 		}
 	}
 
