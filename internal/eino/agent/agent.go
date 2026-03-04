@@ -145,7 +145,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	handlers := buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
 
 	var subAgents []adk.Agent
-	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, backend, logger); peErr != nil {
+	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, backend, handlers, logger); peErr != nil {
 		logger.Warn("[agent] failed to create plan-execute subagent, skipping", "error", peErr)
 	} else {
 		subAgents = append(subAgents, peAgent)
@@ -415,11 +415,17 @@ func (a *namedAgent) Description(_ context.Context) string  { return a.desc }
 // Architecture: Planner (generate plan) → Executor (execute steps with tools)
 //               → Replanner (evaluate progress, replan or finish)
 //
+// The Executor is built manually (instead of using planexecute.NewExecutor) so
+// that the same Handlers as the main agent (Skill, Reduction, etc.) are applied.
+// The custom GenModelInput merges the handler-injected instruction with the
+// standard ExecutorPrompt so that both Skill system prompts and plan context
+// are visible to the model.
+//
 // NOTE: Planner and Replanner internally use tool_choice=required, which is
 // incompatible with models that only support tool_choice=auto (e.g. models
 // with built-in thinking mode like GLM-5). In such cases the Plan-Execute
 // SubAgent will fail at runtime and the error is returned to the main agent.
-func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, backend *tools.Backend, logger *slog.Logger) (adk.Agent, error) {
+func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, backend *tools.Backend, handlers []adk.ChatModelAgentMiddleware, logger *slog.Logger) (adk.Agent, error) {
 	executorToolsConfig := buildExecutorToolsConfig(toolsConfig, backend, logger)
 
 	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
@@ -429,11 +435,7 @@ func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingCh
 		return nil, fmt.Errorf("create planner: %w", err)
 	}
 
-	executor, err := planexecute.NewExecutor(ctx, &planexecute.ExecutorConfig{
-		Model:         chatModel,
-		ToolsConfig:   executorToolsConfig,
-		MaxIterations: planExecuteExecutorMaxIter,
-	})
+	executor, err := buildPlanExecuteExecutor(ctx, chatModel, executorToolsConfig, handlers)
 	if err != nil {
 		return nil, fmt.Errorf("create executor: %w", err)
 	}
@@ -459,6 +461,85 @@ func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingCh
 
 	logger.Info("[agent] plan-execute subagent created successfully")
 	return &namedAgent{Agent: agent, name: "plan-execute", desc: desc}, nil
+}
+
+// buildPlanExecuteExecutor creates a ChatModelAgent that serves as the Executor
+// in the Plan-Execute loop. Unlike planexecute.NewExecutor, this version
+// accepts Handlers so that Skill, Reduction, and other middleware capabilities
+// are available during step execution.
+//
+// The GenModelInput prepends any handler-injected instruction (e.g. Skill
+// system prompt) as a system message, then appends the standard executor
+// prompt (objective + plan + completed steps + current step) as a user message.
+func buildPlanExecuteExecutor(ctx context.Context, chatModel model.BaseChatModel, toolsConfig adk.ToolsConfig, handlers []adk.ChatModelAgentMiddleware) (adk.Agent, error) {
+	genInput := func(ctx context.Context, instruction string, _ *adk.AgentInput) ([]*schema.Message, error) {
+		plan, ok := adk.GetSessionValue(ctx, planexecute.PlanSessionKey)
+		if !ok {
+			return nil, fmt.Errorf("plan not found in session")
+		}
+		p := plan.(planexecute.Plan)
+
+		userInput, ok := adk.GetSessionValue(ctx, planexecute.UserInputSessionKey)
+		if !ok {
+			return nil, fmt.Errorf("user input not found in session")
+		}
+		userMsgs := userInput.([]*schema.Message)
+
+		var executedSteps []planexecute.ExecutedStep
+		if es, ok := adk.GetSessionValue(ctx, planexecute.ExecutedStepsSessionKey); ok {
+			executedSteps = es.([]planexecute.ExecutedStep)
+		}
+
+		planJSON, err := p.MarshalJSON()
+		if err != nil {
+			return nil, fmt.Errorf("marshal plan: %w", err)
+		}
+
+		executorMsgs, err := planexecute.ExecutorPrompt.Format(ctx, map[string]any{
+			"input":          formatPlanExecInput(userMsgs),
+			"plan":           string(planJSON),
+			"executed_steps": formatPlanExecSteps(executedSteps),
+			"step":           p.FirstStep(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("format executor prompt: %w", err)
+		}
+
+		var msgs []*schema.Message
+		if instruction != "" {
+			msgs = append(msgs, schema.SystemMessage(instruction))
+		}
+		msgs = append(msgs, executorMsgs...)
+		return msgs, nil
+	}
+
+	return adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:          "executor",
+		Description:   "an executor agent",
+		Model:         chatModel,
+		ToolsConfig:   toolsConfig,
+		GenModelInput: genInput,
+		MaxIterations: planExecuteExecutorMaxIter,
+		OutputKey:     planexecute.ExecutedStepSessionKey,
+		Handlers:      handlers,
+	})
+}
+
+func formatPlanExecInput(msgs []*schema.Message) string {
+	var sb strings.Builder
+	for _, msg := range msgs {
+		sb.WriteString(msg.Content)
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func formatPlanExecSteps(steps []planexecute.ExecutedStep) string {
+	var sb strings.Builder
+	for _, s := range steps {
+		sb.WriteString(fmt.Sprintf("Step: %s\nResult: %s\n\n", s.Step, s.Result))
+	}
+	return sb.String()
 }
 
 // buildExecutorToolsConfig merges the main agent's user tools with filesystem
