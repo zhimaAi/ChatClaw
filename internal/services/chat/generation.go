@@ -366,9 +366,10 @@ type streamState struct {
 	lastSegmentToolCallIDs map[string]bool
 
 	// Tool call delta tracking
-	toolStatesByKey map[string]*toolCallState
-	toolOrder       []string
-	indexKeyMap     map[int]string
+	toolStatesByKey   map[string]*toolCallState
+	toolOrder         []string
+	indexKeyMap       map[int]string
+	hiddenToolCallIDs map[string]bool
 }
 
 type toolCallState struct {
@@ -379,11 +380,12 @@ type toolCallState struct {
 
 func newStreamState(gc *generationContext, assistantMsg *messageModel) *streamState {
 	return &streamState{
-		gc:              gc,
-		assistantMsg:    assistantMsg,
-		toolStatesByKey: make(map[string]*toolCallState),
-		toolOrder:       make([]string, 0),
-		indexKeyMap:     make(map[int]string),
+		gc:                gc,
+		assistantMsg:      assistantMsg,
+		toolStatesByKey:   make(map[string]*toolCallState),
+		toolOrder:         make([]string, 0),
+		indexKeyMap:       make(map[int]string),
+		hiddenToolCallIDs: make(map[string]bool),
 	}
 }
 
@@ -463,6 +465,9 @@ func (ss *streamState) buildToolCallsForDB() []schema.ToolCall {
 		if _, ok := seen[st.id]; ok {
 			continue
 		}
+		if isHiddenTool(st.name) {
+			continue
+		}
 		seen[st.id] = struct{}{}
 		args := st.args
 		if !json.Valid([]byte(args)) {
@@ -507,6 +512,9 @@ func (ss *streamState) updateToolStates(toolCalls []schema.ToolCall) {
 		}
 		if tc.Function.Name != "" {
 			st.name = tc.Function.Name
+			if isHiddenTool(st.name) && st.id != "" {
+				ss.hiddenToolCallIDs[st.id] = true
+			}
 		}
 		st.args = updateArgs(st.args, tc.Function.Arguments)
 	}
@@ -616,7 +624,7 @@ func (s *ChatService) consumeEventIter(ctx context.Context, gc *generationContex
 // handleInterrupt processes an Interrupted event by saving a confirmation
 // message and pausing until the user replies.
 func (s *ChatService) handleInterrupt(_ context.Context, gc *generationContext, ss *streamState, assistantMsg *messageModel, event *adk.AgentEvent) processStreamResult {
-	promptText := "A potentially dangerous operation requires your confirmation. Please reply **confirm** to proceed or **reject** to cancel."
+	promptText := einoagent.DefaultInterruptPrompt()
 	if cmdInfo := extractInterruptCommand(event); cmdInfo != nil {
 		promptText = einoagent.FormatInterruptPrompt(cmdInfo)
 	}
@@ -626,6 +634,9 @@ func (s *ChatService) handleInterrupt(_ context.Context, gc *generationContext, 
 	if existingContent != "" {
 		separator = "\n\n"
 	}
+
+	ss.addContentToSegments(promptText)
+
 	s.updateMessageFinal(gc.db, assistantMsg.ID, existingContent+separator+promptText, ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusInterrupted, "", "interrupted", ss.inputTokens, ss.outputTokens)
 
 	gc.emit(EventChatChunk, ChatChunkEvent{
@@ -723,6 +734,12 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 	}
 }
 
+// isHiddenTool returns true for tools whose call/result events should not be
+// sent to the frontend or persisted as tool messages.
+func isHiddenTool(name string) bool {
+	return name == "confirm_execution"
+}
+
 func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *streamState, msg *schema.Message) {
 	if len(msg.ToolCalls) > 0 {
 		ss.updateToolStates(msg.ToolCalls)
@@ -739,6 +756,11 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 				}
 			}
 		}
+
+		if isHiddenTool(toolName) || ss.hiddenToolCallIDs[msg.ToolCallID] {
+			return
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
 			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
 			Type:       "result",
@@ -810,6 +832,10 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 			}
 		}
 		if toolName == "" {
+			continue
+		}
+
+		if isHiddenTool(toolName) {
 			continue
 		}
 

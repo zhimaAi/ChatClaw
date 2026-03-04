@@ -42,7 +42,6 @@ const getToolDisplayName = (toolName: string) => {
     memory_retriever: t('tools.memoryRetriever.name'),
     execute: t('tools.execute.name'),
     execute_background: t('tools.executeBackground.name'),
-    confirm_execution: t('tools.confirmExecution.name'),
     http_request: t('tools.httpRequest.name'),
     sequential_thinking: t('tools.sequentialThinking.name'),
     sequentialthinking: t('tools.sequentialThinking.name'), // eino-ext may use either

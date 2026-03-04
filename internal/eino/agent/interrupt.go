@@ -112,9 +112,25 @@ func IsDangerous(cmd string) bool {
 	return false
 }
 
+// DefaultInterruptPrompt returns a generic confirmation prompt when no
+// command information is available. The language matches the system locale.
+func DefaultInterruptPrompt() string {
+	if isZhCN() {
+		return "检测到一个可能具有破坏性的操作，需要你的确认。请回复 **确认** 继续执行，或回复 **拒绝** 取消。"
+	}
+	return "A potentially dangerous operation requires your confirmation. Please reply **confirm** to proceed or **reject** to cancel."
+}
+
 // FormatInterruptPrompt creates the assistant message text shown to the user
-// when a dangerous command is intercepted.
+// when a dangerous command is intercepted. The language matches the current
+// system locale.
 func FormatInterruptPrompt(info *InterruptInfo) string {
+	if isZhCN() {
+		return fmt.Sprintf(
+			"即将执行一条可能具有破坏性的命令：\n\n```\n%s\n```\n\n请回复 **确认** 继续执行，或回复 **拒绝** 取消。",
+			info.Command,
+		)
+	}
 	return fmt.Sprintf(
 		"I'm about to execute a potentially dangerous command:\n\n```\n%s\n```\n\nPlease reply **confirm** to proceed or **reject** to cancel.",
 		info.Command,
