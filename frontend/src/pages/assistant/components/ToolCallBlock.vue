@@ -102,6 +102,24 @@ const getQueryFromArgs = (argsJson?: string): string => {
   const q = obj?.query
   return typeof q === 'string' ? q : ''
 }
+
+const getTaskArgs = (argsJson?: string): { description: string; agentType: string } | null => {
+  const obj = safeParse(argsJson)
+  if (!obj || typeof obj !== 'object') return null
+  return {
+    description: obj.description ?? '',
+    agentType: obj.subagent_type ?? '',
+  }
+}
+
+const isTaskTool = (toolName: string) => toolName === 'task'
+
+const getTaskResult = (resultJson?: string): string => {
+  if (!resultJson) return ''
+  const parsed = safeParse(resultJson)
+  if (typeof parsed === 'string') return parsed
+  return resultJson
+}
 </script>
 
 <template>
@@ -212,6 +230,31 @@ const getQueryFromArgs = (argsJson?: string): string => {
           </details>
         </template>
 
+        <!-- Friendly result view for Task (sub-agent) -->
+        <template v-else-if="isTaskTool(toolCall.toolName)">
+          <div v-if="getTaskArgs(toolCall.argsJson)" class="space-y-1.5">
+            <div v-if="getTaskArgs(toolCall.argsJson)?.agentType" class="flex items-center gap-1.5">
+              <span class="font-medium text-muted-foreground">{{ t('assistant.chat.taskAgentType') }}:</span>
+              <span class="rounded bg-background/50 px-1.5 py-0.5 text-foreground/80 dark:bg-zinc-950/50">
+                {{ getTaskArgs(toolCall.argsJson)?.agentType }}
+              </span>
+            </div>
+            <div v-if="getTaskArgs(toolCall.argsJson)?.description">
+              <div class="font-medium text-muted-foreground">{{ t('assistant.chat.taskDescription') }}</div>
+              <div class="mt-0.5 whitespace-pre-wrap text-foreground/80">
+                {{ getTaskArgs(toolCall.argsJson)?.description }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="toolCall.resultJson" class="space-y-1">
+            <div class="font-medium text-muted-foreground">{{ t('assistant.chat.taskAgentResult') }}</div>
+            <div
+              class="max-h-80 overflow-auto rounded border border-border/50 bg-background/30 p-2.5 text-xs leading-relaxed text-foreground/90 whitespace-pre-wrap dark:bg-zinc-950/30"
+            >{{ getTaskResult(toolCall.resultJson) }}</div>
+          </div>
+        </template>
+
         <!-- Generic: Arguments -->
         <div v-else-if="toolCall.argsJson" class="space-y-1">
           <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolArgs') }}</div>
@@ -222,7 +265,7 @@ const getQueryFromArgs = (argsJson?: string): string => {
 
         <!-- Generic: Result -->
         <div
-          v-if="toolCall.resultJson && toolCall.toolName !== 'duckduckgo_search'"
+          v-if="toolCall.resultJson && toolCall.toolName !== 'duckduckgo_search' && !isTaskTool(toolCall.toolName)"
           class="space-y-1"
         >
           <div class="font-medium text-muted-foreground">{{ t('assistant.chat.toolResult') }}</div>

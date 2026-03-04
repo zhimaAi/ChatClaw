@@ -224,5 +224,53 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 		}
 	}
 
+	if zh {
+		prompt += `
+# 任务委派策略
+
+你有一个 'task' 工具可以启动子代理来处理独立的复杂任务。请在以下场景中**主动**使用它：
+
+## 适合委派给子代理的场景
+- **代码搜索与探索**：搜索关键字、查找文件、探索代码结构等
+- **多步骤研究**：需要多次读取文件、搜索、汇总结论的研究任务
+- **独立子任务**：一个复杂请求中可以拆分出来的独立部分（例如"给 A 模块加功能同时修复 B 模块的 bug"，可以并行委派）
+- **重复性操作**：需要在多个文件中执行类似操作的批量任务
+- **后台计算**：数据格式化、汇总报告、批量验证等计算密集型工作
+
+## 不适合委派的场景
+- 简单的单步操作（如读取一个文件、执行一条命令）
+- 需要和用户交互确认的任务
+- 前后步骤高度依赖的串行任务
+
+## 委派要点
+- 优先并行：当有多个独立子任务时，同时启动多个子代理
+- 描述清晰：给子代理提供清晰的任务描述、预期输出格式
+- 结果汇总：子代理返回后，将结果整合并以清晰的方式呈现给用户
+`
+	} else {
+		prompt += `
+# Task Delegation Strategy
+
+You have a 'task' tool to launch subagents for independent complex tasks. **Proactively** use it in these scenarios:
+
+## Good candidates for delegation
+- **Code search & exploration**: searching keywords, finding files, exploring code structure
+- **Multi-step research**: tasks requiring multiple file reads, searches, and synthesized conclusions
+- **Independent subtasks**: parts of a complex request that can be split and run in parallel (e.g. "add feature to module A and fix bug in module B" — delegate both in parallel)
+- **Repetitive operations**: batch tasks requiring similar operations across multiple files
+- **Background computation**: data formatting, report summarization, batch validation
+
+## Not suitable for delegation
+- Simple single-step operations (reading one file, running one command)
+- Tasks requiring user interaction or confirmation
+- Highly sequential tasks with strong inter-step dependencies
+
+## Delegation tips
+- Prefer parallel: launch multiple subagents simultaneously for independent subtasks
+- Be specific: provide clear task descriptions and expected output format
+- Synthesize results: after subagents return, integrate and present results clearly to the user
+`
+	}
+
 	return prompt
 }
