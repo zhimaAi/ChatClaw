@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PanelRight } from 'lucide-vue-next'
 import IconAssistant from '@/assets/icons/assistant.svg'
@@ -338,7 +338,7 @@ const handleSelectConversationForAgent = (agentId: number, conversation: Convers
   handleSelectConversation(conversation)
 }
 
-const handleSelectConversation = (conversation: Conversation) => {
+const handleSelectConversation = async (conversation: Conversation) => {
   activeConversationId.value = conversation.id
   // Load messages from backend via chatStore
   chatStore.loadMessages(conversation.id)
@@ -351,8 +351,11 @@ const handleSelectConversation = (conversation: Conversation) => {
   // Set knowledge base selection from conversation
   selectedLibraryIds.value = conversation.library_ids || []
 
-  // Set thinking mode from conversation
+  // Set thinking mode from conversation (skip toast notification)
+  isRestoringConversation = true
   enableThinking.value = conversation.enable_thinking || false
+  await nextTick()
+  isRestoringConversation = false
 
   // Set chat mode from conversation
   chatMode.value = conversation.chat_mode || 'task'
@@ -514,9 +517,17 @@ const saveThinkingToConversation = async () => {
   }
 }
 
+// Track if thinking mode watch should show toast (skip initial mount and conversation restoration)
+let isInitialMount = true
+let isRestoringConversation = false
+
 // Watch thinking mode changes and save to conversation
-watch(enableThinking, () => {
+watch(enableThinking, (newValue) => {
   void saveThinkingToConversation()
+  // Show toast notification when thinking mode changes (skip initial mount and conversation restoration)
+  if (!isInitialMount && !isRestoringConversation) {
+    toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
+  }
 })
 
 // Save chat mode to current conversation
@@ -632,12 +643,21 @@ const updateCurrentTab = () => {
 }
 
 // Watch for active agent changes to update selected model, tab info, and load conversations
-watch(activeAgentId, (newAgentId, oldAgentId) => {
+watch(activeAgentId, async (newAgentId, oldAgentId) => {
   selectDefaultModel(activeAgent.value, activeConversation.value)
   updateCurrentTab()
   // 切换助手时加载新助手的会话列表
   if (newAgentId && oldAgentId !== undefined) {
-    loadConversations(newAgentId, { activeAgentId: newAgentId })
+    await loadConversations(newAgentId, { activeAgentId: newAgentId })
+    // 如果有多个助手，自动打开该助手的最新会话
+    if (agents.value.length > 1) {
+      const conversations = getAllAgentConversations(newAgentId)
+      if (conversations.length > 0) {
+        // Select the first conversation (most recent, as they're sorted by updated_at DESC)
+        const lastConversation = conversations[0]
+        handleSelectConversation(lastConversation)
+      }
+    }
   } else if (!newAgentId) {
     if (activeConversationId.value) {
       chatStore.clearMessages(activeConversationId.value)
@@ -735,6 +755,9 @@ onMounted(() => {
     await loadModels()
     await loadLibrariesFn()
 
+    // Check for pending chat data (e.g. from knowledge page shortcut)
+    const pendingData = navigationStore.consumePendingChatData(props.tabId)
+    
     if (activeAgentId.value != null) {
       // Preserve current selection to avoid wiping the first message on cold start.
       await loadConversations(activeAgentId.value, {
@@ -744,12 +767,16 @@ onMounted(() => {
       })
     }
 
-    // Check for pending chat data (e.g. from knowledge page shortcut)
-    const pendingData = navigationStore.consumePendingChatData(props.tabId)
     if (pendingData) {
       // Apply pre-selected agent
       if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
         activeAgentId.value = pendingData.agentId
+        // Load conversations for the selected agent
+        await loadConversations(pendingData.agentId, {
+          preserveSelection: false,
+          force: true,
+          activeAgentId: pendingData.agentId,
+        })
       }
       // Apply pre-selected model
       if (pendingData.selectedModelKey) {
@@ -782,6 +809,17 @@ onMounted(() => {
           }
         }, 200)
       }
+    } else {
+      // Auto-open last conversation if no pending data and no active conversation
+      // This happens when user clicks "AI Assistant" to create a new tab
+      if (!activeConversationId.value && activeAgentId.value != null) {
+        const conversations = getAllAgentConversations(activeAgentId.value)
+        if (conversations.length > 0) {
+          // Select the first conversation (most recent, as they're sorted by updated_at DESC)
+          const lastConversation = conversations[0]
+          handleSelectConversation(lastConversation)
+        }
+      }
     }
 
     // Snap mode initialization
@@ -789,6 +827,9 @@ onMounted(() => {
       await loadSnapSettings()
       await checkSnapStatus()
     }
+
+    // Mark initial mount as complete (enable toast notifications for thinking mode changes)
+    isInitialMount = false
   })()
 
   // Subscribe to chat events (important: do this at page level, not in ChatMessageList)
@@ -962,6 +1003,7 @@ onUnmounted(() => {
       :get-agent-conversations="getAgentConversations"
       :get-all-agent-conversations="getAllAgentConversations"
       :ensure-conversations-loaded="ensureConversationsLoaded"
+      :on-wake-attached="handleWakeAttachedPointerDown"
       @update:active-agent-id="activeAgentId = $event"
       @update:list-mode="listMode = $event"
       @create="createOpen = true"

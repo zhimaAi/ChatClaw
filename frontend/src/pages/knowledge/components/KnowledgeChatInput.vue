@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { toast } from '@/components/ui/toast'
 import { useNavigationStore } from '@/stores'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
@@ -118,6 +119,17 @@ watch(providersWithModels, () => {
   selectDefaultModel(activeAgent.value, null)
 })
 
+// Track if thinking mode watch should show toast (skip initial mount)
+let isInitialMount = true
+
+// Watch thinking mode changes and show toast notification
+watch(enableThinking, (newValue) => {
+  // Show toast notification when thinking mode changes (skip initial mount)
+  if (!isInitialMount) {
+    toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
+  }
+})
+
 // Whether the currently selected model's provider is free (e.g. ChatClaw)
 const selectedProviderIsFree = computed(() => {
   if (!selectedModelInfo.value?.providerId || !providersWithModels.value?.length) return false
@@ -146,6 +158,8 @@ onMounted(async () => {
   await loadModels()
   // Select default model based on the first agent
   selectDefaultModel(activeAgent.value, null)
+  // Mark initial mount as complete (enable toast notifications for thinking mode changes)
+  isInitialMount = false
 })
 </script>
 
