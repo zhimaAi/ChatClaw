@@ -8,6 +8,7 @@ import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
+import { SkillsService } from '@bindings/chatclaw/internal/services/skills'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 
 const { t } = useI18n()
@@ -27,7 +28,7 @@ const loadSettings = async () => {
   }
 
   try {
-    const dir = await SettingsService.GetSkillsDir()
+    const dir = await SkillsService.GetSkillsDir()
     skillsDir.value = dir
   } catch (error) {
     console.error('Failed to get skills directory:', error)

@@ -17,6 +17,7 @@ import IconKnowledge from '@/assets/icons/knowledge.svg'
 import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+import IconSkills from '@/assets/icons/skills.svg'
 // File-type icons for document viewer tabs
 import IconPdf from '@/assets/icons/file-pdf.svg'
 import IconWord from '@/assets/icons/file-word.svg'
@@ -44,6 +45,7 @@ const moduleTabIcons: Partial<Record<NavModule, any>> = {
   memory: IconMemory,
   multiask: IconMultiask,
   settings: IconSettings,
+  skills: IconSkills,
 }
 import {
   ContextMenu,

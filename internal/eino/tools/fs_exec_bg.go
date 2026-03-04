@@ -108,7 +108,10 @@ type bgExecInput struct {
 // NewBgExecuteTool creates the execute_background tool backed by Backend.
 func NewBgExecuteTool(b *Backend, mgr *BgProcessManager) (tool.BaseTool, error) {
 	return utils.InferTool(ToolIDExecuteBackground,
-		"Start a long-running command in the background (e.g. dev servers). Returns the pid and initial output. The process is auto-killed after timeout seconds (default 300, max 600). To stop or check status of the process, use the execute tool with action='stop' or action='status'.",
+		selectDesc(
+			"Start a long-running command in the background (e.g. npm run dev, python manage.py runserver). Returns pid and initial output. Process is auto-killed after timeout (default 300s, max 600s). Use only for starting processes; to stop or check status use execute with action='stop' or action='status' (do NOT use this tool for stopping).",
+			"在后台启动长时间运行的命令（如 npm run dev、python manage.py runserver）。返回 pid 和初始输出。超时后自动终止（默认 300s，最大 600s）。仅用于启动进程；停止或查看状态请用 execute 的 action='stop' 或 action='status'（不要用此工具停止）。",
+		),
 		func(ctx context.Context, input *bgExecInput) (string, error) {
 			return bgStart(b, mgr, input)
 		})

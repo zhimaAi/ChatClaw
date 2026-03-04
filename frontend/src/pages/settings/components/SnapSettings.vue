@@ -807,7 +807,7 @@ onUnmounted(() => {
           <RadioGroup
             :model-value="customApp.noClick ? 'no_click' : 'click'"
             class="flex flex-col gap-2"
-            @update:model-value="(mode: string) => handleCustomInputModeChange(customApp, mode)"
+            @update:model-value="(mode) => handleCustomInputModeChange(customApp, String(mode))"
           >
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${customApp.id}_no_click`" value="no_click" />
@@ -870,7 +870,7 @@ onUnmounted(() => {
             v-if="app.hasNoClickOption"
             :model-value="app.noClick.value ? 'no_click' : 'click'"
             class="flex flex-col gap-2"
-            @update:model-value="(mode: string) => handleInputModeChange(app.key, app.noClick, mode)"
+            @update:model-value="(mode) => handleInputModeChange(app.key, app.noClick, String(mode))"
           >
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${app.key}_no_click`" value="no_click" />
