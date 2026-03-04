@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"runtime"
+	"time"
 
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/toolchain"
@@ -25,12 +26,14 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 	}
 
 	zh := isZhCN()
+	now := time.Now().Format("2006-01-02 (Monday) 15:04")
 
 	var prompt string
 	if zh {
 		prompt = fmt.Sprintf(`
 # 文件系统与执行工具 — 环境信息
 
+- 当前时间: %s
 - 操作系统: %s
 - Shell: %s
 - 用户主目录: %s
@@ -38,11 +41,12 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 - 所有工具使用操作系统的绝对路径。
 - 当用户提到"工作目录"或要求写入/创建文件时，**始终使用工作目录**作为基础路径。例如: write_file(file_path="%s/foo.txt"), ls(path="%s")。
 - 当用户提到"用户目录"或"主目录"时，指的是: %s
-`, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 	} else {
 		prompt = fmt.Sprintf(`
 # Filesystem & Execute Tools — Environment Info
 
+- Current time: %s
 - Operating System: %s
 - Shell: %s
 - Home directory: %s
@@ -50,7 +54,7 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 - All tools use real OS absolute paths.
 - When the user mentions "working directory" or asks to write/create files, **always use the working directory** as the base path. For example: write_file(file_path="%s/foo.txt"), ls(path="%s").
 - When the user mentions "user directory" or "home directory", it refers to: %s
-`, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 	}
 
 	if sessionsDir != "" {
