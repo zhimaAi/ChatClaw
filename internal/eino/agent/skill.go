@@ -102,7 +102,18 @@ func (b *filteringSkillBackend) Get(ctx context.Context, name string) (skill.Ski
 			return s, nil
 		}
 	}
-	return skill.Skill{}, nil
+	return skill.Skill{}, fmt.Errorf("skill %q not found; available skills: %s", name, b.availableSkillNames(skills))
+}
+
+func (b *filteringSkillBackend) availableSkillNames(skills []skill.Skill) string {
+	if len(skills) == 0 {
+		return "(none)"
+	}
+	names := make([]string, len(skills))
+	for i, s := range skills {
+		names[i] = s.Name
+	}
+	return strings.Join(names, ", ")
 }
 
 func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error) {

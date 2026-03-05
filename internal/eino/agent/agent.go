@@ -395,7 +395,7 @@ func isInterruptErr(err error) bool {
 
 const (
 	planExecuteMaxIterations   = 8
-	planExecuteExecutorMaxIter = 10
+	planExecuteExecutorMaxIter = math.MaxInt32
 )
 
 // namedAgent wraps an adk.Agent with a custom name and description so that
@@ -606,6 +606,9 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 					}
 					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
 					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
+				}
+				if output != nil && output.Result == "" {
+					output.Result = "(completed with no output)"
 				}
 				return output, nil
 			}
