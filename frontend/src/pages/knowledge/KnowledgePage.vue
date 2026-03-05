@@ -25,6 +25,8 @@ import FolderTreeItem from './components/FolderTreeItem.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
+import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
+import IconSidebarExpand from '@/assets/icons/sidebar-expand.svg'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +48,7 @@ import {
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, type Folder } from '@bindings/chatclaw/internal/services/library'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { ChevronRight, ChevronDown } from 'lucide-vue-next'
+import { ChevronRight, FileStack } from 'lucide-vue-next'
 
 type LibraryTab = 'personal' | 'team'
 
@@ -68,6 +70,8 @@ const expandedLibraries = ref<Set<number>>(new Set())
 const expandedFolders = ref<Set<number>>(new Set())
 // null = 根目录, -1 = 未分组, >0 = 文件夹ID
 const selectedFolderId = ref<number | null>(null)
+// Left sidebar collapsed state (narrow strip with icons only)
+const sidebarCollapsed = ref(false)
 
 const selectedLibrary = computed(
   () => libraries.value.find((l) => l.id === selectedLibraryId.value) || null
@@ -133,6 +137,25 @@ const handleFolderClick = (folderId: number | -1, libraryId: number) => {
   selectedLibraryId.value = libraryId
   // -1 表示"未分组"
   selectedFolderId.value = folderId === -1 ? -1 : folderId
+
+  // 如果点击的是有下级文件夹的文件夹，自动展开下级
+  if (folderId > 0) {
+    const folders = libraryFolders.value.get(libraryId) || []
+    const findFolder = (folders: Folder[], id: number): Folder | null => {
+      for (const folder of folders) {
+        if (folder.id === id) return folder
+        if (folder.children) {
+          const found = findFolder(folder.children, id)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    const folder = findFolder(folders, folderId)
+    if (folder && folder.children && folder.children.length > 0) {
+      expandedFolders.value.add(folderId)
+    }
+  }
 }
 
 const handleLibraryClick = async (libraryId: number) => {
@@ -292,66 +315,95 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <!-- 左侧：知识库列表（知识库为空时隐藏） -->
-    <aside v-if="!isLibraryEmpty" class="flex w-sidebar shrink-0 flex-col border-r border-border">
-      <div class="flex items-center justify-between gap-2 px-3 py-3">
-        <!-- tabs -->
-        <div class="inline-flex rounded-md bg-muted p-1">
-          <button
-            type="button"
-            :class="
-              cn(
-                'rounded px-3 py-1 text-sm transition-colors',
-                activeTab === 'personal'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )
-            "
-            @click="activeTab = 'personal'"
-          >
-            {{ t('knowledge.tabs.personal') }}
-          </button>
-          <button
-            type="button"
-            disabled
-            :class="
-              cn('rounded px-3 py-1 text-sm transition-colors', 'cursor-not-allowed opacity-50')
-            "
-            :title="t('knowledge.tabs.teamDisabledTip')"
-          >
-            {{ t('knowledge.tabs.team') }}
-          </button>
-        </div>
-
-        <div v-if="activeTab === 'personal'" class="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8"
-            :title="t('knowledge.create.title')"
-            @click="handleCreateClick"
-          >
-            <Plus class="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8"
-            :title="t('knowledge.embeddingSettings.title')"
-            @click="handleEmbeddingSettingsClick"
-          >
-            <Settings class="size-4" />
-          </Button>
-        </div>
+    <!-- 左侧：知识库列表（知识库为空时隐藏），支持收起/展开 -->
+    <aside
+      v-if="!isLibraryEmpty"
+      :class="
+        cn(
+          'flex shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200',
+          sidebarCollapsed ? 'w-14' : 'w-sidebar'
+        )
+      "
+    >
+      <!-- Header: tabs + actions when expanded; collapse toggle always -->
+      <div class="flex items-center gap-2 border-b border-border px-2 py-2">
+        <Button
+          v-if="!sidebarCollapsed"
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 shrink-0"
+          :title="t('knowledge.sidebar.collapse')"
+          @click="sidebarCollapsed = true"
+        >
+          <IconSidebarCollapse class="size-4 text-muted-foreground" />
+        </Button>
+        <Button
+          v-else
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 shrink-0"
+          :title="t('knowledge.sidebar.expand')"
+          @click="sidebarCollapsed = false"
+        >
+          <IconSidebarExpand class="size-4 text-muted-foreground" />
+        </Button>
+        <template v-if="!sidebarCollapsed">
+          <div class="inline-flex min-w-0 flex-1 rounded-md bg-muted p-1">
+            <button
+              type="button"
+              :class="
+                cn(
+                  'rounded px-3 py-1 text-sm transition-colors',
+                  activeTab === 'personal'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )
+              "
+              @click="activeTab = 'personal'"
+            >
+              {{ t('knowledge.tabs.personal') }}
+            </button>
+            <button
+              type="button"
+              disabled
+              :class="
+                cn('rounded px-3 py-1 text-sm transition-colors', 'cursor-not-allowed opacity-50')
+              "
+              :title="t('knowledge.tabs.teamDisabledTip')"
+            >
+              {{ t('knowledge.tabs.team') }}
+            </button>
+          </div>
+          <div v-if="activeTab === 'personal'" class="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              :title="t('knowledge.create.title')"
+              @click="handleCreateClick"
+            >
+              <Plus class="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              :title="t('knowledge.embeddingSettings.title')"
+              @click="handleEmbeddingSettingsClick"
+            >
+              <Settings class="size-4" />
+            </Button>
+          </div>
+        </template>
       </div>
 
-      <div class="flex-1 overflow-auto px-2 pb-2">
+      <div class="flex-1 overflow-auto px-2 pb-2 pt-2">
         <div v-if="loading" class="px-2 py-6 text-sm text-muted-foreground">
-          {{ t('knowledge.loading') }}
+          {{ sidebarCollapsed ? '' : t('knowledge.loading') }}
         </div>
 
         <div
-          v-else-if="activeTab === 'personal' && libraries.length === 0"
+          v-else-if="activeTab === 'personal' && libraries.length === 0 && !sidebarCollapsed"
           class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
         >
           <div class="text-center text-sm text-muted-foreground">
@@ -359,10 +411,51 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-else class="flex flex-col gap-1">
-          <div v-for="lib in libraries" :key="lib.id" class="flex flex-col gap-0.5">
-            <!-- 知识库项 -->
-            <div class="flex items-center gap-1">
+        <!-- Collapsed: only library icons -->
+        <div v-else-if="sidebarCollapsed" class="flex flex-col items-center gap-1">
+          <button
+            v-for="lib in libraries"
+            :key="lib.id"
+            type="button"
+            :class="
+              cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                selectedLibraryId === lib.id
+                  ? 'border-primary bg-accent text-accent-foreground ring-1 ring-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground'
+              )
+            "
+            :title="lib.name"
+            @click="
+              selectedLibraryId = lib.id;
+              selectedFolderId = null;
+              if (!expandedLibraries.has(lib.id)) {
+                expandedLibraries.add(lib.id);
+                loadFoldersForLibrary(lib.id);
+              }
+              sidebarCollapsed = false;
+            "
+          >
+            <IconKnowledge class="size-4 shrink-0" />
+          </button>
+        </div>
+
+        <!-- Expanded: full tree with borders and icons -->
+        <div v-else class="flex flex-col gap-2 overflow-hidden">
+          <div
+            v-for="lib in libraries"
+            :key="lib.id"
+            :class="
+              cn(
+                'overflow-hidden rounded-lg border transition-colors',
+                selectedLibraryId === lib.id
+                  ? 'border-primary bg-card ring-1 ring-primary/50'
+                  : 'border-border bg-card'
+              )
+            "
+          >
+            <!-- 知识库项：图标 + 名称 + 展开箭头 + 菜单 -->
+            <div class="flex items-center gap-1 overflow-hidden p-1">
               <button
                 type="button"
                 class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
@@ -379,7 +472,7 @@ onMounted(() => {
                 type="button"
                 :class="
                   cn(
-                    'group flex h-10 flex-1 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
+                    'group flex h-9 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm font-normal transition-colors',
                     selectedLibraryId === lib.id
                       ? 'bg-accent text-accent-foreground'
                       : 'text-foreground hover:bg-accent/50'
@@ -387,6 +480,7 @@ onMounted(() => {
                 "
                 @click="handleLibraryClick(lib.id)"
               >
+                <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
                 <span class="min-w-0 flex-1 truncate" :title="lib.name">
                   {{ lib.name }}
                 </span>
@@ -422,10 +516,10 @@ onMounted(() => {
             <!-- 文件夹树 -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="ml-4 flex flex-col gap-0.5"
+              class="flex flex-col gap-0.5 overflow-hidden border-t border-border/50 px-1 pb-1.5 pt-0.5"
             >
               <!-- 未分组选项 -->
-              <div class="flex items-center gap-1">
+              <div class="flex items-center gap-1 overflow-hidden">
                 <div class="size-6 shrink-0" />
                 <button
                   type="button"
@@ -439,6 +533,7 @@ onMounted(() => {
                   "
                   @click.stop="handleFolderClick(-1, lib.id)"
                 >
+                  <FileStack class="size-4 shrink-0 text-muted-foreground" />
                   <span
                     class="min-w-0 flex-1 truncate"
                     :title="t('knowledge.folder.uncategorized')"

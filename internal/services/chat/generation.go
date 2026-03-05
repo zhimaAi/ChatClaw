@@ -16,6 +16,7 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/uptrace/bun"
 )
@@ -171,14 +172,30 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
 		return
 	}
-	defer agentResult.Cleanup()
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agentResult.Agent,
-		EnableStreaming: true,
+		EnableStreaming:  true,
+		CheckPointStore: s.checkpointStore,
 	})
 
-	s.processStream(ctx, gc, runner, assistantMsg, messages)
+	checkpointID := fmt.Sprintf("conv_%d_%s", conversationID, gc.requestID)
+	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID)
+
+	if result.interrupted {
+		if existing, ok := s.activeGenerations.Load(conversationID); ok {
+			ag := existing.(*activeGeneration)
+			ag.mu.Lock()
+			ag.runner = runner
+			ag.checkpointID = checkpointID
+			ag.interrupted = true
+			ag.agentCleanup = agentResult.Cleanup
+			ag.mu.Unlock()
+		}
+		return
+	}
+
+	agentResult.Cleanup()
 
 	if agentExtras.MemoryEnabled {
 		go func() {
@@ -186,6 +203,90 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 			memory.RunMemoryExtraction(context.Background(), s.app, conversationID)
 		}()
 	}
+}
+
+// resumeGeneration continues a previously interrupted generation.
+func (s *ChatService) resumeGeneration(gen *activeGeneration, conversationID int64, approved bool) {
+	db, err := s.db()
+	if err != nil {
+		s.app.Logger.Error("[chat] resume: failed to get db", "conv", conversationID, "error", err)
+		s.cleanupGeneration(gen, conversationID)
+		return
+	}
+
+	gc := &generationContext{
+		service:        s,
+		db:             db,
+		conversationID: conversationID,
+		tabID:          gen.tabID,
+		requestID:      gen.requestID,
+	}
+
+	assistantMsg := &messageModel{
+		ConversationID: conversationID,
+		Role:           RoleAssistant,
+		Content:        "",
+		Status:         StatusStreaming,
+		ToolCalls:      "[]",
+	}
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if _, insertErr := db.NewInsert().Model(assistantMsg).Exec(dbCtx); insertErr != nil {
+		dbCancel()
+		gc.emitError("error.chat_message_save_failed", nil)
+		s.cleanupGeneration(gen, conversationID)
+		return
+	}
+	dbCancel()
+
+	gc.emit(EventChatStart, ChatStartEvent{
+		ChatEvent: gc.chatEvent(assistantMsg.ID),
+		Status:    StatusStreaming,
+	})
+
+	// Use a cancellable context derived from gen.cancel so that
+	// StopGeneration can abort the resumed run.
+	ctx, cancel := context.WithCancel(context.Background())
+	oldCancel := gen.cancel
+	gen.cancel = func() {
+		cancel()
+		if oldCancel != nil {
+			oldCancel()
+		}
+	}
+
+	iter, resumeErr := gen.runner.Resume(ctx, gen.checkpointID,
+		adk.WithToolOptions([]tool.Option{einoagent.WithInterruptApproval(approved)}))
+	if resumeErr != nil {
+		s.app.Logger.Error("[chat] resume failed", "conv", conversationID, "error", resumeErr)
+		gc.emitError("error.chat_generation_failed", map[string]any{"Error": resumeErr.Error()})
+		s.updateMessageStatus(db, assistantMsg.ID, StatusError, resumeErr.Error(), "")
+		s.cleanupGeneration(gen, conversationID)
+		return
+	}
+
+	result := s.processResumeStream(ctx, gc, assistantMsg, iter)
+
+	if result.interrupted {
+		gen.mu.Lock()
+		gen.interrupted = true
+		gen.mu.Unlock()
+		return
+	}
+
+	s.cleanupGeneration(gen, conversationID)
+}
+
+// cleanupGeneration releases agent resources and removes the generation from the map.
+func (s *ChatService) cleanupGeneration(gen *activeGeneration, conversationID int64) {
+	gen.mu.Lock()
+	cleanup := gen.agentCleanup
+	gen.agentCleanup = nil
+	gen.mu.Unlock()
+
+	if cleanup != nil {
+		cleanup()
+	}
+	s.activeGenerations.Delete(conversationID)
 }
 
 // buildExtras creates extra tools and handlers based on agent configuration.
@@ -367,6 +468,9 @@ func (ss *streamState) buildToolCallsForDB() []schema.ToolCall {
 		if _, ok := seen[st.id]; ok {
 			continue
 		}
+		if isHiddenTool(st.name) {
+			continue
+		}
 		seen[st.id] = struct{}{}
 		args := st.args
 		if !json.Valid([]byte(args)) {
@@ -436,11 +540,26 @@ func (ss *streamState) segmentsStr() string {
 	return "[]"
 }
 
+type processStreamResult struct {
+	interrupted bool
+}
+
 // processStream runs the ADK runner and processes all streaming events.
-func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message) {
+func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message, checkpointID string) processStreamResult {
 	ss := newStreamState(gc, assistantMsg)
 
-	iter := runner.Run(ctx, messages)
+	iter := runner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
+	return s.consumeEventIter(ctx, gc, ss, assistantMsg, iter)
+}
+
+// processResumeStream processes events from a resumed runner.
+func (s *ChatService) processResumeStream(ctx context.Context, gc *generationContext, assistantMsg *messageModel, iter *adk.AsyncIterator[*adk.AgentEvent]) processStreamResult {
+	ss := newStreamState(gc, assistantMsg)
+	return s.consumeEventIter(ctx, gc, ss, assistantMsg, iter)
+}
+
+// consumeEventIter is the shared event loop for both initial runs and resumed runs.
+func (s *ChatService) consumeEventIter(ctx context.Context, gc *generationContext, ss *streamState, assistantMsg *messageModel, iter *adk.AsyncIterator[*adk.AgentEvent]) processStreamResult {
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -453,7 +572,7 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 				ChatEvent: gc.chatEvent(assistantMsg.ID),
 				Status:    StatusCancelled,
 			})
-			return
+			return processStreamResult{}
 		}
 
 		if event.Err != nil {
@@ -465,7 +584,11 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 			s.app.Logger.Error("[chat] generation failed", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "error", event.Err)
 			gc.emitError(errorKey, map[string]any{"Error": errMsg})
 			s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusError, errMsg, "", ss.inputTokens, ss.outputTokens)
-			return
+			return processStreamResult{}
+		}
+
+		if event.Action != nil && event.Action.Interrupted != nil {
+			return s.handleInterrupt(ctx, gc, ss, assistantMsg, event)
 		}
 
 		if event.Output != nil && event.Output.MessageOutput != nil {
@@ -485,7 +608,7 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 			ChatEvent: gc.chatEvent(assistantMsg.ID),
 			Status:    StatusCancelled,
 		})
-		return
+		return processStreamResult{}
 	}
 
 	s.updateMessageFinal(gc.db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
@@ -495,6 +618,70 @@ func (s *ChatService) processStream(ctx context.Context, gc *generationContext, 
 		Status:       StatusSuccess,
 		FinishReason: ss.finishReason,
 	})
+	return processStreamResult{}
+}
+
+// handleInterrupt processes an Interrupted event by saving a confirmation
+// message and pausing until the user replies.
+func (s *ChatService) handleInterrupt(_ context.Context, gc *generationContext, ss *streamState, assistantMsg *messageModel, event *adk.AgentEvent) processStreamResult {
+	promptText := einoagent.DefaultInterruptPrompt()
+	if cmdInfo := extractInterruptCommand(event); cmdInfo != nil {
+		promptText = einoagent.FormatInterruptPrompt(cmdInfo)
+	}
+
+	existingContent := ss.contentBuilder.String()
+	separator := ""
+	if existingContent != "" {
+		separator = "\n\n"
+	}
+
+	ss.addContentToSegments(promptText)
+
+	s.updateMessageFinal(gc.db, assistantMsg.ID, existingContent+separator+promptText, ss.thinkingBuilder.String(), ss.toolCallsStr(), ss.segmentsStr(), StatusInterrupted, "", "interrupted", ss.inputTokens, ss.outputTokens)
+
+	gc.emit(EventChatChunk, ChatChunkEvent{
+		ChatEvent: gc.chatEvent(assistantMsg.ID),
+		Delta:     promptText,
+	})
+	gc.emit(EventChatComplete, ChatCompleteEvent{
+		ChatEvent:    gc.chatEvent(assistantMsg.ID),
+		Status:       StatusInterrupted,
+		FinishReason: "interrupted",
+	})
+
+	s.app.Logger.Info("[chat] generation interrupted, waiting for user confirmation", "conv", gc.conversationID)
+
+	return processStreamResult{interrupted: true}
+}
+
+// extractInterruptCommand walks the interrupt event data to find the
+// InterruptInfo payload (command) from the ToolsNode rerun extra map.
+func extractInterruptCommand(event *adk.AgentEvent) *einoagent.InterruptInfo {
+	if event.Action == nil || event.Action.Interrupted == nil {
+		return nil
+	}
+
+	cmInfo, ok := event.Action.Interrupted.Data.(*adk.ChatModelAgentInterruptInfo)
+	if !ok || cmInfo == nil || cmInfo.Info == nil {
+		return nil
+	}
+
+	toolExtra, ok := cmInfo.Info.RerunNodesExtra["ToolNode"]
+	if !ok {
+		return nil
+	}
+
+	rerunExtra, ok := toolExtra.(*compose.ToolsInterruptAndRerunExtra)
+	if !ok || rerunExtra == nil {
+		return nil
+	}
+
+	for _, extra := range rerunExtra.RerunExtraMap {
+		if info, ok := extra.(*einoagent.InterruptInfo); ok && info.Command != "" {
+			return info
+		}
+	}
+	return nil
 }
 
 func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generationContext, ss *streamState, msgOutput *adk.MessageVariant) {
@@ -547,13 +734,22 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 	}
 }
 
+// isHiddenTool returns true for tools whose call/result events should not be
+// sent to the frontend or persisted as tool messages.
+func isHiddenTool(name string) bool {
+	return name == "confirm_execution"
+}
+
 func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *streamState, msg *schema.Message) {
 	if len(msg.ToolCalls) > 0 {
 		ss.updateToolStates(msg.ToolCalls)
 	}
 
 	if msg.Role == schema.Tool {
-		toolName := msg.Name
+		toolName := msg.ToolName
+		if toolName == "" {
+			toolName = msg.Name
+		}
 		if toolName == "" && msg.ToolCallID != "" {
 			for _, key := range ss.toolOrder {
 				st := ss.toolStatesByKey[key]
@@ -563,6 +759,11 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 				}
 			}
 		}
+
+		if isHiddenTool(toolName) {
+			return
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
 			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
 			Type:       "result",
@@ -634,6 +835,10 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 			}
 		}
 		if toolName == "" {
+			continue
+		}
+
+		if isHiddenTool(toolName) {
 			continue
 		}
 

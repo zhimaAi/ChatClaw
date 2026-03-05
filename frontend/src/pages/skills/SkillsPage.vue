@@ -210,15 +210,22 @@ async function loadInstalledSkills() {
   }
 }
 
+const refreshing = ref(false)
+
 async function handleRefresh() {
-  installedLoading.value = true
+  refreshing.value = true
+  const minDelay = new Promise((r) => setTimeout(r, 500))
   try {
-    installedSkills.value = await SkillsService.RefreshSkills()
-    installedPage.value = 1
-  } catch (error) {
-    console.error('Failed to refresh skills:', error)
+    if (activeTab.value === 'market') {
+      marketCursor.value = ''
+      searchMode.value = false
+      searchQuery.value = ''
+      await Promise.all([loadMarketSkills(), minDelay])
+    } else {
+      await Promise.all([loadInstalledSkills(), minDelay])
+    }
   } finally {
-    installedLoading.value = false
+    refreshing.value = false
   }
 }
 
@@ -236,14 +243,18 @@ async function handleToggleSkill(skill: InstalledSkill) {
   }
 }
 
+let pendingDeleteSkill: InstalledSkill | null = null
+
 function confirmDelete(skill: InstalledSkill) {
+  pendingDeleteSkill = skill
   deleteTarget.value = skill
 }
 
 async function handleDelete() {
-  const skill = deleteTarget.value
-  if (!skill) return
+  const skill = pendingDeleteSkill
+  pendingDeleteSkill = null
   deleteTarget.value = null
+  if (!skill) return
   try {
     await SkillsService.UninstallSkill(skill.slug)
     installedSkills.value = installedSkills.value.filter((s) => s.slug !== skill.slug)
@@ -406,27 +417,26 @@ async function showMarketDetail(skill: RemoteSkill) {
   fileContent.value = ''
   detailLoading.value = true
   try {
-    const [detail, files] = await Promise.allSettled([
-      SkillsService.GetSkillDetail(skill.slug),
-      SkillsService.GetRemoteSkillFiles(skill.slug, skill.version || 'latest'),
-    ])
-    if (version !== detailLoadVersion) return
-    if (detail.status === 'fulfilled') {
-      detailMeta.value = detail.value
-    } else {
-      const msg = detail.reason?.toString() || ''
+    try {
+      detailMeta.value = await SkillsService.GetSkillDetail(skill.slug)
+    } catch (err) {
+      const msg = String(err ?? '')
       if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
         toast.error(t('settings.skills.rateLimited'))
       }
     }
-    if (files.status === 'fulfilled') {
-      detailFiles.value = files.value
-      if (files.value.length > 0) {
-        const skillMd = files.value.find((f) => f.path === 'SKILL.md')
-        await selectFile(skillMd ? skillMd.path : files.value[0].path)
+    if (version !== detailLoadVersion) return
+
+    try {
+      const files = await SkillsService.GetRemoteSkillFiles(skill.slug, skill.version || 'latest')
+      if (version !== detailLoadVersion) return
+      detailFiles.value = files
+      if (files.length > 0) {
+        const skillMd = files.find((f) => f.path === 'SKILL.md')
+        await selectFile(skillMd ? skillMd.path : files[0].path)
       }
-    } else {
-      const msg = files.reason?.toString() || ''
+    } catch (err) {
+      const msg = String(err ?? '')
       if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
         toast.error(t('settings.skills.rateLimited'))
       }
@@ -602,7 +612,7 @@ watch(activeTab, (tab) => {
           class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           @click="handleRefresh"
         >
-          <RefreshCw class="size-4" :class="installedLoading && 'animate-spin'" />
+          <RefreshCw class="size-4" :class="refreshing && 'animate-spin'" />
         </button>
         <button
           class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -679,7 +689,7 @@ watch(activeTab, (tab) => {
                 </button>
                 <button
                   v-if="detailSkill.source === 'market'"
-                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-destructive/30 px-2.5 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   @click="confirmDelete(detailSkill)"
                 >
                   <Trash2 class="size-3.5" />
@@ -847,45 +857,47 @@ watch(activeTab, (tab) => {
             <span class="text-sm">{{ t('settings.skills.noSkills') }}</span>
             <span class="text-xs">{{ t('settings.skills.noSkillsHint') }}</span>
           </div>
-          <div v-else class="flex flex-col gap-2">
-            <div
-              v-for="skill in paginatedSkills"
-              :key="skill.slug"
-              class="group cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-accent/30 dark:border-white/10"
-              @click="showInstalledDetail(skill)"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-foreground">{{ skill.name || skill.slug }}</span>
-                    <Badge variant="secondary" class="bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
-                      {{ sourceLabel(skill.source) }}
-                    </Badge>
-                    <span v-if="skill.version" class="text-[10px] text-muted-foreground">v{{ skill.version }}</span>
-                  </div>
-                  <p v-if="skill.description" class="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {{ skill.description }}
-                  </p>
+          <div v-else>
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+              <div
+                v-for="skill in paginatedSkills"
+                :key="skill.slug"
+                class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+                @click="showInstalledDetail(skill)"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="truncate text-sm font-medium text-foreground">{{ skill.name || skill.slug }}</span>
+                  <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                    {{ sourceLabel(skill.source) }}
+                  </Badge>
                 </div>
-                <div class="flex shrink-0 items-center gap-2" @click.stop>
-                  <Switch
-                    :model-value="skill.enabled"
-                    class="scale-90"
-                    @update:model-value="() => handleToggleSkill(skill)"
-                  />
-                  <button
-                    v-if="skill.source === 'market' || skill.source === 'local'"
-                    class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    @click="confirmDelete(skill)"
-                  >
-                    <Trash2 class="size-3.5" />
-                  </button>
+                <p v-if="skill.description" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                  {{ skill.description }}
+                </p>
+                <div v-else class="mt-1.5 min-h-[2lh]" />
+                <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                  <span v-if="skill.version" class="text-[10px] text-muted-foreground">v{{ skill.version }}</span>
+                  <span v-else />
+                  <div class="flex items-center gap-2" @click.stop>
+                    <Switch
+                      :model-value="skill.enabled"
+                      class="scale-90"
+                      @update:model-value="() => handleToggleSkill(skill)"
+                    />
+                    <button
+                      v-if="skill.source === 'market' || skill.source === 'local'"
+                      class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      @click.stop="confirmDelete(skill)"
+                    >
+                      <Trash2 class="size-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- Load more -->
-            <div v-if="installedHasMore" class="flex justify-center py-3">
+            <div v-if="installedHasMore" class="flex justify-center py-4">
               <button
                 class="cursor-pointer rounded-md bg-muted px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 @click="installedPage++"
@@ -949,24 +961,25 @@ watch(activeTab, (tab) => {
             <Package class="size-8 opacity-40" />
             <span class="text-sm">{{ t('settings.skills.noResults') }}</span>
           </div>
-          <div v-else class="flex flex-col gap-2">
-            <div
-              v-for="skill in displayedMarketSkills"
-              :key="skill.slug"
-              class="cursor-pointer rounded-lg border border-border p-3 transition-colors hover:bg-accent/30 dark:border-white/10"
-              @click="showMarketDetail(skill)"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-foreground">{{ skill.displayName || skill.slug }}</span>
-                    <span v-if="skill.displayName && skill.displayName !== skill.slug" class="text-[10px] text-muted-foreground/60">{{ skill.slug }}</span>
-                    <span v-if="skill.version" class="text-[10px] text-muted-foreground">v{{ skill.version }}</span>
-                  </div>
-                  <p v-if="skill.summary" class="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {{ skill.summary }}
-                  </p>
-                  <div class="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div v-else>
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+              <div
+                v-for="skill in displayedMarketSkills"
+                :key="skill.slug"
+                class="flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+                @click="showMarketDetail(skill)"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="truncate text-sm font-medium text-foreground">{{ skill.displayName || skill.slug }}</span>
+                  <span v-if="skill.version" class="shrink-0 text-[10px] text-muted-foreground">v{{ skill.version }}</span>
+                </div>
+                <span v-if="skill.displayName && skill.displayName !== skill.slug" class="mt-0.5 truncate text-[10px] text-muted-foreground/60">{{ skill.slug }}</span>
+                <p v-if="skill.summary" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                  {{ skill.summary }}
+                </p>
+                <div v-else class="mt-1.5 min-h-[2lh]" />
+                <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                  <div class="flex items-center gap-3 text-[10px] text-muted-foreground">
                     <span v-if="skill.downloads" class="flex items-center gap-1">
                       <Download class="size-3" />
                       {{ formatNumber(skill.downloads) }}
@@ -976,36 +989,36 @@ watch(activeTab, (tab) => {
                       {{ formatNumber(skill.stars) }}
                     </span>
                   </div>
-                </div>
-                <div class="shrink-0" @click.stop>
-                  <button
-                    v-if="skill.installed"
-                    class="rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                    disabled
-                  >
-                    {{ t('settings.skills.installed') }}
-                  </button>
-                  <button
-                    v-else-if="installingSet.has(skill.slug)"
-                    class="flex items-center gap-1.5 rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
-                    disabled
-                  >
-                    <Loader2 class="size-3 animate-spin" />
-                    {{ t('settings.skills.installing') }}
-                  </button>
-                  <button
-                    v-else
-                    class="cursor-pointer rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-80"
-                    @click="handleInstall(skill)"
-                  >
-                    {{ t('settings.skills.install') }}
-                  </button>
+                  <div class="shrink-0" @click.stop>
+                    <button
+                      v-if="skill.installed"
+                      class="rounded-md bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                      disabled
+                    >
+                      {{ t('settings.skills.installed') }}
+                    </button>
+                    <button
+                      v-else-if="installingSet.has(skill.slug)"
+                      class="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                      disabled
+                    >
+                      <Loader2 class="size-3 animate-spin" />
+                      {{ t('settings.skills.installing') }}
+                    </button>
+                    <button
+                      v-else
+                      class="cursor-pointer rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background transition-opacity hover:opacity-80"
+                      @click="handleInstall(skill)"
+                    >
+                      {{ t('settings.skills.install') }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- Load more -->
-            <div v-if="!searchMode && marketHasMore" class="flex justify-center py-3">
+            <div v-if="!searchMode && marketHasMore" class="flex justify-center py-4">
               <button
                 class="cursor-pointer rounded-md bg-muted px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 :disabled="marketLoading"

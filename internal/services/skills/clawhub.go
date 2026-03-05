@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -247,8 +248,9 @@ func (s *SkillsService) getFileContent(slug, version, path string) ([]byte, erro
 }
 
 func (s *SkillsService) httpGet(rawURL string) ([]byte, error) {
-	const maxRetries = 3
-	backoff := 1 * time.Second
+	const maxRetries = 5
+	const maxBackoff = 60 * time.Second
+	backoff := 2 * time.Second
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
@@ -265,8 +267,10 @@ func (s *SkillsService) httpGet(rawURL string) ([]byte, error) {
 		if resp.StatusCode == http.StatusTooManyRequests {
 			resp.Body.Close()
 			if attempt < maxRetries {
-				time.Sleep(backoff)
-				backoff *= 2
+				wait := retryAfterFromHeaders(resp.Header, backoff)
+				jitter := time.Duration(rand.Int63n(int64(wait/4) + 1))
+				time.Sleep(wait + jitter)
+				backoff = min(backoff*2, maxBackoff)
 				continue
 			}
 			return nil, fmt.Errorf("rate limited (HTTP 429) after %d retries", maxRetries)
@@ -280,6 +284,31 @@ func (s *SkillsService) httpGet(rawURL string) ([]byte, error) {
 		return io.ReadAll(resp.Body)
 	}
 	return nil, fmt.Errorf("unexpected retry loop exit")
+}
+
+// retryAfterFromHeaders extracts the wait duration from rate-limit response
+// headers. It prefers Retry-After, then falls back to RateLimit-Reset (delay
+// seconds), then X-RateLimit-Reset (absolute epoch). If none are usable it
+// returns the provided fallback.
+func retryAfterFromHeaders(h http.Header, fallback time.Duration) time.Duration {
+	if v := h.Get("Retry-After"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
+	}
+	if v := h.Get("RateLimit-Reset"); v != "" {
+		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
+	}
+	if v := h.Get("X-RateLimit-Reset"); v != "" {
+		if epoch, err := strconv.ParseInt(v, 10, 64); err == nil {
+			if d := time.Until(time.Unix(epoch, 0)); d > 0 {
+				return d
+			}
+		}
+	}
+	return fallback
 }
 
 // GetRemoteSkillMD fetches the SKILL.md content from ClawHub for a given skill.

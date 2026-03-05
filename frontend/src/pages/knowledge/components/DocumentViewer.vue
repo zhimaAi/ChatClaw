@@ -46,6 +46,23 @@ const error = ref<string>('')
 const viewerType = ref<'iframe' | 'text' | 'html' | 'markdown' | 'csv' | 'docx' | 'xlsx' | 'ofd' | 'unsupported'>('unsupported')
 const renderError = ref<string>('') // Error during rendering (e.g., corrupted file, wrong type)
 
+const isValidZipHeader = (buf: ArrayBuffer): boolean => {
+  if (buf.byteLength < 4) return false
+  const h = new Uint8Array(buf, 0, 4)
+  return (
+    h[0] === 0x50 &&
+    h[1] === 0x4b &&
+    (h[2] === 0x03 || h[2] === 0x05 || h[2] === 0x07) &&
+    (h[3] === 0x04 || h[3] === 0x06 || h[3] === 0x08)
+  )
+}
+
+const isValidPdfHeader = (buf: ArrayBuffer): boolean => {
+  if (buf.byteLength < 5) return false
+  const h = new Uint8Array(buf, 0, 5)
+  return String.fromCharCode(...h).startsWith('%PDF')
+}
+
 const close = () => emit('update:open', false)
 
 // Determine viewer type based on file extension
@@ -149,18 +166,7 @@ const loadDocument = async () => {
             bytes[i] = binaryString.charCodeAt(i)
           }
           
-          // Validate OFD file header (OFD files are ZIP archives)
-          // Check ZIP signature: PK (0x50 0x4B) at the beginning
-          if (bytes.length < 4) {
-            renderError.value = t('knowledge.viewer.loadFailedUseExternal')
-            loading.value = false
-            return
-          }
-          const header = new Uint8Array(bytes.buffer.slice(0, 4))
-          const isValidZip = header[0] === 0x50 && header[1] === 0x4B && 
-                            (header[2] === 0x03 || header[2] === 0x05 || header[2] === 0x07) &&
-                            (header[3] === 0x04 || header[3] === 0x06 || header[3] === 0x08)
-          if (!isValidZip) {
+          if (!isValidZipHeader(bytes.buffer)) {
             renderError.value = t('knowledge.viewer.loadFailedUseExternal')
             loading.value = false
             return
@@ -200,10 +206,7 @@ const loadDocument = async () => {
             bytes[i] = binaryString.charCodeAt(i)
           }
           
-          // Validate PDF file header (%PDF-)
-          const header = new Uint8Array(bytes.buffer.slice(0, 5))
-          const pdfHeader = String.fromCharCode(...header)
-          if (!pdfHeader.startsWith('%PDF')) {
+          if (!isValidPdfHeader(bytes.buffer)) {
             renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: 'PDF' })
             loading.value = false
             return
@@ -231,16 +234,8 @@ const loadDocument = async () => {
           const response = await fetch(path)
           if (response.ok) {
             fileBuffer.value = await response.arrayBuffer()
-            // Validate file header to check if it's actually a valid Office file
-            if (fileBuffer.value) {
-              const header = new Uint8Array(fileBuffer.value.slice(0, 4))
-              const isValidDocx = viewerType.value === 'docx' && 
-                (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) // ZIP signature (DOCX is a ZIP)
-              const isValidXlsx = viewerType.value === 'xlsx' && 
-                (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) // ZIP signature (XLSX is a ZIP)
-              if (!isValidDocx && !isValidXlsx) {
-                renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
-              }
+            if (fileBuffer.value && !isValidZipHeader(fileBuffer.value)) {
+              renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
             }
           } else {
             throw new Error('Failed to load file content')
@@ -261,16 +256,8 @@ const loadDocument = async () => {
                 bytes[i] = binaryString.charCodeAt(i)
               }
               fileBuffer.value = bytes.buffer
-              // Validate file header
-              if (fileBuffer.value) {
-                const header = new Uint8Array(fileBuffer.value.slice(0, 4))
-                const isValidDocx = viewerType.value === 'docx' && 
-                  (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
-                const isValidXlsx = viewerType.value === 'xlsx' && 
-                  (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
-                if (!isValidDocx && !isValidXlsx) {
-                  renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
-                }
+              if (!isValidZipHeader(fileBuffer.value)) {
+                renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
               }
             } catch (apiErr: any) {
               // If GetDocumentBytes is not available, try file:// URL fallback
@@ -289,16 +276,8 @@ const loadDocument = async () => {
                 const response = await fetch(localFileUrl)
                 if (response.ok) {
                   fileBuffer.value = await response.arrayBuffer()
-                  // Validate file header
-                  if (fileBuffer.value) {
-                    const header = new Uint8Array(fileBuffer.value.slice(0, 4))
-                    const isValidDocx = viewerType.value === 'docx' && 
-                      (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
-                    const isValidXlsx = viewerType.value === 'xlsx' && 
-                      (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04)
-                    if (!isValidDocx && !isValidXlsx) {
-                      renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
-                    }
+                  if (fileBuffer.value && !isValidZipHeader(fileBuffer.value)) {
+                    renderError.value = t('knowledge.viewer.corruptedOrWrongType', { type: viewerType.value.toUpperCase() })
                   }
                 } else {
                   throw new Error('Failed to load file via file:// URL')

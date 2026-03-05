@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk/filesystem"
-	"github.com/cloudwego/eino/adk/middlewares/plantask"
 )
 
 // BackendConfig configures the filesystem backend.
@@ -33,8 +32,8 @@ type BackendConfig struct {
 	ToolchainBinDir string
 }
 
-// Backend implements filesystem.Backend, filesystem.Shell, and plantask's
-// Delete. In sandbox mode (CodexBin != ""), write and execute operations
+// Backend implements filesystem.Backend and filesystem.Shell.
+// In sandbox mode (CodexBin != ""), write and execute operations
 // are routed through codex-cli for OS-level isolation.
 type Backend struct {
 	homeDir         string
@@ -191,7 +190,7 @@ func (b *Backend) Edit(_ context.Context, req *filesystem.EditRequest) error {
 	return os.WriteFile(path, []byte(newContent), 0o644)
 }
 
-func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]filesystem.GrepMatch, error) {
+func (b *Backend) GrepRaw(ctx context.Context, req *filesystem.GrepRequest) ([]filesystem.GrepMatch, error) {
 	basePath := req.Path
 	if basePath == "" {
 		basePath = b.homeDir
@@ -213,6 +212,9 @@ func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]fil
 	var matches []filesystem.GrepMatch
 
 	err := filepath.WalkDir(basePath, func(p string, d os.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		if err != nil {
 			if os.IsPermission(err) {
 				return filepath.SkipDir
@@ -269,7 +271,7 @@ func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]fil
 	return matches, nil
 }
 
-func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) ([]filesystem.FileInfo, error) {
+func (b *Backend) GlobInfo(ctx context.Context, req *filesystem.GlobInfoRequest) ([]filesystem.FileInfo, error) {
 	basePath := req.Path
 	if basePath == "" {
 		basePath = b.homeDir
@@ -295,6 +297,9 @@ func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) (
 		}
 
 		err = filepath.Walk(basePath, func(p string, info os.FileInfo, walkErr error) error {
+			if ctx.Err() != nil {
+				return filepath.SkipAll
+			}
 			if walkErr != nil {
 				return nil
 			}
@@ -335,13 +340,13 @@ func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) (
 // filesystem.Shell — Command execution
 // ---------------------------------------------------------------------------
 
-func (b *Backend) Execute(_ context.Context, input *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
+func (b *Backend) Execute(parentCtx context.Context, input *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
 	if input.Command == "" {
 		return nil, fmt.Errorf("command is required")
 	}
 
 	timeout := 60 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
 
 	var cmd *exec.Cmd
@@ -423,18 +428,6 @@ func (b *Backend) Execute(_ context.Context, input *filesystem.ExecuteRequest) (
 		ExitCode:  &exitCode,
 		Truncated: truncated,
 	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// plantask.Backend — Delete
-// ---------------------------------------------------------------------------
-
-func (b *Backend) Delete(_ context.Context, req *plantask.DeleteRequest) error {
-	err := os.Remove(req.FilePath)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
 }
 
 // ---------------------------------------------------------------------------

@@ -11,11 +11,12 @@ import (
 
 // Message status constants
 const (
-	StatusPending   = "pending"
-	StatusStreaming = "streaming"
-	StatusSuccess   = "success"
-	StatusError     = "error"
-	StatusCancelled = "cancelled"
+	StatusPending     = "pending"
+	StatusStreaming   = "streaming"
+	StatusSuccess     = "success"
+	StatusError       = "error"
+	StatusCancelled   = "cancelled"
+	StatusInterrupted = "interrupted"
 )
 
 // Message role constants
