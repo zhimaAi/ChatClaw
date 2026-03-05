@@ -400,14 +400,70 @@ const (
 
 // namedAgent wraps an adk.Agent with a custom name and description so that
 // the DeepAgent TaskTool can display meaningful info to the main agent LLM.
+//
+// It also fixes a framework issue where the Plan-Execute Replanner's "respond"
+// tool output is lost because BreakLoopAction (which has no content) becomes
+// the last event seen by AgentTool. This wrapper tracks the last content-bearing
+// event and re-emits it at the end of the stream if the final event has no output.
 type namedAgent struct {
-	adk.Agent
-	name string
-	desc string
+	inner adk.Agent
+	name  string
+	desc  string
 }
 
 func (a *namedAgent) Name(_ context.Context) string        { return a.name }
 func (a *namedAgent) Description(_ context.Context) string { return a.desc }
+
+func (a *namedAgent) Run(ctx context.Context, input *adk.AgentInput, opts ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
+	innerIter := a.inner.Run(ctx, input, opts...)
+	return rewriteLastEvent(innerIter)
+}
+
+func (a *namedAgent) Resume(ctx context.Context, info *adk.ResumeInfo, opts ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
+	if ra, ok := a.inner.(adk.ResumableAgent); ok {
+		innerIter := ra.Resume(ctx, info, opts...)
+		return rewriteLastEvent(innerIter)
+	}
+	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
+	gen.Send(&adk.AgentEvent{Err: fmt.Errorf("inner agent does not support Resume")})
+	gen.Close()
+	return iter
+}
+
+// rewriteLastEvent forwards all events from the inner iterator, but ensures
+// the very last event carries content. If the final event has no Output (e.g.
+// a bare BreakLoopAction from the Replanner), the last content-bearing event
+// is re-emitted so that AgentTool.InvokableRun picks up the actual response.
+func rewriteLastEvent(inner *adk.AsyncIterator[*adk.AgentEvent]) *adk.AsyncIterator[*adk.AgentEvent] {
+	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
+	go func() {
+		defer gen.Close()
+
+		var lastContentEvent *adk.AgentEvent
+		var lastEvent *adk.AgentEvent
+
+		for {
+			ev, ok := inner.Next()
+			if !ok {
+				break
+			}
+			gen.Send(ev)
+			lastEvent = ev
+
+			if ev.Output != nil && ev.Output.MessageOutput != nil {
+				if msg := ev.Output.MessageOutput.Message; msg != nil && msg.Content != "" {
+					lastContentEvent = ev
+				}
+			}
+		}
+
+		if lastEvent != nil && lastContentEvent != nil &&
+			(lastEvent.Output == nil || lastEvent.Output.MessageOutput == nil) {
+			gen.Send(lastContentEvent)
+		}
+	}()
+	return iter
+}
 
 // buildPlanExecuteSubAgent creates a Plan-Execute agent that can be registered
 // as a DeepAgent SubAgent. The main agent delegates complex multi-step tasks
@@ -462,7 +518,7 @@ func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingCh
 	desc := selectPlanExecuteDescription()
 
 	logger.Info("[agent] plan-execute subagent created successfully")
-	return &namedAgent{Agent: agent, name: "plan-execute", desc: desc}, nil
+	return &namedAgent{inner: agent, name: "plan-execute", desc: desc}, nil
 }
 
 // buildPlanExecuteExecutor creates a ChatModelAgent that serves as the Executor
@@ -608,10 +664,7 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
 					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
 				}
-				if output != nil && output.Result == "" {
-					output.Result = "Task completed successfully. The subagent finished all steps but did not produce a text summary. Check the working directory for any generated files."
-				}
-				return output, nil
+			return output, nil
 			}
 		},
 		Streamable: func(next compose.StreamableToolEndpoint) compose.StreamableToolEndpoint {
