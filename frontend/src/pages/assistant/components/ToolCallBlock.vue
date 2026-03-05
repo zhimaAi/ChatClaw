@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, Wrench, Loader2, Check, X } from 'lucide-vue-next'
+import { ChevronDown, Wrench, Loader2, Check, X, Bot, Brain } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
-import type { ToolCallInfo } from '@/stores'
+import type { ToolCallInfo, MessageSegment } from '@/stores'
 
 const props = defineProps<{
   toolCalls: ToolCallInfo[]
   isStreaming?: boolean
+  nested?: boolean
 }>()
 
 const { t } = useI18n()
 
+const SUB_AGENT_TOOLS = new Set(['researcher', 'worker', 'skill_advisor'])
+const isSubAgentTool = (toolName: string) => SUB_AGENT_TOOLS.has(toolName)
+
 const expandedCalls = ref<Set<string>>(new Set())
+const expandedAgents = ref<Set<string>>(new Set())
 
 const toggleExpand = (toolCallId: string) => {
   if (expandedCalls.value.has(toolCallId)) {
@@ -23,6 +28,20 @@ const toggleExpand = (toolCallId: string) => {
 }
 
 const isExpanded = (toolCallId: string) => expandedCalls.value.has(toolCallId)
+
+const toggleAgent = (toolCallId: string) => {
+  if (expandedAgents.value.has(toolCallId)) {
+    expandedAgents.value.delete(toolCallId)
+  } else {
+    expandedAgents.value.add(toolCallId)
+  }
+}
+
+const isAgentExpanded = (toolCallId: string) => expandedAgents.value.has(toolCallId)
+
+const childCount = (toolCall: ToolCallInfo) => toolCall.childToolCalls?.length ?? 0
+const childCompleted = (toolCall: ToolCallInfo) =>
+  toolCall.childToolCalls?.filter((c) => c.status === 'completed').length ?? 0
 
 const formatJson = (json?: string) => {
   if (!json) return ''
@@ -67,6 +86,9 @@ const getToolDisplayName = (toolName: string) => {
     skill: t('tools.skill.name'),
     write_todos: t('tools.writeTodos.name'),
     task: t('tools.task.name'),
+    researcher: t('assistant.chat.subAgentResearcher'),
+    worker: t('assistant.chat.subAgentWorker'),
+    skill_advisor: t('assistant.chat.subAgentSkillAdvisor'),
   }
   return nameMap[toolName] ?? toolName
 }
@@ -200,14 +222,67 @@ const getTaskResult = (resultJson?: string): string => {
 </script>
 
 <template>
-  <div class="min-w-0 w-full max-w-[560px] flex flex-col gap-2">
+  <div :class="cn('min-w-0 w-full flex flex-col gap-2', !nested && 'max-w-[560px]')">
     <div
       v-for="toolCall in toolCalls"
       :key="toolCall.toolCallId"
-      class="w-full min-w-0 flex flex-col gap-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm dark:bg-zinc-900/50"
+      :class="cn(
+        'w-full min-w-0 flex flex-col gap-1 rounded-lg border text-sm',
+        isSubAgentTool(toolCall.toolName)
+          ? 'border-border/60 bg-muted/15 dark:bg-zinc-900/30'
+          : 'border-border/50 bg-muted/30 px-3 py-2 dark:bg-zinc-900/50'
+      )"
     >
+      <!-- Sub-agent tool -->
+      <template v-if="isSubAgentTool(toolCall.toolName)">
+        <button
+          class="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground hover:text-foreground transition-colors"
+          @click="toggleAgent(toolCall.toolCallId)"
+        >
+          <Bot class="size-4 shrink-0 text-muted-foreground/70" />
+          <span class="flex-1 truncate font-medium text-xs">
+            {{ getToolDisplayName(toolCall.toolName) }}
+          </span>
+          <span class="flex items-center gap-1.5 text-xs tabular-nums">
+            <template v-if="toolCall.status === 'calling'">
+              <Loader2 class="size-3 animate-spin" />
+              <span v-if="childCount(toolCall) > 0" class="opacity-70">{{ childCompleted(toolCall) }}/{{ childCount(toolCall) }}</span>
+              <span v-else class="opacity-70">{{ t('assistant.chat.toolCalling') }}</span>
+            </template>
+            <template v-else>
+              <Check class="size-3 text-muted-foreground" />
+              <span class="opacity-70">{{ t('assistant.chat.toolCompleted') }}</span>
+            </template>
+          </span>
+          <ChevronDown
+            :class="cn('size-4 shrink-0 transition-transform', isAgentExpanded(toolCall.toolCallId) && 'rotate-180')"
+          />
+        </button>
+        <div v-if="isAgentExpanded(toolCall.toolCallId)" class="flex flex-col gap-1.5 px-2 pb-2">
+          <template v-for="(seg, segIdx) in toolCall.childSegments" :key="segIdx">
+            <div
+              v-if="seg.type === 'thinking' && seg.content"
+              class="flex items-start gap-1.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground/80 dark:bg-zinc-800/30"
+            >
+              <Brain class="size-3 mt-0.5 shrink-0 opacity-60" />
+              <p class="min-w-0 whitespace-pre-wrap wrap-break-word line-clamp-4">{{ seg.content }}</p>
+            </div>
+            <ToolCallBlock
+              v-if="seg.type === 'tools' && seg.toolCalls.length"
+              :tool-calls="seg.toolCalls"
+              :is-streaming="isStreaming"
+              nested
+            />
+            <div
+              v-if="seg.type === 'content' && seg.content"
+              class="rounded-md border border-border/30 bg-background/40 px-2.5 py-2 text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap wrap-break-word dark:bg-zinc-950/30"
+            >{{ seg.content }}<span v-if="toolCall.status === 'calling' && segIdx === toolCall.childSegments!.length - 1" class="streaming-cursor" aria-hidden="true"></span></div>
+          </template>
+        </div>
+      </template>
+
       <!-- File-write tool -->
-      <template v-if="isFileWriteTool(toolCall.toolName)">
+      <template v-else-if="isFileWriteTool(toolCall.toolName)">
         <button
           class="flex w-full min-w-0 items-center gap-2 text-left text-muted-foreground hover:text-foreground"
           @click="toggleExpand(toolCall.toolCallId)"
@@ -417,7 +492,8 @@ const getTaskResult = (resultJson?: string): string => {
             v-if="
               toolCall.resultJson &&
               toolCall.toolName !== 'duckduckgo_search' &&
-              !isTaskTool(toolCall.toolName)
+              !isTaskTool(toolCall.toolName) &&
+              !isSubAgentTool(toolCall.toolName)
             "
             class="space-y-1"
           >

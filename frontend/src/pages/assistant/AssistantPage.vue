@@ -309,9 +309,9 @@ const handleDeleted = (id: number) => {
 }
 
 const handleNewConversation = () => {
-  // Just clear the current conversation selection and chat messages
-  // Don't create a conversation record until user sends first message
-  if (activeConversationId.value) {
+  // Clear selection; only purge cached messages if the conversation is not actively streaming
+  // (another tab may still be using it).
+  if (activeConversationId.value && !chatStore.isGenerating(activeConversationId.value).value) {
     chatStore.clearMessages(activeConversationId.value)
   }
   activeConversationId.value = null
@@ -654,16 +654,16 @@ const updateCurrentTab = () => {
 watch(activeAgentId, async (newAgentId, oldAgentId) => {
   selectDefaultModel(activeAgent.value, activeConversation.value)
   updateCurrentTab()
-  // 切换助手时加载新助手的会话列表
   if (newAgentId && oldAgentId !== undefined) {
-    await loadConversations(newAgentId, { activeAgentId: newAgentId })
-    // 如果有多个助手，自动打开该助手的最新会话
-    if (agents.value.length > 1) {
+    const isRealSwitch = oldAgentId !== null && oldAgentId !== newAgentId
+    await loadConversations(newAgentId, {
+      preserveSelection: !isRealSwitch,
+      activeAgentId: newAgentId,
+    })
+    if (isRealSwitch && agents.value.length > 1) {
       const conversations = getAllAgentConversations(newAgentId)
       if (conversations.length > 0) {
-        // Select the first conversation (most recent, as they're sorted by updated_at DESC)
-        const lastConversation = conversations[0]
-        handleSelectConversation(lastConversation)
+        handleSelectConversation(conversations[0])
       }
     }
   } else if (!newAgentId) {
@@ -671,7 +671,6 @@ watch(activeAgentId, async (newAgentId, oldAgentId) => {
       chatStore.clearMessages(activeConversationId.value)
     }
     activeConversationId.value = null
-    // Clear knowledge base selection when no agent is active
     clearKnowledgeSelection()
   }
 })
@@ -708,18 +707,18 @@ watch(isTabActive, (active) => {
   if (active) {
     void (async () => {
       await loadModels()
+      const agentIdBefore = activeAgentId.value
       await loadAgents()
-      // Refresh knowledge base list (user may have created/deleted libraries in other pages)
       await loadLibrariesFn()
 
-      // Multi-tab reliability: always refresh conversations from DB when this tab becomes active.
-      if (activeAgentId.value != null) {
+      // Only refresh conversations here if loadAgents didn't change the active agent.
+      // If it did change, watch(activeAgentId) already handled the conversation reload.
+      if (activeAgentId.value != null && activeAgentId.value === agentIdBefore) {
         await loadConversations(activeAgentId.value, {
           preserveSelection: true,
           force: true,
           activeAgentId: activeAgentId.value,
         })
-        // Sync library_ids for current conversation (may have changed from other tabs)
         await syncLibraryIdsFromConversation()
       }
     })()
@@ -818,16 +817,8 @@ onMounted(() => {
         }, 200)
       }
     } else {
-      // Auto-open last conversation if no pending data and no active conversation
-      // This happens when user clicks "AI Assistant" to create a new tab
-      if (!activeConversationId.value && activeAgentId.value != null) {
-        const conversations = getAllAgentConversations(activeAgentId.value)
-        if (conversations.length > 0) {
-          // Select the first conversation (most recent, as they're sorted by updated_at DESC)
-          const lastConversation = conversations[0]
-          handleSelectConversation(lastConversation)
-        }
-      }
+      // New tab starts with a fresh conversation (no auto-select).
+      // The user can pick an existing conversation from the sidebar.
     }
 
     // Snap mode initialization

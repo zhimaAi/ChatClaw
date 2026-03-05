@@ -44,6 +44,11 @@ export interface ToolCallInfo {
   argsJson?: string
   resultJson?: string
   status: 'calling' | 'completed' | 'error'
+  agentName?: string
+  childToolCalls?: ToolCallInfo[]
+  childContent?: string
+  childThinkingContent?: string
+  childSegments?: MessageSegment[]
 }
 
 // Retrieval item info for display (chat mode knowledge/memory retrieval)
@@ -475,25 +480,56 @@ export const useChatStore = defineStore('chat', () => {
     } as any)
   }
 
+  const SUB_AGENT_NAMES = new Set(['researcher', 'worker', 'skill_advisor'])
+
+  const extractSubAgentName = (runPath?: string[]): string | undefined => {
+    if (!Array.isArray(runPath) || runPath.length < 2) return undefined
+    const agentName = runPath[1]
+    return SUB_AGENT_NAMES.has(agentName) ? agentName : undefined
+  }
+
+  const findActiveSubAgentToolCall = (streaming: StreamingMessageState, agentName: string): ToolCallInfo | undefined => {
+    return streaming.toolCalls.find(
+      (tc) => tc.toolName === agentName && (tc.status === 'calling' || tc.status === 'completed')
+    )
+  }
+
   const handleChatChunk = (event: any) => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta } = data
+    const { conversation_id, request_id, delta, run_path } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
+      if (!chunk) return
+
+      const subAgentName = extractSubAgentName(run_path)
+
+      if (subAgentName) {
+        const parent = findActiveSubAgentToolCall(streaming, subAgentName)
+        if (parent) {
+          parent.childContent = (parent.childContent || '') + chunk
+          if (!parent.childSegments) parent.childSegments = []
+          const lastChild = parent.childSegments[parent.childSegments.length - 1]
+          if (lastChild && lastChild.type === 'content') {
+            lastChild.content += chunk
+          } else {
+            parent.childSegments.push({ type: 'content', content: chunk })
+          }
+          return
+        }
+      }
+
       streaming.content += chunk
 
       // Track segments: append to last content segment or start a new one
-      if (chunk) {
-        const lastSeg = streaming.segments[streaming.segments.length - 1]
-        if (lastSeg && lastSeg.type === 'content') {
-          lastSeg.content += chunk
-        } else {
-          streaming.segments.push({ type: 'content', content: chunk })
-        }
+      const lastSeg = streaming.segments[streaming.segments.length - 1]
+      if (lastSeg && lastSeg.type === 'content') {
+        lastSeg.content += chunk
+      } else {
+        streaming.segments.push({ type: 'content', content: chunk })
       }
 
       upsertMessage(conversation_id, streaming.messageId, {
@@ -506,21 +542,38 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta } = data
+    const { conversation_id, request_id, delta, run_path } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
+      if (!chunk) return
+
+      const subAgentName = extractSubAgentName(run_path)
+
+      if (subAgentName) {
+        const parent = findActiveSubAgentToolCall(streaming, subAgentName)
+        if (parent) {
+          parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
+          if (!parent.childSegments) parent.childSegments = []
+          const lastChild = parent.childSegments[parent.childSegments.length - 1]
+          if (lastChild && lastChild.type === 'thinking') {
+            lastChild.content += chunk
+          } else {
+            parent.childSegments.push({ type: 'thinking', content: chunk })
+          }
+          return
+        }
+      }
+
       streaming.thinkingContent += chunk
 
       // Track segments: append to last thinking segment or start a new one
-      if (chunk) {
-        const lastSeg = streaming.segments[streaming.segments.length - 1]
-        if (lastSeg && lastSeg.type === 'thinking') {
-          lastSeg.content += chunk
-        } else {
-          streaming.segments.push({ type: 'thinking', content: chunk })
-        }
+      const lastSeg = streaming.segments[streaming.segments.length - 1]
+      if (lastSeg && lastSeg.type === 'thinking') {
+        lastSeg.content += chunk
+      } else {
+        streaming.segments.push({ type: 'thinking', content: chunk })
       }
 
       upsertMessage(conversation_id, streaming.messageId, {
@@ -533,7 +586,7 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json } =
+    const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json, run_path } =
       data
     const streaming = streamingByConversation.value[conversation_id]
 
@@ -569,8 +622,31 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    // Helper: add a new tool call to segments
+    const subAgentName = extractSubAgentName(run_path)
+
+    const findParentToolCall = (agentName: string): ToolCallInfo | undefined => {
+      return streaming.toolCalls.find(
+        (tc) => tc.toolName === agentName && (tc.status === 'calling' || tc.status === 'completed')
+      )
+    }
+
+    // Helper: add a new tool call to segments (or nest under parent sub-agent)
     const addToolCallToSegments = (toolCall: ToolCallInfo) => {
+      if (subAgentName) {
+        const parent = findParentToolCall(subAgentName)
+        if (parent) {
+          if (!parent.childToolCalls) parent.childToolCalls = []
+          parent.childToolCalls.push(toolCall)
+          if (!parent.childSegments) parent.childSegments = []
+          const lastChild = parent.childSegments[parent.childSegments.length - 1]
+          if (lastChild && lastChild.type === 'tools') {
+            lastChild.toolCalls.push(toolCall)
+          } else {
+            parent.childSegments.push({ type: 'tools', toolCalls: [toolCall] })
+          }
+          return
+        }
+      }
       const lastSeg = streaming.segments[streaming.segments.length - 1]
       if (lastSeg && lastSeg.type === 'tools') {
         lastSeg.toolCalls.push(toolCall)
@@ -586,6 +662,7 @@ export const useChatStore = defineStore('chat', () => {
         if (existing) {
           existing.toolName = tool_name
           existing.argsJson = args_json
+          if (!existing.agentName && subAgentName) existing.agentName = subAgentName
           // Don't downgrade completed to calling
           if (existing.status !== 'completed') {
             existing.status = 'calling'
@@ -596,6 +673,7 @@ export const useChatStore = defineStore('chat', () => {
             toolName: tool_name,
             argsJson: args_json,
             status: 'calling',
+            agentName: subAgentName,
           }
           streaming.toolCalls.push(newToolCall)
           // Track in segments (same object reference so updates propagate)
@@ -609,6 +687,7 @@ export const useChatStore = defineStore('chat', () => {
           existing.toolName = existing.toolName || tool_name
           existing.resultJson = result_json
           existing.status = 'completed'
+          if (!existing.agentName && subAgentName) existing.agentName = subAgentName
         } else {
           // Try best-effort merge by (toolName + argsJson) to avoid duplicates like "calling" + "completed"
           const mergeCandidate = streaming.toolCalls.find(
@@ -623,12 +702,14 @@ export const useChatStore = defineStore('chat', () => {
             mergeCandidate.toolCallId = tool_call_id || mergeCandidate.toolCallId
             mergeCandidate.resultJson = result_json
             mergeCandidate.status = 'completed'
+            if (!mergeCandidate.agentName && subAgentName) mergeCandidate.agentName = subAgentName
           } else {
             const newToolCall: ToolCallInfo = {
               toolCallId: tool_call_id,
               toolName: tool_name,
               resultJson: result_json,
               status: 'completed',
+              agentName: subAgentName,
             }
             streaming.toolCalls.push(newToolCall)
             // Track in segments
@@ -759,6 +840,12 @@ export const useChatStore = defineStore('chat', () => {
 
       // For errors, persist streaming segments locally since we don't call loadMessages.
       // Deep-clone to detach from reactive streaming state.
+      const deepCloneToolCall = (tc: ToolCallInfo): ToolCallInfo => ({
+        ...tc,
+        childToolCalls: tc.childToolCalls?.map((c) => ({ ...c })),
+        childContent: tc.childContent,
+        childThinkingContent: tc.childThinkingContent,
+      })
       segmentsByMessage.value[streaming.messageId] = streaming.segments.map((seg) => {
         if (seg.type === 'thinking') {
           return { type: 'thinking' as const, content: seg.content }
@@ -767,7 +854,7 @@ export const useChatStore = defineStore('chat', () => {
         } else if (seg.type === 'retrieval') {
           return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
         } else {
-          return { type: 'tools' as const, toolCalls: seg.toolCalls.map((tc) => ({ ...tc })) }
+          return { type: 'tools' as const, toolCalls: seg.toolCalls.map(deepCloneToolCall) }
         }
       })
 

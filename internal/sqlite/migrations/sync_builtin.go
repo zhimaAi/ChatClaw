@@ -2,14 +2,34 @@ package migrations
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"chatclaw/internal/define"
 
 	"github.com/uptrace/bun"
 )
+
+type optionalModelColumn struct {
+	Name  string
+	Value func(model define.BuiltinModelConfig) (any, error)
+}
+
+var modelOptionalColumns = []optionalModelColumn{
+	{
+		Name: "capabilities",
+		Value: func(model define.BuiltinModelConfig) (any, error) {
+			capabilities, err := json.Marshal(model.Capabilities)
+			if err != nil {
+				return nil, err
+			}
+			return string(capabilities), nil
+		},
+	},
+}
 
 // SyncBuiltinProvidersAndModels synchronises the providers and models tables
 // with the current BuiltinProviders / BuiltinModels slices in define/.
@@ -80,6 +100,11 @@ func syncProviders(ctx context.Context, db *bun.DB, now string) error {
 }
 
 func syncModels(ctx context.Context, db *bun.DB, now string) error {
+	availableOptionalColumns, err := availableModelOptionalColumns(ctx, db)
+	if err != nil {
+		return fmt.Errorf("resolve optional model columns: %w", err)
+	}
+
 	// Build a set of current builtin (provider_id, model_id) pairs for stale detection.
 	type modelKey struct{ ProviderID, ModelID string }
 	builtinSet := make(map[modelKey]struct{}, len(define.BuiltinModels))
@@ -98,21 +123,19 @@ func syncModels(ctx context.Context, db *bun.DB, now string) error {
 		if exists > 0 {
 			// Row exists (either from init migration, prior sync, or user manually added).
 			// Update metadata and claim as builtin; preserve user's enabled flag.
-			capabilities, _ := json.Marshal(m.Capabilities)
-			if _, err := db.ExecContext(ctx, `
-				UPDATE models
-				SET name = ?, type = ?, sort_order = ?, capabilities = ?, is_builtin = 1, updated_at = ?
-				WHERE provider_id = ? AND model_id = ?
-			`, m.Name, m.Type, m.SortOrder, string(capabilities), now, m.ProviderID, m.ModelID); err != nil {
+			updateSQL, updateArgs, err := buildModelUpdateSQL(m, now, availableOptionalColumns)
+			if err != nil {
+				return fmt.Errorf("build update model %s/%s: %w", m.ProviderID, m.ModelID, err)
+			}
+			if _, err := db.ExecContext(ctx, updateSQL, updateArgs...); err != nil {
 				return fmt.Errorf("update model %s/%s: %w", m.ProviderID, m.ModelID, err)
 			}
 		} else {
-			capabilities, _ := json.Marshal(m.Capabilities)
-			if _, err := db.ExecContext(ctx, `
-				INSERT INTO models
-					(provider_id, model_id, name, type, capabilities, is_builtin, enabled, sort_order, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
-			`, m.ProviderID, m.ModelID, m.Name, m.Type, string(capabilities), m.SortOrder, now, now); err != nil {
+			insertSQL, insertArgs, err := buildModelInsertSQL(m, now, availableOptionalColumns)
+			if err != nil {
+				return fmt.Errorf("build insert model %s/%s: %w", m.ProviderID, m.ModelID, err)
+			}
+			if _, err := db.ExecContext(ctx, insertSQL, insertArgs...); err != nil {
 				return fmt.Errorf("insert model %s/%s: %w", m.ProviderID, m.ModelID, err)
 			}
 		}
@@ -152,4 +175,103 @@ func syncModels(ctx context.Context, db *bun.DB, now string) error {
 	}
 
 	return nil
+}
+
+func availableModelOptionalColumns(ctx context.Context, db *bun.DB) ([]optionalModelColumn, error) {
+	available := make([]optionalModelColumn, 0, len(modelOptionalColumns))
+	for _, column := range modelOptionalColumns {
+		exists, err := hasColumn(ctx, db, "models", column.Name)
+		if err != nil {
+			return nil, fmt.Errorf("check models.%s: %w", column.Name, err)
+		}
+		if exists {
+			available = append(available, column)
+		}
+	}
+	return available, nil
+}
+
+func buildModelUpdateSQL(model define.BuiltinModelConfig, now string, optionalColumns []optionalModelColumn) (string, []any, error) {
+	assignments := []string{"name = ?", "type = ?", "sort_order = ?"}
+	args := []any{model.Name, model.Type, model.SortOrder}
+
+	for _, column := range optionalColumns {
+		value, err := column.Value(model)
+		if err != nil {
+			return "", nil, fmt.Errorf("resolve %s: %w", column.Name, err)
+		}
+		assignments = append(assignments, fmt.Sprintf("%s = ?", column.Name))
+		args = append(args, value)
+	}
+
+	assignments = append(assignments, "is_builtin = 1", "updated_at = ?")
+	args = append(args, now, model.ProviderID, model.ModelID)
+
+	sql := fmt.Sprintf(
+		"UPDATE models SET %s WHERE provider_id = ? AND model_id = ?",
+		strings.Join(assignments, ", "),
+	)
+	return sql, args, nil
+}
+
+func buildModelInsertSQL(model define.BuiltinModelConfig, now string, optionalColumns []optionalModelColumn) (string, []any, error) {
+	columns := []string{"provider_id", "model_id", "name", "type"}
+	args := []any{model.ProviderID, model.ModelID, model.Name, model.Type}
+
+	for _, column := range optionalColumns {
+		value, err := column.Value(model)
+		if err != nil {
+			return "", nil, fmt.Errorf("resolve %s: %w", column.Name, err)
+		}
+		columns = append(columns, column.Name)
+		args = append(args, value)
+	}
+
+	columns = append(columns, "is_builtin", "enabled", "sort_order", "created_at", "updated_at")
+	args = append(args, 1, 1, model.SortOrder, now, now)
+
+	sql := fmt.Sprintf(
+		"INSERT INTO models (%s) VALUES (%s)",
+		strings.Join(columns, ", "),
+		strings.Join(questionMarks(len(columns)), ", "),
+	)
+	return sql, args, nil
+}
+
+func questionMarks(n int) []string {
+	placeholders := make([]string, n)
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	return placeholders
+}
+
+func hasColumn(ctx context.Context, db *bun.DB, tableName, columnName string) (bool, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			colType   string
+			notNull   int
+			defaultV  sql.NullString
+			primaryID int
+		)
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultV, &primaryID); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return false, nil
 }

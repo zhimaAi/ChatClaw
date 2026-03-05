@@ -72,6 +72,7 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "deepseek", ModelID: "deepseek-reasoner", Name: "DeepSeek R1", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image"}},
 
 	// 智谱
+	{ProviderID: "zhipu", ModelID: "glm-5", Name: "glm-5", Type: "llm", SortOrder: 99, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7", Name: "glm-4.7", Type: "llm", SortOrder: 100, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7-flash", Name: "glm-4.7-flash", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7-flashx", Name: "glm-4.7-flashx", Type: "llm", SortOrder: 102, Capabilities: []string{"text", "image"}},
@@ -84,6 +85,8 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "zhipu", ModelID: "embedding-3", Name: "Embedding-3", Type: "embedding", SortOrder: 100, Capabilities: []string{"text"}},
 
 	// 通义千问
+	{ProviderID: "qwen", ModelID: "qwen3.5-plus", Name: "通义千问 3.5 Plus", Type: "llm", SortOrder: 98, Capabilities: []string{"text", "image", "audio", "video"}},
+	{ProviderID: "qwen", ModelID: "qwen3.5-flash", Name: "通义千问 3.5 Flash", Type: "llm", SortOrder: 99, Capabilities: []string{"text", "image", "audio", "video"}},
 	{ProviderID: "qwen", ModelID: "qwen3-max", Name: "通义千问 Max", Type: "llm", SortOrder: 100, Capabilities: []string{"text", "image", "audio", "video"}},
 	{ProviderID: "qwen", ModelID: "qwen-plus", Name: "通义千问 Plus", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image", "audio", "video"}},
 	{ProviderID: "qwen", ModelID: "qwen-flash", Name: "通义千问 Flash", Type: "llm", SortOrder: 102, Capabilities: []string{"text", "image", "audio", "video"}},

@@ -13,17 +13,19 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
 
+	"errors"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/middlewares/patchtoolcalls"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/summarization"
-	"github.com/cloudwego/eino/adk/prebuilt/deep"
-	"github.com/cloudwego/eino/adk/prebuilt/planexecute"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -88,11 +90,10 @@ type AgentResult struct {
 	Cleanup func()
 }
 
-// NewChatModelAgent creates a DeepAgent with built-in WriteTodos, TaskTool,
-// a general-purpose SubAgent, and a plan-execute SubAgent, backed by the
-// project's filesystem Backend. messageCount is the number of historical
-// messages in the conversation; pass 1 (first user message only) to enable
-// one-time system prompt logging.
+// NewChatModelAgent creates the main agent with three sub-agents (Researcher,
+// Worker, SkillAdvisor) registered as AgentTools. messageCount is the number of
+// historical messages in the conversation; pass 1 (first user message only)
+// to enable one-time system prompt logging.
 func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
@@ -115,58 +116,68 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	backend := buildBackend(config, logger)
 
-	// Build user-provided tools (registry + browser + bg-execute + extras).
-	// Filesystem tools (read_file, write_file, edit_file, glob, grep, execute)
-	// are handled internally by deep.Config.Backend/Shell.
-	bgTool, bgErr := tools.NewBgExecuteTool(backend, bgMgr)
+	fsTools := buildFilesystemTools(backend, bgMgr, logger)
 
-	userTools := make([]tool.BaseTool, 0, len(enabledTools)+len(extraTools)+3)
-	userTools = append(userTools, enabledTools...)
-	userTools = append(userTools, browserTool)
-	if bgErr == nil {
-		userTools = append(userTools, bgTool)
-	} else {
-		logger.Warn("[agent] failed to create execute_background tool", "error", bgErr)
+	baseTools := make([]tool.BaseTool, 0, len(fsTools)+len(enabledTools)+len(extraTools)+3)
+	baseTools = append(baseTools, fsTools...)
+	baseTools = append(baseTools, enabledTools...)
+	baseTools = append(baseTools, browserTool)
+	baseTools = append(baseTools, NewConfirmExecutionTool())
+	baseTools = append(baseTools, extraTools...)
+
+	// Sub-agents (need baseTools reference for tool selection)
+	researcher, researcherErr := newResearcherSubAgent(ctx, chatModel, baseTools, backend, config, logger)
+	if researcherErr != nil {
+		logger.Warn("[agent] failed to create researcher sub-agent", "error", researcherErr)
 	}
-	userTools = append(userTools, NewConfirmExecutionTool())
-	userTools = append(userTools, extraTools...)
 
-	var toolsConfig adk.ToolsConfig
-	if len(userTools) > 0 {
-		toolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               userTools,
-				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(logger)},
-				UnknownToolsHandler: unknownToolsHandler(userTools, logger),
-			},
+	worker, workerErr := newWorkerSubAgent(ctx, chatModel, baseTools, backend, config, logger)
+	if workerErr != nil {
+		logger.Warn("[agent] failed to create worker sub-agent", "error", workerErr)
+	}
+
+	allTools := make([]tool.BaseTool, 0, len(baseTools)+3)
+	allTools = append(allTools, baseTools...)
+	if researcherErr == nil {
+		allTools = append(allTools, researcher)
+	}
+	if workerErr == nil {
+		allTools = append(allTools, worker)
+	}
+
+	if config.SkillsEnabled {
+		skillMgmtTools := filterToolsByName(extraTools,
+			"skill_list", "skill_search", "skill_install", "skill_enable",
+		)
+		skillBackend := newFilteringSkillBackend(backend, logger)
+		advisor, advisorErr := newSkillAdvisorSubAgent(ctx, chatModel, skillMgmtTools, skillBackend, logger)
+		if advisorErr != nil {
+			logger.Warn("[agent] failed to create skill_advisor sub-agent", "error", advisorErr)
+		} else {
+			allTools = append(allTools, advisor)
 		}
+	}
+
+	toolsConfig := adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools:               allTools,
+			ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(allTools, logger)},
+			UnknownToolsHandler: unknownToolsHandler(allTools, logger),
+		},
+		EmitInternalEvents: true,
 	}
 
 	handlers := buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
 
-	var subAgents []adk.Agent
-	if peAgent, peErr := buildPlanExecuteSubAgent(ctx, chatModel, toolsConfig, backend, handlers, logger); peErr != nil {
-		logger.Warn("[agent] failed to create plan-execute subagent, skipping", "error", peErr)
-	} else {
-		subAgents = append(subAgents, peAgent)
-	}
-
-	instruction := config.Instruction
-
-	deepCfg := &deep.Config{
-		Name:         config.Name,
-		Description:  "AI Assistant",
-		Instruction:  instruction,
-		ChatModel:    chatModel,
-		MaxIteration: UnlimitedIterations,
-		Backend:      backend,
-		Shell:        backend,
-		ToolsConfig:  toolsConfig,
-		Handlers:     handlers,
-		SubAgents:    subAgents,
-	}
-	
-	agent, err := deep.New(ctx, deepCfg)
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:          config.Name,
+		Description:   "AI Assistant",
+		Instruction:   config.Instruction,
+		Model:         chatModel,
+		ToolsConfig:   toolsConfig,
+		Handlers:      handlers,
+		MaxIterations: UnlimitedIterations,
+	})
 	if err != nil {
 		browserTool.Close()
 		return nil, err
@@ -180,31 +191,33 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	}, nil
 }
 
-// buildHandlers creates all ChatModelAgentMiddleware handlers.
+// buildHandlers creates all ChatModelAgentMiddleware handlers for the main agent.
 func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatModel model.BaseChatModel, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) []adk.ChatModelAgentMiddleware {
 	var handlers []adk.ChatModelAgentMiddleware
 
-	// System prompt injection
-	var sessionsDir string
-	if config.AgentID > 0 {
-		base := config.WorkDir
-		if base == "" {
-			base = filepath.Join(b.HomeDir(), appDataDir)
-		}
-		sessionsDir = filepath.Join(base, sessionsSubdir, idHash(config.AgentID))
-	}
-	systemPrompt := buildFilesystemSystemPrompt(b.HomeDir(), b.WorkDir(), sessionsDir, b.ToolchainBinDir(), b.SandboxEnabled(), b.SandboxEnabled() && config.SandboxNetwork)
-	handlers = append(handlers, NewInstructionHandler(systemPrompt))
+	// 1. Core environment prompt
+	sessionsDir := buildSessionsDir(config, b)
+	handlers = append(handlers, NewInstructionHandler(buildCorePrompt(b.HomeDir(), b.WorkDir(), sessionsDir)))
 
-	// Extra handlers from caller (e.g. memory core profile)
+	// 2. Extra handlers from caller (e.g. memory core profile)
 	handlers = append(handlers, extraHandlers...)
 
-	einoDir := filepath.Join(b.WorkDir(), einoMetaDir)
-	_ = os.MkdirAll(einoDir, 0o755)
+	// 3. Tools & sandbox prompt
+	handlers = append(handlers, NewInstructionHandler(
+		buildToolsPrompt(b.WorkDir(), b.SandboxEnabled(),
+			b.SandboxEnabled() && config.SandboxNetwork, b.ToolchainBinDir())))
 
+	// 4. Sub-agent usage guide
+	handlers = append(handlers, NewInstructionHandler(buildSubAgentPrompt()))
+
+	// 5. PatchToolCalls
 	if h := buildPatchToolCallsHandler(ctx, logger); h != nil {
 		handlers = append(handlers, h)
 	}
+
+	// 6. Reduction + Summarization (main agent paths)
+	einoDir := filepath.Join(b.WorkDir(), einoMetaDir)
+	_ = os.MkdirAll(einoDir, 0o755)
 
 	reductionPath := filepath.Join(einoDir, reductionDir)
 	_ = os.MkdirAll(reductionPath, 0o755)
@@ -217,17 +230,79 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 		handlers = append(handlers, h)
 	}
 
+	// 7. Skill middleware + guidance prompt
 	if config.SkillsEnabled {
 		if h := buildSkillHandler(ctx, b, logger); h != nil {
 			handlers = append(handlers, h)
 		}
-		handlers = append(handlers, NewInstructionHandler(buildSkillSystemPrompt()))
+		handlers = append(handlers, NewInstructionHandler(buildSkillGuidancePrompt()))
 	}
 
-	// Logging handler goes last so BeforeAgent sees the fully-assembled instruction.
+	// 8. Logging handler goes last so BeforeAgent sees the fully-assembled instruction.
 	handlers = append(handlers, newLoggingHandler(logger, messageCount <= 1))
 
 	return handlers
+}
+
+// buildFilesystemTools creates all filesystem tools from the backend.
+func buildFilesystemTools(backend *tools.Backend, bgMgr *tools.BgProcessManager, logger *slog.Logger) []tool.BaseTool {
+	type toolFactory struct {
+		name string
+		fn   func() (tool.BaseTool, error)
+	}
+	factories := []toolFactory{
+		{"read_file", func() (tool.BaseTool, error) { return tools.NewReadFileTool(backend) }},
+		{"ls", func() (tool.BaseTool, error) { return tools.NewLsTool(backend) }},
+		{"write_file", func() (tool.BaseTool, error) { return tools.NewWriteFileTool(backend) }},
+		{"edit_file", func() (tool.BaseTool, error) { return tools.NewEditFileTool(backend) }},
+		{"patch_file", func() (tool.BaseTool, error) { return tools.NewPatchFileTool(backend) }},
+		{"glob", func() (tool.BaseTool, error) { return tools.NewGlobTool(backend) }},
+		{"grep", func() (tool.BaseTool, error) { return tools.NewGrepTool(backend) }},
+		{"execute", func() (tool.BaseTool, error) { return tools.NewExecuteTool(backend, nil) }},
+	}
+
+	var result []tool.BaseTool
+	for _, f := range factories {
+		t, err := f.fn()
+		if err != nil {
+			logger.Warn("[agent] failed to create filesystem tool", "tool", f.name, "error", err)
+			continue
+		}
+		result = append(result, t)
+	}
+
+	bgTool, err := tools.NewBgExecuteTool(backend, bgMgr)
+	if err != nil {
+		logger.Warn("[agent] failed to create execute_background tool", "error", err)
+	} else {
+		result = append(result, bgTool)
+	}
+
+	return result
+}
+
+// newFilteringSkillBackend creates a filteringSkillBackend for reading skill content.
+func newFilteringSkillBackend(backend *tools.Backend, logger *slog.Logger) *filteringSkillBackend {
+	baseDir := filepath.Join(backend.HomeDir(), ".chatclaw", "skills")
+	_ = os.MkdirAll(baseDir, 0o755)
+	return &filteringSkillBackend{
+		fsBackend: backend,
+		baseDir:   baseDir,
+		logger:    logger,
+	}
+}
+
+// buildSessionsDir returns the sessions directory for this agent, or "" if
+// AgentID is not set.
+func buildSessionsDir(config Config, b *tools.Backend) string {
+	if config.AgentID <= 0 {
+		return ""
+	}
+	base := config.WorkDir
+	if base == "" {
+		base = filepath.Join(b.HomeDir(), appDataDir)
+	}
+	return filepath.Join(base, sessionsSubdir, idHash(config.AgentID))
 }
 
 func buildPatchToolCallsHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
@@ -393,266 +468,51 @@ func isInterruptErr(err error) bool {
 	return false
 }
 
-const (
-	planExecuteMaxIterations   = 8
-	planExecuteExecutorMaxIter = math.MaxInt32
-)
-
-// namedAgent wraps an adk.Agent with a custom name and description so that
-// the DeepAgent TaskTool can display meaningful info to the main agent LLM.
-//
-// It also fixes a framework issue where the Plan-Execute Replanner's "respond"
-// tool output is lost because BreakLoopAction (which has no content) becomes
-// the last event seen by AgentTool. This wrapper tracks the last content-bearing
-// event and re-emits it at the end of the stream if the final event has no output.
-type namedAgent struct {
-	inner adk.Agent
-	name  string
-	desc  string
-}
-
-func (a *namedAgent) Name(_ context.Context) string        { return a.name }
-func (a *namedAgent) Description(_ context.Context) string { return a.desc }
-
-func (a *namedAgent) Run(ctx context.Context, input *adk.AgentInput, opts ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
-	innerIter := a.inner.Run(ctx, input, opts...)
-	return rewriteLastEvent(innerIter)
-}
-
-func (a *namedAgent) Resume(ctx context.Context, info *adk.ResumeInfo, opts ...adk.AgentRunOption) *adk.AsyncIterator[*adk.AgentEvent] {
-	if ra, ok := a.inner.(adk.ResumableAgent); ok {
-		innerIter := ra.Resume(ctx, info, opts...)
-		return rewriteLastEvent(innerIter)
-	}
-	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
-	gen.Send(&adk.AgentEvent{Err: fmt.Errorf("inner agent does not support Resume")})
-	gen.Close()
-	return iter
-}
-
-// rewriteLastEvent forwards all events from the inner iterator, but ensures
-// the very last event carries content. If the final event has no Output (e.g.
-// a bare BreakLoopAction from the Replanner), the last content-bearing event
-// is re-emitted so that AgentTool.InvokableRun picks up the actual response.
-func rewriteLastEvent(inner *adk.AsyncIterator[*adk.AgentEvent]) *adk.AsyncIterator[*adk.AgentEvent] {
-	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
-	go func() {
-		defer gen.Close()
-
-		var lastContentEvent *adk.AgentEvent
-		var lastEvent *adk.AgentEvent
-
-		for {
-			ev, ok := inner.Next()
-			if !ok {
-				break
-			}
-			gen.Send(ev)
-			lastEvent = ev
-
-			if ev.Output != nil && ev.Output.MessageOutput != nil {
-				if msg := ev.Output.MessageOutput.Message; msg != nil && msg.Content != "" {
-					lastContentEvent = ev
-				}
-			}
-		}
-
-		if lastEvent != nil && lastContentEvent != nil &&
-			(lastEvent.Output == nil || lastEvent.Output.MessageOutput == nil) {
-			gen.Send(lastContentEvent)
-		}
-	}()
-	return iter
-}
-
-// buildPlanExecuteSubAgent creates a Plan-Execute agent that can be registered
-// as a DeepAgent SubAgent. The main agent delegates complex multi-step tasks
-// to this agent via the built-in TaskTool.
-//
-// Architecture: Planner (generate plan) → Executor (execute steps with tools)
-//
-//	→ Replanner (evaluate progress, replan or finish)
-//
-// The Executor is built manually (instead of using planexecute.NewExecutor) so
-// that the same Handlers as the main agent (Skill, Reduction, etc.) are applied.
-// The custom GenModelInput merges the handler-injected instruction with the
-// standard ExecutorPrompt so that both Skill system prompts and plan context
-// are visible to the model.
-//
-// NOTE: Planner and Replanner internally use tool_choice=required, which is
-// incompatible with models that only support tool_choice=auto (e.g. models
-// with built-in thinking mode like GLM-5). In such cases the Plan-Execute
-// SubAgent will fail at runtime and the error is returned to the main agent.
-func buildPlanExecuteSubAgent(ctx context.Context, chatModel model.ToolCallingChatModel, toolsConfig adk.ToolsConfig, backend *tools.Backend, handlers []adk.ChatModelAgentMiddleware, logger *slog.Logger) (adk.Agent, error) {
-	executorToolsConfig := buildExecutorToolsConfig(toolsConfig, backend, logger)
-
-	planner, err := planexecute.NewPlanner(ctx, &planexecute.PlannerConfig{
-		ToolCallingChatModel: chatModel,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create planner: %w", err)
-	}
-
-	executor, err := buildPlanExecuteExecutor(ctx, chatModel, executorToolsConfig, handlers)
-	if err != nil {
-		return nil, fmt.Errorf("create executor: %w", err)
-	}
-
-	replanner, err := planexecute.NewReplanner(ctx, &planexecute.ReplannerConfig{
-		ChatModel: chatModel,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create replanner: %w", err)
-	}
-
-	agent, err := planexecute.New(ctx, &planexecute.Config{
-		Planner:       planner,
-		Executor:      executor,
-		Replanner:     replanner,
-		MaxIterations: planExecuteMaxIterations,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create plan-execute agent: %w", err)
-	}
-
-	desc := selectPlanExecuteDescription()
-
-	logger.Info("[agent] plan-execute subagent created successfully")
-	return &namedAgent{inner: agent, name: "plan-execute", desc: desc}, nil
-}
-
-// buildPlanExecuteExecutor creates a ChatModelAgent that serves as the Executor
-// in the Plan-Execute loop. Unlike planexecute.NewExecutor, this version
-// accepts Handlers so that Skill, Reduction, and other middleware capabilities
-// are available during step execution.
-//
-// The GenModelInput prepends any handler-injected instruction (e.g. Skill
-// system prompt) as a system message, then appends the standard executor
-// prompt (objective + plan + completed steps + current step) as a user message.
-func buildPlanExecuteExecutor(ctx context.Context, chatModel model.BaseChatModel, toolsConfig adk.ToolsConfig, handlers []adk.ChatModelAgentMiddleware) (adk.Agent, error) {
-	genInput := func(ctx context.Context, instruction string, _ *adk.AgentInput) ([]*schema.Message, error) {
-		plan, ok := adk.GetSessionValue(ctx, planexecute.PlanSessionKey)
-		if !ok {
-			return nil, fmt.Errorf("plan not found in session")
-		}
-		p := plan.(planexecute.Plan)
-
-		userInput, ok := adk.GetSessionValue(ctx, planexecute.UserInputSessionKey)
-		if !ok {
-			return nil, fmt.Errorf("user input not found in session")
-		}
-		userMsgs := userInput.([]*schema.Message)
-
-		var executedSteps []planexecute.ExecutedStep
-		if es, ok := adk.GetSessionValue(ctx, planexecute.ExecutedStepsSessionKey); ok {
-			executedSteps = es.([]planexecute.ExecutedStep)
-		}
-
-		planJSON, err := p.MarshalJSON()
-		if err != nil {
-			return nil, fmt.Errorf("marshal plan: %w", err)
-		}
-
-		executorMsgs, err := planexecute.ExecutorPrompt.Format(ctx, map[string]any{
-			"input":          formatPlanExecInput(userMsgs),
-			"plan":           string(planJSON),
-			"executed_steps": formatPlanExecSteps(executedSteps),
-			"step":           p.FirstStep(),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("format executor prompt: %w", err)
-		}
-
-		var msgs []*schema.Message
-		if instruction != "" {
-			msgs = append(msgs, schema.SystemMessage(instruction))
-		}
-		msgs = append(msgs, executorMsgs...)
-		return msgs, nil
-	}
-
-	return adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:          "executor",
-		Description:   "an executor agent",
-		Model:         chatModel,
-		ToolsConfig:   toolsConfig,
-		GenModelInput: genInput,
-		MaxIterations: planExecuteExecutorMaxIter,
-		OutputKey:     planexecute.ExecutedStepSessionKey,
-		Handlers:      handlers,
-	})
-}
-
-func formatPlanExecInput(msgs []*schema.Message) string {
-	var sb strings.Builder
-	for _, msg := range msgs {
-		sb.WriteString(msg.Content)
-		sb.WriteString("\n")
-	}
-	return sb.String()
-}
-
-func formatPlanExecSteps(steps []planexecute.ExecutedStep) string {
-	var sb strings.Builder
-	for _, s := range steps {
-		sb.WriteString(fmt.Sprintf("Step: %s\nResult: %s\n\n", s.Step, s.Result))
-	}
-	return sb.String()
-}
-
-// buildExecutorToolsConfig merges the main agent's user tools with filesystem
-// tools so the Plan-Execute Executor can read/write files and run commands
-// using the same Backend (and sandbox) as the main agent.
-func buildExecutorToolsConfig(base adk.ToolsConfig, backend *tools.Backend, logger *slog.Logger) adk.ToolsConfig {
-	type toolFactory struct {
-		name string
-		fn   func() (tool.BaseTool, error)
-	}
-	factories := []toolFactory{
-		{"read_file", func() (tool.BaseTool, error) { return tools.NewReadFileTool(backend) }},
-		{"ls", func() (tool.BaseTool, error) { return tools.NewLsTool(backend) }},
-		{"write_file", func() (tool.BaseTool, error) { return tools.NewWriteFileTool(backend) }},
-		{"edit_file", func() (tool.BaseTool, error) { return tools.NewEditFileTool(backend) }},
-		{"patch_file", func() (tool.BaseTool, error) { return tools.NewPatchFileTool(backend) }},
-		{"glob", func() (tool.BaseTool, error) { return tools.NewGlobTool(backend) }},
-		{"grep", func() (tool.BaseTool, error) { return tools.NewGrepTool(backend) }},
-		{"execute", func() (tool.BaseTool, error) { return tools.NewExecuteTool(backend, nil) }},
-	}
-
-	var fsTools []tool.BaseTool
-	for _, f := range factories {
-		t, err := f.fn()
-		if err != nil {
-			logger.Warn("[agent] plan-execute: failed to create filesystem tool", "tool", f.name, "error", err)
-			continue
-		}
-		fsTools = append(fsTools, t)
-	}
-
-	merged := make([]tool.BaseTool, 0, len(base.Tools)+len(fsTools))
-	merged = append(merged, base.Tools...)
-	merged = append(merged, fsTools...)
-
-	return adk.ToolsConfig{
-		ToolsNodeConfig: compose.ToolsNodeConfig{
-			Tools:               merged,
-			ToolCallMiddlewares: base.ToolCallMiddlewares,
-			UnknownToolsHandler: base.UnknownToolsHandler,
-		},
-	}
-}
-
-func selectPlanExecuteDescription() string {
-	if isZhCN() {
-		return "基于「规划→执行→反思→调整」循环的智能体。先生成完整计划，逐步执行，每步反思并自动修正后续计划。适用于目标宏大的多步骤任务和深度调研。（工具：与主代理相同）"
-	}
-	return "Agent using a plan→execute→reflect→replan loop. Generates a full plan first, executes step by step, reflects after each step and auto-corrects the remaining plan. Best for large multi-step tasks and deep research. (Tools: same as main agent)"
-}
-
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
 // message as a tool result, allowing the ReAct loop to continue.
+// When a tool fails, the error message includes the tool's parameter schema so
+// the model can self-correct. After 3 consecutive failures on the same tool,
+// a suggestion to try an alternative approach is appended.
 // Interrupt signals are not caught — they must propagate to the ADK framework.
-func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
+func ErrorCatchingToolMiddleware(allTools []tool.BaseTool, logger *slog.Logger) compose.ToolMiddleware {
+	schemaMap := buildToolSchemaMap(allTools)
+	var failureCounters sync.Map // tool name -> *int32
+
+	subAgentNames := map[string]bool{"researcher": true, "worker": true, "skill_advisor": true}
+
+	formatError := func(toolName string, err error) string {
+		if errors.Is(err, adk.ErrExceedMaxIterations) && subAgentNames[toolName] {
+			return fmt.Sprintf("Sub-agent %q has completed its work (reached iteration limit). "+
+				"Use whatever partial results were streamed above. "+
+				"Do NOT call %q again for the same request — summarize available information and respond to the user directly.", toolName, toolName)
+		}
+
+		msg := "Error: " + err.Error()
+
+		if hint, ok := schemaMap[toolName]; ok {
+			msg += "\n\nExpected parameters:\n" + hint
+		}
+
+		if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "not permitted") {
+			msg += "\n\nHint: This may be a sandbox restriction. Ensure you are writing within the working directory."
+		}
+
+		counterVal, _ := failureCounters.LoadOrStore(toolName, new(int32))
+		counter := counterVal.(*int32)
+		count := atomic.AddInt32(counter, 1)
+		if count >= 3 {
+			msg += fmt.Sprintf("\n\nWarning: Tool %q has failed %d times consecutively. Consider trying a different approach or tool.", toolName, count)
+		}
+
+		return msg
+	}
+
+	resetCounter := func(toolName string) {
+		if counterVal, ok := failureCounters.Load(toolName); ok {
+			atomic.StoreInt32(counterVal.(*int32), 0)
+		}
+	}
+
 	return compose.ToolMiddleware{
 		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.ToolOutput, error) {
@@ -662,9 +522,10 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 						return nil, err
 					}
 					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
-					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
+					return &compose.ToolOutput{Result: formatError(input.Name, err)}, nil
 				}
-			return output, nil
+				resetCounter(input.Name)
+				return output, nil
 			}
 		},
 		Streamable: func(next compose.StreamableToolEndpoint) compose.StreamableToolEndpoint {
@@ -676,11 +537,49 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 					}
 					logger.Warn("[agent] streaming tool error", "tool", input.Name, "error", err)
 					return &compose.StreamToolOutput{
-						Result: schema.StreamReaderFromArray([]string{"Error: " + err.Error()}),
+						Result: schema.StreamReaderFromArray([]string{formatError(input.Name, err)}),
 					}, nil
 				}
+				resetCounter(input.Name)
 				return output, nil
 			}
 		},
 	}
+}
+
+// buildToolSchemaMap pre-loads tool parameter schemas into a name→hint map.
+func buildToolSchemaMap(allTools []tool.BaseTool) map[string]string {
+	m := make(map[string]string, len(allTools))
+	for _, t := range allTools {
+		info, err := t.Info(context.Background())
+		if err != nil || info == nil {
+			continue
+		}
+		if info.ParamsOneOf == nil {
+			continue
+		}
+
+		js, err := info.ParamsOneOf.ToJSONSchema()
+		if err != nil || js == nil || js.Properties == nil {
+			continue
+		}
+
+		var sb strings.Builder
+		for pair := js.Properties.Oldest(); pair != nil; pair = pair.Next() {
+			name := pair.Key
+			prop := pair.Value
+			required := ""
+			for _, r := range js.Required {
+				if r == name {
+					required = " (required)"
+					break
+				}
+			}
+			sb.WriteString(fmt.Sprintf("  - %s: %s%s — %s\n", name, prop.Type, required, prop.Description))
+		}
+		if sb.Len() > 0 {
+			m[info.Name] = sb.String()
+		}
+	}
+	return m
 }

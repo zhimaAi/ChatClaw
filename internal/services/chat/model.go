@@ -170,23 +170,26 @@ type ChatStartEvent struct {
 // ChatChunkEvent event sent for content chunks
 type ChatChunkEvent struct {
 	ChatEvent
-	Delta string `json:"delta"`
+	Delta   string   `json:"delta"`
+	RunPath []string `json:"run_path,omitempty"`
 }
 
 // ChatThinkingEvent event sent for thinking content
 type ChatThinkingEvent struct {
 	ChatEvent
-	Delta string `json:"delta"`
+	Delta   string   `json:"delta"`
+	RunPath []string `json:"run_path,omitempty"`
 }
 
 // ChatToolEvent event sent for tool calls and results
 type ChatToolEvent struct {
 	ChatEvent
-	Type       string `json:"type"` // "call" or "result"
-	ToolCallID string `json:"tool_call_id"`
-	ToolName   string `json:"tool_name"`
-	ArgsJSON   string `json:"args_json,omitempty"`
-	ResultJSON string `json:"result_json,omitempty"`
+	Type       string   `json:"type"` // "call" or "result"
+	ToolCallID string   `json:"tool_call_id"`
+	ToolName   string   `json:"tool_name"`
+	ArgsJSON   string   `json:"args_json,omitempty"`
+	ResultJSON string   `json:"result_json,omitempty"`
+	RunPath    []string `json:"run_path,omitempty"`
 }
 
 // ChatCompleteEvent event sent when generation completes
