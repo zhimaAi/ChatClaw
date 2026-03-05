@@ -161,6 +161,7 @@ export default {
       generalSettings: 'General Settings',
       memorySettings: 'Long-term Memory',
       skills: 'Skills Settings',
+      mcp: 'MCP Settings',
       snapSettings: 'Snap Settings',
       tools: 'Tools',
       about: 'About Us',
@@ -267,6 +268,14 @@ export default {
       binaryFile: 'Binary file, cannot preview',
       rateLimited: 'Too many requests, please try again later',
       loadFailed: 'Failed to load, please try again later',
+    },
+    // MCP settings
+    mcp: {
+      title: 'MCP',
+      enable: 'Enable MCP',
+      enableHint: 'When enabled, the AI assistant will automatically connect to and use configured MCP servers during conversations.',
+      directory: 'MCP Config Directory',
+      directoryHint: 'Place MCP server configuration files into this directory. They will be automatically detected and connected during AI conversations.',
     },
     // Snap settings
     snap: {

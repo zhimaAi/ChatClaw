@@ -161,6 +161,7 @@ export default {
       generalSettings: '常规设置',
       memorySettings: '长期记忆',
       skills: '技能设置',
+      mcp: 'MCP 设置',
       snapSettings: '吸附设置',
       tools: '功能工具',
       about: '关于我们',
@@ -267,6 +268,14 @@ export default {
       binaryFile: '二进制文件，无法预览',
       rateLimited: '请求过于频繁，请稍后再试',
       loadFailed: '加载失败，请稍后重试',
+    },
+    // MCP 设置
+    mcp: {
+      title: 'MCP',
+      enable: '启用 MCP',
+      enableHint: '开启后，AI 助手在对话时会自动连接并使用已配置的 MCP 服务。',
+      directory: 'MCP 配置目录',
+      directoryHint: '将 MCP 服务配置文件放入该目录，AI 对话时会自动识别并连接。',
     },
     // 吸附设置
     snap: {

@@ -10,6 +10,7 @@ import ModelServiceIcon from '@/assets/icons/model-service.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
 import MemorySettingsIcon from '@/assets/icons/memory.svg'
 import SkillsIcon from '@/assets/icons/skills.svg'
+import MCPIcon from '@/assets/icons/mcp.svg'
 import SnapSettingsIcon from '@/assets/icons/snap-settings.svg'
 import ToolsIcon from '@/assets/icons/tools.svg'
 import AboutIcon from '@/assets/icons/about.svg'
@@ -31,6 +32,7 @@ const allMenuItems: MenuItem[] = [
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
+  { id: 'mcp', labelKey: 'settings.menu.mcp', icon: MCPIcon },
   { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
   { id: 'tools', labelKey: 'settings.menu.tools', icon: ToolsIcon, guiOnly: true },
   { id: 'about', labelKey: 'settings.menu.about', icon: AboutIcon },

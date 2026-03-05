@@ -9,6 +9,7 @@ export type SettingsMenuItem =
   | 'generalSettings'
   | 'memorySettings'
   | 'skills'
+  | 'mcp'
   | 'snapSettings'
   | 'tools'
   | 'about'

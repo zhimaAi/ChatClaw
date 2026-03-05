@@ -19,6 +19,7 @@ import GeneralSettings from './components/GeneralSettings.vue'
 import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
 import SkillsSettings from './components/SkillsSettings.vue'
+import MCPSettings from './components/MCPSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
@@ -33,6 +34,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
   generalSettings: 'settings.menu.generalSettings',
   memorySettings: 'settings.menu.memorySettings',
   skills: 'settings.menu.skills',
+  mcp: 'settings.menu.mcp',
   snapSettings: 'settings.menu.snapSettings',
   tools: 'settings.menu.tools',
   about: 'settings.menu.about',
@@ -44,6 +46,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
   generalSettings: GeneralSettings,
   memorySettings: MemorySettings,
   skills: SkillsSettings,
+  mcp: MCPSettings,
   snapSettings: SnapSettings,
   tools: ToolsSettings,
   about: AboutSettings,
