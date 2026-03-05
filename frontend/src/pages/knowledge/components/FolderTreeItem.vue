@@ -28,7 +28,7 @@ const handleFolderClick = (folderId: number) => {
 <template>
   <div class="flex flex-col gap-0.5">
     <!-- 当前文件夹 -->
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1 overflow-hidden">
       <button
         v-if="folder.children && folder.children.length > 0"
         type="button"

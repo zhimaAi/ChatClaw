@@ -422,13 +422,13 @@ onMounted(() => {
         </div>
 
         <!-- Expanded: full tree with borders and icons -->
-        <div v-else class="flex flex-col gap-2">
+        <div v-else class="flex flex-col gap-2 overflow-hidden">
           <div
             v-for="lib in libraries"
             :key="lib.id"
             :class="
               cn(
-                'rounded-lg border transition-colors',
+                'overflow-hidden rounded-lg border transition-colors',
                 selectedLibraryId === lib.id
                   ? 'border-primary bg-card ring-1 ring-primary/50'
                   : 'border-border bg-card'
@@ -436,7 +436,7 @@ onMounted(() => {
             "
           >
             <!-- 知识库项：图标 + 名称 + 展开箭头 + 菜单 -->
-            <div class="flex items-center gap-1 p-1">
+            <div class="flex items-center gap-1 overflow-hidden p-1">
               <button
                 type="button"
                 class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
@@ -497,10 +497,10 @@ onMounted(() => {
             <!-- 文件夹树 -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="flex flex-col gap-0.5 border-t border-border/50 px-1 pb-1.5 pt-0.5"
+              class="flex flex-col gap-0.5 overflow-hidden border-t border-border/50 px-1 pb-1.5 pt-0.5"
             >
               <!-- 未分组选项 -->
-              <div class="flex items-center gap-1">
+              <div class="flex items-center gap-1 overflow-hidden">
                 <div class="size-6 shrink-0" />
                 <button
                   type="button"
