@@ -633,6 +633,10 @@ export default {
       team: 'Team',
       teamDisabledTip: 'Team knowledge base is not available yet',
     },
+    sidebar: {
+      collapse: 'Collapse',
+      expand: 'Expand',
+    },
     loading: 'Loading...',
     loadFailed: 'Failed to load knowledge bases',
     providersLoadFailed: 'Failed to load providers',

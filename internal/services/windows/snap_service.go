@@ -65,7 +65,8 @@ const (
 	attachedLowFreqRescanInterval   = 1200 * time.Millisecond
 	attachedLowFreqRescanSwitchHits = 5 // Increased from 3 to 5 for more stable switching
 	attachedMinSwitchInterval       = 800 * time.Millisecond
-	stepDebugPrintInterval          = 10 // Print debug info every N steps
+	lowPowerModePollingInterval     = 1500 * time.Millisecond // Reduced polling when no target is foreground
+	lowPowerModeThreshold           = 5 // Switch to low power mode after N consecutive steps with no foreground target
 )
 
 // SnapService manages the single "winsnap" window and dynamically attaches it to
@@ -108,8 +109,9 @@ type SnapService struct {
 	attachedRescanHits      int
 	obscuredCheckTarget     string // Last target name checked for obscured/non-adjacent state
 	obscuredCheckHits       int    // Consecutive obscured/non-adjacent hits for that target
-	stepCounter             int // Counter for debug printing
 	attachingLock           bool // Lock to prevent concurrent attaching
+	lowPowerMode            bool // Reduce polling frequency when no target is foreground
+	noForegroundCount       int // Counter for consecutive steps with no foreground target
 }
 
 func NewSnapService(app *application.App, winSvc *WindowService) (*SnapService, error) {
@@ -623,14 +625,22 @@ func (s *SnapService) loop(ctx context.Context) {
 	// Run step immediately. The window is created lazily inside step() only
 	// when a visible target is found, so we no longer wait for readyCh here.
 	s.step()
-	ticker := time.NewTicker(400 * time.Millisecond)
-	defer ticker.Stop()
+	pollingInterval := 400 * time.Millisecond
 	for {
 		select {
-		case <-ticker.C:
-			s.step()
 		case <-ctx.Done():
 			return
+		case <-time.After(pollingInterval):
+			s.step()
+			// Adjust polling interval based on low power mode
+			s.mu.Lock()
+			lowPower := s.lowPowerMode
+			s.mu.Unlock()
+			if lowPower {
+				pollingInterval = lowPowerModePollingInterval
+			} else {
+				pollingInterval = 400 * time.Millisecond
+			}
 		}
 	}
 }
@@ -657,29 +667,10 @@ func (s *SnapService) step() {
 	wasMinimized := s.lastWinsnapMinimized
 	targetForRestore := s.currentTarget
 	stateForRestore := s.status.State
-	stepCounter := s.stepCounter
-	s.stepCounter++
-	if s.stepCounter >= stepDebugPrintInterval {
-		s.stepCounter = 0
-	}
 	s.mu.Unlock()
 
-	// Print debug info every N steps
-	if stepCounter == 0 {
-		frontTarget, _, _ := winsnap.FrontMostTargetProcessName(enabledTargets)
-		s.mu.Lock()
-		currentTargetForLog := s.currentTarget
-		stateForLog := s.status.State
-		s.mu.Unlock()
-		if s.app != nil && s.app.Logger != nil {
-			s.app.Logger.Info("SnapService step debug",
-				"frontTarget", frontTarget,
-				"currentTarget", currentTargetForLog,
-				"state", stateForLog,
-				"enabledTargets", enabledTargets,
-			)
-		}
-	}
+	// Only print debug info when state or target actually changes
+	// (not on a timer), to reduce log noise
 
 	if len(enabledTargets) == 0 {
 		// If toggles became empty while loop is still running, stop.
@@ -746,6 +737,21 @@ func (s *SnapService) step() {
 		s.mu.Unlock()
 		return
 	}
+
+	// Update low power mode based on foreground status:
+	// - If a target is foreground, exit low power mode immediately
+	// - If no target is foreground, increment counter and enter low power mode after threshold
+	s.mu.Lock()
+	if frontFound && frontTarget != "" {
+		s.lowPowerMode = false
+		s.noForegroundCount = 0
+	} else {
+		s.noForegroundCount++
+		if s.noForegroundCount >= lowPowerModeThreshold {
+			s.lowPowerMode = true
+		}
+	}
+	s.mu.Unlock()
 
 	// In attached state, use strict foreground-driven switching:
 	// - self foreground: keep current attachment (handled above by ErrSelfIsFrontmost)
@@ -1125,18 +1131,6 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 	}
 	s.mu.Unlock()
 
-	// Print switch debug info
-	if s.app != nil && s.app.Logger != nil {
-		s.app.Logger.Info("SnapService switch attach",
-			"state", prevState,
-			"targetProcess", targetProcess,
-			"isForeground", isForeground,
-			"enabledTargets", enabledTargetsFromSettings,
-			"zOrderInfo", zOrderInfo,
-			"switchLockTimeRemaining", switchLockTimeRemaining,
-		)
-	}
-
 	s.mu.Lock()
 	if s.currentTarget == targetProcess && s.ctrl != nil {
 		// Already attached to this target. The darwinFollower's activation observer
@@ -1154,6 +1148,17 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 		obscured, err := winsnap.IsTargetObscured(w, targetProcess)
 		if err == nil {
 			s.mu.Lock()
+			// Only consider re-attaching if target is NOT foreground and appears obscured.
+			// When target is foreground, the system handles z-order automatically.
+			// This prevents unnecessary re-attach cycles when everything is working fine.
+			if isForeground {
+				// Target is foreground - no need to re-attach, reset any pending re-attach
+				s.obscuredCheckHits = 0
+				s.obscuredCheckTarget = ""
+				s.mu.Unlock()
+				return
+			}
+
 			if obscured {
 				if strings.EqualFold(s.obscuredCheckTarget, targetProcess) {
 					s.obscuredCheckHits++
@@ -1192,6 +1197,18 @@ func (s *SnapService) attachTo(w *application.WebviewWindow, targetProcess strin
 			s.ctrl = nil
 		}
 		s.mu.Unlock()
+	}
+
+	// Print switch debug info only when actually performing attach operation
+	if s.app != nil && s.app.Logger != nil {
+		s.app.Logger.Info("SnapService switch attach",
+			"state", prevState,
+			"targetProcess", targetProcess,
+			"isForeground", isForeground,
+			"enabledTargets", enabledTargetsFromSettings,
+			"zOrderInfo", zOrderInfo,
+			"switchLockTimeRemaining", switchLockTimeRemaining,
+		)
 	}
 
 	// Restore winsnap if it was minimized (e.g. by Win+D); when a target becomes visible again, show the snap window.

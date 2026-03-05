@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight, Folder as FolderIcon } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import type { Folder } from '@bindings/chatclaw/internal/services/library'
 
@@ -55,6 +55,7 @@ const handleFolderClick = (folderId: number) => {
         "
         @click.stop="handleFolderClick(folder.id)"
       >
+        <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
         <span class="min-w-0 flex-1 truncate" :title="folder.name">
           {{ folder.name }}
         </span>

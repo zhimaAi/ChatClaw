@@ -235,8 +235,11 @@ func isTargetAdjacent(selfHwnd windows.HWND, targetHwnd windows.HWND, targetProc
 			return true
 		}
 
-		// Check if this is target app's window (different window but same process)
+		// If this is target app's window (different window but same process)
+		// AND it's a valid top-level candidate, treat it as part of target - skip it
 		if pid == targetPid {
+			// Only skip if this window passed the isTopLevelCandidate check above
+			// This ensures we don't skip windows that should be considered "other apps"
 			continue
 		}
 

@@ -628,6 +628,10 @@ export default {
       team: '团队',
       teamDisabledTip: '团队知识库暂未开放',
     },
+    sidebar: {
+      collapse: '收起',
+      expand: '展开',
+    },
     loading: '加载中...',
     loadFailed: '加载知识库失败',
     providersLoadFailed: '加载模型供应商失败',
