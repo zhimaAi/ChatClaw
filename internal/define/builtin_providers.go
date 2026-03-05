@@ -72,6 +72,7 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "deepseek", ModelID: "deepseek-reasoner", Name: "DeepSeek R1", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image"}},
 
 	// 智谱
+	{ProviderID: "zhipu", ModelID: "glm-5", Name: "glm-5", Type: "llm", SortOrder: 99, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7", Name: "glm-4.7", Type: "llm", SortOrder: 100, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7-flash", Name: "glm-4.7-flash", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image"}},
 	{ProviderID: "zhipu", ModelID: "glm-4.7-flashx", Name: "glm-4.7-flashx", Type: "llm", SortOrder: 102, Capabilities: []string{"text", "image"}},
