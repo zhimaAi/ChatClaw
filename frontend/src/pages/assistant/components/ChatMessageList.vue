@@ -133,11 +133,17 @@ watch(
   }
 )
 
-// Watch for tool call updates and scroll
+// Watch for tool call updates and scroll (including sub-agent child content)
 watch(
   () =>
     streaming.value?.toolCalls
-      ?.map((tc) => `${tc.toolCallId}:${tc.status}:${tc.resultJson ? 1 : 0}`)
+      ?.map((tc) => {
+        let key = `${tc.toolCallId}:${tc.status}:${tc.resultJson ? 1 : 0}:${tc.argsJson?.length ?? 0}`
+        if (tc.childContent) key += `:c${tc.childContent.length}`
+        if (tc.childThinkingContent) key += `:t${tc.childThinkingContent.length}`
+        if (tc.childToolCalls?.length) key += `:s${tc.childToolCalls.map((c) => `${c.toolCallId}:${c.status}:${c.argsJson?.length ?? 0}`).join(',')}`
+        return key
+      })
       .join('|'),
   () => {
     scrollToBottom()

@@ -369,6 +369,9 @@ type streamState struct {
 	toolStatesByKey map[string]*toolCallState
 	toolOrder       []string
 	indexKeyMap     map[int]string
+
+	// Current RunPath from the AgentEvent being processed
+	currentRunPath []string
 }
 
 type toolCallState struct {
@@ -385,6 +388,17 @@ func newStreamState(gc *generationContext, assistantMsg *messageModel) *streamSt
 		toolOrder:       make([]string, 0),
 		indexKeyMap:     make(map[int]string),
 	}
+}
+
+func runPathToStrings(runPath []adk.RunStep) []string {
+	if len(runPath) == 0 {
+		return nil
+	}
+	out := make([]string, len(runPath))
+	for i, step := range runPath {
+		out[i] = step.String()
+	}
+	return out
 }
 
 func (ss *streamState) addThinkingToSegments(thinking string) {
@@ -587,6 +601,7 @@ func (s *ChatService) consumeEventIter(ctx context.Context, gc *generationContex
 		}
 
 		if event.Output != nil && event.Output.MessageOutput != nil {
+			ss.currentRunPath = runPathToStrings(event.RunPath)
 			msgOutput := event.Output.MessageOutput
 
 			if msgOutput.IsStreaming && msgOutput.MessageStream != nil {
@@ -700,6 +715,7 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			gc.emit(EventChatThinking, ChatThinkingEvent{
 				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
 				Delta:     msg.ReasoningContent,
+				RunPath:   ss.currentRunPath,
 			})
 		}
 
@@ -709,6 +725,7 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			gc.emit(EventChatChunk, ChatChunkEvent{
 				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
 				Delta:     msg.Content,
+				RunPath:   ss.currentRunPath,
 			})
 		}
 
@@ -765,6 +782,7 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 			ToolCallID: msg.ToolCallID,
 			ToolName:   toolName,
 			ResultJSON: msg.Content,
+			RunPath:    ss.currentRunPath,
 		})
 
 		toolMsg := &messageModel{
@@ -787,6 +805,7 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 		gc.emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
 			Delta:     msg.Content,
+			RunPath:   ss.currentRunPath,
 		})
 	}
 
@@ -847,6 +866,7 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 			ToolCallID: resolvedID,
 			ToolName:   toolName,
 			ArgsJSON:   args,
+			RunPath:    ss.currentRunPath,
 		})
 	}
 }
