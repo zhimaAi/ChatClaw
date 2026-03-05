@@ -172,5 +172,16 @@
   "error.toolchain_create_dir_failed": "创建工具目录失败",
   "error.toolchain_already_installing": "「{{.Name}}」正在安装中",
   "error.toolchain_fetch_version_failed": "获取最新版本失败",
-  "error.toolchain_install_failed": "安装失败"
+  "error.toolchain_install_failed": "安装失败",
+  "error.channel_list_failed": "获取频道列表失败",
+  "error.channel_create_failed": "创建频道失败",
+  "error.channel_update_failed": "更新频道失败",
+  "error.channel_delete_failed": "删除频道失败",
+  "error.channel_read_failed": "读取频道失败",
+  "error.channel_not_found": "未找到频道「{{.ID}}」",
+  "error.channel_name_required": "缺少频道名称",
+  "error.channel_platform_required": "缺少平台类型",
+  "error.channel_id_required": "缺少频道 ID",
+  "error.channel_connect_failed": "频道「{{.Name}}」连接失败",
+  "error.channel_agent_create_failed": "为频道创建 AI 助手失败"
 }

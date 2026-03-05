@@ -104,6 +104,7 @@ export default {
     assistant: 'AI助手',
     knowledge: '知识库',
     skills: '技能',
+    channels: '频道',
     multiask: '多问',
     memory: '记忆',
     settings: '设置',
@@ -884,5 +885,87 @@ export default {
     content: '内容',
     loadingMore: '加载中…',
     noMore: '没有更多了',
+  },
+  channels: {
+    title: '消息频道',
+    subtitle: '管理您的消息频道和连接',
+    refresh: '刷新',
+    addChannel: '添加频道',
+    stats: {
+      total: '频道总数',
+      connected: '已连接',
+      disconnected: '未连接',
+    },
+    configured: {
+      title: '已配置',
+      desc: '已添加和配置的频道',
+      empty: '暂无已配置的频道',
+      connected: '已连接',
+      disconnected: '未连接',
+      error: '连接异常',
+    },
+    available: {
+      title: '可用频道',
+      desc: '连接一个新的频道',
+    },
+    add: {
+      title: '添加频道',
+      desc: '选择要配置的频道类型',
+    },
+    config: {
+      title: '配置频道',
+      name: '机器人名称',
+      namePlaceholder: '请输入机器人名称',
+      appId: 'App ID',
+      appIdPlaceholder: '请输入 App ID',
+      appSecret: 'App Secret',
+      appSecretPlaceholder: '请输入 App Secret',
+      token: 'Token',
+      tokenPlaceholder: '请输入 Token',
+      save: '保存',
+      cancel: '取消',
+      success: '频道创建成功',
+      failed: '频道创建失败',
+    },
+    delete: {
+      title: '确认删除',
+      desc: '确定要删除频道「{name}」吗？此操作无法撤销。',
+      success: '删除成功',
+      failed: '删除失败',
+    },
+    connect: {
+      success: '连接成功',
+      failed: '连接失败',
+    },
+    disconnect: {
+      success: '已断开连接',
+      failed: '断开连接失败',
+    },
+    meta: {
+      feishu: {
+        name: 'Feishu / Lark',
+        description: '飞书/Lark 机器人，通过长连接接入',
+      },
+      telegram: {
+        name: 'Telegram',
+        description: 'Telegram 机器人，通过 Bot API 接入',
+      },
+      discord: {
+        name: 'Discord',
+        description: 'Discord 机器人，通过 Gateway 接入',
+      },
+      whatsapp: {
+        name: 'WhatsApp',
+        description: 'WhatsApp Business API 接入',
+      },
+      dingtalk: {
+        name: 'DingTalk',
+        description: '钉钉机器人，通过 Stream 接入',
+      },
+    },
+    authType: {
+      token: '令牌',
+      qrcode: '二维码',
+    },
   },
 }
