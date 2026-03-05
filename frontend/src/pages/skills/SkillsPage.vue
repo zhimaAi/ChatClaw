@@ -210,15 +210,22 @@ async function loadInstalledSkills() {
   }
 }
 
+const refreshing = ref(false)
+
 async function handleRefresh() {
-  installedLoading.value = true
+  refreshing.value = true
+  const minDelay = new Promise((r) => setTimeout(r, 500))
   try {
-    installedSkills.value = await SkillsService.RefreshSkills()
-    installedPage.value = 1
-  } catch (error) {
-    console.error('Failed to refresh skills:', error)
+    if (activeTab.value === 'market') {
+      marketCursor.value = ''
+      searchMode.value = false
+      searchQuery.value = ''
+      await Promise.all([loadMarketSkills(), minDelay])
+    } else {
+      await Promise.all([loadInstalledSkills(), minDelay])
+    }
   } finally {
-    installedLoading.value = false
+    refreshing.value = false
   }
 }
 
@@ -601,7 +608,7 @@ watch(activeTab, (tab) => {
           class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           @click="handleRefresh"
         >
-          <RefreshCw class="size-4" :class="installedLoading && 'animate-spin'" />
+          <RefreshCw class="size-4" :class="refreshing && 'animate-spin'" />
         </button>
         <button
           class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

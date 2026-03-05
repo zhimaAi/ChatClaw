@@ -50,7 +50,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
 }
 
 // 是否为全宽组件（不需要居中包装）
-const isFullWidthComponent = computed(() => settingsStore.activeMenu === 'modelService' || settingsStore.activeMenu === 'skills')
+const isFullWidthComponent = computed(() => settingsStore.activeMenu === 'modelService')
 
 // 获取当前菜单的翻译文本
 const activeMenuLabel = computed(() => t(menuLabelKeys[settingsStore.activeMenu]))
