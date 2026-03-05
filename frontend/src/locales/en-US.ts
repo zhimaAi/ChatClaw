@@ -129,6 +129,8 @@ export default {
     notConfigured: 'Not configured',
     longPressToDrag: 'Long press to drag and reorder',
     modelSettings: 'Model Settings',
+    expand: 'Expand',
+    collapse: 'Collapse',
   },
   tabs: {
     newTab: 'New Tab',

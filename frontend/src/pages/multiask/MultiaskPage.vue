@@ -13,6 +13,8 @@ import MessageInput from './components/MessageInput.vue'
 import ModelSettingsDialog from './components/ModelSettingsDialog.vue'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Settings } from 'lucide-vue-next'
+import CollapseIcon from '@/assets/icons/collapse-icon.svg'
+import ExpandIcon from '@/assets/icons/expand-icon.svg'
 import { MultiaskService } from '../../../bindings/chatclaw/internal/services/multiask'
 import { useNavigationStore } from '@/stores'
 
@@ -38,6 +40,7 @@ const STORAGE_KEY_MODEL_ORDER = 'chatclaw:multiask:model-order'
 const STORAGE_KEY_SELECTED_MODELS = 'chatclaw:multiask:selected-models'
 const STORAGE_KEY_ENABLED_MODELS = 'chatclaw:multiask:enabled-models'
 const STORAGE_KEY_DISABLED_MODELS = 'chatclaw:multiask:disabled-models'
+const STORAGE_KEY_SELECTOR_COLLAPSED = 'chatclaw:multiask:selector-collapsed'
 
 /**
  * 服务是否已初始化
@@ -402,6 +405,28 @@ const selectedModelIds = ref<string[]>(getInitialSelectedIds())
  * 设置弹窗状态
  */
 const isSettingsOpen = ref(false)
+
+/**
+ * 模型选择区域展开/收起状态
+ */
+const isModelSelectorCollapsed = ref(
+  localStorage.getItem(STORAGE_KEY_SELECTOR_COLLAPSED) === 'true'
+)
+
+/**
+ * 切换模型选择区域的展开/收起
+ */
+const toggleModelSelector = async () => {
+  isModelSelectorCollapsed.value = !isModelSelectorCollapsed.value
+  localStorage.setItem(
+    STORAGE_KEY_SELECTOR_COLLAPSED,
+    String(isModelSelectorCollapsed.value)
+  )
+  await nextTick()
+  // Wait for CSS transition (200ms) to complete before recalculating bounds
+  await new Promise((resolve) => setTimeout(resolve, 220))
+  await updateAllPanelBounds()
+}
 
 /**
  * 是否应该显示原生面板（当前标签页激活且没有打开遮挡的弹窗）
@@ -840,8 +865,9 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background">
-    <!-- 顶部模型选择区域 -->
+    <!-- 顶部模型选择区域（展开时可见） -->
     <div
+      v-if="!isModelSelectorCollapsed"
       class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-2 py-2"
     >
       <!-- 模型选择器 -->
@@ -851,7 +877,7 @@ onUnmounted(() => {
         @toggle="handleToggleModel"
       />
 
-      <!-- 分栏切换与设置 -->
+      <!-- 分栏切换、设置与收起按钮 -->
       <div class="flex items-center gap-2">
         <TooltipProvider :delay-duration="300">
           <Tooltip>
@@ -870,11 +896,44 @@ onUnmounted(() => {
           </Tooltip>
         </TooltipProvider>
         <ColumnToggle v-model="columnCount" />
+        <TooltipProvider :delay-duration="300">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="toggleModelSelector"
+              >
+                <CollapseIcon class="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {{ t('multiask.collapse') }}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
 
     <!-- 聊天面板区域 -->
-    <div class="flex min-h-0 flex-1 px-4 pb-4 pt-2">
+    <div class="relative flex min-h-0 flex-1 px-4 pb-4 pt-2">
+      <!-- 悬浮展开按钮（收起时显示，浮于内容区右上角） -->
+      <TooltipProvider v-if="isModelSelectorCollapsed" :delay-duration="300">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              class="absolute right-5 top-3 z-20 flex size-8 cursor-pointer items-center justify-center rounded-full bg-muted text-muted-foreground shadow-sm ring-1 ring-border transition-colors hover:bg-accent hover:text-foreground"
+              @click="toggleModelSelector"
+            >
+              <ExpandIcon class="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {{ t('multiask.expand') }}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <!-- 面板容器 -->
       <div
         class="grid h-full w-full gap-2"

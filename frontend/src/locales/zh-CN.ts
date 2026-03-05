@@ -129,6 +129,8 @@ export default {
     notConfigured: '暂未配置',
     longPressToDrag: '长按拖动排序',
     modelSettings: '模型设置',
+    expand: '展开',
+    collapse: '收起',
   },
   tabs: {
     newTab: '新标签页',
