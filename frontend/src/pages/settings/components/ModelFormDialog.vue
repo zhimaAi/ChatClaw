@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle, FileText, Image, Mic, Video, File } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -29,15 +29,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  save: [data: { modelId: string; name: string; type: string }]
+  save: [data: { modelId: string; name: string; type: string; capabilities: string[] }]
 }>()
 
 const { t } = useI18n()
+
+// 支持的输入类型选项
+const capabilityOptions = [
+  { value: 'text', label: 'settings.modelService.capabilityText', icon: FileText },
+  { value: 'image', label: 'settings.modelService.capabilityImage', icon: Image },
+  { value: 'audio', label: 'settings.modelService.capabilityAudio', icon: Mic },
+  { value: 'video', label: 'settings.modelService.capabilityVideo', icon: Video },
+  { value: 'file', label: 'settings.modelService.capabilityFile', icon: File },
+]
 
 // 表单数据
 const formModelId = ref('')
 const formName = ref('')
 const formType = ref<string>('llm')
+const formCapabilities = ref<string[]>(['text'])
 const isSaving = ref(false)
 
 // 是否为编辑模式
@@ -61,10 +71,12 @@ watch(
       formModelId.value = model.model_id
       formName.value = model.name
       formType.value = model.type
+      formCapabilities.value = model.capabilities && model.capabilities.length > 0 ? model.capabilities : ['text']
     } else {
       formModelId.value = ''
       formName.value = ''
       formType.value = 'llm'
+      formCapabilities.value = ['text']
     }
   },
   { immediate: true }
@@ -78,9 +90,20 @@ watch(
       formModelId.value = ''
       formName.value = ''
       formType.value = 'llm'
+      formCapabilities.value = ['text']
     }
   }
 )
+
+// 处理能力选择
+const toggleCapability = (capability: string) => {
+  const index = formCapabilities.value.indexOf(capability)
+  if (index === -1) {
+    formCapabilities.value.push(capability)
+  } else if (formCapabilities.value.length > 1) {
+    formCapabilities.value.splice(index, 1)
+  }
+}
 
 // 处理关闭
 const handleClose = () => {
@@ -95,6 +118,7 @@ const handleSave = () => {
     modelId: formModelId.value.trim(),
     name: formName.value.trim(),
     type: formType.value,
+    capabilities: formCapabilities.value,
   })
 }
 
@@ -167,6 +191,30 @@ defineExpose({ resetSaving })
             :disabled="isSaving"
             maxlength="40"
           />
+        </div>
+
+        <!-- 支持的输入类型 -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-sm font-medium text-foreground">
+            {{ t('settings.modelService.supportedInputs') }}
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="cap in capabilityOptions"
+              :key="cap.value"
+              type="button"
+              :class="[
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm transition-colors border',
+                formCapabilities.includes(cap.value)
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-transparent border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+              ]"
+              @click="toggleCapability(cap.value)"
+            >
+              <component :is="cap.icon" class="size-3.5" />
+              {{ t(cap.label) }}
+            </button>
+          </div>
         </div>
       </div>
 

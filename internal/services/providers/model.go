@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"chatclaw/internal/sqlite"
@@ -29,16 +30,17 @@ type Provider struct {
 
 // Model 模型 DTO（暴露给前端）
 type Model struct {
-	ID         int64     `json:"id"`
-	ProviderID string    `json:"provider_id"`
-	ModelID    string    `json:"model_id"`
-	Name       string    `json:"name"`
-	Type       string    `json:"type"` // llm, embedding, rerank
-	IsBuiltin  bool      `json:"is_builtin"`
-	Enabled    bool      `json:"enabled"`
-	SortOrder  int       `json:"sort_order"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID            int64     `json:"id"`
+	ProviderID    string    `json:"provider_id"`
+	ModelID       string    `json:"model_id"`
+	Name          string    `json:"name"`
+	Type          string    `json:"type"` // llm, embedding, rerank
+	Capabilities  []string  `json:"capabilities"` // 支持的输入类型: text, image, audio, video, file
+	IsBuiltin     bool      `json:"is_builtin"`
+	Enabled       bool      `json:"enabled"`
+	SortOrder     int       `json:"sort_order"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // ModelGroup 模型分组（按类型分组）
@@ -63,16 +65,18 @@ type UpdateProviderInput struct {
 
 // CreateModelInput 创建模型的输入参数
 type CreateModelInput struct {
-	ModelID string `json:"model_id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"` // llm, embedding, rerank
+	ModelID      string   `json:"model_id"`
+	Name         string   `json:"name"`
+	Type         string   `json:"type"` // llm, embedding, rerank
+	Capabilities []string `json:"capabilities"` // 支持的输入类型: text, image, audio, video, file
 }
 
 // UpdateModelInput 更新模型的输入参数
 // 注意：model_id 和 type 创建后不允许修改
 type UpdateModelInput struct {
-	Name    *string `json:"name"`
-	Enabled *bool   `json:"enabled"`
+	Name         *string  `json:"name"`
+	Enabled      *bool    `json:"enabled"`
+	Capabilities []string `json:"capabilities"` // 支持的输入类型: text, image, audio, video, file
 }
 
 // providerModel 数据库模型
@@ -136,16 +140,17 @@ func (m *providerModel) toDTO() Provider {
 type modelModel struct {
 	bun.BaseModel `bun:"table:models,alias:m"`
 
-	ID         int64     `bun:"id,pk,autoincrement"`
-	ProviderID string    `bun:"provider_id,notnull"`
-	ModelID    string    `bun:"model_id,notnull"`
-	Name       string    `bun:"name,notnull"`
-	Type       string    `bun:"type,notnull"`
-	IsBuiltin  bool      `bun:"is_builtin,notnull"`
-	Enabled    bool      `bun:"enabled,notnull"`
-	SortOrder  int       `bun:"sort_order,notnull"`
-	CreatedAt  time.Time `bun:"created_at,notnull"`
-	UpdatedAt  time.Time `bun:"updated_at,notnull"`
+	ID           int64     `bun:"id,pk,autoincrement"`
+	ProviderID   string    `bun:"provider_id,notnull"`
+	ModelID      string    `bun:"model_id,notnull"`
+	Name         string    `bun:"name,notnull"`
+	Type         string    `bun:"type,notnull"`
+	Capabilities string    `bun:"capabilities,notnull"` // JSON 数组格式存储
+	IsBuiltin    bool      `bun:"is_builtin,notnull"`
+	Enabled      bool      `bun:"enabled,notnull"`
+	SortOrder    int       `bun:"sort_order,notnull"`
+	CreatedAt    time.Time `bun:"created_at,notnull"`
+	UpdatedAt    time.Time `bun:"updated_at,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
@@ -167,16 +172,19 @@ func (*modelModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) err
 }
 
 func (m *modelModel) toDTO() Model {
+	var capabilities []string
+	_ = json.Unmarshal([]byte(m.Capabilities), &capabilities)
 	return Model{
-		ID:         m.ID,
-		ProviderID: m.ProviderID,
-		ModelID:    m.ModelID,
-		Name:       m.Name,
-		Type:       m.Type,
-		IsBuiltin:  m.IsBuiltin,
-		Enabled:    m.Enabled,
-		SortOrder:  m.SortOrder,
-		CreatedAt:  m.CreatedAt,
-		UpdatedAt:  m.UpdatedAt,
+		ID:           m.ID,
+		ProviderID:   m.ProviderID,
+		ModelID:      m.ModelID,
+		Name:         m.Name,
+		Type:         m.Type,
+		Capabilities: capabilities,
+		IsBuiltin:    m.IsBuiltin,
+		Enabled:      m.Enabled,
+		SortOrder:    m.SortOrder,
+		CreatedAt:    m.CreatedAt,
+		UpdatedAt:    m.UpdatedAt,
 	}
 }

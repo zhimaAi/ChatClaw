@@ -305,8 +305,33 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // Send a new message
-  const sendMessage = async (conversationId: number, content: string, tabId: string) => {
-    if (conversationId <= 0 || !content.trim()) return null
+  const sendMessage = async (
+    conversationId: number,
+    content: string,
+    tabId: string,
+    images?: Array<{
+      id: string
+      file: File
+      mimeType: string
+      base64: string
+      dataUrl: string
+      fileName: string
+      size: number
+    }>
+  ) => {
+    const hasContent = content.trim() !== '' || (images && images.length > 0)
+    if (conversationId <= 0 || !hasContent) return null
+
+    // Map images to ImagePayload format
+    const imagePayloads =
+      images?.map((img) => ({
+        kind: 'image',
+        source: 'inline_base64',
+        mime_type: img.mimeType,
+        base64: img.base64,
+        file_name: img.fileName,
+        size: img.size,
+      })) || []
 
     // Optimistically append user message (backend inserts user msg, but doesn't emit an event for it)
     localMessageCounter -= 1
@@ -319,6 +344,7 @@ export const useChatStore = defineStore('chat', () => {
       status: MessageStatus.SUCCESS,
       thinking_content: '',
       tool_calls: '[]',
+      images_json: JSON.stringify(imagePayloads),
       input_tokens: 0,
       output_tokens: 0,
       created_at: null as any,
@@ -331,6 +357,7 @@ export const useChatStore = defineStore('chat', () => {
           conversation_id: conversationId,
           content: content.trim(),
           tab_id: tabId,
+          images: imagePayloads,
         })
       )
 

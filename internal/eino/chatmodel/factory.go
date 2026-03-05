@@ -9,6 +9,7 @@ import (
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 )
@@ -46,6 +47,8 @@ func NewChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatModel, er
 		return newGeminiChatModel(ctx, cfg)
 	case "anthropic":
 		return newClaudeChatModel(ctx, cfg)
+	case "qwen":
+		return newQwenChatModel(ctx, cfg)
 	default:
 		// 默认使用 OpenAI 兼容 API
 		return newOpenAIChatModel(ctx, cfg)
@@ -138,4 +141,19 @@ func newClaudeChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 		BaseURL:   baseURL,
 		MaxTokens: 4096,
 	})
+}
+
+// newQwenChatModel 创建 Qwen ChatModel
+func newQwenChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatModel, error) {
+	config := &qwen.ChatModelConfig{
+		APIKey: cfg.APIKey,
+		Model: cfg.ModelID,
+	}
+	if cfg.APIEndpoint != "" {
+		config.BaseURL = cfg.APIEndpoint
+	}
+	if cfg.Timeout > 0 {
+		config.Timeout = cfg.Timeout
+	}
+	return qwen.NewChatModel(ctx, config)
 }

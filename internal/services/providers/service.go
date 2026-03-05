@@ -1136,14 +1136,25 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 		return nil, errs.Wrap("error.model_sort_order_failed", err)
 	}
 
+	// 处理 capabilities
+	capabilities := "[\"text\"]"
+	if len(input.Capabilities) > 0 {
+		capabilitiesBytes, err := json.Marshal(input.Capabilities)
+		if err != nil {
+			return nil, errs.Wrap("error.capabilities_invalid", err)
+		}
+		capabilities = string(capabilitiesBytes)
+	}
+
 	m := &modelModel{
-		ProviderID: providerID,
-		ModelID:    input.ModelID,
-		Name:       input.Name,
-		Type:       input.Type,
-		IsBuiltin:  false,
-		Enabled:    true,
-		SortOrder:  maxSortOrder + 1,
+		ProviderID:   providerID,
+		ModelID:      input.ModelID,
+		Name:         input.Name,
+		Type:         input.Type,
+		Capabilities: capabilities,
+		IsBuiltin:    false,
+		Enabled:      true,
+		SortOrder:    maxSortOrder + 1,
 	}
 
 	_, err = db.NewInsert().Model(m).Exec(ctx)
@@ -1200,6 +1211,13 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	}
 	if input.Enabled != nil {
 		q = q.Set("enabled = ?", *input.Enabled)
+	}
+	if len(input.Capabilities) > 0 {
+		capabilitiesBytes, err := json.Marshal(input.Capabilities)
+		if err != nil {
+			return nil, errs.Wrap("error.capabilities_invalid", err)
+		}
+		q = q.Set("capabilities = ?", string(capabilitiesBytes))
 	}
 
 	result, err := q.Exec(ctx)

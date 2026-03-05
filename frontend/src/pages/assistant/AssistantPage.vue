@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PanelRight } from 'lucide-vue-next'
 import IconAssistant from '@/assets/icons/assistant.svg'
@@ -44,6 +44,7 @@ import { useAgents } from './composables/useAgents'
 import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
+import { supportsMultimodal } from '@/composables/useMultimodal'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -174,6 +175,18 @@ const renameConversationOpen = ref(false)
 const deleteConversationOpen = ref(false)
 const actionConversation = ref<Conversation | null>(null)
 
+// Pending images for message
+interface PendingImage {
+  id: string
+  file: File
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+const pendingImages = ref<PendingImage[]>([])
+
 // Computed
 const activeAgent = computed(() => {
   if (activeAgentId.value == null) return null
@@ -203,9 +216,10 @@ const chatMessages = computed(() => {
 })
 
 const canSend = computed(() => {
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
   return (
     !!activeAgentId.value &&
-    chatInput.value.trim() !== '' &&
+    hasContent &&
     !!selectedModelInfo.value &&
     !isGenerating.value
   )
@@ -216,7 +230,8 @@ const sendDisabledReason = computed(() => {
   if (isGenerating.value) return ''
   if (!activeAgentId.value) return t('assistant.placeholders.createAgentFirst')
   if (!selectedModelKey.value) return t('assistant.placeholders.selectModelFirst')
-  if (!chatInput.value.trim()) return t('assistant.placeholders.enterToSend')
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
+  if (!hasContent) return t('assistant.placeholders.enterToSend')
   return ''
 })
 
@@ -301,6 +316,7 @@ const handleNewConversation = () => {
   }
   activeConversationId.value = null
   chatInput.value = ''
+  pendingImages.value = []
   // Clear knowledge base selection for new conversation
   clearKnowledgeSelection()
   // Reset thinking mode to default (off) for new conversation
@@ -323,7 +339,7 @@ const handleSelectConversationForAgent = (agentId: number, conversation: Convers
   handleSelectConversation(conversation)
 }
 
-const handleSelectConversation = (conversation: Conversation) => {
+const handleSelectConversation = async (conversation: Conversation) => {
   activeConversationId.value = conversation.id
   // Load messages from backend via chatStore
   chatStore.loadMessages(conversation.id)
@@ -336,8 +352,11 @@ const handleSelectConversation = (conversation: Conversation) => {
   // Set knowledge base selection from conversation
   selectedLibraryIds.value = conversation.library_ids || []
 
-  // Set thinking mode from conversation
+  // Set thinking mode from conversation (skip toast notification)
+  isRestoringConversation = true
   enableThinking.value = conversation.enable_thinking || false
+  await nextTick()
+  isRestoringConversation = false
 
   // Set chat mode from conversation
   chatMode.value = conversation.chat_mode || 'task'
@@ -347,7 +366,9 @@ const handleSend = async () => {
   if (!canSend.value || !activeAgentId.value) return
 
   const messageContent = chatInput.value.trim()
+  const imagesToSend = [...pendingImages.value]
   chatInput.value = ''
+  pendingImages.value = []
 
   // If no active conversation, create one first
   if (!activeConversationId.value) {
@@ -358,8 +379,8 @@ const handleSend = async () => {
       await createConversation(
         new CreateConversationInput({
           agent_id: activeAgentId.value,
-          name: messageContent.slice(0, 50), // First message becomes conversation name (truncated)
-          last_message: messageContent,
+          name: messageContent.slice(0, 50) || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''), // First message becomes conversation name (truncated)
+          last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''),
           llm_provider_id: providerId || '',
           llm_model_id: modelId || '',
           library_ids: selectedLibraryIds.value,
@@ -370,7 +391,7 @@ const handleSend = async () => {
     } catch {
       // Error already handled in composable
       return
-    }
+}
   }
 
   // Now send the message via ChatService
@@ -387,14 +408,14 @@ const handleSend = async () => {
         handleConversationUpdated(updated)
       }
 
-      await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId)
+      await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId, imagesToSend)
 
       // Update conversation's last_message
       try {
         const updated2 = await ConversationsService.UpdateConversation(
           activeConversationId.value,
           new UpdateConversationInput({
-            last_message: messageContent,
+            last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : ''),
           })
         )
         if (updated2) {
@@ -432,6 +453,63 @@ const handleRemoveLibrary = async (id: number) => {
   await saveLibraryIdsToConversation()
 }
 
+// Handle image selection
+const handleAddImages = async (files: FileList | File[]) => {
+  // Check if current model supports multimodal (vision)
+  const modelInfo = selectedModelInfo.value
+  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId)) {
+    toast.error(t('assistant.errors.modelNotSupportVision'))
+    return
+  }
+
+  const fileArray = Array.from(files)
+  const MAX_IMAGES = 4
+  const currentCount = pendingImages.value.length
+
+  if (currentCount + fileArray.length > MAX_IMAGES) {
+    toast.error(t('assistant.errors.tooManyImages', { max: MAX_IMAGES }))
+    return
+  }
+
+  for (const file of fileArray) {
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          // Extract base64 without data: prefix
+          const base64Match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
+          if (base64Match) {
+            resolve(base64Match[1])
+          } else {
+            reject(new Error('Invalid image data'))
+          }
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const dataUrl = `data:${file.type};base64,${base64}`
+      pendingImages.value.push({
+        id: `${Date.now()}-${Math.random()}`,
+        file,
+        mimeType: file.type,
+        base64,
+        dataUrl,
+        fileName: file.name,
+        size: file.size,
+      })
+    } catch (error) {
+      console.error('Failed to read image:', error)
+      toast.error(t('assistant.errors.imageReadFailed'))
+    }
+  }
+}
+
+const handleRemoveImage = (id: string) => {
+  pendingImages.value = pendingImages.value.filter((img) => img.id !== id)
+}
+
 // Save thinking mode to current conversation
 const saveThinkingToConversation = async () => {
   if (!activeConversationId.value) return
@@ -447,9 +525,17 @@ const saveThinkingToConversation = async () => {
   }
 }
 
+// Track if thinking mode watch should show toast (skip initial mount and conversation restoration)
+let isInitialMount = true
+let isRestoringConversation = false
+
 // Watch thinking mode changes and save to conversation
-watch(enableThinking, () => {
+watch(enableThinking, (newValue) => {
   void saveThinkingToConversation()
+  // Show toast notification when thinking mode changes (skip initial mount and conversation restoration)
+  if (!isInitialMount && !isRestoringConversation) {
+    toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
+  }
 })
 
 // Save chat mode to current conversation
@@ -565,12 +651,21 @@ const updateCurrentTab = () => {
 }
 
 // Watch for active agent changes to update selected model, tab info, and load conversations
-watch(activeAgentId, (newAgentId, oldAgentId) => {
+watch(activeAgentId, async (newAgentId, oldAgentId) => {
   selectDefaultModel(activeAgent.value, activeConversation.value)
   updateCurrentTab()
   // 切换助手时加载新助手的会话列表
   if (newAgentId && oldAgentId !== undefined) {
-    loadConversations(newAgentId, { activeAgentId: newAgentId })
+    await loadConversations(newAgentId, { activeAgentId: newAgentId })
+    // 如果有多个助手，自动打开该助手的最新会话
+    if (agents.value.length > 1) {
+      const conversations = getAllAgentConversations(newAgentId)
+      if (conversations.length > 0) {
+        // Select the first conversation (most recent, as they're sorted by updated_at DESC)
+        const lastConversation = conversations[0]
+        handleSelectConversation(lastConversation)
+      }
+    }
   } else if (!newAgentId) {
     if (activeConversationId.value) {
       chatStore.clearMessages(activeConversationId.value)
@@ -668,6 +763,9 @@ onMounted(() => {
     await loadModels()
     await loadLibrariesFn()
 
+    // Check for pending chat data (e.g. from knowledge page shortcut)
+    const pendingData = navigationStore.consumePendingChatData(props.tabId)
+    
     if (activeAgentId.value != null) {
       // Preserve current selection to avoid wiping the first message on cold start.
       await loadConversations(activeAgentId.value, {
@@ -677,12 +775,16 @@ onMounted(() => {
       })
     }
 
-    // Check for pending chat data (e.g. from knowledge page shortcut)
-    const pendingData = navigationStore.consumePendingChatData(props.tabId)
     if (pendingData) {
       // Apply pre-selected agent
       if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
         activeAgentId.value = pendingData.agentId
+        // Load conversations for the selected agent
+        await loadConversations(pendingData.agentId, {
+          preserveSelection: false,
+          force: true,
+          activeAgentId: pendingData.agentId,
+        })
       }
       // Apply pre-selected model
       if (pendingData.selectedModelKey) {
@@ -715,6 +817,17 @@ onMounted(() => {
           }
         }, 200)
       }
+    } else {
+      // Auto-open last conversation if no pending data and no active conversation
+      // This happens when user clicks "AI Assistant" to create a new tab
+      if (!activeConversationId.value && activeAgentId.value != null) {
+        const conversations = getAllAgentConversations(activeAgentId.value)
+        if (conversations.length > 0) {
+          // Select the first conversation (most recent, as they're sorted by updated_at DESC)
+          const lastConversation = conversations[0]
+          handleSelectConversation(lastConversation)
+        }
+      }
     }
 
     // Snap mode initialization
@@ -722,6 +835,9 @@ onMounted(() => {
       await loadSnapSettings()
       await checkSnapStatus()
     }
+
+    // Mark initial mount as complete (enable toast notifications for thinking mode changes)
+    isInitialMount = false
   })()
 
   // Subscribe to chat events (important: do this at page level, not in ChatMessageList)
@@ -895,6 +1011,7 @@ onUnmounted(() => {
       :get-agent-conversations="getAgentConversations"
       :get-all-agent-conversations="getAllAgentConversations"
       :ensure-conversations-loaded="ensureConversationsLoaded"
+      :on-wake-attached="handleWakeAttachedPointerDown"
       @update:active-agent-id="activeAgentId = $event"
       @update:list-mode="listMode = $event"
       @create="createOpen = true"
@@ -1026,6 +1143,7 @@ onUnmounted(() => {
         :chat-messages="chatMessages"
         :active-agent-id="activeAgentId"
         :is-snap-mode="isSnapMode"
+        :pending-images="pendingImages"
         @pointerdown.capture="handleWakeAttachedPointerDown"
         @update:chat-input="chatInput = $event"
         @update:chat-mode="chatMode = $event"
@@ -1038,6 +1156,9 @@ onUnmounted(() => {
         @clear-library-selection="clearLibrarySelection"
         @load-libraries="loadLibrariesFn"
         @remove-library="handleRemoveLibrary"
+        @add-images="handleAddImages"
+        @remove-image="handleRemoveImage"
+        @clear-images="pendingImages = []"
       />
     </section>
 
@@ -1071,6 +1192,7 @@ onUnmounted(() => {
       :chat-messages="chatMessages"
       :active-agent-id="activeAgentId"
       :is-snap-mode="isSnapMode"
+      :pending-images="pendingImages"
       @pointerdown.capture="handleWakeAttachedPointerDown"
       @update:chat-input="chatInput = $event"
       @update:chat-mode="chatMode = $event"
@@ -1083,6 +1205,9 @@ onUnmounted(() => {
       @clear-library-selection="clearLibrarySelection"
       @load-libraries="loadLibrariesFn"
       @remove-library="handleRemoveLibrary"
+      @add-images="handleAddImages"
+      @remove-image="handleRemoveImage"
+      @clear-images="pendingImages = []"
     />
     </div><!-- End main content wrapper -->
 

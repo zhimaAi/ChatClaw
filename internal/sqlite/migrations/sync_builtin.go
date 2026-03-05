@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -97,19 +98,21 @@ func syncModels(ctx context.Context, db *bun.DB, now string) error {
 		if exists > 0 {
 			// Row exists (either from init migration, prior sync, or user manually added).
 			// Update metadata and claim as builtin; preserve user's enabled flag.
+			capabilities, _ := json.Marshal(m.Capabilities)
 			if _, err := db.ExecContext(ctx, `
 				UPDATE models
-				SET name = ?, type = ?, sort_order = ?, is_builtin = 1, updated_at = ?
+				SET name = ?, type = ?, sort_order = ?, capabilities = ?, is_builtin = 1, updated_at = ?
 				WHERE provider_id = ? AND model_id = ?
-			`, m.Name, m.Type, m.SortOrder, now, m.ProviderID, m.ModelID); err != nil {
+			`, m.Name, m.Type, m.SortOrder, string(capabilities), now, m.ProviderID, m.ModelID); err != nil {
 				return fmt.Errorf("update model %s/%s: %w", m.ProviderID, m.ModelID, err)
 			}
 		} else {
+			capabilities, _ := json.Marshal(m.Capabilities)
 			if _, err := db.ExecContext(ctx, `
 				INSERT INTO models
-					(provider_id, model_id, name, type, is_builtin, enabled, sort_order, created_at, updated_at)
-				VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?)
-			`, m.ProviderID, m.ModelID, m.Name, m.Type, m.SortOrder, now, now); err != nil {
+					(provider_id, model_id, name, type, capabilities, is_builtin, enabled, sort_order, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
+			`, m.ProviderID, m.ModelID, m.Name, m.Type, string(capabilities), m.SortOrder, now, now); err != nil {
 				return fmt.Errorf("insert model %s/%s: %w", m.ProviderID, m.ModelID, err)
 			}
 		}
