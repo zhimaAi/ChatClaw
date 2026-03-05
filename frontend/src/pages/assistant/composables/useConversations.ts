@@ -76,17 +76,15 @@ export function useConversations(tabId: string) {
       // Only adjust active selection when loading the active agent's list
       if (affectActiveSelection && activeAgentId === agentId) {
         if (preserveSelection && previousConversationId !== null) {
-          // 保持当前选中状态（如果会话仍存在）
           const stillExists = next.some((c) => c.id === previousConversationId)
           if (!stillExists) {
-            if (previousConversationId) {
+            if (previousConversationId && !chatStore.isGenerating(previousConversationId).value) {
               chatStore.clearMessages(previousConversationId)
             }
             activeConversationId.value = null
           }
         } else {
-          // Don't auto-select any conversation when loading
-          if (previousConversationId) {
+          if (previousConversationId && !chatStore.isGenerating(previousConversationId).value) {
             chatStore.clearMessages(previousConversationId)
           }
           activeConversationId.value = null
