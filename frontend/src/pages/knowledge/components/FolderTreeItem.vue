@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight, Folder as FolderIcon } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import type { Folder } from '@bindings/chatclaw/internal/services/library'
 
@@ -28,7 +28,7 @@ const handleFolderClick = (folderId: number) => {
 <template>
   <div class="flex flex-col gap-0.5">
     <!-- 当前文件夹 -->
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1 overflow-hidden">
       <button
         v-if="folder.children && folder.children.length > 0"
         type="button"
@@ -55,6 +55,7 @@ const handleFolderClick = (folderId: number) => {
         "
         @click.stop="handleFolderClick(folder.id)"
       >
+        <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
         <span class="min-w-0 flex-1 truncate" :title="folder.name">
           {{ folder.name }}
         </span>

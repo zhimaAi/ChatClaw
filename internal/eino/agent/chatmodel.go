@@ -10,6 +10,7 @@ import (
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 )
@@ -41,6 +42,8 @@ func CreateChatModel(ctx context.Context, config Config) (model.ToolCallingChatM
 		return createGeminiChatModel(ctx, config)
 	case "ollama":
 		return createOllamaChatModel(ctx, config)
+	case "qwen":
+		return createQwenChatModel(ctx, config)
 	default:
 		return nil, errs.Newf("error.chat_unsupported_provider", map[string]any{"Type": config.Provider.Type})
 	}
@@ -171,4 +174,28 @@ func createOllamaChatModel(ctx context.Context, config Config) (model.ToolCallin
 		Model:   config.ModelID,
 	}
 	return ollama.NewChatModel(ctx, cfg)
+}
+
+func createQwenChatModel(ctx context.Context, config Config) (model.ToolCallingChatModel, error) {
+	cfg := &qwen.ChatModelConfig{
+		APIKey: config.Provider.APIKey,
+		Model:  config.ModelID,
+	}
+	if config.Provider.APIEndpoint != "" {
+		cfg.BaseURL = config.Provider.APIEndpoint
+	}
+
+	if config.EnableTemp && config.Temperature != nil {
+		temp := float32(*config.Temperature)
+		cfg.Temperature = &temp
+	}
+	if config.EnableTopP && config.TopP != nil {
+		topP := float32(*config.TopP)
+		cfg.TopP = &topP
+	}
+	if config.EnableMaxTokens && config.MaxTokens != nil {
+		cfg.MaxTokens = config.MaxTokens
+	}
+
+	return qwen.NewChatModel(ctx, cfg)
 }
