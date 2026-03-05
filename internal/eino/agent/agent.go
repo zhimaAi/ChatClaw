@@ -608,7 +608,7 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
 				}
 				if output != nil && output.Result == "" {
-					output.Result = "(completed with no output)"
+					output.Result = "Task completed successfully. The subagent finished all steps but did not produce a text summary. Check the working directory for any generated files."
 				}
 				return output, nil
 			}
