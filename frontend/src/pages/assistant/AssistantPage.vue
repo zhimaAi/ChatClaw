@@ -636,6 +636,7 @@ let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeConversationsChanged: (() => void) | null = null
 let unsubscribeAgentsChanged: (() => void) | null = null
 let unsubscribeModelsChanged: (() => void) | null = null
+let unsubscribeMessagesChanged: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -828,6 +829,15 @@ onMounted(() => {
     void loadAgents()
   })
 
+  // Listen for message changes
+  unsubscribeMessagesChanged = Events.On('chat:messages-changed', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    const conversationId = Number(payload?.conversation_id)
+    if (conversationId && conversationId === activeConversationId.value) {
+      void chatStore.loadMessages(conversationId)
+    }
+  })
+
   // Listen for model/provider changes from settings page (e.g., add/delete model, enable/disable provider)
   unsubscribeModelsChanged = Events.On('models:changed', () => {
     void loadModels()
@@ -842,6 +852,8 @@ onUnmounted(() => {
   unsubscribeTextSelection = null
   unsubscribeConversationsChanged?.()
   unsubscribeConversationsChanged = null
+  unsubscribeMessagesChanged?.()
+  unsubscribeMessagesChanged = null
   unsubscribeAgentsChanged?.()
   unsubscribeAgentsChanged = null
   unsubscribeModelsChanged?.()

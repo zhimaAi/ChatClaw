@@ -104,6 +104,7 @@ export default {
     assistant: 'AI Assistant',
     knowledge: 'Knowledge Base',
     skills: 'Skills',
+    channels: 'Channels',
     multiask: 'Multi Ask',
     memory: 'Memory',
     settings: 'Settings',
@@ -887,5 +888,87 @@ export default {
     content: 'Content',
     loadingMore: 'Loading…',
     noMore: 'No more',
+  },
+  channels: {
+    title: 'Channels',
+    subtitle: 'Manage your messaging channels and connections',
+    refresh: 'Refresh',
+    addChannel: 'Add Channel',
+    stats: {
+      total: 'Total Channels',
+      connected: 'Connected',
+      disconnected: 'Disconnected',
+    },
+    configured: {
+      title: 'Configured',
+      desc: 'Channels that have been added and configured',
+      empty: 'No configured channels yet',
+      connected: 'Connected',
+      disconnected: 'Disconnected',
+      error: 'Error',
+    },
+    available: {
+      title: 'Available Channels',
+      desc: 'Connect a new channel',
+    },
+    add: {
+      title: 'Add Channel',
+      desc: 'Select the channel type to configure',
+    },
+    config: {
+      title: 'Configure Channel',
+      name: 'Bot Name',
+      namePlaceholder: 'Enter bot name',
+      appId: 'App ID',
+      appIdPlaceholder: 'Enter App ID',
+      appSecret: 'App Secret',
+      appSecretPlaceholder: 'Enter App Secret',
+      token: 'Token',
+      tokenPlaceholder: 'Enter Token',
+      save: 'Save',
+      cancel: 'Cancel',
+      success: 'Channel created successfully',
+      failed: 'Failed to create channel',
+    },
+    delete: {
+      title: 'Confirm Delete',
+      desc: 'Are you sure you want to delete channel "{name}"? This action cannot be undone.',
+      success: 'Deleted successfully',
+      failed: 'Failed to delete',
+    },
+    connect: {
+      success: 'Connected successfully',
+      failed: 'Connection failed',
+    },
+    disconnect: {
+      success: 'Disconnected',
+      failed: 'Failed to disconnect',
+    },
+    meta: {
+      feishu: {
+        name: 'Feishu / Lark',
+        description: 'Feishu/Lark bot via long connection',
+      },
+      telegram: {
+        name: 'Telegram',
+        description: 'Telegram bot via Bot API',
+      },
+      discord: {
+        name: 'Discord',
+        description: 'Discord bot via Gateway',
+      },
+      whatsapp: {
+        name: 'WhatsApp',
+        description: 'WhatsApp Business API',
+      },
+      dingtalk: {
+        name: 'DingTalk',
+        description: 'DingTalk bot via Stream',
+      },
+    },
+    authType: {
+      token: 'Token',
+      qrcode: 'QR Code',
+    },
   },
 }

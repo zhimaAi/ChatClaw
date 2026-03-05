@@ -153,6 +153,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	m := &conversationModel{
 		AgentID:        input.AgentID,
 		Name:           name,
+		ExternalID:     strings.TrimSpace(input.ExternalID),
 		LastMessage:    lastMessage,
 		IsPinned:       false,
 		LLMProviderID:  strings.TrimSpace(input.LLMProviderID),

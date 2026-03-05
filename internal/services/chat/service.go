@@ -228,6 +228,22 @@ func (s *ChatService) StopGeneration(conversationID int64) error {
 	return nil
 }
 
+// WaitForGeneration waits until the active generation for a conversation is finished.
+func (s *ChatService) WaitForGeneration(conversationID int64, requestID string) error {
+	existing, ok := s.activeGenerations.Load(conversationID)
+	if !ok {
+		return nil
+	}
+	
+	gen := existing.(*activeGeneration)
+	if gen.requestID != requestID {
+		return nil
+	}
+	
+	<-gen.done
+	return nil
+}
+
 // startGeneration creates a new generation context and launches the goroutine.
 func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, _ einoagent.Config, _ einoagent.ProviderConfig, _ AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
 	requestID := uuid.New().String()
