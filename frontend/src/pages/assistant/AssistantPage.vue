@@ -817,14 +817,8 @@ onMounted(() => {
         }, 200)
       }
     } else {
-      // Auto-open last idle conversation (skip any that are currently streaming)
-      if (!activeConversationId.value && activeAgentId.value != null) {
-        const conversations = getAllAgentConversations(activeAgentId.value)
-        const idle = conversations.find((c) => !chatStore.isGenerating(c.id).value)
-        if (idle) {
-          handleSelectConversation(idle)
-        }
-      }
+      // New tab starts with a fresh conversation (no auto-select).
+      // The user can pick an existing conversation from the sidebar.
     }
 
     // Snap mode initialization

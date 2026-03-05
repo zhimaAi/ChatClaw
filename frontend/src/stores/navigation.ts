@@ -150,6 +150,10 @@ export const useNavigationStore = defineStore('navigation', () => {
     activeModule.value = module
 
     if (module === 'assistant') {
+      // If the current tab is already an assistant tab, stay on it.
+      const currentTab = tabs.value.find((t) => t.id === activeTabId.value)
+      if (currentTab?.module === 'assistant') return
+
       const assistantTabs = tabs.value.filter((tab) => tab.module === 'assistant')
       if (assistantTabs.length > 0) {
         const rightmostTab = assistantTabs[assistantTabs.length - 1]
