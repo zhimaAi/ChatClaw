@@ -23,6 +23,7 @@ import (
 	"chatclaw/internal/services/greet"
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/library"
+	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/providers"
@@ -297,6 +298,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册 Skill 管理服务
 	skillsService := skills.NewSkillsService(app)
 	app.RegisterService(application.NewService(skillsService))
+	// 注册 MCP 服务
+	app.RegisterService(application.NewService(mcp.NewMCPService(app)))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
