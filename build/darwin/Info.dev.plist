@@ -24,6 +24,16 @@
 		<dict>
 			<key>NSAllowsLocalNetworking</key>
 			<true/>
+			<key>NSExceptionDomains</key>
+			<dict>
+				<key>applnk.cn</key>
+				<dict>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+				</dict>
+			</dict>
 		</dict>
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>

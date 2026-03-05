@@ -4,15 +4,17 @@
  * On "binding" state, opens browser for auth and starts a 2-min countdown.
  * The Go backend emits "chatwiki:auth-callback" via deep link (chatclaw://auth/callback).
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-vue-next'
+import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, RefreshCw } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toast'
 import {
   AlertDialog,
@@ -40,6 +42,28 @@ interface AuthCallbackData {
   user_name: string
 }
 
+interface RobotItem {
+  id: string
+  robot_key: string
+  name: string
+  intro: string
+  type: string
+  icon: string
+  chat_claw_switch_status: number
+  application_type: string
+  enabled: boolean
+}
+
+interface LibraryItem {
+  id: string
+  name: string
+  intro: string
+  type: string
+  type_name: string
+  chat_claw_switch_status: number
+  enabled: boolean
+}
+
 const view = ref<View>('list')
 const openSourceUrl = ref('')
 const showOpenSourceInput = ref(false)
@@ -51,6 +75,16 @@ let unbindAuthCallback: (() => void) | null = null
 
 const isBound = computed(() => !!currentBinding.value)
 const showUnbindConfirm = ref(false)
+
+const robots = ref<RobotItem[]>([])
+const robotsLoading = ref(false)
+
+const libraryTab = ref('0')
+const libraries = ref<LibraryItem[]>([])
+const librariesLoading = ref(false)
+
+const syncingRobots = ref(false)
+const syncingLibraries = ref(false)
 
 const isOpenSourceUrlValid = computed(() => {
   const u = openSourceUrl.value.trim()
@@ -74,6 +108,121 @@ async function loadBinding() {
   } catch (error) {
     console.error('Failed to load chatwiki binding:', error)
     currentBinding.value = null
+  }
+}
+
+async function loadRobots() {
+  if (!isBound.value) return
+  robotsLoading.value = true
+  try {
+    console.log('[ChatWiki] Loading robot list...')
+    const list = await ChatWikiService.GetRobotList()
+    console.log('[ChatWiki] Robot list response:', list)
+    robots.value = (list ?? []).map((r: any) => ({
+      ...r,
+      enabled: Number(r?.chat_claw_switch_status) === 1,
+    }))
+  } catch (error) {
+    console.error('[ChatWiki] Failed to load robots:', error)
+    robots.value = []
+  } finally {
+    robotsLoading.value = false
+  }
+}
+
+async function loadLibraries(type: number = 0) {
+  if (!isBound.value) return
+  librariesLoading.value = true
+  try {
+    console.log('[ChatWiki] Loading library list, type:', type)
+    const list = await ChatWikiService.GetLibraryList(type)
+    console.log('[ChatWiki] Library list response:', list)
+    libraries.value = (list ?? []).map((l: any) => ({
+      ...l,
+      enabled: Number(l?.chat_claw_switch_status) === 1,
+    }))
+  } catch (error) {
+    console.error('[ChatWiki] Failed to load libraries:', error)
+    libraries.value = []
+  } finally {
+    librariesLoading.value = false
+  }
+}
+
+async function syncRobots() {
+  syncingRobots.value = true
+  try {
+    await loadRobots()
+    toast.success(t('settings.chatwiki.syncSuccess'))
+  } catch {
+    toast.error(t('settings.chatwiki.syncFailed'))
+  } finally {
+    syncingRobots.value = false
+  }
+}
+
+async function syncLibraries() {
+  syncingLibraries.value = true
+  try {
+    await loadLibraries(Number(libraryTab.value))
+    toast.success(t('settings.chatwiki.syncSuccess'))
+  } catch {
+    toast.error(t('settings.chatwiki.syncFailed'))
+  } finally {
+    syncingLibraries.value = false
+  }
+}
+
+watch(libraryTab, (newType) => {
+  void loadLibraries(Number(newType))
+})
+
+function getRobotTypeLabel(type: string): string {
+  const typeMap: Record<string, string> = {
+    chat: t('settings.chatwiki.robotType.chat'),
+    workflow: t('settings.chatwiki.robotType.workflow'),
+  }
+  return typeMap[type] || type
+}
+
+function onRobotAvatarError(robot: RobotItem, event: Event) {
+  console.error('[ChatWiki] Robot avatar failed to load', {
+    robotId: robot.id,
+    robotName: robot.name,
+    icon: robot.icon,
+    event,
+  })
+}
+
+async function onRobotSwitchChange(robot: RobotItem, checked: boolean | 'indeterminate') {
+  const nextEnabled = checked === true
+  const previousEnabled = robot.enabled
+  const previousStatus = robot.chat_claw_switch_status
+  robot.enabled = nextEnabled
+  robot.chat_claw_switch_status = nextEnabled ? 1 : 0
+  try {
+    await ChatWikiService.UpdateRobotSwitchStatus(robot.id, robot.chat_claw_switch_status)
+  } catch (error) {
+    robot.enabled = previousEnabled
+    robot.chat_claw_switch_status = previousStatus
+    console.error('[ChatWiki] Failed to update robot switch status:', error)
+    toast.error(t('settings.chatwiki.switchUpdateFailed'))
+  }
+}
+
+async function onLibrarySwitchChange(lib: LibraryItem, checked: boolean | 'indeterminate') {
+  const nextEnabled = checked === true
+  const previousEnabled = lib.enabled
+  const previousStatus = lib.chat_claw_switch_status
+  lib.enabled = nextEnabled
+  lib.chat_claw_switch_status = nextEnabled ? 1 : 0
+  try {
+    await ChatWikiService.UpdateLibrarySwitchStatus(lib.id, lib.chat_claw_switch_status)
+  } catch (error) {
+    lib.enabled = previousEnabled
+    lib.chat_claw_switch_status = previousStatus
+    console.error('[ChatWiki] Failed to update library switch status:', error)
+    toast.error(t('settings.chatwiki.switchUpdateFailed'))
   }
 }
 
@@ -183,10 +332,19 @@ async function confirmUnbind() {
     await ChatWikiService.DeleteBinding()
     currentBinding.value = null
     authUser.value = null
+    robots.value = []
+    libraries.value = []
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)
   }
 }
+
+watch(isBound, (bound) => {
+  if (bound) {
+    void loadRobots()
+    void loadLibraries(Number(libraryTab.value))
+  }
+})
 
 onMounted(() => {
   void loadBinding()
@@ -223,7 +381,7 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Bound: show user info + applications + knowledge bases -->
+      <!-- Bound: user info + robots + libraries -->
       <div v-if="isBound && currentBinding" class="flex flex-col gap-4">
         <div
           class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
@@ -243,33 +401,129 @@ onUnmounted(() => {
             {{ t('settings.chatwiki.bound') }}
           </span>
         </div>
-        <div>
-          <h3 class="mb-1 text-sm font-medium text-foreground">
-            {{ t('settings.chatwiki.applications') }}
-          </h3>
-          <div
-            class="rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
-          >
-            <p class="text-sm text-muted-foreground">
-              {{ t('settings.chatwiki.notAuthorized') }}
-            </p>
+
+        <!-- Applications section -->
+        <div
+          class="rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
+        >
+          <div class="flex items-center justify-between px-4 py-3">
+            <h3 class="text-sm font-medium text-foreground">
+              {{ t('settings.chatwiki.applications') }}
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="syncingRobots"
+              @click="syncRobots"
+            >
+              <RefreshCw
+                class="mr-1 size-3.5"
+                :class="{ 'animate-spin': syncingRobots }"
+              />
+              {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+            </Button>
+          </div>
+          <div v-if="robotsLoading" class="flex items-center justify-center px-4 py-6">
+            <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="robots.length === 0" class="px-4 pb-4">
+            <p class="text-sm text-muted-foreground">{{ t('settings.chatwiki.emptyRobots') }}</p>
+          </div>
+          <div v-else class="flex flex-col">
+            <div
+              v-for="robot in robots"
+              :key="robot.id"
+              class="flex items-center justify-between border-t border-border px-4 py-3 dark:border-white/10"
+            >
+              <div class="flex items-center gap-3 overflow-hidden">
+                <div
+                  class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
+                >
+                  <img
+                    v-if="robot.icon"
+                    :src="robot.icon"
+                    :alt="robot.name"
+                    class="size-full object-cover"
+                    @error="onRobotAvatarError(robot, $event)"
+                  />
+                  <span v-else class="text-xs text-muted-foreground">{{ robot.name?.charAt(0) || '?' }}</span>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-foreground">{{ robot.name }}</p>
+                </div>
+                <span
+                  class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
+                >
+                  {{ getRobotTypeLabel(robot.type) }}
+                </span>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <Switch
+                  :model-value="robot.enabled"
+                  @update:model-value="(checked) => onRobotSwitchChange(robot, checked)"
+                />
+              </div>
+            </div>
           </div>
         </div>
-        <div>
-          <h3 class="mb-1 text-sm font-medium text-foreground">
-            {{ t('settings.chatwiki.knowledgeBases') }}
-          </h3>
-          <div
-            class="rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
-          >
-            <p class="text-sm text-muted-foreground">
-              {{ t('settings.chatwiki.notAuthorized') }}
-            </p>
+
+        <!-- Knowledge Bases section -->
+        <div
+          class="rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
+        >
+          <div class="flex items-center justify-between px-4 py-3">
+            <h3 class="text-sm font-medium text-foreground">
+              {{ t('settings.chatwiki.knowledgeBases') }}
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="syncingLibraries"
+              @click="syncLibraries"
+            >
+              <RefreshCw
+                class="mr-1 size-3.5"
+                :class="{ 'animate-spin': syncingLibraries }"
+              />
+              {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+            </Button>
+          </div>
+          <div class="px-4 pb-3">
+            <Tabs v-model="libraryTab" class="w-full">
+              <TabsList class="w-auto">
+                <TabsTrigger value="0">{{ t('settings.chatwiki.libraryType.normal') }}</TabsTrigger>
+                <TabsTrigger value="2">{{ t('settings.chatwiki.libraryType.qa') }}</TabsTrigger>
+                <TabsTrigger value="3">{{ t('settings.chatwiki.libraryType.wechat') }}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          <div v-if="librariesLoading" class="flex items-center justify-center px-4 py-6">
+            <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="libraries.length === 0" class="px-4 pb-4">
+            <p class="text-sm text-muted-foreground">{{ t('settings.chatwiki.emptyLibraries') }}</p>
+          </div>
+          <div v-else class="flex flex-col">
+            <div
+              v-for="lib in libraries"
+              :key="lib.id"
+              class="flex items-center justify-between border-t border-border px-4 py-3 dark:border-white/10"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm text-foreground">{{ lib.name }}</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <Switch
+                  :model-value="lib.enabled"
+                  @update:model-value="(checked) => onLibrarySwitchChange(lib, checked)"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Not bound: show placeholder -->
+      <!-- Not bound: placeholders -->
       <div v-else class="flex flex-col gap-4">
         <p class="text-sm text-muted-foreground">
           {{ t('settings.chatwiki.notBound') }}
