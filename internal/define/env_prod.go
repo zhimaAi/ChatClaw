@@ -4,6 +4,7 @@ package define
 
 // 生产环境默认值（启用 -tags production 时生效）
 var (
-	Env       = "production"
-	ServerURL = "https://chatclaw.chatwiki.com/openapi"
+	Env              = "production"
+	ServerURL        = "https://chatclaw.chatwiki.com/openapi"
+	ChatWikiCloudURL = "http://dev19.zhima_chat_ai.applnk.cn/"
 )

@@ -29,5 +29,18 @@
 		<string>true</string>
 		<key>NSHumanReadableCopyright</key>
 		<string>Copyright © 2016- 2026 Sesame Small Customer Service Network Technology Co., Ltd.</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>ChatClaw</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>chatclaw</string>
+				</array>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+			</dict>
+		</array>
 	</dict>
 </plist>
