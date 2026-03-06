@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
+	"unicode"
 	"time"
 
 	"chatclaw/internal/services/mcp"
 
 	mcpp "github.com/cloudwego/eino-ext/components/tool/mcp"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
@@ -26,6 +29,9 @@ type MCPToolsResult struct {
 // LoadMCPTools connects to all enabled MCP servers, fetches their tools via
 // eino-ext/mcp, and returns them as eino BaseTools. Individual server failures
 // are logged but do not prevent other servers from loading.
+//
+// Each tool is prefixed with the server name (e.g. "mcp__chatwiki__search")
+// so the model can identify which MCP server a tool belongs to.
 func LoadMCPTools(ctx context.Context, servers []mcp.MCPServer, logger *slog.Logger) *MCPToolsResult {
 	if len(servers) == 0 {
 		return &MCPToolsResult{Cleanup: func() {}}
@@ -64,7 +70,7 @@ func LoadMCPTools(ctx context.Context, servers []mcp.MCPServer, logger *slog.Log
 		}
 
 		toolsCtx, toolsCancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-		tools, err := mcpp.GetTools(toolsCtx, &mcpp.Config{Cli: cli})
+		rawTools, err := mcpp.GetTools(toolsCtx, &mcpp.Config{Cli: cli})
 		toolsCancel()
 		if err != nil {
 			logger.Warn("[mcp] failed to get tools", "server", srv.Name, "error", err)
@@ -72,8 +78,12 @@ func LoadMCPTools(ctx context.Context, servers []mcp.MCPServer, logger *slog.Log
 			continue
 		}
 
-		logger.Info("[mcp] loaded tools from server", "server", srv.Name, "count", len(tools))
-		allTools = append(allTools, tools...)
+		prefix := sanitizeServerName(srv.Name)
+		for _, t := range rawTools {
+			allTools = append(allTools, &mcpToolWrapper{inner: t, serverName: srv.Name, prefix: prefix})
+		}
+
+		logger.Info("[mcp] loaded tools from server", "server", srv.Name, "count", len(rawTools))
 		clients = append(clients, cli)
 	}
 
@@ -85,6 +95,54 @@ func LoadMCPTools(ctx context.Context, servers []mcp.MCPServer, logger *slog.Log
 			}
 		},
 	}
+}
+
+// sanitizeServerName converts a user-defined server name into a safe
+// identifier fragment for tool naming. Keeps Unicode letters (Chinese, etc.)
+// and digits; replaces runs of other characters with "_"; strips
+// leading/trailing underscores. ASCII letters are lowercased.
+func sanitizeServerName(name string) string {
+	var b strings.Builder
+	prevUnderscore := false
+	for _, r := range strings.TrimSpace(name) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if r < 128 {
+				r = unicode.ToLower(r)
+			}
+			b.WriteRune(r)
+			prevUnderscore = false
+		} else if !prevUnderscore {
+			b.WriteRune('_')
+			prevUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
+}
+
+// mcpToolWrapper wraps an MCP tool to add a server-name prefix to its name
+// and annotate its description, following the mcp__<server>__<tool> convention.
+type mcpToolWrapper struct {
+	inner      tool.BaseTool
+	serverName string // original display name
+	prefix     string // sanitized name for the tool ID
+}
+
+func (w *mcpToolWrapper) Info(ctx context.Context) (*schema.ToolInfo, error) {
+	info, err := w.inner.Info(ctx)
+	if err != nil {
+		return nil, err
+	}
+	wrapped := *info
+	wrapped.Name = fmt.Sprintf("mcp__%s__%s", w.prefix, info.Name)
+	wrapped.Desc = fmt.Sprintf("[MCP server: %s] %s", w.serverName, info.Desc)
+	return &wrapped, nil
+}
+
+func (w *mcpToolWrapper) InvokableRun(ctx context.Context, argumentsInJSON string, opts ...tool.Option) (string, error) {
+	if invokable, ok := w.inner.(tool.InvokableTool); ok {
+		return invokable.InvokableRun(ctx, argumentsInJSON, opts...)
+	}
+	return "", fmt.Errorf("underlying MCP tool does not implement InvokableRun")
 }
 
 func createMCPClient(_ context.Context, srv mcp.MCPServer) (*mcpclient.Client, error) {
