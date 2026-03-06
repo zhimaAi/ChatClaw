@@ -19,6 +19,7 @@ import ChatInputArea from './components/ChatInputArea.vue'
 import WorkspaceDrawer from './components/WorkspaceDrawer.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore } from '@/stores'
+import type { PendingChatImage } from '@/stores/navigation'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
 import { Events } from '@wailsio/runtime'
 import {
@@ -801,15 +802,38 @@ onMounted(() => {
       if (pendingData.chatMode) {
         chatMode.value = pendingData.chatMode
       }
-      // Apply chat input and auto-send
+      // Apply chat input
       if (pendingData.chatInput) {
         chatInput.value = pendingData.chatInput
+      }
+      // Apply pending images (convert from serializable format to PendingImage)
+      if (pendingData.pendingImages && pendingData.pendingImages.length > 0) {
+        const converted: PendingImage[] = []
+        for (const img of pendingData.pendingImages as PendingChatImage[]) {
+          try {
+            const blob = await (await fetch(img.dataUrl)).blob()
+            const file = new File([blob], img.fileName, { type: img.mimeType })
+            converted.push({
+              id: img.id,
+              file,
+              mimeType: img.mimeType,
+              base64: img.base64,
+              dataUrl: img.dataUrl,
+              fileName: img.fileName,
+              size: img.size,
+            })
+          } catch (e) {
+            console.warn('Failed to convert pending image:', img.fileName, e)
+          }
+        }
+        pendingImages.value = converted
       }
       // Ensure we start with a new conversation
       activeConversationId.value = null
 
-      // Auto-send after a short delay to let Vue reactivity settle
-      if (pendingData.chatInput) {
+      // Auto-send after a short delay to let Vue reactivity settle (text or images)
+      const hasContent = (pendingData.chatInput?.trim() ?? '') !== '' || (pendingData.pendingImages?.length ?? 0) > 0
+      if (hasContent) {
         window.setTimeout(() => {
           if (canSend.value) {
             handleSend()
@@ -1133,6 +1157,8 @@ onUnmounted(() => {
         :send-disabled-reason="sendDisabledReason"
         :chat-messages="chatMessages"
         :active-agent-id="activeAgentId"
+        :active-agent="activeAgent"
+        :agents="agents"
         :is-snap-mode="isSnapMode"
         :pending-images="pendingImages"
         @pointerdown.capture="handleWakeAttachedPointerDown"
@@ -1182,6 +1208,8 @@ onUnmounted(() => {
       :send-disabled-reason="sendDisabledReason"
       :chat-messages="chatMessages"
       :active-agent-id="activeAgentId"
+      :active-agent="activeAgent"
+      :agents="agents"
       :is-snap-mode="isSnapMode"
       :pending-images="pendingImages"
       @pointerdown.capture="handleWakeAttachedPointerDown"

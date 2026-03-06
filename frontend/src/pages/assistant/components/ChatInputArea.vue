@@ -45,6 +45,7 @@ interface PendingImage {
 }
 
 const props = defineProps<{
+  mode?: 'assistant' | 'knowledge'
   chatInput: string
   chatMode: string
   selectedModelKey: string
@@ -59,9 +60,13 @@ const props = defineProps<{
   sendDisabledReason: string
   chatMessages: any[]
   activeAgentId: number | null
+  activeAgent: { id: number; name: string } | null
+  agents: { id: number; name: string }[]
   isSnapMode?: boolean
   pendingImages: PendingImage[]
 }>()
+
+const currentMode = computed(() => props.mode || 'assistant')
 
 const emit = defineEmits<{
   'update:chatInput': [value: string]
@@ -69,6 +74,7 @@ const emit = defineEmits<{
   'update:selectedModelKey': [value: string]
   'update:enableThinking': [value: boolean]
   'update:selectedLibraryIds': [value: number[]]
+  'update:activeAgentId': [value: number | null]
   send: []
   stop: []
   librarySelectionChange: []
@@ -310,7 +316,9 @@ onUnmounted(() => {
     :class="
       cn(
         'flex px-6',
-        chatMessages.length > 0 || isGenerating ? 'pb-4' : 'flex-1 items-center justify-center'
+        currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating
+          ? 'flex-1 items-center justify-center'
+          : 'pb-4'
       )
     "
   >
@@ -322,7 +330,10 @@ onUnmounted(() => {
         )
       "
     >
-      <div v-if="chatMessages.length === 0 && !isGenerating" class="flex items-center gap-3">
+      <div
+        v-if="currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating"
+        class="flex items-center gap-3"
+      >
         <img :src="logoSrc" class="size-10" alt="ChatClaw logo" />
         <div class="text-2xl font-semibold text-foreground">
           {{ t('app.title') }}
@@ -394,12 +405,56 @@ onUnmounted(() => {
 
         <div class="mt-3 flex items-center justify-between">
           <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
+            <!-- ChatModeSelector: show in both modes -->
             <ChatModeSelector
               :model-value="chatMode"
               :compact="isSnapMode"
               @update:model-value="(v) => emit('update:chatMode', v)"
             />
 
+            <!-- Agent selector: only show in knowledge mode -->
+            <TooltipProvider v-if="currentMode === 'knowledge'">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <div class="min-w-0">
+                    <Select
+                      :model-value="activeAgentId != null ? String(activeAgentId) : undefined"
+                      :disabled="agents.length === 0"
+                      @update:model-value="(v: any) => v && emit('update:activeAgentId', Number(v))"
+                    >
+                      <SelectTrigger
+                        class="h-8 w-auto min-w-[100px] max-w-[160px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
+                      >
+                        <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
+                          <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
+                          <span class="truncate">{{ activeAgent.name }}</span>
+                        </div>
+                        <span v-else class="text-muted-foreground">
+                          {{ t('knowledge.chat.selectAgent') }}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent class="max-h-[260px]">
+                        <SelectGroup>
+                          <SelectLabel>{{ t('knowledge.chat.selectAgent') }}</SelectLabel>
+                          <SelectItem
+                            v-for="a in agents"
+                            :key="a.id"
+                            :value="String(a.id)"
+                          >
+                            {{ a.name }}
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent v-if="activeAgent">
+                  <p>{{ activeAgent.name }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <!-- Model selector: show in both modes -->
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
