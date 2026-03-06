@@ -654,18 +654,21 @@ onUnmounted(() => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                    :disabled="!supportsImage"
-                    @click="handleSelectImagesClick"
-                  >
-                    <ImageIcon class="size-4 text-muted-foreground" />
-                  </Button>
+                  <!-- Wrap in span so tooltip hover still works when button is disabled -->
+                  <span class="inline-flex">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                      :disabled="!supportsImage"
+                      @click="handleSelectImagesClick"
+                    >
+                      <ImageIcon class="size-4 text-muted-foreground" />
+                    </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ supportsImage ? t('assistant.chat.selectImages') : t('assistant.errors.modelNotSupportVision') }}</p>
+                  <p>{{ supportsImage ? t('assistant.chat.selectImages') : t('assistant.chat.selectImagesDisabled') }}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

@@ -480,6 +480,7 @@ export default {
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       selectImages: '选择图片',
+      selectImagesDisabled: '需选择支持输入图片的模型',
       selectImage: '选择图片',
       clearSelected: '清空选中',
       selectedCount: '已选 {count} 个知识库',
