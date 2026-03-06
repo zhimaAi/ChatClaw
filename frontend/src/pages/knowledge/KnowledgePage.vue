@@ -50,6 +50,7 @@ import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { Book, BookOpen, FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
+import { supportsMultimodal } from '@/composables/useMultimodal'
 import { useNavigationStore } from '@/stores'
 import { toast } from '@/components/ui/toast'
 
@@ -424,6 +425,13 @@ const handleSendMessage = () => {
 
 // Handle add images
 const handleAddImages = (files: FileList | File[]) => {
+  // Check if current model supports multimodal (vision)
+  const modelInfo = selectedModelInfo.value
+  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+    toast.error(t('assistant.errors.modelNotSupportVision'))
+    return
+  }
+
   for (const file of Array.from(files)) {
     if (!file.type.startsWith('image/')) continue
     const reader = new FileReader()
@@ -732,7 +740,8 @@ const handleRemoveImage = (id: string) => {
       />
 
       <!-- Bottom chat input using shared ChatInputArea component -->
-      <div v-if="!isLibraryEmpty" class="border-t border-border">
+      <!-- 分割线在输入框容器上，随输入框高度变化而移动 -->
+      <div v-if="!isLibraryEmpty" class="bg-background pt-3">
         <ChatInputArea
           mode="knowledge"
           v-model:chat-input="chatInput"

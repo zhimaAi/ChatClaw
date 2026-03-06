@@ -458,7 +458,7 @@ const handleRemoveLibrary = async (id: number) => {
 const handleAddImages = async (files: FileList | File[]) => {
   // Check if current model supports multimodal (vision)
   const modelInfo = selectedModelInfo.value
-  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId)) {
+  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
     toast.error(t('assistant.errors.modelNotSupportVision'))
     return
   }
