@@ -155,12 +155,13 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 
 	// 8. Call extraction LLM
 	chatModel, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
-		ProviderType: extractProvider.Type,
-		APIKey:       extractProvider.APIKey,
-		APIEndpoint:  extractProvider.APIEndpoint,
-		ModelID:      extractModelID,
-		ExtraConfig:  extractProvider.ExtraConfig,
-		Timeout:      60 * time.Second,
+		ProviderType:    extractProvider.Type,
+		APIKey:          extractProvider.APIKey,
+		APIEndpoint:     extractProvider.APIEndpoint,
+		ModelID:         extractModelID,
+		ExtraConfig:     extractProvider.ExtraConfig,
+		Timeout:         60 * time.Second,
+		DisableThinking: true,
 	})
 	if err != nil {
 		return fmt.Errorf("create chat model: %w", err)
