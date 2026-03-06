@@ -14,6 +14,7 @@ import { Check } from 'lucide-vue-next'
 
 const props = defineProps<{
   modelValue: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,7 +35,9 @@ const modes = [
     @update:model-value="(v: any) => v && emit('update:modelValue', String(v))"
   >
     <SelectTriggerRaw as-child>
+      <!-- Compact mode (snap window): icon only -->
       <button
+        v-if="compact"
         class="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
         :title="t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat')"
       >
@@ -69,6 +72,46 @@ const modes = [
           <circle cx="12" cy="12" r="4" />
           <circle cx="12" cy="12" r="8" />
         </svg>
+      </button>
+      <!-- Full mode (assistant / knowledge pages): icon + label -->
+      <button
+        v-else
+        class="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
+      >
+        <!-- Chat mode icon: speech bubble -->
+        <svg
+          v-if="modelValue === 'chat'"
+          class="size-3.5 shrink-0 text-muted-foreground"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
+        </svg>
+        <!-- Task mode icon: crosshair/target -->
+        <svg
+          v-else
+          class="size-3.5 shrink-0 text-muted-foreground"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 2v4" />
+          <path d="M12 18v4" />
+          <path d="M2 12h4" />
+          <path d="M18 12h4" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="12" cy="12" r="8" />
+        </svg>
+        <span class="text-muted-foreground">
+          {{ t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat') }}
+        </span>
       </button>
     </SelectTriggerRaw>
     <SelectPortal>

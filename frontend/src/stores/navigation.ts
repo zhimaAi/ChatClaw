@@ -37,6 +37,16 @@ export interface Tab {
   data?: DocumentViewerData
 }
 
+/** Serializable image data for pending chat (e.g. from knowledge page) */
+export interface PendingChatImage {
+  id: string
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+
 /**
  * Pending chat data for cross-module navigation.
  * E.g. Knowledge page can pre-fill chat input and jump to a new assistant tab.
@@ -54,6 +64,8 @@ export interface PendingChatData {
   enableThinking?: boolean
   /** Chat mode: 'chat' or 'task' */
   chatMode?: string
+  /** Pending images (e.g. from knowledge page input) */
+  pendingImages?: PendingChatImage[]
   /** Target tab ID that should consume this data */
   targetTabId: string
 }
