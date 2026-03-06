@@ -11,8 +11,10 @@ import (
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	"chatclaw/internal/define"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
+	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
@@ -876,8 +878,72 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 	}
 }
 
+// hasCapability checks if capabilities include a specific type (e.g., "image")
+func hasCapability(capabilities []string, capability string) bool {
+	if len(capabilities) == 0 {
+		return false
+	}
+	capabilityLower := strings.ToLower(capability)
+	for _, c := range capabilities {
+		if strings.ToLower(c) == capabilityLower {
+			return true
+		}
+	}
+	return false
+}
+
+// getModelCapabilities retrieves model capabilities from database or builtin config
+func getModelCapabilities(providerID, modelID string) []string {
+	// Try to get from builtin config first
+	capabilities := define.GetBuiltinModelCapabilities(providerID, modelID)
+	if len(capabilities) > 0 {
+		return capabilities
+	}
+
+	// Try to get from database
+	db := sqlite.DB()
+	if db == nil {
+		return []string{"text"}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var m struct {
+		Capabilities string `bun:"capabilities"`
+	}
+	err := db.NewSelect().
+		Model(&m).
+		Table("models").
+		Where("provider_id = ?", providerID).
+		Where("model_id = ?", modelID).
+		Limit(1).
+		Scan(ctx)
+	if err == nil && m.Capabilities != "" {
+		var caps []string
+		if json.Unmarshal([]byte(m.Capabilities), &caps); len(caps) > 0 {
+			return caps
+		}
+	}
+
+	// Return default text-only capability
+	return []string{"text"}
+}
+
 // supportsMultimodal checks if a model supports multimodal (vision) capabilities.
+// It first checks the model's Capabilities config, then falls back to legacy detection.
 func supportsMultimodal(providerID, modelID string) bool {
+	// Check Capabilities config first
+	capabilities := getModelCapabilities(providerID, modelID)
+	if hasCapability(capabilities, "image") {
+		return true
+	}
+	// If capabilities is set but does NOT include "image", model does not support vision
+	if len(capabilities) > 0 && capabilities[0] != "text" {
+		return false
+	}
+
+	// Fallback to legacy detection for backward compatibility
 	modelIDLower := strings.ToLower(modelID)
 	providerIDLower := strings.ToLower(providerID)
 

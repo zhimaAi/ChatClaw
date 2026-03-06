@@ -4,10 +4,38 @@
  */
 
 /**
- * Check if a model supports multimodal (vision) capabilities based on provider and model ID
- * This mirrors the backend logic in internal/services/chat/generation.go
+ * Check if capabilities include a specific type (e.g., "image")
  */
-export function supportsMultimodal(providerId: string, modelId: string): boolean {
+function hasCapability(capabilities: string[] | undefined, capability: string): boolean {
+  if (!capabilities || capabilities.length === 0) {
+    return false
+  }
+  return capabilities.some(c => c.toLowerCase() === capability.toLowerCase())
+}
+
+/**
+ * Check if a model supports multimodal (vision) capabilities based on Capabilities config
+ * If capabilities is provided and contains "image", return true directly
+ * Otherwise fallback to legacy detection based on provider and model ID
+ */
+export function supportsMultimodal(
+  providerId: string,
+  modelId: string,
+  capabilities?: string[]
+): boolean {
+  // If capabilities is provided and contains "image", use it directly
+  if (capabilities && hasCapability(capabilities, 'image')) {
+    return true
+  }
+
+  // If capabilities is provided but does NOT contain "image", model does not support vision
+  if (capabilities && capabilities.length > 0 && !hasCapability(capabilities, 'image')) {
+    return false
+  }
+
+  // Fallback to legacy detection if capabilities is empty or not provided
+  // (for backward compatibility with models that don't have capabilities set)
+
   const providerIdLower = providerId.toLowerCase()
   const modelIdLower = modelId.toLowerCase()
 

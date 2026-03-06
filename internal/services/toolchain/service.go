@@ -329,6 +329,7 @@ func (s *ToolchainService) getInstalledVersion(binPath string, versionArgs []str
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, binPath, versionArgs...)
+	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
