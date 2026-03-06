@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,11 +27,22 @@ import (
 const (
 	ghProxyPrefix = "https://gh-proxy.org/"
 
+	// 获取 OSS 下载链接的 API
+	ossAPIURL = "https://api.chatclaw.com/tool-download"
+
 	googleProbeURL     = "https://www.google.com"
 	googleProbeTimeout = 3 * time.Second
 
 	downloadTimeout = 5 * time.Minute
 )
+
+// 国内可用的 GitHub 代理列表（按优先级排序，会依次尝试直到成功）
+var chinaMirrors = []string{
+	"https://ghproxy.com/",
+	"https://pd.zwc.workers.dev/",
+	"https://gh.api.99988866.xyz/",
+	"https://gh-proxy.org/",
+}
 
 // ToolStatus represents the current state of a managed tool (returned to frontend).
 type ToolStatus struct {
@@ -254,15 +266,16 @@ func (s *ToolchainService) clearInstalling(name string) {
 	delete(s.installing, name)
 }
 
-// resolveProxy probes Google once and caches the result.
+// resolveProxy probes connectivity to determine if we need a proxy.
+// It checks both direct GitHub access and falls back to proxy if needed.
 func (s *ToolchainService) resolveProxy() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.proxyProbed {
-		s.needProxy = !isGoogleReachable()
+		s.needProxy = !isGitHubReachable()
 		s.proxyProbed = true
 		if s.needProxy {
-			s.app.Logger.Info("toolchain: Google unreachable, will use gh-proxy for GitHub downloads")
+			s.app.Logger.Info("toolchain: GitHub unreachable, will use mirrors for downloads")
 		}
 	}
 	return s.needProxy
@@ -380,16 +393,142 @@ func (s *ToolchainService) fetchLatestVersion(spec toolSpec) (string, error) {
 }
 
 // downloadAndInstall downloads the archive and extracts the binary.
+// It tries multiple mirrors in China if the primary proxy fails,
+// and falls back to OSS backup if all mirrors fail.
 func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir string, needProxy bool) error {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
 
 	rawURL := spec.downloadURL(version, goos, goarch)
-	dlURL := rawURL
+
+	// 如果需要代理，尝试多个镜像
 	if needProxy {
-		dlURL = ghProxyPrefix + rawURL
+		err := s.tryDownloadWithMirrors(spec, rawURL, binDir)
+		if err == nil {
+			return nil
+		}
+		// 所有镜像都失败，尝试直连
+		s.app.Logger.Warn("toolchain: all mirrors failed, trying direct connection", "tool", spec.name)
 	}
 
+	// 直连尝试
+	err := s.downloadWithSingleURL(spec, rawURL, binDir)
+	if err == nil {
+		return nil
+	}
+
+	// 直连也失败，最后尝试 OSS 备份
+	s.app.Logger.Warn("toolchain: direct connection failed, trying OSS backup", "tool", spec.name, "error", err)
+	return s.downloadFromOSS(spec, version, binDir)
+}
+
+// downloadFromOSS downloads from Ali Cloud OSS as final fallback.
+// It first fetches the download URL from the API, then downloads.
+func (s *ToolchainService) downloadFromOSS(spec toolSpec, version, binDir string) error {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+
+	// 通过 API 获取 OSS 下载链接
+	dlURL, err := s.fetchOSSDownloadURL(spec.name, version, goos, goarch)
+	if err != nil {
+		s.app.Logger.Error("toolchain: failed to fetch OSS URL", "tool", spec.name, "error", err)
+		return fmt.Errorf("fetch OSS URL failed: %w", err)
+	}
+
+	s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", dlURL)
+	return s.downloadWithSingleURL(spec, dlURL, binDir)
+}
+
+// fetchOSSDownloadURL calls the API to get the OSS download URL for a tool.
+func (s *ToolchainService) fetchOSSDownloadURL(tool, version, goos, goarch string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// API 请求体
+	type Request struct {
+		Tool    string `json:"tool"`
+		Version string `json:"version"`
+		OS      string `json:"os"`
+		Arch    string `json:"arch"`
+	}
+
+	type Response struct {
+		URL string `json:"url"`
+	}
+
+	reqBody := Request{
+		Tool:    tool,
+		Version: version,
+		OS:      goos,
+		Arch:    goarch,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ossAPIURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var result Response
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if result.URL == "" {
+		return "", fmt.Errorf("API returned empty URL")
+	}
+
+	return result.URL, nil
+}
+
+// tryDownloadWithMirrors tries to download using multiple China mirrors.
+func (s *ToolchainService) tryDownloadWithMirrors(spec toolSpec, rawURL, binDir string) error {
+	var lastErr error
+
+	// 首先尝试 gh-proxy.org（当前默认）
+	dlURL := ghProxyPrefix + rawURL
+	if err := s.downloadWithSingleURL(spec, dlURL, binDir); err != nil {
+		lastErr = err
+		s.app.Logger.Warn("toolchain: primary mirror failed, trying alternatives",
+			"tool", spec.name, "mirror", ghProxyPrefix, "error", err)
+	} else {
+		return nil
+	}
+
+	// 尝试其他镜像
+	for _, mirror := range chinaMirrors {
+		dlURL := mirror + rawURL
+		s.app.Logger.Info("toolchain: trying mirror", "tool", spec.name, "mirror", mirror)
+		if err := s.downloadWithSingleURL(spec, dlURL, binDir); err != nil {
+			lastErr = err
+			s.app.Logger.Warn("toolchain: mirror failed",
+				"tool", spec.name, "mirror", mirror, "error", err)
+			continue
+		}
+		s.app.Logger.Info("toolchain: mirror worked", "tool", spec.name, "mirror", mirror)
+		return nil
+	}
+
+	return fmt.Errorf("all mirrors failed: %w", lastErr)
+}
+
+// downloadWithSingleURL downloads from a single URL and extracts the binary.
+func (s *ToolchainService) downloadWithSingleURL(spec toolSpec, dlURL, binDir string) error {
 	s.app.Logger.Info("toolchain: downloading", "tool", spec.name, "url", dlURL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
@@ -415,8 +554,8 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 		return fmt.Errorf("read body: %w", err)
 	}
 
-	format := spec.archiveFormat(goos)
-	binName := spec.binaryName(goos)
+	format := spec.archiveFormat(runtime.GOOS)
+	binName := spec.binaryName(runtime.GOOS)
 	destPath := filepath.Join(binDir, binName)
 
 	tmpPath := destPath + ".tmp"
@@ -424,12 +563,12 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 
 	switch format {
 	case "zip":
-		binaryInArchive := spec.binaryPathInArchive(goos, goarch)
+		binaryInArchive := spec.binaryPathInArchive(runtime.GOOS, runtime.GOARCH)
 		if err := extractFromZip(data, binaryInArchive, tmpPath); err != nil {
 			return fmt.Errorf("extract zip: %w", err)
 		}
 	case "tar.gz":
-		binaryInArchive := spec.binaryPathInArchive(goos, goarch)
+		binaryInArchive := spec.binaryPathInArchive(runtime.GOOS, runtime.GOARCH)
 		if err := extractFromTarGz(data, binaryInArchive, tmpPath); err != nil {
 			return fmt.Errorf("extract tar.gz: %w", err)
 		}
@@ -450,10 +589,10 @@ func (s *ToolchainService) downloadAndInstall(spec toolSpec, version, binDir str
 	}
 
 	if spec.aliases != nil {
-		for _, alias := range spec.aliases(goos) {
+		for _, alias := range spec.aliases(runtime.GOOS) {
 			aliasPath := filepath.Join(binDir, alias)
 			_ = os.Remove(aliasPath)
-			if goos == "windows" {
+			if runtime.GOOS == "windows" {
 				copyFile(destPath, aliasPath)
 			} else {
 				os.Symlink(binName, aliasPath)
@@ -571,11 +710,12 @@ func extractVersion(s string) string {
 	return s
 }
 
-func isGoogleReachable() bool {
+func isGitHubReachable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), googleProbeTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, googleProbeURL, nil)
+	// 直接探测 GitHub API 或 releases 页面
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, "https://github.com", nil)
 	if err != nil {
 		return false
 	}

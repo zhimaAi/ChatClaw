@@ -7,9 +7,11 @@ import (
 	"syscall"
 )
 
+const createNoWindow = 0x08000000
+
 func setProcGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | createNoWindow,
 	}
 }
 
