@@ -257,7 +257,7 @@ func workerDescription() string {
 	return "General-purpose worker: handles complex multi-step tasks autonomously in an isolated context. Has access to all tools including file operations, shell commands, and browser. Call when the task requires multiple dependent steps, trial-and-error debugging, or would generate too much intermediate output for the main conversation."
 }
 
-func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled, skillsEnabled bool) string {
 	if isZhCN() {
 		inst := fmt.Sprintf(`你是一个通用执行助手，在独立上下文中自主完成用户描述的任务。
 
@@ -294,6 +294,18 @@ func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxN
 - 遇到错误时自行诊断和修复，不要放弃
 - 完成后清晰总结：做了什么、生成了哪些文件、结果在哪里
 - 如果无法完成，说明原因和已尝试的方法`
+
+		if skillsEnabled {
+			inst += `
+
+## 技能系统
+已安装的技能会自动加载到你的能力中，为你提供额外的专业知识和操作指南。
+- 用 skill_list 查看已安装的技能
+- 用 skill_search 搜索技能市场，查找与当前任务相关的技能
+- 用 skill_install 安装合适的技能，用 skill_enable 启用它
+- 用 read_skill 读取技能内容，获取专业的操作步骤
+- 遇到不熟悉的任务时，先搜索是否有相关技能可以指导`
+		}
 		return inst
 	}
 
@@ -332,24 +344,43 @@ func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxN
 - Self-diagnose and fix errors — do not give up
 - Summarize clearly when done: what was done, files created, where results are
 - If unable to complete, explain why and what was attempted`
+
+	if skillsEnabled {
+		inst += `
+
+## Skill System
+Installed skills are automatically loaded into your capabilities, providing additional expertise and operational guidance.
+- Use skill_list to view installed skills
+- Use skill_search to search the marketplace for skills related to the current task
+- Use skill_install to install a suitable skill, then skill_enable to activate it
+- Use read_skill to read skill content for expert step-by-step instructions
+- When facing unfamiliar tasks, search for relevant skills first`
+	}
 	return inst
 }
 
 // newWorkerSubAgent creates the Worker sub-agent as a tool.
-// It inherits all tools from the main agent except the sub-agent tools themselves.
+// It inherits all tools from the main agent except the sub-agent tools themselves,
+// plus a read_skill tool when skills are enabled.
 func newWorkerSubAgent(
 	ctx context.Context,
 	chatModel model.BaseChatModel,
 	allTools []tool.BaseTool,
 	backend *tools.Backend,
 	config Config,
+	skillBackend *filteringSkillBackend,
 	logger *slog.Logger,
 ) (tool.BaseTool, error) {
 	workerTools := excludeToolsByName(allTools, "researcher", "worker", "skill_advisor")
 
+	if config.SkillsEnabled && skillBackend != nil {
+		workerTools = append(workerTools, &readSkillTool{backend: skillBackend})
+	}
+
 	handlers := buildSubAgentHandlers(ctx, backend, config, chatModel, logger,
 		workerInstruction(backend.WorkDir(), backend.ToolchainBinDir(),
-			backend.SandboxEnabled(), backend.SandboxEnabled() && config.SandboxNetwork),
+			backend.SandboxEnabled(), backend.SandboxEnabled() && config.SandboxNetwork,
+			config.SkillsEnabled),
 		"worker",
 		true, true, true,
 	)

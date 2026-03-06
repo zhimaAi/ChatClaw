@@ -141,7 +141,7 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 		logger.Warn("[agent] failed to create researcher sub-agent", "error", researcherErr)
 	}
 
-	worker, workerErr := newWorkerSubAgent(ctx, chatModel, baseTools, backend, config, logger)
+	worker, workerErr := newWorkerSubAgent(ctx, chatModel, baseTools, backend, config, skillBackend, logger)
 	if workerErr != nil {
 		logger.Warn("[agent] failed to create worker sub-agent", "error", workerErr)
 	}
