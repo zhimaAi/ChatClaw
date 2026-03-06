@@ -28,6 +28,8 @@ type ProviderConfig struct {
 	ExtraConfig string
 	// Timeout 请求超时时间
 	Timeout time.Duration
+	// DisableThinking explicitly disables thinking/reasoning mode
+	DisableThinking bool
 }
 
 // NewChatModel 根据供应商配置创建新的 ChatModel
@@ -64,6 +66,9 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
 	}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
+	}
 	return openai.NewChatModel(ctx, config)
 }
 
@@ -89,6 +94,9 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 		BaseURL:    cfg.APIEndpoint,
 		ByAzure:    true,
 		APIVersion: extraConfig.APIVersion,
+	}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
 	return openai.NewChatModel(ctx, config)
 }
@@ -147,13 +155,17 @@ func newClaudeChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 func newQwenChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatModel, error) {
 	config := &qwen.ChatModelConfig{
 		APIKey: cfg.APIKey,
-		Model: cfg.ModelID,
+		Model:  cfg.ModelID,
 	}
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
 	}
 	if cfg.Timeout > 0 {
 		config.Timeout = cfg.Timeout
+	}
+	if cfg.DisableThinking {
+		disableThinking := false
+		config.EnableThinking = &disableThinking
 	}
 	return qwen.NewChatModel(ctx, config)
 }

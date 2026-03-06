@@ -483,6 +483,7 @@ export default {
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
       selectImages: 'Select images',
+      selectImagesDisabled: 'Select a model that supports image input',
       selectImage: 'Select image',
       clearSelected: 'Clear selected',
       selectedCount: '{count} knowledge base(s) selected',
