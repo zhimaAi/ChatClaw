@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { cn } from '@/lib/utils'
 import {
   SelectRoot,
   SelectTrigger as SelectTriggerRaw,
@@ -15,7 +14,6 @@ import { Check } from 'lucide-vue-next'
 
 const props = defineProps<{
   modelValue: string
-  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,15 +35,13 @@ const modes = [
   >
     <SelectTriggerRaw as-child>
       <button
-        :class="cn(
-          'flex h-8 items-center rounded-full border border-border bg-background text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none',
-          compact ? 'size-8 justify-center' : 'gap-1.5 px-3'
-        )"
+        class="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
+        :title="t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat')"
       >
         <!-- Chat mode icon: speech bubble -->
         <svg
           v-if="modelValue === 'chat'"
-          class="size-3.5 shrink-0 text-muted-foreground"
+          class="size-4 text-muted-foreground"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -58,7 +54,7 @@ const modes = [
         <!-- Task mode icon: crosshair/target -->
         <svg
           v-else
-          class="size-3.5 shrink-0 text-muted-foreground"
+          class="size-4 text-muted-foreground"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -73,9 +69,6 @@ const modes = [
           <circle cx="12" cy="12" r="4" />
           <circle cx="12" cy="12" r="8" />
         </svg>
-        <span v-if="!compact" class="text-foreground">
-          {{ t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat') }}
-        </span>
       </button>
     </SelectTriggerRaw>
     <SelectPortal>
