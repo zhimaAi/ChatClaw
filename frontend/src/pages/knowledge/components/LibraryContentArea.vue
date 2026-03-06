@@ -361,18 +361,36 @@ const currentBreadcrumbTitle = computed(() => {
   return path.map(p => p.name).join(' / ')
 })
 
-// 计算要显示的面包屑项（路径过长时，只显示首尾，中间用省略号）
+// 计算要显示的面包屑项（路径过长时，只显示首尾 + 倒数两级，中间用省略号）
 const visibleBreadcrumbs = computed(() => {
   const path = breadcrumbPath.value
   if (path.length <= 4) {
     // 路径不长，全部显示
     return path.map((item, idx) => ({ ...item, visible: true, index: idx, isEllipsis: false }))
   }
-  // 路径过长，只显示首尾
+  // 路径过长：显示首个（库名）+ 省略号 + 倒数第二级 + 最后一级
   const result: Array<{ name: string; id: number | null; visible: boolean; index: number; isEllipsis: boolean }> = []
+  const lastIndex = path.length - 1
+  const secondLastIndex = path.length - 2
+
+  // 首个：库名
   result.push({ ...path[0], visible: true, index: 0, isEllipsis: false })
+  // 中间省略号（不可点击）
   result.push({ name: '...', id: null, visible: true, index: -1, isEllipsis: true })
-  result.push({ ...path[path.length - 1], visible: true, index: path.length - 1, isEllipsis: false })
+  // 倒数第二级（方便返回上级）
+  result.push({
+    ...path[secondLastIndex],
+    visible: true,
+    index: secondLastIndex,
+    isEllipsis: false,
+  })
+  // 最后一级：当前文件夹
+  result.push({
+    ...path[lastIndex],
+    visible: true,
+    index: lastIndex,
+    isEllipsis: false,
+  })
   return result
 })
 
@@ -987,30 +1005,21 @@ onUnmounted(() => {
           <template v-for="(item, idx) in visibleBreadcrumbs" :key="`${item.id ?? 'root'}-${idx}`">
             <span v-if="idx > 0 && !item.isEllipsis" class="shrink-0 px-1 text-muted-foreground/60">/</span>
             <button
-              v-if="item.id !== null && !item.isEllipsis"
+              v-if="!item.isEllipsis"
               type="button"
               class="shrink-0 truncate rounded px-1 py-0.5 text-sm transition-colors hover:bg-accent/50 hover:text-foreground"
               :class="item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'"
               :title="item.name"
               @click="
                 () => {
-                  if (item.id !== null) {
-                    activeFolderId = item.id
-                    emit('folder-selected', item.id)
-                  }
+                  // id=null 表示知识库根目录，点击返回根目录
+                  activeFolderId = item.id
+                  emit('folder-selected', item.id)
                 }
               "
             >
               {{ item.name }}
             </button>
-            <span
-              v-else-if="!item.isEllipsis"
-              class="shrink-0 truncate text-sm"
-              :class="item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'"
-              :title="item.name"
-            >
-              {{ item.name }}
-            </span>
             <span
               v-else
               class="shrink-0 px-1 text-muted-foreground/60"

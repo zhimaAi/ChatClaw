@@ -13,9 +13,8 @@ func isZhCN() bool {
 	return i18n.GetLocale() == i18n.LocaleZhCN
 }
 
-// buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
-// the OS environment, working directory, sandbox constraints, and available tools.
-func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+// buildCorePrompt generates the environment section: OS, shell, directories, time.
+func buildCorePrompt(homeDir, workDir, sessionsDir string) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -31,7 +30,7 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 	var prompt string
 	if zh {
 		prompt = fmt.Sprintf(`
-# 文件系统与执行工具 — 环境信息
+# 环境信息
 
 - 当前时间: %s
 - 操作系统: %s
@@ -44,7 +43,7 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 `, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 	} else {
 		prompt = fmt.Sprintf(`
-# Filesystem & Execute Tools — Environment Info
+# Environment Info
 
 - Current time: %s
 - Operating System: %s
@@ -75,6 +74,15 @@ The parent directory (%s) contains sibling conversations from the same AI assist
 		}
 	}
 
+	return prompt
+}
+
+// buildToolsPrompt generates sandbox rules, toolchain info, dangerous command
+// confirmation, and PowerShell notes.
+func buildToolsPrompt(workDir string, sandboxEnabled, sandboxNetworkEnabled bool, toolchainBinDir string) string {
+	zh := isZhCN()
+	var prompt string
+
 	if sandboxEnabled {
 		if zh {
 			networkDesc := "网络访问已**禁用**。curl、npm install、pip install 等命令将无法使用。"
@@ -100,9 +108,10 @@ The parent directory (%s) contains sibling conversations from the same AI assist
 - **使用 npx / bunx** 运行 CLI 工具，无需全局安装（例如 "npx create-vue@latest my-app" 而不是全局安装 @vue/cli）。
 - **始终传递非交互标志**以避免命令在 stdin 上挂起: 使用 "--yes"、"--default"、"-y"，或根据需要使用管道 "echo"（例如 "npx create-vue@latest my-app --default"、"npm init -y"）。
 - **所有项目文件必须在工作目录内创建。** 不要尝试在其他地方创建文件。
+- **运行 shell 脚本时用 "sh script.sh"（或 "bash script.sh" / "zsh script.sh"）**，不要用 "./script.sh"（沙箱中文件没有执行权限），也不要尝试 chmod。
 - 如果命令因权限被拒绝而失败，可能是在尝试写入工作目录之外的路径。请使用本地/项目范围的替代方案重试。
 `, workDir, networkDesc)
-		} else {
+	} else {
 			networkDesc := "Network access is **disabled** for executed commands. Commands like curl, npm install, pip install will fail."
 			if sandboxNetworkEnabled {
 				networkDesc = "Network access is **enabled** for executed commands (e.g. npm install, curl, pip install will work)."
@@ -126,6 +135,7 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 - **Use npx / bunx** to run CLI tools without global installs (e.g. "npx create-vue@latest my-app" instead of installing @vue/cli globally).
 - **Always pass non-interactive flags** to avoid commands hanging on stdin: use "--yes", "--default", "-y", or pipe "echo" as needed (e.g. "npx create-vue@latest my-app --default", "npm init -y").
 - **All project files must be created inside the working directory.** Do not attempt to create files elsewhere.
+- **Run shell scripts with "sh script.sh" (or "bash script.sh" / "zsh script.sh")** — never use "./script.sh" (files have no execute permission in sandbox) and do not attempt chmod.
 - If a command fails due to permission denied, it is likely trying to write outside the working directory. Retry with a local/project-scoped alternative.
 `, workDir, networkDesc)
 		}
@@ -169,7 +179,7 @@ The following types of commands require confirmation:
 `
 	}
 
-	if osName == "windows" {
+	if runtime.GOOS == "windows" {
 		if zh {
 			prompt += `
 # PowerShell 注意事项
@@ -266,64 +276,87 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 		}
 	}
 
-	if zh {
-		prompt += `
-# 任务委派操作指南
-
-## 何时优先委派（而非自己做）
-当任务满足以下**任一**条件时，应优先使用 task 工具委派给子代理，而不是用 write_todos 列清单自己做：
-- 任务需要 **5 步以上**的工具调用才能完成（如写代码 + 安装依赖 + 执行 + 调试 + 输出文件）
-- 任务目标明确且可以**完整描述给子代理**，不需要与用户反复确认
-- 任务涉及**试错和调试**（如生成视频/图片/代码项目），子代理可以在隔离上下文中自主迭代
-
-## 委派要点
-- 优先并行：当有多个独立子任务时，同时启动多个子代理
-- 描述清晰：给子代理提供清晰的任务描述、预期输出格式和工作目录路径
-- 结果汇总：子代理返回后，将结果整合并以清晰的方式呈现给用户
-- 简单的单步操作（如读取一个文件、执行一条命令）不需要委派，直接自己做
-
-## 子代理选择
-- 需要多步骤规划的复杂任务（调研、分析、方案设计、内容创作、代码项目等）→ task(plan-execute)
-- 代码搜索、简单查找、独立小任务 → task(general-purpose)
-`
-	} else {
-		prompt += `
-# Task Delegation Tips
-
-## When to Prefer Delegation (over doing it yourself)
-When a task meets **any** of the following conditions, prefer delegating via the task tool rather than using write_todos and doing it yourself:
-- The task requires **5 or more** tool calls to complete (e.g. write code + install deps + execute + debug + output file)
-- The task goal is clear and can be **fully described to a subagent** without needing back-and-forth with the user
-- The task involves **trial and error** (e.g. generating video/images/code projects) where the subagent can iterate autonomously in an isolated context
-
-## Tips
-- Prefer parallel: launch multiple subagents simultaneously for independent subtasks
-- Be specific: provide clear task descriptions, expected output format, and working directory path
-- Synthesize results: after subagents return, integrate and present results clearly to the user
-- Simple single-step operations (reading one file, running one command) don't need delegation — do them yourself
-
-## SubAgent Selection
-- Complex tasks requiring multi-step planning (research, analysis, strategy design, content creation, code projects, etc.) → task(plan-execute)
-- Code search, simple lookups, independent small tasks → task(general-purpose)
-`
-	}
-
 	return prompt
 }
 
-// buildSkillSystemPrompt generates a concise system prompt about the Skill
-// marketplace so the agent knows it can search & install skills on demand.
-func buildSkillSystemPrompt() string {
+// buildSubAgentPrompt generates guidance for when and how to use the sub-agents.
+func buildSubAgentPrompt() string {
 	if isZhCN() {
 		return `
-# 技能市场
+# 任务委派
 
-遇到超出自身能力的专业任务时，主动用 skill_search 搜索在线技能市场，找到后用 skill_install 安装。新安装的技能会立即可用。安装前先向用户简要说明并获得确认。
+你有三个专业助手可以委派任务。**优先委派，而非自己做。**
+
+## 何时必须委派
+满足以下**任一**条件时，**必须**委派给对应的子代理：
+- 需要搜索网络信息或调研 → 调用 researcher
+- 需要写文件、创建项目、运行脚本、执行命令 → 调用 worker
+- 需要安装或查找技能 → 调用 skill_advisor
+
+## 何时自己做
+仅当任务是**纯文本对话**（回答问题、翻译、解释概念）时才自己做，不调用子代理。
+
+## researcher
+调研类任务。它会搜索网络、浏览网页，返回精炼的结论。
+给它完整的任务描述，因为它看不到你的对话历史。
+
+## worker
+执行类任务。它拥有所有工具（文件读写、命令执行、浏览器等），在独立上下文中自主完成任务。
+给它清晰的任务描述，包含工作目录路径和预期输出。
+
+## skill_advisor
+技能类任务。它会搜索技能市场、安装技能、分析内容，返回执行指南。
+
+## 委派要点
+- 多个独立任务可以同时委派给多个子代理
+- 子代理返回的结论和指南可以根据实际情况调整
 `
 	}
 	return `
-# Skill Marketplace
+# Task Delegation
 
-When facing specialized tasks beyond your capabilities, proactively use skill_search to find skills in the online marketplace, then skill_install to install them. Newly installed skills are available immediately. Briefly explain the skill to the user and get confirmation before installing.
+You have three specialist assistants to delegate tasks to. **Prefer delegating over doing it yourself.**
+
+## When you MUST delegate
+If the task meets **any** of the following, you **must** delegate:
+- Needs web search or research → call researcher
+- Needs to write files, create projects, run scripts, execute commands → call worker
+- Needs to find or install skills → call skill_advisor
+
+## When to do it yourself
+Only handle it yourself when the task is **pure text conversation** (answering questions, translating, explaining concepts) with no tool usage needed.
+
+## researcher
+For research tasks. It searches the web, browses pages, and returns condensed findings.
+Provide a complete task description — it cannot see your conversation history.
+
+## worker
+For execution tasks. It has all tools (file I/O, command execution, browser, etc.) and works autonomously in an isolated context.
+Provide a clear task description including working directory path and expected output.
+
+## skill_advisor
+For skill tasks. It searches the skill marketplace, installs skills, analyzes content, and returns execution guides.
+
+## Delegation tips
+- Launch multiple sub-agents simultaneously for independent sub-tasks
+- Adjust sub-agent conclusions and guides based on the actual situation
+`
+}
+
+// buildSkillGuidancePrompt generates a concise prompt about the skill system.
+func buildSkillGuidancePrompt() string {
+	if isZhCN() {
+		return `
+# 技能系统
+
+已安装的技能会自动加载到你的能力中。需要更多技能支持时，调用 skill_advisor 搜索市场、安装并分析相关技能。
+skill_advisor 返回的执行指南基于经过验证的最佳实践，优先遵循。
+`
+	}
+	return `
+# Skill System
+
+Installed skills are automatically loaded into your capabilities. When you need more skill support, call skill_advisor to search the marketplace, install and analyze relevant skills.
+Execution guides returned by skill_advisor are based on verified best practices — follow them preferentially.
 `
 }

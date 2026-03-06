@@ -433,6 +433,13 @@ export default {
       deleteConfirmMessage: '确定要删除模型「{name}」吗？此操作无法撤销。',
       confirmDelete: '删除',
       deleting: '删除中...',
+      // 模型能力
+      supportedInputs: '支持的输入类型',
+      capabilityText: '文本',
+      capabilityImage: '图片',
+      capabilityAudio: '音频',
+      capabilityVideo: '视频',
+      capabilityFile: '文件',
     },
     // 关于我们
     about: {
@@ -462,6 +469,7 @@ export default {
     },
   },
   assistant: {
+    imageMessage: '图片消息',
     icon: {
       hint: '点击替换，建议尺寸为100*100px，大小不超过100kb',
       pickTitle: '选择图标文件',
@@ -516,6 +524,7 @@ export default {
       freeBadge: '免费',
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
+      selectImages: '选择图片',
       selectImage: '选择图片',
       clearSelected: '清空选中',
       selectedCount: '已选 {count} 个知识库',
@@ -546,6 +555,12 @@ export default {
       taskDescription: '任务描述',
       taskAgentType: '任务类型',
       taskAgentResult: '子代理执行结果',
+      subAgentResearcher: '子任务 · 调研',
+      subAgentWorker: '子任务 · 执行',
+      subAgentSkillAdvisor: '子任务 · 技能',
+      subAgentRunning: '执行中',
+      subAgentCompleted: '已完成',
+      subAgentStopped: '已停止',
       retrievalKnowledge: '知识库检索',
       retrievalMemory: '记忆检索',
       retrievalScore: '相关度',
@@ -590,6 +605,13 @@ export default {
       deleteConversationFailed: '删除会话失败',
       sendFailed: '发送消息失败',
       resendFailed: '重新发送失败',
+      tooManyImages: '图片数量过多',
+      invalidImageType: '无效的图片类型',
+      imageTooLarge: '图片过大',
+      imagesTotalTooLarge: '图片总大小过大',
+      imageReadFailed: '图片读取失败',
+      modelNotSupportVision: '当前模型不支持图片识别，请切换到支持视觉的多模态模型',
+      modelNotSupportVisionHint: '例如 GPT-4o、Claude、Gemini 等模型支持图片识别',
     },
     toasts: {
       created: '助手创建成功',
@@ -678,6 +700,10 @@ export default {
       personal: '个人',
       team: '团队',
       teamDisabledTip: '团队知识库暂未开放',
+    },
+    sidebar: {
+      collapse: '收起',
+      expand: '展开',
     },
     loading: '加载中...',
     loadFailed: '加载知识库失败',

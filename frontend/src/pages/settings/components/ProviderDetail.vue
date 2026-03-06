@@ -473,17 +473,18 @@ const handleEditModel = (model: Model) => {
 }
 
 // 保存模型（添加或编辑）
-const handleSaveModel = async (data: { modelId: string; name: string; type: string }) => {
+const handleSaveModel = async (data: { modelId: string; name: string; type: string; capabilities: string[] }) => {
   if (!props.providerWithModels) return
 
   try {
     if (editingModel.value) {
-      // 编辑模式（只允许修改 name）
+      // 编辑模式
       await ProvidersService.UpdateModel(
         props.providerWithModels.provider.provider_id,
         editingModel.value.model_id,
         new UpdateModelInput({
           name: data.name,
+          capabilities: data.capabilities,
         })
       )
       toast.success(t('settings.modelService.modelUpdated'))
@@ -495,6 +496,7 @@ const handleSaveModel = async (data: { modelId: string; name: string; type: stri
           model_id: data.modelId,
           name: data.name,
           type: data.type,
+          capabilities: data.capabilities,
         })
       )
       toast.success(t('settings.modelService.modelCreated'))

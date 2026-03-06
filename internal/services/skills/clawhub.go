@@ -8,8 +8,29 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 )
+
+// Global rate limiter for ClawHub API: max 2 requests per second (one every 500ms).
+// Shared across all SkillsService instances, all goroutines.
+var clawHubThrottle = &throttle{minInterval: 500 * time.Millisecond}
+
+type throttle struct {
+	mu          sync.Mutex
+	lastReq     time.Time
+	minInterval time.Duration
+}
+
+func (t *throttle) wait() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if elapsed := time.Since(t.lastReq); elapsed < t.minInterval {
+		time.Sleep(t.minInterval - elapsed)
+	}
+	t.lastReq = time.Now()
+}
 
 const clawHubBaseURL = "https://clawhub.ai/api/v1"
 
@@ -253,6 +274,8 @@ func (s *SkillsService) httpGet(rawURL string) ([]byte, error) {
 	backoff := 2 * time.Second
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		clawHubThrottle.wait()
+
 		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 		if err != nil {
 			return nil, err

@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -130,11 +131,58 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		return nil, errs.New("error.chat_conversation_id_required")
 	}
 	content := strings.TrimSpace(input.Content)
-	if content == "" {
+	hasImages := len(input.Images) > 0
+
+	// Validate: content or images must be non-empty
+	if content == "" && !hasImages {
 		return nil, errs.New("error.chat_content_required")
 	}
 
-	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content))
+	// Validate images
+	if hasImages {
+		const maxImages = 4
+		const maxImageSize = 2 * 1024 * 1024  // 2MB per image
+		const maxTotalSize = 8 * 1024 * 1024  // 8MB total
+
+		if len(input.Images) > maxImages {
+			return nil, errs.New("error.chat_too_many_images")
+		}
+
+		var totalSize int64
+		for _, img := range input.Images {
+			// Validate mime type
+			if !strings.HasPrefix(img.MimeType, "image/") {
+				return nil, errs.New("error.chat_invalid_image_type")
+			}
+
+			// Validate base64
+			if img.Base64 == "" {
+				return nil, errs.New("error.chat_image_base64_required")
+			}
+
+			// Validate size
+			if img.Size > maxImageSize {
+				return nil, errs.New("error.chat_image_too_large")
+			}
+			totalSize += img.Size
+		}
+
+		if totalSize > maxTotalSize {
+			return nil, errs.New("error.chat_images_total_too_large")
+		}
+	}
+
+	// Serialize images to JSON
+	imagesJSON := "[]"
+	if hasImages {
+		b, err := json.Marshal(input.Images)
+		if err != nil {
+			return nil, errs.Wrap("error.chat_images_serialize_failed", err)
+		}
+		imagesJSON = string(b)
+	}
+
+	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content), "images_count", len(input.Images))
 
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
@@ -164,12 +212,12 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 
 	if agentExtras.ChatMode == "chat" {
 		return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
-			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
+			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, imagesJSON, agentConfig, providerConfig, agentExtras)
 		})
 	}
 
 	return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
-		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
+		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, imagesJSON, agentConfig, providerConfig, agentExtras)
 	})
 }
 

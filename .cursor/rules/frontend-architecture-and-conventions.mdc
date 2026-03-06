@@ -31,6 +31,7 @@ Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 5. **添加 UI 组件**：运行 `npx shadcn-vue@latest add [组件名]`
 6. **翻译文本**：用 `const { t } = useI18n()`，key 格式 `模块.功能`
 7. **调用后端**：从 `@bindings/...` 导入，必须处理错误
+8. **ref 在模板中的使用**：在 `<template>` 中，ref 会自动解包，**不要**使用 `.value`
 
 ## shadcn-vue 组件用法规范
 
@@ -49,6 +50,46 @@ shadcn-vue 组件基于 Radix Vue 封装，必须使用 Vue 标准的 `v-model` 
 
 此规则适用于所有 shadcn-vue 双向绑定组件（Switch、Checkbox、Select、Slider 等）。
 
+## ref 在模板中的使用规则
+
+在 Vue 3 的 `<template>` 中，ref 会自动解包，**不需要**使用 `.value`。`.value` 只在 `<script setup>` 中使用。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const scale = ref(1)
+const count = ref(0)
+
+// ✅ 在 script 中必须使用 .value
+const zoomIn = () => {
+  scale.value += 0.1
+}
+
+const increment = () => {
+  count.value++
+}
+</script>
+
+<template>
+  <!-- ❌ BAD — 在模板中使用了 .value -->
+  <Button :disabled="scale.value <= 0.5" @click="zoomIn">
+    Zoom In
+  </Button>
+  <div>{{ count.value }}</div>
+
+  <!-- ✅ GOOD — 在模板中直接使用 ref，自动解包 -->
+  <Button :disabled="scale <= 0.5" @click="zoomIn">
+    Zoom In
+  </Button>
+  <div>{{ count }}</div>
+</template>
+```
+
+**关键规则**：
+- `<script setup>` 中：必须使用 `ref.value` 访问或修改值
+- `<template>` 中：直接使用 `ref`，Vue 会自动解包
+
 ## 禁止
 
 - 不要手动在 `src/components/ui/` 创建文件，必须用 shadcn CLI
@@ -57,6 +98,7 @@ shadcn-vue 组件基于 Radix Vue 封装，必须使用 Vue 标准的 `v-model` 
 - 不要硬编码用户可见文本，必须走 i18n
 - 不要直接写颜色值如 `text-gray-500`，用语义变量 `text-muted-foreground`
 - 不要使用 Radix 底层 prop（如 `:checked`、`:pressed`），必须用 `v-model` 或 `:model-value`
+- **不要在模板中使用 `ref.value`**：Vue 3 模板中 ref 会自动解包，直接使用 `ref` 即可
 
 ## 代码模式
 
