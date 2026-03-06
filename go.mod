@@ -19,6 +19,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
 	github.com/cloudwego/eino-ext/components/model/qwen v0.1.5
 	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260302070227-13ce9b3fa975
+	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.8
 	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260302070227-13ce9b3fa975
 	github.com/creativeprojects/go-selfupdate v1.5.2

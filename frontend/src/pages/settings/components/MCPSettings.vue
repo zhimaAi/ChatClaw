@@ -4,11 +4,16 @@ import { useI18n } from 'vue-i18n'
 import {
   FolderOpen,
   Plus,
+  Pencil,
   Trash2,
   Loader2,
   Package,
   Terminal,
   Globe,
+  ChevronLeft,
+  Wrench,
+  MessageSquare,
+  Database,
 } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -211,6 +216,9 @@ async function handleDialogSave() {
     }
     dialogOpen.value = false
     void loadServers()
+    if (detailServer.value && dialogMode.value === 'edit' && form.id === detailServer.value.id) {
+      void showDetail({ ...detailServer.value, ...payload, id: form.id } as MCPServer)
+    }
   } catch (error) {
     toast.error(
       getErrorMessage(error) ||
@@ -235,6 +243,10 @@ async function handleDelete() {
   try {
     await MCPService.RemoveServer(server.id)
     servers.value = servers.value.filter((s) => s.id !== server.id)
+    if (detailServer.value?.id === server.id) {
+      detailServer.value = null
+      detailResult.value = null
+    }
     toast.success(t('settings.mcp.deleteSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('settings.mcp.deleteFailed'))
@@ -311,6 +323,45 @@ function serverSummary(server: MCPServer): string {
   return server.url
 }
 
+// ==================== Detail view ====================
+interface MCPToolInfo { name: string; description: string }
+interface MCPPromptInfo { name: string; description: string }
+interface MCPResourceInfo { name: string; uri: string; description: string; mimeType: string }
+interface InspectResult { tools: MCPToolInfo[]; prompts: MCPPromptInfo[]; resources: MCPResourceInfo[] }
+
+const detailServer = ref<MCPServer | null>(null)
+const detailLoading = ref(false)
+const detailResult = ref<InspectResult | null>(null)
+type DetailTab = 'tools' | 'prompts' | 'resources'
+const detailTab = ref<DetailTab>('tools')
+
+async function showDetail(server: MCPServer) {
+  detailServer.value = server
+  detailTab.value = 'tools'
+  detailLoading.value = true
+  detailResult.value = null
+  try {
+    detailResult.value = await MCPService.InspectServer(server.id) as InspectResult
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.inspectFailed'))
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function goBackFromDetail() {
+  detailServer.value = null
+  detailResult.value = null
+}
+
+function editFromDetail() {
+  if (detailServer.value) openEditDialog(detailServer.value)
+}
+
+function deleteFromDetail() {
+  if (detailServer.value) confirmDelete(detailServer.value)
+}
+
 // ==================== Init ====================
 onMounted(() => {
   void loadServers()
@@ -347,96 +398,262 @@ onMounted(() => {
 
     <!-- ==================== MCP Tab ==================== -->
     <template v-if="activeTopTab === 'servers'">
-      <!-- Sub tab bar: Installed | Market + Add button -->
-      <div class="flex items-center justify-between px-4 py-2">
-        <div class="flex gap-1">
-          <button
-            :class="
-              cn(
-                'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                activeSubTab === 'installed'
-                  ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
-              )
-            "
-            @click="activeSubTab = 'installed'"
-          >
-            {{ t('settings.mcp.tabInstalled') }}
-          </button>
-          <button
-            class="cursor-not-allowed rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground/50"
-            disabled
-          >
-            {{ t('settings.mcp.tabMarket') }}
-          </button>
-        </div>
-        <button
-          class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          @click="openAddDialog"
-        >
-          <Plus class="size-3.5" />
-          {{ t('settings.mcp.addServer') }}
-        </button>
-      </div>
 
-      <!-- Installed server list -->
-      <div v-if="activeSubTab === 'installed'" class="flex-1 overflow-auto px-4 pb-4">
-        <div
-          v-if="serversLoading && servers.length === 0"
-          class="flex items-center justify-center py-12"
-        >
-          <Loader2 class="size-5 animate-spin text-muted-foreground" />
-        </div>
-        <div
-          v-else-if="servers.length === 0"
-          class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
-        >
-          <Package class="size-8 opacity-40" />
-          <span class="text-sm">{{ t('settings.mcp.noServers') }}</span>
-          <span class="text-xs">{{ t('settings.mcp.noServersHint') }}</span>
-        </div>
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-          <div
-            v-for="server in servers"
-            :key="server.id"
-            class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
-            @click="openEditDialog(server)"
-          >
-            <div class="flex items-center gap-2">
-              <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
-              <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
-                <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
-                <Globe v-else class="mr-0.5 size-2.5" />
-                {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
-              </Badge>
+      <!-- ==================== Detail View ==================== -->
+      <template v-if="detailServer">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <!-- Row 1: back button -->
+          <div class="flex shrink-0 items-center border-b border-border px-4 py-2">
+            <button
+              class="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              @click="goBackFromDetail"
+            >
+              <ChevronLeft class="size-4" />
+              {{ t('settings.mcp.backToList') }}
+            </button>
+          </div>
+
+          <!-- Row 2: server info + actions -->
+          <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-base font-semibold text-foreground">{{ detailServer.name }}</span>
+                <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                  <Terminal v-if="detailServer.transport === 'stdio'" class="mr-0.5 size-2.5" />
+                  <Globe v-else class="mr-0.5 size-2.5" />
+                  {{ detailServer.transport === 'stdio' ? 'stdio' : 'HTTP' }}
+                </Badge>
+              </div>
+              <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ serverSummary(detailServer) }}
+              </p>
             </div>
-            <p class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
-              {{ serverSummary(server) }}
-            </p>
-            <div class="mt-auto flex items-center justify-between gap-2 pt-3">
-              <span class="text-[10px] text-muted-foreground">{{ server.timeout }}s timeout</span>
-              <div class="flex items-center gap-2" @click.stop>
-                <Switch
-                  :model-value="server.enabled"
-                  class="scale-90"
-                  @update:model-value="() => handleToggleServer(server)"
-                />
-                <button
-                  class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  @click.stop="confirmDelete(server)"
-                >
-                  <Trash2 class="size-3.5" />
-                </button>
+            <div class="flex shrink-0 items-center gap-2">
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="editFromDetail"
+              >
+                <Pencil class="size-3.5" />
+                {{ t('settings.mcp.editServer') }}
+              </button>
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="deleteFromDetail"
+              >
+                <Trash2 class="size-3.5" />
+                {{ t('common.delete') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 3: capability tabs -->
+          <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-2">
+            <button
+              v-for="tab in ([
+                { key: 'tools' as DetailTab, label: t('settings.mcp.tabTools'), icon: Wrench, count: detailResult?.tools?.length ?? 0 },
+                { key: 'prompts' as DetailTab, label: t('settings.mcp.tabPrompts'), icon: MessageSquare, count: detailResult?.prompts?.length ?? 0 },
+                { key: 'resources' as DetailTab, label: t('settings.mcp.tabResources'), icon: Database, count: detailResult?.resources?.length ?? 0 },
+              ])"
+              :key="tab.key"
+              :class="
+                cn(
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  detailTab === tab.key
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                )
+              "
+              @click="detailTab = tab.key"
+            >
+              <component :is="tab.icon" class="size-3" />
+              {{ tab.label }}
+              <Badge
+                v-if="detailResult && tab.count > 0"
+                variant="secondary"
+                class="ml-0.5 bg-background/20 px-1.5 py-0 text-[10px]"
+              >
+                {{ tab.count }}
+              </Badge>
+            </button>
+          </div>
+
+          <!-- Row 4: capability content -->
+          <div class="flex-1 overflow-auto px-4 py-3">
+            <div v-if="detailLoading" class="flex items-center justify-center py-12">
+              <Loader2 class="size-5 animate-spin text-muted-foreground" />
+            </div>
+
+            <template v-else-if="detailResult">
+              <!-- Tools -->
+              <div v-if="detailTab === 'tools'">
+                <div v-if="detailResult.tools.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <Wrench class="size-8 opacity-40" />
+                  <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
+                </div>
+                <div v-else class="flex flex-col gap-1">
+                  <div
+                    v-for="tool in detailResult.tools"
+                    :key="tool.name"
+                    class="rounded-md border border-border p-3 dark:border-white/10"
+                  >
+                    <div class="flex items-center gap-2">
+                      <Wrench class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span class="text-sm font-medium text-foreground">{{ tool.name }}</span>
+                    </div>
+                    <p v-if="tool.description" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                      {{ tool.description }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Prompts -->
+              <div v-if="detailTab === 'prompts'">
+                <div v-if="detailResult.prompts.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <MessageSquare class="size-8 opacity-40" />
+                  <span class="text-sm">{{ t('settings.mcp.noPrompts') }}</span>
+                </div>
+                <div v-else class="flex flex-col gap-1">
+                  <div
+                    v-for="prompt in detailResult.prompts"
+                    :key="prompt.name"
+                    class="rounded-md border border-border p-3 dark:border-white/10"
+                  >
+                    <div class="flex items-center gap-2">
+                      <MessageSquare class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span class="text-sm font-medium text-foreground">{{ prompt.name }}</span>
+                    </div>
+                    <p v-if="prompt.description" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                      {{ prompt.description }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Resources -->
+              <div v-if="detailTab === 'resources'">
+                <div v-if="detailResult.resources.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <Database class="size-8 opacity-40" />
+                  <span class="text-sm">{{ t('settings.mcp.noResources') }}</span>
+                </div>
+                <div v-else class="flex flex-col gap-1">
+                  <div
+                    v-for="res in detailResult.resources"
+                    :key="res.uri"
+                    class="rounded-md border border-border p-3 dark:border-white/10"
+                  >
+                    <div class="flex items-center gap-2">
+                      <Database class="size-3.5 shrink-0 text-muted-foreground" />
+                      <span class="text-sm font-medium text-foreground">{{ res.name }}</span>
+                      <Badge v-if="res.mimeType" variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                        {{ res.mimeType }}
+                      </Badge>
+                    </div>
+                    <p class="mt-1 pl-5.5 text-xs text-muted-foreground/70">{{ res.uri }}</p>
+                    <p v-if="res.description" class="mt-0.5 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                      {{ res.description }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- ==================== List View ==================== -->
+      <template v-else>
+        <!-- Sub tab bar: Installed | Market + Add button -->
+        <div class="flex items-center justify-between px-4 py-2">
+          <div class="flex gap-1">
+            <button
+              :class="
+                cn(
+                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  activeSubTab === 'installed'
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                )
+              "
+              @click="activeSubTab = 'installed'"
+            >
+              {{ t('settings.mcp.tabInstalled') }}
+            </button>
+            <button
+              class="cursor-not-allowed rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground/50"
+              disabled
+            >
+              {{ t('settings.mcp.tabMarket') }}
+            </button>
+          </div>
+          <button
+            class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            @click="openAddDialog"
+          >
+            <Plus class="size-3.5" />
+            {{ t('settings.mcp.addServer') }}
+          </button>
+        </div>
+
+        <!-- Installed server list -->
+        <div v-if="activeSubTab === 'installed'" class="flex-1 overflow-auto px-4 pb-4">
+          <div
+            v-if="serversLoading && servers.length === 0"
+            class="flex items-center justify-center py-12"
+          >
+            <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div
+            v-else-if="servers.length === 0"
+            class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+          >
+            <Package class="size-8 opacity-40" />
+            <span class="text-sm">{{ t('settings.mcp.noServers') }}</span>
+            <span class="text-xs">{{ t('settings.mcp.noServersHint') }}</span>
+          </div>
+          <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+            <div
+              v-for="server in servers"
+              :key="server.id"
+              class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+              @click="showDetail(server)"
+            >
+              <div class="flex items-center gap-2">
+                <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
+                <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                  <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
+                  <Globe v-else class="mr-0.5 size-2.5" />
+                  {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
+                </Badge>
+              </div>
+              <p class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                {{ serverSummary(server) }}
+              </p>
+              <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                <span class="text-[10px] text-muted-foreground">{{ server.timeout }}s timeout</span>
+                <div class="flex items-center gap-2" @click.stop>
+                  <Switch
+                    :model-value="server.enabled"
+                    class="scale-90"
+                    @update:model-value="() => handleToggleServer(server)"
+                  />
+                  <button
+                    class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    @click.stop="confirmDelete(server)"
+                  >
+                    <Trash2 class="size-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Market tab (disabled placeholder) -->
-      <div v-if="activeSubTab === 'market'" class="flex flex-1 items-center justify-center">
-        <span class="text-sm text-muted-foreground">{{ t('settings.mcp.marketComingSoon') }}</span>
-      </div>
+        <!-- Market tab (disabled placeholder) -->
+        <div v-if="activeSubTab === 'market'" class="flex flex-1 items-center justify-center">
+          <span class="text-sm text-muted-foreground">{{ t('settings.mcp.marketComingSoon') }}</span>
+        </div>
+      </template>
     </template>
 
     <!-- ==================== Settings Tab ==================== -->

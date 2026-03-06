@@ -11,6 +11,7 @@ import (
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
 
@@ -163,14 +164,22 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	}
 
 	// Build extra tools and handlers
-	extraTools, extraHandlers := s.buildExtras(ctx, gc)
+	extraTools, extraHandlers, extrasCleanup := s.buildExtras(ctx, gc)
 
 	agentConfig.Provider = providerConfig
 	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraHandlers, s.app.Logger, len(messages))
 	if err != nil {
+		extrasCleanup()
 		gc.emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
 		return
+	}
+
+	// Combine agent cleanup with extras cleanup (MCP connections, etc.)
+	originalAgentCleanup := agentResult.Cleanup
+	combinedCleanup := func() {
+		originalAgentCleanup()
+		extrasCleanup()
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
@@ -189,13 +198,13 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 			ag.runner = runner
 			ag.checkpointID = checkpointID
 			ag.interrupted = true
-			ag.agentCleanup = agentResult.Cleanup
+			ag.agentCleanup = combinedCleanup
 			ag.mu.Unlock()
 		}
 		return
 	}
 
-	agentResult.Cleanup()
+	combinedCleanup()
 
 	if agentExtras.MemoryEnabled {
 		go func() {
@@ -290,11 +299,14 @@ func (s *ChatService) cleanupGeneration(gen *activeGeneration, conversationID in
 }
 
 // buildExtras creates extra tools and handlers based on agent configuration.
-func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([]tool.BaseTool, []adk.ChatModelAgentMiddleware) {
+// The returned cleanup function must be called when the tools are no longer
+// needed (it closes MCP client connections, etc.).
+func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([]tool.BaseTool, []adk.ChatModelAgentMiddleware, func()) {
 	agentConfig := &gc.agentConfig
 	agentExtras := gc.agentExtras
 	var extraTools []tool.BaseTool
 	var extraHandlers []adk.ChatModelAgentMiddleware
+	var cleanups []func()
 
 	if len(agentExtras.LibraryIDs) > 0 {
 		retrieverTool, toolErr := s.createLibraryRetrieverTool(ctx, gc.db, agentExtras.LibraryIDs, agentConfig.RetrievalTopK, agentExtras.MatchThreshold)
@@ -344,7 +356,26 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-	return extraTools, extraHandlers
+	// MCP tools: load tools from all enabled MCP servers
+	mcpServers, mcpErr := mcp.ListEnabledServers()
+	if mcpErr != nil {
+		s.app.Logger.Warn("[chat] failed to list enabled MCP servers", "error", mcpErr)
+	} else if len(mcpServers) > 0 {
+		mcpResult := tools.LoadMCPTools(ctx, mcpServers, s.app.Logger)
+		if len(mcpResult.Tools) > 0 {
+			extraTools = append(extraTools, mcpResult.Tools...)
+			s.app.Logger.Info("[chat] MCP tools added", "servers", len(mcpServers), "tools", len(mcpResult.Tools))
+		}
+		cleanups = append(cleanups, mcpResult.Cleanup)
+	}
+
+	cleanup := func() {
+		for _, fn := range cleanups {
+			fn()
+		}
+	}
+
+	return extraTools, extraHandlers, cleanup
 }
 
 // --- streaming / event processing ---

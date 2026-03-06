@@ -127,6 +127,8 @@ github.com/cloudwego/eino-ext/components/model/qwen v0.1.5 h1:H0Irkydo2INyYNqjJT
 github.com/cloudwego/eino-ext/components/model/qwen v0.1.5/go.mod h1:PTn/QxFqwmFW8fB4PtxjXB77uGtabOuWHahe751+Ras=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260302070227-13ce9b3fa975 h1:uzTeHc3rrSkCAd/FA7W+6bZpxil2Ix7vZE18j15sWLc=
 github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260302070227-13ce9b3fa975/go.mod h1:Np0BXy/9hPRu3wCgn+ij6L7YsjFcybVzg1k7uYOXh0M=
+github.com/cloudwego/eino-ext/components/tool/mcp v0.0.8 h1:/QwCVAtB61b4Q2+RUvhoy9AZNkhiThsTySIoimxiJS4=
+github.com/cloudwego/eino-ext/components/tool/mcp v0.0.8/go.mod h1:zxP8sFkADBqflNc0a4qfKdLYQ+edzHPlkOaZF0A1X7o=
 github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260302070227-13ce9b3fa975 h1:/drk8FNlp5DRt6Lmz28bbCCF4kIqbRDfe45wAdjb4YU=
 github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260302070227-13ce9b3fa975/go.mod h1:tfHD4Gn2kHfabi0pghN4y2yYDS24AZX1nQUwG0PESm8=
 github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260302070227-13ce9b3fa975 h1:rxNV9JCb2QSR3fgZ0Yv4gkAlHQ9pA1ixxU4FXNeIdKo=

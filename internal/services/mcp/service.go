@@ -109,6 +109,28 @@ func (s *MCPService) ListServers() ([]MCPServer, error) {
 	return servers, nil
 }
 
+// ListEnabledServers returns all enabled MCP servers (for agent integration).
+// This is a package-level function that does not require an MCPService instance.
+func ListEnabledServers() ([]MCPServer, error) {
+	db := sqlite.DB()
+	if db == nil {
+		return nil, errs.New("error.db_not_ready")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var servers []MCPServer
+	if err := db.NewSelect().
+		Model(&servers).
+		Where("enabled = ?", true).
+		OrderExpr("created_at ASC").
+		Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.mcp_list_failed", err)
+	}
+	return servers, nil
+}
+
 // AddServer creates a new MCP server configuration.
 func (s *MCPService) AddServer(input AddServerInput) (*MCPServer, error) {
 	db := s.db()
@@ -288,66 +310,59 @@ func (s *MCPService) setEnabled(id string, enabled bool) error {
 	return nil
 }
 
-// TestServer verifies that an MCP server is reachable by performing an
-// Initialize handshake and then immediately closing the connection.
-func (s *MCPService) TestServer(input AddServerInput) error {
-	if input.Transport != "stdio" && input.Transport != "streamableHttp" {
-		return errs.New("error.mcp_invalid_transport")
+// connect creates an MCP client from server config, performs the Initialize
+// handshake, and returns the ready-to-use client. Caller must close it.
+func connect(ctx context.Context, server MCPServer) (*mcpclient.Client, error) {
+	if server.Transport != "stdio" && server.Transport != "streamableHttp" {
+		return nil, errs.New("error.mcp_invalid_transport")
 	}
-
-	timeout := input.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
 
 	var c *mcpclient.Client
 	var err error
 
-	switch input.Transport {
+	switch server.Transport {
 	case "stdio":
-		if input.Command == "" {
-			return errs.New("error.mcp_command_required")
+		if server.Command == "" {
+			return nil, errs.New("error.mcp_command_required")
 		}
 
 		var args []string
-		if input.Args != "" && input.Args != "[]" {
-			if jsonErr := json.Unmarshal([]byte(input.Args), &args); jsonErr != nil {
-				return errs.Wrap("error.mcp_invalid_args", jsonErr)
+		if server.Args != "" && server.Args != "[]" {
+			if jsonErr := json.Unmarshal([]byte(server.Args), &args); jsonErr != nil {
+				return nil, errs.Wrap("error.mcp_invalid_args", jsonErr)
 			}
 		}
 
-		env := buildEnv(input.Env)
-
-		c, err = mcpclient.NewStdioMCPClient(input.Command, env, args...)
+		env := BuildEnv(server.Env)
+		c, err = mcpclient.NewStdioMCPClient(server.Command, env, args...)
 		if err != nil {
-			return errs.Wrap("error.mcp_test_failed", err)
+			return nil, errs.Wrap("error.mcp_connect_failed", err)
 		}
 
 	case "streamableHttp":
-		if input.URL == "" {
-			return errs.New("error.mcp_url_required")
+		if server.URL == "" {
+			return nil, errs.New("error.mcp_url_required")
+		}
+
+		timeout := server.Timeout
+		if timeout <= 0 {
+			timeout = 30
 		}
 
 		var opts []transport.StreamableHTTPCOption
-
-		if input.Headers != "" && input.Headers != "{}" {
+		if server.Headers != "" && server.Headers != "{}" {
 			var headers map[string]string
-			if jsonErr := json.Unmarshal([]byte(input.Headers), &headers); jsonErr == nil && len(headers) > 0 {
+			if jsonErr := json.Unmarshal([]byte(server.Headers), &headers); jsonErr == nil && len(headers) > 0 {
 				opts = append(opts, transport.WithHTTPHeaders(headers))
 			}
 		}
-
 		opts = append(opts, transport.WithHTTPTimeout(time.Duration(timeout)*time.Second))
 
-		c, err = mcpclient.NewStreamableHttpClient(input.URL, opts...)
+		c, err = mcpclient.NewStreamableHttpClient(server.URL, opts...)
 		if err != nil {
-			return errs.Wrap("error.mcp_test_failed", err)
+			return nil, errs.Wrap("error.mcp_connect_failed", err)
 		}
 	}
-
-	defer c.Close()
 
 	initReq := mcp.InitializeRequest{}
 	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
@@ -357,15 +372,143 @@ func (s *MCPService) TestServer(input AddServerInput) error {
 	}
 
 	if _, err = c.Initialize(ctx, initReq); err != nil {
-		return errs.Wrap("error.mcp_test_failed", err)
+		_ = c.Close()
+		return nil, errs.Wrap("error.mcp_connect_failed", err)
 	}
 
+	return c, nil
+}
+
+// TestServer verifies that an MCP server is reachable by performing an
+// Initialize handshake and then immediately closing the connection.
+func (s *MCPService) TestServer(input AddServerInput) error {
+	timeout := input.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	server := MCPServer{
+		Transport: input.Transport,
+		Command:   input.Command,
+		Args:      input.Args,
+		Env:       input.Env,
+		URL:       input.URL,
+		Headers:   input.Headers,
+		Timeout:   input.Timeout,
+	}
+
+	c, err := connect(ctx, server)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
 	return nil
 }
 
-// buildEnv merges the current process env with user-defined env vars and
+// ==================== Inspect ====================
+
+// MCPToolInfo represents a tool provided by an MCP server.
+type MCPToolInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// MCPPromptInfo represents a prompt provided by an MCP server.
+type MCPPromptInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// MCPResourceInfo represents a resource provided by an MCP server.
+type MCPResourceInfo struct {
+	Name        string `json:"name"`
+	URI         string `json:"uri"`
+	Description string `json:"description"`
+	MIMEType    string `json:"mimeType"`
+}
+
+// InspectResult contains the capabilities of an MCP server.
+type InspectResult struct {
+	Tools     []MCPToolInfo     `json:"tools"`
+	Prompts   []MCPPromptInfo   `json:"prompts"`
+	Resources []MCPResourceInfo `json:"resources"`
+}
+
+// InspectServer connects to an MCP server by ID, queries its tools, prompts,
+// and resources, then returns the aggregated result.
+func (s *MCPService) InspectServer(id string) (*InspectResult, error) {
+	db := s.db()
+	if db == nil {
+		return nil, errs.New("error.db_not_ready")
+	}
+	if id == "" {
+		return nil, errs.New("error.mcp_id_required")
+	}
+
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer dbCancel()
+
+	var server MCPServer
+	if err := db.NewSelect().Model(&server).Where("id = ?", id).Scan(dbCtx); err != nil {
+		return nil, errs.Wrap("error.mcp_not_found", err)
+	}
+
+	timeout := server.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	c, err := connect(ctx, server)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	result := &InspectResult{
+		Tools:     []MCPToolInfo{},
+		Prompts:   []MCPPromptInfo{},
+		Resources: []MCPResourceInfo{},
+	}
+
+	if toolsRes, err := c.ListTools(ctx, mcp.ListToolsRequest{}); err == nil && toolsRes != nil {
+		for _, t := range toolsRes.Tools {
+			result.Tools = append(result.Tools, MCPToolInfo{
+				Name:        t.Name,
+				Description: t.Description,
+			})
+		}
+	}
+
+	if promptsRes, err := c.ListPrompts(ctx, mcp.ListPromptsRequest{}); err == nil && promptsRes != nil {
+		for _, p := range promptsRes.Prompts {
+			result.Prompts = append(result.Prompts, MCPPromptInfo{
+				Name:        p.Name,
+				Description: p.Description,
+			})
+		}
+	}
+
+	if resourcesRes, err := c.ListResources(ctx, mcp.ListResourcesRequest{}); err == nil && resourcesRes != nil {
+		for _, r := range resourcesRes.Resources {
+			result.Resources = append(result.Resources, MCPResourceInfo{
+				Name:        r.Name,
+				URI:         r.URI,
+				Description: r.Description,
+				MIMEType:    r.MIMEType,
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// BuildEnv merges the current process env with user-defined env vars and
 // prepends the toolchain bin directory to PATH when available.
-func buildEnv(envJSON string) []string {
+func BuildEnv(envJSON string) []string {
 	base := os.Environ()
 
 	if binDir := toolchain.BinDirIfReady(); binDir != "" {
