@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +19,40 @@ import (
 var BlockedCommands = []string{
 	"rm -rf /", "rm -rf /*", "mkfs", "dd if=",
 	":(){:|:&};:", "format c:", "format d:",
+}
+
+// sensitiveCommandPatterns are path fragments that, when found inside a shell
+// command, indicate an attempt to read sensitive credential files.
+var sensitiveCommandPatterns = []string{
+	".ssh/",
+	".gnupg/",
+	".gpg/",
+	".aws/",
+	".azure/",
+	".config/gcloud",
+	".kube/",
+	".docker/config",
+	".npmrc",
+	".pypirc",
+	".gem/credentials",
+	".netrc",
+	".git-credentials",
+	".config/gh/",
+	".config/hub/",
+	".local/share/keyrings",
+	".password-store",
+	".vault-token",
+	".config/op/",
+	".1password/",
+}
+
+// fileReadCommands are shell commands commonly used to read file contents.
+var fileReadCommands = []string{
+	"cat ", "head ", "tail ", "less ", "more ",
+	"cp ", "scp ", "rsync ",
+	"base64 ", "xxd ", "hexdump ",
+	"openssl ", "gpg ",
+	"curl file://", "wget file://",
 }
 
 type executeInput struct {
@@ -64,6 +99,11 @@ func execRun(ctx context.Context, b *Backend, input *executeInput) (string, erro
 	}
 	if err := validateCommand(input.Command); err != nil {
 		return fmt.Sprintf("Command blocked: %s", err.Error()), nil
+	}
+	if b.SandboxEnabled() {
+		if err := validateSensitivePaths(input.Command, b.HomeDir()); err != nil {
+			return fmt.Sprintf("Command blocked: %s", err.Error()), nil
+		}
 	}
 
 	timeoutSec := input.Timeout
@@ -223,5 +263,36 @@ func validateCommand(command string) error {
 			return fmt.Errorf("command contains blocked pattern: %q", blocked)
 		}
 	}
+	return nil
+}
+
+// validateSensitivePaths checks whether a shell command attempts to access
+// sensitive credential paths via common file-reading utilities.
+func validateSensitivePaths(command, homeDir string) error {
+	lower := strings.ToLower(command)
+
+	expandedPaths := make([]string, 0, len(sensitiveCommandPatterns)*2)
+	for _, p := range sensitiveCommandPatterns {
+		expandedPaths = append(expandedPaths, p)
+		if homeDir != "" {
+			expandedPaths = append(expandedPaths, filepath.Join(homeDir, p))
+		}
+	}
+
+	for _, pattern := range expandedPaths {
+		if !strings.Contains(lower, strings.ToLower(pattern)) {
+			continue
+		}
+		for _, readCmd := range fileReadCommands {
+			if strings.Contains(lower, readCmd) {
+				return fmt.Errorf("command blocked: accessing sensitive path %q is not allowed", pattern)
+			}
+		}
+
+		if strings.Contains(lower, "< ") || strings.Contains(lower, "$(") {
+			return fmt.Errorf("command blocked: accessing sensitive path %q is not allowed", pattern)
+		}
+	}
+
 	return nil
 }
