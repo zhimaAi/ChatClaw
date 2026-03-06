@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RefreshCw, Plus, Trash2, Wifi, WifiOff, Radio, AlertCircle } from 'lucide-vue-next'
+import { Plus, Trash2, MoreHorizontal, Unlink, BadgeCheck, RouteOff, SquareDashed } from 'lucide-vue-next'
+import IconChannels from '@/assets/icons/channelsMax.svg'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import {
@@ -16,6 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
@@ -35,14 +43,19 @@ const selectedPlatform = ref<PlatformMeta | null>(null)
 const deleteDialogOpen = ref(false)
 const channelToDelete = ref<Channel | null>(null)
 
-const configuredChannels = computed(() => channels.value)
+const selectedFilter = ref<string>('all')
+
+const filteredChannels = computed(() => {
+  if (selectedFilter.value === 'all') return channels.value
+  return channels.value.filter((ch) => ch.platform === selectedFilter.value)
+})
 
 const platformIconMap: Record<string, string> = {
-  feishu: '🐦',
-  telegram: '✈️',
-  discord: '🎮',
-  whatsapp: '📱',
-  dingtalk: '💬',
+  dingtalk: '/src/assets/icons/snap/dingtalk.svg',
+  feishu: '/src/assets/icons/snap/feishu.svg',
+  wecom: '/src/assets/icons/snap/wechat.svg',
+  qq: '/src/assets/icons/snap/qq.svg',
+  twitter: '/src/assets/icons/snap/twitter.svg',
 }
 
 async function loadData() {
@@ -61,15 +74,6 @@ async function loadData() {
   } finally {
     loading.value = false
   }
-}
-
-async function handleRefresh() {
-  try {
-    await ChannelService.RefreshChannels()
-  } catch {
-    // ignore
-  }
-  await loadData()
 }
 
 function handleAddChannel() {
@@ -97,7 +101,7 @@ async function handleDelete() {
   if (!channelToDelete.value) return
   try {
     await ChannelService.DeleteChannel(channelToDelete.value.id)
-    toast.success(t('channels.delete.success'))
+    toast.success(t('channels.delete.success', '删除成功'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -110,215 +114,231 @@ async function handleDelete() {
 async function handleConnect(channel: Channel) {
   try {
     await ChannelService.ConnectChannel(channel.id)
-    toast.success(t('channels.connect.success'))
+    toast.success(t('channels.connect.success', '连接成功'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
+    // Re-load to reset the switch if failed
+    loadData()
   }
 }
 
 async function handleDisconnect(channel: Channel) {
   try {
     await ChannelService.DisconnectChannel(channel.id)
-    toast.success(t('channels.disconnect.success'))
+    toast.success(t('channels.disconnect.success', '断开成功'))
+    loadData()
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+    loadData()
+  }
+}
+
+async function handleToggleConnection(channel: Channel, val: boolean) {
+  if (val) {
+    await handleConnect(channel)
+  } else {
+    await handleDisconnect(channel)
+  }
+}
+
+async function handleUnbind(channel: Channel) {
+  try {
+    await ChannelService.UnbindAgent(channel.id)
+    toast.success('已解绑助手')
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
   }
 }
 
-function getPlatformIcon(platformId: string): string {
-  return platformIconMap[platformId] || '🤖'
+function getPlatformIcon(platformId: string): string | null {
+  return platformIconMap[platformId] || null
 }
 
 function getPlatformName(platformId: string): string {
-  const key = `channels.meta.${platformId}.name`
-  const translated = t(key)
-  return translated !== key ? translated : platformId
+  const platform = platforms.value.find(p => p.id === platformId)
+  return platform?.name || platformId
 }
 
-function isConfigured(platformId: string): boolean {
-  return channels.value.some((ch) => ch.platform === platformId)
+function getAppId(extraConfig: string): string {
+  try {
+    const config = JSON.parse(extraConfig)
+    return config.app_id || config.token || 'N/A'
+  } catch {
+    return 'N/A'
+  }
 }
 
 onMounted(loadData)
 </script>
 
 <template>
-  <div class="flex h-full flex-col overflow-y-auto">
-    <div class="mx-auto w-full max-w-5xl px-8 py-6">
-      <!-- Header -->
-      <div class="mb-6 flex items-start justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-foreground">{{ t('channels.title') }}</h1>
-          <p class="mt-1 text-sm text-muted-foreground">{{ t('channels.subtitle') }}</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <Button variant="outline" size="sm" :disabled="loading" @click="handleRefresh">
-            <RefreshCw :class="['mr-1.5 size-3.5', loading && 'animate-spin']" />
-            {{ t('channels.refresh') }}
-          </Button>
-          <Button size="sm" @click="handleAddChannel">
-            <Plus class="mr-1.5 size-3.5" />
-            {{ t('channels.addChannel') }}
-          </Button>
-        </div>
+  <div class="flex h-full flex-col overflow-y-auto bg-white dark:bg-background">
+    <!-- Page Header -->
+    <div class="flex h-20 shrink-0 items-center justify-between px-6">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.title', '频道') }}</h1>
+        <p class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.subtitle', '管理您的消息频道和连接') }}</p>
       </div>
+      <Button 
+        class="h-9 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
+        @click="handleAddChannel"
+      >
+        <Plus class="mr-1.5 h-4 w-4" />
+        {{ t('channels.addChannel', '添加频道') }}
+      </Button>
+    </div>
 
-      <!-- Stats Cards -->
-      <div class="mb-8 grid grid-cols-3 gap-4">
-        <div class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10">
-          <div class="flex items-center gap-3">
-            <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Radio class="size-5" />
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-foreground">{{ stats.total }}</p>
-              <p class="text-xs text-muted-foreground">{{ t('channels.stats.total') }}</p>
-            </div>
+    <div class="flex-1 overflow-y-auto px-6 pb-6">
+      <!-- Stats Cards Row -->
+      <div class="mb-6 flex flex-wrap gap-4">
+        <!-- Card 1: Total -->
+        <div class="flex h-[102px] w-[222px] items-center gap-4 rounded-[16px] border border-[#d9d9d9] bg-white px-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted">
+            <IconChannels class="h-6 w-6 text-[#171717] dark:text-foreground" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.total }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.total', '频道总数') }}</span>
           </div>
         </div>
-        <div class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10">
-          <div class="flex items-center gap-3">
-            <div class="flex size-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
-              <Wifi class="size-5" />
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-foreground">{{ stats.connected }}</p>
-              <p class="text-xs text-muted-foreground">{{ t('channels.stats.connected') }}</p>
-            </div>
+        <!-- Card 2: Connected -->
+        <div class="flex h-[102px] w-[222px] items-center gap-4 rounded-[16px] border border-[#d9d9d9] bg-white px-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted">
+            <BadgeCheck class="h-6 w-6 text-[#171717] dark:text-foreground" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.connected }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.connected', '已连接') }}</span>
           </div>
         </div>
-        <div class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10">
-          <div class="flex items-center gap-3">
-            <div class="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <WifiOff class="size-5" />
-            </div>
-            <div>
-              <p class="text-2xl font-bold text-foreground">{{ stats.disconnected }}</p>
-              <p class="text-xs text-muted-foreground">{{ t('channels.stats.disconnected') }}</p>
-            </div>
+        <!-- Card 3: Disconnected -->
+        <div class="flex h-[102px] w-[222px] items-center gap-4 rounded-[16px] border border-[#d9d9d9] bg-white px-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted">
+            <RouteOff class="h-6 w-6 text-[#171717] dark:text-foreground" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.disconnected }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.disconnected', '未连接') }}</span>
           </div>
         </div>
       </div>
 
-      <!-- Configured Channels Section -->
-      <div v-if="configuredChannels.length > 0" class="mb-8">
-        <div class="mb-3">
-          <h2 class="text-lg font-semibold text-foreground">{{ t('channels.configured.title') }}</h2>
-          <p class="text-xs text-muted-foreground">{{ t('channels.configured.desc') }}</p>
-        </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="channel in configuredChannels"
-            :key="channel.id"
-            class="group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/30 dark:shadow-none dark:ring-1 dark:ring-white/10"
-          >
-            <div class="flex items-center gap-3">
-              <span class="text-2xl">{{ getPlatformIcon(channel.platform) }}</span>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium text-foreground">{{ channel.name }}</p>
-                <p class="text-xs text-muted-foreground">{{ getPlatformName(channel.platform) }}</p>
+      <!-- Section Header -->
+      <h2 class="mb-2 text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.available', '可用频道') }}</h2>
+
+      <!-- Platform Filter Tabs -->
+      <div class="mb-4 inline-flex overflow-x-auto rounded-lg border border-[#e5e5e5] bg-[rgba(0,0,0,0.05)] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-muted/50">
+        <button
+          class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg"
+          :class="selectedFilter === 'all' ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50'"
+          @click="selectedFilter = 'all'"
+        >
+          {{ t('common.all', '全部') }}
+        </button>
+        <button
+          v-for="platform in platforms"
+          :key="platform.id"
+          class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg border-l border-[#e5e5e5] dark:border-border"
+          :class="selectedFilter === platform.id ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50'"
+          @click="selectedFilter = platform.id"
+        >
+          {{ getPlatformName(platform.id) }}
+        </button>
+      </div>
+
+      <!-- Channels Grid -->
+      <div v-if="filteredChannels.length > 0" class="flex flex-wrap gap-4">
+        <div
+          v-for="channel in filteredChannels"
+          :key="channel.id"
+          class="flex w-[300px] flex-col gap-2 rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm transition-all hover:border-[#171717] dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card dark:hover:border-primary/50"
+        >
+          <!-- Card Header -->
+          <div class="flex items-center justify-between">
+            <div class="flex flex-1 items-center gap-2">
+              <div class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted">
+                <img 
+                  v-if="getPlatformIcon(channel.platform)" 
+                  :src="getPlatformIcon(channel.platform)!" 
+                  :alt="channel.platform"
+                  class="h-3.5 w-3.5 object-contain"
+                />
+                <span v-else class="text-xs">🤖</span>
               </div>
-              <Badge
-                v-if="channel.status === 'online'"
-                variant="outline"
-                class="shrink-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              >
-                <span class="mr-1 inline-block size-1.5 rounded-full bg-emerald-500" />
-                {{ t('channels.configured.connected') }}
-              </Badge>
-              <Badge
-                v-else-if="channel.status === 'error'"
-                variant="outline"
-                class="shrink-0 border-destructive/30 bg-destructive/10 text-destructive"
-              >
-                <AlertCircle class="mr-1 size-3" />
-                {{ t('channels.configured.error') }}
-              </Badge>
-              <Badge
-                v-else
-                variant="outline"
-                class="shrink-0 text-muted-foreground"
-              >
-                {{ t('channels.configured.disconnected') }}
-              </Badge>
+              <span class="truncate text-sm text-[#171717] dark:text-foreground">{{ channel.name }}</span>
             </div>
-            <div class="mt-3 flex items-center gap-2">
-              <Button
-                v-if="channel.status !== 'online'"
-                variant="outline"
-                size="sm"
-                class="h-7 text-xs"
-                @click="handleConnect(channel)"
-              >
-                <Wifi class="mr-1 size-3" />
-                {{ t('channels.configured.connected') }}
-              </Button>
-              <Button
-                v-else
-                variant="outline"
-                size="sm"
-                class="h-7 text-xs"
-                @click="handleDisconnect(channel)"
-              >
-                <WifiOff class="mr-1 size-3" />
-                {{ t('channels.configured.disconnected') }}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-                @click="confirmDelete(channel)"
-              >
-                <Trash2 class="size-3.5" />
-              </Button>
+            
+            <div class="flex items-center gap-2">
+              <Switch 
+                :checked="channel.status === 'online'" 
+                @update:checked="val => handleToggleConnection(channel, val)" 
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                  <Button variant="ghost" size="icon" class="h-6 w-6 rounded bg-[#f5f5f5] dark:bg-muted hover:bg-[#e5e5e5] dark:hover:bg-muted/80">
+                    <MoreHorizontal class="h-4 w-4 text-[#171717] dark:text-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="min-w-24 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover">
+                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleUnbind(channel)" :disabled="channel.agent_id === 0">
+                    <Unlink class="h-4 w-4" />
+                    解绑
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator class="my-0.5 bg-[#f0f0f0] dark:bg-border" />
+                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px] text-destructive focus:bg-destructive/10 focus:text-destructive" @click="confirmDelete(channel)">
+                    <Trash2 class="h-4 w-4" />
+                    删除
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <!-- Appid -->
+          <p class="text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
+            Appid: {{ getAppId(channel.extra_config) }}
+          </p>
+
+          <!-- Status Tags -->
+          <div class="flex items-center gap-2">
+            <div class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
+              <BadgeCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
+              <Unlink v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? '绑定' : '未绑定' }}</span>
+            </div>
+            <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">AI助手</span>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Available Channels Section -->
-      <div>
-        <div class="mb-3">
-          <h2 class="text-lg font-semibold text-foreground">{{ t('channels.available.title') }}</h2>
-          <p class="text-xs text-muted-foreground">{{ t('channels.available.desc') }}</p>
+      
+      <!-- Empty State -->
+      <div v-else class="flex flex-col items-center justify-center py-12 text-center">
+        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted mb-4">
+          <SquareDashed class="h-6 w-6 text-[#737373] dark:text-muted-foreground" />
         </div>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <button
-            v-for="platform in platforms"
-            :key="platform.id"
-            class="group flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md dark:shadow-none dark:ring-1 dark:ring-white/10 dark:hover:ring-primary/40"
-            :class="isConfigured(platform.id) && 'border-primary/30 ring-1 ring-primary/20'"
-            @click="handleSelectPlatform(platform)"
-          >
-            <span class="text-2xl">{{ getPlatformIcon(platform.id) }}</span>
-            <div>
-              <p class="text-sm font-medium text-foreground">{{ getPlatformName(platform.id) }}</p>
-              <p class="text-xs text-muted-foreground">
-                {{ t(`channels.meta.${platform.id}.description`) }}
-              </p>
-            </div>
-            <Badge
-              v-if="isConfigured(platform.id)"
-              variant="outline"
-              class="border-primary/30 bg-primary/10 text-primary"
-            >
-              {{ t('channels.configured.title') }}
-            </Badge>
-          </button>
-        </div>
+        <h3 class="text-base font-medium text-[#262626] dark:text-foreground">{{ t('channels.empty.title', '暂无频道') }}</h3>
+        <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
+          {{ selectedFilter === 'all' ? '您还没有配置任何频道，点击上方按钮添加一个新频道。' : `您还没有配置 ${getPlatformName(selectedFilter)} 频道。` }}
+        </p>
+        <Button class="mt-6 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" @click="handleAddChannel">
+          <Plus class="mr-1.5 h-4 w-4" />
+          {{ t('channels.addChannel', '添加频道') }}
+        </Button>
       </div>
     </div>
 
-    <!-- Add Channel Dialog (platform selection) -->
+    <!-- Add Channel Dialog -->
     <AddChannelDialog
       v-model:open="addDialogOpen"
       :platforms="platforms"
       @select="handleSelectPlatform"
     />
 
-    <!-- Config Channel Dialog (platform-specific config form) -->
+    <!-- Config Channel Dialog -->
     <ConfigChannelDialog
       v-model:open="configDialogOpen"
       :platform="selectedPlatform"

@@ -11,11 +11,11 @@ import (
 
 // Platform identifiers
 const (
-	PlatformFeishu   = "feishu"
-	PlatformTelegram = "telegram"
-	PlatformDiscord  = "discord"
-	PlatformWhatsApp = "whatsapp"
 	PlatformDingTalk = "dingtalk"
+	PlatformFeishu   = "feishu"
+	PlatformWeCom    = "wecom"
+	PlatformQQ       = "qq"
+	PlatformTwitter  = "twitter"
 )
 
 // Connection status

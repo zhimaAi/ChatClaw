@@ -88,11 +88,11 @@ func (s *ChannelService) GetChannelStats() (*ChannelStats, error) {
 // GetSupportedPlatforms returns all platforms with registered adapters.
 func (s *ChannelService) GetSupportedPlatforms() []PlatformMeta {
 	allPlatforms := []PlatformMeta{
-		{ID: PlatformFeishu, Name: "Feishu / Lark", AuthType: "token"},
-		{ID: PlatformTelegram, Name: "Telegram", AuthType: "token"},
-		{ID: PlatformDiscord, Name: "Discord", AuthType: "token"},
-		{ID: PlatformWhatsApp, Name: "WhatsApp", AuthType: "qrcode"},
-		{ID: PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
+		{ID: PlatformDingTalk, Name: "钉钉", AuthType: "token"},
+		{ID: PlatformFeishu, Name: "飞书", AuthType: "token"},
+		{ID: PlatformWeCom, Name: "企微", AuthType: "token"},
+		{ID: PlatformQQ, Name: "QQ", AuthType: "token"},
+		{ID: PlatformTwitter, Name: "X(Twitter)", AuthType: "token"},
 	}
 	return allPlatforms
 }
@@ -196,6 +196,31 @@ func (s *ChannelService) UpdateChannel(id int64, input UpdateChannelInput) (*Cha
 	}
 	dto := m.toDTO()
 	return &dto, nil
+}
+
+// UnbindAgent removes the AI agent association from a channel.
+func (s *ChannelService) UnbindAgent(id int64) error {
+	if id <= 0 {
+		return errs.New("error.channel_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, err := db.NewUpdate().
+		Model((*channelModel)(nil)).
+		Where("id = ?", id).
+		Set("agent_id = ?", 0).
+		Exec(ctx); err != nil {
+		return errs.Wrap("error.channel_unbind_failed", err)
+	}
+
+	return nil
 }
 
 // DeleteChannel removes a channel and disconnects it if active.

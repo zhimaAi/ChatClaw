@@ -125,6 +125,8 @@ const handleNavClick = (module: NavModule) => {
       >
         <component
           :is="item.icon"
+          width="16"
+          height="16"
           :class="
             cn(
               'size-4 shrink-0 transition-opacity',
@@ -157,6 +159,8 @@ const handleNavClick = (module: NavModule) => {
       >
         <component
           :is="item.icon"
+          width="16"
+          height="16"
           :class="
             cn(
               'size-4 shrink-0 transition-opacity',
