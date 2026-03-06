@@ -13,7 +13,6 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialogs } from '@wailsio/runtime'
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -31,7 +30,7 @@ import {
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
-import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
+import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, ChannelStats, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
 
@@ -153,24 +152,26 @@ async function handleDelete() {
   }
 }
 
-async function handleConnect(channel: Channel) {
+async function handleEnableChannel(channel: Channel) {
   try {
+    await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: true }))
     await ChannelService.ConnectChannel(channel.id)
-    toast.success(t('channels.connect.success', '连接成功'))
-    await loadData()
+    toast.success(t('channels.toggle.enableSuccess', '开启成功'))
   } catch (error) {
     toast.error(getErrorMessage(error))
+  } finally {
     await loadData()
   }
 }
 
-async function handleDisconnect(channel: Channel) {
+async function handleDisableChannel(channel: Channel) {
   try {
+    await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: false }))
     await ChannelService.DisconnectChannel(channel.id)
-    toast.success(t('channels.disconnect.success', '断开成功'))
-    await loadData()
+    toast.success(t('channels.toggle.disableSuccess', '关闭成功'))
   } catch (error) {
     toast.error(getErrorMessage(error))
+  } finally {
     await loadData()
   }
 }
@@ -194,9 +195,9 @@ async function confirmToggle() {
   channelToToggle.value = null
   
   if (val) {
-    await handleConnect(channel)
+    await handleEnableChannel(channel)
   } else {
-    await handleDisconnect(channel)
+    await handleDisableChannel(channel)
   }
 }
 
@@ -451,7 +452,7 @@ onMounted(loadData)
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
-              <!-- Connection switch: enabled only when agent is bound -->
+              <!-- Enable switch: turning on enables the channel and then auto-connects it. -->
               <Switch
                 :model-value="channel.enabled"
                 :disabled="channel.agent_id === 0"
@@ -661,12 +662,12 @@ onMounted(loadData)
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel', '取消') }}</AlertDialogCancel>
-          <AlertDialogAction
+          <Button
             class="bg-primary text-primary-foreground hover:bg-primary/90"
             @click="confirmToggle"
           >
             {{ t('common.confirm', '确定') }}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

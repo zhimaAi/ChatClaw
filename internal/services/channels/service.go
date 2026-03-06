@@ -349,14 +349,16 @@ func (s *ChannelService) ConnectChannel(id int64) error {
 		return errs.New("error.channel_connect_requires_agent")
 	}
 
-	// Mark as enabled
+	// Mark as enabled and touch updated_at (Bun BeforeUpdateHook is not run for this raw Set update)
 	if _, err := db.NewUpdate().
 		Model((*channelModel)(nil)).
 		Where("id = ?", id).
 		Set("enabled = ?", true).
+		Set("updated_at = ?", sqlite.NowUTC()).
 		Exec(ctx); err != nil {
 		return errs.Wrap("error.channel_update_failed", err)
 	}
+	m.Enabled = true
 
 	ch := m.toDTO()
 	if err := s.gateway.ConnectChannel(context.Background(), ch); err != nil {
@@ -380,11 +382,12 @@ func (s *ChannelService) DisconnectChannel(id int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// Mark as disabled
+	// Mark as disabled and touch updated_at
 	if _, err := db.NewUpdate().
 		Model((*channelModel)(nil)).
 		Where("id = ?", id).
 		Set("enabled = ?", false).
+		Set("updated_at = ?", sqlite.NowUTC()).
 		Exec(ctx); err != nil {
 		return errs.Wrap("error.channel_update_failed", err)
 	}
