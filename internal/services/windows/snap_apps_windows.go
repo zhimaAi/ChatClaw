@@ -12,7 +12,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
+
+const createNoWindow = 0x08000000
 
 var windowsProcessDisplayNameMap = map[string]string{
 	"weixin.exe":      "微信",
@@ -127,7 +130,7 @@ func currentProcessNamesForFilter() map[string]struct{} {
 func listRunningApps() ([]SnapAppCandidate, error) {
 	// Keep only processes that own a main window, which matches the
 	// "Apps" section in Windows Task Manager and excludes background services.
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`Add-Type -AssemblyName System.Drawing; `+
 			`$apps = Get-Process | `+
 			`Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -ne "" } | `+
@@ -159,6 +162,9 @@ func listRunningApps() ([]SnapAppCandidate, error) {
 			`IconDataB64 = $iconDataB64 `+
 			`} }; `+
 			`$apps | ConvertTo-Json -Compress`)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: createNoWindow,
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
