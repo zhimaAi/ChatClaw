@@ -260,7 +260,13 @@ onMounted(loadData)
             <div class="flex flex-1 items-center gap-2">
               <div class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted">
                 <img 
-                  v-if="getPlatformIcon(channel.platform)" 
+                  v-if="channel.avatar" 
+                  :src="channel.avatar" 
+                  :alt="channel.name"
+                  class="h-full w-full object-cover"
+                />
+                <img 
+                  v-else-if="getPlatformIcon(channel.platform)" 
                   :src="getPlatformIcon(channel.platform)!" 
                   :alt="channel.platform"
                   class="h-3.5 w-3.5 object-contain"

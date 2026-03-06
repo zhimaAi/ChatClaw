@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { Dialogs } from '@wailsio/runtime'
+import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -27,21 +28,70 @@ const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()
 
 const name = ref('')
+const avatar = ref('')
 const appId = ref('')
 const appSecret = ref('')
 const token = ref('')
 const saving = ref(false)
 
+const platformIconMap: Record<string, string> = {
+  telegram: '/src/assets/icons/snap/telegram.svg',
+  feishu: '/src/assets/icons/snap/feishu.svg',
+}
+
 watch(open, (val) => {
   if (val) {
     name.value = ''
+    avatar.value = ''
     appId.value = ''
     appSecret.value = ''
     token.value = ''
   }
 })
 
-const isFeishu = () => props.platform?.id === 'feishu'
+const isFeishu = computed(() => props.platform?.id === 'feishu')
+
+const dialogTitle = computed(() => {
+  if (!props.platform) return ''
+  const botName = t(`channels.meta.${props.platform.id}.botName`, props.platform.id)
+  return t('channels.config.title', { platform: botName })
+})
+
+const isFormValid = computed(() => {
+  if (!name.value.trim()) return false
+  if (isFeishu.value) {
+    return !!(appId.value.trim() && appSecret.value.trim())
+  }
+  return !!token.value.trim()
+})
+
+const defaultAvatarSrc = computed(() => {
+  if (!props.platform) return null
+  return platformIconMap[props.platform.id] || null
+})
+
+const handlePickIcon = async () => {
+  if (saving.value) return
+  try {
+    const path = await Dialogs.OpenFile({
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Title: t('channels.config.pickAvatar', '选择头像'),
+      Filters: [
+        {
+          DisplayName: t('channels.config.filterImages', '图片文件'),
+          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
+        },
+      ],
+    })
+    if (!path) return
+    avatar.value = await AgentsService.ReadIconFile(path)
+  } catch (error) {
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to pick icon:', error)
+  }
+}
 
 async function handleSave() {
   if (!props.platform) return
@@ -51,7 +101,7 @@ async function handleSave() {
   try {
     let extraConfig = '{}'
 
-    if (isFeishu()) {
+    if (isFeishu.value) {
       extraConfig = JSON.stringify({
         app_id: appId.value.trim(),
         app_secret: appSecret.value.trim(),
@@ -63,6 +113,7 @@ async function handleSave() {
     await ChannelService.CreateChannel({
       platform: props.platform.id,
       name: name.value.trim(),
+      avatar: avatar.value,
       connection_type: 'gateway',
       extra_config: extraConfig,
     })
@@ -80,17 +131,71 @@ async function handleSave() {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle>{{ t('channels.config.title') }}</DialogTitle>
-        <DialogDescription v-if="platform">
-          {{ t(`channels.meta.${platform.id}.name`) }}
-        </DialogDescription>
+    <DialogContent class="sm:max-w-[480px] gap-0 p-0">
+      <DialogHeader class="p-4 pb-0">
+        <DialogTitle class="text-xl font-semibold text-[#0a0a0a] dark:text-foreground">
+          {{ dialogTitle }}
+        </DialogTitle>
       </DialogHeader>
 
-      <form class="space-y-4 py-2" @submit.prevent="handleSave">
-        <div class="space-y-2">
-          <Label for="channel-name">{{ t('channels.config.name') }}</Label>
+      <form class="px-6 pb-4" @submit.prevent="handleSave">
+        <!-- Feishu tip card -->
+        <div
+          v-if="isFeishu"
+          class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
+        >
+          <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            {{ t('channels.config.feishuTipPrefix') }}
+            <a
+              href="https://open.feishu.cn/"
+              target="_blank"
+              class="underline hover:text-primary"
+            >{{ t('channels.config.feishuPlatformLink') }}</a>
+            {{ t('channels.config.feishuTipMiddle') }}
+            <a
+              href="https://www.feishu.cn/hc/zh-CN/articles/360024984973"
+              target="_blank"
+              class="underline hover:text-primary"
+            >{{ t('channels.config.feishuGuideLink') }}</a>
+            {{ t('channels.config.feishuTipSuffix') }}
+          </p>
+        </div>
+
+        <!-- Avatar upload area -->
+        <div class="flex flex-col items-center gap-2 py-6">
+          <button
+            class="flex h-[62px] w-[62px] items-center justify-center rounded-lg overflow-hidden transition-opacity hover:opacity-80 bg-[#f5f5f5] dark:bg-white/5"
+            type="button"
+            @click="handlePickIcon"
+          >
+            <img
+              v-if="avatar"
+              :src="avatar"
+              class="h-full w-full object-cover"
+            />
+            <img
+              v-else-if="defaultAvatarSrc"
+              :src="defaultAvatarSrc"
+              class="h-8 w-8 object-contain text-[#0a0a0a] dark:text-foreground"
+            />
+            <div
+              v-else
+              class="flex h-full w-full items-center justify-center"
+            >
+              <span class="text-2xl text-[#8c8c8c] dark:text-muted-foreground">+</span>
+            </div>
+          </button>
+          <p class="text-sm text-[#8c8c8c] dark:text-muted-foreground">
+            {{ t('channels.config.avatarHint') }}
+          </p>
+        </div>
+
+        <!-- Name field -->
+        <div class="space-y-1">
+          <Label for="channel-name" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            {{ t('channels.config.name') }}
+          </Label>
           <Input
             id="channel-name"
             v-model="name"
@@ -99,17 +204,23 @@ async function handleSave() {
         </div>
 
         <!-- Feishu-specific fields -->
-        <template v-if="isFeishu()">
-          <div class="space-y-2">
-            <Label for="app-id">{{ t('channels.config.appId') }}</Label>
+        <template v-if="isFeishu">
+          <div class="mt-4 space-y-1">
+            <Label for="app-id" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+              {{ t('channels.config.appId') }}
+            </Label>
             <Input
               id="app-id"
               v-model="appId"
               :placeholder="t('channels.config.appIdPlaceholder')"
             />
           </div>
-          <div class="space-y-2">
-            <Label for="app-secret">{{ t('channels.config.appSecret') }}</Label>
+          <div class="mt-4 space-y-1">
+            <Label for="app-secret" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+              {{ t('channels.config.appSecret') }}
+            </Label>
             <Input
               id="app-secret"
               v-model="appSecret"
@@ -121,8 +232,11 @@ async function handleSave() {
 
         <!-- Generic token-based platforms -->
         <template v-else>
-          <div class="space-y-2">
-            <Label for="channel-token">{{ t('channels.config.token') }}</Label>
+          <div class="mt-4 space-y-1">
+            <Label for="channel-token" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+              {{ t('channels.config.token') }}
+            </Label>
             <Input
               id="channel-token"
               v-model="token"
@@ -132,11 +246,11 @@ async function handleSave() {
           </div>
         </template>
 
-        <DialogFooter>
+        <DialogFooter class="mt-6 pt-4">
           <Button variant="outline" type="button" @click="open = false">
             {{ t('channels.config.cancel') }}
           </Button>
-          <Button type="submit" :disabled="saving || !name.trim()">
+          <Button type="submit" :disabled="saving || !isFormValid">
             {{ t('channels.config.save') }}
           </Button>
         </DialogFooter>

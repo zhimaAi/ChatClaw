@@ -61,6 +61,7 @@ type ChannelStats struct {
 type CreateChannelInput struct {
 	Platform       string `json:"platform"`
 	Name           string `json:"name"`
+	Avatar         string `json:"avatar"`
 	ConnectionType string `json:"connection_type"`
 	ExtraConfig    string `json:"extra_config"`
 }
@@ -68,6 +69,7 @@ type CreateChannelInput struct {
 // UpdateChannelInput input for updating a channel
 type UpdateChannelInput struct {
 	Name        *string `json:"name"`
+	Avatar      *string `json:"avatar"`
 	Enabled     *bool   `json:"enabled"`
 	ExtraConfig *string `json:"extra_config"`
 }
