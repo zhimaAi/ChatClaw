@@ -135,7 +135,8 @@ func researcherInstruction(skillsEnabled bool) string {
 - 搜索到能回答问题的信息后就开始撰写结论，不要追求穷尽所有来源
 - 交叉验证关键信息，区分事实与观点
 - 如果信息确实不足，在结论中说明，而不是无限搜索
-- 输出要精炼，避免冗余`
+- 输出要精炼，避免冗余
+- 关键发现需标注出处，输出结尾简要说明数据来源`
 
 		if skillsEnabled {
 			inst += `
@@ -144,8 +145,10 @@ func researcherInstruction(skillsEnabled bool) string {
 已安装的技能会自动加载到你的能力中，为你提供额外的调研方法和专业知识。
 - 用 skill_list 查看已安装的技能
 - 用 skill_search 搜索技能市场，查找与调研主题相关的技能
+- 用 skill_install 安装合适的技能，用 skill_enable 启用它
 - 用 read_skill 读取技能内容，获取专业的操作指南
-- 如果已有启用的技能与当前调研任务相关，优先按照技能指引操作`
+- 如果已有启用的技能与当前调研任务相关，优先按照技能指引操作
+- 遇到不熟悉的调研领域时，先搜索是否有相关技能可以辅助`
 		}
 		return inst
 	}
@@ -173,7 +176,8 @@ List main references with URLs
 - Start writing conclusions once you have enough information to answer the question — do not try to exhaust all sources
 - Cross-verify key information; distinguish facts from opinions
 - If information is genuinely insufficient, state so in conclusions rather than searching endlessly
-- Keep output concise — avoid redundancy`
+- Keep output concise — avoid redundancy
+- Cite sources for key findings, and briefly summarize data sources at the end of the output`
 
 	if skillsEnabled {
 		inst += `
@@ -182,8 +186,10 @@ List main references with URLs
 Installed skills are automatically loaded into your capabilities, providing additional research methods and domain expertise.
 - Use skill_list to view installed skills
 - Use skill_search to search the marketplace for skills related to your research topic
+- Use skill_install to install a suitable skill, then skill_enable to activate it
 - Use read_skill to read skill content for expert operational guidance
-- If an enabled skill is relevant to the current research task, follow its guidance preferentially`
+- If an enabled skill is relevant to the current research task, follow its guidance preferentially
+- When facing unfamiliar research domains, search for relevant skills first`
 	}
 	return inst
 }
@@ -197,7 +203,7 @@ func researcherDescription() string {
 
 // newResearcherSubAgent creates the Researcher sub-agent as a tool.
 // It has access to search, browsing, HTTP, read-only filesystem, thinking tools,
-// and optionally skill tools (list, search, read) when skills are enabled.
+// and optionally skill management tools (list, search, install, enable, read) when skills are enabled.
 func newResearcherSubAgent(
 	ctx context.Context,
 	chatModel model.BaseChatModel,
@@ -211,11 +217,11 @@ func newResearcherSubAgent(
 	researcherTools := filterToolsByName(registeredTools,
 		"duckduckgo_search", "wikipedia_search", "browser_use",
 		"http_request", "read_file", "ls", "sequential_thinking",
+		"memory_retriever", "library_retriever",
 	)
 
 	if config.SkillsEnabled && len(skillMgmtTools) > 0 {
-		relevantSkillTools := filterToolsByName(skillMgmtTools, "skill_list", "skill_search")
-		researcherTools = append(researcherTools, relevantSkillTools...)
+		researcherTools = append(researcherTools, skillMgmtTools...)
 		if skillBackend != nil {
 			researcherTools = append(researcherTools, &readSkillTool{backend: skillBackend})
 		}
