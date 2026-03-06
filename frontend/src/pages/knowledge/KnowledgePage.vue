@@ -64,7 +64,7 @@ import {
   type LibraryParagraph as ChatWikiLibraryParagraph,
 } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { ChevronRight, FileStack,ChevronDown } from 'lucide-vue-next'
+import { ChevronRight, FileStack } from 'lucide-vue-next'
 
 type LibraryTab = 'personal' | 'team'
 
@@ -335,6 +335,21 @@ const handleLibraryClick = async (libraryId: number) => {
     expandedLibraries.value.add(libraryId)
     await loadFoldersForLibrary(libraryId)
   }
+}
+
+const handleCollapsedPersonalLibraryClick = async (libraryId: number) => {
+  selectedLibraryId.value = libraryId
+  selectedFolderId.value = null
+  if (!expandedLibraries.value.has(libraryId)) {
+    expandedLibraries.value.add(libraryId)
+  }
+  sidebarCollapsed.value = false
+  await loadFoldersForLibrary(libraryId)
+}
+
+const handleCollapsedTeamLibraryClick = (libraryId: string) => {
+  selectedTeamLibraryId.value = libraryId
+  sidebarCollapsed.value = false
 }
 
 // 处理文件夹选择
@@ -840,71 +855,142 @@ watch([activeTab, teamLibraryTab, selectedTeamLibraryId], ([tab, libType, librar
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <!-- 左侧：知识库列表（知识库为空时隐藏） -->
-    <aside v-if="!isLibraryEmpty" class="flex w-sidebar shrink-0 flex-col border-r border-border">
-      <div class="flex items-center justify-between gap-2 px-3 py-3">
-        <!-- tabs -->
-        <div class="inline-flex rounded-md bg-muted p-1">
-          <button
-            type="button"
-            :class="
-              cn(
-                'rounded px-3 py-1 text-sm transition-colors',
-                activeTab === 'personal'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )
-            "
-            @click="activeTab = 'personal'"
-          >
-            {{ t('knowledge.tabs.personal') }}
-          </button>
-          <button
-            type="button"
-            disabled
-            :class="
-              cn('rounded px-3 py-1 text-sm transition-colors', 'cursor-not-allowed opacity-50')
-            "
-            :title="t('knowledge.tabs.teamDisabledTip')"
-          >
-            {{ t('knowledge.tabs.team') }}
-          </button>
-        </div>
-
-        <div v-if="activeTab === 'personal'" class="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8"
-            :title="t('knowledge.create.title')"
-            @click="handleCreateClick"
-          >
-            <Plus class="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8"
-            :title="t('knowledge.embeddingSettings.title')"
-            @click="handleEmbeddingSettingsClick"
-          >
-            <Settings class="size-4" />
-          </Button>
-        </div>
+    <!-- 左侧：知识库列表（知识库为空时隐藏），支持收起/展开 -->
+    <aside
+      v-if="!isLibraryEmpty"
+      :class="
+        cn(
+          'flex shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200',
+          sidebarCollapsed ? 'w-14' : 'w-sidebar'
+        )
+      "
+    >
+      <div class="flex items-center gap-2 border-b border-border px-2 py-2">
+        <Button
+          v-if="!sidebarCollapsed"
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 shrink-0"
+          :title="t('knowledge.sidebar.collapse')"
+          @click="sidebarCollapsed = true"
+        >
+          <IconSidebarCollapse class="size-4 text-muted-foreground" />
+        </Button>
+        <Button
+          v-else
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 shrink-0"
+          :title="t('knowledge.sidebar.expand')"
+          @click="sidebarCollapsed = false"
+        >
+          <IconSidebarExpand class="size-4 text-muted-foreground" />
+        </Button>
+        <template v-if="!sidebarCollapsed">
+          <div class="inline-flex min-w-0 flex-1 rounded-md bg-muted p-1">
+            <button
+              type="button"
+              :class="
+                cn(
+                  'rounded px-3 py-1 text-sm transition-colors',
+                  activeTab === 'personal'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )
+              "
+              @click="activeTab = 'personal'"
+            >
+              {{ t('knowledge.tabs.personal') }}
+            </button>
+            <button
+              type="button"
+              :class="
+                cn(
+                  'rounded px-3 py-1 text-sm transition-colors',
+                  activeTab === 'team'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )
+              "
+              @click="activeTab = 'team'"
+            >
+              {{ t('knowledge.tabs.team') }}
+            </button>
+          </div>
+          <div v-if="activeTab === 'personal'" class="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              :title="t('knowledge.create.title')"
+              @click="handleCreateClick"
+            >
+              <Plus class="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8"
+              :title="t('knowledge.embeddingSettings.title')"
+              @click="handleEmbeddingSettingsClick"
+            >
+              <Settings class="size-4" />
+            </Button>
+          </div>
+        </template>
       </div>
 
-      <div class="flex-1 overflow-auto px-2 pb-2">
+      <div class="flex-1 overflow-auto px-2 pb-2 pt-2">
         <div v-if="loading" class="px-2 py-6 text-sm text-muted-foreground">
-          {{ t('knowledge.loading') }}
+          {{ sidebarCollapsed ? '' : t('knowledge.loading') }}
         </div>
 
         <div
-          v-else-if="activeTab === 'personal' && libraries.length === 0"
+          v-else-if="activeTab === 'personal' && libraries.length === 0 && !sidebarCollapsed"
           class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
         >
           <div class="text-center text-sm text-muted-foreground">
             {{ t('knowledge.empty.title') }}
           </div>
+        </div>
+
+        <div v-else-if="sidebarCollapsed" class="flex flex-col items-center gap-1">
+          <button
+            v-if="activeTab === 'personal'"
+            v-for="lib in libraries"
+            :key="`personal-${lib.id}`"
+            type="button"
+            :class="
+              cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                selectedLibraryId === lib.id
+                  ? 'border-primary bg-accent text-accent-foreground ring-1 ring-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground'
+              )
+            "
+            :title="lib.name"
+            @click="handleCollapsedPersonalLibraryClick(lib.id)"
+          >
+            <IconKnowledge class="size-4 shrink-0" />
+          </button>
+          <button
+            v-else
+            v-for="lib in teamLibraries"
+            :key="`team-${lib.id}`"
+            type="button"
+            :class="
+              cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors',
+                selectedTeamLibraryId === lib.id
+                  ? 'border-primary bg-accent text-accent-foreground ring-1 ring-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground'
+              )
+            "
+            :title="lib.name"
+            @click="handleCollapsedTeamLibraryClick(lib.id)"
+          >
+            <FileStack class="size-4 shrink-0" />
+          </button>
         </div>
 
         <div v-else-if="activeTab === 'team'" class="flex flex-col gap-1">
