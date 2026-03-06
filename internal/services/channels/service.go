@@ -124,7 +124,7 @@ func (s *ChannelService) CreateChannel(input CreateChannelInput) (*Channel, erro
 	m := &channelModel{
 		Platform:       platform,
 		Name:           name,
-		Avatar:         "",
+		Avatar:         input.Avatar,
 		Enabled:        false,
 		ConnectionType: connType,
 		ExtraConfig:    input.ExtraConfig,
@@ -170,6 +170,9 @@ func (s *ChannelService) UpdateChannel(id int64, input UpdateChannelInput) (*Cha
 			return nil, errs.New("error.channel_name_required")
 		}
 		q = q.Set("name = ?", n)
+	}
+	if input.Avatar != nil {
+		q = q.Set("avatar = ?", *input.Avatar)
 	}
 	if input.Enabled != nil {
 		q = q.Set("enabled = ?", *input.Enabled)
