@@ -57,12 +57,10 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if config.EnableThinking {
-		if cfg.ExtraFields == nil {
-			cfg.ExtraFields = make(map[string]any)
-		}
-		cfg.ExtraFields["enable_thinking"] = true
+	if cfg.ExtraFields == nil {
+		cfg.ExtraFields = make(map[string]any)
 	}
+	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }
@@ -86,12 +84,10 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if config.EnableThinking {
-		if cfg.ExtraFields == nil {
-			cfg.ExtraFields = make(map[string]any)
-		}
-		cfg.ExtraFields["enable_thinking"] = true
+	if cfg.ExtraFields == nil {
+		cfg.ExtraFields = make(map[string]any)
 	}
+	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }
@@ -196,6 +192,9 @@ func createQwenChatModel(ctx context.Context, config Config) (model.ToolCallingC
 	if config.EnableMaxTokens && config.MaxTokens != nil {
 		cfg.MaxTokens = config.MaxTokens
 	}
+
+	enableThinking := config.EnableThinking
+	cfg.EnableThinking = &enableThinking
 
 	return qwen.NewChatModel(ctx, cfg)
 }
