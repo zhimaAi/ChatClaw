@@ -2,12 +2,20 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/toolchain"
 	"chatclaw/internal/sqlite"
 
 	"github.com/google/uuid"
+	mcpclient "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -278,4 +286,108 @@ func (s *MCPService) setEnabled(id string, enabled bool) error {
 		return errs.New("error.mcp_not_found")
 	}
 	return nil
+}
+
+// TestServer verifies that an MCP server is reachable by performing an
+// Initialize handshake and then immediately closing the connection.
+func (s *MCPService) TestServer(input AddServerInput) error {
+	if input.Transport != "stdio" && input.Transport != "streamableHttp" {
+		return errs.New("error.mcp_invalid_transport")
+	}
+
+	timeout := input.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	var c *mcpclient.Client
+	var err error
+
+	switch input.Transport {
+	case "stdio":
+		if input.Command == "" {
+			return errs.New("error.mcp_command_required")
+		}
+
+		var args []string
+		if input.Args != "" && input.Args != "[]" {
+			if jsonErr := json.Unmarshal([]byte(input.Args), &args); jsonErr != nil {
+				return errs.Wrap("error.mcp_invalid_args", jsonErr)
+			}
+		}
+
+		env := buildEnv(input.Env)
+
+		c, err = mcpclient.NewStdioMCPClient(input.Command, env, args...)
+		if err != nil {
+			return errs.Wrap("error.mcp_test_failed", err)
+		}
+
+	case "streamableHttp":
+		if input.URL == "" {
+			return errs.New("error.mcp_url_required")
+		}
+
+		var opts []transport.StreamableHTTPCOption
+
+		if input.Headers != "" && input.Headers != "{}" {
+			var headers map[string]string
+			if jsonErr := json.Unmarshal([]byte(input.Headers), &headers); jsonErr == nil && len(headers) > 0 {
+				opts = append(opts, transport.WithHTTPHeaders(headers))
+			}
+		}
+
+		opts = append(opts, transport.WithHTTPTimeout(time.Duration(timeout)*time.Second))
+
+		c, err = mcpclient.NewStreamableHttpClient(input.URL, opts...)
+		if err != nil {
+			return errs.Wrap("error.mcp_test_failed", err)
+		}
+	}
+
+	defer c.Close()
+
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{
+		Name:    "ChatClaw",
+		Version: "1.0.0",
+	}
+
+	if _, err = c.Initialize(ctx, initReq); err != nil {
+		return errs.Wrap("error.mcp_test_failed", err)
+	}
+
+	return nil
+}
+
+// buildEnv merges the current process env with user-defined env vars and
+// prepends the toolchain bin directory to PATH when available.
+func buildEnv(envJSON string) []string {
+	base := os.Environ()
+
+	if binDir := toolchain.BinDirIfReady(); binDir != "" {
+		for i, e := range base {
+			if strings.HasPrefix(e, "PATH=") {
+				base[i] = fmt.Sprintf("PATH=%s%c%s", binDir, os.PathListSeparator, e[5:])
+				break
+			}
+		}
+	}
+
+	if envJSON == "" || envJSON == "{}" {
+		return base
+	}
+
+	var userEnv map[string]string
+	if err := json.Unmarshal([]byte(envJSON), &userEnv); err != nil {
+		return base
+	}
+
+	for k, v := range userEnv {
+		base = append(base, fmt.Sprintf("%s=%s", k, v))
+	}
+	return base
 }

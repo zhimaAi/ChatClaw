@@ -303,6 +303,8 @@ export default {
       httpHeadersPlaceholder: '每行一个，格式: Key=Value',
       timeout: '超时时间',
       timeoutUnit: '秒',
+      testing: '验证中...',
+      testFailed: 'MCP 服务连接失败',
       noServers: '暂无 MCP 服务',
       noServersHint: '点击右上角"添加"按钮配置 MCP 服务',
       deleteConfirm: '确定要删除此 MCP 服务吗？',

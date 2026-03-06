@@ -303,6 +303,8 @@ export default {
       httpHeadersPlaceholder: 'One per line, format: Key=Value',
       timeout: 'Timeout',
       timeoutUnit: 'seconds',
+      testing: 'Validating...',
+      testFailed: 'MCP server connection failed',
       noServers: 'No MCP servers configured',
       noServersHint: 'Click the "Add" button to configure an MCP server',
       deleteConfirm: 'Are you sure you want to delete this MCP server?',

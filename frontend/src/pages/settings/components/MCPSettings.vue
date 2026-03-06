@@ -105,6 +105,7 @@ const dialogForm = ref({
   timeout: 30,
 })
 const dialogSaving = ref(false)
+const dialogTesting = ref(false)
 
 function openAddDialog() {
   dialogMode.value = 'add'
@@ -179,32 +180,34 @@ async function handleDialogSave() {
   const form = dialogForm.value
   if (!form.name.trim()) return
 
+  const payload = {
+    name: form.name.trim(),
+    transport: form.transport,
+    command: form.command.trim(),
+    args: parseLinesToArray(form.argsText),
+    env: parseLinesToObject(form.envText),
+    url: form.url.trim(),
+    headers: parseLinesToObject(form.headersText),
+    timeout: form.timeout,
+  }
+
+  dialogTesting.value = true
+  try {
+    await MCPService.TestServer(payload)
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.testFailed'))
+    dialogTesting.value = false
+    return
+  }
+  dialogTesting.value = false
+
   dialogSaving.value = true
   try {
     if (dialogMode.value === 'add') {
-      await MCPService.AddServer({
-        name: form.name.trim(),
-        transport: form.transport,
-        command: form.command.trim(),
-        args: parseLinesToArray(form.argsText),
-        env: parseLinesToObject(form.envText),
-        url: form.url.trim(),
-        headers: parseLinesToObject(form.headersText),
-        timeout: form.timeout,
-      })
+      await MCPService.AddServer(payload)
       toast.success(t('settings.mcp.addSuccess'))
     } else {
-      await MCPService.UpdateServer({
-        id: form.id,
-        name: form.name.trim(),
-        transport: form.transport,
-        command: form.command.trim(),
-        args: parseLinesToArray(form.argsText),
-        env: parseLinesToObject(form.envText),
-        url: form.url.trim(),
-        headers: parseLinesToObject(form.headersText),
-        timeout: form.timeout,
-      })
+      await MCPService.UpdateServer({ id: form.id, ...payload })
       toast.success(t('settings.mcp.updateSuccess'))
     }
     dialogOpen.value = false
@@ -483,7 +486,7 @@ onMounted(() => {
 
     <!-- ==================== Add/Edit Dialog ==================== -->
     <Dialog v-model:open="dialogOpen">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{{ dialogTitle }}</DialogTitle>
           <DialogDescription class="sr-only">{{ dialogTitle }}</DialogDescription>
@@ -581,11 +584,12 @@ onMounted(() => {
         <DialogFooter>
           <button
             class="cursor-pointer rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!canSave || dialogSaving"
+            :disabled="!canSave || dialogSaving || dialogTesting"
             @click="handleDialogSave"
           >
-            <Loader2 v-if="dialogSaving" class="mr-1.5 inline size-3.5 animate-spin" />
-            {{ dialogMode === 'add' ? t('settings.mcp.addServer') : t('common.save') }}
+            <Loader2 v-if="dialogTesting || dialogSaving" class="mr-1.5 inline size-3.5 animate-spin" />
+            <template v-if="dialogTesting">{{ t('settings.mcp.testing') }}</template>
+            <template v-else>{{ dialogMode === 'add' ? t('settings.mcp.addServer') : t('common.save') }}</template>
           </button>
         </DialogFooter>
       </DialogContent>
