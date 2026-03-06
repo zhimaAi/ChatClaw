@@ -13,6 +13,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -497,6 +503,10 @@ const handleFolderDelete = (folder: Folder) => {
 const handleFolderMove = (folder: Folder) => {
   folderToMove.value = folder
   moveFolderDialogOpen.value = true
+}
+
+const handleOpenCreateFolder = () => {
+  createFolderDialogOpen.value = true
 }
 
 // 处理文件夹创建
@@ -1078,14 +1088,7 @@ onUnmounted(() => {
               <IconUploadFile class="size-4 text-muted-foreground" />
               <span>{{ t('knowledge.content.addDocument') }}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              class="gap-2"
-              @select="
-                () => {
-                  createFolderDialogOpen = true
-                }
-              "
-            >
+            <DropdownMenuItem class="gap-2" @select="handleOpenCreateFolder">
               <FolderPlus class="size-4 text-muted-foreground" />
               <span>{{ t('knowledge.folder.create') }}</span>
             </DropdownMenuItem>
@@ -1116,78 +1119,90 @@ onUnmounted(() => {
     </div>
 
     <!-- 内容区域 -->
-    <div ref="scrollContainerRef" class="flex-1 overflow-auto p-4">
-      <!-- 加载中 -->
-      <div v-if="isLoading" class="flex h-full items-center justify-center">
-        <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
-      </div>
-
-      <!-- 空状态（没有文件也没有文件夹时才显示） -->
-      <div
-        v-else-if="filteredDocuments.length === 0 && (displayFolders.length === 0 || searchQuery.trim())"
-        class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"
-      >
-        <Upload class="size-10 opacity-40" />
-        <div class="text-center">
-          <p class="text-sm">{{ t('knowledge.content.empty.title') }}</p>
-          <p class="mt-1 text-xs text-muted-foreground/70">
-            {{ t('knowledge.content.empty.desc') }}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddDocument">
-          <Plus class="size-4" />
-          {{ t('knowledge.content.addDocument') }}
-        </Button>
-      </div>
-
-      <!-- 文件夹和文档网格 -->
-      <div v-else>
-        <div
-          class="grid auto-rows-max gap-4"
-          style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
-        >
-          <!-- 文件夹卡片（仅在显示"全部"时且未搜索时显示） -->
-          <FolderCard
-            v-for="folder in displayFolders"
-            :key="`folder-${folder.id}`"
-            :folder="folder"
-            :document-count="getFolderItemCount(folder)"
-            :latest-updated-at="getFolderLatestUpdatedAt(folder)"
-            @click="handleFolderClick"
-            @rename="handleFolderRename"
-            @delete="handleFolderDelete"
-            @move="handleFolderMove"
-            v-show="!searchQuery.trim()"
-          />
-          <!-- 文档卡片 -->
-          <DocumentCard
-            v-for="doc in filteredDocuments"
-            :key="doc.id"
-            :document="doc"
-            :is-searching="isSearching"
-            @rename="handleRename"
-            @relearn="handleRelearn"
-            @delete="handleOpenDelete"
-            @move-to-folder="handleMoveToFolder"
-            @detail="handleDetail"
-            @view="handleView"
-            @navigate-to-folder="handleNavigateToFolder"
-          />
-        </div>
-
-        <div class="mt-4 flex items-center justify-center">
-          <div v-if="isLoadingMore" class="text-xs text-muted-foreground">
-            {{ t('knowledge.loading') }}
+    <ContextMenu>
+      <ContextMenuTrigger as-child>
+        <div ref="scrollContainerRef" class="flex-1 overflow-auto p-4">
+          <!-- 加载中 -->
+          <div v-if="isLoading" class="flex h-full items-center justify-center">
+            <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
           </div>
-          <div v-else-if="!hasMore" class="text-xs text-muted-foreground/60">
-            {{ t('knowledge.content.noMore') }}
+
+          <!-- 空状态（没有文件也没有文件夹时才显示） -->
+          <div
+            v-else-if="filteredDocuments.length === 0 && (displayFolders.length === 0 || searchQuery.trim())"
+            class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"
+          >
+            <Upload class="size-10 opacity-40" />
+            <div class="text-center">
+              <p class="text-sm">{{ t('knowledge.content.empty.title') }}</p>
+              <p class="mt-1 text-xs text-muted-foreground/70">
+                {{ t('knowledge.content.empty.desc') }}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" class="gap-1.5" @click="handleAddDocument">
+              <Plus class="size-4" />
+              {{ t('knowledge.content.addDocument') }}
+            </Button>
+          </div>
+
+          <!-- 文件夹和文档网格 -->
+          <div v-else>
+            <div
+              class="grid auto-rows-max gap-4"
+              style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
+            >
+              <!-- 文件夹卡片（仅在显示"全部"时且未搜索时显示） -->
+              <FolderCard
+                v-for="folder in displayFolders"
+                :key="`folder-${folder.id}`"
+                :folder="folder"
+                :document-count="getFolderItemCount(folder)"
+                :latest-updated-at="getFolderLatestUpdatedAt(folder)"
+                v-show="!searchQuery.trim()"
+                @click="handleFolderClick"
+                @rename="handleFolderRename"
+                @delete="handleFolderDelete"
+                @move="handleFolderMove"
+                @contextmenu.stop
+              />
+              <!-- 文档卡片 -->
+              <DocumentCard
+                v-for="doc in filteredDocuments"
+                :key="doc.id"
+                :document="doc"
+                :is-searching="isSearching"
+                @rename="handleRename"
+                @relearn="handleRelearn"
+                @delete="handleOpenDelete"
+                @move-to-folder="handleMoveToFolder"
+                @detail="handleDetail"
+                @view="handleView"
+                @navigate-to-folder="handleNavigateToFolder"
+                @contextmenu.stop
+              />
+            </div>
+
+            <div class="mt-4 flex items-center justify-center">
+              <div v-if="isLoadingMore" class="text-xs text-muted-foreground">
+                {{ t('knowledge.loading') }}
+              </div>
+              <div v-else-if="!hasMore" class="text-xs text-muted-foreground/60">
+                {{ t('knowledge.content.noMore') }}
+              </div>
+            </div>
+
+            <!-- sentinel for infinite scroll -->
+            <div ref="loadMoreSentinelRef" class="h-1 w-full" />
           </div>
         </div>
-
-        <!-- sentinel for infinite scroll -->
-        <div ref="loadMoreSentinelRef" class="h-1 w-full" />
-      </div>
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent class="w-auto min-w-max">
+        <ContextMenuItem class="gap-2 whitespace-nowrap" @select="handleOpenCreateFolder">
+          <FolderPlus class="size-4 text-muted-foreground" />
+          <span>{{ t('knowledge.folder.create') }}</span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
 
     <!-- 重命名对话框 -->
     <RenameDocumentDialog

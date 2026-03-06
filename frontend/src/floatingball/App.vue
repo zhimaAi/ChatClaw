@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { Events } from '@wailsio/runtime'
+import { Events, Window } from '@wailsio/runtime'
 import { FloatingBallService } from '@bindings/chatclaw/internal/services/floatingball'
+import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
+import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import logoFloatingball from '@/assets/images/logo-floatingball.png'
+
+const BALL_SIZE = 64
+const MENU_AREA_HEIGHT = 140
 
 const debugDrag = () => {
   try {
@@ -60,14 +65,12 @@ const isWindowsUA = (() => {
 })()
 
 const flashCover = (why: string) => {
-  // Cover for 1-2 frames to clear WebKit ghosts in transparent + resized windows (macOS).
   if (coverOffTimer != null) {
     window.clearTimeout(coverOffTimer)
     coverOffTimer = null
   }
   coverActive.value = true
   logRender('cover:on', { why })
-  // Two RAFs tends to be more reliable across machines.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       coverOffTimer = window.setTimeout(() => {
@@ -126,8 +129,65 @@ const onLeave = () => {
   void FloatingBallService.Hover(false)
 }
 
+const menuVisible = ref(false)
+
+const showMenu = async () => {
+  if (menuVisible.value || collapsed.value) return
+  try {
+    await Window.SetMaxSize(BALL_SIZE, BALL_SIZE + MENU_AREA_HEIGHT)
+    await Window.SetSize(BALL_SIZE, BALL_SIZE + MENU_AREA_HEIGHT)
+    menuVisible.value = true
+  } catch (e) {
+    console.error('Failed to show context menu:', e)
+  }
+}
+
+const hideMenu = async () => {
+  if (!menuVisible.value) return
+  menuVisible.value = false
+  try {
+    await Window.SetSize(BALL_SIZE, BALL_SIZE)
+    await Window.SetMaxSize(BALL_SIZE, BALL_SIZE)
+  } catch (e) {
+    console.error('Failed to hide context menu:', e)
+  }
+}
+
+const onContextMenu = () => {
+  if (menuVisible.value) {
+    void hideMenu()
+  } else {
+    void showMenu()
+  }
+}
+
+const onMenuSettings = async () => {
+  await hideMenu()
+  Events.Emit('floatingball:open-settings')
+  void FloatingBallService.OpenMainFromUI()
+}
+
+const onMenuRestart = async () => {
+  await hideMenu()
+  void UpdaterService.RestartApp()
+}
+
+const onMenuHide = async () => {
+  await hideMenu()
+  try {
+    await SettingsService.SetValue('show_floating_window', 'false')
+  } catch (e) {
+    console.error('Failed to save floating window setting:', e)
+  }
+  void FloatingBallService.CloseFromUI()
+}
+
 const onPointerDown = (e: PointerEvent) => {
-  // 仅在“真实拖拽”时才 setPointerCapture（Windows 上过早 capture 可能导致鼠标被窗口“抓住”）
+  if (e.button !== 0) return
+  if (menuVisible.value) {
+    void hideMenu()
+    return
+  }
   logDrag('pointerdown', { id: e.pointerId, type: e.pointerType, x: e.clientX, y: e.clientY })
   activePointerId.value = e.pointerId
   capturedPointerId.value = null
@@ -140,7 +200,6 @@ const onPointerDown = (e: PointerEvent) => {
   isDragging.value = true
   void FloatingBallService.SetDragging(true)
   void FloatingBallService.GetRelativePosition().then((pos) => {
-    // If pointer already ended, ignore.
     if (activePointerId.value !== e.pointerId) return
     relStartX.value = pos.x ?? null
     relStartY.value = pos.y ?? null
@@ -151,7 +210,6 @@ const onPointerDown = (e: PointerEvent) => {
 const onPointerMove = (e: PointerEvent) => {
   if (activePointerId.value == null || e.pointerId !== activePointerId.value) return
 
-  // Before capture: only decide whether this is a real drag.
   if (capturedPointerId.value == null) {
     const dx = Math.abs(e.clientX - pointerStartX.value)
     const dy = Math.abs(e.clientY - pointerStartY.value)
@@ -167,7 +225,6 @@ const onPointerMove = (e: PointerEvent) => {
     return
   }
 
-  // After capture: implement custom drag. Use screenX/screenY deltas so movement is stable even while the window moves.
   if (relStartX.value == null || relStartY.value == null) return
   const dx = e.screenX - screenStartX.value
   const dy = e.screenY - screenStartY.value
@@ -200,24 +257,21 @@ const onPointerCancel = () => {
 }
 
 const onDblClick = () => {
+  if (menuVisible.value) {
+    void hideMenu()
+    return
+  }
   void FloatingBallService.OpenMainFromUI()
-}
-
-const onClose = () => {
-  void FloatingBallService.CloseFromUI()
 }
 
 const onResize = () => {
   const prevW = innerWidth.value
   innerWidth.value = window.innerWidth
   logRender('resize', { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio })
-  // macOS transparent webview can leave "ghost" pixels after shrinking.
-  // When entering/being in collapsed width, force a DOM remount to clear.
   if (prevW !== innerWidth.value && innerWidth.value <= 40) {
     flashCover('resize')
     repaintKey.value++
     logRender('repaint:resize', { key: repaintKey.value, w: innerWidth.value })
-    // A delayed remount after the native resize settles helps on macOS.
     window.setTimeout(() => {
       if (window.innerWidth <= 40) {
         repaintKey.value++
@@ -231,8 +285,10 @@ const setActive = (active: boolean) => {
   if (appActive.value === active) return
   appActive.value = active
   void FloatingBallService.SetAppActive(active)
-  // 失焦时确保结束拖拽（避免 Windows 捕获导致无法点击其它应用）
   if (!active) {
+    if (menuVisible.value) {
+      void hideMenu()
+    }
     activePointerId.value = null
     capturedPointerId.value = null
     cancelDragMove()
@@ -243,7 +299,6 @@ const setActive = (active: boolean) => {
       void FloatingBallService.SetDragging(false)
     }
   }
-  // 如果应用重新激活且鼠标仍在悬浮球上，触发展开
   if (active && hovered.value) {
     void FloatingBallService.Hover(true)
   }
@@ -258,18 +313,15 @@ let offMacInactive: (() => void) | null = null
 let nativeHoverHandler: ((entered: boolean) => void) | null = null
 
 onMounted(() => {
-  // 初始状态：优先以 visibility 判断（切应用时更可靠）
   setActive(!document.hidden)
   window.addEventListener('resize', onResize)
   window.addEventListener('focus', onWindowFocus)
   window.addEventListener('blur', onWindowBlur)
   document.addEventListener('visibilitychange', onVisibilityChange)
 
-  // macOS：监听应用激活/失活事件（更准确）
   offMacActive = Events.On(Events.Types.Mac.ApplicationDidBecomeActive, () => setActive(true))
   offMacInactive = Events.On(Events.Types.Mac.ApplicationDidResignActive, () => setActive(false))
 
-  // macOS native hover bridge: native tracking area may call into this even when window not focused
   nativeHoverHandler = (entered: boolean) => {
     if (entered) onEnter()
     else onLeave()
@@ -300,6 +352,9 @@ watch(
   (val) => {
     logRender('collapsed', { val, w: window.innerWidth, h: window.innerHeight })
     if (val) {
+      if (menuVisible.value) {
+        void hideMenu()
+      }
       flashCover('collapsed')
       repaintKey.value++
       logRender('repaint:collapsed', { key: repaintKey.value })
@@ -315,10 +370,14 @@ watch(
 </script>
 
 <template>
-  <div class="h-full w-full bg-transparent select-none overflow-hidden">
-    <div :key="repaintKey" class="h-full w-full">
+  <div
+    class="h-full w-full bg-transparent select-none overflow-hidden flex flex-col"
+    @contextmenu.prevent
+  >
+    <!-- Ball area: fixed height -->
+    <div :key="repaintKey" class="w-full shrink-0" :style="{ height: BALL_SIZE + 'px' }">
       <div
-        class="relative h-full w-full"
+        class="relative w-full h-full"
         @pointerenter="onEnter"
         @pointerleave="onLeave"
         @pointerover="onEnter"
@@ -327,14 +386,13 @@ watch(
         @pointerup.capture="onPointerUp"
         @pointercancel.capture="onPointerCancel"
         @dblclick.stop="onDblClick"
+        @contextmenu.prevent="onContextMenu"
       >
-        <!-- Paint layer: tiny alpha to force proper redraw on transparent resize (macOS WebKit can leave ghosts) -->
         <div
           class="absolute inset-0 rounded-full pointer-events-none z-30"
           style="background: rgba(0, 0, 0, 0.0001)"
           aria-hidden="true"
         />
-        <!-- Cover layer: briefly shown to force clear; only affects mac ghosting -->
         <div
           v-show="coverActive"
           class="absolute inset-0 rounded-full pointer-events-none z-60"
@@ -342,19 +400,6 @@ watch(
           aria-hidden="true"
         />
 
-        <!-- Close button (show on hover) -->
-        <button
-          v-show="hovered && !collapsed && appActive"
-          class="absolute right-2 top-2 z-40 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-5"
-          style="--wails-draggable: no-drag"
-          aria-label="close floating ball"
-          title="Close"
-          @click.stop="onClose"
-        >
-          ×
-        </button>
-
-        <!-- Ball (draggable) -->
         <div
           :class="[
             'h-full w-full flex items-center justify-center relative z-10',
@@ -377,6 +422,37 @@ watch(
             style="transform: translateZ(0); backface-visibility: hidden"
           />
         </div>
+      </div>
+    </div>
+
+    <!-- Context menu -->
+    <div
+      v-if="menuVisible"
+      class="w-full flex-1 pt-1"
+      style="--wails-draggable: no-drag"
+    >
+      <div
+        class="mx-0.5 rounded-lg border border-border bg-popover text-popover-foreground shadow-sm overflow-hidden"
+      >
+        <button
+          class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
+          @click.stop="onMenuSettings"
+        >
+          设置
+        </button>
+        <button
+          class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
+          @click.stop="onMenuRestart"
+        >
+          重启
+        </button>
+        <div class="border-t border-border" />
+        <button
+          class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
+          @click.stop="onMenuHide"
+        >
+          隐藏
+        </button>
       </div>
     </div>
   </div>
