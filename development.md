@@ -103,5 +103,7 @@ wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
 docker login registry.cn-hangzhou.aliyuncs.com
 cd frontend && npm run build && cd ..
 wails3 task build:docker PLATFORM=multi
+mv ./bin/linux_amd64/server ./bin/ChatClaw-server-linux-amd64
+mv ./bin/linux_arm64/server ./bin/ChatClaw-server-linux-arm64
 ```
 
