@@ -124,6 +124,11 @@ func bgStart(b *Backend, mgr *BgProcessManager, input *bgExecInput) (string, err
 	if err := validateCommand(input.Command); err != nil {
 		return fmt.Sprintf("Command blocked: %s", err.Error()), nil
 	}
+	if b.SandboxEnabled() {
+		if err := validateSensitivePaths(input.Command, b.HomeDir()); err != nil {
+			return fmt.Sprintf("Command blocked: %s", err.Error()), nil
+		}
+	}
 
 	timeoutSec := input.Timeout
 	if timeoutSec <= 0 {
