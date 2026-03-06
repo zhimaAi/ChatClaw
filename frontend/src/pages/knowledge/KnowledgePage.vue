@@ -371,11 +371,15 @@ const confirmDelete = async () => {
   }
 }
 
+// When thinking mode changes, show toast notification (same as assistant page)
+let isInitialMount = true
+
 onMounted(async () => {
   void loadLibraries()
   await loadAgents()
   await loadModels()
   selectDefaultModel(activeAgent.value, null)
+  isInitialMount = false
 })
 
 // When agent changes, re-select default model
@@ -386,6 +390,12 @@ watch(activeAgentId, () => {
 // When models are loaded, select default model
 watch(providersWithModels, () => {
   selectDefaultModel(activeAgent.value, null)
+})
+
+watch(enableThinking, (newValue) => {
+  if (!isInitialMount) {
+    toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
+  }
 })
 
 // Handle send message
