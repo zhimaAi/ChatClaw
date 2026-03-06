@@ -201,6 +201,34 @@ func (s *ChannelService) UpdateChannel(id int64, input UpdateChannelInput) (*Cha
 	return &dto, nil
 }
 
+// BindAgent updates the AI agent association for a channel.
+func (s *ChannelService) BindAgent(id int64, agentID int64) error {
+	if id <= 0 {
+		return errs.New("error.channel_id_required")
+	}
+	if agentID <= 0 {
+		return errs.New("error.agent_id_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, err := db.NewUpdate().
+		Model((*channelModel)(nil)).
+		Where("id = ?", id).
+		Set("agent_id = ?", agentID).
+		Exec(ctx); err != nil {
+		return errs.Wrap("error.channel_bind_failed", err)
+	}
+
+	return nil
+}
+
 // UnbindAgent removes the AI agent association from a channel.
 func (s *ChannelService) UnbindAgent(id int64) error {
 	if id <= 0 {

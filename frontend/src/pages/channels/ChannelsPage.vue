@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Trash2, MoreHorizontal, Unlink, BadgeCheck, RouteOff, SquareDashed } from 'lucide-vue-next'
+import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed } from 'lucide-vue-next'
 import IconChannels from '@/assets/icons/channelsMax.svg'
+import IconCheck from '@/assets/icons/check-icon.svg'
+import IconClose from '@/assets/icons/close-icon.svg'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
@@ -26,8 +28,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
+import BindAgentDialog from './components/BindAgentDialog.vue'
 import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, ChannelStats, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
+import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
 
 defineProps<{ tabId: string }>()
 
@@ -36,12 +40,17 @@ const { t } = useI18n()
 const channels = ref<Channel[]>([])
 const stats = ref<ChannelStats>({ total: 0, connected: 0, disconnected: 0 })
 const platforms = ref<PlatformMeta[]>([])
+const agents = ref<Agent[]>([])
 const loading = ref(false)
 const addDialogOpen = ref(false)
 const configDialogOpen = ref(false)
 const selectedPlatform = ref<PlatformMeta | null>(null)
 const deleteDialogOpen = ref(false)
 const channelToDelete = ref<Channel | null>(null)
+const bindDialogOpen = ref(false)
+const channelToBind = ref<Channel | null>(null)
+const toggleDialogOpen = ref(false)
+const channelToToggle = ref<{ channel: Channel, val: boolean } | null>(null)
 
 const selectedFilter = ref<string>('all')
 
@@ -61,19 +70,27 @@ const platformIconMap: Record<string, string> = {
 async function loadData() {
   loading.value = true
   try {
-    const [channelList, channelStats, platformList] = await Promise.all([
+    const [channelList, channelStats, platformList, agentsList] = await Promise.all([
       ChannelService.ListChannels(),
       ChannelService.GetChannelStats(),
       ChannelService.GetSupportedPlatforms(),
+      AgentsService.ListAgents(),
     ])
     channels.value = channelList || []
     stats.value = channelStats || { total: 0, connected: 0, disconnected: 0 }
     platforms.value = platformList || []
+    agents.value = agentsList || []
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
     loading.value = false
   }
+}
+
+function getAgentName(agentId: number): string {
+  if (!agentId) return 'AI助手'
+  const agent = agents.value.find(a => a.id === agentId)
+  return agent ? agent.name : 'AI助手'
 }
 
 function handleAddChannel() {
@@ -135,6 +152,23 @@ async function handleDisconnect(channel: Channel) {
 }
 
 async function handleToggleConnection(channel: Channel, val: boolean) {
+  channelToToggle.value = { channel, val }
+  toggleDialogOpen.value = true
+}
+
+function cancelToggle() {
+  toggleDialogOpen.value = false
+  channelToToggle.value = null
+  // Just in case the UI switch visually toggled, reload data to revert it to DB state.
+  loadData()
+}
+
+async function confirmToggle() {
+  if (!channelToToggle.value) return
+  const { channel, val } = channelToToggle.value
+  toggleDialogOpen.value = false
+  channelToToggle.value = null
+  
   if (val) {
     await handleConnect(channel)
   } else {
@@ -149,6 +183,25 @@ async function handleUnbind(channel: Channel) {
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
+  }
+}
+
+function handleOpenBind(channel: Channel) {
+  channelToBind.value = channel
+  bindDialogOpen.value = true
+}
+
+async function handleBindAgent(agentId: number) {
+  if (!channelToBind.value) return
+  try {
+    await ChannelService.BindAgent(channelToBind.value.id, agentId)
+    toast.success('绑定助手成功')
+    loadData()
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+  } finally {
+    bindDialogOpen.value = false
+    channelToBind.value = null
   }
 }
 
@@ -277,10 +330,7 @@ onMounted(loadData)
             </div>
             
             <div class="flex items-center gap-2">
-              <Switch 
-                :checked="channel.status === 'online'" 
-                @update:checked="val => handleToggleConnection(channel, val)" 
-              />
+        
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                   <Button variant="ghost" size="icon" class="h-6 w-6 rounded bg-[#f5f5f5] dark:bg-muted hover:bg-[#e5e5e5] dark:hover:bg-muted/80">
@@ -288,6 +338,10 @@ onMounted(loadData)
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="min-w-24 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover">
+                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleOpenBind(channel)">
+                    <Link class="h-4 w-4" />
+                    {{ channel.agent_id === 0 ? '绑定' : '切换绑定' }}
+                  </DropdownMenuItem>
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleUnbind(channel)" :disabled="channel.agent_id === 0">
                     <Unlink class="h-4 w-4" />
                     解绑
@@ -309,13 +363,32 @@ onMounted(loadData)
 
           <!-- Status Tags -->
           <div class="flex items-center gap-2">
-            <div class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-              <BadgeCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
-              <Unlink v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
+            <!-- Connection Status -->
+            <div class="inline-flex items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
+              <div 
+                class="h-2 w-2 rounded-full" 
+                :class="{
+                  'bg-green-500': channel.status === 'online',
+                  'bg-red-500': channel.status === 'error',
+                  'bg-gray-400': channel.status === 'offline' || !channel.status
+                }"
+              ></div>
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
+                {{ channel.status === 'online' ? t('channels.status.online', '已连接') : channel.status === 'error' ? t('channels.status.error', '错误') : t('channels.status.offline', '未连接') }}
+              </span>
+            </div>
+            <!-- Bind Status -->
+            <div 
+              class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+              :class="{ 'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors': channel.agent_id === 0 }"
+              @click="channel.agent_id === 0 ? handleOpenBind(channel) : undefined"
+            >
+              <IconCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
+              <IconClose v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
               <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? '绑定' : '未绑定' }}</span>
             </div>
             <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">AI助手</span>
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ getAgentName(channel.agent_id) }}</span>
             </div>
           </div>
         </div>
@@ -350,6 +423,33 @@ onMounted(loadData)
       :platform="selectedPlatform"
       @saved="handleConfigSaved"
     />
+
+    <!-- Bind Agent Dialog -->
+    <BindAgentDialog
+      v-model:open="bindDialogOpen"
+      @bind="handleBindAgent"
+    />
+
+    <!-- Toggle Confirmation -->
+    <AlertDialog :open="toggleDialogOpen" @update:open="(val) => { if (!val) cancelToggle() }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ channelToToggle?.val ? t('channels.toggle.enableTitle', '确定要开启该频道吗？') : t('channels.toggle.disableTitle', '确定要关闭该频道吗？') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ channelToToggle?.val ? t('channels.toggle.enableDesc', '开启后，系统将尝试连接该频道以接收并处理消息。') : t('channels.toggle.disableDesc', '关闭后，将断开与该频道的连接，系统不再接收其消息。') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel', '取消') }}</AlertDialogCancel>
+          <AlertDialogAction
+            class="bg-primary text-primary-foreground hover:bg-primary/90"
+            @click="confirmToggle"
+          >
+            {{ t('common.confirm', '确定') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <!-- Delete Confirmation -->
     <AlertDialog v-model:open="deleteDialogOpen">
