@@ -30,7 +30,8 @@ import {
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import { LibraryService, type Library } from '@bindings/chatclaw/internal/services/library'
-import { ChatWikiService, TeamChatInput } from '@bindings/chatclaw/internal/services/chatwiki'
+import { ChatWikiService, TeamChatInput, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
+import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +68,11 @@ const props = withDefaults(
 const isSnapMode = computed(() => props.mode === 'snap')
 
 type ListMode = 'personal' | 'team'
+
+// Snap mode: cache keys for list mode and assistant selection (restore on next open, default personal)
+const SNAP_CACHE_LIST_MODE = 'snap_list_mode'
+const SNAP_CACHE_AGENT_ID = 'snap_agent_id'
+const SNAP_CACHE_TEAM_ROBOT_ID = 'snap_team_robot_id'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
@@ -140,6 +146,8 @@ const settingsAgent = ref<Agent | null>(null)
 const settingsInitialTab = ref<string>('')
 const sidebarCollapsed = ref(false)
 const workspaceDrawerOpen = ref(false)
+/** dialogue_id from SSE per team conversation id, for next request */
+const teamDialogueIdByConversation = ref<Record<number, string>>({})
 let teamAssistantMessageCounter = -1000000
 
 // Snap mode: draggable floating expand button
@@ -188,16 +196,27 @@ const deleteConversationOpen = ref(false)
 const actionConversation = ref<Conversation | null>(null)
 const isTeamMode = computed(() => listMode.value === 'team')
 const activeTeamRobot = computed(() => activeRobot.value)
+const activeTeamConversationId = ref<number | null>(null)
 
-const getTeamConversationId = (robotId: string | null) => {
-  if (!robotId) return null
+const getTeamConversationAgentId = (robotId: string) => {
   let hash = 0
   for (let i = 0; i < robotId.length; i += 1) {
     hash = (hash * 31 + robotId.charCodeAt(i)) % 1000000007
   }
-  return -(hash + 1000)
+  return hash + 1000
 }
-const activeTeamConversationId = computed(() => getTeamConversationId(activeTeamRobotId.value))
+
+const getActiveTeamConversations = () => {
+  if (!activeTeamRobotId.value) return []
+  return getAllAgentConversations(getTeamConversationAgentId(activeTeamRobotId.value))
+}
+
+const activeTeamConversation = computed<Conversation | null>(() => {
+  if (!activeTeamConversationId.value) return null
+  const list = getActiveTeamConversations()
+  return list.find((c) => c.id === activeTeamConversationId.value) || null
+})
+
 const activeDisplayConversationId = computed(() =>
   isTeamMode.value ? activeTeamConversationId.value : activeConversationId.value
 )
@@ -208,6 +227,28 @@ const logTeam = (stage: string, payload?: Record<string, any>) => {
     return
   }
   console.warn(`[assistant][team] ${stage}`)
+}
+
+const logTeamConversationSnapshot = (stage: string, robotId: string | null = activeTeamRobotId.value) => {
+  if (!robotId) {
+    logTeam(stage, {
+      robot_id: robotId,
+      team_agent_id: null,
+      conversation_count: 0,
+      active_team_conversation_id: activeTeamConversationId.value,
+    })
+    return
+  }
+  const teamAgentId = getTeamConversationAgentId(robotId)
+  const list = getAllAgentConversations(teamAgentId)
+  logTeam(stage, {
+    robot_id: robotId,
+    team_agent_id: teamAgentId,
+    conversation_count: list.length,
+    conversation_ids: list.map((c) => c.id),
+    conversation_names: list.map((c) => c.name),
+    active_team_conversation_id: activeTeamConversationId.value,
+  })
 }
 
 // Pending images for message
@@ -254,7 +295,7 @@ const chatMessages = computed(() => {
 const canSend = computed(() => {
   const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
   if (isTeamMode.value) {
-    return !!activeTeamRobotId.value && hasContent && !isGenerating.value
+    return !!activeTeamRobotId.value && chatInput.value.trim() !== '' && !isGenerating.value
   }
   return (
     !!activeAgentId.value &&
@@ -269,6 +310,7 @@ const sendDisabledReason = computed(() => {
   if (isGenerating.value) return ''
   if (isTeamMode.value) {
     if (!activeTeamRobotId.value) return '请先选择团队机器人'
+    if (pendingImages.value.length > 0) return t('assistant.errors.teamImageNotSupported')
     if (!chatInput.value.trim()) return t('assistant.placeholders.enterToSend')
     return ''
   }
@@ -375,8 +417,44 @@ const handleListModeChange = (mode: ListMode) => {
   if (mode === 'team') {
     chatMode.value = 'chat'
     enableThinking.value = false
+    pendingImages.value = []
     clearKnowledgeSelection()
-    void loadTeamRobots()
+    void (async () => {
+      await loadTeamRobots()
+      logTeamConversationSnapshot('after loadTeamRobots')
+    })()
+  }
+}
+
+// Snap mode: persist list mode and assistant selection to cache
+function persistSnapCache() {
+  void SettingsService.SetValue(SNAP_CACHE_LIST_MODE, listMode.value).catch(() => {})
+  void SettingsService.SetValue(SNAP_CACHE_AGENT_ID, activeAgentId.value != null ? String(activeAgentId.value) : '').catch(() => {})
+  void SettingsService.SetValue(SNAP_CACHE_TEAM_ROBOT_ID, activeTeamRobotId.value ?? '').catch(() => {})
+}
+
+// Snap mode: restore list mode and assistant selection from cache (default: personal)
+async function restoreSnapCache() {
+  try {
+    const cachedMode = (await SettingsService.Get(SNAP_CACHE_LIST_MODE))?.value ?? 'personal'
+    listMode.value = cachedMode === 'team' ? 'team' : 'personal'
+    if (listMode.value === 'team') {
+      await loadTeamRobots()
+      const cachedRobotId = (await SettingsService.Get(SNAP_CACHE_TEAM_ROBOT_ID))?.value?.trim()
+      if (cachedRobotId && teamRobots.value.some((r) => r.id === cachedRobotId)) {
+        activeTeamRobotId.value = cachedRobotId
+      }
+    } else {
+      const cachedAgentId = (await SettingsService.Get(SNAP_CACHE_AGENT_ID))?.value?.trim()
+      if (cachedAgentId) {
+        const id = Number(cachedAgentId)
+        if (Number.isFinite(id) && agents.value.some((a) => a.id === id)) {
+          activeAgentId.value = id
+        }
+      }
+    }
+  } catch {
+    listMode.value = 'personal'
   }
 }
 
@@ -387,11 +465,51 @@ const handleNewConversationForAgent = (agentId: number) => {
   handleNewConversation()
 }
 
+const handleNewConversationForTeamRobot = (robotId: string) => {
+  if (activeTeamRobotId.value !== robotId) {
+    activeTeamRobotId.value = robotId
+  }
+  const conversationId = activeTeamConversationId.value
+  if (conversationId != null) {
+    delete teamDialogueIdByConversation.value[conversationId]
+    if (!chatStore.isGenerating(conversationId).value) {
+      chatStore.clearMessages(conversationId)
+    }
+  }
+  activeTeamConversationId.value = null
+  chatInput.value = ''
+  pendingImages.value = []
+}
+
+// Snap header: new conversation (after switching agent or team robot in dropdown)
+function handleSnapNewConversation() {
+  if (listMode.value === 'team' && activeTeamRobotId.value) {
+    handleNewConversationForTeamRobot(activeTeamRobotId.value)
+  } else {
+    handleNewConversation()
+  }
+}
+
 const handleSelectConversationForAgent = (agentId: number, conversation: Conversation) => {
   if (activeAgentId.value !== agentId) {
     activeAgentId.value = agentId
   }
   handleSelectConversation(conversation)
+}
+
+const handleSelectConversationForTeamRobot = (robotId: string, conversation: Conversation) => {
+  logTeam('select team conversation', {
+    robot_id: robotId,
+    conversation_id: conversation.id,
+    dialogue_id: conversation.dialogue_id,
+    name: conversation.name,
+  })
+  if (activeTeamRobotId.value !== robotId) {
+    activeTeamRobotId.value = robotId
+  }
+  activeTeamConversationId.value = conversation.id
+  chatStore.loadMessages(conversation.id)
+  logTeamConversationSnapshot('after select team conversation', robotId)
 }
 
 const handleSelectConversation = async (conversation: Conversation) => {
@@ -434,13 +552,47 @@ const buildTeamHistoryMessages = (conversationId: number) => {
 }
 
 const sendTeamMessage = async (messageContent: string) => {
-  const conversationId = activeTeamConversationId.value
-  if (!conversationId) {
+  if (!activeTeamRobotId.value) {
     logTeam('send blocked: no team conversation id', {
       active_team_robot_id: activeTeamRobotId.value,
     })
     return
   }
+  let conversationId = activeTeamConversationId.value
+  if (!conversationId) {
+    const teamAgentId = getTeamConversationAgentId(activeTeamRobotId.value)
+    logTeam('team conversation missing, creating new one', {
+      robot_id: activeTeamRobotId.value,
+      team_agent_id: teamAgentId,
+      message_len: messageContent.length,
+    })
+    const created = await ConversationsService.CreateConversation(
+      new CreateConversationInput({
+        agent_id: teamAgentId,
+        name: messageContent.slice(0, 50),
+        last_message: messageContent,
+        chat_mode: 'chat',
+        team_type: 'team',
+      })
+    )
+    if (!created) {
+      logTeam('create team conversation returned empty')
+      return
+    }
+    handleConversationUpdated(created)
+    conversationId = created.id
+    activeTeamConversationId.value = created.id
+    logTeam('created team conversation', {
+      robot_id: activeTeamRobotId.value,
+      team_agent_id: teamAgentId,
+      conversation_id: created.id,
+      dialogue_id: created.dialogue_id,
+      chat_mode: created.chat_mode,
+      team_type: created.team_type,
+    })
+    logTeamConversationSnapshot('after create team conversation')
+  }
+  const teamAgentId = getTeamConversationAgentId(activeTeamRobotId.value)
 
   const currentBinding = binding.value
   if (!currentBinding?.server_url || !currentBinding?.token) {
@@ -479,20 +631,48 @@ const sendTeamMessage = async (messageContent: string) => {
     local_message_id: localMessageId,
     token_length: String(currentBinding.token).length,
   })
+  const conversationDialogueId =
+    activeTeamConversation.value?.id === conversationId ? activeTeamConversation.value.dialogue_id : 0
+  const dialogueId =
+    conversationDialogueId > 0
+      ? String(conversationDialogueId)
+      : teamDialogueIdByConversation.value[conversationId]
+  const useNewDialogue = dialogueId ? 0 : 1
+  logTeam('team send params', {
+    conversation_id: conversationId,
+    dialogue_id: dialogueId,
+    use_new_dialogue: useNewDialogue,
+  })
   try {
     const result = await ChatWikiService.SendTeamMessageStream(
       new TeamChatInput({
         conversation_id: conversationId,
+        team_agent_id: teamAgentId,
         tab_id: props.tabId,
         robot_key: robotKey,
         content: messageContent,
         messages: history,
+        use_new_dialogue: useNewDialogue,
+        ...(dialogueId ? { dialogue_id: dialogueId } : {}),
       })
     )
     logTeam('backend proxy started', {
       request_id: result?.request_id,
       message_id: result?.message_id,
     })
+    try {
+      const updated = await ConversationsService.UpdateConversation(
+        conversationId,
+        new UpdateConversationInput({
+          last_message: messageContent,
+        })
+      )
+      if (updated) {
+        handleConversationUpdated(updated)
+      }
+    } catch {
+      // Non-critical error for team mode
+    }
   } catch (error: unknown) {
     logTeam('backend proxy failed', {
       error: getErrorMessage(error) || String(error),
@@ -622,6 +802,10 @@ const handleRemoveLibrary = async (id: number) => {
 
 // Handle image selection
 const handleAddImages = async (files: FileList | File[]) => {
+  if (isTeamMode.value) {
+    toast.error(t('assistant.errors.teamImageNotSupported'))
+    return
+  }
   // Check if current model supports multimodal (vision)
   const modelInfo = selectedModelInfo.value
   if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId)) {
@@ -781,7 +965,7 @@ const handleOpenDeleteConversation = (conv: Conversation) => {
 
 const handleTogglePin = async (conv: Conversation) => {
   try {
-    await togglePin(conv, activeAgentId.value)
+    await togglePin(conv, conv.agent_id)
   } catch {
     // Error already handled in composable
   }
@@ -797,6 +981,11 @@ const confirmDeleteConversation = async () => {
     await deleteConversation(actionConversation.value)
     // Clear knowledge base selection when active conversation is deleted
     if (activeConversationId.value === actionConversation.value.id) {
+      clearKnowledgeSelection()
+    }
+    if (activeTeamConversationId.value === actionConversation.value.id) {
+      activeTeamConversationId.value = null
+      delete teamDialogueIdByConversation.value[actionConversation.value.id]
       clearKnowledgeSelection()
     }
     deleteConversationOpen.value = false
@@ -862,12 +1051,47 @@ watch(selectedModelKey, () => {
   })()
 })
 
+// Snap mode: persist list mode and assistant selection when user changes selection
+watch(
+  () => [listMode.value, activeAgentId.value, activeTeamRobotId.value] as const,
+  () => {
+    if (isSnapMode.value) persistSnapCache()
+  }
+)
+
 watch(activeTeamRobotId, (newId, oldId) => {
   logTeam('active team robot changed', {
     from: oldId,
     to: newId,
-    conversation_id: getTeamConversationId(newId),
   })
+  if (!newId) {
+    activeTeamConversationId.value = null
+    return
+  }
+  const teamAgentId = getTeamConversationAgentId(newId)
+  void (async () => {
+    logTeam('loading team conversations by robot', {
+      robot_id: newId,
+      team_agent_id: teamAgentId,
+    })
+    await loadConversations(teamAgentId, {
+      preserveSelection: false,
+      affectActiveSelection: false,
+      force: true,
+    })
+    const list = getAllAgentConversations(teamAgentId)
+    activeTeamConversationId.value = list.length > 0 ? list[0].id : null
+    logTeam('loaded team conversations by robot', {
+      robot_id: newId,
+      team_agent_id: teamAgentId,
+      conversation_count: list.length,
+      picked_conversation_id: activeTeamConversationId.value,
+    })
+    if (activeTeamConversationId.value) {
+      chatStore.loadMessages(activeTeamConversationId.value)
+    }
+    logTeamConversationSnapshot('after activeTeamRobotId watcher load', newId)
+  })()
 })
 
 // 当前标签页是否激活
@@ -909,6 +1133,7 @@ let unsubscribeModelsChanged: (() => void) | null = null
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
 let unsubscribeTextSelectionSnap: (() => void) | null = null
+let unsubscribeChatCompleteTeamDialogue: (() => void) | null = null
 
 const wakeAttachedSkipSelector =
   '[data-snap-block-focus], [data-snap-drag-zone], [data-snap-no-wake], [data-snap-action], [data-radix-popper-content-wrapper], [data-radix-select-viewport], [data-radix-menu-content], [role="listbox"], [role="dialog"]'
@@ -937,9 +1162,14 @@ onMounted(() => {
     await loadModels()
     await loadLibrariesFn()
 
+    // Snap mode: restore list mode and assistant selection from cache (default: personal)
+    if (isSnapMode.value) {
+      await restoreSnapCache()
+    }
+
     // Check for pending chat data (e.g. from knowledge page shortcut)
     const pendingData = navigationStore.consumePendingChatData(props.tabId)
-    
+
     if (activeAgentId.value != null) {
       // Preserve current selection to avoid wiping the first message on cold start.
       await loadConversations(activeAgentId.value, {
@@ -1089,12 +1319,25 @@ onMounted(() => {
 
     markConversationsStale(agentId)
 
-    // If this tab is active and currently viewing the same agent, refresh immediately.
-    if (isTabActive.value && activeAgentId.value === agentId) {
+    const activeTeamAgentId = activeTeamRobotId.value
+      ? getTeamConversationAgentId(activeTeamRobotId.value)
+      : null
+
+    // If this tab is active and currently viewing the same agent/team robot, refresh immediately.
+    if (
+      isTabActive.value &&
+      (activeAgentId.value === agentId || (listMode.value === 'team' && activeTeamAgentId === agentId))
+    ) {
+      logTeam('received conversations:changed for active team scope', {
+        agent_id: agentId,
+        active_team_agent_id: activeTeamAgentId,
+        list_mode: listMode.value,
+      })
       void loadConversations(agentId, {
         preserveSelection: true,
         force: true,
         activeAgentId: activeAgentId.value,
+        affectActiveSelection: activeAgentId.value === agentId,
       })
     }
   })
@@ -1114,6 +1357,28 @@ onMounted(() => {
   unsubscribeModelsChanged = Events.On('models:changed', () => {
     void loadModels()
   })
+
+  // Store dialogue_id from team chat SSE for next request
+  unsubscribeChatCompleteTeamDialogue = Events.On('chat:complete', (event: any) => {
+    const data = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const convId = data?.conversation_id
+    const dId = data?.dialogue_id
+    const isKnownTeamConversation =
+      typeof convId === 'number' &&
+      (convId === activeTeamConversationId.value ||
+        teamRobots.value.some((r) => {
+          const teamAgentId = getTeamConversationAgentId(r.id)
+          return (conversationsByAgent.value[teamAgentId] || []).some((c) => c.id === convId)
+        }))
+    if (
+      isKnownTeamConversation &&
+      dId != null &&
+      String(dId).trim() !== ''
+    ) {
+      teamDialogueIdByConversation.value[convId] = String(dId).trim()
+      logTeam('stored dialogue_id from SSE', { conversation_id: convId, dialogue_id: dId })
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -1128,6 +1393,8 @@ onUnmounted(() => {
   unsubscribeAgentsChanged = null
   unsubscribeModelsChanged?.()
   unsubscribeModelsChanged = null
+  unsubscribeChatCompleteTeamDialogue?.()
+  unsubscribeChatCompleteTeamDialogue = null
 
   // Snap mode cleanup
   unsubscribeSnapSettings?.()
@@ -1144,12 +1411,19 @@ onUnmounted(() => {
     <!-- Snap mode header toolbar -->
     <SnapModeHeader
       v-if="isSnapMode"
+      :list-mode="listMode"
       :agents="agents"
       :active-agent="activeAgent"
       :active-agent-id="activeAgentId"
+      :team-robots="teamRobots"
+      :active-team-robot="activeTeamRobot"
+      :active-team-robot-id="activeTeamRobotId"
+      :team-loading="teamLoading"
       :has-attached-target="hasAttachedTarget"
+      @update:list-mode="handleListModeChange"
       @update:active-agent-id="activeAgentId = $event"
-      @new-conversation="handleNewConversation"
+      @update:active-team-robot-id="activeTeamRobotId = $event"
+      @new-conversation="handleSnapNewConversation"
       @cancel-snap="cancelSnap"
       @find-and-attach="findAndAttach"
       @close-window="closeSnapWindow"
@@ -1170,13 +1444,14 @@ onUnmounted(() => {
       v-if="!sidebarCollapsed && !isAgentEmpty"
       :agents="agents"
       :active-agent-id="activeAgentId"
-      :active-conversation-id="activeConversationId"
+      :active-conversation-id="activeDisplayConversationId"
       :loading="loading"
       :list-mode="listMode"
       :is-snap-mode="isSnapMode"
       :get-agent-conversations="getAgentConversations"
       :get-all-agent-conversations="getAllAgentConversations"
       :ensure-conversations-loaded="ensureConversationsLoaded"
+      :get-team-conversation-agent-id="getTeamConversationAgentId"
       :team-robots="teamRobots"
       :active-team-robot-id="activeTeamRobotId"
       :team-loading="teamLoading"
@@ -1188,8 +1463,10 @@ onUnmounted(() => {
       @open-settings="openSettings"
       @new-conversation="handleNewConversation"
       @new-conversation-for-agent="handleNewConversationForAgent"
+      @new-conversation-for-team-robot="handleNewConversationForTeamRobot"
       @select-conversation="handleSelectConversation"
       @select-conversation-for-agent="handleSelectConversationForAgent"
+      @select-conversation-for-team-robot="handleSelectConversationForTeamRobot"
       @toggle-pin="handleTogglePin"
       @open-rename="handleOpenRenameConversation"
       @open-delete="handleOpenDeleteConversation"

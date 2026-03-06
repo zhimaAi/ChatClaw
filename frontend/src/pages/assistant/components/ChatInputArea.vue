@@ -204,6 +204,10 @@ const MAX_TOTAL_SIZE = 8 * 1024 * 1024 // 8MB
 
 // Common function to validate and process image files
 const processImageFiles = (files: FileList | File[]): File[] | null => {
+  if (props.isTeamMode) {
+    toast.error(t('assistant.errors.teamImageNotSupported'))
+    return null
+  }
   const fileArray = Array.from(files)
   
   // Filter only image files
@@ -617,8 +621,8 @@ onUnmounted(() => {
               </SelectPortal>
             </SelectRoot>
 
-            <!-- Image selection button -->
-            <TooltipProvider>
+            <!-- Image selection button (not supported in team mode) -->
+            <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button

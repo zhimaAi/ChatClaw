@@ -135,6 +135,8 @@ const teamQAParagraphsLoadingMore = ref(false)
 const teamQAParagraphsPage = ref(1)
 const teamQAParagraphsHasMore = ref(true)
 const teamQAParagraphTotal = ref(-1)
+const teamNormalTotal = ref(-1)
+const teamWechatTotal = ref(-1)
 const teamQASearchInput = ref('')
 const teamQASearchKeyword = ref('')
 const selectedTeamGroupId = ref<string>(TEAM_ALL_GROUP_ID)
@@ -239,6 +241,8 @@ const clearTeamNormalContent = () => {
   teamUngroupedFilesLoadingMore.value = false
   selectedTeamGroupId.value = TEAM_ALL_GROUP_ID
   teamNormalPage.value = teamLibraryTab.value === 0 ? 'groups' : 'files'
+  teamNormalTotal.value = -1
+  teamWechatTotal.value = -1
 }
 
 const applyTeamNormalSearch = () => {
@@ -485,11 +489,14 @@ const loadTeamLibraryGroups = async (libraryID: string, requestID: number) => {
     const groups = await ChatWikiService.GetLibraryGroup(libraryID, 1)
     if (requestID !== teamNormalRequestID) return
     teamLibraryGroups.value = groups || []
+    const allGroup = teamLibraryGroups.value.find((g) => g.id === TEAM_ALL_GROUP_ID)
+    teamNormalTotal.value = allGroup != null && allGroup.total != null ? Number(allGroup.total) : -1
     selectedTeamGroupId.value = TEAM_ALL_GROUP_ID
     teamNormalPage.value = 'groups'
   } catch (error) {
     if (requestID !== teamNormalRequestID) return
     teamLibraryGroups.value = []
+    teamNormalTotal.value = -1
     selectedTeamGroupId.value = TEAM_ALL_GROUP_ID
     teamNormalPage.value = 'groups'
     console.error('Failed to load team library groups:', error)
@@ -519,7 +526,7 @@ const loadTeamLibraryFiles = async (
   }
   try {
     const page = append ? teamLibraryFilesPage.value + 1 : 1
-    const files = await ChatWikiService.GetLibFileList(
+    const result = await ChatWikiService.GetLibFileList(
       libraryID,
       '',
       page,
@@ -530,10 +537,18 @@ const loadTeamLibraryFiles = async (
       teamNormalSearchKeyword.value
     )
     if (requestID !== teamNormalRequestID) return
-    const list = files || []
+    const list = result?.list ?? []
+    const total = Number(result?.total ?? -1)
     teamLibraryFiles.value = append ? [...teamLibraryFiles.value, ...list] : list
     teamLibraryFilesPage.value = page
-    teamLibraryFilesHasMore.value = list.length >= TEAM_PAGE_SIZE
+    if (total >= 0) {
+      teamLibraryFilesHasMore.value = page * TEAM_PAGE_SIZE < total
+    } else {
+      teamLibraryFilesHasMore.value = list.length >= TEAM_PAGE_SIZE
+    }
+    if (!append && teamLibraryTab.value === 3 && groupID === '') {
+      teamWechatTotal.value = total >= 0 ? total : -1
+    }
   } catch (error) {
     if (requestID !== teamNormalRequestID) return
     if (!append) {
@@ -570,7 +585,7 @@ const loadTeamUngroupedFiles = async (libraryID: string, requestID: number, appe
   }
   try {
     const page = append ? teamUngroupedFilesPage.value + 1 : 1
-    const files = await ChatWikiService.GetLibFileList(
+    const result = await ChatWikiService.GetLibFileList(
       libraryID,
       '',
       page,
@@ -581,10 +596,15 @@ const loadTeamUngroupedFiles = async (libraryID: string, requestID: number, appe
       teamNormalSearchKeyword.value
     )
     if (requestID !== teamNormalRequestID) return
-    const list = files || []
+    const list = result?.list ?? []
+    const total = Number(result?.total ?? -1)
     teamUngroupedFiles.value = append ? [...teamUngroupedFiles.value, ...list] : list
     teamUngroupedFilesPage.value = page
-    teamUngroupedFilesHasMore.value = list.length >= TEAM_PAGE_SIZE
+    if (total >= 0) {
+      teamUngroupedFilesHasMore.value = page * TEAM_PAGE_SIZE < total
+    } else {
+      teamUngroupedFilesHasMore.value = list.length >= TEAM_PAGE_SIZE
+    }
   } catch (error) {
     if (requestID !== teamNormalRequestID) return
     if (!append) {
@@ -1237,7 +1257,12 @@ watch([activeTab, teamLibraryTab, selectedTeamLibraryId], ([tab, libType, librar
         <div class="border-b border-border px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+                <span v-if="teamNormalTotal >= 0" class="text-xs text-muted-foreground">
+                  {{ t('knowledge.team.fileTotal', { count: teamNormalTotal }) }}
+                </span>
+              </div>
               <p class="mt-1 text-sm text-muted-foreground">
                 {{ selectedTeamLibrary?.intro || t('knowledge.team.noIntro') }}
               </p>
@@ -1412,7 +1437,12 @@ watch([activeTab, teamLibraryTab, selectedTeamLibraryId], ([tab, libType, librar
         <div class="border-b border-border px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+                <span v-if="teamWechatTotal >= 0" class="text-xs text-muted-foreground">
+                  {{ t('knowledge.team.fileTotal', { count: teamWechatTotal }) }}
+                </span>
+              </div>
               <p class="mt-1 text-sm text-muted-foreground">
                 {{ selectedTeamLibrary?.intro || t('knowledge.team.noIntro') }}
               </p>

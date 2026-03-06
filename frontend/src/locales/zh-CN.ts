@@ -583,6 +583,9 @@ export default {
       pin: '置顶',
       unpin: '取消置顶',
     },
+    teamRobot: {
+      infoTitle: '团队机器人信息',
+    },
     conversation: {
       empty: '暂无聊天记录',
       rename: {
@@ -618,6 +621,7 @@ export default {
       imageTooLarge: '图片过大',
       imagesTotalTooLarge: '图片总大小过大',
       imageReadFailed: '图片读取失败',
+      teamImageNotSupported: '团队模式暂不支持发送图片',
       modelNotSupportVision: '当前模型不支持图片识别，请切换到支持视觉的多模态模型',
       modelNotSupportVisionHint: '例如 GPT-4o、Claude、Gemini 等模型支持图片识别',
     },
@@ -727,6 +731,7 @@ export default {
       groupFileCount: '{count} 个文件',
       noFiles: '暂无文件',
       noParagraphs: '暂无问答内容',
+      fileTotal: '文件总数：{count}',
       qa: {
         question: '问题',
         answer: '答案',

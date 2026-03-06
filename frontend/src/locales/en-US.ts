@@ -586,6 +586,9 @@ export default {
       pin: 'Pin',
       unpin: 'Unpin',
     },
+    teamRobot: {
+      infoTitle: 'Team Robot Info',
+    },
     conversation: {
       empty: 'No chat history',
       rename: {
@@ -621,6 +624,7 @@ export default {
       imageTooLarge: 'Image too large (max {max})',
       imagesTotalTooLarge: 'Total image size too large (max {max})',
       imageReadFailed: 'Failed to read image',
+      teamImageNotSupported: 'Image sending is not supported in team mode yet',
       modelNotSupportVision: 'Current model does not support image recognition. Please switch to a multimodal vision model',
       modelNotSupportVisionHint: 'Models like GPT-4o, Claude, Gemini support image recognition',
     },
@@ -732,6 +736,7 @@ export default {
       groupFileCount: '{count} files',
       noFiles: 'No files',
       noParagraphs: 'No QA paragraphs',
+      fileTotal: 'Total: {count}',
       qa: {
         question: 'Question',
         answer: 'Answer',

@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,6 +90,13 @@ type LibraryParagraphPage struct {
 	Total int                `json:"total"`
 }
 
+// LibraryFilePage represents a page result for library file list.
+// Total is -1 when upstream does not return a reliable total count.
+type LibraryFilePage struct {
+	List  []LibraryFile `json:"list"`
+	Total int           `json:"total"`
+}
+
 // TeamChatMessage is a single history message for team chat.
 type TeamChatMessage struct {
 	Role    string `json:"role"`
@@ -96,11 +105,14 @@ type TeamChatMessage struct {
 
 // TeamChatInput is the frontend input for team mode streaming chat.
 type TeamChatInput struct {
-	ConversationID int64             `json:"conversation_id"`
-	TabID          string            `json:"tab_id"`
-	RobotKey       string            `json:"robot_key"`
-	Content        string            `json:"content"`
-	Messages       []TeamChatMessage `json:"messages"`
+	ConversationID  int64             `json:"conversation_id"`
+	TeamAgentID     int64             `json:"team_agent_id"` // team conversation group agent id
+	TabID           string            `json:"tab_id"`
+	RobotKey        string            `json:"robot_key"`
+	Content         string            `json:"content"`
+	Messages        []TeamChatMessage `json:"messages"`
+	UseNewDialogue  int               `json:"use_new_dialogue"`  // 1 = new session; 0 or omit = continue existing
+	DialogueID      string            `json:"dialogue_id"`     // from previous SSE response when continuing
 }
 
 // TeamChatResult returns request/message IDs so frontend can correlate state.
@@ -363,7 +375,20 @@ func (s *ChatWikiService) SendTeamMessageStream(input TeamChatInput) (*TeamChatR
 		"content_len", len(content),
 	)
 
-	go s.runTeamChatStream(ctx, conversationID, tabID, requestID, messageID, robotKey, content, input.Messages, binding)
+	go s.runTeamChatStream(
+		ctx,
+		conversationID,
+		input.TeamAgentID,
+		tabID,
+		requestID,
+		messageID,
+		robotKey,
+		content,
+		input.Messages,
+		input.UseNewDialogue,
+		input.DialogueID,
+		binding,
+	)
 
 	return &TeamChatResult{
 		RequestID: requestID,
@@ -388,12 +413,15 @@ func (s *ChatWikiService) StopTeamMessageStream(conversationID int64) error {
 func (s *ChatWikiService) runTeamChatStream(
 	ctx context.Context,
 	conversationID int64,
+	teamAgentID int64,
 	tabID string,
 	requestID string,
 	messageID int64,
 	robotKey string,
 	content string,
 	history []TeamChatMessage,
+	useNewDialogue int,
+	dialogueID string,
 	binding *Binding,
 ) {
 	defer s.clearTeamCancel(conversationID)
@@ -421,6 +449,19 @@ func (s *ChatWikiService) runTeamChatStream(
 		"content":   content,
 		"messages":  history,
 		"quote_lib": true,
+	}
+	if useNewDialogue == 1 {
+		reqBody["use_new_dialogue"] = 1
+	} else if dialogueID != "" {
+		parsedDialogueID, parseErr := strconv.ParseInt(strings.TrimSpace(dialogueID), 10, 64)
+		if parseErr != nil || parsedDialogueID <= 0 {
+			s.app.Logger.Warn("[ChatWiki][TeamChat] invalid dialogue_id for continue chat",
+				"dialogue_id", dialogueID,
+				"error", parseErr,
+			)
+		} else {
+			reqBody["dialogue_id"] = parsedDialogueID
+		}
 	}
 	b, err := json.Marshal(reqBody)
 	if err != nil {
@@ -505,6 +546,7 @@ func (s *ChatWikiService) runTeamChatStream(
 	dataLines := make([]string, 0, 4)
 	finished := false
 	var fullSendingText strings.Builder
+	var sseDialogueID string // dialogue_id from SSE, forwarded to frontend for next request
 
 	flush := func() {
 		if eventName == "" {
@@ -525,7 +567,23 @@ func (s *ChatWikiService) runTeamChatStream(
 			chunk := emitBase()
 			chunk["delta"] = data
 			s.app.Event.Emit("chat:chunk", chunk)
+		case "dialogue_id":
+			sseDialogueID = strings.TrimSpace(data)
 		case "finish", "data":
+			// Try to extract dialogue_id from JSON payload (e.g. {"dialogue_id": "xxx", ...})
+			if data != "" {
+				var parsed map[string]any
+				if err := json.Unmarshal([]byte(data), &parsed); err == nil {
+					if id, ok := parsed["dialogue_id"]; ok {
+						switch v := id.(type) {
+						case string:
+							sseDialogueID = strings.TrimSpace(v)
+						case float64:
+							sseDialogueID = strings.TrimSpace(strconv.FormatInt(int64(v), 10))
+						}
+					}
+				}
+			}
 			if fullSendingText.Len() > 0 {
 				s.app.Logger.Info("[ChatWiki][TeamChat] full sending content",
 					"conversation_id", conversationID,
@@ -536,6 +594,10 @@ func (s *ChatWikiService) runTeamChatStream(
 			complete := emitBase()
 			complete["status"] = "success"
 			complete["finish_reason"] = "stop"
+			if sseDialogueID != "" {
+				s.persistTeamMessageRecords(conversationID, teamAgentID, sseDialogueID, content, fullSendingText.String())
+				complete["dialogue_id"] = sseDialogueID
+			}
 			s.app.Event.Emit("chat:complete", complete)
 			finished = true
 		case "error":
@@ -589,8 +651,229 @@ func (s *ChatWikiService) runTeamChatStream(
 		complete := emitBase()
 		complete["status"] = "success"
 		complete["finish_reason"] = "stop"
+		if sseDialogueID != "" {
+			s.persistTeamMessageRecords(conversationID, teamAgentID, sseDialogueID, content, fullSendingText.String())
+			complete["dialogue_id"] = sseDialogueID
+		}
 		s.app.Event.Emit("chat:complete", complete)
 	}
+}
+
+func (s *ChatWikiService) persistTeamMessageRecords(conversationID int64, teamAgentID int64, dialogueIDRaw string, userContent string, assistantContent string) {
+	dialogueID, ok := parsePositiveInt64(strings.TrimSpace(dialogueIDRaw))
+	if !ok {
+		s.app.Logger.Warn("[ChatWiki][TeamChat] skip persisting messages: invalid dialogue_id",
+			"dialogue_id", dialogueIDRaw,
+		)
+		return
+	}
+	db := sqlite.DB()
+	if db == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conversationID, err := s.ensureTeamConversationByDialogueID(ctx, db, conversationID, teamAgentID, dialogueID, userContent)
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki][TeamChat] ensure team conversation failed",
+			"dialogue_id", dialogueID,
+			"error", err,
+		)
+		return
+	}
+
+	trimmedUserContent := strings.TrimSpace(userContent)
+	if trimmedUserContent != "" {
+		if _, err := db.ExecContext(
+			ctx,
+			`INSERT INTO messages (conversation_id, role, content, status, tool_calls) VALUES (?, ?, ?, ?, ?)`,
+			conversationID,
+			"user",
+			trimmedUserContent,
+			"success",
+			"[]",
+		); err != nil {
+			s.app.Logger.Warn("[ChatWiki][TeamChat] persist user message failed",
+				"conversation_id", conversationID,
+				"dialogue_id", dialogueID,
+				"error", err,
+			)
+		}
+	}
+
+	trimmedAssistantContent := strings.TrimSpace(assistantContent)
+	if trimmedAssistantContent != "" {
+		if _, err := db.ExecContext(
+			ctx,
+			`INSERT INTO messages (conversation_id, role, content, status, finish_reason, tool_calls) VALUES (?, ?, ?, ?, ?, ?)`,
+			conversationID,
+			"assistant",
+			trimmedAssistantContent,
+			"success",
+			"stop",
+			"[]",
+		); err != nil {
+			s.app.Logger.Warn("[ChatWiki][TeamChat] persist assistant message failed",
+				"conversation_id", conversationID,
+				"dialogue_id", dialogueID,
+				"error", err,
+			)
+		}
+	}
+}
+
+func (s *ChatWikiService) ensureTeamConversationByDialogueID(
+	ctx context.Context,
+	db *bun.DB,
+	preferredConversationID int64,
+	preferredAgentID int64,
+	dialogueID int64,
+	lastMessage string,
+) (int64, error) {
+	if preferredConversationID > 0 {
+		var byPreferredID int64
+		err := db.NewSelect().
+			Table("conversations").
+			Column("id").
+			Where("id = ?", preferredConversationID).
+			Limit(1).
+			Scan(ctx, &byPreferredID)
+		if err == nil && byPreferredID > 0 {
+			trimmedLastMessage := strings.TrimSpace(lastMessage)
+			var updateErr error
+			if preferredAgentID > 0 {
+				_, updateErr = db.ExecContext(
+					ctx,
+					`UPDATE conversations
+SET agent_id = ?, last_message = ?, chat_mode = ?, team_type = ?, dialogue_id = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?`,
+					preferredAgentID,
+					trimmedLastMessage,
+					"chat",
+					"team",
+					dialogueID,
+					byPreferredID,
+				)
+			} else {
+				_, updateErr = db.ExecContext(
+					ctx,
+					`UPDATE conversations
+SET last_message = ?, chat_mode = ?, team_type = ?, dialogue_id = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?`,
+					trimmedLastMessage,
+					"chat",
+					"team",
+					dialogueID,
+					byPreferredID,
+				)
+			}
+			if updateErr != nil {
+				return 0, updateErr
+			}
+			return byPreferredID, nil
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+	}
+
+	var existingID int64
+	err := db.NewSelect().
+		Table("conversations").
+		Column("id").
+		Where("team_type = ?", "team").
+		Where("dialogue_id = ?", dialogueID).
+		Limit(1).
+		Scan(ctx, &existingID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	if existingID > 0 {
+		trimmedLastMessage := strings.TrimSpace(lastMessage)
+		if trimmedLastMessage != "" || preferredAgentID > 0 {
+			var updateErr error
+			if preferredAgentID > 0 {
+				_, updateErr = db.ExecContext(
+					ctx,
+					`UPDATE conversations
+SET agent_id = ?, last_message = ?, chat_mode = ?, team_type = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?`,
+					preferredAgentID,
+					trimmedLastMessage,
+					"chat",
+					"team",
+					existingID,
+				)
+			} else {
+				_, updateErr = db.ExecContext(
+				ctx,
+				`UPDATE conversations
+SET last_message = ?, chat_mode = ?, team_type = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?`,
+					trimmedLastMessage,
+					"chat",
+					"team",
+					existingID,
+				)
+			}
+			if updateErr != nil {
+				s.app.Logger.Warn("[ChatWiki][TeamChat] update team conversation failed",
+					"conversation_id", existingID,
+					"dialogue_id", dialogueID,
+					"error", updateErr,
+				)
+			}
+		}
+		return existingID, nil
+	}
+
+	trimmedLastMessage := strings.TrimSpace(lastMessage)
+	title := trimmedLastMessage
+	if title == "" {
+		title = fmt.Sprintf("Team %d", dialogueID)
+	}
+	titleRunes := []rune(title)
+	if len(titleRunes) > 100 {
+		title = string(titleRunes[:100])
+	}
+
+	result, err := db.ExecContext(
+		ctx,
+		`INSERT INTO conversations (agent_id, name, last_message, chat_mode, team_type, dialogue_id)
+VALUES (?, ?, ?, ?, ?, ?)`,
+		preferredAgentID,
+		title,
+		trimmedLastMessage,
+		"chat",
+		"team",
+		dialogueID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	conversationID, err := result.LastInsertId()
+	if err != nil || conversationID <= 0 {
+		return 0, fmt.Errorf("get inserted conversation id failed: %w", err)
+	}
+
+	s.app.Logger.Info("[ChatWiki][TeamChat] persisted team conversation",
+		"conversation_id", conversationID,
+		"dialogue_id", dialogueID,
+		"chat_mode", "chat",
+		"team_type", "team",
+	)
+	return conversationID, nil
+}
+
+func parsePositiveInt64(raw string) (int64, bool) {
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	return v, true
 }
 
 func (s *ChatWikiService) emitTeamError(emitBase func() map[string]any, message string) {
@@ -792,6 +1075,7 @@ func (s *ChatWikiService) GetLibraryGroup(libraryID string, groupType int) ([]Li
 
 // GetLibFileList fetches the file list in a knowledge base.
 // groupID is optional; pass an empty string to query all files.
+// Total in the result is -1 when upstream does not return a total count.
 func (s *ChatWikiService) GetLibFileList(
 	libraryID string,
 	status string,
@@ -801,14 +1085,15 @@ func (s *ChatWikiService) GetLibFileList(
 	sortType string,
 	groupID string,
 	fileName string,
-) ([]LibraryFile, error) {
+) (LibraryFilePage, error) {
+	out := LibraryFilePage{Total: -1}
 	binding, err := s.GetBinding()
 	if err != nil || binding == nil {
-		return nil, fmt.Errorf("no binding found")
+		return out, fmt.Errorf("no binding found")
 	}
 	libraryID = strings.TrimSpace(libraryID)
 	if libraryID == "" {
-		return nil, fmt.Errorf("library_id is required")
+		return out, fmt.Errorf("library_id is required")
 	}
 	if page < 1 {
 		page = 1
@@ -851,14 +1136,14 @@ func (s *ChatWikiService) GetLibFileList(
 		"file_name", strings.TrimSpace(fileName),
 	)
 
-	body, err := s.chatWikiGET(binding.Token, apiURL)
+	body, err := s.chatWikiGETLoose(binding.Token, apiURL)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 
-	items, err := decodeAPIDataObjectArray(body)
+	items, total, hasTotal, err := decodeAPIDataObjectArrayWithTotal(body)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 
 	result := make([]LibraryFile, 0, len(items))
@@ -885,7 +1170,11 @@ func (s *ChatWikiService) GetLibFileList(
 			ThumbPath: thumbPath,
 		})
 	}
-	return result, nil
+	out.List = result
+	if hasTotal {
+		out.Total = total
+	}
+	return out, nil
 }
 
 // GetParagraphList fetches paragraph list for QA knowledge base.
