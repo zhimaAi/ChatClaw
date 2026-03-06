@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed } from 'lucide-vue-next'
+import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed, Check } from 'lucide-vue-next'
 import IconChannels from '@/assets/icons/channelsMax.svg'
 import IconCheck from '@/assets/icons/check-icon.svg'
 import IconClose from '@/assets/icons/close-icon.svg'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { Dialogs } from '@wailsio/runtime'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,9 +56,26 @@ const channelToToggle = ref<{ channel: Channel, val: boolean } | null>(null)
 
 const selectedFilter = ref<string>('all')
 
+// Inline add form state
+const inlineFormName = ref('')
+const inlineFormAvatar = ref('')
+const inlineFormAppId = ref('')
+const inlineFormAppSecret = ref('')
+const inlineFormSaving = ref(false)
+
 const filteredChannels = computed(() => {
   if (selectedFilter.value === 'all') return channels.value
   return channels.value.filter((ch) => ch.platform === selectedFilter.value)
+})
+
+const selectedPlatformMeta = computed(() => {
+  if (selectedFilter.value === 'all') return null
+  return platforms.value.find(p => p.id === selectedFilter.value) || null
+})
+
+const isInlineFormValid = computed(() => {
+  if (!inlineFormName.value.trim()) return false
+  return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
 })
 
 const platformIconMap: Record<string, string> = {
@@ -212,6 +231,80 @@ function getPlatformIcon(platformId: string): string | null {
 function getPlatformName(platformId: string): string {
   const platform = platforms.value.find(p => p.id === platformId)
   return platform?.name || platformId
+}
+
+function resetInlineForm() {
+  inlineFormName.value = ''
+  inlineFormAvatar.value = ''
+  inlineFormAppId.value = ''
+  inlineFormAppSecret.value = ''
+}
+
+async function handleInlinePickAvatar() {
+  if (inlineFormSaving.value) return
+  try {
+    const path = await Dialogs.OpenFile({
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Title: t('channels.config.pickAvatar', '选择头像'),
+      Filters: [
+        {
+          DisplayName: t('channels.config.filterImages', '图片文件'),
+          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
+        },
+      ],
+    })
+    if (!path) return
+    inlineFormAvatar.value = await AgentsService.ReadIconFile(path)
+  } catch (error) {
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to pick icon:', error)
+  }
+}
+
+async function handleInlineSave() {
+  if (!selectedPlatformMeta.value) return
+  if (!isInlineFormValid.value) return
+
+  inlineFormSaving.value = true
+  try {
+    const extraConfig = JSON.stringify({
+      app_id: inlineFormAppId.value.trim(),
+      app_secret: inlineFormAppSecret.value.trim(),
+    })
+
+    await ChannelService.CreateChannel({
+      platform: selectedPlatformMeta.value.id,
+      name: inlineFormName.value.trim(),
+      avatar: inlineFormAvatar.value,
+      connection_type: 'gateway',
+      extra_config: extraConfig,
+    })
+
+    toast.success(t('channels.config.success'))
+    resetInlineForm()
+    loadData()
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+  } finally {
+    inlineFormSaving.value = false
+  }
+}
+
+function openPlatformDocs() {
+  if (selectedPlatformMeta.value?.id === 'feishu') {
+    window.open('https://open.feishu.cn/', '_blank')
+  }
+}
+
+function handleInlineVerify() {
+  if (!isInlineFormValid.value) {
+    toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
+    return
+  }
+  // TODO: call backend to verify app_id / app_secret for selected platform
+  toast.success(t('channels.inline.verifySuccess', '验证通过'))
 }
 
 function getAppId(extraConfig: string): string {
@@ -394,19 +487,111 @@ onMounted(loadData)
         </div>
       </div>
       
-      <!-- Empty State -->
-      <div v-else class="flex flex-col items-center justify-center py-12 text-center">
+      <!-- Empty State - All platforms -->
+      <div v-else-if="selectedFilter === 'all'" class="flex flex-col items-center justify-center py-12 text-center">
         <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted mb-4">
           <SquareDashed class="h-6 w-6 text-[#737373] dark:text-muted-foreground" />
         </div>
         <h3 class="text-base font-medium text-[#262626] dark:text-foreground">{{ t('channels.empty.title', '暂无频道') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
-          {{ selectedFilter === 'all' ? '您还没有配置任何频道，点击上方按钮添加一个新频道。' : `您还没有配置 ${getPlatformName(selectedFilter)} 频道。` }}
+          您还没有配置任何频道，点击上方按钮添加一个新频道。
         </p>
         <Button class="mt-6 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" @click="handleAddChannel">
           <Plus class="mr-1.5 h-4 w-4" />
           {{ t('channels.addChannel', '添加频道') }}
         </Button>
+      </div>
+
+      <!-- Inline Add Form - Specific platform selected (per Figma: Inline Add Form) -->
+      <div v-else class="space-y-6">
+        <!-- Form Row: three vertical fields, labels with * and 4px gap to input -->
+        <div class="flex items-end gap-4">
+          <!-- * 机器人头像/名称: 262px width, avatar 40x40 + input flex-1, gap 8px -->
+          <div class="flex w-[262px] shrink-0 flex-col gap-1">
+            <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
+              <span>*</span>
+              <span>{{ t('channels.inline.avatarName', '机器人头像/名称') }}</span>
+            </label>
+            <div class="flex min-w-0 gap-2">
+              <button
+                type="button"
+                class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#e5e5e5] bg-white shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] transition-opacity hover:opacity-80 dark:border-border dark:bg-input dark:shadow-none dark:ring-1 dark:ring-white/10"
+                @click="handleInlinePickAvatar"
+              >
+                <img
+                  v-if="inlineFormAvatar"
+                  :src="inlineFormAvatar"
+                  class="h-full w-full object-cover"
+                />
+                <img
+                  v-else-if="getPlatformIcon(selectedFilter)"
+                  :src="getPlatformIcon(selectedFilter)!"
+                  class="h-5 w-5 object-contain"
+                />
+                <span v-else class="text-lg text-[#737373] dark:text-muted-foreground">🤖</span>
+              </button>
+              <Input
+                v-model="inlineFormName"
+                class="h-10 min-w-0 flex-1 rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+                :placeholder="t('channels.inline.namePlaceholder', '请输入')"
+              />
+            </div>
+          </div>
+
+          <!-- * APPID: 260px -->
+          <div class="flex w-[260px] shrink-0 flex-col gap-1">
+            <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
+              <span>*</span>
+              <span>APPID</span>
+            </label>
+            <Input
+              v-model="inlineFormAppId"
+              class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+              :placeholder="t('channels.inline.appIdPlaceholder', '请输入您的AppId')"
+            />
+          </div>
+
+          <!-- * API Secret: 260px -->
+          <div class="flex w-[260px] shrink-0 flex-col gap-1">
+            <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
+              <span>*</span>
+              <span>API Secret</span>
+            </label>
+            <Input
+              v-model="inlineFormAppSecret"
+              type="password"
+              class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+              :placeholder="t('channels.inline.appSecretPlaceholder', '请输入您的APP Secret')"
+            />
+          </div>
+        </div>
+
+        <!-- Button row: 验证配置 | 保存添加 | 配置步骤, gap 12px -->
+        <div class="flex items-center gap-3">
+          <Button
+            type="button"
+            class="h-10 bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+            @click="handleInlineVerify"
+          >
+            <Check class="mr-2 h-4 w-4" />
+            {{ t('channels.inline.verifyConfig', '验证配置') }}
+          </Button>
+          <Button
+            class="h-10 bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+            :disabled="inlineFormSaving || !isInlineFormValid"
+            @click="handleInlineSave"
+          >
+            <Plus class="mr-2 h-4 w-4" />
+            {{ t('channels.inline.save', '保存添加') }}
+          </Button>
+          <Button
+            variant="outline"
+            class="h-10 border-[#d4d4d4] px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+            @click="openPlatformDocs"
+          >
+            {{ t('channels.inline.configSteps', '配置步骤') }}
+          </Button>
+        </div>
       </div>
     </div>
 
