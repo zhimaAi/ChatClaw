@@ -22,9 +22,10 @@ import (
 
 // MCPServer is the DB model and the DTO returned to the frontend.
 type MCPServer struct {
-	ID        string `json:"id"        bun:"id,pk"`
-	Name      string `json:"name"      bun:"name"`
-	Transport string `json:"transport" bun:"transport"` // "stdio" | "streamableHttp"
+	ID          string `json:"id"          bun:"id,pk"`
+	Name        string `json:"name"        bun:"name"`
+	Description string `json:"description" bun:"description"`
+	Transport   string `json:"transport"   bun:"transport"` // "stdio" | "streamableHttp"
 	// stdio fields
 	Command string `json:"command" bun:"command"`
 	Args    string `json:"args"    bun:"args"`    // JSON array string
@@ -50,27 +51,29 @@ func (*MCPServer) BeforeInsert(ctx context.Context, query *bun.InsertQuery) erro
 
 // AddServerInput is the input for adding a new MCP server.
 type AddServerInput struct {
-	Name      string `json:"name"`
-	Transport string `json:"transport"`
-	Command   string `json:"command"`
-	Args      string `json:"args"`
-	Env       string `json:"env"`
-	URL       string `json:"url"`
-	Headers   string `json:"headers"`
-	Timeout   int    `json:"timeout"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Transport   string `json:"transport"`
+	Command     string `json:"command"`
+	Args        string `json:"args"`
+	Env         string `json:"env"`
+	URL         string `json:"url"`
+	Headers     string `json:"headers"`
+	Timeout     int    `json:"timeout"`
 }
 
 // UpdateServerInput is the input for updating an existing MCP server.
 type UpdateServerInput struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Transport string `json:"transport"`
-	Command   string `json:"command"`
-	Args      string `json:"args"`
-	Env       string `json:"env"`
-	URL       string `json:"url"`
-	Headers   string `json:"headers"`
-	Timeout   int    `json:"timeout"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Transport   string `json:"transport"`
+	Command     string `json:"command"`
+	Args        string `json:"args"`
+	Env         string `json:"env"`
+	URL         string `json:"url"`
+	Headers     string `json:"headers"`
+	Timeout     int    `json:"timeout"`
 }
 
 // MCPService manages MCP server configurations.
@@ -169,6 +172,9 @@ func (s *MCPService) AddServer(input AddServerInput) (*MCPServer, error) {
 	if input.Name == "" {
 		return nil, errs.New("error.mcp_name_required")
 	}
+	if input.Description == "" {
+		return nil, errs.New("error.mcp_description_required")
+	}
 	if input.Transport != "stdio" && input.Transport != "streamableHttp" {
 		return nil, errs.New("error.mcp_invalid_transport")
 	}
@@ -187,16 +193,17 @@ func (s *MCPService) AddServer(input AddServerInput) (*MCPServer, error) {
 	}
 
 	server := &MCPServer{
-		ID:        uuid.New().String(),
-		Name:      input.Name,
-		Transport: input.Transport,
-		Command:   input.Command,
-		Args:      input.Args,
-		Env:       input.Env,
-		URL:       input.URL,
-		Headers:   input.Headers,
-		Timeout:   input.Timeout,
-		Enabled:   true,
+		ID:          uuid.New().String(),
+		Name:        input.Name,
+		Description: input.Description,
+		Transport:   input.Transport,
+		Command:     input.Command,
+		Args:        input.Args,
+		Env:         input.Env,
+		URL:         input.URL,
+		Headers:     input.Headers,
+		Timeout:     input.Timeout,
+		Enabled:     true,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -220,6 +227,9 @@ func (s *MCPService) UpdateServer(input UpdateServerInput) (*MCPServer, error) {
 	}
 	if input.Name == "" {
 		return nil, errs.New("error.mcp_name_required")
+	}
+	if input.Description == "" {
+		return nil, errs.New("error.mcp_description_required")
 	}
 	if input.Transport != "stdio" && input.Transport != "streamableHttp" {
 		return nil, errs.New("error.mcp_invalid_transport")
@@ -245,6 +255,7 @@ func (s *MCPService) UpdateServer(input UpdateServerInput) (*MCPServer, error) {
 	result, err := db.NewUpdate().
 		Model((*MCPServer)(nil)).
 		Set("name = ?", input.Name).
+		Set("description = ?", input.Description).
 		Set("transport = ?", input.Transport).
 		Set("command = ?", input.Command).
 		Set("args = ?", input.Args).
