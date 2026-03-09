@@ -14,6 +14,7 @@ import (
 	"chatclaw/internal/eino/chatmodel"
 	"chatclaw/internal/eino/embedding"
 	"chatclaw/internal/fts/tokenizer"
+	i18n "chatclaw/internal/services/i18n"
 	"chatclaw/internal/sqlite"
 
 	einoembedding "github.com/cloudwego/eino/components/embedding"
@@ -154,12 +155,13 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 
 	// 8. Call extraction LLM
 	chatModel, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
-		ProviderType: extractProvider.Type,
-		APIKey:       extractProvider.APIKey,
-		APIEndpoint:  extractProvider.APIEndpoint,
-		ModelID:      extractModelID,
-		ExtraConfig:  extractProvider.ExtraConfig,
-		Timeout:      60 * time.Second,
+		ProviderType:    extractProvider.Type,
+		APIKey:          extractProvider.APIKey,
+		APIEndpoint:     extractProvider.APIEndpoint,
+		ModelID:         extractModelID,
+		ExtraConfig:     extractProvider.ExtraConfig,
+		Timeout:         60 * time.Second,
+		DisableThinking: true,
 	})
 	if err != nil {
 		return fmt.Errorf("create chat model: %w", err)
@@ -392,21 +394,29 @@ func shouldSkipExtraction(content string) bool {
 // buildExistingMemoryContext loads current memory state and formats it as context
 // for the extraction LLM, so it can avoid duplicates and make better merge decisions.
 func buildExistingMemoryContext(ctx context.Context, memDB *bun.DB, agentID int64) string {
+	isZh := i18n.GetLocale() == i18n.LocaleZhCN
+
 	var sb strings.Builder
 
-	// Core Profile
 	var cp CoreProfile
 	if err := memDB.NewSelect().Model(&cp).Where("agent_id = ?", agentID).Limit(1).Scan(ctx); err == nil && cp.Content != "" {
-		sb.WriteString("## Existing Core Profile\n")
+		if isZh {
+			sb.WriteString("## 已有核心档案\n")
+		} else {
+			sb.WriteString("## Existing Core Profile\n")
+		}
 		sb.WriteString(cp.Content)
 		sb.WriteString("\n\n")
 	}
 
-	// Thematic Facts (up to 20)
 	var facts []ThematicFact
 	if err := memDB.NewSelect().Model(&facts).Where("agent_id = ?", agentID).
 		OrderExpr("updated_at DESC").Limit(20).Scan(ctx); err == nil && len(facts) > 0 {
-		sb.WriteString("## Existing Thematic Facts\n")
+		if isZh {
+			sb.WriteString("## 已有主题事实\n")
+		} else {
+			sb.WriteString("## Existing Thematic Facts\n")
+		}
 		for _, f := range facts {
 			sb.WriteString(fmt.Sprintf("- [%s] %s\n", f.Topic, f.Content))
 		}
@@ -417,8 +427,23 @@ func buildExistingMemoryContext(ctx context.Context, memDB *bun.DB, agentID int6
 }
 
 func buildExtractionPrompt(existingContext string) string {
+	isZh := i18n.GetLocale() == i18n.LocaleZhCN
+
 	var sb strings.Builder
-	sb.WriteString(`You are a memory extraction assistant. Analyze the following conversation between a User and an Assistant.
+	if isZh {
+		sb.WriteString(`你是一个记忆提取助手。分析以下用户与助手之间的对话。
+提取关于用户的任何新的长期事实性信息（例如，偏好、习惯、事实、限制条件）。
+
+重要规则：
+- 不要提取下方记忆上下文中已经存在的信息。
+- 对于 thematic_facts：如果主题已存在，请提供更新/合并后的内容版本（合并新旧信息）。使用完全相同的主题名称。
+- 对于 core_profile_update：仅在用户基本身份信息发生变化时提供（姓名、语言、核心限制条件）。与现有档案合并。
+- 如果没有值得记住的新事实信息，返回空 JSON 对象 {}。
+- 不要提取助手的观点，只提取用户透露的事实信息。
+- 所有输出内容必须使用中文。
+`)
+	} else {
+		sb.WriteString(`You are a memory extraction assistant. Analyze the following conversation between a User and an Assistant.
 Extract any NEW long-term factual information about the User (e.g., preferences, habits, facts, constraints).
 
 IMPORTANT RULES:
@@ -428,13 +453,36 @@ IMPORTANT RULES:
 - If there is no new factual information worth remembering, return an empty JSON object {}.
 - Do NOT extract the assistant's opinions, only factual information revealed by the user.
 `)
+	}
 
 	if existingContext != "" {
-		sb.WriteString("\n# Current Memory Context\n")
+		if isZh {
+			sb.WriteString("\n# 当前记忆上下文\n")
+		} else {
+			sb.WriteString("\n# Current Memory Context\n")
+		}
 		sb.WriteString(existingContext)
 	}
 
-	sb.WriteString(`
+	if isZh {
+		sb.WriteString(`
+仅以如下格式的 JSON 对象回复（所有文本值必须使用中文）：
+{
+  "event_stream": "本轮对话中揭示的事实事件或信息的简要总结。如无新内容则为空字符串。",
+  "core_profile_update": "如需更新则提供更新后的核心档案文本。否则为空字符串。",
+  "thematic_facts": [
+    {
+      "topic": "主题概括（如果是更新已有主题，使用完全相同的主题名称）",
+      "content": "该主题的完整更新事实（如适用则与现有内容合并）。"
+    }
+  ]
+}
+
+对话：
+用户：%s
+助手：%s`)
+	} else {
+		sb.WriteString(`
 Respond ONLY with a JSON object in the following format:
 {
   "event_stream": "A concise summary of the factual event or information revealed in this turn. Empty string if nothing new.",
@@ -450,6 +498,7 @@ Respond ONLY with a JSON object in the following format:
 Conversation:
 User: %s
 Assistant: %s`)
+	}
 
 	return sb.String()
 }

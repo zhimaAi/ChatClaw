@@ -20,7 +20,7 @@ import (
 // runChatModeGeneration handles the "chat" mode: direct LLM call with
 // knowledge-base and memory retrieval injected into the system prompt.
 // No ReAct loop or tool calling — just a single streaming LLM invocation.
-func (s *ChatService) runChatModeGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
+func (s *ChatService) runChatModeGeneration(ctx context.Context, db *bun.DB, conversationID int64, tabID, requestID, userContent, imagesJSON string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras) {
 	gc := &generationContext{
 		service:        s,
 		db:             db,
@@ -32,12 +32,16 @@ func (s *ChatService) runChatModeGeneration(ctx context.Context, db *bun.DB, con
 		agentExtras:    agentExtras,
 	}
 
+	if imagesJSON == "" {
+		imagesJSON = "[]"
+	}
 	userMsg := &messageModel{
 		ConversationID: conversationID,
 		Role:           RoleUser,
 		Content:        userContent,
 		Status:         StatusSuccess,
 		ToolCalls:      "[]",
+		ImagesJSON:     imagesJSON,
 	}
 
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -82,6 +86,7 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		ModelID:        agentConfig.ModelID,
 		Status:         StatusStreaming,
 		ToolCalls:      "[]",
+		ImagesJSON:     "[]",
 	}
 
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -97,7 +102,7 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		Status:    StatusStreaming,
 	})
 
-	messages, err := s.loadMessagesForContext(ctx, db, conversationID, agentConfig.ContextCount)
+	messages, err := s.loadMessagesForContext(ctx, db, conversationID, agentConfig.ContextCount, providerConfig.ProviderID, agentConfig.ModelID)
 	if err != nil {
 		gc.emitError("error.chat_messages_failed", nil)
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")

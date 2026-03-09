@@ -17,6 +17,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/gemini v0.1.28
 	github.com/cloudwego/eino-ext/components/model/ollama v0.1.8
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.8
+	github.com/cloudwego/eino-ext/components/model/qwen v0.1.5
 	github.com/cloudwego/eino-ext/components/tool/duckduckgo/v2 v2.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/tool/sequentialthinking v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/tool/wikipedia v0.0.0-20260302070227-13ce9b3fa975

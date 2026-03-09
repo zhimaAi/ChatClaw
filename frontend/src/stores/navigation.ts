@@ -37,6 +37,16 @@ export interface Tab {
   data?: DocumentViewerData
 }
 
+/** Serializable image data for pending chat (e.g. from knowledge page) */
+export interface PendingChatImage {
+  id: string
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+
 /**
  * Pending chat data for cross-module navigation.
  * E.g. Knowledge page can pre-fill chat input and jump to a new assistant tab.
@@ -54,6 +64,8 @@ export interface PendingChatData {
   enableThinking?: boolean
   /** Chat mode: 'chat' or 'task' */
   chatMode?: string
+  /** Pending images (e.g. from knowledge page input) */
+  pendingImages?: PendingChatImage[]
   /** Target tab ID that should consume this data */
   targetTabId: string
 }
@@ -151,6 +163,10 @@ export const useNavigationStore = defineStore('navigation', () => {
     activeModule.value = module
 
     if (module === 'assistant') {
+      // If the current tab is already an assistant tab, stay on it.
+      const currentTab = tabs.value.find((t) => t.id === activeTabId.value)
+      if (currentTab?.module === 'assistant') return
+
       const assistantTabs = tabs.value.filter((tab) => tab.module === 'assistant')
       if (assistantTabs.length > 0) {
         const rightmostTab = assistantTabs[assistantTabs.length - 1]

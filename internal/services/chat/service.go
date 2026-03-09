@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"chatclaw/internal/errs"
 	"chatclaw/internal/sqlite"
 
+	"github.com/cloudwego/eino/adk"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -24,6 +26,14 @@ type activeGeneration struct {
 	requestID string
 	tabID     string
 	done      chan struct{}
+
+	// mu protects the Interrupt/Resume fields below, which are written by
+	// the generation goroutine and read by SendMessage on the main goroutine.
+	mu           sync.Mutex
+	runner       *adk.Runner
+	checkpointID string
+	interrupted  bool
+	agentCleanup func() // deferred agent cleanup, held during interrupt
 }
 
 // ChatService handles chat operations
@@ -31,6 +41,7 @@ type ChatService struct {
 	app               *application.App
 	toolRegistry      *tools.ToolRegistry
 	bgProcessManager  *tools.BgProcessManager
+	checkpointStore   adk.CheckPointStore
 	activeGenerations sync.Map // map[int64]*activeGeneration
 }
 
@@ -40,7 +51,32 @@ func NewChatService(app *application.App) *ChatService {
 		app:              app,
 		toolRegistry:     tools.NewToolRegistry(),
 		bgProcessManager: tools.NewBgProcessManager(),
+		checkpointStore:  newInMemoryCheckPointStore(),
 	}
+}
+
+// inMemoryCheckPointStore is a simple in-memory implementation of adk.CheckPointStore.
+type inMemoryCheckPointStore struct {
+	mu sync.RWMutex
+	m  map[string][]byte
+}
+
+func newInMemoryCheckPointStore() *inMemoryCheckPointStore {
+	return &inMemoryCheckPointStore{m: make(map[string][]byte)}
+}
+
+func (s *inMemoryCheckPointStore) Get(_ context.Context, id string) ([]byte, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.m[id]
+	return v, ok, nil
+}
+
+func (s *inMemoryCheckPointStore) Set(_ context.Context, id string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[id] = data
+	return nil
 }
 
 // Shutdown cleans up all resources held by the ChatService, including
@@ -87,20 +123,75 @@ func (s *ChatService) GetMessages(conversationID int64) ([]Message, error) {
 	return messages, nil
 }
 
-// SendMessage sends a message and starts a ReAct generation loop
+// SendMessage sends a message and starts a ReAct generation loop.
+// If the conversation is in an interrupted state (waiting for user confirmation),
+// the message is treated as a resume response instead of starting a new generation.
 func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, error) {
 	if input.ConversationID <= 0 {
 		return nil, errs.New("error.chat_conversation_id_required")
 	}
 	content := strings.TrimSpace(input.Content)
-	if content == "" {
+	hasImages := len(input.Images) > 0
+
+	// Validate: content or images must be non-empty
+	if content == "" && !hasImages {
 		return nil, errs.New("error.chat_content_required")
 	}
 
-	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content))
+	// Validate images
+	if hasImages {
+		const maxImages = 4
+		const maxImageSize = 2 * 1024 * 1024  // 2MB per image
+		const maxTotalSize = 8 * 1024 * 1024  // 8MB total
+
+		if len(input.Images) > maxImages {
+			return nil, errs.New("error.chat_too_many_images")
+		}
+
+		var totalSize int64
+		for _, img := range input.Images {
+			// Validate mime type
+			if !strings.HasPrefix(img.MimeType, "image/") {
+				return nil, errs.New("error.chat_invalid_image_type")
+			}
+
+			// Validate base64
+			if img.Base64 == "" {
+				return nil, errs.New("error.chat_image_base64_required")
+			}
+
+			// Validate size
+			if img.Size > maxImageSize {
+				return nil, errs.New("error.chat_image_too_large")
+			}
+			totalSize += img.Size
+		}
+
+		if totalSize > maxTotalSize {
+			return nil, errs.New("error.chat_images_total_too_large")
+		}
+	}
+
+	// Serialize images to JSON
+	imagesJSON := "[]"
+	if hasImages {
+		b, err := json.Marshal(input.Images)
+		if err != nil {
+			return nil, errs.Wrap("error.chat_images_serialize_failed", err)
+		}
+		imagesJSON = string(b)
+	}
+
+	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content), "images_count", len(input.Images))
 
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
+		gen.mu.Lock()
+		isInterrupted := gen.interrupted
+		gen.mu.Unlock()
+		if isInterrupted {
+			return s.handleResumeMessage(input.ConversationID, gen, content)
+		}
 		if gen.tabID != input.TabID {
 			return nil, errs.New("error.chat_generation_in_progress_other_tab")
 		}
@@ -121,13 +212,60 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 
 	if agentExtras.ChatMode == "chat" {
 		return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
-			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
+			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, imagesJSON, agentConfig, providerConfig, agentExtras)
 		})
 	}
 
 	return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
-		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, agentConfig, providerConfig, agentExtras)
+		s.runGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, imagesJSON, agentConfig, providerConfig, agentExtras)
 	})
+}
+
+// handleResumeMessage processes user confirmation/rejection for an interrupted generation.
+func (s *ChatService) handleResumeMessage(conversationID int64, gen *activeGeneration, content string) (*SendMessageResult, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	userMsg := &messageModel{
+		ConversationID: conversationID,
+		Role:           RoleUser,
+		Content:        content,
+		Status:         StatusSuccess,
+		ToolCalls:      "[]",
+	}
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if _, insertErr := db.NewInsert().Model(userMsg).Exec(dbCtx); insertErr != nil {
+		dbCancel()
+		s.app.Logger.Error("[chat] failed to save resume user message", "conv", conversationID, "error", insertErr)
+		return nil, errs.Wrap("error.chat_message_save_failed", insertErr)
+	}
+	dbCancel()
+
+	approved := isApproval(content)
+
+	gen.mu.Lock()
+	gen.interrupted = false
+	gen.mu.Unlock()
+
+	go func() {
+		s.resumeGeneration(gen, conversationID, approved)
+	}()
+
+	return &SendMessageResult{RequestID: gen.requestID, MessageID: userMsg.ID}, nil
+}
+
+// isApproval checks whether the user message indicates approval.
+func isApproval(content string) bool {
+	lower := strings.ToLower(strings.TrimSpace(content))
+	approvals := []string{"确认", "confirm", "yes", "y", "ok", "approve", "是", "好", "继续", "执行"}
+	for _, a := range approvals {
+		if lower == a {
+			return true
+		}
+	}
+	return false
 }
 
 // EditAndResend edits a message and resends
@@ -269,8 +407,15 @@ func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID st
 	}, nil
 }
 
-// tryDeleteGeneration removes the generation from the map only if it is still the active one.
+// tryDeleteGeneration removes the generation from the map only if it is still
+// the active one and not in an interrupted state (waiting for user confirmation).
 func (s *ChatService) tryDeleteGeneration(conversationID int64, gen *activeGeneration) {
+	gen.mu.Lock()
+	isInterrupted := gen.interrupted
+	gen.mu.Unlock()
+	if isInterrupted {
+		return
+	}
 	if cur, ok := s.activeGenerations.Load(conversationID); ok && cur == gen {
 		s.activeGenerations.Delete(conversationID)
 	}

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk/filesystem"
-	"github.com/cloudwego/eino/adk/middlewares/plantask"
 )
 
 // BackendConfig configures the filesystem backend.
@@ -33,8 +32,8 @@ type BackendConfig struct {
 	ToolchainBinDir string
 }
 
-// Backend implements filesystem.Backend, filesystem.Shell, and plantask's
-// Delete. In sandbox mode (CodexBin != ""), write and execute operations
+// Backend implements filesystem.Backend and filesystem.Shell.
+// In sandbox mode (CodexBin != ""), write and execute operations
 // are routed through codex-cli for OS-level isolation.
 type Backend struct {
 	homeDir         string
@@ -77,6 +76,10 @@ func (b *Backend) LsInfo(_ context.Context, req *filesystem.LsInfoRequest) ([]fi
 	}
 	path = filepath.Clean(path)
 
+	if b.IsSensitivePath(path) {
+		return nil, fmt.Errorf("access denied: path contains sensitive credentials")
+	}
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -91,8 +94,12 @@ func (b *Backend) LsInfo(_ context.Context, req *filesystem.LsInfoRequest) ([]fi
 
 	result := make([]filesystem.FileInfo, 0, len(entries))
 	for _, e := range entries {
+		fullPath := filepath.Join(path, e.Name())
+		if b.IsSensitivePath(fullPath) {
+			continue
+		}
 		fi := filesystem.FileInfo{
-			Path:  filepath.Join(path, e.Name()),
+			Path:  fullPath,
 			IsDir: e.IsDir(),
 		}
 		if info, infoErr := e.Info(); infoErr == nil {
@@ -106,6 +113,10 @@ func (b *Backend) LsInfo(_ context.Context, req *filesystem.LsInfoRequest) ([]fi
 
 func (b *Backend) Read(_ context.Context, req *filesystem.ReadRequest) (string, error) {
 	path := filepath.Clean(req.FilePath)
+
+	if b.IsSensitivePath(path) {
+		return "", fmt.Errorf("access denied: path contains sensitive credentials")
+	}
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -191,12 +202,16 @@ func (b *Backend) Edit(_ context.Context, req *filesystem.EditRequest) error {
 	return os.WriteFile(path, []byte(newContent), 0o644)
 }
 
-func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]filesystem.GrepMatch, error) {
+func (b *Backend) GrepRaw(ctx context.Context, req *filesystem.GrepRequest) ([]filesystem.GrepMatch, error) {
 	basePath := req.Path
 	if basePath == "" {
 		basePath = b.homeDir
 	}
 	basePath = filepath.Clean(basePath)
+
+	if b.IsSensitivePath(basePath) {
+		return nil, fmt.Errorf("access denied: path contains sensitive credentials")
+	}
 
 	patternStr := req.Pattern
 	if req.CaseInsensitive {
@@ -213,8 +228,17 @@ func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]fil
 	var matches []filesystem.GrepMatch
 
 	err := filepath.WalkDir(basePath, func(p string, d os.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		if err != nil {
 			if os.IsPermission(err) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if b.IsSensitivePath(p) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
@@ -269,12 +293,16 @@ func (b *Backend) GrepRaw(_ context.Context, req *filesystem.GrepRequest) ([]fil
 	return matches, nil
 }
 
-func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) ([]filesystem.FileInfo, error) {
+func (b *Backend) GlobInfo(ctx context.Context, req *filesystem.GlobInfoRequest) ([]filesystem.FileInfo, error) {
 	basePath := req.Path
 	if basePath == "" {
 		basePath = b.homeDir
 	}
 	basePath = filepath.Clean(basePath)
+
+	if b.IsSensitivePath(basePath) {
+		return nil, fmt.Errorf("access denied: path contains sensitive credentials")
+	}
 
 	pattern := req.Pattern
 	if pattern == "" {
@@ -295,7 +323,16 @@ func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) (
 		}
 
 		err = filepath.Walk(basePath, func(p string, info os.FileInfo, walkErr error) error {
+			if ctx.Err() != nil {
+				return filepath.SkipAll
+			}
 			if walkErr != nil {
+				return nil
+			}
+			if b.IsSensitivePath(p) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			relPath, _ := filepath.Rel(basePath, p)
@@ -316,6 +353,9 @@ func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) (
 			return nil, err
 		}
 		for _, m := range globMatches {
+			if b.IsSensitivePath(m) {
+				continue
+			}
 			info, statErr := os.Stat(m)
 			isDir := false
 			if statErr == nil {
@@ -335,13 +375,13 @@ func (b *Backend) GlobInfo(_ context.Context, req *filesystem.GlobInfoRequest) (
 // filesystem.Shell — Command execution
 // ---------------------------------------------------------------------------
 
-func (b *Backend) Execute(_ context.Context, input *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
+func (b *Backend) Execute(parentCtx context.Context, input *filesystem.ExecuteRequest) (*filesystem.ExecuteResponse, error) {
 	if input.Command == "" {
 		return nil, fmt.Errorf("command is required")
 	}
 
 	timeout := 60 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
 
 	var cmd *exec.Cmd
@@ -423,18 +463,6 @@ func (b *Backend) Execute(_ context.Context, input *filesystem.ExecuteRequest) (
 		ExitCode:  &exitCode,
 		Truncated: truncated,
 	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// plantask.Backend — Delete
-// ---------------------------------------------------------------------------
-
-func (b *Backend) Delete(_ context.Context, req *plantask.DeleteRequest) error {
-	err := os.Remove(req.FilePath)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
 }
 
 // ---------------------------------------------------------------------------
@@ -522,10 +550,88 @@ func (b *Backend) applyToolchainEnv(cmd *exec.Cmd) {
 }
 
 // ---------------------------------------------------------------------------
+// Sensitive path protection
+// ---------------------------------------------------------------------------
+
+// sensitiveHomeDirs are home-relative directories that contain credentials,
+// private keys, or other secrets. Access to these paths is blocked for both
+// read and write operations performed by the sandbox agent.
+var sensitiveHomeDirs = []string{
+	".ssh",
+	".gnupg",
+	".gpg",
+	".aws",
+	".azure",
+	".config/gcloud",
+	".kube",
+	".docker",
+	".npmrc",
+	".pypirc",
+	".gem/credentials",
+	".netrc",
+	".git-credentials",
+	".config/gh",
+	".config/hub",
+	".local/share/keyrings",
+	".password-store",
+	".vault-token",
+	".config/op",
+	".1password",
+}
+
+// sensitiveFileNames are specific file names (matched anywhere) that should
+// be blocked regardless of directory.
+var sensitiveFileNames = []string{
+	".env",
+	".env.local",
+	".env.production",
+	".env.staging",
+	"credentials.json",
+	"service-account.json",
+	"secrets.yaml",
+	"secrets.yml",
+}
+
+// IsSensitivePath reports whether the given absolute path falls inside a
+// sensitive directory or matches a sensitive file name relative to homeDir.
+// This check only applies in sandbox mode; native mode has full access.
+func (b *Backend) IsSensitivePath(absPath string) bool {
+	if !b.SandboxEnabled() {
+		return false
+	}
+
+	cleaned := filepath.Clean(absPath)
+	homeClean := filepath.Clean(b.homeDir)
+
+	rel, err := filepath.Rel(homeClean, cleaned)
+	if err != nil {
+		return false
+	}
+	relSlash := filepath.ToSlash(rel)
+
+	for _, dir := range sensitiveHomeDirs {
+		dirSlash := filepath.ToSlash(dir)
+		if relSlash == dirSlash || strings.HasPrefix(relSlash, dirSlash+"/") {
+			return true
+		}
+	}
+
+	baseName := filepath.Base(cleaned)
+	for _, name := range sensitiveFileNames {
+		if strings.EqualFold(baseName, name) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ---------------------------------------------------------------------------
 // Path resolution helpers (used by tool wrappers)
 // ---------------------------------------------------------------------------
 
 // ResolvePath converts a path to an absolute filesystem path.
+// It rejects paths that escape homeDir or target sensitive locations.
 func (b *Backend) ResolvePath(p string) (string, error) {
 	if p == "" || p == "/" {
 		return b.homeDir, nil
@@ -551,6 +657,11 @@ func (b *Backend) ResolvePath(p string) (string, error) {
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("path escapes home directory: %s", p)
 	}
+
+	if b.IsSensitivePath(absResolved) {
+		return "", fmt.Errorf("access denied: %q is a sensitive path containing credentials or secrets", p)
+	}
+
 	return absResolved, nil
 }
 

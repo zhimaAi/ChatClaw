@@ -132,6 +132,7 @@ const updateDialogNotes = ref('')
 
 let unsubscribeUpdateAvailable: (() => void) | null = null
 let unsubscribeShowDialog: (() => void) | null = null
+let unsubscribeFloatingBallSettings: (() => void) | null = null
 
 let unsubscribeTextSelection: (() => void) | null = null
 let onMouseDown: ((e: MouseEvent) => void) | null = null
@@ -206,6 +207,11 @@ onMounted(async () => {
     updateDialogNotes.value = payload?.release_notes || ''
     updateDialogMode.value = payload?.mode || 'new-version'
     updateDialogOpen.value = true
+  })
+
+  // Floating ball: open settings page
+  unsubscribeFloatingBallSettings = Events.On('floatingball:open-settings', () => {
+    navigationStore.navigateToModule('settings')
   })
 
   // Text selection event handling
@@ -358,6 +364,8 @@ onUnmounted(() => {
   unsubscribeUpdateAvailable = null
   unsubscribeShowDialog?.()
   unsubscribeShowDialog = null
+  unsubscribeFloatingBallSettings?.()
+  unsubscribeFloatingBallSettings = null
 
   // Clean up in-app popup timer
   if (inAppPopupHideTimer) {

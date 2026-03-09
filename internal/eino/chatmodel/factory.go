@@ -9,6 +9,7 @@ import (
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 )
@@ -27,6 +28,8 @@ type ProviderConfig struct {
 	ExtraConfig string
 	// Timeout 请求超时时间
 	Timeout time.Duration
+	// DisableThinking explicitly disables thinking/reasoning mode
+	DisableThinking bool
 }
 
 // NewChatModel 根据供应商配置创建新的 ChatModel
@@ -46,6 +49,8 @@ func NewChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatModel, er
 		return newGeminiChatModel(ctx, cfg)
 	case "anthropic":
 		return newClaudeChatModel(ctx, cfg)
+	case "qwen":
+		return newQwenChatModel(ctx, cfg)
 	default:
 		// 默认使用 OpenAI 兼容 API
 		return newOpenAIChatModel(ctx, cfg)
@@ -60,6 +65,9 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	}
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
+	}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
 	return openai.NewChatModel(ctx, config)
 }
@@ -86,6 +94,9 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 		BaseURL:    cfg.APIEndpoint,
 		ByAzure:    true,
 		APIVersion: extraConfig.APIVersion,
+	}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
 	return openai.NewChatModel(ctx, config)
 }
@@ -138,4 +149,23 @@ func newClaudeChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 		BaseURL:   baseURL,
 		MaxTokens: 4096,
 	})
+}
+
+// newQwenChatModel 创建 Qwen ChatModel
+func newQwenChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatModel, error) {
+	config := &qwen.ChatModelConfig{
+		APIKey: cfg.APIKey,
+		Model:  cfg.ModelID,
+	}
+	if cfg.APIEndpoint != "" {
+		config.BaseURL = cfg.APIEndpoint
+	}
+	if cfg.Timeout > 0 {
+		config.Timeout = cfg.Timeout
+	}
+	if cfg.DisableThinking {
+		disableThinking := false
+		config.EnableThinking = &disableThinking
+	}
+	return qwen.NewChatModel(ctx, config)
 }

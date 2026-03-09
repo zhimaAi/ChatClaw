@@ -37,6 +37,7 @@ const props = defineProps<{
   getAgentConversations: (agentId: number) => Conversation[]
   getAllAgentConversations: (agentId: number) => Conversation[]
   ensureConversationsLoaded: (agentId: number) => Promise<void>
+  onWakeAttached?: (e: globalThis.PointerEvent) => void
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +65,13 @@ const handleAgentClick = (agentId: number) => {
 
 const handleListModeChange = (mode: ListMode) => {
   emit('update:listMode', mode)
+}
+
+const handleWakeAttached = (e: globalThis.PointerEvent) => {
+  // Only trigger wake attached when there are multiple agents
+  if (props.agents.length > 1 && props.onWakeAttached) {
+    props.onWakeAttached(e)
+  }
 }
 </script>
 
@@ -146,6 +154,7 @@ const handleListModeChange = (mode: ListMode) => {
             role="button"
             tabindex="0"
             @click="handleAgentClick(a.id)"
+            @pointerdown.capture="handleWakeAttached"
             @keydown.enter.prevent="handleAgentClick(a.id)"
             @keydown.space.prevent="handleAgentClick(a.id)"
           >

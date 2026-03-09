@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"runtime"
+	"time"
 
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/toolchain"
@@ -12,9 +13,8 @@ func isZhCN() bool {
 	return i18n.GetLocale() == i18n.LocaleZhCN
 }
 
-// buildFilesystemSystemPrompt generates a system prompt that tells the LLM about
-// the OS environment, working directory, sandbox constraints, and available tools.
-func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+// buildCorePrompt generates the environment section: OS, shell, directories, time.
+func buildCorePrompt(homeDir, workDir, sessionsDir string) string {
 	osName := runtime.GOOS
 	shell := "/bin/bash"
 	switch osName {
@@ -25,12 +25,14 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 	}
 
 	zh := isZhCN()
+	now := time.Now().Format("2006-01-02 (Monday) 15:04")
 
 	var prompt string
 	if zh {
 		prompt = fmt.Sprintf(`
-# 文件系统与执行工具 — 环境信息
+# 环境信息
 
+- 当前时间: %s
 - 操作系统: %s
 - Shell: %s
 - 用户主目录: %s
@@ -38,11 +40,12 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 - 所有工具使用操作系统的绝对路径。
 - 当用户提到"工作目录"或要求写入/创建文件时，**始终使用工作目录**作为基础路径。例如: write_file(file_path="%s/foo.txt"), ls(path="%s")。
 - 当用户提到"用户目录"或"主目录"时，指的是: %s
-`, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 	} else {
 		prompt = fmt.Sprintf(`
-# Filesystem & Execute Tools — Environment Info
+# Environment Info
 
+- Current time: %s
 - Operating System: %s
 - Shell: %s
 - Home directory: %s
@@ -50,7 +53,7 @@ func buildFilesystemSystemPrompt(homeDir, workDir, sessionsDir, toolchainBinDir 
 - All tools use real OS absolute paths.
 - When the user mentions "working directory" or asks to write/create files, **always use the working directory** as the base path. For example: write_file(file_path="%s/foo.txt"), ls(path="%s").
 - When the user mentions "user directory" or "home directory", it refers to: %s
-`, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
 	}
 
 	if sessionsDir != "" {
@@ -70,6 +73,15 @@ The parent directory (%s) contains sibling conversations from the same AI assist
 `, workDir, sessionsDir, sessionsDir)
 		}
 	}
+
+	return prompt
+}
+
+// buildToolsPrompt generates sandbox rules, toolchain info, dangerous command
+// confirmation, and PowerShell notes.
+func buildToolsPrompt(workDir string, sandboxEnabled, sandboxNetworkEnabled bool, toolchainBinDir string) string {
+	zh := isZhCN()
+	var prompt string
 
 	if sandboxEnabled {
 		if zh {
@@ -96,9 +108,10 @@ The parent directory (%s) contains sibling conversations from the same AI assist
 - **使用 npx / bunx** 运行 CLI 工具，无需全局安装（例如 "npx create-vue@latest my-app" 而不是全局安装 @vue/cli）。
 - **始终传递非交互标志**以避免命令在 stdin 上挂起: 使用 "--yes"、"--default"、"-y"，或根据需要使用管道 "echo"（例如 "npx create-vue@latest my-app --default"、"npm init -y"）。
 - **所有项目文件必须在工作目录内创建。** 不要尝试在其他地方创建文件。
+- **运行 shell 脚本时用 "sh script.sh"（或 "bash script.sh" / "zsh script.sh"）**，不要用 "./script.sh"（沙箱中文件没有执行权限），也不要尝试 chmod。
 - 如果命令因权限被拒绝而失败，可能是在尝试写入工作目录之外的路径。请使用本地/项目范围的替代方案重试。
 `, workDir, networkDesc)
-		} else {
+	} else {
 			networkDesc := "Network access is **disabled** for executed commands. Commands like curl, npm install, pip install will fail."
 			if sandboxNetworkEnabled {
 				networkDesc = "Network access is **enabled** for executed commands (e.g. npm install, curl, pip install will work)."
@@ -122,12 +135,51 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 - **Use npx / bunx** to run CLI tools without global installs (e.g. "npx create-vue@latest my-app" instead of installing @vue/cli globally).
 - **Always pass non-interactive flags** to avoid commands hanging on stdin: use "--yes", "--default", "-y", or pipe "echo" as needed (e.g. "npx create-vue@latest my-app --default", "npm init -y").
 - **All project files must be created inside the working directory.** Do not attempt to create files elsewhere.
+- **Run shell scripts with "sh script.sh" (or "bash script.sh" / "zsh script.sh")** — never use "./script.sh" (files have no execute permission in sandbox) and do not attempt chmod.
 - If a command fails due to permission denied, it is likely trying to write outside the working directory. Retry with a local/project-scoped alternative.
 `, workDir, networkDesc)
 		}
 	}
 
-	if osName == "windows" {
+	if zh {
+		prompt += `
+# 危险命令确认
+
+在执行任何可能造成破坏性影响的 shell 命令之前，你**必须**先调用 confirm_execution 工具，将完整命令传入，等待用户确认后再执行。
+
+以下类型的命令需要确认:
+- 递归删除 (rm -rf, rm -r, rmdir)
+- 磁盘格式化 (mkfs, dd if=, format)
+- 需要提权的命令 (sudo)
+- 系统关机/重启 (shutdown, reboot, halt)
+- 批量进程终止 (kill -9, killall)
+- 危险权限修改 (chmod -R 777)
+- 写入设备文件 (> /dev/)
+
+**工作流程**: 先调用 confirm_execution(command="你要执行的命令") → 获得用户确认 → 再调用 execute 执行命令。
+**绝对不要**跳过确认直接执行上述类型的命令。
+`
+	} else {
+		prompt += `
+# Dangerous Command Confirmation
+
+Before executing any potentially destructive shell command, you **must** call the confirm_execution tool first, passing the exact command, and wait for user confirmation before executing it.
+
+The following types of commands require confirmation:
+- Recursive deletion (rm -rf, rm -r, rmdir)
+- Disk formatting (mkfs, dd if=, format)
+- Privilege escalation (sudo)
+- System shutdown/reboot (shutdown, reboot, halt)
+- Batch process termination (kill -9, killall)
+- Dangerous permission changes (chmod -R 777)
+- Writing to device files (> /dev/)
+
+**Workflow**: Call confirm_execution(command="your command") → get user confirmation → then call execute to run the command.
+**Never** skip confirmation and directly execute the above types of commands.
+`
+	}
+
+	if runtime.GOOS == "windows" {
 		if zh {
 			prompt += `
 # PowerShell 注意事项
@@ -225,4 +277,86 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 	}
 
 	return prompt
+}
+
+// buildSubAgentPrompt generates guidance for when and how to use the sub-agents.
+func buildSubAgentPrompt() string {
+	if isZhCN() {
+		return `
+# 任务委派
+
+你有三个专业助手可以委派任务。**优先委派，而非自己做。**
+
+## 何时必须委派
+满足以下**任一**条件时，**必须**委派给对应的子代理：
+- 需要搜索网络信息或调研 → 调用 researcher
+- 需要写文件、创建项目、运行脚本、执行命令 → 调用 worker
+- 需要安装或查找技能 → 调用 skill_advisor
+
+## 何时自己做
+仅当任务是**纯文本对话**（回答问题、翻译、解释概念）时才自己做，不调用子代理。
+
+## researcher
+调研类任务。它会搜索网络、浏览网页，返回精炼的结论。
+给它完整的任务描述，因为它看不到你的对话历史。
+
+## worker
+执行类任务。它拥有所有工具（文件读写、命令执行、浏览器等），在独立上下文中自主完成任务。
+给它清晰的任务描述，包含工作目录路径和预期输出。
+
+## skill_advisor
+技能类任务。它会搜索技能市场、安装技能、分析内容，返回执行指南。
+
+## 委派要点
+- 多个独立任务可以同时委派给多个子代理
+- 子代理返回的结论和指南可以根据实际情况调整
+`
+	}
+	return `
+# Task Delegation
+
+You have three specialist assistants to delegate tasks to. **Prefer delegating over doing it yourself.**
+
+## When you MUST delegate
+If the task meets **any** of the following, you **must** delegate:
+- Needs web search or research → call researcher
+- Needs to write files, create projects, run scripts, execute commands → call worker
+- Needs to find or install skills → call skill_advisor
+
+## When to do it yourself
+Only handle it yourself when the task is **pure text conversation** (answering questions, translating, explaining concepts) with no tool usage needed.
+
+## researcher
+For research tasks. It searches the web, browses pages, and returns condensed findings.
+Provide a complete task description — it cannot see your conversation history.
+
+## worker
+For execution tasks. It has all tools (file I/O, command execution, browser, etc.) and works autonomously in an isolated context.
+Provide a clear task description including working directory path and expected output.
+
+## skill_advisor
+For skill tasks. It searches the skill marketplace, installs skills, analyzes content, and returns execution guides.
+
+## Delegation tips
+- Launch multiple sub-agents simultaneously for independent sub-tasks
+- Adjust sub-agent conclusions and guides based on the actual situation
+`
+}
+
+// buildSkillGuidancePrompt generates a concise prompt about the skill system.
+func buildSkillGuidancePrompt() string {
+	if isZhCN() {
+		return `
+# 技能系统
+
+已安装的技能会自动加载到你的能力中。需要更多技能支持时，调用 skill_advisor 搜索市场、安装并分析相关技能。
+skill_advisor 返回的执行指南基于经过验证的最佳实践，优先遵循。
+`
+	}
+	return `
+# Skill System
+
+Installed skills are automatically loaded into your capabilities. When you need more skill support, call skill_advisor to search the marketplace, install and analyze relevant skills.
+Execution guides returned by skill_advisor are based on verified best practices — follow them preferentially.
+`
 }

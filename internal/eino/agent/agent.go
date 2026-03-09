@@ -13,14 +13,17 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
 
+	"errors"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/middlewares/patchtoolcalls"
-	"github.com/cloudwego/eino/adk/middlewares/plantask"
 	"github.com/cloudwego/eino/adk/middlewares/reduction"
 	"github.com/cloudwego/eino/adk/middlewares/summarization"
 	"github.com/cloudwego/eino/components/model"
@@ -37,7 +40,6 @@ const (
 	einoMetaDir    = ".eino"            // per-session metadata directory under WorkDir
 	sessionsSubdir = "sessions"         // subdirectory for per-agent/conversation working dirs
 	reductionDir   = "reduction"        // reduction middleware offload directory
-	tasksDir       = "tasks"            // plantask middleware data directory
 	transcriptFile = "transcript.jsonl" // summarization transcript filename
 	codexBinName   = "codex"            // codex sandbox binary name (without .exe)
 	sandboxCodex   = "codex"            // SandboxMode value for codex sandbox
@@ -84,13 +86,14 @@ type Config struct {
 // AgentResult holds the created agent and a cleanup function that should be
 // called (typically via defer) when the agent is no longer needed.
 type AgentResult struct {
-	Agent   adk.Agent
+	Agent   adk.ResumableAgent
 	Cleanup func()
 }
 
-// NewChatModelAgent creates an ADK ChatModelAgent with tools and handlers.
-// messageCount is the number of historical messages in the conversation;
-// pass 1 (first user message only) to enable one-time system prompt logging.
+// NewChatModelAgent creates the main agent with three sub-agents (Researcher,
+// Worker, SkillAdvisor) registered as AgentTools. messageCount is the number of
+// historical messages in the conversation; pass 1 (first user message only)
+// to enable one-time system prompt logging.
 func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) (*AgentResult, error) {
 	chatModel, err := CreateChatModel(ctx, config)
 	if err != nil {
@@ -112,35 +115,75 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	}
 
 	backend := buildBackend(config, logger)
-	fsTools := BuildFsTools(backend, bgMgr, logger)
 
-	baseTools := make([]tool.BaseTool, 0, len(enabledTools)+len(fsTools)+len(extraTools)+1)
+	fsTools := buildFilesystemTools(backend, bgMgr, logger)
+
+	baseTools := make([]tool.BaseTool, 0, len(fsTools)+len(enabledTools)+len(extraTools)+3)
+	baseTools = append(baseTools, fsTools...)
 	baseTools = append(baseTools, enabledTools...)
 	baseTools = append(baseTools, browserTool)
-	baseTools = append(baseTools, fsTools...)
+	baseTools = append(baseTools, NewConfirmExecutionTool())
 	baseTools = append(baseTools, extraTools...)
 
-	agentConfig := &adk.ChatModelAgentConfig{
+	// Prepare skill resources (shared by sub-agents)
+	var skillMgmtTools []tool.BaseTool
+	var skillBackend *filteringSkillBackend
+	if config.SkillsEnabled {
+		skillMgmtTools = filterToolsByName(extraTools,
+			"skill_list", "skill_search", "skill_install", "skill_enable",
+		)
+		skillBackend = newFilteringSkillBackend(backend, logger)
+	}
+
+	// Sub-agents (need baseTools reference for tool selection)
+	researcher, researcherErr := newResearcherSubAgent(ctx, chatModel, baseTools, backend, config, skillMgmtTools, skillBackend, logger)
+	if researcherErr != nil {
+		logger.Warn("[agent] failed to create researcher sub-agent", "error", researcherErr)
+	}
+
+	worker, workerErr := newWorkerSubAgent(ctx, chatModel, baseTools, backend, config, skillBackend, logger)
+	if workerErr != nil {
+		logger.Warn("[agent] failed to create worker sub-agent", "error", workerErr)
+	}
+
+	allTools := make([]tool.BaseTool, 0, len(baseTools)+3)
+	allTools = append(allTools, baseTools...)
+	if researcherErr == nil {
+		allTools = append(allTools, researcher)
+	}
+	if workerErr == nil {
+		allTools = append(allTools, worker)
+	}
+
+	if config.SkillsEnabled {
+		advisor, advisorErr := newSkillAdvisorSubAgent(ctx, chatModel, skillMgmtTools, skillBackend, logger)
+		if advisorErr != nil {
+			logger.Warn("[agent] failed to create skill_advisor sub-agent", "error", advisorErr)
+		} else {
+			allTools = append(allTools, advisor)
+		}
+	}
+
+	toolsConfig := adk.ToolsConfig{
+		ToolsNodeConfig: compose.ToolsNodeConfig{
+			Tools:               allTools,
+			ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(allTools, logger)},
+			UnknownToolsHandler: unknownToolsHandler(allTools, logger),
+		},
+		EmitInternalEvents: true,
+	}
+
+	handlers := buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
+
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          config.Name,
 		Description:   "AI Assistant",
 		Instruction:   config.Instruction,
 		Model:         chatModel,
+		ToolsConfig:   toolsConfig,
+		Handlers:      handlers,
 		MaxIterations: UnlimitedIterations,
-	}
-
-	if len(baseTools) > 0 {
-		agentConfig.ToolsConfig = adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               baseTools,
-				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(logger)},
-				UnknownToolsHandler: unknownToolsHandler(baseTools, logger),
-			},
-		}
-	}
-
-	agentConfig.Handlers = buildHandlers(ctx, backend, config, chatModel, extraHandlers, logger, messageCount)
-
-	agent, err := adk.NewChatModelAgent(ctx, agentConfig)
+	})
 	if err != nil {
 		browserTool.Close()
 		return nil, err
@@ -154,31 +197,33 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	}, nil
 }
 
-// buildHandlers creates all ChatModelAgentMiddleware handlers.
+// buildHandlers creates all ChatModelAgentMiddleware handlers for the main agent.
 func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatModel model.BaseChatModel, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) []adk.ChatModelAgentMiddleware {
 	var handlers []adk.ChatModelAgentMiddleware
 
-	// System prompt injection
-	var sessionsDir string
-	if config.AgentID > 0 {
-		base := config.WorkDir
-		if base == "" {
-			base = filepath.Join(b.HomeDir(), appDataDir)
-		}
-		sessionsDir = filepath.Join(base, sessionsSubdir, idHash(config.AgentID))
-	}
-	systemPrompt := buildFilesystemSystemPrompt(b.HomeDir(), b.WorkDir(), sessionsDir, b.ToolchainBinDir(), b.SandboxEnabled(), b.SandboxEnabled() && config.SandboxNetwork)
-	handlers = append(handlers, NewInstructionHandler(systemPrompt))
+	// 1. Core environment prompt
+	sessionsDir := buildSessionsDir(config, b)
+	handlers = append(handlers, NewInstructionHandler(buildCorePrompt(b.HomeDir(), b.WorkDir(), sessionsDir)))
 
-	// Extra handlers from caller (e.g. memory core profile)
+	// 2. Extra handlers from caller (e.g. memory core profile)
 	handlers = append(handlers, extraHandlers...)
 
-	einoDir := filepath.Join(b.WorkDir(), einoMetaDir)
-	_ = os.MkdirAll(einoDir, 0o755)
+	// 3. Tools & sandbox prompt
+	handlers = append(handlers, NewInstructionHandler(
+		buildToolsPrompt(b.WorkDir(), b.SandboxEnabled(),
+			b.SandboxEnabled() && config.SandboxNetwork, b.ToolchainBinDir())))
 
+	// 4. Sub-agent usage guide
+	handlers = append(handlers, NewInstructionHandler(buildSubAgentPrompt()))
+
+	// 5. PatchToolCalls
 	if h := buildPatchToolCallsHandler(ctx, logger); h != nil {
 		handlers = append(handlers, h)
 	}
+
+	// 6. Reduction + Summarization (main agent paths)
+	einoDir := filepath.Join(b.WorkDir(), einoMetaDir)
+	_ = os.MkdirAll(einoDir, 0o755)
 
 	reductionPath := filepath.Join(einoDir, reductionDir)
 	_ = os.MkdirAll(reductionPath, 0o755)
@@ -191,22 +236,79 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 		handlers = append(handlers, h)
 	}
 
-	taskPath := filepath.Join(einoDir, tasksDir)
-	_ = os.MkdirAll(taskPath, 0o755)
-	if h := buildPlantaskHandler(ctx, b, taskPath, logger); h != nil {
-		handlers = append(handlers, h)
-	}
-
+	// 7. Skill middleware + guidance prompt
 	if config.SkillsEnabled {
 		if h := buildSkillHandler(ctx, b, logger); h != nil {
 			handlers = append(handlers, h)
 		}
+		handlers = append(handlers, NewInstructionHandler(buildSkillGuidancePrompt()))
 	}
 
-	// Logging handler goes last so BeforeAgent sees the fully-assembled instruction.
+	// 8. Logging handler goes last so BeforeAgent sees the fully-assembled instruction.
 	handlers = append(handlers, newLoggingHandler(logger, messageCount <= 1))
 
 	return handlers
+}
+
+// buildFilesystemTools creates all filesystem tools from the backend.
+func buildFilesystemTools(backend *tools.Backend, bgMgr *tools.BgProcessManager, logger *slog.Logger) []tool.BaseTool {
+	type toolFactory struct {
+		name string
+		fn   func() (tool.BaseTool, error)
+	}
+	factories := []toolFactory{
+		{"read_file", func() (tool.BaseTool, error) { return tools.NewReadFileTool(backend) }},
+		{"ls", func() (tool.BaseTool, error) { return tools.NewLsTool(backend) }},
+		{"write_file", func() (tool.BaseTool, error) { return tools.NewWriteFileTool(backend) }},
+		{"edit_file", func() (tool.BaseTool, error) { return tools.NewEditFileTool(backend) }},
+		{"patch_file", func() (tool.BaseTool, error) { return tools.NewPatchFileTool(backend) }},
+		{"glob", func() (tool.BaseTool, error) { return tools.NewGlobTool(backend) }},
+		{"grep", func() (tool.BaseTool, error) { return tools.NewGrepTool(backend) }},
+		{"execute", func() (tool.BaseTool, error) { return tools.NewExecuteTool(backend, nil) }},
+	}
+
+	var result []tool.BaseTool
+	for _, f := range factories {
+		t, err := f.fn()
+		if err != nil {
+			logger.Warn("[agent] failed to create filesystem tool", "tool", f.name, "error", err)
+			continue
+		}
+		result = append(result, t)
+	}
+
+	bgTool, err := tools.NewBgExecuteTool(backend, bgMgr)
+	if err != nil {
+		logger.Warn("[agent] failed to create execute_background tool", "error", err)
+	} else {
+		result = append(result, bgTool)
+	}
+
+	return result
+}
+
+// newFilteringSkillBackend creates a filteringSkillBackend for reading skill content.
+func newFilteringSkillBackend(backend *tools.Backend, logger *slog.Logger) *filteringSkillBackend {
+	baseDir := filepath.Join(backend.HomeDir(), ".chatclaw", "skills")
+	_ = os.MkdirAll(baseDir, 0o755)
+	return &filteringSkillBackend{
+		fsBackend: backend,
+		baseDir:   baseDir,
+		logger:    logger,
+	}
+}
+
+// buildSessionsDir returns the sessions directory for this agent, or "" if
+// AgentID is not set.
+func buildSessionsDir(config Config, b *tools.Backend) string {
+	if config.AgentID <= 0 {
+		return ""
+	}
+	base := config.WorkDir
+	if base == "" {
+		base = filepath.Join(b.HomeDir(), appDataDir)
+	}
+	return filepath.Join(base, sessionsSubdir, idHash(config.AgentID))
 }
 
 func buildPatchToolCallsHandler(ctx context.Context, logger *slog.Logger) adk.ChatModelAgentMiddleware {
@@ -257,56 +359,6 @@ func buildSummarizationHandler(ctx context.Context, chatModel model.BaseChatMode
 		return nil
 	}
 	return mw
-}
-
-func buildPlantaskHandler(ctx context.Context, b *tools.Backend, taskDir string, logger *slog.Logger) adk.ChatModelAgentMiddleware {
-	mw, err := plantask.New(ctx, &plantask.Config{
-		Backend: b,
-		BaseDir: taskDir,
-	})
-	if err != nil {
-		logger.Warn("[agent] failed to create plantask handler", "error", err)
-		return nil
-	}
-	return mw
-}
-
-// BuildFsTools creates all filesystem tools backed by a single Backend.
-func BuildFsTools(b *tools.Backend, bgMgr *tools.BgProcessManager, logger *slog.Logger) []tool.BaseTool {
-	var fsTools []tool.BaseTool
-	builders := []func(*tools.Backend) (tool.BaseTool, error){
-		tools.NewLsTool,
-		tools.NewReadFileTool,
-		tools.NewWriteFileTool,
-		tools.NewEditFileTool,
-		tools.NewPatchFileTool,
-		tools.NewGlobTool,
-		tools.NewGrepTool,
-	}
-	for _, build := range builders {
-		t, err := build(b)
-		if err != nil {
-			logger.Warn("[agent] failed to create fs tool", "error", err)
-			continue
-		}
-		fsTools = append(fsTools, t)
-	}
-
-	execTool, err := tools.NewExecuteTool(b, bgMgr)
-	if err != nil {
-		logger.Warn("[agent] failed to create execute tool", "error", err)
-	} else {
-		fsTools = append(fsTools, execTool)
-	}
-
-	bgTool, err := tools.NewBgExecuteTool(b, bgMgr)
-	if err != nil {
-		logger.Warn("[agent] failed to create execute_background tool", "error", err)
-	} else {
-		fsTools = append(fsTools, bgTool)
-	}
-
-	return fsTools
 }
 
 // buildBackend creates the unified filesystem backend.
@@ -410,17 +462,75 @@ func unknownToolsHandler(registeredTools []tool.BaseTool, logger *slog.Logger) f
 	}
 }
 
+// isInterruptErr returns true if the error is an interrupt signal that must
+// propagate to the ADK framework rather than being caught.
+func isInterruptErr(err error) bool {
+	if _, ok := compose.IsInterruptRerunError(err); ok {
+		return true
+	}
+	if _, ok := compose.ExtractInterruptInfo(err); ok {
+		return true
+	}
+	return false
+}
+
 // ErrorCatchingToolMiddleware catches tool execution errors and returns the error
 // message as a tool result, allowing the ReAct loop to continue.
-func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
+// When a tool fails, the error message includes the tool's parameter schema so
+// the model can self-correct. After 3 consecutive failures on the same tool,
+// a suggestion to try an alternative approach is appended.
+// Interrupt signals are not caught — they must propagate to the ADK framework.
+func ErrorCatchingToolMiddleware(allTools []tool.BaseTool, logger *slog.Logger) compose.ToolMiddleware {
+	schemaMap := buildToolSchemaMap(allTools)
+	var failureCounters sync.Map // tool name -> *int32
+
+	subAgentNames := map[string]bool{"researcher": true, "worker": true, "skill_advisor": true}
+
+	formatError := func(toolName string, err error) string {
+		if errors.Is(err, adk.ErrExceedMaxIterations) && subAgentNames[toolName] {
+			return fmt.Sprintf("Sub-agent %q has completed its work (reached iteration limit). "+
+				"Use whatever partial results were streamed above. "+
+				"Do NOT call %q again for the same request — summarize available information and respond to the user directly.", toolName, toolName)
+		}
+
+		msg := "Error: " + err.Error()
+
+		if hint, ok := schemaMap[toolName]; ok {
+			msg += "\n\nExpected parameters:\n" + hint
+		}
+
+		if strings.Contains(err.Error(), "permission denied") || strings.Contains(err.Error(), "not permitted") {
+			msg += "\n\nHint: This may be a sandbox restriction. Ensure you are writing within the working directory."
+		}
+
+		counterVal, _ := failureCounters.LoadOrStore(toolName, new(int32))
+		counter := counterVal.(*int32)
+		count := atomic.AddInt32(counter, 1)
+		if count >= 3 {
+			msg += fmt.Sprintf("\n\nWarning: Tool %q has failed %d times consecutively. Consider trying a different approach or tool.", toolName, count)
+		}
+
+		return msg
+	}
+
+	resetCounter := func(toolName string) {
+		if counterVal, ok := failureCounters.Load(toolName); ok {
+			atomic.StoreInt32(counterVal.(*int32), 0)
+		}
+	}
+
 	return compose.ToolMiddleware{
 		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.ToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
+					if isInterruptErr(err) {
+						return nil, err
+					}
 					logger.Warn("[agent] tool error", "tool", input.Name, "error", err)
-					return &compose.ToolOutput{Result: "Error: " + err.Error()}, nil
+					return &compose.ToolOutput{Result: formatError(input.Name, err)}, nil
 				}
+				resetCounter(input.Name)
 				return output, nil
 			}
 		},
@@ -428,13 +538,54 @@ func ErrorCatchingToolMiddleware(logger *slog.Logger) compose.ToolMiddleware {
 			return func(ctx context.Context, input *compose.ToolInput) (*compose.StreamToolOutput, error) {
 				output, err := next(ctx, input)
 				if err != nil {
+					if isInterruptErr(err) {
+						return nil, err
+					}
 					logger.Warn("[agent] streaming tool error", "tool", input.Name, "error", err)
 					return &compose.StreamToolOutput{
-						Result: schema.StreamReaderFromArray([]string{"Error: " + err.Error()}),
+						Result: schema.StreamReaderFromArray([]string{formatError(input.Name, err)}),
 					}, nil
 				}
+				resetCounter(input.Name)
 				return output, nil
 			}
 		},
 	}
+}
+
+// buildToolSchemaMap pre-loads tool parameter schemas into a name→hint map.
+func buildToolSchemaMap(allTools []tool.BaseTool) map[string]string {
+	m := make(map[string]string, len(allTools))
+	for _, t := range allTools {
+		info, err := t.Info(context.Background())
+		if err != nil || info == nil {
+			continue
+		}
+		if info.ParamsOneOf == nil {
+			continue
+		}
+
+		js, err := info.ParamsOneOf.ToJSONSchema()
+		if err != nil || js == nil || js.Properties == nil {
+			continue
+		}
+
+		var sb strings.Builder
+		for pair := js.Properties.Oldest(); pair != nil; pair = pair.Next() {
+			name := pair.Key
+			prop := pair.Value
+			required := ""
+			for _, r := range js.Required {
+				if r == name {
+					required = " (required)"
+					break
+				}
+			}
+			sb.WriteString(fmt.Sprintf("  - %s: %s%s — %s\n", name, prop.Type, required, prop.Description))
+		}
+		if sb.Len() > 0 {
+			m[info.Name] = sb.String()
+		}
+	}
+	return m
 }

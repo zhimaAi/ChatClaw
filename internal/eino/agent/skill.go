@@ -20,19 +20,19 @@ import (
 const skillFileName = "SKILL.md"
 
 // buildSkillHandler creates the skill middleware using the SDK's skill package.
-// It uses a filtering backend that only loads skills enabled in the DB.
+// It uses a filtering backend that dynamically queries the DB for enabled slugs
+// on every List/Get call, so newly installed skills are available immediately.
 func buildSkillHandler(ctx context.Context, b *tools.Backend, logger *slog.Logger) adk.ChatModelAgentMiddleware {
 	baseDir := filepath.Join(b.HomeDir(), ".chatclaw", "skills")
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		logger.Warn("[agent] failed to create skills directory", "dir", baseDir, "error", err)
 		return nil
 	}
-	enabledSlugs := queryEnabledSlugs(logger)
 
-	backend, err := newFilteringSkillBackend(ctx, b, baseDir, enabledSlugs)
-	if err != nil {
-		logger.Warn("[agent] failed to create skill backend", "error", err)
-		return nil
+	backend := &filteringSkillBackend{
+		fsBackend: b,
+		baseDir:   baseDir,
+		logger:    logger,
 	}
 
 	mw, err := skill.NewChatModelAgentMiddleware(ctx, &skill.Config{
@@ -71,19 +71,13 @@ func queryEnabledSlugs(logger *slog.Logger) map[string]bool {
 	return slugs
 }
 
-// filteringSkillBackend implements skill.Backend and filters by enabled slugs.
+// filteringSkillBackend implements skill.Backend and dynamically queries the DB
+// for enabled slugs on every call, so skills installed mid-conversation are
+// picked up immediately.
 type filteringSkillBackend struct {
-	fsBackend    filesystem.Backend
-	baseDir      string
-	enabledSlugs map[string]bool // nil = load all
-}
-
-func newFilteringSkillBackend(ctx context.Context, fs filesystem.Backend, baseDir string, enabledSlugs map[string]bool) (skill.Backend, error) {
-	return &filteringSkillBackend{
-		fsBackend:    fs,
-		baseDir:      baseDir,
-		enabledSlugs: enabledSlugs,
-	}, nil
+	fsBackend filesystem.Backend
+	baseDir   string
+	logger    *slog.Logger
 }
 
 func (b *filteringSkillBackend) List(ctx context.Context) ([]skill.FrontMatter, error) {
@@ -108,7 +102,18 @@ func (b *filteringSkillBackend) Get(ctx context.Context, name string) (skill.Ski
 			return s, nil
 		}
 	}
-	return skill.Skill{}, nil
+	return skill.Skill{}, fmt.Errorf("skill %q not found; available skills: %s", name, b.availableSkillNames(skills))
+}
+
+func (b *filteringSkillBackend) availableSkillNames(skills []skill.Skill) string {
+	if len(skills) == 0 {
+		return "(none)"
+	}
+	names := make([]string, len(skills))
+	for i, s := range skills {
+		names[i] = s.Name
+	}
+	return strings.Join(names, ", ")
 }
 
 func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error) {
@@ -120,6 +125,8 @@ func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error)
 		return nil, err
 	}
 
+	enabledSlugs := queryEnabledSlugs(b.logger)
+
 	var skills []skill.Skill
 	for _, entry := range entries {
 		filePath := entry.Path
@@ -127,7 +134,7 @@ func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error)
 			filePath = filepath.Join(b.baseDir, filePath)
 		}
 		slug := filepath.Base(filepath.Dir(filePath))
-		if b.enabledSlugs != nil && !b.enabledSlugs[slug] {
+		if enabledSlugs != nil && !enabledSlugs[slug] {
 			continue
 		}
 

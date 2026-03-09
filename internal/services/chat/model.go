@@ -11,11 +11,12 @@ import (
 
 // Message status constants
 const (
-	StatusPending   = "pending"
-	StatusStreaming = "streaming"
-	StatusSuccess   = "success"
-	StatusError     = "error"
-	StatusCancelled = "cancelled"
+	StatusPending     = "pending"
+	StatusStreaming   = "streaming"
+	StatusSuccess     = "success"
+	StatusError       = "error"
+	StatusCancelled   = "cancelled"
+	StatusInterrupted = "interrupted"
 )
 
 // Message role constants
@@ -25,6 +26,20 @@ const (
 	RoleSystem    = "system"
 	RoleTool      = "tool"
 )
+
+// ImagePayload describes a single image attached to a message.
+type ImagePayload struct {
+	ID       string `json:"id,omitempty"`
+	Kind     string `json:"kind"`                 // "image"
+	Source   string `json:"source"`               // "inline_base64"
+	MimeType string `json:"mime_type"`
+	Base64   string `json:"base64"`               // without "data:" prefix
+	DataURL  string `json:"data_url,omitempty"`   // optional convenience field for frontend
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	FileName string `json:"file_name,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+}
 
 // Message DTO (exposed to frontend)
 type Message struct {
@@ -44,15 +59,17 @@ type Message struct {
 	ToolCallName    string    `json:"tool_call_name,omitempty"`
 	ThinkingContent string    `json:"thinking_content,omitempty"`
 	Segments        string    `json:"segments,omitempty"` // JSON array for interleaved content/tool-call order
+	ImagesJSON      string    `json:"images_json,omitempty"` // raw JSON string of []ImagePayload
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // SendMessageInput input for sending a message
 type SendMessageInput struct {
-	ConversationID int64  `json:"conversation_id"`
-	Content        string `json:"content"`
-	TabID          string `json:"tab_id"`
+	ConversationID int64          `json:"conversation_id"`
+	Content        string         `json:"content"`
+	TabID          string         `json:"tab_id"`
+	Images         []ImagePayload `json:"images,omitempty"` // from frontend (base64)
 }
 
 // EditAndResendInput input for editing and resending a message
@@ -91,6 +108,7 @@ type messageModel struct {
 	ToolCallName    string    `bun:"tool_call_name,notnull"`
 	ThinkingContent string    `bun:"thinking_content,notnull"`
 	Segments        string    `bun:"segments,notnull"`
+	ImagesJSON      string    `bun:"images_json,notnull"`
 }
 
 var _ bun.BeforeInsertHook = (*messageModel)(nil)
@@ -127,6 +145,7 @@ func (m *messageModel) toDTO() Message {
 		ToolCallName:    m.ToolCallName,
 		ThinkingContent: m.ThinkingContent,
 		Segments:        m.Segments,
+		ImagesJSON:      m.ImagesJSON,
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,
 	}
@@ -151,23 +170,26 @@ type ChatStartEvent struct {
 // ChatChunkEvent event sent for content chunks
 type ChatChunkEvent struct {
 	ChatEvent
-	Delta string `json:"delta"`
+	Delta   string   `json:"delta"`
+	RunPath []string `json:"run_path,omitempty"`
 }
 
 // ChatThinkingEvent event sent for thinking content
 type ChatThinkingEvent struct {
 	ChatEvent
-	Delta string `json:"delta"`
+	Delta   string   `json:"delta"`
+	RunPath []string `json:"run_path,omitempty"`
 }
 
 // ChatToolEvent event sent for tool calls and results
 type ChatToolEvent struct {
 	ChatEvent
-	Type       string `json:"type"` // "call" or "result"
-	ToolCallID string `json:"tool_call_id"`
-	ToolName   string `json:"tool_name"`
-	ArgsJSON   string `json:"args_json,omitempty"`
-	ResultJSON string `json:"result_json,omitempty"`
+	Type       string   `json:"type"` // "call" or "result"
+	ToolCallID string   `json:"tool_call_id"`
+	ToolName   string   `json:"tool_name"`
+	ArgsJSON   string   `json:"args_json,omitempty"`
+	ResultJSON string   `json:"result_json,omitempty"`
+	RunPath    []string `json:"run_path,omitempty"`
 }
 
 // ChatCompleteEvent event sent when generation completes

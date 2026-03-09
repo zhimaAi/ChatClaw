@@ -3,7 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { Eye, EyeOff, LoaderCircle, Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import { Eye, EyeOff, LoaderCircle, Plus, Pencil, Trash2, FileText, Image as ImageIcon, Mic, Video, File } from 'lucide-vue-next'
 import ModelIcon from '@/assets/icons/model.svg'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   Provider,
   ProviderWithModels,
@@ -232,6 +233,24 @@ const isModelUsedByAgent = async (providerId: string, modelId: string): Promise<
     console.error('Failed to check agent default models:', error)
     return null
   }
+}
+
+// Capability icon mapping
+const capabilityIcons: Record<string, any> = {
+  text: FileText,
+  image: ImageIcon,
+  audio: Mic,
+  video: Video,
+  file: File,
+}
+
+// Capability label translation keys
+const capabilityLabelKeys: Record<string, string> = {
+  text: 'settings.modelService.capabilityText',
+  image: 'settings.modelService.capabilityImage',
+  audio: 'settings.modelService.capabilityAudio',
+  video: 'settings.modelService.capabilityVideo',
+  file: 'settings.modelService.capabilityFile',
 }
 
 // 获取模型组的翻译标题
@@ -473,17 +492,18 @@ const handleEditModel = (model: Model) => {
 }
 
 // 保存模型（添加或编辑）
-const handleSaveModel = async (data: { modelId: string; name: string; type: string }) => {
+const handleSaveModel = async (data: { modelId: string; name: string; type: string; capabilities: string[] }) => {
   if (!props.providerWithModels) return
 
   try {
     if (editingModel.value) {
-      // 编辑模式（只允许修改 name）
+      // 编辑模式
       await ProvidersService.UpdateModel(
         props.providerWithModels.provider.provider_id,
         editingModel.value.model_id,
         new UpdateModelInput({
           name: data.name,
+          capabilities: data.capabilities,
         })
       )
       toast.success(t('settings.modelService.modelUpdated'))
@@ -495,6 +515,7 @@ const handleSaveModel = async (data: { modelId: string; name: string; type: stri
           model_id: data.modelId,
           name: data.name,
           type: data.type,
+          capabilities: data.capabilities,
         })
       )
       toast.success(t('settings.modelService.modelCreated'))
@@ -733,6 +754,21 @@ const confirmDeleteModel = async () => {
                         <span class="min-w-0 flex-1 truncate text-sm text-foreground">{{
                           model.name
                         }}</span>
+                        <!-- Capability icons for LLM models -->
+                        <template v-if="group.type === 'llm' && model.capabilities && model.capabilities.length > 0">
+                          <TooltipProvider v-for="cap in model.capabilities" :key="cap">
+                            <Tooltip>
+                              <TooltipTrigger as-child>
+                                <span class="shrink-0 text-muted-foreground">
+                                  <component :is="capabilityIcons[cap]" class="size-3.5" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{{ t(capabilityLabelKeys[cap] || cap) }}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </template>
                         <!-- 编辑和删除按钮（仅对非内置模型显示，ChatClaw 模型禁止编辑删除） -->
                         <div
                           v-if="!isChatClaw && !model.is_builtin"
