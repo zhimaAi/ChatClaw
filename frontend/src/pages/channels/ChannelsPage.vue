@@ -515,8 +515,8 @@ onMounted(loadData)
               <IconClose v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
               <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? '绑定' : '未绑定' }}</span>
             </div>
-            <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ getAgentName(channel.agent_id) }}</span>
+            <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted max-w-[120px]">
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground truncate" :title="getAgentName(channel.agent_id)">{{ getAgentName(channel.agent_id) }}</span>
             </div>
           </div>
         </div>
