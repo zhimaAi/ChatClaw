@@ -76,11 +76,23 @@ const selectedPlatformChannels = computed(() => {
 })
 
 const isFeishu = computed(() => selectedPlatformMeta.value?.id === 'feishu')
+const isWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
+const inlineAppIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
+const inlineAppSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
+const inlineAppIdPlaceholder = computed(() => (
+  isWeCom.value
+    ? t('channels.config.wecomAppIdPlaceholder')
+    : t('channels.config.appIdPlaceholder')
+))
+const inlineAppSecretPlaceholder = computed(() => (
+  isWeCom.value
+    ? t('channels.config.wecomAppSecretPlaceholder')
+    : t('channels.config.appSecretPlaceholder')
+))
 
 const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
-  if (isFeishu.value) return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
-  return !!inlineFormToken.value.trim()
+  return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
 })
 
 const shouldShowCreateForm = computed(() => {
@@ -240,13 +252,11 @@ async function handleCreateChannel() {
 
   inlineFormSaving.value = true
   try {
-    const extraConfig = isFeishu.value
-      ? JSON.stringify({
-          app_id: inlineFormAppId.value.trim(),
-          app_secret: inlineFormAppSecret.value.trim(),
-        })
-      : JSON.stringify({ token: inlineFormToken.value.trim() })
-
+    const extraConfig = JSON.stringify({
+      app_id: inlineFormAppId.value.trim(),
+      app_secret: inlineFormAppSecret.value.trim(),
+    })  
+ 
     const channel = await ChannelService.CreateChannel({
       platform: selectedPlatformMeta.value.id,
       name: inlineFormName.value.trim(),
@@ -494,40 +504,26 @@ async function handleConfigChannelSaved(channel: Channel) {
                     />
                   </div>
 
-                  <template v-if="isFeishu">
-                    <div class="flex flex-col gap-1">
-                      <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                        * {{ t('channels.config.appId') }}
-                      </label>
-                      <Input
-                        v-model="inlineFormAppId"
-                        class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                        :placeholder="t('channels.config.appIdPlaceholder')"
-                      />
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                      <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                        * {{ t('channels.config.appSecret') }}
-                      </label>
-                      <Input
-                        v-model="inlineFormAppSecret"
-                        type="password"
-                        class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                        :placeholder="t('channels.config.appSecretPlaceholder')"
-                      />
-                    </div>
-                  </template>
-
-                  <div v-else class="flex flex-col gap-1">
+                  <div class="flex flex-col gap-1">
                     <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                      * {{ t('channels.config.token', 'Token') }}
+                      * {{ inlineAppIdLabel }}
                     </label>
                     <Input
-                      v-model="inlineFormToken"
+                      v-model="inlineFormAppId"
+                      class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+                      :placeholder="inlineAppIdPlaceholder"
+                    />
+                  </div>
+
+                  <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
+                      * {{ inlineAppSecretLabel }}
+                    </label>
+                    <Input
+                      v-model="inlineFormAppSecret"
                       type="password"
                       class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                      :placeholder="t('channels.config.tokenPlaceholder', '请输入 Token')"
+                      :placeholder="inlineAppSecretPlaceholder"
                     />
                   </div>
                 </div>

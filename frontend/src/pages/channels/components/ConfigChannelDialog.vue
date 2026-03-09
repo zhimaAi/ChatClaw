@@ -50,6 +50,19 @@ watch(open, (val) => {
 })
 
 const isFeishu = computed(() => props.platform?.id === 'feishu')
+const isWeCom = computed(() => props.platform?.id === 'wecom')
+const appIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
+const appSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
+const appIdPlaceholder = computed(() => (
+  isWeCom.value
+    ? t('channels.config.wecomAppIdPlaceholder')
+    : t('channels.config.appIdPlaceholder')
+))
+const appSecretPlaceholder = computed(() => (
+  isWeCom.value
+    ? t('channels.config.wecomAppSecretPlaceholder')
+    : t('channels.config.appSecretPlaceholder')
+))
 
 const dialogTitle = computed(() => {
   if (!props.platform) return ''
@@ -59,10 +72,7 @@ const dialogTitle = computed(() => {
 
 const isFormValid = computed(() => {
   if (!name.value.trim()) return false
-  if (isFeishu.value) {
-    return !!(appId.value.trim() && appSecret.value.trim())
-  }
-  return !!token.value.trim()
+  return !!(appId.value.trim() && appSecret.value.trim())
 })
 
 const defaultAvatarSrc = computed(() => {
@@ -99,16 +109,10 @@ async function handleSave() {
 
   saving.value = true
   try {
-    let extraConfig = '{}'
-
-    if (isFeishu.value) {
-      extraConfig = JSON.stringify({
-        app_id: appId.value.trim(),
-        app_secret: appSecret.value.trim(),
-      })
-    } else {
-      extraConfig = JSON.stringify({ token: token.value.trim() })
-    }
+    let extraConfig = JSON.stringify({
+      app_id: appId.value.trim(),
+      app_secret: appSecret.value.trim(),
+    })
 
     const channel = await ChannelService.CreateChannel({
       platform: props.platform.id,
@@ -203,48 +207,29 @@ async function handleSave() {
           />
         </div>
 
-        <!-- Feishu-specific fields -->
-        <template v-if="isFeishu">
-          <div class="mt-4 space-y-1">
-            <Label for="app-id" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
-              {{ t('channels.config.appId') }}
-            </Label>
-            <Input
-              id="app-id"
-              v-model="appId"
-              :placeholder="t('channels.config.appIdPlaceholder')"
-            />
-          </div>
-          <div class="mt-4 space-y-1">
-            <Label for="app-secret" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
-              {{ t('channels.config.appSecret') }}
-            </Label>
-            <Input
-              id="app-secret"
-              v-model="appSecret"
-              type="password"
-              :placeholder="t('channels.config.appSecretPlaceholder')"
-            />
-          </div>
-        </template>
-
-        <!-- Generic token-based platforms -->
-        <template v-else>
-          <div class="mt-4 space-y-1">
-            <Label for="channel-token" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-              <span class="text-[#0a0a0a] dark:text-foreground">*</span>
-              {{ t('channels.config.token') }}
-            </Label>
-            <Input
-              id="channel-token"
-              v-model="token"
-              type="password"
-              :placeholder="t('channels.config.tokenPlaceholder')"
-            />
-          </div>
-        </template>
+        <div class="mt-4 space-y-1">
+          <Label for="app-id" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            {{ appIdLabel }}
+          </Label>
+          <Input
+            id="app-id"
+            v-model="appId"
+            :placeholder="appIdPlaceholder"
+          />
+        </div>
+        <div class="mt-4 space-y-1">
+          <Label for="app-secret" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            {{ appSecretLabel }}
+          </Label>
+          <Input
+            id="app-secret"
+            v-model="appSecret"
+            type="password"
+            :placeholder="appSecretPlaceholder"
+          />
+        </div>
 
         <DialogFooter class="mt-6 pt-4">
           <Button variant="outline" type="button" @click="open = false">

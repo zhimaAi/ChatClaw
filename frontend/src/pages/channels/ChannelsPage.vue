@@ -75,6 +75,20 @@ const selectedPlatformMeta = computed(() => {
   return platforms.value.find(p => p.id === selectedFilter.value) || null
 })
 
+const isInlineWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
+const inlineAppIdLabel = computed(() => (isInlineWeCom.value ? 'Bot ID' : 'APPID'))
+const inlineAppSecretLabel = computed(() => (isInlineWeCom.value ? 'Secret' : 'APP Secret'))
+const inlineAppIdPlaceholder = computed(() => (
+  isInlineWeCom.value
+    ? t('channels.config.wecomAppIdPlaceholder')
+    : t('channels.config.appIdPlaceholder')
+))
+const inlineAppSecretPlaceholder = computed(() => (
+  isInlineWeCom.value
+    ? t('channels.config.wecomAppSecretPlaceholder')
+    : t('channels.config.appSecretPlaceholder')
+))
+
 const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
   return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
@@ -577,12 +591,12 @@ onMounted(loadData)
           <div class="flex w-[260px] shrink-0 flex-col gap-1">
             <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
               <span>*</span>
-              <span>APPID</span>
+              <span>{{ inlineAppIdLabel }}</span>
             </label>
             <Input
               v-model="inlineFormAppId"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="t('channels.inline.appIdPlaceholder', '请输入您的AppId')"
+              :placeholder="inlineAppIdPlaceholder"
             />
           </div>
 
@@ -590,13 +604,13 @@ onMounted(loadData)
           <div class="flex w-[260px] shrink-0 flex-col gap-1">
             <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
               <span>*</span>
-              <span>APP Secret</span>
+              <span>{{ inlineAppSecretLabel }}</span>
             </label>
             <Input
               v-model="inlineFormAppSecret"
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="t('channels.inline.appSecretPlaceholder', '请输入您的APP Secret')"
+              :placeholder="inlineAppSecretPlaceholder"
             />
           </div>
         </div>
