@@ -1,5 +1,7 @@
 # ChatClaw
-![](./frontend/src/assets/images/logo-floatingball.png)
+<div align="center">
+  <img src="./frontend/src/assets/images/logo-floatingball.png" width="200" height="200">
+</div>
 
 [中文文档](./README_zh-CN.md) [英文文档](./README.md)
 
