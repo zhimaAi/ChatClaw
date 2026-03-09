@@ -183,15 +183,18 @@ export default {
         installFailed: 'Installation failed',
         uv: {
           name: 'Python Runtime',
-          description: 'Enables the AI assistant to write and run Python scripts for complex tasks.',
+          description:
+            'Enables the AI assistant to write and run Python scripts for complex tasks.',
         },
         bun: {
           name: 'JavaScript Runtime',
-          description: 'Enables the AI assistant to write and run JavaScript scripts for complex tasks.',
+          description:
+            'Enables the AI assistant to write and run JavaScript scripts for complex tasks.',
         },
         codex: {
           name: 'Security Sandbox',
-          description: 'Runs commands in an isolated environment to protect your system from unintended changes.',
+          description:
+            'Runs commands in an isolated environment to protect your system from unintended changes.',
         },
       },
     },
@@ -199,31 +202,38 @@ export default {
     memory: {
       title: 'Long-term Memory',
       enable: 'Enable Long-term Memory',
-      enableHint: 'When enabled, AI will automatically extract and remember your preferences, habits, and important facts during conversations.',
+      enableHint:
+        'When enabled, AI will automatically extract and remember your preferences, habits, and important facts during conversations.',
       extractModel: 'Memory Extraction Model',
-      extractModelHint: 'Used to summarize and extract valuable memory information after each conversation.',
+      extractModelHint:
+        'Used to summarize and extract valuable memory information after each conversation.',
       embeddingModel: 'Memory Embedding Model',
-      embeddingModelHint: 'Used to convert memory text into vectors for semantic retrieval during conversations.',
+      embeddingModelHint:
+        'Used to convert memory text into vectors for semantic retrieval during conversations.',
       embeddingDimension: 'Embedding Dimension',
       embeddingDimensionHint: 'Embedding vector dimension must match the selected model output.',
       save: 'Save Settings',
       saved: 'Settings saved',
       saveFailed: 'Failed to save settings',
-      rebuildWarning: 'After changing the embedding model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuildWarning:
+        'After changing the embedding model or dimension, all existing memory vector data will be rebuilt asynchronously.',
       rebuilding: 'Rebuilding memory vectors...',
       rebuildSuccess: 'Memory vectors rebuilt successfully',
       rebuildFailed: 'Failed to rebuild memory vectors',
       confirmRebuildTitle: 'Confirm Rebuild Memory Vectors',
-      confirmRebuildDesc: 'You have changed the embedding model or dimension, which requires recalculating vector data for all existing memories. This process may take some time. Do you want to continue?',
+      confirmRebuildDesc:
+        'You have changed the embedding model or dimension, which requires recalculating vector data for all existing memories. This process may take some time. Do you want to continue?',
     },
     // Skills settings
     skills: {
       title: 'Skills',
       enable: 'Enable Skills',
-      enableHint: 'When enabled, the AI assistant will automatically load and use installed skills during conversations.',
+      enableHint:
+        'When enabled, the AI assistant will automatically load and use installed skills during conversations.',
       pageDesc: 'Browse and manage AI capabilities',
       directory: 'Skills Directory',
-      directoryHint: 'Place downloaded skill folders into this directory. They will be automatically detected and loaded during AI conversations.',
+      directoryHint:
+        'Place downloaded skill folders into this directory. They will be automatically detected and loaded during AI conversations.',
       tabInstalled: 'Installed',
       tabMarket: 'Market',
       filterAll: 'All',
@@ -570,7 +580,8 @@ export default {
       imageTooLarge: 'Image too large (max {max})',
       imagesTotalTooLarge: 'Total image size too large (max {max})',
       imageReadFailed: 'Failed to read image',
-      modelNotSupportVision: 'Current model does not support image recognition. Please switch to a multimodal vision model',
+      modelNotSupportVision:
+        'Current model does not support image recognition. Please switch to a multimodal vision model',
       modelNotSupportVisionHint: 'Models like GPT-4o, Claude, Gemini support image recognition',
     },
     toasts: {
@@ -591,14 +602,20 @@ export default {
         sandboxMode: 'Execution Mode',
         modeCodex: 'Codex Sandbox',
         modeNative: 'Native Execution',
-        codexDesc: 'Execute commands in an OS-level sandbox provided by OpenAI Codex CLI. Commands can only write files within the working directory; the rest of the filesystem is read-only.',
-        codexNotInstalled: 'Security Sandbox is not installed yet. Sandbox mode is temporarily unavailable and will fall back to native execution. You can install it in Settings → General → Extensions.',
-        nativeDesc: 'Execute commands directly on the host machine without sandbox isolation. Commands have full permissions of the current user.',
+        codexDesc:
+          'Execute commands in an OS-level sandbox provided by OpenAI Codex CLI. Commands can only write files within the working directory; the rest of the filesystem is read-only.',
+        codexNotInstalled:
+          'Security Sandbox is not installed yet. Sandbox mode is temporarily unavailable and will fall back to native execution. You can install it in Settings → General → Extensions.',
+        nativeDesc:
+          'Execute commands directly on the host machine without sandbox isolation. Commands have full permissions of the current user.',
         networkAccess: 'Allow Network Access',
-        networkAccessDesc: 'When enabled, commands inside the sandbox can access the network (e.g. npm install, pip install). When disabled, commands cannot reach the network, which is more secure.',
+        networkAccessDesc:
+          'When enabled, commands inside the sandbox can access the network (e.g. npm install, pip install). When disabled, commands cannot reach the network, which is more secure.',
         workDir: 'Working Directory',
-        workDirDesc: 'All session outputs and files will be saved in this directory. Each conversation creates a subfolder under sessions/.',
-        workDirHint: 'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
+        workDirDesc:
+          'All session outputs and files will be saved in this directory. Each conversation creates a subfolder under sessions/.',
+        workDirHint:
+          'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: 'Change',
         resetDir: 'Reset to default',
         selectDir: 'Select Working Directory',
@@ -828,7 +845,8 @@ export default {
       renameSuccess: 'Renamed',
       renameFailed: 'Failed to rename',
       deleteTitle: 'Confirm Delete',
-      deleteDesc: 'After deleting folder "{name}", its documents will be moved to "Uncategorized". This action cannot be undone.',
+      deleteDesc:
+        'After deleting folder "{name}", its documents will be moved to "Uncategorized". This action cannot be undone.',
       deleteCancel: 'Cancel',
       deleteConfirm: 'Delete',
       deleteSuccess: 'Deleted',
@@ -845,7 +863,8 @@ export default {
       nameDuplicate: 'Folder name already exists',
       nameHelp: 'Folder name (max 50 characters).',
       parentFolder: 'Parent Folder',
-      parentFolderHelp: 'Select a parent folder to create a nested folder. Leave empty to create at root level.',
+      parentFolderHelp:
+        'Select a parent folder to create a nested folder. Leave empty to create at root level.',
       rootFolder: 'Root (No Parent)',
     },
     detail: {
@@ -911,8 +930,10 @@ export default {
     editThematicFact: 'Edit Topic Summary',
     editEventStream: 'Edit Conversation Log',
     deleteConfirmTitle: 'Confirm Delete',
-    deleteThematicFactConfirm: 'Are you sure you want to delete this topic summary? This action cannot be undone.',
-    deleteEventStreamConfirm: 'Are you sure you want to delete this conversation log? This action cannot be undone.',
+    deleteThematicFactConfirm:
+      'Are you sure you want to delete this topic summary? This action cannot be undone.',
+    deleteEventStreamConfirm:
+      'Are you sure you want to delete this conversation log? This action cannot be undone.',
     updateSuccess: 'Updated successfully',
     updateFailed: 'Failed to update',
     deleteSuccess: 'Deleted successfully',
@@ -924,15 +945,19 @@ export default {
   },
   scheduledTasks: {
     title: 'Scheduled Tasks',
+    listTitle: 'Task List',
     create: 'Create Task',
     edit: 'Edit Task',
     empty: 'No scheduled tasks yet',
+    errorReason: 'View error reason',
+    actionsMenu: 'Open actions menu',
     total: 'Total Tasks',
     running: 'Running',
     paused: 'Paused',
     failed: 'Failed',
     runNow: 'Run Now',
     history: 'History',
+    delete: 'Delete',
     enabled: 'Enabled',
     disabled: 'Paused',
     statusRunning: 'Running',
@@ -940,6 +965,14 @@ export default {
     statusSuccess: 'Success',
     statusPending: 'Pending',
     noRuns: 'No run history yet',
+    columns: {
+      title: 'Task Title',
+      schedule: 'Schedule',
+      lastRun: 'Last Run',
+      nextRun: 'Next Run',
+      status: 'Status',
+      actions: 'Actions',
+    },
     conversationEmpty: 'No conversation content',
     form: {
       name: 'Task Name',
