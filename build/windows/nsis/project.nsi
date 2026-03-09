@@ -99,7 +99,9 @@ Section
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
-    
+    ; Register chatclaw:// URL scheme so the browser can launch the app after OAuth login
+    !insertmacro CUSTOM_PROTOCOL_ASSOCIATE "chatclaw" "URL:ChatClaw Protocol" "$INSTDIR\${PRODUCT_EXECUTABLE},0" '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"'
+
     !insertmacro wails.writeUninstaller
 SectionEnd
 
@@ -115,6 +117,8 @@ Section "uninstall"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
+    ; Remove chatclaw:// URL scheme registration
+    !insertmacro CUSTOM_PROTOCOL_UNASSOCIATE "chatclaw"
 
     !insertmacro wails.deleteUninstaller
 SectionEnd
