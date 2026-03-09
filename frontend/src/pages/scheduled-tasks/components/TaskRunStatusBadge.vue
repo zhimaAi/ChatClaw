@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   status: string
+  label: string
 }>()
 
 const statusClass = computed(() => {
@@ -13,6 +14,8 @@ const statusClass = computed(() => {
       return 'bg-red-500/10 text-red-700 dark:text-red-300'
     case 'running':
       return 'bg-sky-500/10 text-sky-700 dark:text-sky-300'
+    case 'paused':
+      return 'bg-slate-500/10 text-slate-700 dark:text-slate-300'
     default:
       return 'bg-muted text-muted-foreground'
   }
@@ -21,6 +24,6 @@ const statusClass = computed(() => {
 
 <template>
   <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="statusClass">
-    {{ status }}
+    {{ label }}
   </span>
 </template>

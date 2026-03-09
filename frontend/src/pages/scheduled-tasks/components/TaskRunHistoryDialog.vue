@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,6 +22,14 @@ const loading = ref(false)
 const runs = ref<ScheduledTaskRun[]>([])
 const selectedRunId = ref<number | null>(null)
 const selectedDetail = ref<ScheduledTaskRunDetail | null>(null)
+const { t } = useI18n()
+
+function displayRunStatusLabel(status: string) {
+  if (status === 'running') return t('scheduledTasks.statusRunning')
+  if (status === 'failed') return t('scheduledTasks.statusFailed')
+  if (status === 'success') return t('scheduledTasks.statusSuccess')
+  return t('scheduledTasks.statusPending')
+}
 
 watch(
   () => props.open,
@@ -31,7 +40,9 @@ watch(
       runs.value = await ScheduledTasksService.ListScheduledTaskRuns(props.task.id, 1, 50)
       selectedRunId.value = runs.value[0]?.id ?? null
       if (selectedRunId.value) {
-        selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(selectedRunId.value)
+        selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(
+          selectedRunId.value
+        )
       } else {
         selectedDetail.value = null
       }
@@ -58,7 +69,9 @@ async function selectRun(run: ScheduledTaskRun) {
       <div class="flex h-[70vh] min-h-0 gap-4">
         <div class="w-80 shrink-0 overflow-auto rounded-lg border border-border">
           <div v-if="loading" class="p-4 text-sm text-muted-foreground">加载中...</div>
-          <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">暂无运行记录</div>
+          <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
+            暂无运行记录
+          </div>
           <button
             v-for="run in runs"
             :key="run.id"
@@ -67,8 +80,10 @@ async function selectRun(run: ScheduledTaskRun) {
             @click="selectRun(run)"
           >
             <div class="flex items-center justify-between gap-2">
-              <TaskRunStatusBadge :status="run.status" />
-              <span class="text-xs text-muted-foreground">{{ formatDuration(run.duration_ms) }}</span>
+              <TaskRunStatusBadge :status="run.status" :label="displayRunStatusLabel(run.status)" />
+              <span class="text-xs text-muted-foreground">{{
+                formatDuration(run.duration_ms)
+              }}</span>
             </div>
             <div class="mt-2 text-sm text-foreground">{{ formatTaskTime(run.started_at) }}</div>
             <div class="mt-1 text-xs text-muted-foreground">{{ run.trigger_type }}</div>

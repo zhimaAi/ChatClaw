@@ -214,7 +214,8 @@ export default {
       rebuildSuccess: '记忆向量重建完成',
       rebuildFailed: '记忆向量重建失败',
       confirmRebuildTitle: '确认重建记忆向量',
-      confirmRebuildDesc: '您修改了向量模型或维度，这需要重新计算所有已有记忆的向量数据。此过程可能需要一些时间，是否继续？',
+      confirmRebuildDesc:
+        '您修改了向量模型或维度，这需要重新计算所有已有记忆的向量数据。此过程可能需要一些时间，是否继续？',
     },
     // 技能设置
     skills: {
@@ -588,13 +589,17 @@ export default {
         sandboxMode: '执行模式',
         modeCodex: 'Codex 沙箱',
         modeNative: '本机执行',
-        codexDesc: '使用 OpenAI Codex CLI 提供的 OS 级沙箱隔离执行命令。命令只能在工作目录内写入文件，外部文件系统为只读。',
-        codexNotInstalled: '安全沙箱尚未安装，沙箱模式暂时不可用，将自动回退到本机执行。可在「设置 → 常规设置 → 扩展组件」中手动安装。',
+        codexDesc:
+          '使用 OpenAI Codex CLI 提供的 OS 级沙箱隔离执行命令。命令只能在工作目录内写入文件，外部文件系统为只读。',
+        codexNotInstalled:
+          '安全沙箱尚未安装，沙箱模式暂时不可用，将自动回退到本机执行。可在「设置 → 常规设置 → 扩展组件」中手动安装。',
         nativeDesc: '直接在本机执行命令，无沙箱隔离。命令拥有当前用户的完整权限。',
         networkAccess: '允许网络访问',
-        networkAccessDesc: '开启后，沙箱内的命令可以访问网络（如 npm install、pip install 等）。关闭时命令无法联网，更加安全。',
+        networkAccessDesc:
+          '开启后，沙箱内的命令可以访问网络（如 npm install、pip install 等）。关闭时命令无法联网，更加安全。',
         workDir: '工作目录',
-        workDirDesc: '所有会话输出和文件将保存在此目录中。每个对话会在 sessions/ 下创建一个子文件夹。',
+        workDirDesc:
+          '所有会话输出和文件将保存在此目录中。每个对话会在 sessions/ 下创建一个子文件夹。',
         workDirHint: '结构：{basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: '更改',
         resetDir: '恢复默认目录',
@@ -883,7 +888,8 @@ export default {
       contentNotAvailable: '内容无法查看，请使用外部应用打开。',
       unsupported: '文件类型 "{type}" 不支持查看，请使用外部应用打开。',
       localFileNote: '此文件需要使用外部应用打开。',
-      corruptedOrWrongType: '文档可能已损坏或文件类型不匹配（实际内容与 {type} 格式不符），无法预览。请使用外部应用打开。',
+      corruptedOrWrongType:
+        '文档可能已损坏或文件类型不匹配（实际内容与 {type} 格式不符），无法预览。请使用外部应用打开。',
       loadFailedUseExternal: '加载失败，请使用外部打开',
     },
   },
@@ -921,15 +927,19 @@ export default {
   },
   scheduledTasks: {
     title: '定时任务',
+    listTitle: '任务列表',
     create: '新建任务',
     edit: '编辑任务',
     empty: '暂无定时任务',
+    errorReason: '查看错误原因',
+    actionsMenu: '打开操作菜单',
     total: '任务总数',
     running: '运行中',
     paused: '已暂停',
     failed: '失败',
     runNow: '立即运行',
     history: '历史记录',
+    delete: '删除',
     enabled: '已启用',
     disabled: '已暂停',
     statusRunning: '进行中',
@@ -937,6 +947,14 @@ export default {
     statusSuccess: '成功',
     statusPending: '待运行',
     noRuns: '暂无运行记录',
+    columns: {
+      title: '任务标题',
+      schedule: '执行时间',
+      lastRun: '上次运行',
+      nextRun: '下次运行',
+      status: '状态',
+      actions: '操作',
+    },
     conversationEmpty: '暂无会话内容',
     form: {
       name: '任务名称',
