@@ -947,7 +947,7 @@ export default {
       namePlaceholder: '请输入',
       appId: 'APPID',
       appIdPlaceholder: '请输入您的AppId',
-      appSecret: 'API Secret',
+      appSecret: 'APP Secret',
       appSecretPlaceholder: '请输入您的APP Secret',
       token: 'Token',
       tokenPlaceholder: '请输入 Token',
