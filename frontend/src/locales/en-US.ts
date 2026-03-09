@@ -950,7 +950,7 @@ export default {
       namePlaceholder: 'Please enter',
       appId: 'APPID',
       appIdPlaceholder: 'Enter your AppId',
-      appSecret: 'API Secret',
+      appSecret: 'APP Secret',
       appSecretPlaceholder: 'Enter your APP Secret',
       token: 'Token',
       tokenPlaceholder: 'Enter Token',

@@ -586,11 +586,11 @@ onMounted(loadData)
             />
           </div>
 
-          <!-- * API Secret: 260px -->
+          <!-- * APP Secret: 260px -->
           <div class="flex w-[260px] shrink-0 flex-col gap-1">
             <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
               <span>*</span>
-              <span>API Secret</span>
+              <span>APP Secret</span>
             </label>
             <Input
               v-model="inlineFormAppSecret"
