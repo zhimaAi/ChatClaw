@@ -952,11 +952,13 @@ watch(activeTab, (tab) => {
         <!-- Search + Sort -->
         <div class="flex shrink-0 items-center gap-3 px-4 py-2">
           <div class="relative flex-1">
-            <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Loader2 v-if="isSearching" class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+            <Search v-else class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               v-model="searchQuery"
               :placeholder="t('settings.skills.searchPlaceholder')"
               class="h-8 pl-8 text-sm"
+              :disabled="isSearching"
               @keyup.enter="handleSearch"
             />
           </div>
