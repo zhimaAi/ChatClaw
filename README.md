@@ -1,7 +1,11 @@
 # ChatClaw
+<center>
+![](./frontend/src/assets/images/logo-floatingball.png)
+</center>
 
-[中文文档](./README_zh-CN.md)
-
+<center>
+[中文文档](./README_zh-CN.md) [英文文档](./README.md)
+</center>
 
 ChatClaw: Get an OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
 
