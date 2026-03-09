@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-ChatClaw 是一款桌面端 AI 工具，支持上传知识库创建自定义机器人，实现智能问答。安装即用，并提供免费 AI 模型。
+5 分钟即可拥有类 OpenClaw 的小龙虾个人AI 智能体，沙箱安全防护， macOS/Windows 30M 极小安装包，1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、知识库、记忆、MCP、计划任务等核心功能。Go 开发，运行快、占资源少。
 
 ## 功能预览
 
@@ -142,7 +142,7 @@ docker compose up -d
 ## 项目结构
 
 ```
-WillChat_D2/
+ChatClaw_D2/
 ├── main.go                     # 应用入口
 ├── go.mod / go.sum             # Go 模块依赖
 ├── Taskfile.yml                # 任务运行器配置
