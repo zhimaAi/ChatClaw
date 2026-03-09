@@ -156,17 +156,27 @@ func (s *ToolchainService) InstallTool(name string) (*ToolStatus, error) {
 
 	needProxy := s.resolveProxy()
 
+	// 优先尝试从 GitHub 获取最新版本
 	latestVersion, err := s.fetchLatestVersion(spec)
 	if err != nil {
 		return nil, errs.Wrap("error.toolchain_fetch_version_failed", err)
 	}
 
+	// 优先尝试从 GitHub 直连/代理下载，失败后尝试 API/OSS 兜底
 	if err := s.downloadAndInstall(spec, latestVersion, binDir, needProxy); err != nil {
-		return nil, errs.Wrap("error.toolchain_install_failed", err)
+		// GitHub 下载失败，尝试 API/OSS 兜底
+		s.app.Logger.Warn("toolchain: GitHub download failed, trying API/OSS", "tool", spec.name, "error", err)
+		ossURL, ossErr := s.fetchLatestDownloadURL(spec.name, runtime.GOOS, runtime.GOARCH)
+		if ossErr != nil {
+			return nil, errs.Wrap("error.toolchain_install_failed", fmt.Errorf("GitHub failed: %w, API failed: %w", err, ossErr))
+		}
+		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
+			return nil, errs.Wrap("error.toolchain_install_failed", err)
+		}
+		s.app.Logger.Info("toolchain: installed successfully via OSS fallback", "tool", name)
+	} else {
+		s.app.Logger.Info("toolchain: installed successfully", "tool", name, "version", latestVersion)
 	}
-
-	s.app.Logger.Info("toolchain: installed successfully",
-		"tool", name, "version", latestVersion)
 
 	MarkInstalled(name)
 	st := s.getStatus(name)
@@ -284,14 +294,53 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 	binPath := filepath.Join(binDir, binName)
 
 	installedVersion := s.getInstalledVersion(binPath, spec.versionArgs)
+
+	// 优先尝试从 GitHub 获取最新版本
 	latestVersion, err := s.fetchLatestVersion(spec)
 	if err != nil {
-		s.app.Logger.Warn("toolchain: failed to fetch latest version",
+		s.app.Logger.Warn("toolchain: failed to fetch latest version from GitHub",
 			"tool", spec.name, "error", err)
-		if installedVersion != "" {
-			s.app.Logger.Info("toolchain: keeping existing version",
-				"tool", spec.name, "version", installedVersion)
+		// 尝试 API 兜底获取版本
+		_, ossURL, apiErr := s.fetchToolLatest(spec.name, runtime.GOOS, runtime.GOARCH)
+		if apiErr != nil {
+			if installedVersion != "" {
+				s.app.Logger.Info("toolchain: keeping existing version",
+					"tool", spec.name, "version", installedVersion)
+			}
+			return
 		}
+		// API 获取到版本，继续使用 OSS 下载
+		latestVersion = ""
+		if installedVersion == "" {
+			s.app.Logger.Info("toolchain: no version info, will use OSS",
+				"tool", spec.name)
+		}
+		if !s.markInstalling(spec.name) {
+			s.app.Logger.Info("toolchain: already being installed by another caller",
+				"tool", spec.name)
+			return
+		}
+		defer s.clearInstalling(spec.name)
+		s.emitStatus(spec.name)
+
+		if installedVersion != "" {
+			s.app.Logger.Info("toolchain: updating via OSS",
+				"tool", spec.name, "from", installedVersion)
+		} else {
+			s.app.Logger.Info("toolchain: installing via OSS",
+				"tool", spec.name)
+		}
+
+		s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
+		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
+			s.app.Logger.Error("toolchain: install failed",
+				"tool", spec.name, "error", err)
+			s.emitStatus(spec.name)
+			return
+		}
+		s.app.Logger.Info("toolchain: installed successfully via OSS",
+			"tool", spec.name, "path", binPath)
+		s.emitStatus(spec.name)
 		return
 	}
 
@@ -317,11 +366,24 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 			"tool", spec.name, "version", latestVersion)
 	}
 
+	// 优先尝试从 GitHub 直连/代理下载，失败后尝试 API/OSS 兜底
 	if err := s.downloadAndInstall(spec, latestVersion, binDir, needProxy); err != nil {
-		s.app.Logger.Error("toolchain: install failed",
-			"tool", spec.name, "version", latestVersion, "error", err)
-		s.emitStatus(spec.name)
-		return
+		// GitHub 下载失败，尝试 API/OSS 兜底
+		s.app.Logger.Warn("toolchain: GitHub download failed, trying API/OSS", "tool", spec.name, "error", err)
+		ossURL, ossErr := s.fetchLatestDownloadURL(spec.name, runtime.GOOS, runtime.GOARCH)
+		if ossErr != nil {
+			s.app.Logger.Error("toolchain: install failed (GitHub and API both failed)",
+				"tool", spec.name, "version", latestVersion, "error", err)
+			s.emitStatus(spec.name)
+			return
+		}
+		s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
+		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
+			s.app.Logger.Error("toolchain: install failed",
+				"tool", spec.name, "version", latestVersion, "error", err)
+			s.emitStatus(spec.name)
+			return
+		}
 	}
 
 	s.app.Logger.Info("toolchain: installed successfully",
@@ -493,6 +555,110 @@ func (s *ToolchainService) fetchOSSDownloadURL(tool, version, goos, goarch strin
 	}
 
 	return result.URL, nil
+}
+
+// ToolLatestItem 单个工具的最新版本信息（与服务端对应）
+type ToolLatestItem struct {
+	Tool    string `json:"tool"`
+	Version string `json:"version"`
+	OS      string `json:"os"`
+	Arch    string `json:"arch"`
+	URL     string `json:"url"`
+}
+
+// fetchToolLatest 从 API 获取工具最新版本信息
+func (s *ToolchainService) fetchToolLatest(tool, goos, goarch string) (version string, downloadURL string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	apiURL := define.ServerURL + "/tool-latest"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	type Response struct {
+		Code    int              `json:"code"`
+		Data    []ToolLatestItem `json:"data"`
+		Message string           `json:"message"`
+	}
+
+	var result Response
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", err
+	}
+
+	// 查找匹配的 tool + os + arch
+	for _, item := range result.Data {
+		if item.Tool == tool && item.OS == goos && item.Arch == goarch {
+			return item.Version, item.URL, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("no latest version found for %s-%s-%s", tool, goos, goarch)
+}
+
+// fetchLatestDownloadURL 从 API 获取最新下载链接（国内使用 OSS）
+func (s *ToolchainService) fetchLatestDownloadURL(tool, goos, goarch string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	apiURL := define.ServerURL + "/tool-latest"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	type Response struct {
+		Code    int              `json:"code"`
+		Data    []ToolLatestItem `json:"data"`
+		Message string           `json:"message"`
+	}
+
+	var result Response
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	// 查找匹配的 tool + os + arch
+	for _, item := range result.Data {
+		if item.Tool == tool && item.OS == goos && item.Arch == goarch {
+			return item.URL, nil
+		}
+	}
+
+	return "", fmt.Errorf("no download URL found for %s-%s-%s", tool, goos, goarch)
+}
+
+// downloadFromOSSURL 从 OSS URL 直接下载并安装
+func (s *ToolchainService) downloadFromOSSURL(spec toolSpec, ossURL string) error {
+	binDir := s.BinDir()
+	if binDir == "" {
+		return fmt.Errorf("no bin dir")
+	}
+
+	s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
+	return s.downloadWithSingleURL(spec, ossURL, binDir)
 }
 
 // tryDownloadWithMirrors tries to download using multiple China mirrors.
