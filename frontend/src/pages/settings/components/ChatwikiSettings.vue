@@ -30,7 +30,7 @@ import {
 
 const { t } = useI18n()
 
-const CHATWIKI_CLOUD_AUTH_URL = 'http://dev19.zhima_chat_ai.applnk.cn/'
+const CHATWIKI_CLOUD_AUTH_URL = 'https://dev6zhimachatai.applnk.cn/'
 const BINDING_TIMEOUT_SEC = 120
 
 type View = 'list' | 'choose' | 'binding' | 'success' | 'failure'
@@ -126,7 +126,7 @@ async function loadRobots() {
   robotsLoading.value = true
   try {
     console.log('[ChatWiki] Loading robot list...')
-    const list = await ChatWikiService.GetRobotList()
+    const list = await ChatWikiService.GetRobotListAll()
     console.log('[ChatWiki] Robot list response:', list)
     robots.value = (list ?? []).map((r: any) => ({
       ...r,
@@ -323,7 +323,8 @@ function listenAuthCallback() {
 }
 
 async function handleLoginCloud() {
-  await startBinding(CHATWIKI_CLOUD_AUTH_URL)
+  const base = CHATWIKI_CLOUD_AUTH_URL.replace(/\/+$/, '')
+  await startBinding(`${base}/#/chatclaw/login`)
 }
 
 async function handleGoToAuth() {

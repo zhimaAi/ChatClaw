@@ -6,5 +6,5 @@ package define
 var (
 	Env              = "production"
 	ServerURL        = "https://chatclaw.chatwiki.com/openapi"
-	ChatWikiCloudURL = "http://dev19.zhima_chat_ai.applnk.cn/"
+	ChatWikiCloudURL = "http:/6.zhima_chat_ai.applnk.cn/"
 )

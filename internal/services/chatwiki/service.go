@@ -265,8 +265,18 @@ func (s *ChatWikiService) markBindingExpired() {
 	s.app.Logger.Info("[ChatWiki] Binding marked expired (exp=0) for re-auth")
 }
 
-// GetRobotList fetches the robot/application list from ChatWiki API.
+// GetRobotList fetches the robot/application list from ChatWiki API (only robots with switch_status open).
 func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
+	return s.getRobotList(1)
+}
+
+// GetRobotListAll fetches all robots/applications from ChatWiki API (no only_open filter).
+// Used by account management settings to show and manage all applications.
+func (s *ChatWikiService) GetRobotListAll() ([]Robot, error) {
+	return s.getRobotList(0)
+}
+
+func (s *ChatWikiService) getRobotList(onlyOpen int) ([]Robot, error) {
 	binding, err := s.GetBinding()
 	if err != nil || binding == nil {
 		return nil, fmt.Errorf("no binding found")
@@ -275,11 +285,14 @@ func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 	baseURL := strings.TrimRight(binding.ServerURL, "/")
 	q := url.Values{}
 	q.Set("application_type", "-1")
-	q.Set("only_open", "1") // only robots with switch_status open
+	if onlyOpen != 0 {
+		q.Set("only_open", "1")
+	}
 	apiURL := baseURL + "/manage/chatclaw/getRobotList?" + q.Encode()
 
-	s.app.Logger.Info("[ChatWiki] GetRobotList request",
+	s.app.Logger.Info("[ChatWiki] getRobotList request",
 		"url", apiURL,
+		"only_open", onlyOpen,
 		"token_length", len(binding.Token),
 	)
 
@@ -294,7 +307,7 @@ func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		s.app.Logger.Error("[ChatWiki] GetRobotList request failed", "error", err)
+		s.app.Logger.Error("[ChatWiki] getRobotList request failed", "error", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -304,7 +317,7 @@ func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 		return nil, fmt.Errorf("read response body: %w", err)
 	}
 
-	s.app.Logger.Info("[ChatWiki] GetRobotList response",
+	s.app.Logger.Info("[ChatWiki] getRobotList response",
 		"status", resp.StatusCode,
 		"body", string(body),
 	)

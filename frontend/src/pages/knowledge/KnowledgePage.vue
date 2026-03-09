@@ -1196,13 +1196,8 @@ const handleRemoveImage = (id: string) => {
               {{ t('knowledge.team.goBind') }}
             </Button>
           </div>
-          <div
-            v-else-if="teamLibraries.length === 0"
-            class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
-          >
-            {{ t('knowledge.team.empty') }}
-          </div>
           <div v-else class="flex flex-col gap-1">
+            <!-- Always show the three category tabs when team is bound -->
             <div class="mx-1 mb-1 inline-flex rounded-md bg-muted p-1">
               <button
                 type="button"
@@ -1242,23 +1237,31 @@ const handleRemoveImage = (id: string) => {
               </button>
             </div>
             <div
-              v-for="lib in teamLibraries"
-              :key="lib.id"
-              class="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors"
-              :class="
-                cn(
-                  selectedTeamLibraryId === lib.id
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-foreground hover:bg-accent/50'
-                )
-              "
-              role="button"
-              @click="selectedTeamLibraryId = lib.id"
+              v-if="teamLibraries.length === 0"
+              class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
             >
-              <span class="min-w-0 flex-1 truncate" :title="lib.name">
-                {{ lib.name }}
-              </span>
+              {{ t('knowledge.team.empty') }}
             </div>
+            <template v-else>
+              <div
+                v-for="lib in teamLibraries"
+                :key="lib.id"
+                class="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors"
+                :class="
+                  cn(
+                    selectedTeamLibraryId === lib.id
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-foreground hover:bg-accent/50'
+                  )
+                "
+                role="button"
+                @click="selectedTeamLibraryId = lib.id"
+              >
+                <span class="min-w-0 flex-1 truncate" :title="lib.name">
+                  {{ lib.name }}
+                </span>
+              </div>
+            </template>
           </div>
         </div>
 
