@@ -42,6 +42,8 @@ const props = withDefaults(
     teamRobots?: Robot[]
     activeTeamRobotId?: string | null
     teamLoading?: boolean
+    teamBindingChecked?: boolean
+    teamBound?: boolean
     onWakeAttached?: (e: globalThis.PointerEvent) => void
   }>(),
   {
@@ -49,6 +51,8 @@ const props = withDefaults(
     teamRobots: () => [],
     activeTeamRobotId: null,
     teamLoading: false,
+    teamBindingChecked: false,
+    teamBound: false,
   }
 )
 
@@ -68,6 +72,7 @@ const emit = defineEmits<{
   'openRename': [conversation: Conversation]
   'openDelete': [conversation: Conversation]
   'closeSidebar': []
+  'goBind': []
 }>()
 
 const { t } = useI18n()
@@ -171,14 +176,27 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
         </div>
       </div>
 
-      <!-- Team mode: empty / no binding -->
+      <!-- Team mode: loading binding -->
       <div
-        v-if="listMode === 'team' && !teamLoading && teamRobots.length === 0"
+        v-if="listMode === 'team' && !teamBindingChecked"
         class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
       >
         <div class="text-center text-sm text-muted-foreground">
-          {{ t('knowledge.needsBindingShort') }}
+          {{ t('knowledge.loading') }}
         </div>
+      </div>
+
+      <!-- Team mode: not bound (no binding or exp expired) -->
+      <div
+        v-else-if="listMode === 'team' && !teamBound"
+        class="mx-2 mt-2 flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4 text-center"
+      >
+        <p class="text-sm text-muted-foreground">
+          {{ t('assistant.teamNeedsBinding') }}
+        </p>
+        <Button size="sm" @click="emit('goBind')">
+          {{ t('knowledge.team.goBind') }}
+        </Button>
       </div>
 
       <!-- Personal mode: agent list -->
@@ -328,7 +346,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </div>
 
       <!-- Team mode: robot list from ChatWiki getRobotList -->
-      <div v-if="listMode === 'team'" class="flex flex-col gap-1.5">
+      <div v-if="listMode === 'team' && teamBound" class="flex flex-col gap-1.5">
         <div v-for="r in teamRobots" :key="r.id" class="flex flex-col">
           <div
             :class="

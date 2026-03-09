@@ -8,7 +8,7 @@ import IconKnowledge from '@/assets/icons/knowledge.svg'
  * Props - 每个标签页实例都有自己独立的 tabId
  * 通过 v-show 控制显示/隐藏，组件实例不会被销毁，状态自然保留
  */
-defineProps<{
+const props = defineProps<{
   tabId: string
 }>()
 import { Button } from '@/components/ui/button'
@@ -67,7 +67,6 @@ import { Book, BookOpen, ChevronRight, FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
-import { useNavigationStore } from '@/stores'
 import { toast } from '@/components/ui/toast'
 
 type LibraryTab = 'personal' | 'team'
@@ -116,8 +115,6 @@ const {
   loadModels,
   selectDefaultModel,
 } = useModelSelection()
-
-const navigationStore = useNavigationStore()
 
 interface PendingImage {
   id: string
@@ -833,7 +830,9 @@ const checkTeamBindingAndLoad = async () => {
   teamBindingChecked.value = false
   try {
     const binding = await ChatWikiService.GetBinding()
-    teamBound.value = !!binding
+    // Valid only when binding exists and exp (Unix seconds) not expired
+    const exp = binding?.exp != null ? Number(binding.exp) : 0
+    teamBound.value = !!binding && exp > Math.floor(Date.now() / 1000)
     if (!teamBound.value) {
       teamLibraries.value = []
       selectedTeamLibraryId.value = null
@@ -920,8 +919,17 @@ onUnmounted(() => {
   }
 })
 
+// When switching to team tab, always re-check binding and load
 watch(activeTab, (tab) => {
   if (tab === 'team') {
+    void checkTeamBindingAndLoad()
+  }
+})
+
+// When this module tab becomes active and we're on team tab but unbound, re-check (e.g. after binding in settings)
+const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
+watch(isTabActive, (active) => {
+  if (active && activeTab.value === 'team' && !teamBound.value) {
     void checkTeamBindingAndLoad()
   }
 })
@@ -1179,9 +1187,14 @@ const handleRemoveImage = (id: string) => {
           </div>
           <div
             v-else-if="!teamBound"
-            class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+            class="mx-2 mt-2 flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4 text-center"
           >
-            {{ t('knowledge.team.needsBindingShort') }}
+            <p class="text-sm text-muted-foreground">
+              {{ t('assistant.teamNeedsBinding') }}
+            </p>
+            <Button size="sm" @click="goToChatwikiBindingSettings">
+              {{ t('knowledge.team.goBind') }}
+            </Button>
           </div>
           <div
             v-else-if="teamLibraries.length === 0"
@@ -1267,11 +1280,12 @@ const handleRemoveImage = (id: string) => {
                   "
                 />
               </button>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabindex="0"
                 :class="
                   cn(
-                    'group flex h-10 flex-1 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
+                    'group flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
                     selectedLibraryId === lib.id
                       ? 'bg-accent text-accent-foreground'
                       : 'text-foreground hover:bg-accent/50'
@@ -1309,6 +1323,7 @@ const handleRemoveImage = (id: string) => {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              </div>
             </div>
             <!-- Folder tree -->
             <div
@@ -1823,9 +1838,9 @@ const handleRemoveImage = (id: string) => {
         @folder-deleted="handleFolderDeleted"
       />
 
-      <!-- Bottom chat input using shared ChatInputArea component -->
+      <!-- Bottom chat input using shared ChatInputArea component (personal tab only; hidden on team tab) -->
       <!-- 分割线在输入框容器上，随输入框高度变化而移动 -->
-      <div v-if="!isLibraryEmpty" class="bg-background pt-3">
+      <div v-if="!isLibraryEmpty && isPersonalTab" class="bg-background pt-3">
         <ChatInputArea
           mode="knowledge"
           v-model:chat-input="chatInput"

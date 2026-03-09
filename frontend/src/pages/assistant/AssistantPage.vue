@@ -18,7 +18,7 @@ import AgentSidebar from './components/AgentSidebar.vue'
 import ChatInputArea from './components/ChatInputArea.vue'
 import WorkspaceDrawer from './components/WorkspaceDrawer.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
-import { useNavigationStore, useChatStore } from '@/stores'
+import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
 import { Events } from '@wailsio/runtime'
@@ -78,6 +78,7 @@ const SNAP_CACHE_TEAM_ROBOT_ID = 'snap_team_robot_id'
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const chatStore = useChatStore()
+const settingsStore = useSettingsStore()
 
 // Use composables
 const {
@@ -136,8 +137,15 @@ const {
   activeRobot,
   binding,
   teamLoading,
+  teamBindingChecked,
+  teamBound,
   loadTeamRobots,
 } = useTeamRobots()
+
+function goToChatwikiBindingSettings() {
+  settingsStore.setActiveMenu('chatwiki')
+  navigationStore.navigateToModule('settings')
+}
 
 // Local state
 const listMode = ref<ListMode>('personal')
@@ -602,7 +610,7 @@ const sendTeamMessage = async (messageContent: string) => {
       server_url: currentBinding?.server_url,
       token_length: String(currentBinding?.token ?? '').length,
     })
-    toast.error(t('knowledge.needsBindingShort'))
+    toast.error(t('knowledge.team.needsBindingShort'))
     return
   }
 
@@ -1103,6 +1111,7 @@ const isTabActive = computed(() => isSnapMode.value || navigationStore.activeTab
 // 监听标签页激活状态，激活时刷新模型/助手列表
 // - 模型：用户可能在设置页启用/禁用 provider/model
 // - 助手：其它标签页可能创建/更新/删除了助手
+// - 团队：若当前为团队 tab 且未绑定，重新检查绑定（例如从设置页绑定后返回）
 watch(isTabActive, (active) => {
   if (active) {
     void (async () => {
@@ -1110,6 +1119,11 @@ watch(isTabActive, (active) => {
       const agentIdBefore = activeAgentId.value
       await loadAgents()
       await loadLibrariesFn()
+
+      // When on team tab and unbound, re-check binding so we refresh after user binds in settings
+      if (listMode.value === 'team' && !teamBound.value) {
+        await loadTeamRobots()
+      }
 
       // Only refresh conversations here if loadAgents didn't change the active agent.
       // If it did change, watch(activeAgentId) already handled the conversation reload.
@@ -1479,7 +1493,10 @@ onUnmounted(() => {
       :team-robots="teamRobots"
       :active-team-robot-id="activeTeamRobotId"
       :team-loading="teamLoading"
+      :team-binding-checked="teamBindingChecked"
+      :team-bound="teamBound"
       :on-wake-attached="handleWakeAttachedPointerDown"
+      @go-bind="goToChatwikiBindingSettings"
       @update:active-agent-id="activeAgentId = $event"
       @update:active-team-robot-id="activeTeamRobotId = $event"
       @update:list-mode="handleListModeChange"

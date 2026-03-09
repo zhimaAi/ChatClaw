@@ -320,6 +320,8 @@ export default {
       description: '授权绑定ChatWiki，获取机器人和对应的知识库',
       notBound: '暂未绑定',
       bound: '已绑定',
+      bindingExpired: '已过期',
+      reauthBind: '重新授权绑定',
       unbind: '解除绑定',
       unbindConfirmTitle: '确认解除绑定',
       unbindConfirmDesc: '解除绑定后，将无法使用 ChatWiki 提供的应用和知识库。确定要继续吗？',
@@ -487,6 +489,7 @@ export default {
       personal: '个人',
       team: '团队',
     },
+    teamNeedsBinding: '需要绑定账号',
     empty: '暂无助手',
     emptyState: {
       title: '小助手为空',
@@ -723,8 +726,8 @@ export default {
     providersLoadFailed: '加载模型供应商失败',
     teamNotReady: '团队知识库暂未开放',
     team: {
-      needsBinding: '当前未绑定 ChatWiki，无法使用团队知识库。',
-      needsBindingShort: '未绑定 ChatWiki',
+      needsBinding: '当前未绑定账号，无法使用团队知识库。',
+      needsBindingShort: '未绑定账号',
       goBind: '前往绑定',
       empty: '暂无团队知识库',
       noIntro: '暂无简介',

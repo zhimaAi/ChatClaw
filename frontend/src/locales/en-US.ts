@@ -320,6 +320,8 @@ export default {
       description: 'Bind ChatWiki to get robots and corresponding knowledge bases.',
       notBound: 'Not bound',
       bound: 'Bound',
+      bindingExpired: 'Expired',
+      reauthBind: 'Re-authorize',
       unbind: 'Unbind',
       unbindConfirmTitle: 'Confirm Unbind',
       unbindConfirmDesc: 'After unbinding, you will no longer have access to ChatWiki applications and knowledge bases. Are you sure?',
@@ -490,6 +492,7 @@ export default {
       personal: 'Personal',
       team: 'Team',
     },
+    teamNeedsBinding: 'Account binding required',
     empty: 'No agents yet',
     emptyState: {
       title: 'No Agents',
@@ -728,8 +731,8 @@ export default {
     providersLoadFailed: 'Failed to load providers',
     teamNotReady: 'Team knowledge base is not available yet',
     team: {
-      needsBinding: 'ChatWiki is not bound. Team knowledge bases are unavailable.',
-      needsBindingShort: 'ChatWiki not bound',
+      needsBinding: 'Account not bound. Team knowledge base is unavailable.',
+      needsBindingShort: 'Not bound',
       goBind: 'Go to bind',
       empty: 'No team knowledge base',
       noIntro: 'No introduction',

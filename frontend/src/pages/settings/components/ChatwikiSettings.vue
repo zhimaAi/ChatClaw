@@ -67,6 +67,8 @@ interface LibraryItem {
 const view = ref<View>('list')
 const openSourceUrl = ref('')
 const showOpenSourceInput = ref(false)
+/** True when we entered binding view via re-auth (so cancel returns to list, not choose) */
+const isReauthFlow = ref(false)
 const remainingSeconds = ref(BINDING_TIMEOUT_SEC)
 const authUser = ref<AuthCallbackData | null>(null)
 const currentBinding = ref<Binding | null>(null)
@@ -74,6 +76,13 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null
 let unbindAuthCallback: (() => void) | null = null
 
 const isBound = computed(() => !!currentBinding.value)
+/** exp is Unix timestamp in seconds; binding is expired when exp <= now */
+const bindingExpired = computed(() => {
+  const b = currentBinding.value
+  if (!b || b.exp == null) return false
+  const exp = Number(b.exp)
+  return exp <= Math.floor(Date.now() / 1000)
+})
 const showUnbindConfirm = ref(false)
 
 const robots = ref<RobotItem[]>([])
@@ -230,6 +239,18 @@ function goToChoose() {
   view.value = 'choose'
   openSourceUrl.value = ''
   showOpenSourceInput.value = false
+}
+
+/** Re-auth: open current binding server_url login page directly (no choose step) */
+async function startReauthBinding() {
+  const b = currentBinding.value
+  const base = (b?.server_url ?? '').trim().replace(/\/+$/, '')
+  if (!base) {
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+  const authUrl = `${base}/#/chatclaw/login`
+  await startBinding(authUrl)
 }
 
 function backToList() {
@@ -397,9 +418,27 @@ onUnmounted(() => {
               <p class="truncate text-xs text-muted-foreground">ID: {{ currentBinding.user_id }}</p>
             </div>
           </div>
-          <span class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-            {{ t('settings.chatwiki.bound') }}
-          </span>
+          <div class="flex shrink-0 items-center gap-2">
+            <span
+              v-if="bindingExpired"
+              class="rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1 text-xs text-destructive"
+            >
+              {{ t('settings.chatwiki.bindingExpired') }}
+            </span>
+            <span
+              v-else
+              class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
+            >
+              {{ t('settings.chatwiki.bound') }}
+            </span>
+            <Button
+              v-if="bindingExpired"
+              size="sm"
+              @click="startReauthBinding"
+            >
+              {{ t('settings.chatwiki.reauthBind') }}
+            </Button>
+          </div>
         </div>
 
         <!-- Applications section -->
