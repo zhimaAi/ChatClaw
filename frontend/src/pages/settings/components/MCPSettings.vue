@@ -14,6 +14,7 @@ import {
   Wrench,
   MessageSquare,
   Database,
+  ExternalLink,
 } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -362,6 +363,28 @@ function deleteFromDetail() {
   if (detailServer.value) confirmDelete(detailServer.value)
 }
 
+// ==================== Market ====================
+const mcpMarkets = [
+  { name: 'BigModel MCP Market', desc: '精选 MCP，极速接入。', url: 'https://bigmodel.cn/marketplace/index/mcp' },
+  { name: 'modelscope.cn', desc: '魔塔社区 MCP 服务器。', url: 'https://www.modelscope.cn/mcp' },
+  { name: 'mcp.higress.ai', desc: 'Higress MCP 服务器。', url: 'https://mcp.higress.ai/' },
+  { name: 'mcp.so', desc: 'MCP 服务器发现平台。', url: 'https://mcp.so/' },
+  { name: 'smithery.ai', desc: 'Smithery MCP 工具。', url: 'https://smithery.ai/' },
+  { name: 'glama.ai', desc: 'Glama MCP 服务器目录。', url: 'https://glama.ai/mcp/servers' },
+  { name: 'pulsemcp.com', desc: 'Pulse MCP 服务器。', url: 'https://www.pulsemcp.com/' },
+  { name: 'mcp.composio.dev', desc: 'Composio MCP 开发工具。', url: 'https://mcp.composio.dev/' },
+  { name: 'Model Context Protocol Servers', desc: '官方 MCP 服务器集合。', url: 'https://github.com/modelcontextprotocol/servers' },
+  { name: 'awesome MCP Servers', desc: '精选的 MCP 服务器列表。', url: 'https://github.com/punkpeye/awesome-mcp-servers' },
+]
+
+async function openMarketLink(url: string) {
+  try {
+    await BrowserService.OpenURL(url)
+  } catch (error) {
+    console.error('Failed to open URL:', error)
+  }
+}
+
 // ==================== Init ====================
 onMounted(() => {
   void loadServers()
@@ -580,13 +603,21 @@ onMounted(() => {
               {{ t('settings.mcp.tabInstalled') }}
             </button>
             <button
-              class="cursor-not-allowed rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground/50"
-              disabled
+              :class="
+                cn(
+                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  activeSubTab === 'market'
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                )
+              "
+              @click="activeSubTab = 'market'"
             >
               {{ t('settings.mcp.tabMarket') }}
             </button>
           </div>
           <button
+            v-if="activeSubTab === 'installed'"
             class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             @click="openAddDialog"
           >
@@ -649,9 +680,22 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Market tab (disabled placeholder) -->
-        <div v-if="activeSubTab === 'market'" class="flex flex-1 items-center justify-center">
-          <span class="text-sm text-muted-foreground">{{ t('settings.mcp.marketComingSoon') }}</span>
+        <!-- Market tab -->
+        <div v-if="activeSubTab === 'market'" class="flex-1 overflow-auto px-4 pb-4">
+          <div class="flex flex-col gap-1.5">
+            <div
+              v-for="item in mcpMarkets"
+              :key="item.url"
+              class="group flex cursor-pointer items-center justify-between rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+              @click="openMarketLink(item.url)"
+            >
+              <div class="min-w-0 flex-1">
+                <span class="text-sm font-medium text-foreground">{{ item.name }}</span>
+                <p class="mt-0.5 text-xs text-muted-foreground">{{ item.desc }}</p>
+              </div>
+              <ExternalLink class="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+            </div>
+          </div>
         </div>
       </template>
     </template>
