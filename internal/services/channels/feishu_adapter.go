@@ -89,6 +89,12 @@ func (a *FeishuAdapter) Connect(ctx context.Context, channelID int64, configJSON
 }
 
 func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+	// Guard: SDK ws client does not stop on context cancel in current version.
+	// Ignore all events after adapter is marked disconnected.
+	if !a.connected.Load() {
+		return nil
+	}
+
 	if a.handler == nil || event == nil || event.Event == nil || event.Event.Message == nil {
 		return nil
 	}
@@ -232,6 +238,7 @@ func (a *FeishuAdapter) Disconnect(ctx context.Context) error {
 		a.cancel = nil
 	}
 	a.connected.Store(false)
+	a.handler = nil
 	return nil
 }
 
