@@ -20,7 +20,7 @@ Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-sm
 <h1 />
   
 <p align="center">
-<a href="./releases">Windows/Mac/Linux (Releases)</a>  
+<a href="https://github.com/zhimaAi/ChatClaw/releases">Windows/Mac/Linux (Releases)</a>  
 </p>
 
 ## Previews
