@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Database,
   ExternalLink,
+  X,
 } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -111,12 +112,13 @@ const dialogMode = ref<'add' | 'edit'>('add')
 const dialogForm = ref({
   id: '',
   name: '',
+  description: '',
   transport: 'stdio' as 'stdio' | 'streamableHttp',
   command: '',
   argsText: '',
-  envText: '',
+  envPairs: [] as Array<{ key: string; value: string }>,
   url: '',
-  headersText: '',
+  headerPairs: [] as Array<{ key: string; value: string }>,
   timeout: 30,
 })
 const dialogSaving = ref(false)
@@ -127,12 +129,13 @@ function openAddDialog() {
   dialogForm.value = {
     id: '',
     name: '',
+    description: '',
     transport: 'stdio',
     command: '',
     argsText: '',
-    envText: '',
+    envPairs: [],
     url: '',
-    headersText: '',
+    headerPairs: [],
     timeout: 30,
   }
   dialogOpen.value = true
@@ -147,27 +150,28 @@ function openEditDialog(server: MCPServer) {
     if (Array.isArray(arr)) argsText = arr.join('\n')
   } catch { /* keep empty */ }
 
-  let envText = ''
+  let envPairs: Array<{ key: string; value: string }> = []
   try {
     const obj = JSON.parse(server.env || '{}')
-    envText = Object.entries(obj).map(([k, v]) => `${k}=${v}`).join('\n')
+    envPairs = Object.entries(obj).map(([k, v]) => ({ key: k, value: String(v) }))
   } catch { /* keep empty */ }
 
-  let headersText = ''
+  let headerPairs: Array<{ key: string; value: string }> = []
   try {
     const obj = JSON.parse(server.headers || '{}')
-    headersText = Object.entries(obj).map(([k, v]) => `${k}=${v}`).join('\n')
+    headerPairs = Object.entries(obj).map(([k, v]) => ({ key: k, value: String(v) }))
   } catch { /* keep empty */ }
 
   dialogForm.value = {
     id: server.id,
     name: server.name,
+    description: server.description || '',
     transport: server.transport as 'stdio' | 'streamableHttp',
     command: server.command,
     argsText,
-    envText,
+    envPairs,
     url: server.url,
-    headersText,
+    headerPairs,
     timeout: server.timeout > 0 ? server.timeout : 30,
   }
   dialogOpen.value = true
@@ -178,31 +182,36 @@ function parseLinesToArray(text: string): string {
   return JSON.stringify(lines)
 }
 
-function parseLinesToObject(text: string): string {
+function pairsToJsonObject(pairs: Array<{ key: string; value: string }>): string {
   const obj: Record<string, string> = {}
-  text.split('\n').forEach((line) => {
-    const trimmed = line.trim()
-    if (!trimmed) return
-    const idx = trimmed.indexOf('=')
-    if (idx > 0) {
-      obj[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim()
-    }
+  pairs.forEach(({ key, value }) => {
+    const k = key.trim()
+    if (k) obj[k] = value
   })
   return JSON.stringify(obj)
 }
 
+function addPair(pairs: Array<{ key: string; value: string }>) {
+  pairs.push({ key: '', value: '' })
+}
+
+function removePair(pairs: Array<{ key: string; value: string }>, index: number) {
+  pairs.splice(index, 1)
+}
+
 async function handleDialogSave() {
   const form = dialogForm.value
-  if (!form.name.trim()) return
+  if (!form.name.trim() || !form.description.trim()) return
 
   const payload = {
     name: form.name.trim(),
+    description: form.description.trim(),
     transport: form.transport,
     command: form.command.trim(),
     args: parseLinesToArray(form.argsText),
-    env: parseLinesToObject(form.envText),
+    env: pairsToJsonObject(form.envPairs),
     url: form.url.trim(),
-    headers: parseLinesToObject(form.headersText),
+    headers: pairsToJsonObject(form.headerPairs),
     timeout: form.timeout,
   }
 
@@ -315,23 +324,14 @@ const dialogTitle = computed(() =>
 const canSave = computed(() => {
   const f = dialogForm.value
   if (!f.name.trim()) return false
+  if (!f.description.trim()) return false
   if (f.transport === 'stdio' && !f.command.trim()) return false
   if (f.transport === 'streamableHttp' && !f.url.trim()) return false
   return true
 })
 
 function serverSummary(server: MCPServer): string {
-  if (server.transport === 'stdio') {
-    let summary = server.command
-    try {
-      const args = JSON.parse(server.args || '[]')
-      if (Array.isArray(args) && args.length > 0) {
-        summary += ' ' + args.join(' ')
-      }
-    } catch { /* ignore */ }
-    return summary
-  }
-  return server.url
+  return server.description
 }
 
 // ==================== Detail view ====================
@@ -776,6 +776,21 @@ onMounted(() => {
             />
           </div>
 
+          <!-- Description -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <Label class="text-sm">{{ t('settings.mcp.description') }}</Label>
+              <span class="text-[10px] text-muted-foreground">{{ dialogForm.description.length }}/300</span>
+            </div>
+            <textarea
+              v-model="dialogForm.description"
+              :placeholder="t('settings.mcp.descriptionPlaceholder')"
+              :maxlength="300"
+              rows="2"
+              class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            />
+          </div>
+
           <!-- Transport type -->
           <div class="flex flex-col gap-1.5">
             <Label class="text-sm">{{ t('settings.mcp.transportType') }}</Label>
@@ -809,13 +824,44 @@ onMounted(() => {
               />
             </div>
             <div class="flex flex-col gap-1.5">
-              <Label class="text-sm">{{ t('settings.mcp.envVars') }}</Label>
-              <textarea
-                v-model="dialogForm.envText"
-                :placeholder="t('settings.mcp.envVarsPlaceholder')"
-                rows="3"
-                class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
+              <div class="flex items-center justify-between">
+                <Label class="text-sm">{{ t('settings.mcp.envVars') }}</Label>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  @click="addPair(dialogForm.envPairs)"
+                >
+                  <Plus class="size-3" />
+                  {{ t('settings.mcp.addRow') }}
+                </button>
+              </div>
+              <div v-if="dialogForm.envPairs.length === 0" class="text-xs text-muted-foreground py-1">
+                {{ t('settings.mcp.envVarsPlaceholder') }}
+              </div>
+              <div
+                v-for="(pair, idx) in dialogForm.envPairs"
+                :key="idx"
+                class="flex items-center gap-2"
+              >
+                <Input
+                  v-model="pair.key"
+                  placeholder="KEY"
+                  class="flex-1 font-mono text-xs"
+                />
+                <span class="text-muted-foreground text-xs">=</span>
+                <Input
+                  v-model="pair.value"
+                  placeholder="VALUE"
+                  class="flex-1 font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  @click="removePair(dialogForm.envPairs, idx)"
+                >
+                  <X class="size-3.5" />
+                </button>
+              </div>
             </div>
           </template>
 
@@ -829,13 +875,44 @@ onMounted(() => {
               />
             </div>
             <div class="flex flex-col gap-1.5">
-              <Label class="text-sm">{{ t('settings.mcp.httpHeaders') }}</Label>
-              <textarea
-                v-model="dialogForm.headersText"
-                :placeholder="t('settings.mcp.httpHeadersPlaceholder')"
-                rows="3"
-                class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
+              <div class="flex items-center justify-between">
+                <Label class="text-sm">{{ t('settings.mcp.httpHeaders') }}</Label>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  @click="addPair(dialogForm.headerPairs)"
+                >
+                  <Plus class="size-3" />
+                  {{ t('settings.mcp.addRow') }}
+                </button>
+              </div>
+              <div v-if="dialogForm.headerPairs.length === 0" class="text-xs text-muted-foreground py-1">
+                {{ t('settings.mcp.httpHeadersPlaceholder') }}
+              </div>
+              <div
+                v-for="(pair, idx) in dialogForm.headerPairs"
+                :key="idx"
+                class="flex items-center gap-2"
+              >
+                <Input
+                  v-model="pair.key"
+                  placeholder="Header-Name"
+                  class="flex-1 font-mono text-xs"
+                />
+                <span class="text-muted-foreground text-xs">:</span>
+                <Input
+                  v-model="pair.value"
+                  placeholder="Value"
+                  class="flex-1 font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  @click="removePair(dialogForm.headerPairs, idx)"
+                >
+                  <X class="size-3.5" />
+                </button>
+              </div>
             </div>
           </template>
 
