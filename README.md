@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> |
-  <a href="README_zh-CN.md">简体中文</a>
+  <a href="README.md" target="_blank">English</a> |
+  <a href="README_zh-CN.md" target="_blank">简体中文</a>
 </p>
 
 Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
@@ -20,7 +20,7 @@ Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-sm
 <h1 />
   
 <p align="center">
-<a href="https://github.com/zhimaAi/ChatClaw/releases">Windows/Mac/Linux (Releases)</a>  
+<a href="https://github.com/zhimaAi/ChatClaw/releases">Windows/Mac/Linux (Releases) target="_blank"</a>  
 </p>
 
 ## Previews
