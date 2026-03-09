@@ -806,7 +806,7 @@ onMounted(() => {
     </Dialog>
 
     <!-- ==================== Delete Confirm ==================== -->
-    <AlertDialog :open="!!deleteTarget" @update:open="(v) => !v && (deleteTarget = null)">
+    <AlertDialog :open="!!deleteTarget">
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{{ t('common.delete') }}</AlertDialogTitle>
@@ -815,7 +815,7 @@ onMounted(() => {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel @click="deleteTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
           <AlertDialogAction @click="handleDelete">{{ t('common.confirm') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
