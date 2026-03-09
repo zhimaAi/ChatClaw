@@ -29,14 +29,9 @@ const (
 type ScheduledTask struct {
 	ID int64 `json:"id"`
 
-	Name           string  `json:"name"`
-	Prompt         string  `json:"prompt"`
-	AgentID        int64   `json:"agent_id"`
-	LLMProviderID  string  `json:"llm_provider_id"`
-	LLMModelID     string  `json:"llm_model_id"`
-	LibraryIDs     []int64 `json:"library_ids"`
-	EnableThinking bool    `json:"enable_thinking"`
-	ChatMode       string  `json:"chat_mode"`
+	Name    string `json:"name"`
+	Prompt  string `json:"prompt"`
+	AgentID int64  `json:"agent_id"`
 
 	ScheduleType  string     `json:"schedule_type"`
 	ScheduleValue string     `json:"schedule_value"`
@@ -56,26 +51,21 @@ type ScheduledTask struct {
 type ScheduledTaskRun struct {
 	ID int64 `json:"id"`
 
-	TaskID              int64  `json:"task_id"`
-	TriggerType         string `json:"trigger_type"`
-	Status              string `json:"status"`
-	ErrorMessage        string `json:"error_message"`
-	ConversationID      *int64 `json:"conversation_id"`
-	UserMessageID       *int64 `json:"user_message_id"`
-	AssistantMessageID  *int64 `json:"assistant_message_id"`
-	SnapshotTaskName    string `json:"snapshot_task_name"`
-	SnapshotPrompt      string `json:"snapshot_prompt"`
-	SnapshotAgentID     int64  `json:"snapshot_agent_id"`
-	SnapshotProviderID  string `json:"snapshot_provider_id"`
-	SnapshotModelID     string `json:"snapshot_model_id"`
-	SnapshotLibraryIDs  []int64 `json:"snapshot_library_ids"`
-	SnapshotEnableThinking bool `json:"snapshot_enable_thinking"`
-	SnapshotChatMode    string `json:"snapshot_chat_mode"`
-	StartedAt           time.Time  `json:"started_at"`
-	FinishedAt          *time.Time `json:"finished_at"`
-	DurationMS          int64      `json:"duration_ms"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	TaskID             int64      `json:"task_id"`
+	TriggerType        string     `json:"trigger_type"`
+	Status             string     `json:"status"`
+	ErrorMessage       string     `json:"error_message"`
+	ConversationID     *int64     `json:"conversation_id"`
+	UserMessageID      *int64     `json:"user_message_id"`
+	AssistantMessageID *int64     `json:"assistant_message_id"`
+	SnapshotTaskName   string     `json:"snapshot_task_name"`
+	SnapshotPrompt     string     `json:"snapshot_prompt"`
+	SnapshotAgentID    int64      `json:"snapshot_agent_id"`
+	StartedAt          time.Time  `json:"started_at"`
+	FinishedAt         *time.Time `json:"finished_at"`
+	DurationMS         int64      `json:"duration_ms"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type ScheduledTaskSummary struct {
@@ -86,37 +76,27 @@ type ScheduledTaskSummary struct {
 }
 
 type CreateScheduledTaskInput struct {
-	Name           string  `json:"name"`
-	Prompt         string  `json:"prompt"`
-	AgentID        int64   `json:"agent_id"`
-	LLMProviderID  string  `json:"llm_provider_id"`
-	LLMModelID     string  `json:"llm_model_id"`
-	LibraryIDs     []int64 `json:"library_ids"`
-	EnableThinking bool    `json:"enable_thinking"`
-	ChatMode       string  `json:"chat_mode"`
-	ScheduleType   string  `json:"schedule_type"`
-	ScheduleValue  string  `json:"schedule_value"`
-	CronExpr       string  `json:"cron_expr"`
-	Enabled        bool    `json:"enabled"`
+	Name          string `json:"name"`
+	Prompt        string `json:"prompt"`
+	AgentID       int64  `json:"agent_id"`
+	ScheduleType  string `json:"schedule_type"`
+	ScheduleValue string `json:"schedule_value"`
+	CronExpr      string `json:"cron_expr"`
+	Enabled       bool   `json:"enabled"`
 }
 
 type UpdateScheduledTaskInput struct {
-	Name           *string  `json:"name"`
-	Prompt         *string  `json:"prompt"`
-	AgentID        *int64   `json:"agent_id"`
-	LLMProviderID  *string  `json:"llm_provider_id"`
-	LLMModelID     *string  `json:"llm_model_id"`
-	LibraryIDs     *[]int64 `json:"library_ids"`
-	EnableThinking *bool    `json:"enable_thinking"`
-	ChatMode       *string  `json:"chat_mode"`
-	ScheduleType   *string  `json:"schedule_type"`
-	ScheduleValue  *string  `json:"schedule_value"`
-	CronExpr       *string  `json:"cron_expr"`
-	Enabled        *bool    `json:"enabled"`
+	Name          *string `json:"name"`
+	Prompt        *string `json:"prompt"`
+	AgentID       *int64  `json:"agent_id"`
+	ScheduleType  *string `json:"schedule_type"`
+	ScheduleValue *string `json:"schedule_value"`
+	CronExpr      *string `json:"cron_expr"`
+	Enabled       *bool   `json:"enabled"`
 }
 
 type ScheduledTaskRunDetail struct {
-	Run          ScheduledTaskRun          `json:"run"`
+	Run          ScheduledTaskRun            `json:"run"`
 	Conversation *conversations.Conversation `json:"conversation"`
-	Messages     []chat.Message           `json:"messages"`
+	Messages     []chat.Message              `json:"messages"`
 }

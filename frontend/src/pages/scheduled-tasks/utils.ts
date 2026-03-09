@@ -51,11 +51,6 @@ export function createEmptyForm(): ScheduledTaskFormState {
     name: '',
     prompt: '',
     agentId: null,
-    llmProviderId: '',
-    llmModelId: '',
-    libraryIds: [],
-    enableThinking: false,
-    chatMode: 'task',
     enabled: true,
     scheduleType: 'preset',
     schedulePreset: 'every_day_0900',
@@ -74,11 +69,6 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   form.name = task.name
   form.prompt = task.prompt
   form.agentId = task.agent_id
-  form.llmProviderId = task.llm_provider_id
-  form.llmModelId = task.llm_model_id
-  form.libraryIds = [...task.library_ids]
-  form.enableThinking = task.enable_thinking
-  form.chatMode = task.chat_mode || 'task'
   form.enabled = task.enabled
   form.scheduleType = task.schedule_type as ScheduledTaskFormState['scheduleType']
   form.cronExpr = task.cron_expr

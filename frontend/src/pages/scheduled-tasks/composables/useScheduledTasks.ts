@@ -1,16 +1,13 @@
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
-import { LibraryService } from '@bindings/chatclaw/internal/services/library'
-import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import {
   CreateScheduledTaskInput,
   ScheduledTasksService,
   UpdateScheduledTaskInput,
 } from '@bindings/chatclaw/internal/services/scheduledtasks'
-import type { ModelGroup } from '@bindings/chatclaw/internal/services/providers'
-import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskSummary, Agent, Library, Provider, Model } from '../types'
+import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskSummary, Agent } from '../types'
 import { createEmptyForm } from '../utils'
 
 export function useScheduledTasks() {
@@ -19,33 +16,15 @@ export function useScheduledTasks() {
   const tasks = ref<ScheduledTask[]>([])
   const summary = ref<ScheduledTaskSummary | null>(null)
   const agents = ref<Agent[]>([])
-  const libraries = ref<Library[]>([])
-  const providers = ref<Provider[]>([])
-  const providerModels = ref<Record<string, Model[]>>({})
 
   const createDialogOpen = ref(false)
   const historyTask = ref<ScheduledTask | null>(null)
   const editingTask = ref<ScheduledTask | null>(null)
   const form = ref<ScheduledTaskFormState>(createEmptyForm())
 
-  const activeProviderModels = computed(() => providerModels.value[form.value.llmProviderId] || [])
-
   async function loadBaseOptions() {
-    const [agentList, libraryList, providerList] = await Promise.all([
-      AgentsService.ListAgents(),
-      LibraryService.ListLibraries(),
-      ProvidersService.ListProviders(),
-    ])
+    const agentList = await AgentsService.ListAgents()
     agents.value = agentList || []
-    libraries.value = libraryList || []
-    providers.value = (providerList || []).filter((item) => item.enabled)
-  }
-
-  async function ensureProviderModels(providerID: string) {
-    if (!providerID || providerModels.value[providerID]) return
-    const providerWithModels = await ProvidersService.GetProviderWithModels(providerID)
-    const groups = providerWithModels?.model_groups || []
-    providerModels.value[providerID] = flattenModels(groups)
   }
 
   async function loadTasks() {
@@ -77,9 +56,6 @@ export function useScheduledTasks() {
   async function openEditDialog(task: ScheduledTask, toForm: (task: ScheduledTask) => ScheduledTaskFormState) {
     editingTask.value = task
     form.value = toForm(task)
-    if (form.value.llmProviderId) {
-      await ensureProviderModels(form.value.llmProviderId)
-    }
     createDialogOpen.value = true
   }
 
@@ -143,16 +119,12 @@ export function useScheduledTasks() {
     tasks,
     summary,
     agents,
-    libraries,
-    providers,
-    activeProviderModels,
     createDialogOpen,
     historyTask,
     editingTask,
     form,
     loadTasks,
     reloadAll,
-    ensureProviderModels,
     openCreateDialog,
     openEditDialog,
     submitForm,
@@ -160,11 +132,4 @@ export function useScheduledTasks() {
     toggleTask,
     runTaskNow,
   }
-}
-
-function flattenModels(groups: ModelGroup[]): Model[] {
-  return groups
-    .filter((group) => group.type === 'llm')
-    .flatMap((group) => group.models || [])
-    .filter((model) => model.enabled)
 }

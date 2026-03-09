@@ -1,39 +1,22 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { WEEKDAY_OPTIONS } from '../constants'
-import type { Agent, Library, Model, Provider, ScheduledTaskFormState } from '../types'
+import type { Agent, ScheduledTaskFormState } from '../types'
 
-const props = defineProps<{
+defineProps<{
   open: boolean
   saving: boolean
   title: string
   form: ScheduledTaskFormState
   agents: Agent[]
-  libraries: Library[]
-  providers: Provider[]
-  models: Model[]
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
   submit: []
-  providerChange: [providerID: string]
 }>()
-
-const selectedLibrarySummary = computed(() => {
-  if (!props.form.libraryIds.length) return '未选择知识库'
-  return `已选 ${props.form.libraryIds.length} 个知识库`
-})
-
-watch(
-  () => props.form.llmProviderId,
-  (value) => {
-    emit('providerChange', value)
-  }
-)
 </script>
 
 <template>
@@ -59,57 +42,11 @@ watch(
         </div>
 
         <div>
-          <label class="mb-1 block text-sm font-medium">助手</label>
+          <label class="mb-1 block text-sm font-medium">AI 助手</label>
           <select v-model.number="form.agentId" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option :value="null">请选择助手</option>
+            <option :value="null">请选择 AI 助手</option>
             <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
           </select>
-        </div>
-
-        <div>
-          <label class="mb-1 block text-sm font-medium">对话模式</label>
-          <select v-model="form.chatMode" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option value="task">task</option>
-            <option value="chat">chat</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="mb-1 block text-sm font-medium">模型供应商</label>
-          <select v-model="form.llmProviderId" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option value="">默认跟随助手</option>
-            <option v-for="provider in providers" :key="provider.provider_id" :value="provider.provider_id">
-              {{ provider.name }}
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label class="mb-1 block text-sm font-medium">模型</label>
-          <select v-model="form.llmModelId" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option value="">默认跟随助手/供应商</option>
-            <option v-for="model in models" :key="model.model_id" :value="model.model_id">
-              {{ model.name || model.model_id }}
-            </option>
-          </select>
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">知识库</label>
-          <div class="rounded-md border border-input p-3">
-            <div class="mb-2 text-xs text-muted-foreground">{{ selectedLibrarySummary }}</div>
-            <div class="grid gap-2 md:grid-cols-3">
-              <label v-for="library in libraries" :key="library.id" class="flex items-center gap-2 text-sm">
-                <input v-model="form.libraryIds" type="checkbox" :value="library.id" />
-                <span>{{ library.name }}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-between rounded-md border border-input px-3 py-2">
-          <span class="text-sm">思考模式</span>
-          <Switch :model-value="form.enableThinking" @update:model-value="(value) => (form.enableThinking = !!value)" />
         </div>
 
         <div class="flex items-center justify-between rounded-md border border-input px-3 py-2">

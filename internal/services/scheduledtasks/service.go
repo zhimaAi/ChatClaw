@@ -166,11 +166,6 @@ func (s *ScheduledTasksService) UpdateScheduledTask(id int64, input UpdateSchedu
 		Set("name = ?", model.Name).
 		Set("prompt = ?", model.Prompt).
 		Set("agent_id = ?", model.AgentID).
-		Set("llm_provider_id = ?", model.LLMProviderID).
-		Set("llm_model_id = ?", model.LLMModelID).
-		Set("library_ids = ?", model.LibraryIDs).
-		Set("enable_thinking = ?", model.EnableThinking).
-		Set("chat_mode = ?", model.ChatMode).
 		Set("schedule_type = ?", model.ScheduleType).
 		Set("schedule_value = ?", model.ScheduleValue).
 		Set("cron_expr = ?", model.CronExpr).
@@ -340,21 +335,16 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 	}
 
 	model := &scheduledTaskModel{
-		Name:           name,
-		Prompt:         prompt,
-		AgentID:        input.AgentID,
-		LLMProviderID:  strings.TrimSpace(input.LLMProviderID),
-		LLMModelID:     strings.TrimSpace(input.LLMModelID),
-		LibraryIDs:     encodeInt64Array(input.LibraryIDs),
-		EnableThinking: input.EnableThinking,
-		ChatMode:       normalizeChatMode(input.ChatMode),
-		ScheduleType:   schedule.ScheduleType,
-		ScheduleValue:  schedule.ScheduleValue,
-		CronExpr:       schedule.CronExpr,
-		Timezone:       schedule.Timezone,
-		Enabled:        input.Enabled,
-		LastStatus:     TaskStatusPending,
-		LastError:      "",
+		Name:          name,
+		Prompt:        prompt,
+		AgentID:       input.AgentID,
+		ScheduleType:  schedule.ScheduleType,
+		ScheduleValue: schedule.ScheduleValue,
+		CronExpr:      schedule.CronExpr,
+		Timezone:      schedule.Timezone,
+		Enabled:       input.Enabled,
+		LastStatus:    TaskStatusPending,
+		LastError:     "",
 	}
 	if input.Enabled {
 		model.NextRunAt = schedule.NextRunAt
@@ -382,21 +372,6 @@ func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, inpu
 			return errs.New("error.agent_id_required")
 		}
 		model.AgentID = *input.AgentID
-	}
-	if input.LLMProviderID != nil {
-		model.LLMProviderID = strings.TrimSpace(*input.LLMProviderID)
-	}
-	if input.LLMModelID != nil {
-		model.LLMModelID = strings.TrimSpace(*input.LLMModelID)
-	}
-	if input.LibraryIDs != nil {
-		model.LibraryIDs = encodeInt64Array(*input.LibraryIDs)
-	}
-	if input.EnableThinking != nil {
-		model.EnableThinking = *input.EnableThinking
-	}
-	if input.ChatMode != nil {
-		model.ChatMode = normalizeChatMode(*input.ChatMode)
 	}
 	if input.Enabled != nil {
 		model.Enabled = *input.Enabled
@@ -470,6 +445,22 @@ func (s *ScheduledTasksService) getTaskModel(ctx context.Context, db *bun.DB, id
 	return model, nil
 }
 
+func (s *ScheduledTasksService) getTaskAgentConfig(ctx context.Context, db *bun.DB, agentID int64) (scheduledTaskAgentRow, error) {
+	var row scheduledTaskAgentRow
+	if err := db.NewSelect().
+		Table("agents").
+		Column("id", "default_llm_provider_id", "default_llm_model_id").
+		Where("id = ?", agentID).
+		Limit(1).
+		Scan(ctx, &row); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return scheduledTaskAgentRow{}, errs.Newf("error.agent_not_found", map[string]any{"ID": agentID})
+		}
+		return scheduledTaskAgentRow{}, errs.Wrap("error.scheduled_task_run_failed", err)
+	}
+	return row, nil
+}
+
 func (s *ScheduledTasksService) reloadEnabledTasks() error {
 	db, err := s.dbOrGlobal()
 	if err != nil {
@@ -518,19 +509,14 @@ func (s *ScheduledTasksService) createRun(ctx context.Context, task scheduledTas
 	}
 
 	run := &scheduledTaskRunModel{
-		TaskID:                 task.ID,
-		TriggerType:            triggerType,
-		Status:                 RunStatusRunning,
-		StartedAt:              time.Now().UTC(),
-		ErrorMessage:           "",
-		SnapshotTaskName:       task.Name,
-		SnapshotPrompt:         task.Prompt,
-		SnapshotAgentID:        task.AgentID,
-		SnapshotProviderID:     task.LLMProviderID,
-		SnapshotModelID:        task.LLMModelID,
-		SnapshotLibraryIDs:     task.LibraryIDs,
-		SnapshotEnableThinking: task.EnableThinking,
-		SnapshotChatMode:       task.ChatMode,
+		TaskID:           task.ID,
+		TriggerType:      triggerType,
+		Status:           RunStatusRunning,
+		StartedAt:        time.Now().UTC(),
+		ErrorMessage:     "",
+		SnapshotTaskName: task.Name,
+		SnapshotPrompt:   task.Prompt,
+		SnapshotAgentID:  task.AgentID,
 	}
 	if _, err := db.NewInsert().Model(run).Exec(ctx); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_run_create_failed", err)
@@ -735,16 +721,4 @@ func (s *ScheduledTasksService) mustGetCronExpr(ctx context.Context, db *bun.DB,
 	var cronExpr string
 	_ = db.NewSelect().Table("scheduled_tasks").Column("cron_expr").Where("id = ?", taskID).Scan(ctx, &cronExpr)
 	return cronExpr
-}
-
-func normalizeChatMode(raw string) string {
-	mode := strings.TrimSpace(raw)
-	switch mode {
-	case conversations.ChatModeChat:
-		return mode
-	case "", conversations.ChatModeTask:
-		return conversations.ChatModeTask
-	default:
-		return conversations.ChatModeTask
-	}
 }

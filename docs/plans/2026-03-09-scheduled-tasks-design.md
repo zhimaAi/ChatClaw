@@ -23,7 +23,7 @@
   - 右侧为该次运行关联的对话明细
 - 后端与桌面端当前是一体部署，时区一致
 - 暂不处理“同一任务执行时间过长时的并发冲突”
-- 不额外评估“后台无人值守调用是否支持”，执行链路直接按“创建新对话并发送提示词”设计
+- 不额外评估“后台无人值守调用是否支持”，执行链路直接按“读取当前 AI 助手配置、创建新对话并发送提示词”设计
 
 ## 2. 整体方案
 
@@ -33,6 +33,7 @@
 
 1. 定时任务定义层
    - 管理任务名称、提示词、关联助手、时间配置、启用状态
+   - 不在任务上保存模型供应商、模型、知识库、思考模式、对话模式等派生配置
 
 2. 调度执行层
    - 负责根据 cron/自定义时间触发任务
@@ -40,6 +41,7 @@
 
 3. 会话关联层
    - 每次触发都创建一个新的 conversation
+   - 执行时先读取当前 AI 助手配置，再创建 conversation
    - 发送一条任务提示词作为该会话的首条用户消息
    - 将本次运行记录与该 conversation 关联
 
@@ -144,6 +146,26 @@ frontend/src/pages/scheduled-tasks/
 
 右侧建议单独实现 `TaskRunConversationPreview.vue`，不要直接复用整个 `AssistantPage.vue`，原因是完整助手页包含会话切换、输入框、工具栏、知识库选择等无关能力，复用成本高且容易引入额外耦合。
 
+#### 创建/编辑任务弹窗字段
+
+本次确认创建和编辑定时任务时只保留以下字段：
+
+- 任务名称
+- 提示词
+- AI 助手
+- 调度方式与时间配置
+- 是否启用
+
+以下字段从弹窗中移除，不再由计划任务自行配置：
+
+- 对话模式
+- 模型供应商
+- 模型
+- 知识库
+- 思考模式
+
+这些能力统一由选中的 AI 助手配置决定。
+
 ## 4. 后端模块设计
 
 建议新增独立服务模块：
@@ -209,11 +231,6 @@ internal/services/scheduledtasks/
 - `name`
 - `prompt`
 - `agent_id`
-- `llm_provider_id`
-- `llm_model_id`
-- `library_ids`
-- `enable_thinking`
-- `chat_mode`
 - `schedule_type`
   - 取值建议：`preset | custom | cron`
 - `schedule_value`
@@ -253,17 +270,12 @@ internal/services/scheduledtasks/
 - `snapshot_task_name`
 - `snapshot_prompt`
 - `snapshot_agent_id`
-- `snapshot_provider_id`
-- `snapshot_model_id`
-- `snapshot_library_ids`
-- `snapshot_enable_thinking`
-- `snapshot_chat_mode`
 
 增加 snapshot 字段的原因：
 
 - 定时任务后续可能被编辑
-- 历史运行记录应显示触发当时真实执行的配置，而不是当前最新配置
-- 删除任务后仍保留运行记录，快照字段可以避免显示缺失
+- 删除任务后仍保留运行记录，需要保留基础可读信息
+- 本次已明确历史详情始终按当前助手配置展示，因此不保留模型侧配置快照
 
 ### 5.3 删除策略
 
@@ -288,23 +300,25 @@ internal/services/scheduledtasks/
 
 1. 调度器触发某个任务
 2. 创建一条 `scheduled_task_runs` 记录，状态为 `running`
-3. 调用现有 `conversations` 服务创建新的 conversation
-4. 会话标题建议格式：
+3. 读取当前 `agent_id` 对应的 AI 助手配置
+4. 调用现有 `conversations` 服务创建新的 conversation，并把当前助手配置写入 conversation
+5. 会话标题建议格式：
 
 ```text
 (定时) 任务名称 - 2026-03-09 09:00
 ```
 
-5. 将生成的 `conversation_id` 回填到本次 run 记录
-6. 在该 conversation 中创建一条用户消息，内容为任务提示词
-7. 走现有聊天发送链路，生成 AI 回复
-8. 成功则更新 run 状态为 `success`
-9. 失败则更新 run 状态为 `failed` 并写入错误信息
-10. 同步更新 `scheduled_tasks.last_run_at / last_status / last_error / next_run_at / last_run_id`
+6. 将生成的 `conversation_id` 回填到本次 run 记录
+7. 在该 conversation 中创建一条用户消息，内容为任务提示词
+8. 走现有聊天发送链路，生成 AI 回复
+9. 成功则更新 run 状态为 `success`
+10. 失败则更新 run 状态为 `failed` 并写入错误信息
+11. 同步更新 `scheduled_tasks.last_run_at / last_status / last_error / next_run_at / last_run_id`
 
 这样设计的优点：
 
 - 每次运行记录都能稳定关联一个独立会话
+- 会话实际运行配置天然与当前 AI 助手保持一致
 - 弹窗右侧直接展示现有消息结构即可
 - 在 AI 助手页面里也能看到这些定时生成的会话
 - `(定时)` 前缀可以让普通对话和自动任务对话一眼区分
@@ -523,7 +537,7 @@ type ScheduledTaskScheduleInput = {
 - 前端独立一级模块，符合产品入口要求
 - 页面组件全部收敛在 `frontend/src/pages/scheduled-tasks/`，结构清晰
 - 后端独立服务模块职责明确，便于维护
-- 每次执行创建新会话，最符合“运行记录 + 对话明细”交互模型
+- 每次执行创建新会话，并在执行时读取当前 AI 助手配置，最符合“运行记录 + 对话明细”交互模型
 - 删除任务仍保留记录，满足历史追溯需求
 - 对现有会话与消息系统改动可控，复用度高
 

@@ -22,14 +22,10 @@ const {
   tasks,
   summary,
   agents,
-  libraries,
-  providers,
-  activeProviderModels,
   createDialogOpen,
   historyTask,
   editingTask,
   form,
-  ensureProviderModels,
   openCreateDialog,
   openEditDialog,
   submitForm,
@@ -80,11 +76,6 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
-    llm_provider_id: state.llmProviderId,
-    llm_model_id: state.llmModelId,
-    library_ids: state.libraryIds,
-    enable_thinking: state.enableThinking,
-    chat_mode: state.chatMode,
     schedule_type: state.scheduleType,
     schedule_value: scheduleValue,
     cron_expr: state.scheduleType === 'cron' ? state.cronExpr : '',
@@ -95,11 +86,6 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
-    llm_provider_id: state.llmProviderId,
-    llm_model_id: state.llmModelId,
-    library_ids: state.libraryIds,
-    enable_thinking: state.enableThinking,
-    chat_mode: state.chatMode,
     schedule_type: state.scheduleType,
     schedule_value: scheduleValue,
     cron_expr: state.scheduleType === 'cron' ? state.cronExpr : '',
@@ -159,12 +145,8 @@ const deleteDialogOpen = computed({
       :title="editingTask ? t('scheduledTasks.edit') : t('scheduledTasks.create')"
       :form="form"
       :agents="agents"
-      :libraries="libraries"
-      :providers="providers"
-      :models="activeProviderModels"
       @update:open="(value) => (createDialogOpen = value)"
       @submit="handleSubmit"
-      @providerChange="ensureProviderModels"
     />
 
     <TaskRunHistoryDialog

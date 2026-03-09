@@ -49,9 +49,9 @@ func TestParseSchedule(t *testing.T) {
 
 func TestScheduledTaskCRUD(t *testing.T) {
 	db := newTestDB(t)
-	seedAgent(t, db, 1)
+	seedAgent(t, db, 1, "openai", "gpt-5")
 
-	svc := NewScheduledTasksServiceForTest(nil, db, stubConversationService{}, stubChatService{})
+	svc := NewScheduledTasksServiceForTest(nil, db, &stubConversationService{}, stubChatService{})
 
 	task, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
 		Name:          "日报",
@@ -108,11 +108,12 @@ func TestScheduledTaskCRUD(t *testing.T) {
 
 func TestRunScheduledTaskNow(t *testing.T) {
 	db := newTestDB(t)
-	seedAgent(t, db, 1)
+	seedAgent(t, db, 1, "openai", "gpt-5")
 
-	svc := NewScheduledTasksServiceForTest(nil, db, stubConversationService{
+	convSvc := &stubConversationService{
 		conversation: &conversations.Conversation{ID: 42, AgentID: 1, Name: "scheduled"},
-	}, stubChatService{
+	}
+	svc := NewScheduledTasksServiceForTest(nil, db, convSvc, stubChatService{
 		sendResult: &chat.SendMessageResult{MessageID: 88, RequestID: "req-1"},
 	})
 
@@ -140,6 +141,24 @@ func TestRunScheduledTaskNow(t *testing.T) {
 	}
 	if run.UserMessageID == nil || *run.UserMessageID != 88 {
 		t.Fatalf("expected user message id to be stored")
+	}
+	if convSvc.lastCreateInput == nil {
+		t.Fatalf("expected conversation create input to be captured")
+	}
+	if convSvc.lastCreateInput.LLMProviderID != "openai" {
+		t.Fatalf("expected provider from agent defaults, got %q", convSvc.lastCreateInput.LLMProviderID)
+	}
+	if convSvc.lastCreateInput.LLMModelID != "gpt-5" {
+		t.Fatalf("expected model from agent defaults, got %q", convSvc.lastCreateInput.LLMModelID)
+	}
+	if len(convSvc.lastCreateInput.LibraryIDs) != 0 {
+		t.Fatalf("expected no libraries for scheduled task conversation, got %+v", convSvc.lastCreateInput.LibraryIDs)
+	}
+	if convSvc.lastCreateInput.EnableThinking {
+		t.Fatalf("expected thinking disabled by default")
+	}
+	if convSvc.lastCreateInput.ChatMode != conversations.ChatModeTask {
+		t.Fatalf("expected task mode by default, got %q", convSvc.lastCreateInput.ChatMode)
 	}
 }
 
@@ -183,11 +202,6 @@ create table scheduled_tasks (
 	name text not null,
 	prompt text not null,
 	agent_id integer not null,
-	llm_provider_id text not null default '',
-	llm_model_id text not null default '',
-	library_ids text not null default '[]',
-	enable_thinking boolean not null default false,
-	chat_mode text not null default 'task',
 	schedule_type text not null,
 	schedule_value text not null,
 	cron_expr text not null,
@@ -215,12 +229,7 @@ create table scheduled_task_runs (
 	assistant_message_id integer,
 	snapshot_task_name text not null,
 	snapshot_prompt text not null,
-	snapshot_agent_id integer not null,
-	snapshot_provider_id text not null default '',
-	snapshot_model_id text not null default '',
-	snapshot_library_ids text not null default '[]',
-	snapshot_enable_thinking boolean not null default false,
-	snapshot_chat_mode text not null default 'task'
+	snapshot_agent_id integer not null
 );
 create table messages (
 	id integer primary key autoincrement,
@@ -240,19 +249,22 @@ create table messages (
 	return db
 }
 
-func seedAgent(t *testing.T, db *bun.DB, id int64) {
+func seedAgent(t *testing.T, db *bun.DB, id int64, providerID, modelID string) {
 	t.Helper()
-	if _, err := db.ExecContext(context.Background(), `insert into agents(id, name, prompt) values(?, ?, ?)`, id, "助手", "prompt"); err != nil {
+	query := `insert into agents(id, name, prompt, default_llm_provider_id, default_llm_model_id) values(?, ?, ?, ?, ?)`
+	if _, err := db.ExecContext(context.Background(), query, id, "assistant", "prompt", providerID, modelID); err != nil {
 		t.Fatalf("seed agent failed: %v", err)
 	}
 }
 
 type stubConversationService struct {
-	conversation *conversations.Conversation
-	err          error
+	conversation    *conversations.Conversation
+	err             error
+	lastCreateInput *conversations.CreateConversationInput
 }
 
-func (s stubConversationService) CreateConversation(input conversations.CreateConversationInput) (*conversations.Conversation, error) {
+func (s *stubConversationService) CreateConversation(input conversations.CreateConversationInput) (*conversations.Conversation, error) {
+	s.lastCreateInput = &input
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -262,7 +274,7 @@ func (s stubConversationService) CreateConversation(input conversations.CreateCo
 	return &conversations.Conversation{ID: 1, AgentID: input.AgentID, Name: input.Name}, nil
 }
 
-func (s stubConversationService) GetConversation(id int64) (*conversations.Conversation, error) {
+func (s *stubConversationService) GetConversation(id int64) (*conversations.Conversation, error) {
 	if s.conversation != nil {
 		return s.conversation, nil
 	}

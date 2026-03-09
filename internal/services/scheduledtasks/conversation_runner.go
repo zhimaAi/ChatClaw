@@ -3,7 +3,6 @@ package scheduledtasks
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
@@ -25,21 +24,32 @@ type runDependencies struct {
 }
 
 func (s *ScheduledTasksService) executeTask(ctx context.Context, task scheduledTaskModel, triggerType string) (*scheduledTaskRunModel, error) {
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return nil, err
+	}
+
 	runModel, err := s.createRun(ctx, task, triggerType)
 	if err != nil {
 		return nil, err
 	}
 
-	startedAt := time.Now()
+	agentConfig, err := s.getTaskAgentConfig(ctx, db, task.AgentID)
+	if err != nil {
+		_ = s.failRun(context.Background(), task.ID, runModel.ID, err.Error(), runModel.StartedAt)
+		return nil, err
+	}
+
+	startedAt := runModel.StartedAt
 	conversationName := fmt.Sprintf("(定时) %s - %s", task.Name, startedAt.Format("2006-01-02 15:04"))
 	conv, err := s.runnerDeps.conversations.CreateConversation(conversations.CreateConversationInput{
 		AgentID:        task.AgentID,
 		Name:           conversationName,
-		LLMProviderID:  task.LLMProviderID,
-		LLMModelID:     task.LLMModelID,
-		LibraryIDs:     parseInt64Array(task.LibraryIDs),
-		EnableThinking: task.EnableThinking,
-		ChatMode:       task.ChatMode,
+		LLMProviderID:  agentConfig.DefaultLLMProviderID,
+		LLMModelID:     agentConfig.DefaultLLMModelID,
+		LibraryIDs:     []int64{},
+		EnableThinking: false,
+		ChatMode:       conversations.ChatModeTask,
 	})
 	if err != nil {
 		_ = s.failRun(context.Background(), task.ID, runModel.ID, err.Error(), startedAt)

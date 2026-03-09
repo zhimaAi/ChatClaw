@@ -5,10 +5,8 @@ import type {
   ScheduledTaskSummary,
 } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
-import type { Library } from '@bindings/chatclaw/internal/services/library'
-import type { Provider, Model } from '@bindings/chatclaw/internal/services/providers'
 
-export type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail, ScheduledTaskSummary, Agent, Library, Provider, Model }
+export type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail, ScheduledTaskSummary, Agent }
 
 export type SchedulePresetValue =
   | 'every_hour'
@@ -23,11 +21,6 @@ export interface ScheduledTaskFormState {
   name: string
   prompt: string
   agentId: number | null
-  llmProviderId: string
-  llmModelId: string
-  libraryIds: number[]
-  enableThinking: boolean
-  chatMode: string
   enabled: boolean
   scheduleType: 'preset' | 'custom' | 'cron'
   schedulePreset: SchedulePresetValue

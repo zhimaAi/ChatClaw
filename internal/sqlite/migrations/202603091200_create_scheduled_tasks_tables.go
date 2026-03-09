@@ -18,11 +18,6 @@ create table if not exists scheduled_tasks (
 	name text not null,
 	prompt text not null,
 	agent_id integer not null,
-	llm_provider_id varchar(64) not null default '',
-	llm_model_id varchar(128) not null default '',
-	library_ids text not null default '[]',
-	enable_thinking boolean not null default false,
-	chat_mode varchar(16) not null default 'task',
 	schedule_type varchar(16) not null,
 	schedule_value text not null default '',
 	cron_expr varchar(64) not null,
@@ -53,12 +48,7 @@ create table if not exists scheduled_task_runs (
 	assistant_message_id integer,
 	snapshot_task_name text not null,
 	snapshot_prompt text not null,
-	snapshot_agent_id integer not null,
-	snapshot_provider_id varchar(64) not null default '',
-	snapshot_model_id varchar(128) not null default '',
-	snapshot_library_ids text not null default '[]',
-	snapshot_enable_thinking boolean not null default false,
-	snapshot_chat_mode varchar(16) not null default 'task'
+	snapshot_agent_id integer not null
 );
 create index if not exists idx_scheduled_task_runs_task_id_started_at on scheduled_task_runs(task_id, started_at desc, id desc);
 create index if not exists idx_scheduled_task_runs_conversation_id on scheduled_task_runs(conversation_id);
