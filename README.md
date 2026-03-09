@@ -20,9 +20,7 @@ Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-sm
 <h1 />
   
 <p align="center">
-  <a href="/releases">Windows</a> |
-  <a href="/releases>Mac</a> | 
-  <a href="/releases">Linux</a>
+[Windows](./releases) | [Mac](./releases) | [Linux](./releases)|
 </p>
 
 ## Previews
