@@ -159,32 +159,21 @@ tasks:
         task build:docker PLATFORM=amd64    # exports bin/linux_amd64/server
         task build:docker PLATFORM=multi    # exports both architectures
     cmds:
-      - mkdir -p {{.BIN_DIR}}
+      - go run ./internal/tools/mkdirp {{.BIN_DIR}}
       - |
         {{- if eq .PLATFORM "multi"}}
-        docker buildx build \
-          --builder multiarch-builder \
-          --platform linux/amd64,linux/arm64 \
-          -t {{.DOCKER_IMAGE}}:latest \
-          --output type=local,dest={{.BIN_DIR}} \
-          --push \
-          -f build/docker/Dockerfile.server .
+        docker buildx build --builder multiarch-builder --platform linux/amd64,linux/arm64 -t {{.DOCKER_IMAGE}}:latest --output type=local,dest={{.BIN_DIR}} --push -f build/docker/Dockerfile.server .
         {{- else}}
-        docker buildx build \
-          --builder multiarch-builder \
-          --platform linux/{{.PLATFORM}} \
-          -t {{.DOCKER_IMAGE}}:latest \
-          --output type=local,dest={{.BIN_DIR}}/linux_{{.PLATFORM}} \
-          -f build/docker/Dockerfile.server .
+        docker buildx build --builder multiarch-builder --platform linux/{{.PLATFORM}} -t {{.DOCKER_IMAGE}}:latest --output type=local,dest={{.BIN_DIR}}/linux_{{.PLATFORM}} -f build/docker/Dockerfile.server .
         {{- end}}
     vars:
       PLATFORM: "{{.PLATFORM}}"
     preconditions:
-      - sh: docker info > /dev/null 2>&1
+      - sh: docker info
         msg: "Docker is required. Please install Docker first."
-      - sh: test -f build/docker/Dockerfile.server
+      - sh: go run ./internal/tools/fileexists build/docker/Dockerfile.server
         msg: "Dockerfile.server not found. Run 'wails3 update build-assets' to generate it."
-      - sh: test -n "{{.PLATFORM}}"
+      - sh: go run ./internal/tools/notempty "{{.PLATFORM}}"
         msg: "PLATFORM is required. Use: PLATFORM=amd64, PLATFORM=arm64, or PLATFORM=multi"
 
   run:docker:
@@ -193,26 +182,14 @@ tasks:
       Builds and runs a single-arch Docker image for local testing.
       Usage: task run:docker [PORT=8080]
     cmds:
-      - |
-        docker buildx build \
-          --builder multiarch-builder \
-          --platform linux/{{.NATIVE_ARCH}} \
-          -t {{.DOCKER_IMAGE}}:latest \
-          --load \
-          -f build/docker/Dockerfile.server .
+      - docker buildx build --builder multiarch-builder --platform linux/{{.NATIVE_ARCH}} -t {{.DOCKER_IMAGE}}:latest --load -f build/docker/Dockerfile.server .
       - docker run --rm -p {{.PORT | default "8080"}}:8080 {{.DOCKER_IMAGE}}:latest
     vars:
       PORT: "{{.PORT}}"
       NATIVE_ARCH:
-        sh: |
-          UNAME_M=$(uname -m)
-          case "$UNAME_M" in
-            x86_64)  echo "amd64" ;;
-            aarch64|arm64) echo "arm64" ;;
-            *) echo "$UNAME_M" ;;
-          esac
+        sh: go run ./internal/tools/archdetect
     preconditions:
-      - sh: docker info > /dev/null 2>&1
+      - sh: docker info
         msg: "Docker is required. Please install Docker first."
 
   setup:docker:
@@ -223,7 +200,7 @@ tasks:
     cmds:
       - docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
     preconditions:
-      - sh: docker info > /dev/null 2>&1
+      - sh: docker info
         msg: "Docker is required. Please install Docker first."
 
   ios:device:list:

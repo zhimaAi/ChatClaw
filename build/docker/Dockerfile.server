@@ -32,6 +32,14 @@ RUN sed -i 's/!gtk4 && !android/!gtk4 \&\& !android \&\& !server/' \
       vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/responsewriter_linux.go \
       vendor/github.com/wailsapp/wails/v3/internal/assetserver/webview/request_linux.go
 
+# Patch: add missing AttachModal/attachModal methods (upstream bug in alpha.74)
+# Window interface requires AttachModal but BrowserWindow stub doesn't implement it
+# webviewWindowImpl interface requires attachModal but serverWebviewWindow doesn't implement it
+RUN sed -i '/^func (b \*BrowserWindow) shouldUnconditionallyClose/i\func (b *BrowserWindow) AttachModal(modalWindow Window) {}' \
+      vendor/github.com/wailsapp/wails/v3/pkg/application/browser_window.go \
+    && sed -i '/^func (w \*serverWebviewWindow) setContentProtection/a\func (w *serverWebviewWindow) attachModal(modalWindow *WebviewWindow) {}' \
+      vendor/github.com/wailsapp/wails/v3/pkg/application/application_server.go
+
 # Extract app version from build/config.yml for ldflags injection
 RUN APP_VERSION=$(grep -A20 '^info:' build/config.yml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | tr -d '"'"'" | sed 's/[[:space:]]*#.*//') \
     && echo "Building version: ${APP_VERSION}" \

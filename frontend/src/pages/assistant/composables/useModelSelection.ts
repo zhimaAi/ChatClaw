@@ -39,6 +39,7 @@ export function useModelSelection() {
             providerId,
             modelId,
             modelName: model.name,
+            capabilities: model.capabilities,
           }
         }
       }

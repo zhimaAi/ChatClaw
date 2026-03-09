@@ -13,15 +13,14 @@ defineProps<{
 }>()
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
 import EditLibraryDialog from './components/EditLibraryDialog.vue'
 import LibraryContentArea from './components/LibraryContentArea.vue'
-import KnowledgeChatInput from './components/KnowledgeChatInput.vue'
 import FolderTreeItem from './components/FolderTreeItem.vue'
+import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -48,7 +47,12 @@ import {
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, type Folder } from '@bindings/chatclaw/internal/services/library'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { ChevronRight, FileStack } from 'lucide-vue-next'
+import { Book, BookOpen, FileStack } from 'lucide-vue-next'
+import { useAgents } from '@/pages/assistant/composables/useAgents'
+import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
+import { supportsMultimodal } from '@/composables/useMultimodal'
+import { useNavigationStore } from '@/stores'
+import { toast } from '@/components/ui/toast'
 
 type LibraryTab = 'personal' | 'team'
 
@@ -72,6 +76,65 @@ const expandedFolders = ref<Set<number>>(new Set())
 const selectedFolderId = ref<number | null>(null)
 // Left sidebar collapsed state (narrow strip with icons only)
 const sidebarCollapsed = ref(false)
+
+// Chat input state for the bottom input area
+const chatInput = ref('')
+const enableThinking = ref(false)
+const chatMode = ref('task')
+const pendingImages = ref<PendingImage[]>([])
+
+// Use composables for agent and model selection
+const {
+  agents,
+  activeAgentId,
+  loadAgents,
+} = useAgents()
+
+const {
+  providersWithModels,
+  selectedModelKey,
+  hasModels,
+  selectedModelInfo,
+  loadModels,
+  selectDefaultModel,
+} = useModelSelection()
+
+const navigationStore = useNavigationStore()
+
+interface PendingImage {
+  id: string
+  file: File
+  mimeType: string
+  base64: string
+  dataUrl: string
+  fileName: string
+  size: number
+}
+
+// Computed: active agent
+const activeAgent = computed(() => {
+  if (activeAgentId.value == null) return null
+  return agents.value.find((a) => a.id === activeAgentId.value) ?? null
+})
+
+// Can send: must have input or images, agent, and model
+const canSend = computed(() => {
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
+  return (
+    !!activeAgentId.value &&
+    hasContent &&
+    !!selectedModelInfo.value
+  )
+})
+
+// Reason why send is disabled
+const sendDisabledReason = computed(() => {
+  if (!activeAgentId.value) return t('assistant.placeholders.createAgentFirst')
+  if (!selectedModelKey.value) return t('assistant.placeholders.selectModelFirst')
+  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
+  if (!hasContent) return t('assistant.placeholders.enterToSend')
+  return ''
+})
 
 const selectedLibrary = computed(
   () => libraries.value.find((l) => l.id === selectedLibraryId.value) || null
@@ -308,9 +371,103 @@ const confirmDelete = async () => {
   }
 }
 
-onMounted(() => {
+// When thinking mode changes, show toast notification (same as assistant page)
+let isInitialMount = true
+
+onMounted(async () => {
   void loadLibraries()
+  await loadAgents()
+  await loadModels()
+  selectDefaultModel(activeAgent.value, null)
+  isInitialMount = false
 })
+
+// When agent changes, re-select default model
+watch(activeAgentId, () => {
+  selectDefaultModel(activeAgent.value, null)
+})
+
+// When models are loaded, select default model
+watch(providersWithModels, () => {
+  selectDefaultModel(activeAgent.value, null)
+})
+
+watch(enableThinking, (newValue) => {
+  if (!isInitialMount) {
+    toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
+  }
+})
+
+// Handle send message
+const handleSendMessage = () => {
+  if (!canSend.value) return
+
+  const messageContent = chatInput.value.trim()
+  const imagesToSend = [...pendingImages.value]
+
+  // Build library IDs array from the selected library
+  const libraryIds = selectedLibraryId.value ? [selectedLibraryId.value] : []
+
+  // Set pending chat data and open a new assistant tab
+  navigationStore.setPendingChatAndOpenAssistant({
+    chatInput: messageContent,
+    libraryIds,
+    selectedModelKey: selectedModelKey.value,
+    agentId: activeAgentId.value ?? undefined,
+    enableThinking: enableThinking.value,
+    chatMode: chatMode.value,
+    ...(imagesToSend.length > 0 && {
+      pendingImages: imagesToSend.map((img) => ({
+        id: img.id,
+        mimeType: img.mimeType,
+        base64: img.base64,
+        dataUrl: img.dataUrl,
+        fileName: img.fileName,
+        size: img.size,
+      })),
+    }),
+  })
+
+  // Clear input and images after sending
+  chatInput.value = ''
+  pendingImages.value = []
+}
+
+// Handle add images
+const handleAddImages = (files: FileList | File[]) => {
+  // Check if current model supports multimodal (vision)
+  const modelInfo = selectedModelInfo.value
+  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+    toast.error(t('assistant.errors.modelNotSupportVision'))
+    return
+  }
+
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith('image/')) continue
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const base64Match = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/)
+      const base64 = base64Match ? base64Match[1] : ''
+      if (!base64) return
+      pendingImages.value.push({
+        id: crypto.randomUUID(),
+        file,
+        mimeType: file.type,
+        base64,
+        dataUrl,
+        fileName: file.name,
+        size: file.size,
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+// Handle remove image
+const handleRemoveImage = (id: string) => {
+  pendingImages.value = pendingImages.value.filter((img) => img.id !== id)
+}
 </script>
 
 <template>
@@ -445,102 +602,81 @@ onMounted(() => {
           <div
             v-for="lib in libraries"
             :key="lib.id"
-            :class="
-              cn(
-                'overflow-hidden rounded-lg border transition-colors',
-                selectedLibraryId === lib.id
-                  ? 'border-primary bg-card ring-1 ring-primary/50'
-                  : 'border-border bg-card'
-              )
-            "
+            class="overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-muted-foreground/50 dark:hover:border-white/30"
           >
-            <!-- 知识库项：图标 + 名称 + 展开箭头 + 菜单 -->
-            <div class="flex items-center gap-1 overflow-hidden p-1">
+            <!-- Library item: full-width clickable row with expand + menu -->
+            <div
+              class="group flex min-h-9 w-full min-w-0 cursor-pointer items-center gap-1 overflow-hidden rounded-md p-1 transition-colors"
+              :class="
+                selectedLibraryId === lib.id && selectedFolderId === null
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-foreground hover:bg-accent/50'
+              "
+              @click="handleLibraryClick(lib.id)"
+            >
               <button
                 type="button"
                 class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                @click="toggleLibraryExpanded(lib.id)"
+                @click.stop="toggleLibraryExpanded(lib.id)"
               >
-                <ChevronRight
-                  :class="cn(
-                    'size-3.5 transition-transform',
-                    expandedLibraries.has(lib.id) && 'rotate-90'
-                  )"
+                <component
+                  :is="expandedLibraries.has(lib.id) ? BookOpen : Book"
+                  class="size-4 shrink-0"
                 />
               </button>
-              <button
-                type="button"
-                :class="
-                  cn(
-                    'group flex h-9 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm font-normal transition-colors',
-                    selectedLibraryId === lib.id
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground hover:bg-accent/50'
-                  )
-                "
-                @click="handleLibraryClick(lib.id)"
-              >
-                <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
-                <span class="min-w-0 flex-1 truncate" :title="lib.name">
-                  {{ lib.name }}
-                </span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
-                    :title="t('knowledge.item.menu')"
-                    @click.stop
+              <span class="min-w-0 flex-1 truncate text-sm font-normal" :title="lib.name">
+                {{ lib.name }}
+              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                  :title="t('knowledge.item.menu')"
+                  @click.stop
+                >
+                  <MoreHorizontal class="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-40">
+                  <DropdownMenuItem class="gap-2" @select="handleOpenRename(lib)">
+                    <IconRename class="size-4 text-muted-foreground" />
+                    {{ t('knowledge.item.rename') }}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem class="gap-2" @select="handleOpenEdit(lib)">
+                    <IconLibSettings class="size-4 text-muted-foreground" />
+                    {{ t('knowledge.item.settings') }}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    class="gap-2 text-muted-foreground focus:text-foreground"
+                    @select="handleOpenDelete(lib)"
                   >
-                    <MoreHorizontal class="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" class="w-40">
-                    <DropdownMenuItem class="gap-2" @select="handleOpenRename(lib)">
-                      <IconRename class="size-4 text-muted-foreground" />
-                      {{ t('knowledge.item.rename') }}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem class="gap-2" @select="handleOpenEdit(lib)">
-                      <IconLibSettings class="size-4 text-muted-foreground" />
-                      {{ t('knowledge.item.settings') }}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      class="gap-2 text-muted-foreground focus:text-foreground"
-                      @select="handleOpenDelete(lib)"
-                    >
-                      <IconDelete class="size-4" />
-                      {{ t('knowledge.item.delete') }}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </button>
+                    <IconDelete class="size-4" />
+                    {{ t('knowledge.item.delete') }}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <!-- 文件夹树 -->
+            <!-- Folder tree -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="flex flex-col gap-0.5 overflow-hidden border-t border-border/50 px-1 pb-1.5 pt-0.5"
+              class="flex flex-col overflow-hidden border-t border-border/50 px-1 pb-1.5 pt-0.5"
             >
-              <!-- 未分组选项 -->
-              <div class="flex items-center gap-1 overflow-hidden">
-                <div class="size-6 shrink-0" />
-                <button
-                  type="button"
-                  :class="
-                    cn(
-                      'flex h-8 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs transition-colors',
-                      selectedFolderId === -1 && selectedLibraryId === lib.id
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-                    )
-                  "
-                  @click.stop="handleFolderClick(-1, lib.id)"
+              <!-- Uncategorized option: full-width clickable row -->
+              <div
+                class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                :class="
+                  selectedFolderId === -1 && selectedLibraryId === lib.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                "
+                @click.stop="handleFolderClick(-1, lib.id)"
+              >
+                <FileStack class="size-4 shrink-0 text-muted-foreground" />
+                <span
+                  class="min-w-0 flex-1 truncate text-xs"
+                  :title="t('knowledge.folder.uncategorized')"
                 >
-                  <FileStack class="size-4 shrink-0 text-muted-foreground" />
-                  <span
-                    class="min-w-0 flex-1 truncate"
-                    :title="t('knowledge.folder.uncategorized')"
-                  >
-                    {{ t('knowledge.folder.uncategorized') }}
-                  </span>
-                </button>
+                  {{ t('knowledge.folder.uncategorized') }}
+                </span>
               </div>
               <!-- 文件夹列表 -->
               <template v-if="libraryFolders.has(lib.id)">
@@ -613,8 +749,33 @@ onMounted(() => {
         @folder-deleted="handleFolderDeleted"
       />
 
-      <!-- Bottom chat input shortcut (hidden when no libraries exist) -->
-      <KnowledgeChatInput v-if="!isLibraryEmpty" :selected-library-id="selectedLibraryId" :tab-id="tabId" />
+      <!-- Bottom chat input using shared ChatInputArea component -->
+      <!-- 分割线在输入框容器上，随输入框高度变化而移动 -->
+      <div v-if="!isLibraryEmpty" class="bg-background pt-3">
+        <ChatInputArea
+          mode="knowledge"
+          v-model:chat-input="chatInput"
+          v-model:chat-mode="chatMode"
+          v-model:selected-model-key="selectedModelKey"
+          v-model:enable-thinking="enableThinking"
+          v-model:active-agent-id="activeAgentId"
+          :providers-with-models="providersWithModels"
+          :has-models="hasModels"
+          :selected-model-info="selectedModelInfo"
+          :selected-library-ids="selectedLibraryId ? [selectedLibraryId] : []"
+          :libraries="libraries"
+          :is-generating="false"
+          :can-send="canSend"
+          :send-disabled-reason="sendDisabledReason"
+          :chat-messages="[]"
+          :active-agent="activeAgent"
+          :agents="agents"
+          :pending-images="pendingImages"
+          @send="handleSendMessage"
+          @add-images="handleAddImages"
+          @remove-image="handleRemoveImage"
+        />
+      </div>
     </main>
 
     <CreateLibraryDialog v-model:open="createDialogOpen" @created="handleCreated" />

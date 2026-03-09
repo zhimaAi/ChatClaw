@@ -45,10 +45,11 @@ interface PendingImage {
 }
 
 const props = defineProps<{
+  mode?: 'assistant' | 'knowledge'
   chatInput: string
   chatMode: string
   selectedModelKey: string
-  selectedModelInfo: { providerId: string; modelId: string; modelName: string } | null
+  selectedModelInfo: { providerId: string; modelId: string; modelName: string; capabilities?: string[] } | null
   providersWithModels: ProviderWithModels[]
   hasModels: boolean
   enableThinking: boolean
@@ -59,9 +60,13 @@ const props = defineProps<{
   sendDisabledReason: string
   chatMessages: any[]
   activeAgentId: number | null
+  activeAgent: { id: number; name: string } | null
+  agents: { id: number; name: string }[]
   isSnapMode?: boolean
   pendingImages: PendingImage[]
 }>()
+
+const currentMode = computed(() => props.mode || 'assistant')
 
 const emit = defineEmits<{
   'update:chatInput': [value: string]
@@ -69,6 +74,7 @@ const emit = defineEmits<{
   'update:selectedModelKey': [value: string]
   'update:enableThinking': [value: boolean]
   'update:selectedLibraryIds': [value: number[]]
+  'update:activeAgentId': [value: number | null]
   send: []
   stop: []
   librarySelectionChange: []
@@ -137,18 +143,15 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
 
 // 获取选中模型的能力标签
 const selectedModelCapabilities = computed(() => {
-  if (!props.selectedModelInfo?.providerId || !props.selectedModelInfo?.modelId || !props.providersWithModels?.length) {
-    return []
-  }
-  const pw = props.providersWithModels.find((p) => p.provider?.provider_id === props.selectedModelInfo?.providerId)
-  if (!pw) return []
-  for (const group of pw.model_groups) {
-    const model = group.models.find((m) => m.model_id === props.selectedModelInfo?.modelId)
-    if (model?.capabilities) {
-      return model.capabilities
-    }
+  if (props.selectedModelInfo?.capabilities) {
+    return props.selectedModelInfo.capabilities
   }
   return []
+})
+
+// Whether the currently selected model supports image/vision
+const supportsImage = computed(() => {
+  return selectedModelCapabilities.value.includes('image')
 })
 
 // 能力图标映射
@@ -310,7 +313,9 @@ onUnmounted(() => {
     :class="
       cn(
         'flex px-6',
-        chatMessages.length > 0 || isGenerating ? 'pb-4' : 'flex-1 items-center justify-center'
+        currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating
+          ? 'flex-1 items-center justify-center'
+          : 'pb-4'
       )
     "
   >
@@ -322,7 +327,10 @@ onUnmounted(() => {
         )
       "
     >
-      <div v-if="chatMessages.length === 0 && !isGenerating" class="flex items-center gap-3">
+      <div
+        v-if="currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating"
+        class="flex items-center gap-3"
+      >
         <img :src="logoSrc" class="size-10" alt="ChatClaw logo" />
         <div class="text-2xl font-semibold text-foreground">
           {{ t('app.title') }}
@@ -333,7 +341,8 @@ onUnmounted(() => {
         ref="inputContainerRef"
         :class="cn(
           'w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
-          isDragging && 'ring-2 ring-primary/50 border-primary/50'
+          isDragging && 'ring-2 ring-primary/50 border-primary/50',
+          currentMode === 'knowledge' && 'border-t'
         )"
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
@@ -392,13 +401,58 @@ onUnmounted(() => {
           @keydown.enter.exact="handleChatEnter"
         />
 
-        <div class="mt-3 flex items-center justify-between gap-2">
-          <div :class="cn('flex min-w-0 flex-wrap items-center', isSnapMode ? 'gap-1' : 'gap-1.5')">
+        <div class="mt-3 flex items-center justify-between">
+          <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
+            <!-- ChatModeSelector: show in both modes -->
             <ChatModeSelector
               :model-value="chatMode"
+              :compact="isSnapMode"
               @update:model-value="(v) => emit('update:chatMode', v)"
             />
 
+            <!-- Agent selector: only show in knowledge mode -->
+            <TooltipProvider v-if="currentMode === 'knowledge'">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <div class="min-w-0">
+                    <Select
+                      :model-value="activeAgentId != null ? String(activeAgentId) : undefined"
+                      :disabled="agents.length === 0"
+                      @update:model-value="(v: any) => v && emit('update:activeAgentId', Number(v))"
+                    >
+                      <SelectTrigger
+                        class="h-8 w-auto min-w-[100px] max-w-[160px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
+                      >
+                        <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
+                          <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
+                          <span class="truncate">{{ activeAgent.name }}</span>
+                        </div>
+                        <span v-else class="text-muted-foreground">
+                          {{ t('knowledge.chat.selectAgent') }}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent class="max-h-[260px]">
+                        <SelectGroup>
+                          <SelectLabel>{{ t('knowledge.chat.selectAgent') }}</SelectLabel>
+                          <SelectItem
+                            v-for="a in agents"
+                            :key="a.id"
+                            :value="String(a.id)"
+                          >
+                            {{ a.name }}
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent v-if="activeAgent">
+                  <p>{{ activeAgent.name }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <!-- Model selector: show in both modes -->
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -410,8 +464,8 @@ onUnmounted(() => {
                     >
                       <SelectTrigger
                         :class="cn(
-                          'h-8 w-auto min-w-0 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode ? 'max-w-[120px]' : 'max-w-[180px]'
+                          'h-8 w-auto rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
+                          isSnapMode ? 'min-w-0 max-w-[120px]' : 'min-w-[160px] max-w-[240px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -421,6 +475,21 @@ onUnmounted(() => {
                             class="shrink-0 text-foreground"
                           />
                           <span class="truncate">{{ selectedModelInfo.modelName }}</span>
+                          <span
+                            v-if="selectedProviderIsFree && !isSnapMode"
+                            class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                          >
+                            {{ t('assistant.chat.freeBadge') }}
+                          </span>
+                          <template v-if="!isSnapMode && selectedModelCapabilities.length > 0">
+                            <span
+                              v-for="cap in selectedModelCapabilities.slice(0, 2)"
+                              :key="cap"
+                              class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                            >
+                              <component :is="capabilityIcons[cap]" class="size-2.5" />
+                            </span>
+                          </template>
                         </div>
                         <span v-else class="text-muted-foreground">
                           {{ t('assistant.chat.noModel') }}
@@ -480,7 +549,7 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 shrink-0 rounded-full border border-border bg-background"
+                    class="size-8 rounded-full border border-border bg-background"
                     :class="
                       enableThinking
                         ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
@@ -527,7 +596,7 @@ onUnmounted(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  class="size-8 shrink-0 rounded-full border border-border bg-background"
+                  class="size-8 rounded-full border border-border bg-background"
                   :class="
                     selectedLibraryIds.length > 0
                       ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
@@ -585,17 +654,21 @@ onUnmounted(() => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="size-8 shrink-0 rounded-full border border-border bg-background hover:bg-muted/40"
-                    @click="handleSelectImagesClick"
-                  >
-                    <ImageIcon class="size-4 text-muted-foreground" />
-                  </Button>
+                  <!-- Wrap in span so tooltip hover still works when button is disabled -->
+                  <span class="inline-flex">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                      :disabled="!supportsImage"
+                      @click="handleSelectImagesClick"
+                    >
+                      <ImageIcon class="size-4 text-muted-foreground" />
+                    </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ t('assistant.chat.selectImages') }}</p>
+                  <p>{{ supportsImage ? t('assistant.chat.selectImages') : t('assistant.chat.selectImagesDisabled') }}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

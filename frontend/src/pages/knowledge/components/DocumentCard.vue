@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import {
   MoreHorizontal,
   FileText,
-  CheckCircle2,
+  Check,
   XCircle,
   AlertTriangle,
   RefreshCw,
@@ -82,11 +82,11 @@ const statusConfig = computed(() => {
   switch (status) {
     case 'completed':
       return {
-        label: t('knowledge.content.status.completed'),
-        icon: CheckCircle2,
-        // 深色实心背景 + 白色文字，表示完成
-        class: 'bg-foreground/80 text-background',
-        iconClass: 'text-background',
+        label: '',
+        icon: Check,
+        class: 'size-5 rounded-full bg-black/70 text-white shadow-sm dark:bg-white/15 dark:text-white',
+        iconClass: 'text-white',
+        iconOnly: true,
         show: true,
       }
     case 'parsing':
@@ -96,6 +96,7 @@ const statusConfig = computed(() => {
         // 半透明黑底 + 白字，表示进行中
         class: 'bg-black/50 text-white dark:bg-white/15 dark:text-white/90',
         iconClass: '',
+        iconOnly: false,
         show: true,
       }
     case 'learning':
@@ -105,6 +106,7 @@ const statusConfig = computed(() => {
         // 半透明黑底 + 白字，表示进行中
         class: 'bg-black/50 text-white dark:bg-white/15 dark:text-white/90',
         iconClass: '',
+        iconOnly: false,
         show: true,
       }
     case 'failed':
@@ -114,6 +116,7 @@ const statusConfig = computed(() => {
         // 浅背景 + 边框 + 深色文字，表示失败/警告
         class: 'bg-background/90 text-foreground/70 ring-1 ring-foreground/20',
         iconClass: 'text-foreground/50',
+        iconOnly: false,
         show: true,
       }
     case 'pending':
@@ -123,6 +126,7 @@ const statusConfig = computed(() => {
         // 浅背景 + 边框，表示待处理
         class: 'bg-background/90 text-foreground/60 ring-1 ring-foreground/10',
         iconClass: '',
+        iconOnly: false,
         show: true,
       }
     default:
@@ -131,6 +135,7 @@ const statusConfig = computed(() => {
         icon: null,
         class: '',
         iconClass: '',
+        iconOnly: false,
         show: false,
       }
   }
@@ -321,7 +326,9 @@ const handleCardClick = () => {
       <div
         :class="
           cn(
-            'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium',
+            statusConfig.iconOnly
+              ? 'flex items-center justify-center text-xs'
+              : 'flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium',
             statusConfig.class
           )
         "
@@ -329,7 +336,7 @@ const handleCardClick = () => {
         <component
           :is="statusConfig.icon"
           v-if="statusConfig.icon"
-          :class="cn('size-3.5', statusConfig.iconClass)"
+          :class="cn(statusConfig.iconOnly ? 'size-4' : 'size-3.5', statusConfig.iconClass)"
         />
         {{ statusConfig.label }}
       </div>

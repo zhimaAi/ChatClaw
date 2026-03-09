@@ -227,4 +227,29 @@ WillChat_D2/
 └── images/                     # README screenshots
 ```
 
+### Changelog
+To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
+### 2026/03/06
+1. **Multimodal Support**: Added image input capability to assistant and knowledge pages, with model capability checks to detect multimodal support.<br/>
+2. **Model Configuration Updates**: Updated OpenAI, Anthropic, Zhipu (GLM), and Qwen model configurations with refined capabilities and new model additions.<br/>
+3. **Thinking Mode Control**: Added `DisableThinking` option to `ProviderConfig` and streamlined enable-thinking logic; added toast notifications for thinking mode changes.<br/>
+4. **Sandbox Security**: Implemented sensitive path protection in sandbox mode to prevent unauthorized file access.<br/>
+5. **Build System Improvements**: Replaced shell commands with Go tools for directory creation, file existence checks, and platform detection in Taskfile.<br/>
+6. **License Update**: Switched from GNU Affero GPL to GNU General Public License.<br/>
+
+### 2026/03/05
+1. **Multi-Agent Architecture**: Introduced Researcher, Worker, and SkillAdvisor sub-agents for enhanced task delegation and execution; implemented plan-execute subagent for complex multi-step task handling.<br/>
+2. **Agent Enhancements**: Added skill marketplace prompt, current time display in tools prompt, improved plan execution parameters and error handling.<br/>
+3. **Knowledge Base Navigation**: Added sidebar collapse/expand feature, auto-expand folders with children on click, improved breadcrumb visibility logic, and fixed overflow handling in tree components.<br/>
+4. **Skills Page Improvements**: Enhanced skill deletion confirmation dialog, improved refresh handling and loading state.<br/>
+5. **Application Icons**: Updated macOS and Windows application icons with new designs.<br/>
+
+### 2026/03/04
+1. **Task Delegation UI**: Implemented task delegation feature with new UI components and bilingual (English/Chinese) localization updates.<br/>
+2. **Workspace Drawer**: Added workspace drawer for file management and environment settings with file tree depth limit hint.<br/>
+3. **Skill Management Tools**: Added AI-driven tools for searching, installing, enabling, and disabling skills from the skill marketplace.<br/>
+4. **Image Handling in Chat**: Added drag-and-drop and paste support for images in `ChatInputArea`; added image preview functionality.<br/>
+5. **Document Viewer**: Implemented header validation for ZIP and PDF files; enhanced search functionality in `DocumentCard` and `DocumentViewer`.<br/>
+6. **Folder Management**: Added move folder functionality with supporting UI components.<br/>
+7. **License**: Updated license to GNU Affero General Public License v3.<br/>
