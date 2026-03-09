@@ -18,7 +18,7 @@ const FS_MUTATING_TOOLS = new Set([
 const props = defineProps<{
   open: boolean
   agent: Agent | null
-  conversationId: number | null
+  conversationId: number | null | undefined
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +36,10 @@ const expandedDirs = ref<Set<string>>(new Set())
 
 const sandboxMode = computed(() => props.agent?.sandbox_mode || 'codex')
 const isSandbox = computed(() => sandboxMode.value === 'codex')
+const hasConversation = computed(() => !!props.conversationId)
+
+const defaultWorkDir = ref('')
+const displayWorkDir = computed(() => props.agent?.work_dir || defaultWorkDir.value)
 
 const refreshFileTree = async () => {
   if (!props.agent || !props.conversationId) return
@@ -95,6 +99,10 @@ const toggleDir = (path: string) => {
 }
 
 const handleOpenFolder = async () => {
+  if (!hasConversation.value) {
+    emit('openWorkspaceSettings')
+    return
+  }
   if (!workspaceDir.value) return
   try {
     await BrowserService.OpenDirectory(workspaceDir.value)
@@ -115,6 +123,10 @@ let unsubTool: (() => void) | null = null
 let unsubComplete: (() => void) | null = null
 
 onMounted(() => {
+  void AgentsService.GetDefaultWorkDir().then((dir) => {
+    defaultWorkDir.value = dir
+  })
+
   unsubTool = Events.On('chat:tool', (event: any) => {
     const data = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     if (!data || !props.conversationId) return
@@ -216,46 +228,68 @@ onUnmounted(() => {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                {{ t('assistant.workspaceDrawer.openFolder') }}
+                {{ hasConversation ? t('assistant.workspaceDrawer.openFolder') : t('assistant.workspaceDrawer.configureWorkspace') }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
 
-        <!-- Directory path -->
-        <div
-          v-if="workspaceDir"
-          class="mb-2 truncate rounded-md bg-muted/50 px-2 py-1.5 font-mono text-[11px] text-muted-foreground"
-          :title="workspaceDir"
+        <template v-if="hasConversation">
+          <!-- Directory path -->
+          <div
+            v-if="workspaceDir"
+            class="mb-2 truncate rounded-md bg-muted/50 px-2 py-1.5 font-mono text-[11px] text-muted-foreground"
+            :title="workspaceDir"
+          >
+            {{ workspaceDir }}
+          </div>
+
+          <div class="mb-2 text-[11px] text-muted-foreground/80">
+            {{ t('assistant.workspaceDrawer.depthLimitHint', { depth: MAX_TREE_DEPTH }) }}
+          </div>
+
+          <!-- File tree -->
+          <div v-if="fileTree.length > 0" class="flex flex-col">
+            <FileTreeNode
+              v-for="entry in fileTree"
+              :key="entry.path"
+              :entry="entry"
+              :depth="0"
+              :expanded-dirs="expandedDirs"
+              @toggle="toggleDir"
+            />
+          </div>
+
+          <!-- Empty state -->
+          <div
+            v-else-if="!loading"
+            class="flex items-center justify-center rounded-lg border border-dashed border-border py-6"
+          >
+            <span class="text-xs text-muted-foreground">
+              {{ t('assistant.workspaceDrawer.noFiles') }}
+            </span>
+          </div>
+        </template>
+
+        <!-- No conversation: show default work dir with link to settings -->
+        <button
+          v-else
+          class="group w-full cursor-pointer rounded-lg border border-dashed border-border px-3 py-3 text-left transition-colors hover:border-foreground/20 hover:bg-muted/50"
+          @click="handleEnvironmentClick"
         >
-          {{ workspaceDir }}
-        </div>
-
-        <div class="mb-2 text-[11px] text-muted-foreground/80">
-          {{ t('assistant.workspaceDrawer.depthLimitHint', { depth: MAX_TREE_DEPTH }) }}
-        </div>
-
-        <!-- File tree -->
-        <div v-if="fileTree.length > 0" class="flex flex-col">
-          <FileTreeNode
-            v-for="entry in fileTree"
-            :key="entry.path"
-            :entry="entry"
-            :depth="0"
-            :expanded-dirs="expandedDirs"
-            @toggle="toggleDir"
-          />
-        </div>
-
-        <!-- Empty state -->
-        <div
-          v-else-if="!loading"
-          class="flex items-center justify-center rounded-lg border border-dashed border-border py-6"
-        >
-          <span class="text-xs text-muted-foreground">
-            {{ t('assistant.workspaceDrawer.noFiles') }}
-          </span>
-        </div>
+          <div class="mb-1 text-[11px] text-muted-foreground">
+            {{ t('assistant.workspaceDrawer.noConversationDir') }}
+          </div>
+          <div
+            class="truncate font-mono text-[11px] text-muted-foreground"
+            :title="displayWorkDir"
+          >
+            {{ displayWorkDir }}
+          </div>
+          <div class="mt-1.5 text-[11px] text-primary/70 group-hover:text-primary">
+            {{ t('assistant.workspaceDrawer.noConversationAction') }}
+          </div>
+        </button>
       </div>
     </div>
   </div>
