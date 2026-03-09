@@ -120,7 +120,7 @@ async function handleValidateAll() {
           srv.enabled = false
         }
       }
-      toast.warning(t('settings.mcp.validateDisabled', { count: disabledIDs.length }))
+      toast.default(t('settings.mcp.validateDisabled', { count: disabledIDs.length }))
     } else {
       toast.success(t('settings.mcp.validateAllPassed'))
     }

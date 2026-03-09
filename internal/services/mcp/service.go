@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
+	"os/exec"
+	"runtime"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -373,7 +374,13 @@ func connect(ctx context.Context, server MCPServer) (*mcpclient.Client, error) {
 		}
 
 		env := BuildEnv(server.Env)
-		c, err = mcpclient.NewStdioMCPClient(server.Command, env, args...)
+
+		var opts []transport.StdioOption
+		if runtime.GOOS == "windows" {
+			opts = append(opts, transport.WithCommandFunc(windowsCmdFunc))
+		}
+
+		c, err = mcpclient.NewStdioMCPClientWithOptions(server.Command, env, args, opts...)
 		if err != nil {
 			return nil, errs.Wrap("error.mcp_connect_failed", err)
 		}
@@ -605,31 +612,37 @@ func (s *MCPService) InspectServer(id string) (*InspectResult, error) {
 	return result, nil
 }
 
-// BuildEnv merges the current process env with user-defined env vars and
-// prepends the toolchain bin directory to PATH when available.
+// windowsCmdFunc wraps the command via cmd.exe /C so that .cmd/.bat
+// executables (npx.cmd, bun.cmd, uvx.cmd …) are resolved correctly.
+func windowsCmdFunc(ctx context.Context, command string, envVars []string, args []string) (*exec.Cmd, error) {
+	shellArgs := append([]string{"/C", command}, args...)
+	cmd := exec.CommandContext(ctx, "cmd.exe", shellArgs...)
+	cmd.Env = append(os.Environ(), envVars...)
+	return cmd, nil
+}
+
+// BuildEnv returns extra env vars to pass to the MCP subprocess.
+// The mcp-go library already inherits os.Environ(), so we only return
+// the toolchain PATH override and user-defined vars — NOT the full env.
 func BuildEnv(envJSON string) []string {
-	base := os.Environ()
+	var extra []string
 
 	if binDir := toolchain.BinDirIfReady(); binDir != "" {
-		for i, e := range base {
-			if strings.HasPrefix(e, "PATH=") {
-				base[i] = fmt.Sprintf("PATH=%s%c%s", binDir, os.PathListSeparator, e[5:])
-				break
-			}
-		}
+		currentPath := os.Getenv("PATH")
+		extra = append(extra, fmt.Sprintf("PATH=%s%c%s", binDir, os.PathListSeparator, currentPath))
 	}
 
 	if envJSON == "" || envJSON == "{}" {
-		return base
+		return extra
 	}
 
 	var userEnv map[string]string
 	if err := json.Unmarshal([]byte(envJSON), &userEnv); err != nil {
-		return base
+		return extra
 	}
 
 	for k, v := range userEnv {
-		base = append(base, fmt.Sprintf("%s=%s", k, v))
+		extra = append(extra, fmt.Sprintf("%s=%s", k, v))
 	}
-	return base
+	return extra
 }
