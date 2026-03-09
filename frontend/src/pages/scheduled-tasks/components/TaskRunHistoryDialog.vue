@@ -1,0 +1,94 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail } from '../types'
+import { formatDuration, formatTaskTime } from '../utils'
+import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
+import TaskRunConversationPreview from './TaskRunConversationPreview.vue'
+
+const props = defineProps<{
+  open: boolean
+  task: ScheduledTask | null
+}>()
+
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+}>()
+
+const loading = ref(false)
+const runs = ref<ScheduledTaskRun[]>([])
+const selectedRunId = ref<number | null>(null)
+const selectedDetail = ref<ScheduledTaskRunDetail | null>(null)
+
+watch(
+  () => props.open,
+  async (value) => {
+    if (!value || !props.task) return
+    loading.value = true
+    try {
+      runs.value = await ScheduledTasksService.ListScheduledTaskRuns(props.task.id, 1, 50)
+      selectedRunId.value = runs.value[0]?.id ?? null
+      if (selectedRunId.value) {
+        selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(selectedRunId.value)
+      } else {
+        selectedDetail.value = null
+      }
+    } finally {
+      loading.value = false
+    }
+  },
+  { immediate: true }
+)
+
+async function selectRun(run: ScheduledTaskRun) {
+  selectedRunId.value = run.id
+  selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(run.id)
+}
+</script>
+
+<template>
+  <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
+    <DialogContent class="max-h-[90vh] overflow-hidden sm:max-w-6xl">
+      <DialogHeader>
+        <DialogTitle>{{ task?.name }} / 运行记录</DialogTitle>
+      </DialogHeader>
+
+      <div class="flex h-[70vh] min-h-0 gap-4">
+        <div class="w-80 shrink-0 overflow-auto rounded-lg border border-border">
+          <div v-if="loading" class="p-4 text-sm text-muted-foreground">加载中...</div>
+          <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">暂无运行记录</div>
+          <button
+            v-for="run in runs"
+            :key="run.id"
+            class="w-full border-b border-border px-4 py-3 text-left transition-colors hover:bg-accent/40"
+            :class="selectedRunId === run.id ? 'bg-accent/50' : ''"
+            @click="selectRun(run)"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <TaskRunStatusBadge :status="run.status" />
+              <span class="text-xs text-muted-foreground">{{ formatDuration(run.duration_ms) }}</span>
+            </div>
+            <div class="mt-2 text-sm text-foreground">{{ formatTaskTime(run.started_at) }}</div>
+            <div class="mt-1 text-xs text-muted-foreground">{{ run.trigger_type }}</div>
+            <TooltipProvider>
+              <Tooltip v-if="run.error_message">
+                <TooltipTrigger as-child>
+                  <div class="mt-2 line-clamp-1 text-xs text-red-600">{{ run.error_message }}</div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p class="max-w-sm whitespace-pre-wrap text-xs">{{ run.error_message }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </button>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
+          <TaskRunConversationPreview :detail="selectedDetail" empty-text="暂无会话内容" />
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+</template>

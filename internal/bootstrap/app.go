@@ -26,6 +26,7 @@ import (
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/providers"
+	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/services/textselection"
@@ -293,13 +294,17 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册助手服务
 	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
 	// 注册会话服务
-	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
+	conversationsService := conversations.NewConversationsService(app)
+	app.RegisterService(application.NewService(conversationsService))
 	// 注册 Skill 管理服务
 	skillsService := skills.NewSkillsService(app)
 	app.RegisterService(application.NewService(skillsService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
+	// 注册定时任务服务
+	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
+	app.RegisterService(application.NewService(scheduledTasksService))
 	// 注册记忆服务
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
@@ -456,6 +461,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		go toolchainService.EnsureAll()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
+		go func() {
+			if err := scheduledTasksService.Start(); err != nil {
+				app.Logger.Error("Failed to start scheduled tasks service", "error", err)
+			}
+		}()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -507,6 +517,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		scheduledTasksService.Stop()
 		chatService.Shutdown()
 		// Stop task manager before closing database
 		if tm := taskmanager.Get(); tm != nil {
