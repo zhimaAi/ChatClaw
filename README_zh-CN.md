@@ -5,7 +5,7 @@
 <h1 align="center">ChatClaw</h1>
 
 <p align="center">
-  <strong>Get OpenClaw-like personal AI agent in 5 mins. with Sandbox security,small and fast</strong>
+  5 分钟即可拥有类 OpenClaw 的小龙虾个人AI 智能体，沙箱安全，占资源少，运行快.
 </p>
 
 <p align="center">
