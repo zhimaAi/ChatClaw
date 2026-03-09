@@ -364,6 +364,7 @@ export default {
       timeoutReason: 'TimeOut',
       retry: '重试',
       authSuccess: '授权成功',
+      authExpiredPleaseReauth: '账号未获取登录信息，请重新授权',
       startUsingHint: '点击下方「开始」继续使用 ChatClaw 桌面端',
       startUsing: '开始使用',
       freeVersion: '免费版',

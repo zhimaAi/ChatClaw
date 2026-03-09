@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
-import { getErrorMessage } from '@/composables/useErrorMessage'
+import { getErrorMessage, isChatWikiAuthExpiredError } from '@/composables/useErrorMessage'
 import { ChatWikiService, type Binding, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
 
 /**
@@ -60,7 +60,14 @@ export function useTeamRobots() {
       })
     } catch (error: unknown) {
       console.error('[assistant][team] load robots: failed', error)
-      toast.error(getErrorMessage(error) || t('knowledge.team.needsBinding'))
+      if (isChatWikiAuthExpiredError(error)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+        // Refetch binding so teamBound becomes false (backend already set exp=0)
+        const latest = await ChatWikiService.GetBinding()
+        binding.value = latest ?? null
+      } else {
+        toast.error(getErrorMessage(error) || t('knowledge.team.needsBinding'))
+      }
       teamRobots.value = []
     } finally {
       teamLoading.value = false

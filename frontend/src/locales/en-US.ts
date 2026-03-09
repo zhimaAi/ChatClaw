@@ -364,6 +364,7 @@ export default {
       timeoutReason: 'TimeOut',
       retry: 'Retry',
       authSuccess: 'Authorization successful',
+      authExpiredPleaseReauth: 'Login expired or not found, please re-authorize.',
       startUsingHint: 'Click "Start" below to continue using ChatClaw Desktop.',
       startUsing: 'Start using',
       freeVersion: 'Free',

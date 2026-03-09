@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toast'
+import { isChatWikiAuthExpiredError } from '@/composables/useErrorMessage'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -133,6 +134,10 @@ async function loadRobots() {
     }))
   } catch (error) {
     console.error('[ChatWiki] Failed to load robots:', error)
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      await loadBinding()
+    }
     robots.value = []
   } finally {
     robotsLoading.value = false
@@ -152,6 +157,10 @@ async function loadLibraries(type: number = 0) {
     }))
   } catch (error) {
     console.error('[ChatWiki] Failed to load libraries:', error)
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      await loadBinding()
+    }
     libraries.value = []
   } finally {
     librariesLoading.value = false

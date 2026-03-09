@@ -238,6 +238,33 @@ func (s *ChatWikiService) DeleteBinding() error {
 	return err
 }
 
+// errChatWikiAuthExpired is returned when the server returns 401 (e.g. "账号未获取登录信息").
+// Frontend should show re-auth hint and treat binding as expired.
+var errChatWikiAuthExpired = errors.New("CHATWIKI_AUTH_EXPIRED")
+
+// markBindingExpired sets the latest binding's exp to 0 so the client treats it as expired
+// and guides the user to re-authorize.
+func (s *ChatWikiService) markBindingExpired() {
+	db := sqlite.DB()
+	if db == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Update the latest row (max id) to exp=0
+	_, err := db.NewUpdate().Model((*bindingModel)(nil)).
+		Set("exp = ?", int64(0)).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("id = (SELECT MAX(id) FROM chatwiki_bindings)").
+		Exec(ctx)
+	if err != nil {
+		s.app.Logger.Warn("Failed to mark chatwiki binding expired", "error", err)
+		return
+	}
+	s.app.Logger.Info("[ChatWiki] Binding marked expired (exp=0) for re-auth")
+}
+
 // GetRobotList fetches the robot/application list from ChatWiki API.
 func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 	binding, err := s.GetBinding()
@@ -282,6 +309,20 @@ func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 		"body", string(body),
 	)
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		s.markBindingExpired()
+		var apiErr struct {
+			Res int    `json:"res"`
+			Msg string `json:"msg"`
+		}
+		_ = json.Unmarshal(body, &apiErr)
+		msg := apiErr.Msg
+		if msg == "" {
+			msg = "账号未获取登录信息，请重新授权"
+		}
+		return nil, fmt.Errorf("%w: %s", errChatWikiAuthExpired, msg)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
@@ -298,6 +339,14 @@ func (s *ChatWikiService) GetRobotList() ([]Robot, error) {
 	resultCode := apiResp.Res
 	if resultCode == 0 && apiResp.Code != 0 {
 		resultCode = apiResp.Code
+	}
+	if resultCode == 401 {
+		s.markBindingExpired()
+		msg := apiResp.Msg
+		if msg == "" {
+			msg = "账号未获取登录信息，请重新授权"
+		}
+		return nil, fmt.Errorf("%w: %s", errChatWikiAuthExpired, msg)
 	}
 	if resultCode != 0 {
 		return nil, fmt.Errorf("API error code=%d msg=%s", resultCode, apiResp.Msg)
@@ -970,6 +1019,20 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 		"body", string(body),
 	)
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		s.markBindingExpired()
+		var apiErr struct {
+			Res int    `json:"res"`
+			Msg string `json:"msg"`
+		}
+		_ = json.Unmarshal(body, &apiErr)
+		msg := apiErr.Msg
+		if msg == "" {
+			msg = "账号未获取登录信息，请重新授权"
+		}
+		return nil, fmt.Errorf("%w: %s", errChatWikiAuthExpired, msg)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
@@ -986,6 +1049,14 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 	resultCode := apiResp.Res
 	if resultCode == 0 && apiResp.Code != 0 {
 		resultCode = apiResp.Code
+	}
+	if resultCode == 401 {
+		s.markBindingExpired()
+		msg := apiResp.Msg
+		if msg == "" {
+			msg = "账号未获取登录信息，请重新授权"
+		}
+		return nil, fmt.Errorf("%w: %s", errChatWikiAuthExpired, msg)
 	}
 	if resultCode != 0 {
 		return nil, fmt.Errorf("API error code=%d msg=%s", resultCode, apiResp.Msg)
