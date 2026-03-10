@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -375,9 +376,8 @@ func connect(ctx context.Context, server MCPServer) (*mcpclient.Client, error) {
 
 		env := BuildEnv(server.Env)
 
-		var opts []transport.StdioOption
-		if runtime.GOOS == "windows" {
-			opts = append(opts, transport.WithCommandFunc(windowsCmdFunc))
+		opts := []transport.StdioOption{
+			transport.WithCommandFunc(StdioCmdFunc),
 		}
 
 		c, err = mcpclient.NewStdioMCPClientWithOptions(server.Command, env, args, opts...)
@@ -612,13 +612,120 @@ func (s *MCPService) InspectServer(id string) (*InspectResult, error) {
 	return result, nil
 }
 
-// windowsCmdFunc wraps the command via cmd.exe /C so that .cmd/.bat
-// executables (npx.cmd, bun.cmd, uvx.cmd …) are resolved correctly.
-func windowsCmdFunc(ctx context.Context, command string, envVars []string, args []string) (*exec.Cmd, error) {
-	shellArgs := append([]string{"/C", command}, args...)
-	cmd := exec.CommandContext(ctx, "cmd.exe", shellArgs...)
-	cmd.Env = append(os.Environ(), envVars...)
+// StdioCmdFunc resolves the command binary using the augmented PATH from
+// envVars before creating the exec.Cmd. This is necessary because GUI apps
+// (especially on Windows) inherit a minimal system PATH that doesn't include
+// directories like the toolchain bin folder where npx.exe / bun.exe / uvx.exe live.
+func StdioCmdFunc(ctx context.Context, command string, envVars []string, args []string) (*exec.Cmd, error) {
+	mergedEnv := mergeEnvVars(os.Environ(), envVars)
+
+	resolved := command
+	for _, e := range envVars {
+		upper := e
+		if len(upper) > 5 {
+			upper = upper[:5]
+		}
+		if equalFoldASCII(upper, "PATH=") {
+			if p := lookPathIn(command, e[5:]); p != "" {
+				resolved = p
+			}
+			break
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, resolved, args...)
+	cmd.Env = mergedEnv
 	return cmd, nil
+}
+
+// mergeEnvVars merges extra vars into base, replacing existing keys
+// (case-insensitive on Windows, case-sensitive elsewhere).
+func mergeEnvVars(base, extra []string) []string {
+	result := make([]string, len(base))
+	copy(result, base)
+
+	for _, ev := range extra {
+		idx := indexByte(ev, '=')
+		if idx <= 0 {
+			continue
+		}
+		key := ev[:idx]
+		replaced := false
+		for i, existing := range result {
+			eIdx := indexByte(existing, '=')
+			if eIdx <= 0 {
+				continue
+			}
+			if envKeyEqual(existing[:eIdx], key) {
+				result[i] = ev
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			result = append(result, ev)
+		}
+	}
+	return result
+}
+
+func indexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func envKeyEqual(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return equalFoldASCII(a, b)
+	}
+	return a == b
+}
+
+func equalFoldASCII(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		ca, cb := a[i], b[i]
+		if ca >= 'A' && ca <= 'Z' {
+			ca += 'a' - 'A'
+		}
+		if cb >= 'A' && cb <= 'Z' {
+			cb += 'a' - 'A'
+		}
+		if ca != cb {
+			return false
+		}
+	}
+	return true
+}
+
+// lookPathIn searches for an executable in the given PATH string
+// without modifying the global environment (thread-safe).
+func lookPathIn(name, pathEnv string) string {
+	var exts []string
+	if runtime.GOOS == "windows" {
+		exts = []string{"", ".exe", ".cmd", ".bat", ".com"}
+	} else {
+		exts = []string{""}
+	}
+
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" {
+			continue
+		}
+		for _, ext := range exts {
+			p := filepath.Join(dir, name+ext)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				return p
+			}
+		}
+	}
+	return ""
 }
 
 // BuildEnv returns extra env vars to pass to the MCP subprocess.
@@ -629,7 +736,11 @@ func BuildEnv(envJSON string) []string {
 
 	if binDir := toolchain.BinDirIfReady(); binDir != "" {
 		currentPath := os.Getenv("PATH")
-		extra = append(extra, fmt.Sprintf("PATH=%s%c%s", binDir, os.PathListSeparator, currentPath))
+		pathKey := "PATH"
+		if runtime.GOOS == "windows" {
+			pathKey = "Path"
+		}
+		extra = append(extra, fmt.Sprintf("%s=%s%c%s", pathKey, binDir, os.PathListSeparator, currentPath))
 	}
 
 	if envJSON == "" || envJSON == "{}" {

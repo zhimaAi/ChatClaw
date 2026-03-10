@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -164,16 +161,8 @@ func createMCPClient(_ context.Context, srv mcp.MCPServer) (*mcpclient.Client, e
 
 		env := mcp.BuildEnv(srv.Env)
 
-		var opts []transport.StdioOption
-		if runtime.GOOS == "windows" {
-			opts = append(opts, transport.WithCommandFunc(
-				func(ctx context.Context, command string, envVars []string, cmdArgs []string) (*exec.Cmd, error) {
-					shellArgs := append([]string{"/C", command}, cmdArgs...)
-					cmd := exec.CommandContext(ctx, "cmd.exe", shellArgs...)
-					cmd.Env = append(os.Environ(), envVars...)
-					return cmd, nil
-				},
-			))
+		opts := []transport.StdioOption{
+			transport.WithCommandFunc(mcp.StdioCmdFunc),
 		}
 
 		return mcpclient.NewStdioMCPClientWithOptions(srv.Command, env, args, opts...)
