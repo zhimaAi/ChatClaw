@@ -305,6 +305,27 @@ export const useChatStore = defineStore('chat', () => {
     ].filter((m) => m.id !== messageId)
   }
 
+  // Append a local-only message (used by team mode SSE integration).
+  const appendLocalMessage = (conversationId: number, role: string, content: string) => {
+    if (conversationId === 0) return 0
+    localMessageCounter -= 1
+    const localMessageId = localMessageCounter
+    appendMessage(conversationId, {
+      id: localMessageId,
+      conversation_id: conversationId,
+      role,
+      content: content.trim(),
+      status: MessageStatus.SUCCESS,
+      thinking_content: '',
+      tool_calls: '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+    return localMessageId
+  }
+
   // Send a new message
   const sendMessage = async (
     conversationId: number,
@@ -980,6 +1001,7 @@ export const useChatStore = defineStore('chat', () => {
     editAndResend,
     stopGeneration,
     clearMessages,
+    appendLocalMessage,
 
     // Event subscription
     subscribe,
