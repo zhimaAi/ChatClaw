@@ -514,6 +514,7 @@ export default {
       taskDescription: 'Task Description',
       taskAgentType: 'Agent Type',
       taskAgentResult: 'Sub-agent Result',
+      subAgentPrefix: 'Subtask',
       subAgentGeneralPurpose: 'Subtask · Agent',
       subAgentBash: 'Subtask · Terminal',
       subAgentRunning: 'Running',

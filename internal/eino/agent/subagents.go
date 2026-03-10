@@ -138,20 +138,11 @@ func generalPurposeInstruction(workDir, toolchainBinDir string, sandboxEnabled, 
 
 		inst += `
 
-## 工具使用
-- 创建/写入文件用 write_file，编辑现有文件用 edit_file
-- 运行命令用 execute，长时间运行的命令用 execute_background
-- 读取文件用 read_file，搜索文件用 glob/grep
-- 运行 Python 脚本优先用 uv run，运行 JS/TS 优先用 bun run
-- 运行 shell 脚本时用 "sh script.sh"（或 "bash script.sh" / "zsh script.sh"），不要用 "./script.sh"（没有执行权限），也不要尝试 chmod
-- 需要确认的危险命令先调用 confirm_execution
-
 ## 原则
-- 理解任务目标后立即开始执行
-- 遇到错误时自行诊断和修复，不要放弃
-- 完成后清晰总结：做了什么、生成了哪些文件、结果在哪里
-- 如果无法完成，说明原因和已尝试的方法
-- 调研类任务：产出精炼结论，带来源和证据，不要堆砌过程`
+- 理解任务后立即执行，遇错自行诊断修复
+- 完成后清晰总结：做了什么、文件在哪
+- 调研类任务：产出精炼结论，带来源和证据，不要堆砌过程
+- 用 "sh script.sh" 运行脚本（不要用 "./script.sh"），破坏性命令先 confirm_execution`
 
 		if skillsEnabled {
 			inst += `
@@ -188,20 +179,11 @@ func generalPurposeInstruction(workDir, toolchainBinDir string, sandboxEnabled, 
 
 	inst += `
 
-## Tool Usage
-- Create/write files with write_file, edit existing files with edit_file
-- Run commands with execute, long-running commands with execute_background
-- Read files with read_file, search with glob/grep
-- Run Python scripts with uv run, JS/TS with bun run
-- Run shell scripts with "sh script.sh" (or "bash script.sh" / "zsh script.sh") — never use "./script.sh" (no execute permission) and do not attempt chmod
-- Call confirm_execution before dangerous commands
-
 ## Principles
-- Begin execution immediately after understanding the task goal
-- Self-diagnose and fix errors — do not give up
-- Summarize clearly when done: what was done, files created, where results are
-- If unable to complete, explain why and what was attempted
-- For research tasks: produce condensed conclusions with sources and evidence, not process narration`
+- Execute immediately after understanding the task; self-diagnose and fix errors
+- Summarize when done: what was done, where files are
+- Research tasks: condensed conclusions with sources, not process narration
+- Run scripts with "sh script.sh" (not "./script.sh"); call confirm_execution before destructive commands`
 
 	if skillsEnabled {
 		inst += `

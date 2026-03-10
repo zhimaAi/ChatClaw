@@ -511,6 +511,7 @@ export default {
       taskDescription: '任务描述',
       taskAgentType: '任务类型',
       taskAgentResult: '子代理执行结果',
+      subAgentPrefix: '子任务',
       subAgentGeneralPurpose: '子任务 · 执行',
       subAgentBash: '子任务 · 终端',
       subAgentRunning: '执行中',

@@ -101,6 +101,22 @@ const safeParse = (json?: string): any | null => {
   }
 }
 
+const MAX_SUB_AGENT_TITLE_LEN = 40
+
+const getSubAgentTitle = (toolCall: ToolCallInfo): string => {
+  const prefix = t('assistant.chat.subAgentPrefix')
+  const parsed = safeParse(toolCall.argsJson)
+  const request = parsed?.request
+  if (typeof request === 'string' && request.trim()) {
+    const firstLine = request.trim().split('\n')[0]
+    if (firstLine.length > MAX_SUB_AGENT_TITLE_LEN) {
+      return `${prefix} ${firstLine.slice(0, MAX_SUB_AGENT_TITLE_LEN)}…`
+    }
+    return `${prefix} ${firstLine}`
+  }
+  return getToolDisplayName(toolCall.toolName)
+}
+
 // --- File-write tool streaming preview ---
 
 const FILE_WRITE_TOOLS = new Set(['write_file', 'edit_file', 'patch_file'])
@@ -240,7 +256,7 @@ const getTaskResult = (resultJson?: string): string => {
         >
           <Bot class="size-4 shrink-0 text-muted-foreground/70" />
           <span class="flex-1 truncate font-medium text-xs">
-            {{ getToolDisplayName(toolCall.toolName) }}
+            {{ getSubAgentTitle(toolCall) }}
           </span>
           <span class="flex items-center gap-1.5 text-xs tabular-nums">
             <template v-if="toolCall.status === 'calling'">
