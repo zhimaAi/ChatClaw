@@ -85,6 +85,14 @@ type CreateScheduledTaskInput struct {
 	Enabled       bool   `json:"enabled"`
 }
 
+type ScheduleValidationResult struct {
+	ScheduleType  string     `json:"schedule_type"`
+	ScheduleValue string     `json:"schedule_value"`
+	CronExpr      string     `json:"cron_expr"`
+	Timezone      string     `json:"timezone"`
+	NextRunAt     *time.Time `json:"next_run_at,omitempty"`
+}
+
 type UpdateScheduledTaskInput struct {
 	Name          *string `json:"name"`
 	Prompt        *string `json:"prompt"`

@@ -360,3 +360,139 @@ Installed skills are automatically loaded into your capabilities. When you need 
 Execution guides returned by skill_advisor are based on verified best practices — follow them preferentially.
 `
 }
+
+// buildScheduledTaskPrompt generates guidance for scheduled task management tools.
+func buildScheduledTaskPrompt() string {
+	if isZhCN() {
+		return `
+# 定时任务管理
+
+你可以帮助用户管理定时任务（计划任务）。当用户提到"计划"、"定时任务"、"定时执行"、"周期性任务"等关键词时，应使用以下工具：
+
+## 可用工具
+
+### 查询任务
+- ` + "`scheduled_task_list`" + `: 查询任务列表，支持关键词搜索和状态过滤
+
+### 创建任务（两步流程）
+1. ` + "`scheduled_task_create_preview`" + `: 预览任务草案，校验参数，生成确认摘要
+2. ` + "`scheduled_task_create_confirm`" + `: 用户确认后真正创建任务
+
+### 管理任务
+- ` + "`scheduled_task_enable`" + `: 启用已停用的任务
+- ` + "`scheduled_task_disable`" + `: 停用已启用的任务
+- ` + "`scheduled_task_delete`" + `: 删除任务
+
+### 助手匹配
+- ` + "`agent_match_by_name`" + `: 按名称匹配 AI 助手，返回匹配状态和候选列表
+
+## 创建任务流程
+
+**第一步：预览**
+1. 用户用自然语言描述任务需求（任务名、提示词、执行时间、目标助手）
+2. 你将时间自然语言转换为结构化调度参数：
+   - ` + "`schedule_type`" + `: 调度类型，如 "preset"、"cron"、"interval"
+   - ` + "`schedule_value`" + `: 预设值，如 "every_day_0900"、"every_week_mon_1000"
+   - ` + "`cron_expr`" + `: 标准 cron 表达式（如需要）
+3. 调用 ` + "`scheduled_task_create_preview`" + `，传入：
+   - ` + "`name`" + `: 任务名称
+   - ` + "`prompt`" + `: 任务提示词
+   - ` + "`agent_name`" + `: 目标助手名称
+   - ` + "`schedule_type`" + ` / ` + "`schedule_value`" + ` / ` + "`cron_expr`" + `: 调度参数
+   - ` + "`enabled`" + `: 是否启用（可选，默认 true）
+4. 检查返回的 ` + "`issues`" + `，如有问题需告知用户
+
+**第二步：确认创建**
+1. 向用户复述任务摘要，请求确认
+2. 用户确认后，调用 ` + "`scheduled_task_create_confirm`" + `（使用 ` + "`agent_id`" + ` 而非 ` + "`agent_name`" + `）
+
+## 常见时间表达转换
+
+| 用户表达 | schedule_type | schedule_value | cron_expr |
+|---------|--------------|----------------|-----------|
+| 每天早上9点 | preset | every_day_0900 | |
+| 每周一上午10点 | preset | every_week_mon_1000 | |
+| 每月1号0点 | preset | every_month_1_0000 | |
+| 每小时 | preset | every_hour | |
+| 自定义 cron | cron | | 0 30 9 * * * |
+
+## 重要规则
+
+- **创建、删除、启用、停用都必须先预览，用户确认后再执行**
+- ` + "`confirm=false`" + ` 时只返回预览，不执行操作
+- ` + "`confirm=true`" + ` 时才真正执行
+- 助手名称匹配不唯一时，需让用户指定具体助手
+- 任务名称匹配多条时，需让用户指定具体任务
+
+## 示例对话
+
+用户: "帮我创建一个每天早上9点执行的销售日报任务"
+助手: 调用 ` + "`scheduled_task_create_preview`" + ` → 向用户展示预览 → 用户确认 → 调用 ` + "`scheduled_task_create_confirm`" + `
+`
+	}
+	return `
+# Scheduled Task Management
+
+You can help users manage scheduled tasks. When users mention "scheduled tasks", "plans", "periodic tasks", "cron jobs", or similar keywords, use the following tools:
+
+## Available Tools
+
+### Query Tasks
+- ` + "`scheduled_task_list`" + `: List tasks with optional keyword search and status filter
+
+### Create Task (Two-Step Process)
+1. ` + "`scheduled_task_create_preview`" + `: Preview task draft, validate parameters, generate confirmation summary
+2. ` + "`scheduled_task_create_confirm`" + `: Actually create the task after user confirmation
+
+### Manage Tasks
+- ` + "`scheduled_task_enable`" + `: Enable a disabled task
+- ` + "`scheduled_task_disable`" + `: Disable an enabled task
+- ` + "`scheduled_task_delete`" + `: Delete a task
+
+### Agent Matching
+- ` + "`agent_match_by_name`" + `: Match AI assistant by name, returns match status and candidates
+
+## Task Creation Workflow
+
+**Step 1: Preview**
+1. User describes task requirements in natural language (name, prompt, schedule, target assistant)
+2. You convert natural language time into structured schedule parameters:
+   - ` + "`schedule_type`" + `: Schedule type like "preset", "cron", "interval"
+   - ` + "`schedule_value`" + `: Preset value like "every_day_0900", "every_week_mon_1000"
+   - ` + "`cron_expr`" + `: Standard cron expression (if needed)
+3. Call ` + "`scheduled_task_create_preview`" + ` with:
+   - ` + "`name`" + `: Task name
+   - ` + "`prompt`" + `: Task prompt
+   - ` + "`agent_name`" + `: Target assistant name
+   - ` + "`schedule_type`" + ` / ` + "`schedule_value`" + ` / ` + "`cron_expr`" + `: Schedule parameters
+   - ` + "`enabled`" + `: Whether to enable (optional, default true)
+4. Check returned ` + "`issues`" + ` and inform user if there are problems
+
+**Step 2: Confirm Creation**
+1. Present task summary to user, ask for confirmation
+2. After user confirms, call ` + "`scheduled_task_create_confirm`" + ` (use ` + "`agent_id`" + ` instead of ` + "`agent_name`" + `)
+
+## Common Time Expression Conversion
+
+| User Expression | schedule_type | schedule_value | cron_expr |
+|----------------|--------------|----------------|-----------|
+| Every day at 9am | preset | every_day_0900 | |
+| Every Monday at 10am | preset | every_week_mon_1000 | |
+| 1st of every month at midnight | preset | every_month_1_0000 | |
+| Every hour | preset | every_hour | |
+| Custom cron | cron | | 0 30 9 * * * |
+
+## Important Rules
+
+- **Create, delete, enable, disable MUST preview first, then execute after user confirmation**
+- ` + "`confirm=false`" + ` only returns preview, does not execute
+- ` + "`confirm=true`" + ` actually executes the operation
+- When agent name matches multiple candidates, ask user to specify
+- When task name matches multiple tasks, ask user to specify
+
+## Example Conversation
+
+User: "Create a daily sales report task at 9am"
+Assistant: Call ` + "`scheduled_task_create_preview`" + ` → Show preview to user → User confirms → Call ` + "`scheduled_task_create_confirm`" + `
+`
+}

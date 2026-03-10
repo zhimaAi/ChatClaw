@@ -39,19 +39,85 @@ func (s *AgentsService) GetDefaultWorkDir() string {
 
 // AgentsService 助手服务（暴露给前端调用）
 type AgentsService struct {
-	app *application.App
+	app    *application.App
+	testDB *bun.DB
 }
 
 func NewAgentsService(app *application.App) *AgentsService {
 	return &AgentsService{app: app}
 }
 
+func NewAgentsServiceForTest(db *bun.DB) *AgentsService {
+	return &AgentsService{testDB: db}
+}
+
 func (s *AgentsService) db() (*bun.DB, error) {
+	if s.testDB != nil {
+		return s.testDB, nil
+	}
 	db := sqlite.DB()
 	if db == nil {
 		return nil, errs.New("error.sqlite_not_initialized")
 	}
 	return db, nil
+}
+
+func (s *AgentsService) ListAgentsForMatching() ([]AgentMatch, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	matches := make([]AgentMatch, 0)
+	if err := db.NewSelect().
+		Table("agents").
+		Column("id", "name").
+		OrderExpr("updated_at DESC, id DESC").
+		Scan(ctx, &matches); err != nil {
+		return nil, errs.Wrap("error.agent_list_failed", err)
+	}
+	return matches, nil
+}
+
+func (s *AgentsService) MatchAgentsByName(query string) ([]AgentMatch, string, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []AgentMatch{}, "none", nil
+	}
+
+	agents, err := s.ListAgentsForMatching()
+	if err != nil {
+		return nil, "", err
+	}
+
+	normalizedQuery := strings.ToLower(query)
+	exact := make([]AgentMatch, 0)
+	contains := make([]AgentMatch, 0)
+	for _, agent := range agents {
+		normalizedName := strings.ToLower(strings.TrimSpace(agent.Name))
+		switch {
+		case normalizedName == normalizedQuery:
+			exact = append(exact, agent)
+		case strings.Contains(normalizedName, normalizedQuery):
+			contains = append(contains, agent)
+		}
+	}
+
+	switch {
+	case len(exact) == 1:
+		return exact, "exact", nil
+	case len(exact) > 1:
+		return exact, "multiple", nil
+	case len(contains) == 1:
+		return contains, "single", nil
+	case len(contains) > 1:
+		return contains, "multiple", nil
+	default:
+		return []AgentMatch{}, "none", nil
+	}
 }
 
 func (s *AgentsService) ListAgents() ([]Agent, error) {

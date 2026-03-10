@@ -1,0 +1,613 @@
+package tools
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+)
+
+type ScheduledTaskAgent struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type ScheduledTaskRecord struct {
+	ID            int64      `json:"id"`
+	Name          string     `json:"name"`
+	Prompt        string     `json:"prompt"`
+	AgentID       int64      `json:"agent_id"`
+	AgentName     string     `json:"agent_name,omitempty"`
+	ScheduleType  string     `json:"schedule_type"`
+	ScheduleValue string     `json:"schedule_value"`
+	CronExpr      string     `json:"cron_expr"`
+	Timezone      string     `json:"timezone,omitempty"`
+	Enabled       bool       `json:"enabled"`
+	LastRunAt     *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt     *time.Time `json:"next_run_at,omitempty"`
+	LastStatus    string     `json:"last_status,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
+	LastRunID     *int64     `json:"last_run_id,omitempty"`
+	CreatedAt     time.Time  `json:"created_at,omitempty"`
+	UpdatedAt     time.Time  `json:"updated_at,omitempty"`
+}
+
+type ScheduledTaskCreateInput struct {
+	Name          string `json:"name"`
+	Prompt        string `json:"prompt"`
+	AgentID       int64  `json:"agent_id"`
+	ScheduleType  string `json:"schedule_type"`
+	ScheduleValue string `json:"schedule_value"`
+	CronExpr      string `json:"cron_expr"`
+	Enabled       bool   `json:"enabled"`
+}
+
+type ScheduledTaskValidationResult struct {
+	ScheduleType  string     `json:"schedule_type"`
+	ScheduleValue string     `json:"schedule_value"`
+	CronExpr      string     `json:"cron_expr"`
+	Timezone      string     `json:"timezone"`
+	NextRunAt     *time.Time `json:"next_run_at,omitempty"`
+}
+
+type ScheduledTaskManagementConfig struct {
+	ListAgentsForMatchingFn func() ([]ScheduledTaskAgent, error)
+	MatchAgentsByNameFn     func(string) ([]ScheduledTaskAgent, string, error)
+	ListScheduledTasksFn    func() ([]ScheduledTaskRecord, error)
+	GetScheduledTaskByIDFn  func(int64) (*ScheduledTaskRecord, error)
+	FindScheduledTasksFn    func(string) ([]ScheduledTaskRecord, error)
+	ValidateScheduleFn      func(string, string, string) (*ScheduledTaskValidationResult, error)
+	CreateScheduledTaskFn   func(ScheduledTaskCreateInput) (*ScheduledTaskRecord, error)
+	DeleteScheduledTaskFn   func(int64) error
+	SetScheduledTaskFn      func(int64, bool) (*ScheduledTaskRecord, error)
+}
+
+func NewScheduledTaskManagementTools(config *ScheduledTaskManagementConfig) ([]tool.BaseTool, error) {
+	return []tool.BaseTool{
+		&scheduledTaskListTool{config: config},
+		&agentMatchByNameTool{config: config},
+		&scheduledTaskCreatePreviewTool{config: config},
+		&scheduledTaskCreateConfirmTool{config: config},
+		&scheduledTaskDeleteTool{config: config},
+		&scheduledTaskEnableTool{config: config},
+		&scheduledTaskDisableTool{config: config},
+	}, nil
+}
+
+type scheduledTaskListTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type agentMatchByNameTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskCreatePreviewTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskCreateConfirmTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskDeleteTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskEnableTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskDisableTool struct {
+	config *ScheduledTaskManagementConfig
+}
+
+type scheduledTaskListInput struct {
+	Keyword string `json:"keyword"`
+	Status  string `json:"status"`
+	Limit   int    `json:"limit"`
+}
+
+type agentMatchByNameInput struct {
+	Query string `json:"query"`
+}
+
+type scheduledTaskCreatePreviewInput struct {
+	Name          string `json:"name"`
+	Prompt        string `json:"prompt"`
+	AgentName     string `json:"agent_name"`
+	ScheduleType  string `json:"schedule_type"`
+	ScheduleValue string `json:"schedule_value"`
+	CronExpr      string `json:"cron_expr"`
+	Enabled       *bool  `json:"enabled"`
+}
+
+type scheduledTaskCreateConfirmInput struct {
+	Name          string `json:"name"`
+	Prompt        string `json:"prompt"`
+	AgentID       int64  `json:"agent_id"`
+	ScheduleType  string `json:"schedule_type"`
+	ScheduleValue string `json:"schedule_value"`
+	CronExpr      string `json:"cron_expr"`
+	Enabled       *bool  `json:"enabled"`
+}
+
+type scheduledTaskMutationInput struct {
+	TaskID   int64  `json:"task_id"`
+	TaskName string `json:"task_name"`
+	Confirm  bool   `json:"confirm"`
+}
+
+func (t *scheduledTaskListTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "scheduled_task_list",
+		Desc: selectDesc(
+			"List scheduled tasks for search and lookup.",
+			"查询计划任务列表，供检索和定位任务。",
+		),
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"keyword": {Type: schema.String, Desc: selectDesc("Optional task keyword", "可选的任务关键词"), Required: false},
+			"status": {
+				Type:     schema.String,
+				Desc:     selectDesc("Task status filter", "任务状态过滤"),
+				Enum:     []string{"enabled", "disabled", "all"},
+				Required: false,
+			},
+			"limit": {Type: schema.Integer, Desc: selectDesc("Max tasks to return", "最多返回任务数"), Required: false},
+		}),
+	}, nil
+}
+
+func (t *agentMatchByNameTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "agent_match_by_name",
+		Desc: selectDesc(
+			"Match an AI assistant by name before creating a scheduled task.",
+			"按名称匹配 AI 助手，在创建计划任务前定位助手。",
+		),
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"query": {Type: schema.String, Desc: selectDesc("Assistant name query", "助手名称查询"), Required: true},
+		}),
+	}, nil
+}
+
+func (t *scheduledTaskCreatePreviewTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "scheduled_task_create_preview",
+		Desc: selectDesc(
+			"Validate a scheduled task draft and return a confirmation preview without creating it.",
+			"校验计划任务草案并返回确认预览，不会真正创建任务。",
+		),
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"name":           {Type: schema.String, Desc: selectDesc("Task name", "任务名称"), Required: true},
+			"prompt":         {Type: schema.String, Desc: selectDesc("Task prompt", "任务提示词"), Required: true},
+			"agent_name":     {Type: schema.String, Desc: selectDesc("Assistant name", "助手名称"), Required: true},
+			"schedule_type":  {Type: schema.String, Desc: selectDesc("Schedule type", "调度类型"), Required: true},
+			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value", "调度值"), Required: true},
+			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression", "Cron 表达式"), Required: true},
+			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether enabled after creation", "创建后是否启用"), Required: false},
+		}),
+	}, nil
+}
+
+func (t *scheduledTaskCreateConfirmTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: "scheduled_task_create_confirm",
+		Desc: selectDesc(
+			"Create a scheduled task after the user has confirmed the preview.",
+			"在用户确认后真正创建计划任务。",
+		),
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"name":           {Type: schema.String, Desc: selectDesc("Task name", "任务名称"), Required: true},
+			"prompt":         {Type: schema.String, Desc: selectDesc("Task prompt", "任务提示词"), Required: true},
+			"agent_id":       {Type: schema.Integer, Desc: selectDesc("Assistant ID", "助手 ID"), Required: true},
+			"schedule_type":  {Type: schema.String, Desc: selectDesc("Schedule type", "调度类型"), Required: true},
+			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value", "调度值"), Required: true},
+			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression", "Cron 表达式"), Required: true},
+			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether enabled after creation", "创建后是否启用"), Required: false},
+		}),
+	}, nil
+}
+
+func (t *scheduledTaskDeleteTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return mutationToolInfo("scheduled_task_delete", "Preview or delete a scheduled task after user confirmation.", "预检查或删除计划任务，删除前需要用户确认。")
+}
+
+func (t *scheduledTaskEnableTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return mutationToolInfo("scheduled_task_enable", "Preview or enable a scheduled task after user confirmation.", "预检查或启用计划任务，启用前需要用户确认。")
+}
+
+func (t *scheduledTaskDisableTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return mutationToolInfo("scheduled_task_disable", "Preview or disable a scheduled task after user confirmation.", "预检查或停用计划任务，停用前需要用户确认。")
+}
+
+func mutationToolInfo(name, enDesc, zhDesc string) (*schema.ToolInfo, error) {
+	return &schema.ToolInfo{
+		Name: name,
+		Desc: selectDesc(enDesc, zhDesc),
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"task_id":   {Type: schema.Integer, Desc: selectDesc("Task ID", "任务 ID"), Required: false},
+			"task_name": {Type: schema.String, Desc: selectDesc("Task name", "任务名称"), Required: false},
+			"confirm":   {Type: schema.Boolean, Desc: selectDesc("Whether to execute the action", "是否执行操作"), Required: true},
+		}),
+	}, nil
+}
+
+func (t *scheduledTaskListTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	if t.config == nil || t.config.ListScheduledTasksFn == nil {
+		return "", fmt.Errorf("scheduled task list is unavailable")
+	}
+
+	var input scheduledTaskListInput
+	if err := decodeJSONArguments(arguments, &input); err != nil {
+		return "", err
+	}
+
+	tasks, err := t.config.ListScheduledTasksFn()
+	if err != nil {
+		return "", err
+	}
+	if t.config.ListAgentsForMatchingFn != nil {
+		if agents, agentErr := t.config.ListAgentsForMatchingFn(); agentErr == nil {
+			applyAgentNames(tasks, agents)
+		}
+	}
+
+	keyword := strings.TrimSpace(input.Keyword)
+	status := strings.TrimSpace(input.Status)
+	if status == "" {
+		status = "all"
+	}
+
+	filtered := make([]ScheduledTaskRecord, 0, len(tasks))
+	for _, task := range tasks {
+		if keyword != "" && !strings.Contains(strings.ToLower(task.Name), strings.ToLower(keyword)) && !strings.Contains(strings.ToLower(task.Prompt), strings.ToLower(keyword)) {
+			continue
+		}
+		if status == "enabled" && !task.Enabled {
+			continue
+		}
+		if status == "disabled" && task.Enabled {
+			continue
+		}
+		filtered = append(filtered, task)
+	}
+	if input.Limit > 0 && len(filtered) > input.Limit {
+		filtered = filtered[:input.Limit]
+	}
+
+	return marshalJSON(map[string]any{
+		"tasks": filtered,
+		"count": len(filtered),
+	}), nil
+}
+
+func (t *agentMatchByNameTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	if t.config == nil || t.config.MatchAgentsByNameFn == nil {
+		return "", fmt.Errorf("agent matching is unavailable")
+	}
+
+	var input agentMatchByNameInput
+	if err := decodeJSONArguments(arguments, &input); err != nil {
+		return "", err
+	}
+
+	matches, status, err := t.config.MatchAgentsByNameFn(input.Query)
+	if err != nil {
+		return "", err
+	}
+
+	result := map[string]any{
+		"query":        strings.TrimSpace(input.Query),
+		"match_status": status,
+		"matches":      matches,
+	}
+	if (status == "exact" || status == "single") && len(matches) == 1 {
+		result["recommended_agent_id"] = matches[0].ID
+	}
+	return marshalJSON(result), nil
+}
+
+func (t *scheduledTaskCreatePreviewTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	if t.config == nil || t.config.MatchAgentsByNameFn == nil || t.config.ValidateScheduleFn == nil {
+		return "", fmt.Errorf("scheduled task preview is unavailable")
+	}
+
+	var input scheduledTaskCreatePreviewInput
+	if err := decodeJSONArguments(arguments, &input); err != nil {
+		return "", err
+	}
+
+	issues := make([]string, 0)
+	if strings.TrimSpace(input.Name) == "" {
+		issues = append(issues, "任务名称不能为空")
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		issues = append(issues, "任务提示词不能为空")
+	}
+
+	matches, status, err := t.config.MatchAgentsByNameFn(input.AgentName)
+	if err != nil {
+		return "", err
+	}
+	if status == "none" {
+		issues = append(issues, "未匹配到对应的助手")
+	}
+	if status == "multiple" {
+		issues = append(issues, "助手名称匹配到多个结果，需要用户进一步确认")
+	}
+
+	schedule, err := t.config.ValidateScheduleFn(input.ScheduleType, input.ScheduleValue, input.CronExpr)
+	if err != nil {
+		issues = append(issues, "调度参数校验失败: "+err.Error())
+	}
+
+	result := map[string]any{
+		"needs_confirmation": false,
+		"issues":             issues,
+		"agent_matches":      matches,
+	}
+
+	if len(issues) > 0 || schedule == nil || len(matches) != 1 || (status != "exact" && status != "single") {
+		return marshalJSON(result), nil
+	}
+
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
+	}
+
+	parsedTask := ScheduledTaskRecord{
+		Name:          strings.TrimSpace(input.Name),
+		Prompt:        strings.TrimSpace(input.Prompt),
+		AgentID:       matches[0].ID,
+		AgentName:     matches[0].Name,
+		ScheduleType:  schedule.ScheduleType,
+		ScheduleValue: schedule.ScheduleValue,
+		CronExpr:      schedule.CronExpr,
+		Timezone:      schedule.Timezone,
+		Enabled:       enabled,
+		NextRunAt:     schedule.NextRunAt,
+	}
+	result["needs_confirmation"] = true
+	result["parsed_task"] = parsedTask
+	result["confirmation_message"] = buildCreateConfirmationMessage(parsedTask)
+
+	return marshalJSON(result), nil
+}
+
+func (t *scheduledTaskCreateConfirmTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	if t.config == nil || t.config.CreateScheduledTaskFn == nil || t.config.ValidateScheduleFn == nil {
+		return "", fmt.Errorf("scheduled task creation is unavailable")
+	}
+
+	var input scheduledTaskCreateConfirmInput
+	if err := decodeJSONArguments(arguments, &input); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(input.Name) == "" {
+		return "", fmt.Errorf("task name is required")
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		return "", fmt.Errorf("task prompt is required")
+	}
+	if input.AgentID <= 0 {
+		return "", fmt.Errorf("agent_id is required")
+	}
+
+	schedule, err := t.config.ValidateScheduleFn(input.ScheduleType, input.ScheduleValue, input.CronExpr)
+	if err != nil {
+		return "", err
+	}
+
+	enabled := true
+	if input.Enabled != nil {
+		enabled = *input.Enabled
+	}
+
+	created, err := t.config.CreateScheduledTaskFn(ScheduledTaskCreateInput{
+		Name:          strings.TrimSpace(input.Name),
+		Prompt:        strings.TrimSpace(input.Prompt),
+		AgentID:       input.AgentID,
+		ScheduleType:  schedule.ScheduleType,
+		ScheduleValue: schedule.ScheduleValue,
+		CronExpr:      schedule.CronExpr,
+		Enabled:       enabled,
+	})
+	if err != nil {
+		return "", err
+	}
+	if created != nil && created.Timezone == "" {
+		created.Timezone = schedule.Timezone
+	}
+	return marshalJSON(map[string]any{
+		"action": "created",
+		"task":   created,
+	}), nil
+}
+
+func (t *scheduledTaskDeleteTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	return t.runMutation(arguments, "delete", false)
+}
+
+func (t *scheduledTaskEnableTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	return t.runMutation(arguments, "enable", true)
+}
+
+func (t *scheduledTaskDisableTool) InvokableRun(_ context.Context, arguments string, _ ...tool.Option) (string, error) {
+	return t.runMutation(arguments, "disable", false)
+}
+
+func (t *scheduledTaskDeleteTool) runMutation(arguments, action string, enabled bool) (string, error) {
+	return runTaskMutation(t.config, arguments, action, enabled)
+}
+
+func (t *scheduledTaskEnableTool) runMutation(arguments, action string, enabled bool) (string, error) {
+	return runTaskMutation(t.config, arguments, action, enabled)
+}
+
+func (t *scheduledTaskDisableTool) runMutation(arguments, action string, enabled bool) (string, error) {
+	return runTaskMutation(t.config, arguments, action, enabled)
+}
+
+func runTaskMutation(config *ScheduledTaskManagementConfig, arguments, action string, enabled bool) (string, error) {
+	if config == nil {
+		return "", fmt.Errorf("scheduled task mutation is unavailable")
+	}
+
+	var input scheduledTaskMutationInput
+	if err := decodeJSONArguments(arguments, &input); err != nil {
+		return "", err
+	}
+
+	task, candidates, err := resolveTaskForMutation(config, input)
+	if err != nil {
+		return "", err
+	}
+
+	issues := make([]string, 0)
+	if task == nil {
+		if len(candidates) == 0 {
+			issues = append(issues, "未找到匹配的任务")
+		} else {
+			issues = append(issues, "匹配到多个任务，需要用户指定具体目标")
+		}
+		return marshalJSON(map[string]any{
+			"action":        "preview_" + action,
+			"issues":        issues,
+			"matched_tasks": candidates,
+		}), nil
+	}
+
+	if action != "delete" {
+		if action == "enable" && task.Enabled {
+			return marshalJSON(map[string]any{
+				"action": "already_enabled",
+				"task":   task,
+			}), nil
+		}
+		if action == "disable" && !task.Enabled {
+			return marshalJSON(map[string]any{
+				"action": "already_disabled",
+				"task":   task,
+			}), nil
+		}
+	}
+
+	if !input.Confirm {
+		return marshalJSON(map[string]any{
+			"action":               "preview_" + action,
+			"needs_confirmation":   true,
+			"matched_tasks":        []ScheduledTaskRecord{*task},
+			"confirmation_message": buildMutationConfirmationMessage(action, *task),
+		}), nil
+	}
+
+	switch action {
+	case "delete":
+		if config.DeleteScheduledTaskFn == nil {
+			return "", fmt.Errorf("scheduled task deletion is unavailable")
+		}
+		if err := config.DeleteScheduledTaskFn(task.ID); err != nil {
+			return "", err
+		}
+		return marshalJSON(map[string]any{
+			"action":            "deleted",
+			"deleted_task_id":   task.ID,
+			"deleted_task_name": task.Name,
+		}), nil
+	case "enable", "disable":
+		if config.SetScheduledTaskFn == nil {
+			return "", fmt.Errorf("scheduled task enable/disable is unavailable")
+		}
+		updated, err := config.SetScheduledTaskFn(task.ID, enabled)
+		if err != nil {
+			return "", err
+		}
+		return marshalJSON(map[string]any{
+			"action": action + "d",
+			"task":   updated,
+		}), nil
+	default:
+		return "", fmt.Errorf("unsupported mutation action: %s", action)
+	}
+}
+
+func resolveTaskForMutation(config *ScheduledTaskManagementConfig, input scheduledTaskMutationInput) (*ScheduledTaskRecord, []ScheduledTaskRecord, error) {
+	if input.TaskID > 0 {
+		if config.GetScheduledTaskByIDFn == nil {
+			return nil, nil, fmt.Errorf("scheduled task lookup is unavailable")
+		}
+		task, err := config.GetScheduledTaskByIDFn(input.TaskID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return task, []ScheduledTaskRecord{*task}, nil
+	}
+
+	name := strings.TrimSpace(input.TaskName)
+	if name == "" {
+		return nil, nil, fmt.Errorf("task_id or task_name is required")
+	}
+	if config.FindScheduledTasksFn == nil {
+		return nil, nil, fmt.Errorf("scheduled task lookup is unavailable")
+	}
+	tasks, err := config.FindScheduledTasksFn(name)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(tasks) == 1 {
+		return &tasks[0], tasks, nil
+	}
+	return nil, tasks, nil
+}
+
+func decodeJSONArguments(arguments string, target any) error {
+	if strings.TrimSpace(arguments) == "" {
+		arguments = "{}"
+	}
+	decoder := json.NewDecoder(bytes.NewBufferString(arguments))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("parse arguments: %w", err)
+	}
+	return nil
+}
+
+func marshalJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return `{"error":"marshal_failed"}`
+	}
+	return string(b)
+}
+
+func applyAgentNames(tasks []ScheduledTaskRecord, agents []ScheduledTaskAgent) {
+	nameMap := make(map[int64]string, len(agents))
+	for _, agent := range agents {
+		nameMap[agent.ID] = agent.Name
+	}
+	for i := range tasks {
+		if tasks[i].AgentName == "" {
+			tasks[i].AgentName = nameMap[tasks[i].AgentID]
+		}
+	}
+}
+
+func buildCreateConfirmationMessage(task ScheduledTaskRecord) string {
+	return fmt.Sprintf("请确认创建计划任务：任务名=%s，助手=%s，cron=%s，启用=%t", task.Name, task.AgentName, task.CronExpr, task.Enabled)
+}
+
+func buildMutationConfirmationMessage(action string, task ScheduledTaskRecord) string {
+	actionText := map[string]string{
+		"delete":  "删除",
+		"enable":  "启用",
+		"disable": "停用",
+	}[action]
+	return fmt.Sprintf("请确认%s计划任务：任务名=%s，ID=%d", actionText, task.Name, task.ID)
+}

@@ -106,6 +106,81 @@ func TestScheduledTaskCRUD(t *testing.T) {
 	}
 }
 
+func TestGetScheduledTaskByID(t *testing.T) {
+	db := newTestDB(t)
+	seedAgent(t, db, 1, "openai", "gpt-5")
+
+	svc := NewScheduledTasksServiceForTest(nil, db, &stubConversationService{}, stubChatService{})
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "日报",
+		Prompt:        "生成日报",
+		AgentID:       1,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	task, err := svc.GetScheduledTaskByID(created.ID)
+	if err != nil {
+		t.Fatalf("GetScheduledTaskByID returned error: %v", err)
+	}
+	if task.ID != created.ID || task.Name != created.Name {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+}
+
+func TestFindScheduledTasksByName(t *testing.T) {
+	db := newTestDB(t)
+	seedAgent(t, db, 1, "openai", "gpt-5")
+
+	svc := NewScheduledTasksServiceForTest(nil, db, &stubConversationService{}, stubChatService{})
+	first, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "销售日报",
+		Prompt:        "生成销售日报",
+		AgentID:       1,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+	second, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "市场日报",
+		Prompt:        "生成市场日报",
+		AgentID:       1,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	tasks, err := svc.FindScheduledTasksByName("日报")
+	if err != nil {
+		t.Fatalf("FindScheduledTasksByName returned error: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("unexpected tasks: %+v", tasks)
+	}
+
+	if err := svc.DeleteScheduledTask(first.ID); err != nil {
+		t.Fatalf("DeleteScheduledTask returned error: %v", err)
+	}
+
+	tasks, err = svc.FindScheduledTasksByName("日报")
+	if err != nil {
+		t.Fatalf("FindScheduledTasksByName returned error: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != second.ID {
+		t.Fatalf("unexpected remaining tasks: %+v", tasks)
+	}
+}
+
 func TestRunScheduledTaskNow(t *testing.T) {
 	db := newTestDB(t)
 	seedAgent(t, db, 1, "openai", "gpt-5")
