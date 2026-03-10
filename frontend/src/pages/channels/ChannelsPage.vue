@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed, Check } from 'lucide-vue-next'
+import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed, Check, LoaderCircle } from 'lucide-vue-next'
 import IconChannels from '@/assets/icons/channelsMax.svg'
 import IconCheck from '@/assets/icons/check-icon.svg'
 import IconClose from '@/assets/icons/close-icon.svg'
@@ -64,6 +64,7 @@ const inlineFormAvatar = ref('')
 const inlineFormAppId = ref('')
 const inlineFormAppSecret = ref('')
 const inlineFormSaving = ref(false)
+const inlineFormVerifying = ref(false)
 
 const filteredChannels = computed(() => {
   if (selectedFilter.value === 'all') return channels.value
@@ -342,13 +343,25 @@ function openPlatformDocs() {
   }
 }
 
-function handleInlineVerify() {
+async function handleInlineVerify() {
   if (!isInlineFormValid.value) {
     toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
     return
   }
-  // TODO: call backend to verify app_id / app_secret for selected platform
-  toast.success(t('channels.inline.verifySuccess', '验证通过'))
+  if (!selectedPlatformMeta.value) return
+  const extraConfig = JSON.stringify({
+    app_id: inlineFormAppId.value.trim(),
+    app_secret: inlineFormAppSecret.value.trim(),
+  })
+  inlineFormVerifying.value = true
+  try {
+    await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
+    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+  } finally {
+    inlineFormVerifying.value = false
+  }
 }
 
 function getAppId(extraConfig: string): string {
@@ -620,14 +633,16 @@ onMounted(loadData)
           <Button
             type="button"
             class="h-10 bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+            :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
             @click="handleInlineVerify"
           >
-            <Check class="mr-2 h-4 w-4" />
-            {{ t('channels.inline.verifyConfig', '验证配置') }}
+            <LoaderCircle v-if="inlineFormVerifying" class="mr-2 h-4 w-4 animate-spin" />
+            <Check v-else class="mr-2 h-4 w-4" />
+            {{ inlineFormVerifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
           </Button>
           <Button
             class="h-10 bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-            :disabled="inlineFormSaving || !isInlineFormValid"
+            :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
             @click="handleInlineSave"
           >
             <Plus class="mr-2 h-4 w-4" />
