@@ -76,7 +76,7 @@ const hasTasks = computed(() => props.tasks.length > 0)
             <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.schedule') }}</th>
             <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.agent') }}</th>
             <th class="w-[12%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.status') }}</th>
-            <th class="w-[6%] px-5 py-3 text-right font-medium">
+            <th class="w-[88px] min-w-[88px] whitespace-nowrap px-5 py-3 text-right font-medium">
               {{ t('scheduledTasks.columns.actions') }}
             </th>
           </tr>
@@ -147,7 +147,7 @@ const hasTasks = computed(() => props.tasks.length > 0)
                 </TooltipProvider>
               </div>
             </td>
-            <td class="px-5 py-3.5 text-right">
+            <td class="w-[88px] min-w-[88px] px-5 py-3.5 text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                   <button
