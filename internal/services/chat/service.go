@@ -15,6 +15,7 @@ import (
 	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -42,6 +43,7 @@ type ChatService struct {
 	toolRegistry      *tools.ToolRegistry
 	bgProcessManager  *tools.BgProcessManager
 	checkpointStore   adk.CheckPointStore
+	extraToolFactories []func() ([]tool.BaseTool, error)
 	activeGenerations sync.Map // map[int64]*activeGeneration
 }
 
@@ -53,6 +55,13 @@ func NewChatService(app *application.App) *ChatService {
 		bgProcessManager: tools.NewBgProcessManager(),
 		checkpointStore:  newInMemoryCheckPointStore(),
 	}
+}
+
+func (s *ChatService) RegisterExtraToolFactory(factory func() ([]tool.BaseTool, error)) {
+	if factory == nil {
+		return
+	}
+	s.extraToolFactories = append(s.extraToolFactories, factory)
 }
 
 // inMemoryCheckPointStore is a simple in-memory implementation of adk.CheckPointStore.

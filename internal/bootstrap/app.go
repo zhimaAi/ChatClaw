@@ -40,6 +40,7 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -292,7 +293,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 	// 注册助手服务
-	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
+	agentsService := agents.NewAgentsService(app)
+	app.RegisterService(application.NewService(agentsService))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
 	app.RegisterService(application.NewService(conversationsService))
@@ -304,6 +306,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(chatService))
 	// 注册定时任务服务
 	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
+	chatService.RegisterExtraToolFactory(func() ([]tool.BaseTool, error) {
+		return newScheduledTaskManagementTools(agentsService, scheduledTasksService)
+	})
 	app.RegisterService(application.NewService(scheduledTasksService))
 	// 注册记忆服务
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))

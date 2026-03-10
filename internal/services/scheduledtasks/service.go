@@ -93,6 +93,65 @@ func (s *ScheduledTasksService) ListScheduledTasks() ([]ScheduledTask, error) {
 	return out, nil
 }
 
+func (s *ScheduledTasksService) GetScheduledTaskByID(id int64) (*ScheduledTask, error) {
+	if id <= 0 {
+		return nil, errs.New("error.scheduled_task_id_required")
+	}
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	model, err := s.getTaskModel(ctx, db, id)
+	if err != nil {
+		return nil, err
+	}
+	dto := model.toDTO()
+	return &dto, nil
+}
+
+func (s *ScheduledTasksService) FindScheduledTasksByName(name string) ([]ScheduledTask, error) {
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return nil, err
+	}
+
+	query := strings.TrimSpace(name)
+	if query == "" {
+		return []ScheduledTask{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	exactModels := make([]scheduledTaskModel, 0)
+	if err := db.NewSelect().
+		Model(&exactModels).
+		Where("deleted_at IS NULL").
+		Where("name = ?", query).
+		OrderExpr("created_at DESC, id DESC").
+		Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, errs.Wrap("error.scheduled_task_list_failed", err)
+	}
+	if len(exactModels) > 0 {
+		return taskModelsToDTOs(exactModels), nil
+	}
+
+	containsModels := make([]scheduledTaskModel, 0)
+	if err := db.NewSelect().
+		Model(&containsModels).
+		Where("deleted_at IS NULL").
+		Where("name LIKE ?", "%"+query+"%").
+		OrderExpr("created_at DESC, id DESC").
+		Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, errs.Wrap("error.scheduled_task_list_failed", err)
+	}
+	return taskModelsToDTOs(containsModels), nil
+}
+
 func (s *ScheduledTasksService) GetScheduledTaskSummary() (*ScheduledTaskSummary, error) {
 	tasks, err := s.ListScheduledTasks()
 	if err != nil {
@@ -112,6 +171,20 @@ func (s *ScheduledTasksService) GetScheduledTaskSummary() (*ScheduledTaskSummary
 		}
 	}
 	return summary, nil
+}
+
+func (s *ScheduledTasksService) ValidateSchedule(scheduleType, scheduleValue, cronExpr string) (*ScheduleValidationResult, error) {
+	schedule, err := parseSchedule(scheduleType, scheduleValue, cronExpr, time.Now())
+	if err != nil {
+		return nil, errs.Wrap("error.scheduled_task_schedule_invalid", err)
+	}
+	return &ScheduleValidationResult{
+		ScheduleType:  schedule.ScheduleType,
+		ScheduleValue: schedule.ScheduleValue,
+		CronExpr:      schedule.CronExpr,
+		Timezone:      schedule.Timezone,
+		NextRunAt:     schedule.NextRunAt,
+	}, nil
 }
 
 func (s *ScheduledTasksService) CreateScheduledTask(input CreateScheduledTaskInput) (*ScheduledTask, error) {
@@ -755,4 +828,12 @@ func (s *ScheduledTasksService) mustGetCronExpr(ctx context.Context, db *bun.DB,
 	var cronExpr string
 	_ = db.NewSelect().Table("scheduled_tasks").Column("cron_expr").Where("id = ?", taskID).Scan(ctx, &cronExpr)
 	return cronExpr
+}
+
+func taskModelsToDTOs(models []scheduledTaskModel) []ScheduledTask {
+	out := make([]ScheduledTask, 0, len(models))
+	for i := range models {
+		out = append(out, models[i].toDTO())
+	}
+	return out
 }
