@@ -67,7 +67,7 @@ async function selectRun(run: ScheduledTaskRun) {
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="max-h-[90vh] overflow-hidden sm:max-w-[1600px]">
+    <DialogContent class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]">
       <DialogHeader>
         <DialogTitle>{{ task?.name }} / 运行记录</DialogTitle>
       </DialogHeader>

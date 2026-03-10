@@ -86,7 +86,7 @@ function selectMonthlyDay(value: number) {
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
       :show-close-button="true"
-      class="max-h-[90vh] overflow-y-auto border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:max-w-[720px]"
+      class="max-h-[90vh] overflow-y-auto border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
     >
       <DialogHeader class="gap-1 border-b border-[#eef2f6] px-7 py-6">
         <DialogTitle class="text-[32px] font-semibold tracking-[-0.03em] text-[#111827]">
