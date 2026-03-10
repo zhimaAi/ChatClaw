@@ -1,9 +1,26 @@
-# ChatClaw
+<p align="center">
+<img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
+</p>
 
-[中文文档](./README_zh-CN.md)
+<h1 align="center">ChatClaw</h1>
 
+<p align="center">
+  <strong>Get OpenClaw-like personal AI agent in 5 mins. with Sandbox security,small and fast</strong>
+</p>
 
-ChatClaw is a desktop AI tool that supports uploading knowledge bases to create custom robots for intelligent Q&A. Install and start using it immediately. Free AI models are provided.
+<p align="center">
+  <a href="README.md" target="_blank">English</a> |
+  <a href="README_zh-CN.md" target="_blank">简体中文</a>
+</p>
+
+Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
+
+ 5分钟拥有类 OpenClaw 的小龙虾个人AI智能体,沙箱安全防护,支持macOS/Windows 30M 极小安装包,1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、IMA开源版本地知识库平替、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
+ 
+ 
+<p align="center">
+<a href="https://github.com/zhimaAi/ChatClaw/releases" target="_blank" >Windows/Mac/Linux (Releases)</a>  
+</p>
 
 ## Previews
 
@@ -143,7 +160,7 @@ Open http://localhost:8080 in your browser. To stop: `docker compose down`. Data
 ## Project Structure
 
 ```
-WillChat_D2/
+ChatClaw_D2/
 ├── main.go                     # Application entry point
 ├── go.mod / go.sum             # Go module dependencies
 ├── Taskfile.yml                # Task runner configuration
