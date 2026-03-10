@@ -358,10 +358,10 @@ async function selectFile(path: string) {
     let content = ''
     if (detailView.value === 'installed' && detailSkill.value) {
       content = await SkillsService.ReadSkillFile(detailSkill.value.slug, path)
-    } else if (detailView.value === 'market' && detailRemoteSkill.value) {
+    } else if (detailView.value === 'market' && detailRemoteSkill.value && detailMeta.value) {
       content = await SkillsService.GetRemoteSkillFile(
         detailRemoteSkill.value.slug,
-        detailRemoteSkill.value.version || 'latest',
+        detailMeta.value.version,
         path,
       )
     }
@@ -417,32 +417,21 @@ async function showMarketDetail(skill: RemoteSkill) {
   fileContent.value = ''
   detailLoading.value = true
   try {
-    try {
-      detailMeta.value = await SkillsService.GetSkillDetail(skill.slug)
-    } catch (err) {
-      const msg = String(err ?? '')
-      if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
-        toast.error(t('settings.skills.rateLimited'))
-      }
-    }
+    detailMeta.value = await SkillsService.GetSkillDetail(skill.slug)
     if (version !== detailLoadVersion) return
 
-    try {
-      const files = await SkillsService.GetRemoteSkillFiles(skill.slug, skill.version || 'latest')
-      if (version !== detailLoadVersion) return
-      detailFiles.value = files
-      if (files.length > 0) {
-        const skillMd = files.find((f) => f.path === 'SKILL.md')
-        await selectFile(skillMd ? skillMd.path : files[0].path)
-      }
-    } catch (err) {
-      const msg = String(err ?? '')
-      if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
-        toast.error(t('settings.skills.rateLimited'))
-      }
+    const files = await SkillsService.GetRemoteSkillFiles(skill.slug, detailMeta.value!.version)
+    if (version !== detailLoadVersion) return
+    detailFiles.value = files
+    if (files.length > 0) {
+      const skillMd = files.find((f) => f.path === 'SKILL.md')
+      await selectFile(skillMd ? skillMd.path : files[0].path)
     }
-  } catch {
-    // ignore
+  } catch (err) {
+    const msg = String(err ?? '')
+    if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
+      toast.error(t('settings.skills.rateLimited'))
+    }
   } finally {
     if (version === detailLoadVersion) {
       detailLoading.value = false
