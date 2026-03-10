@@ -44,27 +44,32 @@ interface PendingImage {
   size: number
 }
 
-const props = defineProps<{
-  mode?: 'assistant' | 'knowledge'
-  chatInput: string
-  chatMode: string
-  selectedModelKey: string
-  selectedModelInfo: { providerId: string; modelId: string; modelName: string; capabilities?: string[] } | null
-  providersWithModels: ProviderWithModels[]
-  hasModels: boolean
-  enableThinking: boolean
-  selectedLibraryIds: number[]
-  libraries: Library[]
-  isGenerating: boolean
-  canSend: boolean
-  sendDisabledReason: string
-  chatMessages: any[]
-  activeAgentId: number | null
-  activeAgent: { id: number; name: string } | null
-  agents: { id: number; name: string }[]
-  isSnapMode?: boolean
-  pendingImages: PendingImage[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    mode?: 'assistant' | 'knowledge'
+    chatInput: string
+    chatMode: string
+    selectedModelKey: string
+    selectedModelInfo: { providerId: string; modelId: string; modelName: string; capabilities?: string[] } | null
+    providersWithModels: ProviderWithModels[]
+    hasModels: boolean
+    enableThinking: boolean
+    selectedLibraryIds: number[]
+    libraries: Library[]
+    isGenerating: boolean
+    canSend: boolean
+    sendDisabledReason: string
+    chatMessages: any[]
+    activeAgentId: number | null
+    activeAgent: { id: number; name: string } | null
+    agents: { id: number; name: string }[]
+    isSnapMode?: boolean
+    /** Team mode: only plain chat, hide mode/model/thinking/knowledge controls */
+    isTeamMode?: boolean
+    pendingImages?: PendingImage[]
+  }>(),
+  { mode: 'assistant', isTeamMode: false, pendingImages: () => [] }
+)
 
 const currentMode = computed(() => props.mode || 'assistant')
 
@@ -98,8 +103,36 @@ const handleChatEnter = (event: KeyboardEvent) => {
     return
   }
 
+  console.warn('[assistant][input] Enter pressed', {
+    isTeamMode: props.isTeamMode,
+    canSend: props.canSend,
+    reason: props.sendDisabledReason,
+    chatInputLen: String(props.chatInput ?? '').trim().length,
+    activeAgentId: props.activeAgentId,
+  })
   event.preventDefault()
   emit('send')
+}
+
+const handleSendClick = () => {
+  console.warn('[assistant][input] Send button clicked', {
+    isTeamMode: props.isTeamMode,
+    canSend: props.canSend,
+    reason: props.sendDisabledReason,
+    chatInputLen: String(props.chatInput ?? '').trim().length,
+    activeAgentId: props.activeAgentId,
+  })
+  emit('send')
+}
+
+const handleDisabledSendClick = () => {
+  console.warn('[assistant][input] Disabled send clicked', {
+    isTeamMode: props.isTeamMode,
+    canSend: props.canSend,
+    reason: props.sendDisabledReason,
+    chatInputLen: String(props.chatInput ?? '').trim().length,
+    activeAgentId: props.activeAgentId,
+  })
 }
 
 const MAX_VISIBLE_LIBRARIES = 3
@@ -174,6 +207,10 @@ const MAX_TOTAL_SIZE = 8 * 1024 * 1024 // 8MB
 
 // Common function to validate and process image files
 const processImageFiles = (files: FileList | File[]): File[] | null => {
+  if (props.isTeamMode) {
+    toast.error(t('assistant.errors.teamImageNotSupported'))
+    return null
+  }
   const fileArray = Array.from(files)
   
   // Filter only image files
@@ -365,9 +402,9 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Selected knowledge bases -->
+        <!-- Selected knowledge bases (hidden in team mode) -->
         <div
-          v-if="selectedLibraryIds.length > 0"
+          v-if="!isTeamMode && selectedLibraryIds.length > 0"
           class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
         >
           <div
@@ -405,6 +442,7 @@ onUnmounted(() => {
           <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
             <!-- ChatModeSelector: show in both modes -->
             <ChatModeSelector
+              v-if="!isTeamMode"
               :model-value="chatMode"
               :compact="isSnapMode"
               @update:model-value="(v) => emit('update:chatMode', v)"
@@ -452,8 +490,8 @@ onUnmounted(() => {
               </Tooltip>
             </TooltipProvider>
 
-            <!-- Model selector: show in both modes -->
-            <TooltipProvider>
+            <!-- Model selector: hidden in team mode -->
+            <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <div class="min-w-0">
@@ -542,8 +580,8 @@ onUnmounted(() => {
               </Tooltip>
             </TooltipProvider>
 
-            <!-- Thinking mode toggle -->
-            <TooltipProvider>
+            <!-- Thinking mode toggle: hidden in team mode -->
+            <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button
@@ -578,8 +616,9 @@ onUnmounted(() => {
               @change="handleFilesSelected"
             />
 
-            <!-- Knowledge base multi-select using reka-ui Select with multiple -->
+            <!-- Knowledge base multi-select: hidden in team mode -->
             <SelectRoot
+              v-if="!isTeamMode"
               :model-value="selectedLibraryIds"
               multiple
               @update:model-value="(v: any) => { emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v]); handleLibrarySelectionChange() }"
@@ -650,8 +689,8 @@ onUnmounted(() => {
               </SelectPortal>
             </SelectRoot>
 
-            <!-- Image selection button -->
-            <TooltipProvider>
+            <!-- Image selection button (not supported in team mode) -->
+            <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <!-- Wrap in span so tooltip hover still works when button is disabled -->
@@ -691,10 +730,10 @@ onUnmounted(() => {
               <Tooltip>
                 <TooltipTrigger as-child>
                   <!-- disabled button has pointer-events-none; use wrapper to keep tooltip hover -->
-                  <span class="inline-flex">
+                  <span class="inline-flex" @click="handleDisabledSendClick">
                     <Button
                       size="icon"
-                      class="size-6 rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
+                      class="size-6 pointer-events-none rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
                       disabled
                     >
                       <ArrowUp class="size-4" />
@@ -711,7 +750,7 @@ onUnmounted(() => {
               size="icon"
               class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
               :title="t('assistant.chat.send')"
-              @click="emit('send')"
+              @click="handleSendClick"
             >
               <ArrowUp class="size-4" />
             </Button>

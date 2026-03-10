@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
+	"chatclaw/internal/deeplink"
 	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
 	"chatclaw/internal/services/browser"
 	"chatclaw/internal/services/chat"
+	"chatclaw/internal/services/chatwiki"
 	"chatclaw/internal/services/conversations"
 	"chatclaw/internal/services/document"
 	"chatclaw/internal/services/floatingball"
@@ -179,12 +181,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: define.SingleInstanceUniqueID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				// 当第二个实例启动时，安全地聚焦主窗口
 				mainWinMgr.safeWake()
-				// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
 				if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
 					_ = floatingBallService.SetVisible(true)
 				}
+				deeplink.HandleSecondInstance(app, data)
 			},
 		},
 	})
@@ -311,6 +312,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
+	// 注册 ChatWiki 绑定服务
+	app.RegisterService(application.NewService(chatwiki.NewChatWikiService(app)))
 
 	// ========== macOS 应用菜单 ==========
 	if runtime.GOOS == "darwin" {
@@ -424,6 +427,15 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 创建托盘服务（用于前端动态控制 show/hide + 缓存关闭策略）
 	trayService := tray.NewTrayService(app, systray)
 	app.RegisterService(application.NewService(trayService))
+	// macOS: URL Scheme is delivered via Apple Event, not via command-line args.
+	// Listen for ApplicationLaunchedWithUrl to handle chatclaw:// deep links.
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+		urlStr := event.Context().URL()
+		app.Logger.Info("ApplicationLaunchedWithUrl received", "url", urlStr)
+		mainWinMgr.safeWake()
+		deeplink.HandleURL(app, urlStr)
+	})
+
 	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		trayService.InitFromSettings()

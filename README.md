@@ -1,9 +1,26 @@
-# ChatClaw
+<p align="center">
+<img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
+</p>
 
-[中文文档](./README_zh-CN.md)
+<h1 align="center">ChatClaw</h1>
 
+<p align="center">
+  <strong>Get OpenClaw-like personal AI agent in 5 mins. with Sandbox security,small and fast</strong>
+</p>
 
-ChatClaw is a desktop AI tool that supports uploading knowledge bases to create custom robots for intelligent Q&A. Install and start using it immediately. Free AI models are provided.
+<p align="center">
+  <a href="README.md" target="_blank">English</a> |
+  <a href="README_zh-CN.md" target="_blank">简体中文</a>
+</p>
+
+Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
+
+ 5分钟拥有类 OpenClaw 的小龙虾个人AI智能体,沙箱安全防护,支持macOS/Windows 30M 极小安装包,1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、IMA开源版本地知识库平替、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
+ 
+ 
+<p align="center">
+<a href="https://github.com/zhimaAi/ChatClaw/releases" target="_blank" >Windows/Mac/Linux (Releases)</a>  
+</p>
 
 ## Previews
 
@@ -143,7 +160,7 @@ Open http://localhost:8080 in your browser. To stop: `docker compose down`. Data
 ## Project Structure
 
 ```
-WillChat_D2/
+ChatClaw_D2/
 ├── main.go                     # Application entry point
 ├── go.mod / go.sum             # Go module dependencies
 ├── Taskfile.yml                # Task runner configuration
@@ -230,6 +247,16 @@ WillChat_D2/
 ### Changelog
 To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
+### 2026/03/10
+1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
+2. **ChatWiki Backend Service**: Introduced `ChatWikiService` with binding persistence, robot/library management APIs, and auth-expired handling.<br/>
+3. **Team Chat Streaming**: Implemented team-mode SSE streaming with `dialogue_id` continuation support and conversation/message persistence for team sessions.<br/>
+4. **DB Migrations**: Added SQLite migrations for ChatWiki binding storage and team conversation fields (`team_type`, `dialogue_id`).<br/>
+5. **UI & i18n Updates**: Updated assistant/settings/knowledge pages and added new locales to support ChatWiki integration and related UI states.<br/>
+
+### 2026/03/09
+1. **Branding Assets Refresh**: Updated app icons and frontend logo assets across Windows/macOS builds and UI images.<br/>
+
 ### 2026/03/06
 1. **Multimodal Support**: Added image input capability to assistant and knowledge pages, with model capability checks to detect multimodal support.<br/>
 2. **Model Configuration Updates**: Updated OpenAI, Anthropic, Zhipu (GLM), and Qwen model configurations with refined capabilities and new model additions.<br/>
@@ -237,19 +264,3 @@ To view the complete update log, please click👉️👉️[UpdateLog.md](./Upda
 4. **Sandbox Security**: Implemented sensitive path protection in sandbox mode to prevent unauthorized file access.<br/>
 5. **Build System Improvements**: Replaced shell commands with Go tools for directory creation, file existence checks, and platform detection in Taskfile.<br/>
 6. **License Update**: Switched from GNU Affero GPL to GNU General Public License.<br/>
-
-### 2026/03/05
-1. **Multi-Agent Architecture**: Introduced Researcher, Worker, and SkillAdvisor sub-agents for enhanced task delegation and execution; implemented plan-execute subagent for complex multi-step task handling.<br/>
-2. **Agent Enhancements**: Added skill marketplace prompt, current time display in tools prompt, improved plan execution parameters and error handling.<br/>
-3. **Knowledge Base Navigation**: Added sidebar collapse/expand feature, auto-expand folders with children on click, improved breadcrumb visibility logic, and fixed overflow handling in tree components.<br/>
-4. **Skills Page Improvements**: Enhanced skill deletion confirmation dialog, improved refresh handling and loading state.<br/>
-5. **Application Icons**: Updated macOS and Windows application icons with new designs.<br/>
-
-### 2026/03/04
-1. **Task Delegation UI**: Implemented task delegation feature with new UI components and bilingual (English/Chinese) localization updates.<br/>
-2. **Workspace Drawer**: Added workspace drawer for file management and environment settings with file tree depth limit hint.<br/>
-3. **Skill Management Tools**: Added AI-driven tools for searching, installing, enabling, and disabling skills from the skill marketplace.<br/>
-4. **Image Handling in Chat**: Added drag-and-drop and paste support for images in `ChatInputArea`; added image preview functionality.<br/>
-5. **Document Viewer**: Implemented header validation for ZIP and PDF files; enhanced search functionality in `DocumentCard` and `DocumentViewer`.<br/>
-6. **Folder Management**: Added move folder functionality with supporting UI components.<br/>
-7. **License**: Updated license to GNU Affero General Public License v3.<br/>
