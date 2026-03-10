@@ -66,6 +66,11 @@ func (a *FeishuAdapter) Connect(ctx context.Context, channelID int64, configJSON
 
 	a.client = lark.NewClient(cfg.AppID, cfg.AppSecret)
 
+	// Verify credentials by fetching tenant access token
+	if err := a.verifyCredentials(ctx); err != nil {
+		return fmt.Errorf("feishu credentials verification failed: %w", err)
+	}
+
 	eventHandler := dispatcher.NewEventDispatcher("", "").
 		OnP2MessageReceiveV1(a.onMessageReceive)
 
@@ -81,12 +86,39 @@ func (a *FeishuAdapter) Connect(ctx context.Context, channelID int64, configJSON
 	go func() {
 		err := wsClient.Start(connCtx)
 		if err != nil {
+			slog.Error("[feishu] websocket connection error", "error", err)
 			a.connected.Store(false)
 			return
 		}
 	}()
 
 	a.connected.Store(true)
+	return nil
+}
+
+// verifyCredentials checks if the app_id and app_secret are valid by requesting a tenant access token.
+func (a *FeishuAdapter) verifyCredentials(ctx context.Context) error {
+	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Use the contact API to verify - get bot info
+	req := larkcontact.NewGetUserReqBuilder().
+		UserId("on_xxx_placeholder").
+		UserIdType("open_id").
+		Build()
+
+	// The actual request will fail with invalid user, but auth error happens first if credentials are wrong
+	_, err := a.client.Contact.User.Get(reqCtx, req)
+	if err != nil {
+		errStr := err.Error()
+		// Check for authentication errors (99991663 = invalid app credentials, 99991668 = app not enabled)
+		if strings.Contains(errStr, "99991663") || strings.Contains(errStr, "99991668") ||
+			strings.Contains(errStr, "invalid") || strings.Contains(errStr, "unauthorized") ||
+			strings.Contains(errStr, "app_access_token") || strings.Contains(errStr, "tenant_access_token") {
+			return fmt.Errorf("invalid app_id or app_secret: %s", errStr)
+		}
+		// Other errors (like user not found) are expected and OK - credentials are valid
+	}
 	return nil
 }
 

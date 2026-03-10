@@ -56,35 +56,128 @@ type WeComAdapter struct {
 	lastReqID         string   // for reply
 	lastResponseURL   string   // for HTTP reply fallback
 	pendingReplies    sync.Map // reqID -> chan error
+	authResult        chan error // channel for first auth result
+	authReqID         string     // req_id of the pending auth request
 }
 
 func (a *WeComAdapter) Platform() string { return PlatformWeCom }
 
 func (a *WeComAdapter) Connect(ctx context.Context, channelID int64, configJSON string, handler MessageHandler) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	var cfg WeComConfig
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		a.mu.Unlock()
 		return fmt.Errorf("parse wecom config: %w", err)
 	}
 	if cfg.AppID == "" || cfg.AppSecret == "" {
+		a.mu.Unlock()
 		return fmt.Errorf("wecom config: app_id and app_secret are required")
 	}
 
 	a.config = cfg
 	a.channelID = channelID
 	a.handler = handler
+	a.authResult = make(chan error, 1)
 
 	connCtx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
+	a.mu.Unlock()
 
-	go a.connectLoop(connCtx)
+	// Perform first connection synchronously to verify credentials
+	if err := a.doConnect(connCtx); err != nil {
+		cancel()
+		return fmt.Errorf("wecom connection failed: %w", err)
+	}
+
+	// Start reading messages in background to receive auth response
+	authDone := make(chan struct{})
+	go func() {
+		defer close(authDone)
+		a.readMessagesUntilAuth(connCtx)
+	}()
+
+	// Wait for auth response with timeout
+	select {
+	case err := <-a.authResult:
+		if err != nil {
+			a.Disconnect(ctx)
+			return fmt.Errorf("wecom authentication failed: %w", err)
+		}
+	case <-time.After(15 * time.Second):
+		a.Disconnect(ctx)
+		return fmt.Errorf("wecom authentication timeout")
+	case <-ctx.Done():
+		a.Disconnect(ctx)
+		return ctx.Err()
+	}
+
+	a.reconnectAttempts = 0
+	a.connected.Store(true)
+
+	// Start background loop for message handling and reconnection
+	go a.maintainLoop(connCtx)
 
 	return nil
 }
 
-func (a *WeComAdapter) connectLoop(ctx context.Context) {
+// readMessagesUntilAuth reads messages until auth result is received or context cancelled
+func (a *WeComAdapter) readMessagesUntilAuth(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		a.mu.Lock()
+		conn := a.conn
+		authReqID := a.authReqID
+		a.mu.Unlock()
+
+		if conn == nil || authReqID == "" {
+			return
+		}
+
+		conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			slog.Warn("[wecom] read error during auth", "error", err)
+			// Signal auth failure on connection error
+			a.mu.Lock()
+			authCh := a.authResult
+			a.mu.Unlock()
+			if authCh != nil {
+				select {
+				case authCh <- fmt.Errorf("connection error: %w", err):
+				default:
+				}
+			}
+			return
+		}
+
+		a.handleMessage(message)
+
+		// Check if auth request ID has been cleared (auth processed)
+		a.mu.Lock()
+		currentAuthReqID := a.authReqID
+		a.mu.Unlock()
+		if currentAuthReqID == "" {
+			return
+		}
+	}
+}
+
+// maintainLoop handles message receiving and reconnection after initial connect
+func (a *WeComAdapter) maintainLoop(ctx context.Context) {
+	// Run the message loop first (initial connection already established)
+	err := a.runLoop(ctx)
+	if err != nil {
+		slog.Warn("[wecom] connection lost", "error", err)
+		a.connected.Store(false)
+	}
+
+	// Reconnection loop
 	for {
 		select {
 		case <-ctx.Done():
@@ -94,7 +187,7 @@ func (a *WeComAdapter) connectLoop(ctx context.Context) {
 
 		err := a.doConnect(ctx)
 		if err != nil {
-			slog.Warn("[wecom] connection failed", "error", err, "attempt", a.reconnectAttempts)
+			slog.Warn("[wecom] reconnection failed", "error", err, "attempt", a.reconnectAttempts)
 			a.connected.Store(false)
 
 			if a.reconnectAttempts >= wecomMaxReconnect {
@@ -185,6 +278,10 @@ func (a *WeComAdapter) sendAuth() error {
 	})
 
 	reqID := generateReqID("aibot_subscribe")
+	a.mu.Lock()
+	a.authReqID = reqID
+	a.mu.Unlock()
+
 	frame := WeComFrame{
 		Cmd:     "aibot_subscribe",
 		Headers: map[string]interface{}{"req_id": reqID},
@@ -337,10 +434,6 @@ type WeComEvent struct {
 }
 
 func (a *WeComAdapter) handleMessage(data []byte) {
-	if !a.connected.Load() {
-		return
-	}
-
 	slog.Info("[wecom] received raw frame", "data", string(data))
 
 	var frame WeComFrame
@@ -380,10 +473,30 @@ func (a *WeComAdapter) handleMessage(data []byte) {
 
 	// Auth response: req_id starts with "aibot_subscribe"
 	if strings.HasPrefix(reqID, "aibot_subscribe") {
+		a.mu.Lock()
+		authCh := a.authResult
+		expectedReqID := a.authReqID
+		a.authReqID = "" // Clear to signal auth processed
+		a.mu.Unlock()
+
 		if frame.ErrCode != 0 {
 			slog.Error("[wecom] auth failed", "errcode", frame.ErrCode, "errmsg", frame.ErrMsg)
+			// Signal auth failure if this is the pending auth request
+			if authCh != nil && reqID == expectedReqID {
+				select {
+				case authCh <- fmt.Errorf("errcode %d: %s", frame.ErrCode, frame.ErrMsg):
+				default:
+				}
+			}
 		} else {
 			slog.Info("[wecom] auth acknowledged successfully")
+			// Signal auth success if this is the pending auth request
+			if authCh != nil && reqID == expectedReqID {
+				select {
+				case authCh <- nil:
+				default:
+				}
+			}
 		}
 		return
 	}
