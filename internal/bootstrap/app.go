@@ -763,7 +763,7 @@ func handleChannelMessage(
 
 // extractTextContent extracts plain text from platform-specific message formats.
 func extractTextContent(msg channels.IncomingMessage) string {
-	if msg.MsgType != "text" && msg.MsgType != "" {
+	if msg.MsgType != "text" && msg.MsgType != "post" && msg.MsgType != "" {
 		return ""
 	}
 
@@ -772,13 +772,42 @@ func extractTextContent(msg channels.IncomingMessage) string {
 		return ""
 	}
 
-	// Feishu text messages come as JSON: {"text":"actual message"}
 	if strings.HasPrefix(content, "{") {
-		var parsed struct {
-			Text string `json:"text"`
+		// Handle Feishu text messages: {"text":"actual message"}
+		if msg.MsgType == "text" || msg.MsgType == "" {
+			var parsed struct {
+				Text string `json:"text"`
+			}
+			if err := json.Unmarshal([]byte(content), &parsed); err == nil && parsed.Text != "" {
+				return strings.TrimSpace(parsed.Text)
+			}
 		}
-		if err := json.Unmarshal([]byte(content), &parsed); err == nil && parsed.Text != "" {
-			return strings.TrimSpace(parsed.Text)
+
+		// Handle Feishu post (rich text) messages
+		if msg.MsgType == "post" {
+			var parsed struct {
+				Title   string `json:"title"`
+				Content [][]struct {
+					Tag  string `json:"tag"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if err := json.Unmarshal([]byte(content), &parsed); err == nil {
+				var sb strings.Builder
+				if parsed.Title != "" {
+					sb.WriteString(parsed.Title)
+					sb.WriteString("\n")
+				}
+				for _, line := range parsed.Content {
+					for _, item := range line {
+						if item.Tag == "text" || item.Tag == "a" {
+							sb.WriteString(item.Text)
+						}
+					}
+					sb.WriteString("\n")
+				}
+				return strings.TrimSpace(sb.String())
+			}
 		}
 	}
 

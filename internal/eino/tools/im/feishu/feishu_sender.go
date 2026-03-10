@@ -1,4 +1,4 @@
-package tools
+package feishu
 
 import (
 	"context"
@@ -8,11 +8,20 @@ import (
 	"path/filepath"
 	"strings"
 
+	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/channels"
+	"chatclaw/internal/services/i18n"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
+
+func selectDesc(eng, zh string) string {
+	if i18n.GetLocale() == i18n.LocaleZhCN {
+		return zh
+	}
+	return eng
+}
 
 // FeishuSenderConfig configures the feishu_sender tool.
 type FeishuSenderConfig struct {
@@ -84,7 +93,7 @@ func (t *feishuSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	}
 
 	return &schema.ToolInfo{
-		Name: ToolIDFeishuSender,
+		Name: tools.ToolIDFeishuSender,
 		Desc: selectDesc(descEN, descZH),
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"channel_id": {
