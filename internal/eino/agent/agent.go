@@ -365,17 +365,11 @@ func buildSummarizationHandler(ctx context.Context, chatModel model.BaseChatMode
 			ContextTokens: 100000,
 		},
 		TranscriptFilePath: transcriptPath,
-		Prepare: func(_ context.Context, originalMessages []adk.Message) ([]adk.Message, error) {
-			if err := writeTranscript(transcriptPath, originalMessages); err != nil {
+		Callback: func(_ context.Context, before, _ adk.ChatModelAgentState) error {
+			if err := writeTranscript(transcriptPath, before.Messages); err != nil {
 				logger.Warn("[agent] failed to write transcript before summarization", "path", transcriptPath, "error", err)
 			}
-			var toSummarize []adk.Message
-			for _, msg := range originalMessages {
-				if msg.Role != schema.System {
-					toSummarize = append(toSummarize, msg)
-				}
-			}
-			return toSummarize, nil
+			return nil
 		},
 	})
 	if err != nil {
