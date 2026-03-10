@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import type { PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
+import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 
 defineProps<{
   platforms: PlatformMeta[]
@@ -22,14 +23,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-const platformIconPathMap: Record<string, string> = {
-  dingtalk: '/src/assets/icons/snap/dingtalk.svg',
-  feishu: '/src/assets/icons/snap/feishu.svg',
-  wecom: '/src/assets/icons/snap/wechat.svg',
-  qq: '/src/assets/icons/snap/qq.svg',
-  twitter: '/src/assets/icons/snap/twitter.svg',
-}
 
 const localSelected = ref<PlatformMeta | null>(null)
 
@@ -51,7 +44,7 @@ function handleConfirm() {
 }
 
 function getPlatformIcon(platformId: string): string | null {
-  return platformIconPathMap[platformId] || null
+  return platformIconMap[platformId] || null
 }
 </script>
 

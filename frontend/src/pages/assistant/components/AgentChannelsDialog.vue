@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 
 const props = defineProps<{
   agent: Agent | null
@@ -49,15 +50,6 @@ const showAddBotDialog = ref(false)
 const selectedBotId = ref<number | null>(null)
 const addBotLoading = ref(false)
 const showConfigChannelDialog = ref(false)
-
-const platformIconMap: Record<string, string> = {
-  dingtalk: '/src/assets/icons/snap/dingtalk.svg',
-  feishu: '/src/assets/icons/snap/feishu.svg',
-  wecom: '/src/assets/icons/snap/wechat.svg',
-  qq: '/src/assets/icons/snap/qq.svg',
-  twitter: '/src/assets/icons/snap/twitter.svg',
-  telegram: '/src/assets/icons/snap/telegram.svg',
-}
 
 const currentAgentId = computed(() => props.agent?.id ?? 0)
 const currentAgentName = computed(() => props.agent?.name || t('assistant.channels.currentAgent'))

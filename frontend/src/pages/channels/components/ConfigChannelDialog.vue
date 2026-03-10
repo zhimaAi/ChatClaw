@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
+import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 
 const props = defineProps<{
   platform: PlatformMeta | null
@@ -35,11 +36,6 @@ const appSecret = ref('')
 const token = ref('')
 const saving = ref(false)
 const verifying = ref(false)
-
-const platformIconMap: Record<string, string> = {
-  telegram: '/src/assets/icons/snap/telegram.svg',
-  feishu: '/src/assets/icons/snap/feishu.svg',
-}
 
 watch(open, (val) => {
   if (val) {

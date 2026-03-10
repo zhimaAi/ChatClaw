@@ -5,6 +5,7 @@ import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, Squar
 import IconChannels from '@/assets/icons/channelsMax.svg'
 import IconCheck from '@/assets/icons/check-icon.svg'
 import IconClose from '@/assets/icons/close-icon.svg'
+import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -94,14 +95,6 @@ const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
   return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
 })
-
-const platformIconMap: Record<string, string> = {
-  dingtalk: '/src/assets/icons/snap/dingtalk.svg',
-  feishu: '/src/assets/icons/snap/feishu.svg',
-  wecom: '/src/assets/icons/snap/wechat.svg',
-  qq: '/src/assets/icons/snap/qq.svg',
-  twitter: '/src/assets/icons/snap/twitter.svg',
-}
 
 async function loadData() {
   loading.value = true
