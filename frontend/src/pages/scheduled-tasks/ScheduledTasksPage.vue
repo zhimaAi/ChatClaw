@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Plus, RefreshCcw } from 'lucide-vue-next'
+import { Clock3, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { CreateScheduledTaskInput, UpdateScheduledTaskInput } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import { useScheduledTasks } from './composables/useScheduledTasks'
@@ -41,6 +41,8 @@ const summaryLabels = computed(() => ({
   paused: t('scheduledTasks.paused'),
   failed: t('scheduledTasks.failed'),
 }))
+
+const hasTasks = computed(() => tasks.value.length > 0)
 
 function buildPayload(state: ScheduledTaskFormState) {
   const customPayload =
@@ -140,7 +142,30 @@ async function handleEdit(task: ScheduledTask) {
         v-if="loading"
         class="rounded-2xl border border-[#e5e5e5] bg-white px-4 py-16 text-center text-sm text-[#737373]"
       >
-        加载中...
+        {{ t('common.loading', 'Loading...') }}
+      </div>
+      <div v-else-if="!hasTasks" class="flex min-h-[420px] items-center justify-center px-4 py-16">
+        <div class="flex w-full max-w-[356px] flex-col items-center gap-4 text-center">
+          <div class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]">
+            <Clock3 class="size-5" />
+          </div>
+          <div class="space-y-1">
+            <div class="text-base font-medium leading-6 text-[#171717]">
+              {{ t('scheduledTasks.empty') }}
+            </div>
+            <div class="text-sm leading-5 text-[#737373]">
+              {{ t('scheduledTasks.emptyDescription') }}
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#171717] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0f0f0f]"
+            @click="openCreateDialog"
+          >
+            <Plus class="size-4" />
+            {{ t('scheduledTasks.create') }}
+          </button>
+        </div>
       </div>
       <TaskTable
         v-else

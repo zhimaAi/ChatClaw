@@ -934,6 +934,7 @@ export default {
     refresh: '刷新',
     edit: '编辑任务',
     empty: '暂无定时任务',
+    emptyDescription: '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
     errorReason: '查看错误原因',
     actionsMenu: '打开操作菜单',
     total: '任务总数',

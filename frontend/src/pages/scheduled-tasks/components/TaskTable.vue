@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { CircleAlert, CircleCheck, Clock3, MoreHorizontal } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import {
@@ -58,17 +57,11 @@ function lastRunIconClass(task: ScheduledTask) {
 function statusTextClass(task: ScheduledTask) {
   return task.enabled ? 'text-[#404040]' : 'text-[#737373]'
 }
-
-const hasTasks = computed(() => props.tasks.length > 0)
 </script>
 
 <template>
   <div class="overflow-hidden rounded-lg border border-[#e5e5e5] bg-white">
-    <div v-if="!hasTasks" class="px-4 py-16 text-center text-sm text-[#737373]">
-      {{ t('scheduledTasks.empty') }}
-    </div>
-
-    <div v-else class="overflow-x-auto">
+    <div class="overflow-x-auto">
       <table class="min-w-[920px] w-full table-fixed text-sm">
         <thead class="text-left text-sm text-[#0a0a0a]">
           <tr>

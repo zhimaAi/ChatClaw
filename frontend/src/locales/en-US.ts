@@ -952,6 +952,8 @@ export default {
     refresh: 'Refresh',
     edit: 'Edit Task',
     empty: 'No scheduled tasks yet',
+    emptyDescription:
+      'Create scheduled tasks to automate AI workflows. Tasks can send messages, run queries, or execute actions at specified times.',
     errorReason: 'View error reason',
     actionsMenu: 'Open actions menu',
     total: 'Total Tasks',
