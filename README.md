@@ -144,7 +144,7 @@ Open http://localhost:8080 in your browser. To stop: `docker compose down`. Data
 | Layer | Technology |
 |-------|-----------|
 | Desktop Framework | [Wails v3](https://wails.io/) (Go + WebView) |
-| Backend Language | [Go 1.25](https://go.dev/) |
+| Backend Language | [Go 1.26](https://go.dev/) |
 | Frontend Framework | [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) |
 | UI Components | [shadcn-vue](https://www.shadcn-vue.com/) (New York style) + [Reka UI](https://reka-ui.com/) |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com/) |
