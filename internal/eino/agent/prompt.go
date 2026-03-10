@@ -33,27 +33,19 @@ func buildCorePrompt(homeDir, workDir, sessionsDir string) string {
 # 环境信息
 
 - 当前时间: %s
-- 操作系统: %s
-- Shell: %s
-- 用户主目录: %s
-- **工作目录: %s**
-- 所有工具使用操作系统的绝对路径。
-- 当用户提到"工作目录"或要求写入/创建文件时，**始终使用工作目录**作为基础路径。例如: write_file(file_path="%s/foo.txt"), ls(path="%s")。
-- 当用户提到"用户目录"或"主目录"时，指的是: %s
-`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+- 操作系统: %s | Shell: %s
+- 主目录: %s
+- **工作目录: %s**（所有文件操作默认基于此路径，使用绝对路径）
+`, now, osName, shell, homeDir, workDir)
 	} else {
 		prompt = fmt.Sprintf(`
-# Environment Info
+# Environment
 
-- Current time: %s
-- Operating System: %s
-- Shell: %s
-- Home directory: %s
-- **Working directory: %s**
-- All tools use real OS absolute paths.
-- When the user mentions "working directory" or asks to write/create files, **always use the working directory** as the base path. For example: write_file(file_path="%s/foo.txt"), ls(path="%s").
-- When the user mentions "user directory" or "home directory", it refers to: %s
-`, now, osName, shell, homeDir, workDir, workDir, workDir, homeDir)
+- Time: %s
+- OS: %s | Shell: %s
+- Home: %s
+- **Working directory: %s** (all file ops default to this path; use absolute paths)
+`, now, osName, shell, homeDir, workDir)
 	}
 
 	if sessionsDir != "" {
@@ -85,58 +77,36 @@ func buildToolsPrompt(workDir string, sandboxEnabled, sandboxNetworkEnabled bool
 
 	if sandboxEnabled {
 		if zh {
-			networkDesc := "网络访问已**禁用**。curl、npm install、pip install 等命令将无法使用。"
+			networkDesc := "网络访问已**禁用**"
 			if sandboxNetworkEnabled {
-				networkDesc = "网络访问已**启用**（例如 npm install、curl、pip install 等命令可以正常使用）。"
+				networkDesc = "网络访问已**启用**"
 			}
 			prompt += fmt.Sprintf(`
 # 沙箱模式
 
-你正在操作系统级沙箱中运行。在选择命令**之前**请了解以下限制:
+所有写入仅限工作目录 %s 内（读取不受限）。%s。
 
-## 写入限制
-- 所有写入操作仅限于工作目录: %s
-- write_file、edit_file、patch_file 只能写入工作目录内的路径。
-- execute 以工作目录为 cwd 运行命令；写入工作目录之外的路径将被操作系统拒绝。
-- read_file、ls、glob、grep 可以读取文件系统上的任何路径（读取不受限制）。
-
-## 网络
-- %s
-
-## 沙箱最佳实践
-- **不要使用全局安装**（例如 "npm install -g"、"pip install --user"）。全局路径在工作目录之外，写入将被拒绝。请使用本地/项目级安装（例如在项目目录中使用 "npm install"、"pip install --target ."）。
-- **使用 npx / bunx** 运行 CLI 工具，无需全局安装（例如 "npx create-vue@latest my-app" 而不是全局安装 @vue/cli）。
-- **始终传递非交互标志**以避免命令在 stdin 上挂起: 使用 "--yes"、"--default"、"-y"，或根据需要使用管道 "echo"（例如 "npx create-vue@latest my-app --default"、"npm init -y"）。
-- **所有项目文件必须在工作目录内创建。** 不要尝试在其他地方创建文件。
-- **运行 shell 脚本时用 "sh script.sh"（或 "bash script.sh" / "zsh script.sh"）**，不要用 "./script.sh"（沙箱中文件没有执行权限），也不要尝试 chmod。
-- 如果命令因权限被拒绝而失败，可能是在尝试写入工作目录之外的路径。请使用本地/项目范围的替代方案重试。
+要点：
+- 禁止全局安装（npm -g、pip --user），用本地安装或 npx/bunx
+- 始终加非交互标志（--yes、-y、--default）避免 stdin 挂起
+- 用 "sh script.sh" 运行脚本，不要用 "./script.sh"（无执行权限）
+- 权限拒绝 = 可能在写工作目录外的路径，改用本地方案
 `, workDir, networkDesc)
 	} else {
-			networkDesc := "Network access is **disabled** for executed commands. Commands like curl, npm install, pip install will fail."
+			networkDesc := "Network access is **disabled**"
 			if sandboxNetworkEnabled {
-				networkDesc = "Network access is **enabled** for executed commands (e.g. npm install, curl, pip install will work)."
+				networkDesc = "Network access is **enabled**"
 			}
 			prompt += fmt.Sprintf(`
 # Sandbox Mode
 
-You are running inside an OS-level sandbox. Understand these constraints **before** choosing commands:
+All writes restricted to working directory %s (reads unrestricted). %s.
 
-## Write Restrictions
-- All write operations are restricted to the working directory: %s
-- write_file, edit_file, patch_file can only write to paths within the working directory.
-- execute runs commands with the working directory as cwd; writing to paths outside it will be denied by the OS.
-- read_file, ls, glob, grep can read any path on the filesystem (read is unrestricted).
-
-## Network
-- %s
-
-## Best Practices in Sandbox
-- **Never use global installs** (e.g. "npm install -g", "pip install --user"). Global paths are outside the working directory and writes will be rejected. Use local/project-level installs instead (e.g. "npm install" in the project directory, "pip install --target .").
-- **Use npx / bunx** to run CLI tools without global installs (e.g. "npx create-vue@latest my-app" instead of installing @vue/cli globally).
-- **Always pass non-interactive flags** to avoid commands hanging on stdin: use "--yes", "--default", "-y", or pipe "echo" as needed (e.g. "npx create-vue@latest my-app --default", "npm init -y").
-- **All project files must be created inside the working directory.** Do not attempt to create files elsewhere.
-- **Run shell scripts with "sh script.sh" (or "bash script.sh" / "zsh script.sh")** — never use "./script.sh" (files have no execute permission in sandbox) and do not attempt chmod.
-- If a command fails due to permission denied, it is likely trying to write outside the working directory. Retry with a local/project-scoped alternative.
+Key rules:
+- No global installs (npm -g, pip --user) — use local installs or npx/bunx
+- Always pass non-interactive flags (--yes, -y, --default) to avoid stdin hangs
+- Run scripts with "sh script.sh", not "./script.sh" (no execute permission)
+- Permission denied = likely writing outside working dir; use local alternative
 `, workDir, networkDesc)
 		}
 	}
@@ -145,37 +115,13 @@ You are running inside an OS-level sandbox. Understand these constraints **befor
 		prompt += `
 # 危险命令确认
 
-在执行任何可能造成破坏性影响的 shell 命令之前，你**必须**先调用 confirm_execution 工具，将完整命令传入，等待用户确认后再执行。
-
-以下类型的命令需要确认:
-- 递归删除 (rm -rf, rm -r, rmdir)
-- 磁盘格式化 (mkfs, dd if=, format)
-- 需要提权的命令 (sudo)
-- 系统关机/重启 (shutdown, reboot, halt)
-- 批量进程终止 (kill -9, killall)
-- 危险权限修改 (chmod -R 777)
-- 写入设备文件 (> /dev/)
-
-**工作流程**: 先调用 confirm_execution(command="你要执行的命令") → 获得用户确认 → 再调用 execute 执行命令。
-**绝对不要**跳过确认直接执行上述类型的命令。
+破坏性命令（rm -rf、sudo、mkfs、shutdown、kill -9、chmod -R 777 等）执行前**必须**先调用 confirm_execution，等用户确认后再 execute。
 `
 	} else {
 		prompt += `
 # Dangerous Command Confirmation
 
-Before executing any potentially destructive shell command, you **must** call the confirm_execution tool first, passing the exact command, and wait for user confirmation before executing it.
-
-The following types of commands require confirmation:
-- Recursive deletion (rm -rf, rm -r, rmdir)
-- Disk formatting (mkfs, dd if=, format)
-- Privilege escalation (sudo)
-- System shutdown/reboot (shutdown, reboot, halt)
-- Batch process termination (kill -9, killall)
-- Dangerous permission changes (chmod -R 777)
-- Writing to device files (> /dev/)
-
-**Workflow**: Call confirm_execution(command="your command") → get user confirmation → then call execute to run the command.
-**Never** skip confirmation and directly execute the above types of commands.
+Destructive commands (rm -rf, sudo, mkfs, shutdown, kill -9, chmod -R 777, etc.) **must** call confirm_execution first, then execute only after user confirms.
 `
 	}
 
@@ -201,77 +147,30 @@ The following types of commands require confirmation:
 
 	if toolchainBinDir != "" {
 		installed := toolchain.InstalledSnapshot()
-		var toolSections string
-
+		var tools []string
 		if installed["uv"] {
-			if zh {
-				toolSections += `
-## uv — 快速 Python 包管理器与运行器
-- **始终优先使用 uv 而非系统 python/pip/pip3/python3。** 即使用户已安装 Python，也使用 uv 以获得更好的可复现性和速度。
-- 创建新 Python 项目: ` + "`uv init my-project`" + `
-- 运行 Python 脚本（自动安装依赖）: ` + "`uv run script.py`" + `
-- 添加依赖: ` + "`uv add requests`" + `
-- 创建虚拟环境: ` + "`uv venv`" + `
-- 从 requirements.txt 安装: ` + "`uv pip install -r requirements.txt`" + `
-`
-			} else {
-				toolSections += `
-## uv — Fast Python Package Manager & Runner
-- **Always prefer uv over system python/pip/pip3/python3.** Even if the user has Python installed, use uv for better reproducibility and speed.
-- Create a new Python project: ` + "`uv init my-project`" + `
-- Run a Python script (auto-installs dependencies): ` + "`uv run script.py`" + `
-- Add a dependency: ` + "`uv add requests`" + `
-- Create a virtual environment: ` + "`uv venv`" + `
-- Install from requirements.txt: ` + "`uv pip install -r requirements.txt`" + `
-`
-			}
+			tools = append(tools, "uv")
 		}
-
 		if installed["bun"] {
-			if zh {
-				toolSections += `
-## bun — 快速 JavaScript 运行时与包管理器
-- **始终优先使用 bun 而非系统 node/npm/npx。** 即使用户已安装 Node.js，也使用 bun 以获得更快的执行和安装速度。
-- 初始化项目: ` + "`bun init`" + `
-- 安装依赖: ` + "`bun install`" + `
-- 运行脚本: ` + "`bun run script.ts`" + `（原生支持 TypeScript）
-- 添加依赖: ` + "`bun add express`" + `
-- 执行包二进制文件: ` + "`bunx create-vite my-app`" + `
-`
-			} else {
-				toolSections += `
-## bun — Fast JavaScript Runtime & Package Manager
-- **Always prefer bun over system node/npm/npx.** Even if the user has Node.js installed, use bun for faster execution and installs.
-- Initialize a project: ` + "`bun init`" + `
-- Install dependencies: ` + "`bun install`" + `
-- Run a script: ` + "`bun run script.ts`" + ` (supports TypeScript natively)
-- Add a dependency: ` + "`bun add express`" + `
-- Execute a package binary: ` + "`bunx create-vite my-app`" + `
-`
-			}
+			tools = append(tools, "bun")
 		}
 
-		if toolSections != "" {
+		if len(tools) > 0 {
+			toolList := fmt.Sprintf("%v", tools)
 			if zh {
 				prompt += fmt.Sprintf(`
-# 预装开发工具
+# 预装开发工具（%s，位于 %s）
 
-以下工具已**预装并在 PATH 中**（位于 %s）。你可以直接按名称调用它们。
-%s
-## 重要提示
-- 这些工具由应用程序管理，保证可用。不要要求用户安装 Python、Node.js、pip 或 npm — 请使用 uv 和 bun。
-- 如果任务需要 Python 工作，默认使用 uv。如果需要 JavaScript/TypeScript 工作，默认使用 bun。
-`, toolchainBinDir, toolSections)
+- Python 任务优先用 uv（替代 python/pip），JS/TS 任务优先用 bun（替代 node/npm）
+- 这些工具由应用管理，保证可用，不要要求用户另行安装
+`, toolList, toolchainBinDir)
 			} else {
 				prompt += fmt.Sprintf(`
-# Pre-installed Development Tools
+# Pre-installed Tools (%s, in %s)
 
-The following tools are **pre-installed and already on PATH** (in %s). You can call them directly by name.
-%s
-## Important
-- These tools are managed by the application and guaranteed to be available. Do NOT ask the user to install Python, Node.js, pip, or npm — use uv and bun instead.
-- If a task requires Python work, default to uv. If it requires JavaScript/TypeScript work, default to bun.
-`, toolchainBinDir, toolSections)
+- Prefer uv for Python (over python/pip), bun for JS/TS (over node/npm)
+- These are managed by the app and guaranteed available — do not ask user to install separately
+`, toolList, toolchainBinDir)
 			}
 		}
 	}
@@ -279,84 +178,92 @@ The following tools are **pre-installed and already on PATH** (in %s). You can c
 	return prompt
 }
 
-// buildSubAgentPrompt generates guidance for when and how to use the sub-agents.
+// buildSubAgentPrompt generates orchestration guidance for the lead agent.
+// Since the lead agent only has read-only tools, delegation is architecturally enforced.
 func buildSubAgentPrompt() string {
 	if isZhCN() {
 		return `
 # 任务委派
 
-你有三个专业助手可以委派任务。**优先委派，而非自己做。**
+你是任务编排者。你只有只读工具（read_file、ls），所有执行类操作必须通过子代理完成。
 
-## 何时必须委派
-满足以下**任一**条件时，**必须**委派给对应的子代理：
-- 需要搜索网络信息或调研 → 调用 researcher
-- 需要写文件、创建项目、运行脚本、执行命令 → 调用 worker
-- 需要安装或查找技能 → 调用 skill_advisor
+## 可用子代理
 
-## 何时自己做
-仅当任务是**纯文本对话**（回答问题、翻译、解释概念）时才自己做，不调用子代理。
+### general_purpose（执行代理）
+适用于：调研、搜索、写代码、文件操作、分析、多步执行 — 任何非琐碎任务。
+- 拥有完整工具集：web_search、write_file、edit_file、execute、glob、grep 等
+- 给它完整的任务描述（包含背景、目标、工作目录路径），因为它看不到你的对话历史
 
-## researcher
-调研类任务。它会搜索网络、浏览网页，返回精炼的结论。
-给它完整的任务描述，因为它看不到你的对话历史。
+### bash（终端代理）
+仅适用于：纯 bash 命令序列（git、npm、docker、构建/测试/部署）。
+- 只有 execute、ls、read_file、write_file、edit_file
+- **没有搜索、没有 web_search、没有 glob/grep**
 
-## worker
-执行类任务。它拥有所有工具（文件读写、命令执行、浏览器等），在独立上下文中自主完成任务。
-给它清晰的任务描述，包含工作目录路径和预期输出。
+## 选择规则（严格遵守）
+- 需要搜索/调研 → general_purpose（bash 没有搜索能力）
+- 需要写代码/编辑文件 → general_purpose
+- 只需要运行命令 → bash
+- 不确定时 → general_purpose（它能做 bash 能做的一切）
 
-## skill_advisor
-技能类任务。它会搜索技能市场、安装技能、分析内容，返回执行指南。
+## 你自己可以做的
+- **纯文本对话**：回答问题、翻译、解释概念
+- **读文件**：用 read_file 快速查看文件内容
+- **看目录**：用 ls 查看目录结构
 
-## 委派要点
-- 多个独立任务可以同时委派给多个子代理
-- 子代理返回的结论和指南可以根据实际情况调整
+## 编排规则
+- **有依赖的任务串行**：等前一个子代理返回后再调用下一个，把前一步结果作为上下文传入。例："调研X再写文章" → 先调研，拿到结果后再委派写作
+- **无依赖的任务可并行**：完全独立的子任务可同时委派多个 general_purpose
+- 子代理返回后，综合结果再回复用户
 `
 	}
 	return `
 # Task Delegation
 
-You have three specialist assistants to delegate tasks to. **Prefer delegating over doing it yourself.**
+You are a task orchestrator. You only have read-only tools (read_file, ls) — all execution must go through sub-agents.
 
-## When you MUST delegate
-If the task meets **any** of the following, you **must** delegate:
-- Needs web search or research → call researcher
-- Needs to write files, create projects, run scripts, execute commands → call worker
-- Needs to find or install skills → call skill_advisor
+## Available Sub-agents
 
-## When to do it yourself
-Only handle it yourself when the task is **pure text conversation** (answering questions, translating, explaining concepts) with no tool usage needed.
+### general_purpose (Execution agent)
+Use for: research, search, coding, file operations, analysis, multi-step execution — any non-trivial task.
+- Has full toolset: web_search, write_file, edit_file, execute, glob, grep, etc.
+- Provide complete task descriptions (background, goal, working directory path) — it cannot see your conversation history
 
-## researcher
-For research tasks. It searches the web, browses pages, and returns condensed findings.
-Provide a complete task description — it cannot see your conversation history.
+### bash (Terminal agent)
+Use ONLY for: pure bash command sequences (git, npm, docker, build/test/deploy).
+- Only has execute, ls, read_file, write_file, edit_file
+- **No search, no web_search, no glob/grep**
 
-## worker
-For execution tasks. It has all tools (file I/O, command execution, browser, etc.) and works autonomously in an isolated context.
-Provide a clear task description including working directory path and expected output.
+## Selection Rules (strict)
+- Needs search/research → general_purpose (bash has no search capability)
+- Needs coding/file editing → general_purpose
+- Only needs to run commands → bash
+- When in doubt → general_purpose (it can do everything bash can)
 
-## skill_advisor
-For skill tasks. It searches the skill marketplace, installs skills, analyzes content, and returns execution guides.
+## What you CAN do yourself
+- **Pure text conversation**: Answering questions, translating, explaining concepts
+- **Read files**: Use read_file to quickly view file contents
+- **List directories**: Use ls to view directory structure
 
-## Delegation tips
-- Launch multiple sub-agents simultaneously for independent sub-tasks
-- Adjust sub-agent conclusions and guides based on the actual situation
+## Orchestration Rules
+- **Dependent tasks are sequential**: Wait for previous sub-agent result before calling the next; pass prior results as context. Example: "Research X then write article" → research first, get results, then delegate writing
+- **Independent tasks can be parallel**: Fully independent sub-tasks can dispatch multiple general_purpose calls simultaneously
+- Synthesize sub-agent results before responding to user
 `
 }
 
 // buildSkillGuidancePrompt generates a concise prompt about the skill system.
+// DeerFlow-style: skills are tools (skill_list, skill_search, skill_install, skill_enable, read_skill), not a separate sub-agent.
 func buildSkillGuidancePrompt() string {
 	if isZhCN() {
 		return `
 # 技能系统
 
-已安装的技能会自动加载到你的能力中。需要更多技能支持时，调用 skill_advisor 搜索市场、安装并分析相关技能。
-skill_advisor 返回的执行指南基于经过验证的最佳实践，优先遵循。
+已安装的技能会自动加载到你的能力中。需要更多技能支持时，用 skill_list、skill_search、skill_install、skill_enable、read_skill 等工具搜索市场、安装并读取技能内容。复杂任务开始前优先加载相关技能。
 `
 	}
 	return `
 # Skill System
 
-Installed skills are automatically loaded into your capabilities. When you need more skill support, call skill_advisor to search the marketplace, install and analyze relevant skills.
-Execution guides returned by skill_advisor are based on verified best practices — follow them preferentially.
+Installed skills are automatically loaded into your capabilities. When you need more skill support, use skill_list, skill_search, skill_install, skill_enable, and read_skill to search the marketplace, install, and read skill content. Load relevant skills before starting complex tasks.
 `
 }
