@@ -1,6 +1,6 @@
 module chatclaw
 
-go 1.25
+go 1.26
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
