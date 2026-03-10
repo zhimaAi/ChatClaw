@@ -12,6 +12,7 @@ import (
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	feishutools "chatclaw/internal/eino/tools/im/feishu"
 	"chatclaw/internal/define"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
@@ -348,12 +349,12 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	}
 
 	if s.gateway != nil {
-		feishuCfg := &tools.FeishuSenderConfig{Gateway: s.gateway}
+		feishuCfg := &feishutools.FeishuSenderConfig{Gateway: s.gateway}
 		if chID, tgtID, ok := s.resolveChannelSource(ctx, gc.db, gc.conversationID); ok {
 			feishuCfg.DefaultChannelID = chID
 			feishuCfg.DefaultTargetID = tgtID
 		}
-		feishuTool, toolErr := tools.NewFeishuSenderTool(feishuCfg)
+		feishuTool, toolErr := feishutools.NewFeishuSenderTool(feishuCfg)
 		if toolErr != nil {
 			s.app.Logger.Warn("[chat] failed to create feishu_sender tool", "error", toolErr)
 		} else {
