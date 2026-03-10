@@ -408,13 +408,40 @@ func buildScheduledTaskPrompt() string {
 
 ## 常见时间表达转换
 
+**重要：` + "`preset`" + ` 类型只支持以下固定预设值，其他时间必须使用 ` + "`cron`" + ` 类型并生成标准 cron 表达式。**
+
+### 支持的 preset 预设值（仅限以下值）
+- ` + "`every_hour`" + `: 每小时整点执行
+- ` + "`every_day_0900`" + `: 每天早上 9:00 执行
+- ` + "`weekdays_0900`" + `: 每个工作日（周一至周五）早上 9:00 执行
+- ` + "`every_monday_0900`" + `: 每周一早上 9:00 执行
+
+### 时间转换示例
+
 | 用户表达 | schedule_type | schedule_value | cron_expr |
 |---------|--------------|----------------|-----------|
+| 每小时整点 | preset | every_hour | |
 | 每天早上9点 | preset | every_day_0900 | |
-| 每周一上午10点 | preset | every_week_mon_1000 | |
-| 每月1号0点 | preset | every_month_1_0000 | |
-| 每小时 | preset | every_hour | |
-| 自定义 cron | cron | | 0 30 9 * * * |
+| 每个工作日9点 | preset | weekdays_0900 | |
+| 每周一早上9点 | preset | every_monday_0900 | |
+| 每天15:20 | cron | | 20 15 * * * |
+| 每天下午3点半 | cron | | 30 15 * * * |
+| 每周一上午10点 | cron | | 0 10 * * 1 |
+| 每月1号0点 | cron | | 0 0 1 * * |
+| 每小时30分 | cron | | 30 * * * * |
+
+### Cron 表达式格式
+标准 5 字段 cron 表达式：` + "`分 时 日 月 周`" + `
+- 分：0-59
+- 时：0-23
+- 日：1-31
+- 月：1-12
+- 周：0-6（0=周日，1=周一，...，6=周六）
+
+示例：
+- ` + "`20 15 * * *`" + `: 每天 15:20
+- ` + "`0 9 * * 1-5`" + `: 每个工作日 9:00
+- ` + "`30 8 1 * *`" + `: 每月1号 8:30
 
 ## 重要规则
 
@@ -474,13 +501,40 @@ You can help users manage scheduled tasks. When users mention "scheduled tasks",
 
 ## Common Time Expression Conversion
 
+**Important: ` + "`preset`" + ` type only supports the following fixed preset values. For other times, you MUST use ` + "`cron`" + ` type and generate a standard cron expression.**
+
+### Supported Preset Values (Only These)
+- ` + "`every_hour`" + `: Execute at the start of every hour
+- ` + "`every_day_0900`" + `: Execute at 9:00 AM every day
+- ` + "`weekdays_0900`" + `: Execute at 9:00 AM on weekdays (Mon-Fri)
+- ` + "`every_monday_0900`" + `: Execute at 9:00 AM every Monday
+
+### Time Conversion Examples
+
 | User Expression | schedule_type | schedule_value | cron_expr |
 |----------------|--------------|----------------|-----------|
+| Every hour on the hour | preset | every_hour | |
 | Every day at 9am | preset | every_day_0900 | |
-| Every Monday at 10am | preset | every_week_mon_1000 | |
-| 1st of every month at midnight | preset | every_month_1_0000 | |
-| Every hour | preset | every_hour | |
-| Custom cron | cron | | 0 30 9 * * * |
+| Every weekday at 9am | preset | weekdays_0900 | |
+| Every Monday at 9am | preset | every_monday_0900 | |
+| Every day at 15:20 | cron | | 20 15 * * * |
+| Every day at 3:30pm | cron | | 30 15 * * * |
+| Every Monday at 10am | cron | | 0 10 * * 1 |
+| 1st of every month at midnight | cron | | 0 0 1 * * |
+| Every hour at 30 min | cron | | 30 * * * * |
+
+### Cron Expression Format
+Standard 5-field cron expression: ` + "`minute hour day month weekday`" + `
+- minute: 0-59
+- hour: 0-23
+- day: 1-31
+- month: 1-12
+- weekday: 0-6 (0=Sunday, 1=Monday, ..., 6=Saturday)
+
+Examples:
+- ` + "`20 15 * * *`" + `: Every day at 15:20
+- ` + "`0 9 * * 1-5`" + `: Every weekday at 9:00
+- ` + "`30 8 1 * *`" + `: 1st of every month at 8:30
 
 ## Important Rules
 
