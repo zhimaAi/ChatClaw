@@ -10,18 +10,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
-import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
-import type { ScheduledTask } from '../types'
+import type { Agent, ScheduledTask } from '../types'
 import { describeSchedule, formatTaskTime } from '../utils'
 
 const props = defineProps<{
   tasks: ScheduledTask[]
+  agents: Agent[]
 }>()
 
 const { t } = useI18n()
 
 const emit = defineEmits<{
-  create: []
   edit: [task: ScheduledTask]
   delete: [task: ScheduledTask]
   run: [task: ScheduledTask]
@@ -40,6 +39,10 @@ function displayTaskStatusLabel(task: ScheduledTask) {
   return t('scheduledTasks.statusPending')
 }
 
+function resolveAgentName(task: ScheduledTask) {
+  return props.agents.find((agent) => agent.id === task.agent_id)?.name || '-'
+}
+
 function lastRunIcon(task: ScheduledTask) {
   if (task.last_status === 'failed') return CircleAlert
   if (task.last_status === 'success') return CircleCheck
@@ -47,40 +50,33 @@ function lastRunIcon(task: ScheduledTask) {
 }
 
 function lastRunIconClass(task: ScheduledTask) {
-  if (task.last_status === 'failed') return 'text-red-500'
-  if (task.last_status === 'success') return 'text-emerald-500'
-  return 'text-muted-foreground/70'
+  if (task.last_status === 'failed') return 'text-[#ef4444]'
+  if (task.last_status === 'success') return 'text-[#22c55e]'
+  return 'text-[#a3a3a3]'
+}
+
+function statusTextClass(task: ScheduledTask) {
+  return task.enabled ? 'text-[#404040]' : 'text-[#737373]'
 }
 
 const hasTasks = computed(() => props.tasks.length > 0)
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-xl border border-border bg-card">
-    <div class="flex items-center justify-between border-b border-border px-4 py-3">
-      <div class="text-sm font-medium text-foreground">{{ t('scheduledTasks.listTitle') }}</div>
-      <button
-        class="rounded-md bg-foreground px-3 py-1.5 text-sm text-background"
-        @click="emit('create')"
-      >
-        {{ t('scheduledTasks.create') }}
-      </button>
-    </div>
-
-    <div v-if="!hasTasks" class="px-4 py-12 text-center text-sm text-muted-foreground">
+  <div class="overflow-hidden rounded-lg border border-[#e5e5e5] bg-white">
+    <div v-if="!hasTasks" class="px-4 py-16 text-center text-sm text-[#737373]">
       {{ t('scheduledTasks.empty') }}
     </div>
 
     <div v-else class="overflow-x-auto">
-      <table class="min-w-full text-sm">
-        <thead class="bg-muted/50 text-left text-xs text-muted-foreground">
+      <table class="min-w-[920px] w-full table-fixed text-sm">
+        <thead class="text-left text-sm text-[#0a0a0a]">
           <tr>
-            <th class="px-4 py-3 font-medium">{{ t('scheduledTasks.columns.title') }}</th>
-            <th class="px-4 py-3 font-medium">{{ t('scheduledTasks.columns.schedule') }}</th>
-            <th class="px-4 py-3 font-medium">{{ t('scheduledTasks.columns.lastRun') }}</th>
-            <th class="px-4 py-3 font-medium">{{ t('scheduledTasks.columns.nextRun') }}</th>
-            <th class="px-4 py-3 font-medium">{{ t('scheduledTasks.columns.status') }}</th>
-            <th class="px-4 py-3 text-right font-medium">
+            <th class="w-[34%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.title') }}</th>
+            <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.schedule') }}</th>
+            <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.agent') }}</th>
+            <th class="w-[12%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.status') }}</th>
+            <th class="w-[6%] px-5 py-3 text-right font-medium">
               {{ t('scheduledTasks.columns.actions') }}
             </th>
           </tr>
@@ -89,34 +85,56 @@ const hasTasks = computed(() => props.tasks.length > 0)
           <tr
             v-for="task in tasks"
             :key="task.id"
-            class="border-t border-border align-top transition-colors hover:bg-muted/20"
+            class="border-t border-[#e5e5e5] align-top transition-colors hover:bg-[#fafafa]"
           >
-            <td class="px-4 py-3">
-              <div class="max-w-md">
-                <div class="font-medium text-foreground">{{ task.name }}</div>
-                <div class="mt-1 line-clamp-2 text-xs text-muted-foreground">{{ task.prompt }}</div>
+            <td class="px-5 py-3.5">
+              <div class="max-w-md space-y-1">
+                <div class="text-[15px] font-medium leading-6 text-[#171717]">{{ task.name }}</div>
+                <div class="line-clamp-2 text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
               </div>
             </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-2 text-muted-foreground">
-                <Clock3 class="size-4 shrink-0 text-muted-foreground/70" />
-                <span>{{ describeSchedule(task) }}</span>
+            <td class="px-5 py-3.5">
+              <div class="space-y-1 text-sm">
+                <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
+                <div class="flex items-center gap-1.5 text-[#8c8c8c]">
+                  <component
+                    :is="lastRunIcon(task)"
+                    class="size-4 shrink-0"
+                    :class="lastRunIconClass(task)"
+                  />
+                  <span class="truncate">
+                    {{ t('scheduledTasks.lastRunPrefix') }}{{ formatTaskTime(task.last_run_at) }}
+                  </span>
+                </div>
               </div>
             </td>
-            <td class="px-4 py-3">
-              <div v-if="task.last_run_at" class="flex items-center gap-2 text-muted-foreground">
-                <component
-                  :is="lastRunIcon(task)"
-                  class="size-4 shrink-0"
-                  :class="lastRunIconClass(task)"
+            <td class="px-5 py-3.5">
+              <div class="space-y-1">
+                <div class="text-[15px] leading-6 text-[#171717]">{{ resolveAgentName(task) }}</div>
+                <div class="flex items-center gap-1.5 text-sm text-[#8c8c8c]">
+                  <Clock3 class="size-4 shrink-0 text-[#a3a3a3]" />
+                  <span class="truncate">
+                    {{ t('scheduledTasks.nextRunPrefix') }}{{ formatTaskTime(task.next_run_at) }}
+                  </span>
+                </div>
+              </div>
+            </td>
+            <td class="px-5 py-3.5">
+              <div class="flex items-center gap-2 whitespace-nowrap">
+                <Switch
+                  :model-value="task.enabled"
+                  class="h-[18px] w-[33px] border-transparent data-[state=checked]:bg-[#171717] data-[state=unchecked]:bg-[#e5e5e5]"
+                  @update:model-value="(value) => emit('toggle', task, !!value)"
                 />
-                <span>{{ formatTaskTime(task.last_run_at) }}</span>
+                <span class="text-sm" :class="statusTextClass(task)">
+                  {{ displayTaskStatusLabel(task) }}
+                </span>
                 <TooltipProvider v-if="task.last_error">
                   <Tooltip>
                     <TooltipTrigger as-child>
                       <button
                         type="button"
-                        class="inline-flex size-5 items-center justify-center rounded-full text-amber-600 transition-colors hover:bg-amber-500/10"
+                        class="inline-flex size-5 items-center justify-center rounded-full text-[#a3a3a3] transition-colors hover:bg-[#f5f5f5] hover:text-[#171717]"
                         :aria-label="t('scheduledTasks.errorReason')"
                       >
                         <CircleAlert class="size-3.5" />
@@ -128,34 +146,22 @@ const hasTasks = computed(() => props.tasks.length > 0)
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <span v-else class="text-muted-foreground">-</span>
             </td>
-            <td class="px-4 py-3 text-muted-foreground">{{ formatTaskTime(task.next_run_at) }}</td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-3 whitespace-nowrap">
-                <TaskRunStatusBadge
-                  :status="displayTaskStatus(task)"
-                  :label="displayTaskStatusLabel(task)"
-                  variant="dot"
-                />
-                <Switch
-                  :model-value="task.enabled"
-                  @update:model-value="(value) => emit('toggle', task, !!value)"
-                />
-              </div>
-            </td>
-            <td class="px-4 py-3 text-right">
+            <td class="px-5 py-3.5 text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                   <button
                     type="button"
-                    class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    class="inline-flex size-9 items-center justify-center rounded-lg text-[#737373] transition-colors hover:bg-[#f5f5f5] hover:text-[#171717]"
                     :aria-label="t('scheduledTasks.actionsMenu')"
                   >
                     <MoreHorizontal class="size-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" class="w-36">
+                <DropdownMenuContent
+                  align="end"
+                  class="w-[92px] rounded-md border-[#ececec] p-1 shadow-[0px_6px_30px_rgba(0,0,0,0.05),0px_16px_24px_rgba(0,0,0,0.04),0px_8px_10px_rgba(0,0,0,0.08)]"
+                >
                   <DropdownMenuItem @select="emit('run', task)">{{
                     t('scheduledTasks.runNow')
                   }}</DropdownMenuItem>
