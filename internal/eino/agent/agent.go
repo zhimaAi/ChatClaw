@@ -90,8 +90,8 @@ type AgentResult struct {
 	Cleanup func()
 }
 
-// NewChatModelAgent creates the main agent with three sub-agents (Researcher,
-// Worker, SkillAdvisor) registered as AgentTools. messageCount is the number of
+// NewChatModelAgent creates the main agent with two sub-agents (general-purpose,
+// bash) registered as AgentTools, following DeerFlow-style orchestration. messageCount is the number of
 // historical messages in the conversation; pass 1 (first user message only)
 // to enable one-time system prompt logging.
 func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.ToolRegistry, bgMgr *tools.BgProcessManager, extraTools []tool.BaseTool, extraHandlers []adk.ChatModelAgentMiddleware, logger *slog.Logger, messageCount int) (*AgentResult, error) {
@@ -118,57 +118,46 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 
 	fsTools := buildFilesystemTools(backend, bgMgr, logger)
 
-	baseTools := make([]tool.BaseTool, 0, len(fsTools)+len(enabledTools)+len(extraTools)+3)
-	baseTools = append(baseTools, fsTools...)
-	baseTools = append(baseTools, enabledTools...)
-	baseTools = append(baseTools, browserTool)
-	baseTools = append(baseTools, NewConfirmExecutionTool())
-	baseTools = append(baseTools, extraTools...)
+	// Full toolset for sub-agents (everything available)
+	subAgentTools := make([]tool.BaseTool, 0, len(fsTools)+len(enabledTools)+len(extraTools)+3)
+	subAgentTools = append(subAgentTools, fsTools...)
+	subAgentTools = append(subAgentTools, enabledTools...)
+	subAgentTools = append(subAgentTools, browserTool)
+	subAgentTools = append(subAgentTools, NewConfirmExecutionTool())
+	subAgentTools = append(subAgentTools, extraTools...)
 
-	// Prepare skill resources (shared by sub-agents)
-	var skillMgmtTools []tool.BaseTool
+	// Prepare skill resources
 	var skillBackend *filteringSkillBackend
 	if config.SkillsEnabled {
-		skillMgmtTools = filterToolsByName(extraTools,
-			"skill_list", "skill_search", "skill_install", "skill_enable",
-		)
 		skillBackend = newFilteringSkillBackend(backend, logger)
+		subAgentTools = append(subAgentTools, &readSkillTool{backend: skillBackend})
 	}
 
-	// Sub-agents (need baseTools reference for tool selection)
-	researcher, researcherErr := newResearcherSubAgent(ctx, chatModel, baseTools, backend, config, skillMgmtTools, skillBackend, logger)
-	if researcherErr != nil {
-		logger.Warn("[agent] failed to create researcher sub-agent", "error", researcherErr)
+	// Sub-agents get the full toolset
+	generalPurpose, gpErr := newGeneralPurposeSubAgent(ctx, chatModel, subAgentTools, backend, config, skillBackend, logger)
+	if gpErr != nil {
+		logger.Warn("[agent] failed to create general_purpose sub-agent", "error", gpErr)
 	}
 
-	worker, workerErr := newWorkerSubAgent(ctx, chatModel, baseTools, backend, config, skillBackend, logger)
-	if workerErr != nil {
-		logger.Warn("[agent] failed to create worker sub-agent", "error", workerErr)
+	bashAgent, bashErr := newBashSubAgent(ctx, chatModel, subAgentTools, backend, config, logger)
+	if bashErr != nil {
+		logger.Warn("[agent] failed to create bash sub-agent", "error", bashErr)
 	}
 
-	allTools := make([]tool.BaseTool, 0, len(baseTools)+3)
-	allTools = append(allTools, baseTools...)
-	if researcherErr == nil {
-		allTools = append(allTools, researcher)
+	// Lead agent gets only read-only tools + sub-agents (DeerFlow-style: orchestrator, not executor)
+	leadTools := buildLeadAgentTools(subAgentTools, extraTools, config.SkillsEnabled)
+	if gpErr == nil {
+		leadTools = append(leadTools, generalPurpose)
 	}
-	if workerErr == nil {
-		allTools = append(allTools, worker)
-	}
-
-	if config.SkillsEnabled {
-		advisor, advisorErr := newSkillAdvisorSubAgent(ctx, chatModel, skillMgmtTools, skillBackend, logger)
-		if advisorErr != nil {
-			logger.Warn("[agent] failed to create skill_advisor sub-agent", "error", advisorErr)
-		} else {
-			allTools = append(allTools, advisor)
-		}
+	if bashErr == nil {
+		leadTools = append(leadTools, bashAgent)
 	}
 
 	toolsConfig := adk.ToolsConfig{
 		ToolsNodeConfig: compose.ToolsNodeConfig{
-			Tools:               allTools,
-			ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(allTools, logger)},
-			UnknownToolsHandler: unknownToolsHandler(allTools, logger),
+			Tools:               leadTools,
+			ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(leadTools, logger)},
+			UnknownToolsHandler: unknownToolsHandler(leadTools, logger),
 		},
 		EmitInternalEvents: true,
 	}
@@ -195,6 +184,41 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 			browserTool.Close()
 		},
 	}, nil
+}
+
+// buildLeadAgentTools selects the minimal read-only toolset for the lead agent.
+// The lead agent is an orchestrator — it delegates execution to sub-agents.
+// It only keeps tools needed for quick reads and lightweight management.
+func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, skillsEnabled bool) []tool.BaseTool {
+	// Tools the lead agent is allowed to use directly
+	allowedNames := map[string]bool{
+		"read_file":           true,
+		"ls":                  true,
+		"confirm_execution":   true,
+		"sequential_thinking": true,
+		"memory_retriever":    true,
+		"library_retriever":   true,
+	}
+
+	if skillsEnabled {
+		allowedNames["skill_list"] = true
+		allowedNames["skill_search"] = true
+		allowedNames["skill_install"] = true
+		allowedNames["skill_enable"] = true
+		allowedNames["read_skill"] = true
+	}
+
+	var result []tool.BaseTool
+	for _, t := range allTools {
+		info, err := t.Info(context.Background())
+		if err != nil || info == nil {
+			continue
+		}
+		if allowedNames[info.Name] {
+			result = append(result, t)
+		}
+	}
+	return result
 }
 
 // buildHandlers creates all ChatModelAgentMiddleware handlers for the main agent.
@@ -484,7 +508,7 @@ func ErrorCatchingToolMiddleware(allTools []tool.BaseTool, logger *slog.Logger) 
 	schemaMap := buildToolSchemaMap(allTools)
 	var failureCounters sync.Map // tool name -> *int32
 
-	subAgentNames := map[string]bool{"researcher": true, "worker": true, "skill_advisor": true}
+	subAgentNames := map[string]bool{"general_purpose": true, "bash": true}
 
 	formatError := func(toolName string, err error) string {
 		if errors.Is(err, adk.ErrExceedMaxIterations) && subAgentNames[toolName] {
