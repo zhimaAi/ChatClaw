@@ -969,6 +969,8 @@ export default {
     statusFailed: 'Failed',
     statusSuccess: 'Success',
     statusPending: 'Pending',
+    runTriggerSchedule: 'Schedule',
+    runTriggerManual: 'Manual',
     lastRunPrefix: 'Last: ',
     nextRunPrefix: 'Next: ',
     noRuns: 'No run history yet',

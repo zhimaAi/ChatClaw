@@ -31,6 +31,12 @@ function displayRunStatusLabel(status: string) {
   return t('scheduledTasks.statusPending')
 }
 
+function displayRunTriggerLabel(triggerType: string) {
+  if (triggerType === 'schedule') return t('scheduledTasks.runTriggerSchedule')
+  if (triggerType === 'manual') return t('scheduledTasks.runTriggerManual')
+  return triggerType
+}
+
 watch(
   () => props.open,
   async (value) => {
@@ -61,7 +67,7 @@ async function selectRun(run: ScheduledTaskRun) {
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="max-h-[90vh] overflow-hidden sm:max-w-[1400px]">
+    <DialogContent class="max-h-[90vh] overflow-hidden sm:max-w-[1600px]">
       <DialogHeader>
         <DialogTitle>{{ task?.name }} / 运行记录</DialogTitle>
       </DialogHeader>
@@ -85,8 +91,12 @@ async function selectRun(run: ScheduledTaskRun) {
                 formatDuration(run.duration_ms)
               }}</span>
             </div>
-            <div class="mt-2 text-sm text-foreground">{{ formatTaskTime(run.started_at) }}</div>
-            <div class="mt-1 text-xs text-muted-foreground">{{ run.trigger_type }}</div>
+            <div class="mt-2 whitespace-nowrap text-xs text-foreground">
+              {{ formatTaskTime(run.started_at) }}
+            </div>
+            <div class="mt-1 text-xs text-muted-foreground">
+              {{ displayRunTriggerLabel(run.trigger_type) }}
+            </div>
             <TooltipProvider>
               <Tooltip v-if="run.error_message">
                 <TooltipTrigger as-child>

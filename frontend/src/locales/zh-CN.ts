@@ -950,6 +950,8 @@ export default {
     statusFailed: '失败',
     statusSuccess: '成功',
     statusPending: '待运行',
+    runTriggerSchedule: '计划',
+    runTriggerManual: '手动',
     lastRunPrefix: '上次: ',
     nextRunPrefix: '下次: ',
     noRuns: '暂无运行记录',
