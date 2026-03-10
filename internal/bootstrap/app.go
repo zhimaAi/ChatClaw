@@ -731,7 +731,7 @@ func handleChannelMessage(
 	})
 	if err != nil {
 		app.Logger.Error("channel message: AI generation failed to start", "conv", conv.ID, "error", err)
-		sendReply(fmt.Sprintf("AI回复失败: %v", err))
+		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
 		return
 	}
 
@@ -743,7 +743,7 @@ func handleChannelMessage(
 	// Wait for the background generation to complete
 	if err := chatService.WaitForGeneration(conv.ID, res.RequestID); err != nil {
 		app.Logger.Error("channel message: AI generation wait failed", "conv", conv.ID, "error", err)
-		sendReply(fmt.Sprintf("AI回复失败: %v", err))
+		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
 		// Not returning here in case some partial response was generated
 	}
 
@@ -777,7 +777,7 @@ func handleChannelMessage(
 
 	if finalResponse == "" {
 		app.Logger.Warn("channel message: empty AI response", "conv", conv.ID)
-		sendReply("AI回复失败: 生成了空回复")
+		sendReply(i18n.T("error.channel_ai_reply_empty"))
 		return
 	}
 
