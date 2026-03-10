@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -255,11 +257,9 @@ func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, conten
 		return fmt.Errorf("feishu client not initialized")
 	}
 
-	// Use json.Marshal for proper escaping of quotes, newlines, etc.
-	textPayload := map[string]string{"text": content}
-	contentBytes, err := json.Marshal(textPayload)
+	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
 	if err != nil {
-		return fmt.Errorf("marshal feishu content: %w", err)
+		return err
 	}
 
 	// Detect ID type: chat IDs start with "oc_", open IDs start with "ou_"
@@ -272,8 +272,8 @@ func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, conten
 		ReceiveIdType(receiveIDType).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(targetID).
-			MsgType(larkim.MsgTypeText).
-			Content(string(contentBytes)).
+			MsgType(msgType).
+			Content(contentJSON).
 			Build()).
 		Build()
 
@@ -285,6 +285,213 @@ func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, conten
 		return fmt.Errorf("send feishu message: code=%d msg=%s", resp.Code, resp.Msg)
 	}
 	return nil
+}
+
+type feishuOutgoingMessage struct {
+	MsgType string          `json:"msg_type"`
+	Content json.RawMessage `json:"content"`
+	Text    string          `json:"text"`
+
+	ImageKey string `json:"image_key"`
+	FileKey  string `json:"file_key"`
+	FileName string `json:"file_name"`
+	Duration int    `json:"duration"`
+}
+
+func buildFeishuOutgoingMessage(raw string) (string, string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", "", fmt.Errorf("feishu message content is empty")
+	}
+
+	if !strings.HasPrefix(trimmed, "{") {
+		contentBytes, err := json.Marshal(map[string]string{"text": raw})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+		}
+		return larkim.MsgTypeText, string(contentBytes), nil
+	}
+
+	var payload feishuOutgoingMessage
+	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+		contentBytes, marshalErr := json.Marshal(map[string]string{"text": raw})
+		if marshalErr != nil {
+			return "", "", fmt.Errorf("marshal feishu text content: %w", marshalErr)
+		}
+		return larkim.MsgTypeText, string(contentBytes), nil
+	}
+
+	msgType := strings.TrimSpace(payload.MsgType)
+	if msgType == "" {
+		contentBytes, err := json.Marshal(map[string]string{"text": raw})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+		}
+		return larkim.MsgTypeText, string(contentBytes), nil
+	}
+
+	if len(payload.Content) > 0 && string(payload.Content) != "null" {
+		switch msgType {
+		case "text":
+			return larkim.MsgTypeText, string(payload.Content), nil
+		case "image":
+			return larkim.MsgTypeImage, string(payload.Content), nil
+		case "file":
+			return larkim.MsgTypeFile, string(payload.Content), nil
+		case "audio":
+			return larkim.MsgTypeAudio, string(payload.Content), nil
+		case "media":
+			return larkim.MsgTypeMedia, string(payload.Content), nil
+		case "sticker":
+			return larkim.MsgTypeSticker, string(payload.Content), nil
+		default:
+			return "", "", fmt.Errorf("unsupported feishu msg_type: %s", msgType)
+		}
+	}
+
+	switch msgType {
+	case "text":
+		text := payload.Text
+		if text == "" {
+			text = raw
+		}
+		contentBytes, err := json.Marshal(map[string]string{"text": text})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+		}
+		return larkim.MsgTypeText, string(contentBytes), nil
+	case "image":
+		if strings.TrimSpace(payload.ImageKey) == "" {
+			return "", "", fmt.Errorf("feishu image message requires image_key")
+		}
+		contentBytes, err := json.Marshal(map[string]string{"image_key": payload.ImageKey})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu image content: %w", err)
+		}
+		return larkim.MsgTypeImage, string(contentBytes), nil
+	case "file":
+		if strings.TrimSpace(payload.FileKey) == "" {
+			return "", "", fmt.Errorf("feishu file message requires file_key")
+		}
+		contentBytes, err := json.Marshal(map[string]string{"file_key": payload.FileKey})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu file content: %w", err)
+		}
+		return larkim.MsgTypeFile, string(contentBytes), nil
+	case "audio":
+		if strings.TrimSpace(payload.FileKey) == "" {
+			return "", "", fmt.Errorf("feishu audio message requires file_key")
+		}
+		contentBytes, err := json.Marshal(map[string]string{"file_key": payload.FileKey})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu audio content: %w", err)
+		}
+		return larkim.MsgTypeAudio, string(contentBytes), nil
+	case "media":
+		if strings.TrimSpace(payload.FileKey) == "" {
+			return "", "", fmt.Errorf("feishu media message requires file_key")
+		}
+		mediaPayload := map[string]any{
+			"file_key": payload.FileKey,
+		}
+		if payload.ImageKey != "" {
+			mediaPayload["image_key"] = payload.ImageKey
+		}
+		if payload.FileName != "" {
+			mediaPayload["file_name"] = payload.FileName
+		}
+		if payload.Duration > 0 {
+			mediaPayload["duration"] = payload.Duration
+		}
+		contentBytes, err := json.Marshal(mediaPayload)
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu media content: %w", err)
+		}
+		return larkim.MsgTypeMedia, string(contentBytes), nil
+	case "sticker":
+		if strings.TrimSpace(payload.FileKey) == "" {
+			return "", "", fmt.Errorf("feishu sticker message requires file_key")
+		}
+		contentBytes, err := json.Marshal(map[string]string{"file_key": payload.FileKey})
+		if err != nil {
+			return "", "", fmt.Errorf("marshal feishu sticker content: %w", err)
+		}
+		return larkim.MsgTypeSticker, string(contentBytes), nil
+	default:
+		return "", "", fmt.Errorf("unsupported feishu msg_type: %s", msgType)
+	}
+}
+
+// UploadFile uploads a local file to Feishu and returns the file_key.
+// fileType: opus, mp4, pdf, doc, xls, ppt, stream (default "stream").
+func (a *FeishuAdapter) UploadFile(ctx context.Context, filePath string, fileType string) (string, error) {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+
+	if client == nil {
+		return "", fmt.Errorf("feishu client not initialized")
+	}
+
+	if fileType == "" {
+		fileType = "stream"
+	}
+
+	fileName := filepath.Base(filePath)
+
+	body, err := larkim.NewCreateFilePathReqBodyBuilder().
+		FileType(fileType).
+		FileName(fileName).
+		FilePath(filePath).
+		Build()
+	if err != nil {
+		return "", fmt.Errorf("build file upload body: %w", err)
+	}
+
+	req := larkim.NewCreateFileReqBuilder().Body(body).Build()
+	resp, err := client.Im.File.Create(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("upload file to feishu: %w", err)
+	}
+	if !resp.Success() {
+		return "", fmt.Errorf("upload file to feishu: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	if resp.Data == nil || resp.Data.FileKey == nil {
+		return "", fmt.Errorf("upload file to feishu: empty file_key in response")
+	}
+	return *resp.Data.FileKey, nil
+}
+
+// UploadImage uploads a local image to Feishu and returns the image_key.
+func (a *FeishuAdapter) UploadImage(ctx context.Context, imagePath string) (string, error) {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+
+	if client == nil {
+		return "", fmt.Errorf("feishu client not initialized")
+	}
+
+	body, err := larkim.NewCreateImagePathReqBodyBuilder().
+		ImageType("message").
+		ImagePath(imagePath).
+		Build()
+	if err != nil {
+		return "", fmt.Errorf("build image upload body: %w", err)
+	}
+
+	req := larkim.NewCreateImageReqBuilder().Body(body).Build()
+	resp, err := client.Im.Image.Create(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("upload image to feishu: %w", err)
+	}
+	if !resp.Success() {
+		return "", fmt.Errorf("upload image to feishu: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	if resp.Data == nil || resp.Data.ImageKey == nil {
+		return "", fmt.Errorf("upload image to feishu: empty image_key in response")
+	}
+	return *resp.Data.ImageKey, nil
 }
 
 func deref(s *string) string {

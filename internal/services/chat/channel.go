@@ -50,7 +50,14 @@ func (s *ChatService) SendChannelMessage(ctx context.Context, conversationID int
 	dbCancel()
 
 	// Load conversation history
-	messages, err := s.loadMessagesForContext(ctx, db, conversationID, agentConfig.ContextCount)
+	messages, err := s.loadMessagesForContext(
+		ctx,
+		db,
+		conversationID,
+		agentConfig.ContextCount,
+		providerConfig.ProviderID,
+		agentConfig.ModelID,
+	)
 	if err != nil {
 		return "", fmt.Errorf("load history: %w", err)
 	}
