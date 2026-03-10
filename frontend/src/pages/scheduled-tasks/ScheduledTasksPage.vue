@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { CreateScheduledTaskInput, UpdateScheduledTaskInput } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import { useScheduledTasks } from './composables/useScheduledTasks'
@@ -9,7 +9,7 @@ import TaskRunHistoryDialog from './components/TaskRunHistoryDialog.vue'
 import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
 import type { ScheduledTaskFormState, ScheduledTask } from './types'
-import { createEmptyForm, taskToForm } from './utils'
+import { taskToForm } from './utils'
 
 defineProps<{
   tabId: string
@@ -26,6 +26,7 @@ const {
   historyTask,
   editingTask,
   form,
+  reloadAll,
   openCreateDialog,
   openEditDialog,
   submitForm,
@@ -33,11 +34,6 @@ const {
   toggleTask,
   runTaskNow,
 } = useScheduledTasks()
-
-const deleteTarget = computed<ScheduledTask | null>({
-  get: () => null,
-  set: () => undefined,
-})
 
 const summaryLabels = computed(() => ({
   total: t('scheduledTasks.total'),
@@ -102,35 +98,54 @@ async function handleSubmit() {
 async function handleEdit(task: ScheduledTask) {
   await openEditDialog(task, taskToForm)
 }
-
-const deleteDialogOpen = computed({
-  get: () => false,
-  set: () => undefined,
-})
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-auto bg-background px-6 py-5">
-    <div class="mb-5 flex items-center justify-between">
-      <div>
-        <div class="text-xl font-semibold text-foreground">{{ t('scheduledTasks.title') }}</div>
-        <div class="mt-1 text-sm text-muted-foreground">创建、编辑并追踪自动会话任务</div>
+  <div class="flex h-full min-h-0 flex-col overflow-auto bg-[#fafafa] px-6 py-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div class="space-y-1">
+        <div class="text-[28px] font-semibold tracking-[-0.02em] text-[#171717]">
+          {{ t('scheduledTasks.title') }}
+        </div>
+        <div class="text-sm text-[#737373]">
+          {{ t('scheduledTasks.subtitle') }}
+        </div>
       </div>
-      <button class="rounded-md bg-foreground px-4 py-2 text-sm text-background" @click="openCreateDialog">
-        {{ t('scheduledTasks.create') }}
-      </button>
+      <div class="flex items-center gap-2 self-start">
+        <button
+          type="button"
+          class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#f5f5f5] px-4 text-sm font-medium text-[#171717] transition-colors hover:bg-[#ebebeb]"
+          @click="reloadAll"
+        >
+          <RefreshCcw class="size-4" />
+          {{ t('scheduledTasks.refresh') }}
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#171717] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0f0f0f]"
+          @click="openCreateDialog"
+        >
+          <Plus class="size-4" />
+          {{ t('scheduledTasks.addTask') }}
+        </button>
+      </div>
     </div>
 
-    <TaskSummaryCards :summary="summary" :labels="summaryLabels" />
+    <div class="mt-6">
+      <TaskSummaryCards :summary="summary" :labels="summaryLabels" />
+    </div>
 
-    <div class="mt-5">
-      <div v-if="loading" class="rounded-xl border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+    <div class="mt-4">
+      <div
+        v-if="loading"
+        class="rounded-2xl border border-[#e5e5e5] bg-white px-4 py-16 text-center text-sm text-[#737373]"
+      >
         加载中...
       </div>
       <TaskTable
         v-else
         :tasks="tasks"
-        @create="openCreateDialog"
+        :agents="agents"
         @edit="handleEdit"
         @run="runTaskNow"
         @history="(task) => (historyTask = task)"
