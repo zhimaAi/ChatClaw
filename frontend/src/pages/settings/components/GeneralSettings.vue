@@ -70,6 +70,17 @@ interface ToolDef {
   descKey: string
 }
 
+interface DownloadProgress {
+  tool: string
+  url: string
+  totalSize: number
+  downloaded: number
+  percent: number
+  speed: number
+  elapsedTime: number
+  remaining: number
+}
+
 const toolDefs: ToolDef[] = [
   { id: 'uv', nameKey: 'settings.general.toolchain.uv.name', descKey: 'settings.general.toolchain.uv.description' },
   { id: 'bun', nameKey: 'settings.general.toolchain.bun.name', descKey: 'settings.general.toolchain.bun.description' },
@@ -78,6 +89,34 @@ const toolDefs: ToolDef[] = [
 
 const toolStatuses = reactive<Record<string, ToolStatus>>({})
 const installErrors = reactive<Record<string, boolean>>({})
+const downloadProgress = reactive<Record<string, DownloadProgress>>({})
+
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// 格式化下载速度
+const formatSpeed = (kbPerSec: number): string => {
+  if (kbPerSec >= 1024) {
+    return (kbPerSec / 1024).toFixed(1) + ' MB/s'
+  }
+  return kbPerSec.toFixed(1) + ' KB/s'
+}
+
+// 格式化剩余时间
+const formatRemaining = (ms: number): string => {
+  if (ms <= 0) return ''
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${minutes}m ${secs}s`
+}
 
 const loadToolStatuses = async () => {
   try {
@@ -107,6 +146,7 @@ const handleInstall = async (toolId: string) => {
 }
 
 let unsubscribeToolchain: (() => void) | null = null
+let unsubscribeProgress: (() => void) | null = null
 
 onMounted(() => {
   void loadToolStatuses()
@@ -115,6 +155,17 @@ onMounted(() => {
     if (data && data.name) {
       toolStatuses[data.name] = ToolStatus.createFrom(data)
       installErrors[data.name] = false
+      // 安装完成后清除进度
+      if (!data.installing) {
+        delete downloadProgress[data.name]
+      }
+    }
+  })
+  // 监听下载进度
+  unsubscribeProgress = Events.On('toolchain:download-progress', (event: any) => {
+    const data = event?.data?.[0] ?? event?.data ?? event
+    if (data && data.tool) {
+      downloadProgress[data.tool] = data
     }
   })
 })
@@ -122,6 +173,8 @@ onMounted(() => {
 onUnmounted(() => {
   unsubscribeToolchain?.()
   unsubscribeToolchain = null
+  unsubscribeProgress?.()
+  unsubscribeProgress = null
 })
 </script>
 
@@ -195,6 +248,35 @@ onUnmounted(() => {
             <Loader2 class="size-3 animate-spin" />
             {{ t('settings.general.toolchain.installing') }}
           </span>
+
+          <!-- Download Progress -->
+          <div
+            v-else-if="downloadProgress[tool.id]"
+            class="flex flex-col gap-1 min-w-[120px]"
+          >
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">
+                {{ downloadProgress[tool.id].percent.toFixed(1) }}%
+              </span>
+              <span class="text-muted-foreground">
+                {{ formatSpeed(downloadProgress[tool.id].speed) }}
+              </span>
+            </div>
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                class="h-full bg-primary transition-all duration-300"
+                :style="{ width: `${downloadProgress[tool.id].percent}%` }"
+              />
+            </div>
+            <div class="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {{ formatFileSize(downloadProgress[tool.id].downloaded) }} / {{ formatFileSize(downloadProgress[tool.id].totalSize) }}
+              </span>
+              <span v-if="downloadProgress[tool.id].remaining > 0">
+                {{ formatRemaining(downloadProgress[tool.id].remaining) }}
+              </span>
+            </div>
+          </div>
 
           <!-- Install button -->
           <template v-else>

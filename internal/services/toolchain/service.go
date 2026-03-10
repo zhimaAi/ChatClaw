@@ -7,8 +7,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -262,6 +264,34 @@ func (s *ToolchainService) emitStatus(name string) {
 	if s.app != nil {
 		s.app.Event.Emit("toolchain:status", s.getStatus(name))
 	}
+}
+
+// emitProgress 发送下载进度到前端
+func (s *ToolchainService) emitProgress(progress DownloadProgress) {
+	if s.app != nil {
+		s.app.Event.Emit("toolchain:download-progress", progress)
+	}
+}
+
+// progressReader 带进度跟踪的 Reader
+type progressReader struct {
+	reader   io.Reader
+	callback func(downloaded int64, percent float64)
+	downloaded int64
+	totalSize   int64
+}
+
+func (p *progressReader) Read(buf []byte) (int, error) {
+	n, err := p.reader.Read(buf)
+	if n > 0 {
+		p.downloaded += int64(n)
+		var percent float64
+		if p.totalSize > 0 {
+			percent = float64(p.downloaded) / float64(p.totalSize) * 100
+		}
+		p.callback(p.downloaded, percent)
+	}
+	return n, err
 }
 
 func (s *ToolchainService) markInstalling(name string) bool {
@@ -731,20 +761,60 @@ func (s *ToolchainService) tryDownloadWithMirrors(spec toolSpec, rawURL, binDir 
 	return fmt.Errorf("all mirrors failed: %w", lastErr)
 }
 
+// DownloadProgress 下载进度信息（用于事件推送）
+type DownloadProgress struct {
+	Tool        string  `json:"tool"`        // 工具名称
+	URL         string  `json:"url"`         // 正在下载的 URL
+	TotalSize   int64   `json:"totalSize"`   // 总大小（字节）
+	Downloaded  int64   `json:"downloaded"`   // 已下载（字节）
+	Percent     float64 `json:"percent"`      // 百分比 (0-100)
+	Speed       float64 `json:"speed"`        // 下载速度 (KB/s)
+	ElapsedTime int64   `json:"elapsedTime"`  // 已用时间 (毫秒)
+	Remaining   int64   `json:"remaining"`     // 预计剩余时间 (毫秒)
+}
+
 // downloadWithSingleURL downloads from a single URL and extracts the binary.
+// 支持进度回调和事件推送
 func (s *ToolchainService) downloadWithSingleURL(spec toolSpec, dlURL, binDir string) error {
 	s.app.Logger.Info("toolchain: downloading", "tool", spec.name, "url", dlURL)
 
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
-	defer cancel()
+	// 连接超时和读取超时配置
+	connectTimeout := 10 * time.Second
+	readTimeout := 5 * time.Minute
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+	// 创建带超时的 HTTP 客户端
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: connectTimeout,
+		}).DialContext,
+		TLSHandshakeTimeout:   connectTimeout,
+		ResponseHeaderTimeout: readTimeout,
+		DisableCompression:    true,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   connectTimeout + readTimeout,
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, dlURL, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("Accept-Encoding", "identity")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
+		// 区分错误类型
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			if netErr.Timeout() {
+				s.app.Logger.Error("toolchain: download timeout", "tool", spec.name, "url", dlURL, "error", err)
+				return fmt.Errorf("connection/download timeout: %w", err)
+			}
+			s.app.Logger.Error("toolchain: connection failed", "tool", spec.name, "url", dlURL, "error", err)
+			return fmt.Errorf("connection failed: %w", err)
+		}
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -753,7 +823,42 @@ func (s *ToolchainService) downloadWithSingleURL(spec toolSpec, dlURL, binDir st
 		return fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	// 获取总大小
+	totalSize := resp.ContentLength
+	startTime := time.Now()
+
+	// 使用带进度跟踪的 Reader
+	reader := &progressReader{
+		reader: resp.Body,
+		callback: func(downloaded int64, percent float64) {
+			elapsed := time.Since(startTime)
+			var speed float64
+			if elapsed > 0 {
+				speed = float64(downloaded) / elapsed.Seconds() / 1024 // KB/s
+			}
+
+			var remaining int64
+			if speed > 0 && totalSize > 0 {
+				remaining = int64(float64(totalSize-downloaded) / speed * 1000) // 毫秒
+			}
+
+			// 通过 Wails 事件推送到前端
+			progress := DownloadProgress{
+				Tool:        spec.name,
+				URL:         dlURL,
+				TotalSize:   totalSize,
+				Downloaded:  downloaded,
+				Percent:     percent,
+				Speed:       speed,
+				ElapsedTime: elapsed.Milliseconds(),
+				Remaining:   remaining,
+			}
+			s.emitProgress(progress)
+		},
+		totalSize: totalSize,
+	}
+
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return fmt.Errorf("read body: %w", err)
 	}
