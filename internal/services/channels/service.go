@@ -400,3 +400,32 @@ func (s *ChannelService) RefreshChannels() error {
 	s.gateway.RefreshStatuses(context.Background())
 	return nil
 }
+
+// VerifyChannelConfig verifies that the given platform credentials (extraConfig) can connect.
+// It creates a temporary adapter, attempts Connect, then Disconnect. Used for "验证配置" before saving.
+func (s *ChannelService) VerifyChannelConfig(platform string, extraConfig string) error {
+	platform = strings.TrimSpace(platform)
+	if platform == "" {
+		return errs.New("error.channel_platform_required")
+	}
+	extraConfig = strings.TrimSpace(extraConfig)
+	if extraConfig == "" {
+		return errs.New("error.channel_extra_config_required")
+	}
+
+	adapter := NewAdapter(platform)
+	if adapter == nil {
+		return errs.Newf("error.channel_platform_unsupported", map[string]any{"Platform": platform})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	noopHandler := func(msg IncomingMessage) {}
+	if err := adapter.Connect(ctx, 0, extraConfig, noopHandler); err != nil {
+		return errs.Wrapf("error.channel_verify_failed", err, map[string]any{"Platform": platform})
+	}
+	// Disconnect to avoid leaving a live connection; ignore disconnect error for verify flow
+	_ = adapter.Disconnect(context.Background())
+	return nil
+}

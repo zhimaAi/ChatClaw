@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { LoaderCircle, ShieldCheck } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,6 +34,7 @@ const appId = ref('')
 const appSecret = ref('')
 const token = ref('')
 const saving = ref(false)
+const verifying = ref(false)
 
 const platformIconMap: Record<string, string> = {
   telegram: '/src/assets/icons/snap/telegram.svg',
@@ -100,6 +102,27 @@ const handlePickIcon = async () => {
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to pick icon:', error)
+  }
+}
+
+async function handleVerify() {
+  if (!props.platform) return
+  if (!isFormValid.value) {
+    toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
+    return
+  }
+  const extraConfig = JSON.stringify({
+    app_id: appId.value.trim(),
+    app_secret: appSecret.value.trim(),
+  })
+  verifying.value = true
+  try {
+    await ChannelService.VerifyChannelConfig(props.platform.id, extraConfig)
+    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+  } finally {
+    verifying.value = false
   }
 }
 
@@ -232,10 +255,21 @@ async function handleSave() {
         </div>
 
         <DialogFooter class="mt-6 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            class="bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+            :disabled="saving || verifying || !isFormValid"
+            @click="handleVerify"
+          >
+            <LoaderCircle v-if="verifying" class="mr-2 size-4 animate-spin" />
+            <ShieldCheck v-else class="mr-2 size-4" />
+            {{ verifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
+          </Button>
           <Button variant="outline" type="button" @click="open = false">
             {{ t('channels.config.cancel') }}
           </Button>
-          <Button type="submit" :disabled="saving || !isFormValid">
+          <Button type="submit" :disabled="saving || verifying || !isFormValid">
             {{ t('channels.config.save') }}
           </Button>
         </DialogFooter>

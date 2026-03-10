@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs } from '@wailsio/runtime'
-import { Check, Link2, MoreHorizontal, Plus, ShieldCheck, Unlink } from 'lucide-vue-next'
+import { Check, Link2, LoaderCircle, MoreHorizontal, Plus, ShieldCheck, Unlink } from 'lucide-vue-next'
 import { type Agent, AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
@@ -43,6 +43,7 @@ const inlineFormAppId = ref('')
 const inlineFormAppSecret = ref('')
 const inlineFormToken = ref('')
 const inlineFormSaving = ref(false)
+const inlineFormVerifying = ref(false)
 
 const showAddBotDialog = ref(false)
 const selectedBotId = ref<number | null>(null)
@@ -333,12 +334,25 @@ function openPlatformDocs() {
   }
 }
 
-function handleInlineVerify() {
+async function handleInlineVerify() {
   if (!isInlineFormValid.value) {
     toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
     return
   }
-  toast.success(t('channels.inline.verifySuccess', '验证通过'))
+  if (!selectedPlatformMeta.value) return
+  const extraConfig = JSON.stringify({
+    app_id: inlineFormAppId.value.trim(),
+    app_secret: inlineFormAppSecret.value.trim(),
+  })
+  inlineFormVerifying.value = true
+  try {
+    await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
+    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+  } finally {
+    inlineFormVerifying.value = false
+  }
 }
 
 function handleOpenAddBotDialog() {
@@ -532,15 +546,17 @@ async function handleConfigChannelSaved(channel: Channel) {
                   <Button
                     type="button"
                     class="h-10 rounded-lg bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+                    :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
                     @click="handleInlineVerify"
                   >
-                    <ShieldCheck class="mr-2 size-4" />
-                    {{ t('channels.inline.verifyConfig', '验证配置') }}
+                    <LoaderCircle v-if="inlineFormVerifying" class="mr-2 size-4 animate-spin" />
+                    <ShieldCheck v-else class="mr-2 size-4" />
+                    {{ inlineFormVerifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
                   </Button>
 
                   <Button
                     class="h-10 rounded-lg bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                    :disabled="inlineFormSaving || !isInlineFormValid"
+                    :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
                     @click="handleCreateChannel"
                   >
                     <Plus class="mr-2 size-4" />
