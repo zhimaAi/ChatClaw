@@ -211,8 +211,9 @@ func buildSubAgentPrompt() string {
 - **看目录**：用 ls 查看目录结构
 
 ## 编排规则
-- **有依赖的任务串行**：等前一个子代理返回后再调用下一个，把前一步结果作为上下文传入。例："调研X再写文章" → 先调研，拿到结果后再委派写作
-- **无依赖的任务可并行**：完全独立的子任务可同时委派多个 general_purpose
+- **一个目标 = 一个子代理**：先拆分用户请求中的独立目标，每个目标委派**恰好一个**子代理。严禁把多个目标合并到同一个子代理。3 个目标 = 3 次调用
+- **无依赖则并行**：拆分出的子任务之间如果没有数据依赖，**同时**委派，不需要用户要求
+- **有依赖则串行**：等前一个返回后再调用下一个，把前一步结果作为上下文传入
 - 子代理返回后，综合结果再回复用户
 `
 	}
@@ -245,8 +246,9 @@ Use ONLY for: pure bash command sequences (git, npm, docker, build/test/deploy).
 - **List directories**: Use ls to view directory structure
 
 ## Orchestration Rules
-- **Dependent tasks are sequential**: Wait for previous sub-agent result before calling the next; pass prior results as context. Example: "Research X then write article" → research first, get results, then delegate writing
-- **Independent tasks can be parallel**: Fully independent sub-tasks can dispatch multiple general_purpose calls simultaneously
+- **One goal = one sub-agent**: Decompose the user's request into independent goals first. Each goal gets **exactly one** sub-agent call. Never merge multiple goals into one call. 3 goals = 3 calls
+- **No dependency → parallel**: Dispatch independent sub-tasks simultaneously without waiting for user to ask
+- **Has dependency → sequential**: Wait for previous result before calling next; pass prior results as context
 - Synthesize sub-agent results before responding to user
 `
 }
