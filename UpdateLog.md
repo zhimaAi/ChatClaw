@@ -1,5 +1,15 @@
 ## Changelog
 
+### 2026/03/10
+1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
+2. **ChatWiki Backend Service**: Introduced `ChatWikiService` with binding persistence, robot/library management APIs, and auth-expired handling.<br/>
+3. **Team Chat Streaming**: Implemented team-mode SSE streaming with `dialogue_id` continuation support and conversation/message persistence for team sessions.<br/>
+4. **DB Migrations**: Added SQLite migrations for ChatWiki binding storage and team conversation fields (`team_type`, `dialogue_id`).<br/>
+5. **UI & i18n Updates**: Updated assistant/settings/knowledge pages and added new locales to support ChatWiki integration and related UI states.<br/>
+
+### 2026/03/09
+1. **Branding Assets Refresh**: Updated app icons and frontend logo assets across Windows/macOS builds and UI images.<br/>
+
 ### 2026/03/06
 1. **Multimodal Support**: Added image input capability to assistant and knowledge pages, with model capability checks to detect multimodal support.<br/>
 2. **Model Configuration Updates**: Updated OpenAI, Anthropic, Zhipu (GLM), and Qwen model configurations with refined capabilities and new model additions.<br/>
