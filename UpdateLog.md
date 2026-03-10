@@ -1,7 +1,7 @@
 ## Changelog
 
 ### 2026/03/10
-1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/解绑).<br/>
+1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
 2. **ChatWiki Backend Service**: Introduced `ChatWikiService` with binding persistence, robot/library management APIs, and auth-expired handling.<br/>
 3. **Team Chat Streaming**: Implemented team-mode SSE streaming with `dialogue_id` continuation support and conversation/message persistence for team sessions.<br/>
 4. **DB Migrations**: Added SQLite migrations for ChatWiki binding storage and team conversation fields (`team_type`, `dialogue_id`).<br/>
