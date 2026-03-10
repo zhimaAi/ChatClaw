@@ -27,18 +27,25 @@ import (
 const (
 	ghProxyPrefix = "https://gh-proxy.org/"
 
-	googleProbeURL     = "https://www.google.com"
+	googleProbeURL     = "https://github.com"
 	googleProbeTimeout = 3 * time.Second
 
 	downloadTimeout = 5 * time.Minute
 )
 
-// 国内可用的 GitHub 代理列表（按优先级排序，会依次尝试直到成功）
-var chinaMirrors = []string{
-	"https://ghproxy.com/",
-	"https://pd.zwc.workers.dev/",
-	"https://gh.api.99988866.xyz/",
-	"https://gh-proxy.org/",
+// 国内可用的 GitHub 下载代理列表（按优先级排序）
+// 这些代理用于下载文件，代理方式是：在原始下载链接前加代理域名
+var downloadProxies = []string{
+	"https://gh-proxy.org/",         // gh-proxy.org (主推荐)
+	"https://hk.gh-proxy.org/",      // 香港线路
+	"https://cdn.gh-proxy.org/",     // CDN 加速
+	"https://edgeone.gh-proxy.org/", // Edgeone 加速
+}
+
+// 国内可用的 GitHub API 镜像列表（用于版本检测）
+// 这些镜像用于访问 GitHub 页面，代理方式是将 github.com 域名替换为镜像域名
+var apiMirrors = []string{
+	"https://bgithub.xyz", // bgithub.xyz (主推荐，不带末尾斜杠)
 }
 
 // ToolStatus represents the current state of a managed tool (returned to frontend).
@@ -411,7 +418,39 @@ func (s *ToolchainService) getInstalledVersion(binPath string, versionArgs []str
 }
 
 // fetchLatestVersion queries the GitHub releases/latest redirect to get the tag.
+// It tries direct connection first, then falls back to API mirrors.
 func (s *ToolchainService) fetchLatestVersion(spec toolSpec) (string, error) {
+	// 先尝试直连
+	version, err := s.fetchLatestVersionDirect(spec.latestReleaseAPI)
+	if err == nil {
+		return version, nil
+	}
+
+	// 直连失败，尝试 API 镜像（域名替换方式）
+	s.app.Logger.Warn("toolchain: direct connection failed, trying API mirrors", "tool", spec.name, "error", err)
+
+	for _, mirror := range apiMirrors {
+		if mirror == "" {
+			continue
+		}
+
+		// 替换 github.com 为镜像域名
+		mirroredURL := strings.Replace(spec.latestReleaseAPI, "https://github.com", mirror, 1)
+		s.app.Logger.Info("toolchain: trying API mirror", "tool", spec.name, "url", mirroredURL)
+
+		version, err := s.fetchLatestVersionDirect(mirroredURL)
+		if err == nil {
+			s.app.Logger.Info("toolchain: fetched version via mirror", "tool", spec.name, "mirror", mirror, "version", version)
+			return version, nil
+		}
+		s.app.Logger.Warn("toolchain: API mirror failed", "tool", spec.name, "mirror", mirror, "error", err)
+	}
+
+	return "", fmt.Errorf("failed to fetch latest version: %w", err)
+}
+
+// fetchLatestVersionDirect 直接请求获取版本（不经过代理）
+func (s *ToolchainService) fetchLatestVersionDirect(url string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -421,7 +460,7 @@ func (s *ToolchainService) fetchLatestVersion(spec toolSpec) (string, error) {
 		},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, spec.latestReleaseAPI, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
@@ -676,7 +715,7 @@ func (s *ToolchainService) tryDownloadWithMirrors(spec toolSpec, rawURL, binDir 
 	}
 
 	// 尝试其他镜像
-	for _, mirror := range chinaMirrors {
+	for _, mirror := range downloadProxies {
 		dlURL := mirror + rawURL
 		s.app.Logger.Info("toolchain: trying mirror", "tool", spec.name, "mirror", mirror)
 		if err := s.downloadWithSingleURL(spec, dlURL, binDir); err != nil {
