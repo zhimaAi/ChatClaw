@@ -426,6 +426,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 				}
 			}()
 		})
+	systray.SetTooltip("ChatClaw")
 
 	// 创建托盘服务（用于前端动态控制 show/hide + 缓存关闭策略）
 	trayService := tray.NewTrayService(app, systray)
