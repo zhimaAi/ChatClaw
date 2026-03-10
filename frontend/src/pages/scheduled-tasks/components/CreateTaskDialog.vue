@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { WEEKDAY_OPTIONS } from '../constants'
+import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
 import type { Agent, ScheduledTaskFormState } from '../types'
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   saving: boolean
   title: string
@@ -17,127 +19,222 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
   submit: []
 }>()
+
+const scheduleTypeOptions = [
+  { value: 'preset', label: '快捷设置' },
+  { value: 'custom', label: '自定义时间' },
+  { value: 'cron', label: 'Linux Crontab 代码' },
+] as const
+
+const customModeOptions = [
+  { value: 'daily', label: '每天' },
+  { value: 'weekly', label: '每周' },
+  { value: 'monthly', label: '每月' },
+] as const
+
+const dialogSubtitle = computed(() => (props.form.id ? '更新自动化的 AI 任务' : '安排自动化的 AI 任务'))
+
+function closeDialog() {
+  emit('update:open', false)
+}
 </script>
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="max-h-[90vh] overflow-auto sm:max-w-3xl">
-      <DialogHeader>
-        <DialogTitle>{{ title }}</DialogTitle>
+    <DialogContent
+      :show-close-button="true"
+      class="max-h-[90vh] overflow-y-auto border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:max-w-[720px]"
+    >
+      <DialogHeader class="gap-1 border-b border-[#eef2f6] px-7 py-6">
+        <DialogTitle class="text-[32px] font-semibold tracking-[-0.03em] text-[#111827]">
+          {{ title }}
+        </DialogTitle>
+        <p class="text-sm font-medium text-[#94a3b8]">
+          {{ dialogSubtitle }}
+        </p>
       </DialogHeader>
 
-      <div class="grid gap-4 py-2 md:grid-cols-2">
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">任务名称</label>
-          <Input v-model="form.name" placeholder="请输入任务名称" />
-        </div>
+      <div class="space-y-6 px-7 py-6">
+        <section class="space-y-5">
+          <div class="space-y-2">
+            <label class="block text-[15px] font-semibold text-[#1f2937]">任务名称</label>
+            <Input
+              v-model="form.name"
+              placeholder="例如：早间简报"
+              class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4 text-sm text-[#111827] placeholder:text-[#a0aec0] focus-visible:border-[#2563eb] focus-visible:ring-[#bfdbfe]"
+            />
+          </div>
 
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">提示词</label>
-          <textarea
-            v-model="form.prompt"
-            class="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            placeholder="请输入每次自动发送的提示词"
+          <div class="space-y-2">
+            <label class="block text-[15px] font-semibold text-[#1f2937]">消息提示词</label>
+            <textarea
+              v-model="form.prompt"
+              class="min-h-[118px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+              placeholder="AI 应该做什么？例如：给我一份今天的新闻和天气摘要"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-[15px] font-semibold text-[#1f2937]">关联 AI 助手</label>
+            <div class="relative">
+              <select
+                v-model.number="form.agentId"
+                class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+              >
+                <option :value="null">请选择助手</option>
+                <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
+              </select>
+              <ChevronDown class="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]" />
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-4">
+          <div class="space-y-1">
+            <h3 class="text-[15px] font-semibold text-[#1f2937]">设置定时时间</h3>
+            <p class="text-sm text-[#94a3b8]">选择快捷方案，或按你的节奏自定义执行时间。</p>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="option in scheduleTypeOptions"
+              :key="option.value"
+              type="button"
+              class="inline-flex h-10 items-center rounded-xl border px-4 text-sm font-medium transition-colors"
+              :class="
+                form.scheduleType === option.value
+                  ? 'border-[#2563eb] bg-[#eff6ff] text-[#2563eb]'
+                  : 'border-[#dbe3ec] bg-white text-[#64748b] hover:border-[#cbd5e1] hover:text-[#0f172a]'
+              "
+              @click="form.scheduleType = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
+          <div class="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+            <div v-if="form.scheduleType === 'preset'" class="space-y-2">
+              <label class="block text-sm font-semibold text-[#334155]">快捷设置</label>
+              <div class="relative">
+                <select
+                  v-model="form.schedulePreset"
+                  class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                >
+                  <option v-for="item in SCHEDULE_PRESETS" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+                <ChevronDown class="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]" />
+              </div>
+            </div>
+
+            <div v-else-if="form.scheduleType === 'custom'" class="space-y-4">
+              <div class="space-y-2">
+                <label class="block text-sm font-semibold text-[#334155]">频率</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="item in customModeOptions"
+                    :key="item.value"
+                    type="button"
+                    class="inline-flex h-10 items-center rounded-xl border px-4 text-sm font-medium transition-colors"
+                    :class="
+                      form.customMode === item.value
+                        ? 'border-[#0f172a] bg-[#0f172a] text-white'
+                        : 'border-[#dbe3ec] bg-white text-[#64748b] hover:border-[#cbd5e1] hover:text-[#0f172a]'
+                    "
+                    @click="form.customMode = item.value"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-[#334155]">小时</label>
+                  <Input
+                    v-model.number="form.customHour"
+                    type="number"
+                    min="0"
+                    max="23"
+                    class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-sm font-semibold text-[#334155]">分钟</label>
+                  <Input
+                    v-model.number="form.customMinute"
+                    type="number"
+                    min="0"
+                    max="59"
+                    class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4"
+                  />
+                </div>
+              </div>
+
+              <div v-if="form.customMode === 'weekly'" class="space-y-2">
+                <label class="block text-sm font-semibold text-[#334155]">星期</label>
+                <div class="flex flex-wrap gap-2">
+                  <label
+                    v-for="item in WEEKDAY_OPTIONS"
+                    :key="item.value"
+                    class="inline-flex items-center gap-2 rounded-xl border border-[#dbe3ec] bg-white px-4 py-2 text-sm text-[#475569]"
+                  >
+                    <input v-model="form.customWeekdays" type="checkbox" :value="item.value" class="size-4 accent-[#2563eb]" />
+                    <span>{{ item.label }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div v-if="form.customMode === 'monthly'" class="space-y-2">
+                <label class="block text-sm font-semibold text-[#334155]">每月日期</label>
+                <Input
+                  v-model.number="form.customDayOfMonth"
+                  type="number"
+                  min="1"
+                  max="31"
+                  class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4"
+                />
+              </div>
+            </div>
+
+            <div v-else class="space-y-2">
+              <label class="block text-sm font-semibold text-[#334155]">Linux Crontab 代码</label>
+              <textarea
+                v-model="form.cronExpr"
+                class="min-h-[108px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 font-mono text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                placeholder="例如 0 9 * * *"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4">
+          <div class="space-y-1">
+            <h3 class="text-[15px] font-semibold text-[#1f2937]">立即启用</h3>
+            <p class="text-sm text-[#94a3b8]">创建后立即开始运行此任务</p>
+          </div>
+          <Switch
+            :model-value="form.enabled"
+            class="data-[state=checked]:bg-[#111827] data-[state=unchecked]:bg-[#cbd5e1]"
+            @update:model-value="(value) => (form.enabled = !!value)"
           />
-        </div>
-
-        <div>
-          <label class="mb-1 block text-sm font-medium">AI 助手</label>
-          <select v-model.number="form.agentId" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option :value="null">请选择 AI 助手</option>
-            <option v-for="agent in agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between rounded-md border border-input px-3 py-2">
-          <span class="text-sm">启用任务</span>
-          <Switch :model-value="form.enabled" @update:model-value="(value) => (form.enabled = !!value)" />
-        </div>
-
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">调度方式</label>
-          <div class="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              class="rounded-md border px-3 py-2 text-sm"
-              :class="form.scheduleType === 'preset' ? 'border-foreground bg-accent text-foreground' : 'border-input'"
-              @click="form.scheduleType = 'preset'"
-            >
-              快捷设置
-            </button>
-            <button
-              type="button"
-              class="rounded-md border px-3 py-2 text-sm"
-              :class="form.scheduleType === 'custom' ? 'border-foreground bg-accent text-foreground' : 'border-input'"
-              @click="form.scheduleType = 'custom'"
-            >
-              自定义时间
-            </button>
-            <button
-              type="button"
-              class="rounded-md border px-3 py-2 text-sm"
-              :class="form.scheduleType === 'cron' ? 'border-foreground bg-accent text-foreground' : 'border-input'"
-              @click="form.scheduleType = 'cron'"
-            >
-              Cron
-            </button>
-          </div>
-        </div>
-
-        <div v-if="form.scheduleType === 'preset'" class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">快捷设置</label>
-          <select v-model="form.schedulePreset" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-            <option value="every_hour">每小时整点</option>
-            <option value="every_day_0900">每天 09:00</option>
-            <option value="weekdays_0900">工作日 09:00</option>
-            <option value="every_monday_0900">每周一 09:00</option>
-          </select>
-        </div>
-
-        <template v-if="form.scheduleType === 'custom'">
-          <div>
-            <label class="mb-1 block text-sm font-medium">频率</label>
-            <select v-model="form.customMode" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-              <option value="daily">每天</option>
-              <option value="weekly">每周</option>
-              <option value="monthly">每月</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="mb-1 block text-sm font-medium">执行时间</label>
-            <div class="grid grid-cols-2 gap-2">
-              <Input v-model.number="form.customHour" type="number" min="0" max="23" />
-              <Input v-model.number="form.customMinute" type="number" min="0" max="59" />
-            </div>
-          </div>
-
-          <div v-if="form.customMode === 'weekly'" class="md:col-span-2">
-            <label class="mb-1 block text-sm font-medium">星期</label>
-            <div class="flex flex-wrap gap-2">
-              <label v-for="item in WEEKDAY_OPTIONS" :key="item.value" class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm">
-                <input v-model="form.customWeekdays" type="checkbox" :value="item.value" />
-                <span>{{ item.label }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="form.customMode === 'monthly'" class="md:col-span-2">
-            <label class="mb-1 block text-sm font-medium">每月日期</label>
-            <Input v-model.number="form.customDayOfMonth" type="number" min="1" max="31" />
-          </div>
-        </template>
-
-        <div v-if="form.scheduleType === 'cron'" class="md:col-span-2">
-          <label class="mb-1 block text-sm font-medium">Cron</label>
-          <Input v-model="form.cronExpr" placeholder="0 9 * * *" />
-        </div>
+        </section>
       </div>
 
-      <DialogFooter>
-        <button class="rounded-md border border-input px-3 py-2 text-sm" @click="emit('update:open', false)">取消</button>
-        <button :disabled="saving" class="rounded-md bg-foreground px-3 py-2 text-sm text-background" @click="emit('submit')">
-          {{ saving ? '保存中...' : '保存' }}
+      <DialogFooter class="border-t border-[#eef2f6] px-7 py-5 sm:justify-end">
+        <button
+          type="button"
+          class="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-[#dbe3ec] bg-white px-5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#f8fafc]"
+          @click="closeDialog"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          :disabled="saving"
+          class="inline-flex h-11 min-w-[116px] items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f172a] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
+          @click="emit('submit')"
+        >
+          {{ saving ? '提交中...' : '确定' }}
         </button>
       </DialogFooter>
     </DialogContent>
