@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -346,7 +347,54 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
+	if s.gateway != nil {
+		feishuCfg := &tools.FeishuSenderConfig{Gateway: s.gateway}
+		if chID, tgtID, ok := s.resolveChannelSource(ctx, gc.db, gc.conversationID); ok {
+			feishuCfg.DefaultChannelID = chID
+			feishuCfg.DefaultTargetID = tgtID
+		}
+		feishuTool, toolErr := tools.NewFeishuSenderTool(feishuCfg)
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create feishu_sender tool", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, feishuTool)
+			s.app.Logger.Info("[chat] feishu_sender tool added", "default_channel", feishuCfg.DefaultChannelID, "default_target", feishuCfg.DefaultTargetID)
+		}
+	}
+
 	return extraTools, extraHandlers
+}
+
+// resolveChannelSource parses the conversation's external_id (format "ch:{channelID}:{targetID}")
+// to extract the source channel_id and target_id for auto-filling feishu_sender defaults.
+func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conversationID int64) (channelID int64, targetID string, ok bool) {
+	var externalID string
+	err := db.NewSelect().
+		Table("conversations").
+		Column("external_id").
+		Where("id = ?", conversationID).
+		Scan(ctx, &externalID)
+	if err != nil || externalID == "" {
+		return 0, "", false
+	}
+
+	// Format: "ch:{channelID}:{targetID}"
+	if !strings.HasPrefix(externalID, "ch:") {
+		return 0, "", false
+	}
+	parts := strings.SplitN(externalID, ":", 3)
+	if len(parts) != 3 {
+		return 0, "", false
+	}
+	chID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || chID <= 0 {
+		return 0, "", false
+	}
+	tgt := strings.TrimSpace(parts[2])
+	if tgt == "" {
+		return 0, "", false
+	}
+	return chID, tgt, true
 }
 
 // --- streaming / event processing ---
