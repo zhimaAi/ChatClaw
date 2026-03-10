@@ -1040,9 +1040,8 @@ const handleRemoveImage = (id: string) => {
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <!-- 左侧：知识库列表（知识库为空时隐藏），支持收起/展开 -->
+    <!-- 左侧：个人/团队 tab 与知识库列表，始终展示以支持切换；支持收起/展开 -->
     <aside
-      v-if="!isLibraryEmpty"
       :class="
         cn(
           'flex shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200',
@@ -1187,14 +1186,11 @@ const handleRemoveImage = (id: string) => {
           </div>
           <div
             v-else-if="!teamBound"
-            class="mx-2 mt-2 flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4 text-center"
+            class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
           >
-            <p class="text-sm text-muted-foreground">
-              {{ t('assistant.teamNeedsBinding') }}
-            </p>
-            <Button size="sm" @click="goToChatwikiBindingSettings">
-              {{ t('knowledge.team.goBind') }}
-            </Button>
+            <div class="text-center text-sm text-muted-foreground">
+              {{ t('knowledge.team.notBoundTitle') }}
+            </div>
           </div>
           <div v-else class="flex flex-col gap-1">
             <!-- Always show the three category tabs when team is bound -->
@@ -1388,13 +1384,19 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && !teamBound"
         class="flex h-full items-center justify-center px-8"
       >
-        <div
-          class="flex max-w-xl flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 text-center shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-        >
-          <p class="text-sm text-muted-foreground">
-            {{ t('knowledge.team.needsBinding') }}
-          </p>
-          <Button @click="goToChatwikiBindingSettings">
+        <div class="flex flex-col items-center gap-4">
+          <div class="grid size-10 place-items-center rounded-lg bg-muted">
+            <IconKnowledge class="size-4 text-muted-foreground" />
+          </div>
+          <div class="flex flex-col items-center gap-1.5">
+            <h3 class="text-base font-medium text-foreground">
+              {{ t('knowledge.team.notBoundTitle') }}
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              {{ t('knowledge.team.needsBinding') }}
+            </p>
+          </div>
+          <Button class="mt-1" @click="goToChatwikiBindingSettings">
             {{ t('knowledge.team.goBind') }}
           </Button>
         </div>

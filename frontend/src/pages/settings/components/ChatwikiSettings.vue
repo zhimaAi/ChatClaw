@@ -388,8 +388,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- List view -->
+  <!-- List view: main ChatWiki card + Applications card + Knowledge bases card -->
   <template v-if="view === 'list'">
+    <div class="flex flex-col gap-6">
+      <!-- Main ChatWiki card: binding info only -->
     <div
       class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
     >
@@ -412,7 +414,7 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <!-- Bound: user info + robots + libraries -->
+      <!-- Bound: user info only -->
       <div v-if="isBound && currentBinding" class="flex flex-col gap-4">
         <div
           class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
@@ -450,150 +452,145 @@ onUnmounted(() => {
             </Button>
           </div>
         </div>
-
-        <!-- Applications section -->
-        <div
-          class="rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
-        >
-          <div class="flex items-center justify-between px-4 py-3">
-            <h3 class="text-sm font-medium text-foreground">
-              {{ t('settings.chatwiki.applications') }}
-            </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="syncingRobots"
-              @click="syncRobots"
-            >
-              <RefreshCw
-                class="mr-1 size-3.5"
-                :class="{ 'animate-spin': syncingRobots }"
-              />
-              {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
-            </Button>
-          </div>
-          <div v-if="robotsLoading" class="flex items-center justify-center px-4 py-6">
-            <Loader2 class="size-5 animate-spin text-muted-foreground" />
-          </div>
-          <div v-else-if="robots.length === 0" class="px-4 pb-4">
-            <p class="text-sm text-muted-foreground">{{ t('settings.chatwiki.emptyRobots') }}</p>
-          </div>
-          <div v-else class="flex flex-col">
-            <div
-              v-for="robot in robots"
-              :key="robot.id"
-              class="flex items-center justify-between border-t border-border px-4 py-3 dark:border-white/10"
-            >
-              <div class="flex items-center gap-3 overflow-hidden">
-                <div
-                  class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
-                >
-                  <img
-                    v-if="robot.icon"
-                    :src="robot.icon"
-                    :alt="robot.name"
-                    class="size-full object-cover"
-                    @error="onRobotAvatarError(robot, $event)"
-                  />
-                  <span v-else class="text-xs text-muted-foreground">{{ robot.name?.charAt(0) || '?' }}</span>
-                </div>
-                <div class="min-w-0">
-                  <p class="truncate text-sm text-foreground">{{ robot.name }}</p>
-                </div>
-                <span
-                  class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
-                >
-                  {{ getRobotTypeLabel(robot.type) }}
-                </span>
-              </div>
-              <div class="flex shrink-0 items-center gap-2">
-                <Switch
-                  :model-value="robot.enabled"
-                  @update:model-value="(checked) => onRobotSwitchChange(robot, checked)"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Knowledge Bases section -->
-        <div
-          class="rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
-        >
-          <div class="flex items-center justify-between px-4 py-3">
-            <h3 class="text-sm font-medium text-foreground">
-              {{ t('settings.chatwiki.knowledgeBases') }}
-            </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="syncingLibraries"
-              @click="syncLibraries"
-            >
-              <RefreshCw
-                class="mr-1 size-3.5"
-                :class="{ 'animate-spin': syncingLibraries }"
-              />
-              {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
-            </Button>
-          </div>
-          <div class="px-4 pb-3">
-            <Tabs v-model="libraryTab" class="w-full">
-              <TabsList class="w-auto">
-                <TabsTrigger value="0">{{ t('settings.chatwiki.libraryType.normal') }}</TabsTrigger>
-                <TabsTrigger value="2">{{ t('settings.chatwiki.libraryType.qa') }}</TabsTrigger>
-                <TabsTrigger value="3">{{ t('settings.chatwiki.libraryType.wechat') }}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <div v-if="librariesLoading" class="flex items-center justify-center px-4 py-6">
-            <Loader2 class="size-5 animate-spin text-muted-foreground" />
-          </div>
-          <div v-else-if="libraries.length === 0" class="px-4 pb-4">
-            <p class="text-sm text-muted-foreground">{{ t('settings.chatwiki.emptyLibraries') }}</p>
-          </div>
-          <div v-else class="flex flex-col">
-            <div
-              v-for="lib in libraries"
-              :key="lib.id"
-              class="flex items-center justify-between border-t border-border px-4 py-3 dark:border-white/10"
-            >
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-foreground">{{ lib.name }}</p>
-              </div>
-              <div class="flex shrink-0 items-center gap-2">
-                <Switch
-                  :model-value="lib.enabled"
-                  @update:model-value="(checked) => onLibrarySwitchChange(lib, checked)"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
-      <!-- Not bound: placeholders -->
-      <div v-else class="flex flex-col gap-4">
+      <!-- Not bound -->
+      <div v-else>
         <p class="text-sm text-muted-foreground">
           {{ t('settings.chatwiki.notBound') }}
         </p>
-        <div>
-          <h3 class="mb-1 text-sm font-medium text-foreground">
-            {{ t('settings.chatwiki.applications') }}
-          </h3>
-          <p class="text-sm text-muted-foreground">
-            {{ t('settings.chatwiki.notAuthorized') }}
-          </p>
-        </div>
-        <div>
-          <h3 class="mb-1 text-sm font-medium text-foreground">
-            {{ t('settings.chatwiki.knowledgeBases') }}
-          </h3>
-          <p class="text-sm text-muted-foreground">
-            {{ t('settings.chatwiki.notAuthorized') }}
-          </p>
-        </div>
       </div>
+    </div>
+
+    <!-- Applications card -->
+    <div
+      class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+    >
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {{ t('settings.chatwiki.applications') }}
+        </h2>
+        <Button
+          v-if="isBound"
+          variant="outline"
+          size="sm"
+          :disabled="syncingRobots"
+          @click="syncRobots"
+        >
+          <RefreshCw
+            class="mr-1 size-3.5"
+            :class="{ 'animate-spin': syncingRobots }"
+          />
+          {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+        </Button>
+      </div>
+      <div v-if="!isBound" class="text-sm text-muted-foreground">
+        {{ t('settings.chatwiki.notAuthorized') }}
+      </div>
+      <template v-else>
+        <div v-if="robotsLoading" class="flex items-center justify-center py-6">
+          <Loader2 class="size-5 animate-spin text-muted-foreground" />
+        </div>
+        <div v-else-if="robots.length === 0" class="text-sm text-muted-foreground">
+          {{ t('settings.chatwiki.emptyRobots') }}
+        </div>
+        <div v-else class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5">
+          <div
+            v-for="robot in robots"
+            :key="robot.id"
+            class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+          >
+            <div class="flex items-center gap-3 overflow-hidden">
+              <div
+                class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
+              >
+                <img
+                  v-if="robot.icon"
+                  :src="robot.icon"
+                  :alt="robot.name"
+                  class="size-full object-cover"
+                  @error="onRobotAvatarError(robot, $event)"
+                />
+                <span v-else class="text-xs text-muted-foreground">{{ robot.name?.charAt(0) || '?' }}</span>
+              </div>
+              <div class="min-w-0">
+                <p class="truncate text-sm text-foreground">{{ robot.name }}</p>
+              </div>
+              <span
+                class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
+              >
+                {{ getRobotTypeLabel(robot.type) }}
+              </span>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <Switch
+                :model-value="robot.enabled"
+                @update:model-value="(checked) => onRobotSwitchChange(robot, checked)"
+              />
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Knowledge bases card -->
+    <div
+      class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+    >
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold tracking-tight text-foreground">
+          {{ t('settings.chatwiki.knowledgeBases') }}
+        </h2>
+        <Button
+          v-if="isBound"
+          variant="outline"
+          size="sm"
+          :disabled="syncingLibraries"
+          @click="syncLibraries"
+        >
+          <RefreshCw
+            class="mr-1 size-3.5"
+            :class="{ 'animate-spin': syncingLibraries }"
+          />
+          {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+        </Button>
+      </div>
+      <div v-if="!isBound" class="text-sm text-muted-foreground">
+        {{ t('settings.chatwiki.notAuthorized') }}
+      </div>
+      <template v-else>
+        <Tabs v-model="libraryTab" class="w-full">
+          <TabsList class="w-auto">
+            <TabsTrigger value="0">{{ t('settings.chatwiki.libraryType.normal') }}</TabsTrigger>
+            <TabsTrigger value="2">{{ t('settings.chatwiki.libraryType.qa') }}</TabsTrigger>
+            <TabsTrigger value="3">{{ t('settings.chatwiki.libraryType.wechat') }}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div v-if="librariesLoading" class="flex items-center justify-center py-6">
+          <Loader2 class="size-5 animate-spin text-muted-foreground" />
+        </div>
+        <div v-else-if="libraries.length === 0" class="text-sm text-muted-foreground">
+          {{ t('settings.chatwiki.emptyLibraries') }}
+        </div>
+        <div v-else class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5">
+          <div
+            v-for="lib in libraries"
+            :key="lib.id"
+            class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm text-foreground">{{ lib.name }}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <Switch
+                :model-value="lib.enabled"
+                @update:model-value="(checked) => onLibrarySwitchChange(lib, checked)"
+              />
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
     </div>
   </template>
 

@@ -1477,9 +1477,9 @@ onUnmounted(() => {
       @click="sidebarCollapsed = true"
     />
 
-    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded, hidden when empty) -->
+    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded; always show so personal/team tab can switch when empty) -->
     <AgentSidebar
-      v-if="!sidebarCollapsed && !isAgentEmpty"
+      v-if="!sidebarCollapsed"
       :agents="agents"
       :active-agent-id="activeAgentId"
       :active-conversation-id="activeDisplayConversationId"
@@ -1517,9 +1517,9 @@ onUnmounted(() => {
     <!-- Upper row: expand button + messages -->
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
 
-    <!-- Collapse/Expand button (hidden when empty; snap mode: floating, draggable) -->
+    <!-- Collapse/Expand button (snap mode: floating, draggable) -->
     <div
-      v-if="!isAgentEmpty && isSnapMode"
+      v-if="isSnapMode"
       class="absolute left-0.5 z-[5] cursor-grab active:cursor-grabbing"
       :style="{ top: snapBtnTop + 'px' }"
       @pointerdown="onSnapBtnPointerDown"
@@ -1538,7 +1538,7 @@ onUnmounted(() => {
     </div>
     <!-- Collapse/Expand button (non-snap mode: in-flow) -->
     <div
-      v-if="!isAgentEmpty && !isSnapMode"
+      v-if="!isSnapMode"
       class="flex w-8 shrink-0 items-center justify-center"
     >
       <Button
@@ -1571,7 +1571,7 @@ onUnmounted(() => {
         </Button>
       </div>
 
-      <!-- Agent list empty state -->
+      <!-- Agent list empty state (personal tab, no agents) -->
       <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
         <div class="flex flex-col items-center gap-4">
           <div class="grid size-10 place-items-center rounded-lg bg-muted">
@@ -1591,9 +1591,47 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Team tab: not bound - same structure as personal empty (icon + title + desc + bind button) -->
+      <div
+        v-else-if="listMode === 'team' && !teamBound"
+        class="flex h-full items-center justify-center px-8"
+      >
+        <div class="flex flex-col items-center gap-4">
+          <div class="grid size-10 place-items-center rounded-lg bg-muted">
+            <IconAssistant class="size-4 text-muted-foreground" />
+          </div>
+          <div class="flex flex-col items-center gap-1.5">
+            <h3 class="text-base font-medium text-foreground">
+              {{ t('knowledge.team.notBoundTitle') }}
+            </h3>
+            <p class="text-sm text-muted-foreground">
+              {{ t('assistant.teamNeedsBindingDesc') }}
+            </p>
+          </div>
+          <Button class="mt-1" @click="goToChatwikiBindingSettings">
+            {{ t('knowledge.team.goBind') }}
+          </Button>
+        </div>
+      </div>
+
+      <!-- Team tab: bound but no robots - empty data hint only (sync with personal empty style) -->
+      <div
+        v-else-if="listMode === 'team' && teamBound && teamRobots.length === 0"
+        class="flex h-full items-center justify-center px-8"
+      >
+        <div class="flex flex-col items-center gap-4">
+          <div class="grid size-10 place-items-center rounded-lg bg-muted">
+            <IconAssistant class="size-4 text-muted-foreground" />
+          </div>
+          <p class="text-sm text-muted-foreground">
+            {{ t('assistant.teamEmpty') }}
+          </p>
+        </div>
+      </div>
+
       <!-- Chat messages area - show when we have an active conversation -->
       <ChatMessageList
-        v-if="!isAgentEmpty && activeDisplayConversationId"
+        v-else-if="activeDisplayConversationId"
         data-snap-wake="true"
         :conversation-id="activeDisplayConversationId"
         :tab-id="tabId"
@@ -1612,9 +1650,13 @@ onUnmounted(() => {
         @snap-copy="handleCopyToClipboard"
       />
 
-      <!-- Input area: non-snap mode OR snap mode with no messages (centered empty state) -->
+      <!-- Input area: hide when personal empty or team empty/unbound -->
       <ChatInputArea
-        v-if="!isAgentEmpty && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))"
+        v-if="
+          !isAgentEmpty
+          && !(listMode === 'team' && (!teamBound || teamRobots.length === 0))
+          && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
+        "
         data-snap-wake="true"
         :chat-input="chatInput"
         :chat-mode="chatMode"
@@ -1666,7 +1708,12 @@ onUnmounted(() => {
 
     <!-- Input area (snap mode with messages: full-width at bottom) -->
     <ChatInputArea
-      v-if="!isAgentEmpty && isSnapMode && (chatMessages.length > 0 || isGenerating)"
+      v-if="
+        !isAgentEmpty
+        && !(listMode === 'team' && (!teamBound || teamRobots.length === 0))
+        && isSnapMode
+        && (chatMessages.length > 0 || isGenerating)
+      "
       data-snap-wake="true"
       :chat-input="chatInput"
       :chat-mode="chatMode"

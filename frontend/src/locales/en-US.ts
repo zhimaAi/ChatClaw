@@ -494,6 +494,8 @@ export default {
       team: 'Team',
     },
     teamNeedsBinding: 'Account binding required',
+    teamNeedsBindingDesc: 'Account not bound. Team assistants are unavailable.',
+    teamEmpty: 'No team assistants',
     empty: 'No agents yet',
     emptyState: {
       title: 'No Agents',
@@ -732,6 +734,7 @@ export default {
     providersLoadFailed: 'Failed to load providers',
     teamNotReady: 'Team knowledge base is not available yet',
     team: {
+      notBoundTitle: 'Account not bound',
       needsBinding: 'Account not bound. Team knowledge base is unavailable.',
       needsBindingShort: 'Not bound',
       goBind: 'Go to bind',

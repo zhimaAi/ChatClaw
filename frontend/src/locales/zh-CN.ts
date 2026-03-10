@@ -491,6 +491,8 @@ export default {
       team: '团队',
     },
     teamNeedsBinding: '需要绑定账号',
+    teamNeedsBindingDesc: '当前未绑定账号，无法使用团队助手',
+    teamEmpty: '暂无团队助手',
     empty: '暂无助手',
     emptyState: {
       title: '小助手为空',
@@ -727,6 +729,7 @@ export default {
     providersLoadFailed: '加载模型供应商失败',
     teamNotReady: '团队知识库暂未开放',
     team: {
+      notBoundTitle: '暂未绑定账号',
       needsBinding: '当前未绑定账号，无法使用团队知识库。',
       needsBindingShort: '未绑定账号',
       goBind: '前往绑定',
