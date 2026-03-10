@@ -14,6 +14,7 @@ import (
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
+	larkauth "github.com/larksuite/oapi-sdk-go/v3/service/auth/v3"
 	larkcontact "github.com/larksuite/oapi-sdk-go/v3/service/contact/v3"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
@@ -101,24 +102,22 @@ func (a *FeishuAdapter) verifyCredentials(ctx context.Context) error {
 	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	// Use the contact API to verify - get bot info
-	req := larkcontact.NewGetUserReqBuilder().
-		UserId("on_xxx_placeholder").
-		UserIdType("open_id").
+	// Use the auth API to verify credentials by explicitly requesting a tenant access token
+	req := larkauth.NewInternalTenantAccessTokenReqBuilder().
+		Body(larkauth.NewInternalTenantAccessTokenReqBodyBuilder().
+			AppId(a.config.AppID).
+			AppSecret(a.config.AppSecret).
+			Build()).
 		Build()
 
-	// The actual request will fail with invalid user, but auth error happens first if credentials are wrong
-	_, err := a.client.Contact.User.Get(reqCtx, req)
+	resp, err := a.client.Auth.TenantAccessToken.Internal(reqCtx, req)
 	if err != nil {
-		errStr := err.Error()
-		// Check for authentication errors (99991663 = invalid app credentials, 99991668 = app not enabled)
-		if strings.Contains(errStr, "99991663") || strings.Contains(errStr, "99991668") ||
-			strings.Contains(errStr, "invalid") || strings.Contains(errStr, "unauthorized") ||
-			strings.Contains(errStr, "app_access_token") || strings.Contains(errStr, "tenant_access_token") {
-			return fmt.Errorf("invalid app_id or app_secret: %s", errStr)
-		}
-		// Other errors (like user not found) are expected and OK - credentials are valid
+		return fmt.Errorf("feishu auth request failed: %w", err)
 	}
+	if !resp.Success() {
+		return fmt.Errorf("invalid app_id or app_secret (code: %d, msg: %s)", resp.Code, resp.Msg)
+	}
+
 	return nil
 }
 

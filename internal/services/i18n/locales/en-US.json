@@ -185,5 +185,7 @@
   "error.channel_connect_failed": "failed to connect channel '{{.Name}}'",
   "error.channel_connect_requires_agent": "please bind an agent before connecting",
   "error.channel_agent_create_failed": "failed to create AI agent for channel",
-  "error.channel_agent_create_not_available": "auto-create agent is not available"
+  "error.channel_agent_create_not_available": "auto-create agent is not available",
+  "error.channel_ai_reply_failed": "AI reply failed: {{.Error}}",
+  "error.channel_ai_reply_empty": "AI reply failed: generated empty response"
 }
