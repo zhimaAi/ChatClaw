@@ -86,9 +86,9 @@ function selectMonthlyDay(value: number) {
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
       :show-close-button="true"
-      class="max-h-[90vh] overflow-y-auto border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
+      class="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
     >
-      <DialogHeader class="gap-1 border-b border-[#eef2f6] px-7 py-6">
+      <DialogHeader class="flex shrink-0 flex-row items-baseline gap-3 border-b border-[#eef2f6] px-7 py-6">
         <DialogTitle class="text-[32px] font-semibold tracking-[-0.03em] text-[#111827]">
           {{ title }}
         </DialogTitle>
@@ -97,8 +97,9 @@ function selectMonthlyDay(value: number) {
         </p>
       </DialogHeader>
 
-      <div class="space-y-6 px-7 py-6">
-        <section class="space-y-5">
+      <div class="flex-1 overflow-y-auto px-7">
+        <div class="space-y-6 py-6">
+          <section class="space-y-5">
           <div class="space-y-2">
             <label class="block text-[15px] font-semibold text-[#1f2937]">任务名称</label>
             <Input
@@ -204,7 +205,7 @@ function selectMonthlyDay(value: number) {
 
                 <div
                   v-if="form.customMode === 'weekly'"
-                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
+                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
                 >
                   <button
                     v-for="item in WEEKDAY_OPTIONS"
@@ -225,7 +226,7 @@ function selectMonthlyDay(value: number) {
 
                 <div
                   v-else-if="form.customMode === 'monthly'"
-                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
+                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
                 >
                   <button
                     v-for="day in monthlyOptions"
@@ -273,9 +274,10 @@ function selectMonthlyDay(value: number) {
             @update:model-value="(value) => (form.enabled = !!value)"
           />
         </section>
+        </div>
       </div>
 
-      <DialogFooter class="border-t border-[#eef2f6] px-7 py-5 sm:justify-end">
+      <DialogFooter class="shrink-0 border-t border-[#eef2f6] px-7 py-5 sm:justify-end">
         <button
           type="button"
           class="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-[#dbe3ec] bg-white px-5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#f8fafc]"
