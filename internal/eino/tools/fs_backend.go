@@ -111,16 +111,16 @@ func (b *Backend) LsInfo(_ context.Context, req *filesystem.LsInfoRequest) ([]fi
 	return result, nil
 }
 
-func (b *Backend) Read(_ context.Context, req *filesystem.ReadRequest) (string, error) {
+func (b *Backend) Read(_ context.Context, req *filesystem.ReadRequest) (*filesystem.FileContent, error) {
 	path := filepath.Clean(req.FilePath)
 
 	if b.IsSensitivePath(path) {
-		return "", fmt.Errorf("access denied: path contains sensitive credentials")
+		return nil, fmt.Errorf("access denied: path contains sensitive credentials")
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to open file: %w", err)
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
@@ -150,14 +150,14 @@ func (b *Backend) Read(_ context.Context, req *filesystem.ReadRequest) (string, 
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	content := strings.Join(lines, "\n")
 	if content == "" {
-		return "(empty file)", nil
+		return &filesystem.FileContent{Content: "(empty file)"}, nil
 	}
-	return content, nil
+	return &filesystem.FileContent{Content: content}, nil
 }
 
 func (b *Backend) Write(_ context.Context, req *filesystem.WriteRequest) error {

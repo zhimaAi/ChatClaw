@@ -444,6 +444,9 @@ type streamState struct {
 
 	// Current RunPath from the AgentEvent being processed
 	currentRunPath []string
+
+	// Maps sub-agent name → active parent tool_call_id (for routing streaming events)
+	activeSubAgentToolCall map[string]string
 }
 
 type toolCallState struct {
@@ -454,12 +457,23 @@ type toolCallState struct {
 
 func newStreamState(gc *generationContext, assistantMsg *messageModel) *streamState {
 	return &streamState{
-		gc:              gc,
-		assistantMsg:    assistantMsg,
-		toolStatesByKey: make(map[string]*toolCallState),
-		toolOrder:       make([]string, 0),
-		indexKeyMap:     make(map[int]string),
+		gc:                     gc,
+		assistantMsg:           assistantMsg,
+		toolStatesByKey:        make(map[string]*toolCallState),
+		toolOrder:              make([]string, 0),
+		indexKeyMap:            make(map[int]string),
+		activeSubAgentToolCall: make(map[string]string),
 	}
+}
+
+// parentToolCallID returns the tool_call_id of the parent sub-agent invocation
+// for the current run_path, or empty string if not inside a sub-agent.
+func (ss *streamState) parentToolCallID() string {
+	if len(ss.currentRunPath) < 2 {
+		return ""
+	}
+	agentName := ss.currentRunPath[1]
+	return ss.activeSubAgentToolCall[agentName]
 }
 
 func runPathToStrings(runPath []adk.RunStep) []string {
@@ -785,9 +799,10 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			ss.thinkingBuilder.WriteString(msg.ReasoningContent)
 			ss.addThinkingToSegments(msg.ReasoningContent)
 			gc.emit(EventChatThinking, ChatThinkingEvent{
-				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-				Delta:     msg.ReasoningContent,
-				RunPath:   ss.currentRunPath,
+				ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+				Delta:            msg.ReasoningContent,
+				RunPath:          ss.currentRunPath,
+				ParentToolCallID: ss.parentToolCallID(),
 			})
 		}
 
@@ -795,9 +810,10 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			ss.contentBuilder.WriteString(msg.Content)
 			ss.addContentToSegments(msg.Content)
 			gc.emit(EventChatChunk, ChatChunkEvent{
-				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-				Delta:     msg.Content,
-				RunPath:   ss.currentRunPath,
+				ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+				Delta:            msg.Content,
+				RunPath:          ss.currentRunPath,
+				ParentToolCallID: ss.parentToolCallID(),
 			})
 		}
 
@@ -848,13 +864,19 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 			return
 		}
 
+		// Clear sub-agent tracking when the lead agent receives a tool result
+		if len(ss.currentRunPath) <= 1 {
+			delete(ss.activeSubAgentToolCall, toolName)
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
-			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
-			Type:       "result",
-			ToolCallID: msg.ToolCallID,
-			ToolName:   toolName,
-			ResultJSON: msg.Content,
-			RunPath:    ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Type:             "result",
+			ToolCallID:       msg.ToolCallID,
+			ToolName:         toolName,
+			ResultJSON:       msg.Content,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 
 		toolMsg := &messageModel{
@@ -875,9 +897,10 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 		ss.contentBuilder.WriteString(msg.Content)
 		ss.addContentToSegments(msg.Content)
 		gc.emit(EventChatChunk, ChatChunkEvent{
-			ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-			Delta:     msg.Content,
-			RunPath:   ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Delta:            msg.Content,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 	}
 
@@ -932,13 +955,21 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 		if args != "" && !json.Valid([]byte(args)) {
 			s.app.Logger.Warn("[chat] tool arguments not valid JSON", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "tool", toolName, "call_id", resolvedID, "args", args)
 		}
+
+		// Track sub-agent tool calls from the lead agent layer so child
+		// streaming events can be routed to the correct parent tool_call_id.
+		if len(ss.currentRunPath) <= 1 {
+			ss.activeSubAgentToolCall[toolName] = resolvedID
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
-			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
-			Type:       "call",
-			ToolCallID: resolvedID,
-			ToolName:   toolName,
-			ArgsJSON:   args,
-			RunPath:    ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Type:             "call",
+			ToolCallID:       resolvedID,
+			ToolName:         toolName,
+			ArgsJSON:         args,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 	}
 }

@@ -101,8 +101,8 @@ github.com/cloudflare/circl v1.6.3 h1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg
 github.com/cloudflare/circl v1.6.3/go.mod h1:2eXP6Qfat4O/Yhh8BznvKnJ+uzEoTQ6jVKJRn81BiS4=
 github.com/cloudwego/base64x v0.1.6 h1:t11wG9AECkCDk5fMSoxmufanudBtJ+/HemLstXDLI2M=
 github.com/cloudwego/base64x v0.1.6/go.mod h1:OFcloc187FXDaYHvrNIjxSe8ncn0OOM8gEHfghB2IPU=
-github.com/cloudwego/eino v0.8.0-beta.1 h1:8BUdpRqnPXGOk0bmN7SogJXiPvf6J4cQ/domEk1B4Nk=
-github.com/cloudwego/eino v0.8.0-beta.1/go.mod h1:R/UcCjduEJKpdX4rSYPmBd61NP/NN8gdqQxh7skdv4c=
+github.com/cloudwego/eino v0.8.0 h1:DLbrgEAloA+l7aR2qim7qQocQB48DjPrb8LzG3PYMHY=
+github.com/cloudwego/eino v0.8.0/go.mod h1:+2N4nsMPxA6kGBHpH+75JuTfEcGprAMTdsZESrShKpU=
 github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260302070227-13ce9b3fa975 h1:9m3+TvdW1JdQXfXcrfKZOek1AbHY/Md/Br5C0bvuwzA=
 github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260302070227-13ce9b3fa975/go.mod h1:DBwsPrdNxPeE3HNr5XyjjFreG4ypqCUjN0T2C2JSy6k=
 github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260302070227-13ce9b3fa975 h1:ma4Nyn0ejITmbBJedgVt8M15mmvvEyS/FAtYaXFO6EY=
