@@ -3,9 +3,11 @@ package scheduledtasks
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
+	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
 
@@ -287,6 +289,67 @@ func TestRunScheduledTaskNow(t *testing.T) {
 	}
 	if convSvc.lastCreateInput.ChatMode != conversations.ChatModeTask {
 		t.Fatalf("expected task mode by default, got %q", convSvc.lastCreateInput.ChatMode)
+	}
+}
+
+func TestRunScheduledTaskNowConversationNameFollowsLocale(t *testing.T) {
+	db := newTestDB(t)
+	seedAgent(t, db, 1, "openai", "gpt-5")
+
+	makeService := func() (*ScheduledTasksService, *stubConversationService) {
+		convSvc := &stubConversationService{
+			conversation: &conversations.Conversation{ID: 42, AgentID: 1, Name: "scheduled"},
+		}
+		svc := NewScheduledTasksServiceForTest(nil, db, convSvc, stubChatService{
+			sendResult: &chat.SendMessageResult{MessageID: 88, RequestID: "req-1"},
+		})
+		return svc, convSvc
+	}
+
+	i18n.SetLocale(i18n.LocaleZhCN)
+	svc, convSvc := makeService()
+	task, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "日报",
+		Prompt:        "生成日报",
+		AgentID:       1,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+	if _, err := svc.RunScheduledTaskNow(task.ID); err != nil {
+		t.Fatalf("RunScheduledTaskNow returned error: %v", err)
+	}
+	if convSvc.lastCreateInput == nil || convSvc.lastCreateInput.Name == "" {
+		t.Fatalf("expected conversation create input name")
+	}
+	if !strings.HasPrefix(convSvc.lastCreateInput.Name, "(定时) ") {
+		t.Fatalf("expected zh-CN conversation name, got %q", convSvc.lastCreateInput.Name)
+	}
+
+	i18n.SetLocale(i18n.LocaleEnUS)
+	svc, convSvc = makeService()
+	englishTask, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "Daily Report",
+		Prompt:        "Generate daily report",
+		AgentID:       1,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+	if _, err := svc.RunScheduledTaskNow(englishTask.ID); err != nil {
+		t.Fatalf("RunScheduledTaskNow returned error: %v", err)
+	}
+	if convSvc.lastCreateInput == nil || convSvc.lastCreateInput.Name == "" {
+		t.Fatalf("expected conversation create input name")
+	}
+	if !strings.HasPrefix(convSvc.lastCreateInput.Name, "(Scheduled) ") {
+		t.Fatalf("expected en-US conversation name, got %q", convSvc.lastCreateInput.Name)
 	}
 }
 
