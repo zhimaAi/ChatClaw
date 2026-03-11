@@ -727,7 +727,7 @@ func (s *ScheduledTasksService) watchRun(taskID, runID, conversationID int64, st
 			switch assistant.Status {
 			case chat.StatusStreaming, chat.StatusPending, "":
 				continue
-			case chat.StatusSuccess, chat.StatusCancelled, chat.StatusInterrupted:
+			case chat.StatusSuccess:
 				_ = s.completeRun(context.Background(), taskID, runID, assistant.ID, startedAt, "")
 				return
 			default:
