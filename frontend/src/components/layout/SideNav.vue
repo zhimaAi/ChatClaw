@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
 import IconTools from '@/assets/icons/tools.svg'
+import IconCorn from '@/assets/icons/corn.svg'
 import IconSkills from '@/assets/icons/skills.svg'
 import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
@@ -52,7 +53,7 @@ const allTopNavItems: NavItem[] = [
   {
     key: 'scheduled-tasks',
     labelKey: 'nav.scheduledTasks',
-    icon: IconTools,
+    icon: IconCorn,
   },
   {
     key: 'skills',
