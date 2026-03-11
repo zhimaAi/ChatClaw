@@ -32,7 +32,7 @@ const (
 	googleProbeURL     = "https://github.com"
 	googleProbeTimeout = 3 * time.Second
 
-	downloadTimeout = 5 * time.Minute
+	downloadTimeout = 50 * time.Minute
 )
 
 // 国内可用的 GitHub 下载代理列表（按优先级排序）
@@ -275,10 +275,10 @@ func (s *ToolchainService) emitProgress(progress DownloadProgress) {
 
 // progressReader 带进度跟踪的 Reader
 type progressReader struct {
-	reader   io.Reader
-	callback func(downloaded int64, percent float64)
+	reader     io.Reader
+	callback   func(downloaded int64, percent float64)
 	downloaded int64
-	totalSize   int64
+	totalSize  int64
 }
 
 func (p *progressReader) Read(buf []byte) (int, error) {
@@ -766,11 +766,11 @@ type DownloadProgress struct {
 	Tool        string  `json:"tool"`        // 工具名称
 	URL         string  `json:"url"`         // 正在下载的 URL
 	TotalSize   int64   `json:"totalSize"`   // 总大小（字节）
-	Downloaded  int64   `json:"downloaded"`   // 已下载（字节）
-	Percent     float64 `json:"percent"`      // 百分比 (0-100)
-	Speed       float64 `json:"speed"`        // 下载速度 (KB/s)
-	ElapsedTime int64   `json:"elapsedTime"`  // 已用时间 (毫秒)
-	Remaining   int64   `json:"remaining"`     // 预计剩余时间 (毫秒)
+	Downloaded  int64   `json:"downloaded"`  // 已下载（字节）
+	Percent     float64 `json:"percent"`     // 百分比 (0-100)
+	Speed       float64 `json:"speed"`       // 下载速度 (KB/s)
+	ElapsedTime int64   `json:"elapsedTime"` // 已用时间 (毫秒)
+	Remaining   int64   `json:"remaining"`   // 预计剩余时间 (毫秒)
 }
 
 // downloadWithSingleURL downloads from a single URL and extracts the binary.
@@ -780,7 +780,7 @@ func (s *ToolchainService) downloadWithSingleURL(spec toolSpec, dlURL, binDir st
 
 	// 连接超时和读取超时配置
 	connectTimeout := 10 * time.Second
-	readTimeout := 5 * time.Minute
+	readTimeout := 50 * time.Minute
 
 	// 创建带超时的 HTTP 客户端
 	transport := &http.Transport{
