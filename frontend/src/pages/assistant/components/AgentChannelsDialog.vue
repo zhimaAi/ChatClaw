@@ -113,6 +113,12 @@ function getPlatformIcon(platformId: string): string | null {
   return platformIconMap[platformId] || null
 }
 
+function getPlatformDisplayName(platformId: string, fallbackName?: string): string {
+  const key = `channels.platforms.${platformId}`
+  if (te(key)) return t(key)
+  return fallbackName || platformId
+}
+
 function getPlatformDescription(platformId: string): string {
   const key = `channels.meta.${platformId}.description`
   if (te(key)) {
@@ -428,9 +434,9 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                     platform.id !== 'feishu' && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="platform.id === 'feishu' ? handleSelectPlatform(platform.id) : toast.default('即将上线')"
+                @click="platform.id === 'feishu' ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
-                <span class="truncate">{{ platform.name || platform.id }}</span>
+                <span class="truncate">{{ getPlatformDisplayName(platform.id, platform.name) }}</span>
               </button>
             </div>
           </aside>
@@ -445,7 +451,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0 flex-1">
                   <h3 class="text-base font-semibold leading-6 text-[#262626] dark:text-foreground">
-                    {{ selectedPlatformMeta.name }}
+                    {{ getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name) }}
                   </h3>
                   <p class="mt-1 text-sm leading-5 text-[#737373] dark:text-muted-foreground">
                     {{ getPlatformDescription(selectedPlatformMeta.id) }}
@@ -492,13 +498,13 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                     <img
                       v-if="inlineFormAvatar"
                       :src="inlineFormAvatar"
-                      :alt="inlineFormName || selectedPlatformMeta.name"
+                      :alt="inlineFormName || getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)"
                       class="h-full w-full object-cover"
                     />
                     <img
                       v-else-if="getPlatformIcon(selectedPlatformMeta.id)"
                       :src="getPlatformIcon(selectedPlatformMeta.id)!"
-                      :alt="selectedPlatformMeta.name"
+                      :alt="getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)"
                       class="h-8 w-8 object-contain"
                     />
                     <Plus v-else class="size-6 text-[#595959] dark:text-muted-foreground" />

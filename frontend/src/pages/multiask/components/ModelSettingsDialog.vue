@@ -179,15 +179,15 @@ onUnmounted(cleanupDrag)
     <DialogContent class="max-h-[85vh] flex max-w-md flex-col">
       <DialogHeader class="text-left">
         <div class="flex items-center gap-2">
-          <DialogTitle>{{ t('multiask.modelSettings', '模型设置') }}</DialogTitle>
-          <span class="text-xs text-muted-foreground font-normal">{{ t('multiask.dragToReorder', '拖拽可调整顺序') }}</span>
+          <DialogTitle>{{ t('multiask.modelSettings') }}</DialogTitle>
+          <span class="text-xs text-muted-foreground font-normal">{{ t('multiask.dragToReorder') }}</span>
         </div>
       </DialogHeader>
 
       <div class="flex-1 overflow-y-auto py-4">
         <div class="flex items-center justify-between px-3 pb-2 text-xs text-muted-foreground">
-          <span>{{ t('multiask.modelName', '模型名称') }}</span>
-          <span>{{ t('multiask.hideOrShow', '隐藏 / 显示') }}</span>
+          <span>{{ t('multiask.modelName') }}</span>
+          <span>{{ t('multiask.hideOrShow') }}</span>
         </div>
         <ul ref="listRef" class="flex flex-col px-1 pb-1">
           <li
@@ -228,8 +228,8 @@ onUnmounted(cleanupDrag)
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="emit('update:open', false)">{{ t('common.cancel', '取消') }}</Button>
-        <Button @click="handleSave">{{ t('common.save', '保存') }}</Button>
+        <Button variant="outline" @click="emit('update:open', false)">{{ t('common.cancel') }}</Button>
+        <Button @click="handleSave">{{ t('common.save') }}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

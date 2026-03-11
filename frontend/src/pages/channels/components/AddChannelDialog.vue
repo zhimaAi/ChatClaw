@@ -23,7 +23,7 @@ const emit = defineEmits<{
   select: [platform: PlatformMeta]
 }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const localSelected = ref<PlatformMeta | null>(null)
 
@@ -47,6 +47,12 @@ function handleConfirm() {
 function getPlatformIcon(platformId: string): string | null {
   return platformIconMap[platformId] || null
 }
+
+function getPlatformDisplayName(platformId: string, fallbackName?: string): string {
+  const key = `channels.platforms.${platformId}`
+  if (te(key)) return t(key)
+  return fallbackName || platformId
+}
 </script>
 
 <template>
@@ -54,7 +60,7 @@ function getPlatformIcon(platformId: string): string | null {
     <DialogContent class="sm:max-w-[480px] p-0 gap-0 overflow-hidden">
       <DialogHeader class="px-6 py-4">
         <DialogTitle class="text-lg font-semibold text-[#0a0a0a] dark:text-foreground">
-          {{ t('channels.add.title', '添加频道') }}
+          {{ t('channels.add.title') }}
         </DialogTitle>
         <DialogDescription class="hidden">{{ t('channels.add.desc') }}</DialogDescription>
       </DialogHeader>
@@ -68,7 +74,7 @@ function getPlatformIcon(platformId: string): string | null {
             :class="[
               platform.id === 'feishu' ? 'cursor-pointer hover:bg-[#fcfcfc] dark:hover:bg-muted/50' : 'cursor-not-allowed opacity-50 bg-[#f9f9f9] dark:bg-muted/20'
             ]"
-            @click="platform.id === 'feishu' ? handleSelect(platform) : toast.default('即将上线')"
+            @click="platform.id === 'feishu' ? handleSelect(platform) : toast.default(t('channels.comingSoon'))"
           >
             <div class="flex flex-1 items-center gap-2">
               <div class="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
@@ -81,7 +87,7 @@ function getPlatformIcon(platformId: string): string | null {
                 <span v-else class="text-xs">🤖</span>
               </div>
               <p class="text-sm font-medium leading-[20px] text-[#0a0a0a] dark:text-foreground">
-                {{ platform.name || platform.id }}
+                {{ getPlatformDisplayName(platform.id, platform.name) }}
               </p>
             </div>
             
@@ -102,14 +108,14 @@ function getPlatformIcon(platformId: string): string | null {
           class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
           @click="open = false"
         >
-          {{ t('common.cancel', '取消') }}
+          {{ t('common.cancel') }}
         </Button>
         <Button 
           class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" 
           @click="handleConfirm" 
           :disabled="!localSelected"
         >
-          {{ t('common.confirm', '确定') }}
+          {{ t('common.confirm') }}
         </Button>
       </DialogFooter>
     </DialogContent>

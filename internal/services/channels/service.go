@@ -87,12 +87,13 @@ func (s *ChannelService) GetChannelStats() (*ChannelStats, error) {
 
 // GetSupportedPlatforms returns all platforms with registered adapters.
 func (s *ChannelService) GetSupportedPlatforms() []PlatformMeta {
+	// Name is a locale-neutral fallback; UI should use platform ID with i18n (channels.platforms.*).
 	allPlatforms := []PlatformMeta{
-		{ID: PlatformDingTalk, Name: "钉钉", AuthType: "token"},
-		{ID: PlatformFeishu, Name: "飞书", AuthType: "token"},
-		{ID: PlatformWeCom, Name: "企微", AuthType: "token"},
+		{ID: PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
+		{ID: PlatformFeishu, Name: "Feishu", AuthType: "token"},
+		{ID: PlatformWeCom, Name: "WeCom", AuthType: "token"},
 		{ID: PlatformQQ, Name: "QQ", AuthType: "token"},
-		{ID: PlatformTwitter, Name: "X(Twitter)", AuthType: "token"},
+		{ID: PlatformTwitter, Name: "X (Twitter)", AuthType: "token"},
 	}
 	return allPlatforms
 }

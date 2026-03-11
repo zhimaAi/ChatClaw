@@ -65,8 +65,12 @@ const currentPlatformId = computed(() => props.platform?.id || props.channel?.pl
 
 const isFeishu = computed(() => currentPlatformId.value === 'feishu')
 const isWeCom = computed(() => currentPlatformId.value === 'wecom')
-const appIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
-const appSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
+const appIdLabel = computed(() =>
+  isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId'),
+)
+const appSecretLabel = computed(() =>
+  isWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret'),
+)
 const appIdPlaceholder = computed(() => (
   isWeCom.value
     ? t('channels.config.wecomAppIdPlaceholder')
@@ -83,7 +87,7 @@ const dialogTitle = computed(() => {
   if (!pid) return ''
   const botName = t(`channels.meta.${pid}.botName`, pid)
   if (props.channel) {
-    return t('channels.config.editTitle', '编辑 {platform} 频道').replace('{platform}', botName)
+    return t('channels.config.editTitle', { platform: botName })
   }
   return t('channels.config.title', { platform: botName })
 })
@@ -106,10 +110,10 @@ const handlePickIcon = async () => {
       CanChooseFiles: true,
       CanChooseDirectories: false,
       AllowsMultipleSelection: false,
-      Title: t('channels.config.pickAvatar', '选择头像'),
+      Title: t('channels.config.pickAvatar'),
       Filters: [
         {
-          DisplayName: t('channels.config.filterImages', '图片文件'),
+          DisplayName: t('channels.config.filterImages'),
           Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
         },
       ],
@@ -126,7 +130,7 @@ async function handleVerify() {
   const pid = currentPlatformId.value
   if (!pid) return
   if (!isFormValid.value) {
-    toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
+    toast.error(t('channels.inline.fillRequired'))
     return
   }
   const extraConfig = JSON.stringify({
@@ -136,9 +140,9 @@ async function handleVerify() {
   verifying.value = true
   try {
     await ChannelService.VerifyChannelConfig(pid, extraConfig)
-    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+    toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
-    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
   } finally {
     verifying.value = false
   }
@@ -164,7 +168,7 @@ async function handleSave() {
         avatar: avatar.value,
         extra_config: extraConfig,
       }))
-      toast.success(t('channels.config.editSuccess', '编辑成功'))
+      toast.success(t('channels.config.editSuccess'))
     } else {
       channel = await ChannelService.CreateChannel({
         platform: pid,
@@ -294,7 +298,7 @@ async function handleSave() {
           >
             <LoaderCircle v-if="verifying" class="mr-2 size-4 animate-spin" />
             <ShieldCheck v-else class="mr-2 size-4" />
-            {{ verifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
+            {{ verifying ? t('channels.inline.verifying') : t('channels.inline.verifyConfig') }}
           </Button>
           <Button variant="outline" type="button" @click="open = false">
             {{ t('channels.config.cancel') }}
