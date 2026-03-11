@@ -20,6 +20,7 @@ import ChatwikiSettings from './components/ChatwikiSettings.vue'
 import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
 import SkillsSettings from './components/SkillsSettings.vue'
+import MCPSettings from './components/MCPSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
@@ -34,6 +35,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
   generalSettings: 'settings.menu.generalSettings',
   memorySettings: 'settings.menu.memorySettings',
   skills: 'settings.menu.skills',
+  mcp: 'settings.menu.mcp',
   snapSettings: 'settings.menu.snapSettings',
   tools: 'settings.menu.tools',
   chatwiki: 'settings.menu.chatwiki',
@@ -46,6 +48,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
   generalSettings: GeneralSettings,
   memorySettings: MemorySettings,
   skills: SkillsSettings,
+  mcp: MCPSettings,
   snapSettings: SnapSettings,
   tools: ToolsSettings,
   chatwiki: ChatwikiSettings,
@@ -53,7 +56,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
 }
 
 // 是否为全宽组件（不需要居中包装）
-const isFullWidthComponent = computed(() => settingsStore.activeMenu === 'modelService')
+const isFullWidthComponent = computed(() => settingsStore.activeMenu === 'modelService' || settingsStore.activeMenu === 'mcp')
 
 // 获取当前菜单的翻译文本
 const activeMenuLabel = computed(() => t(menuLabelKeys[settingsStore.activeMenu]))
