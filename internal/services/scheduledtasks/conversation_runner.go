@@ -6,6 +6,7 @@ import (
 
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
+	"chatclaw/internal/services/i18n"
 )
 
 type conversationService interface {
@@ -41,7 +42,10 @@ func (s *ScheduledTasksService) executeTask(ctx context.Context, task scheduledT
 	}
 
 	startedAt := runModel.StartedAt
-	conversationName := fmt.Sprintf("(定时) %s - %s", task.Name, startedAt.Format("2006-01-02 15:04"))
+	conversationName := i18n.Tf("scheduled_task.conversation.name", map[string]any{
+		"TaskName": task.Name,
+		"StartedAt": startedAt.Format("2006-01-02 15:04"),
+	})
 	conv, err := s.runnerDeps.conversations.CreateConversation(conversations.CreateConversationInput{
 		AgentID:        task.AgentID,
 		Name:           conversationName,

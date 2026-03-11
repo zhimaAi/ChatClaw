@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"chatclaw/internal/services/i18n"
+
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 )
@@ -402,10 +404,10 @@ func (t *scheduledTaskCreatePreviewTool) InvokableRun(_ context.Context, argumen
 
 	issues := make([]string, 0)
 	if strings.TrimSpace(input.Name) == "" {
-		issues = append(issues, "任务名称不能为空")
+		issues = append(issues, i18n.T("scheduled_task.issue.name_required"))
 	}
 	if strings.TrimSpace(input.Prompt) == "" {
-		issues = append(issues, "任务提示词不能为空")
+		issues = append(issues, i18n.T("scheduled_task.issue.prompt_required"))
 	}
 
 	matches, status, err := t.config.MatchAgentsByNameFn(input.AgentName)
@@ -413,15 +415,17 @@ func (t *scheduledTaskCreatePreviewTool) InvokableRun(_ context.Context, argumen
 		return "", err
 	}
 	if status == "none" {
-		issues = append(issues, "未匹配到对应的助手")
+		issues = append(issues, i18n.T("scheduled_task.issue.agent_not_found"))
 	}
 	if status == "multiple" {
-		issues = append(issues, "助手名称匹配到多个结果，需要用户进一步确认")
+		issues = append(issues, i18n.T("scheduled_task.issue.agent_ambiguous"))
 	}
 
 	schedule, err := t.config.ValidateScheduleFn(input.ScheduleType, input.ScheduleValue, input.CronExpr)
 	if err != nil {
-		issues = append(issues, "调度参数校验失败: "+err.Error())
+		issues = append(issues, i18n.Tf("scheduled_task.issue.schedule_invalid", map[string]any{
+			"Error": err.Error(),
+		}))
 	}
 
 	result := map[string]any{
@@ -535,9 +539,9 @@ func (t *scheduledTaskHistoryListTool) InvokableRun(_ context.Context, arguments
 		return "", err
 	}
 	if task == nil {
-		issues := []string{"匹配到多个任务，需要用户指定具体目标"}
+		issues := []string{i18n.T("scheduled_task.issue.task_ambiguous")}
 		if len(candidates) == 0 {
-			issues = []string{"未找到匹配的任务"}
+			issues = []string{i18n.T("scheduled_task.issue.task_not_found")}
 		}
 		return marshalJSON(map[string]any{
 			"issues":        issues,
@@ -617,9 +621,9 @@ func runTaskMutation(config *ScheduledTaskManagementConfig, arguments, action st
 	issues := make([]string, 0)
 	if task == nil {
 		if len(candidates) == 0 {
-			issues = append(issues, "未找到匹配的任务")
+			issues = append(issues, i18n.T("scheduled_task.issue.task_not_found"))
 		} else {
-			issues = append(issues, "匹配到多个任务，需要用户指定具体目标")
+			issues = append(issues, i18n.T("scheduled_task.issue.task_ambiguous"))
 		}
 		return marshalJSON(map[string]any{
 			"action":        "preview_" + action,
@@ -751,14 +755,31 @@ func applyAgentNames(tasks []ScheduledTaskRecord, agents []ScheduledTaskAgent) {
 }
 
 func buildCreateConfirmationMessage(task ScheduledTaskRecord) string {
-	return fmt.Sprintf("请确认创建计划任务：任务名=%s，助手=%s，cron=%s，启用=%t", task.Name, task.AgentName, task.CronExpr, task.Enabled)
+	return i18n.Tf("scheduled_task.confirm.create", map[string]any{
+		"Name":      task.Name,
+		"AgentName": task.AgentName,
+		"CronExpr":  task.CronExpr,
+		"Enabled":   task.Enabled,
+	})
 }
 
 func buildMutationConfirmationMessage(action string, task ScheduledTaskRecord) string {
-	actionText := map[string]string{
-		"delete":  "删除",
-		"enable":  "启用",
-		"disable": "停用",
-	}[action]
-	return fmt.Sprintf("请确认%s计划任务：任务名=%s，ID=%d", actionText, task.Name, task.ID)
+	return i18n.Tf("scheduled_task.confirm.mutation", map[string]any{
+		"Action": scheduledTaskMutationActionLabel(action),
+		"Name":   task.Name,
+		"ID":     task.ID,
+	})
+}
+
+func scheduledTaskMutationActionLabel(action string) string {
+	switch action {
+	case "delete":
+		return i18n.T("scheduled_task.action.delete")
+	case "enable":
+		return i18n.T("scheduled_task.action.enable")
+	case "disable":
+		return i18n.T("scheduled_task.action.disable")
+	default:
+		return action
+	}
 }

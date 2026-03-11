@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"chatclaw/internal/services/i18n"
 )
 
 func TestScheduledTaskManagementTools(t *testing.T) {
@@ -214,6 +216,27 @@ func TestScheduledTaskDeleteEnableDisableTools(t *testing.T) {
 		t.Fatalf("unexpected disable preview: %s", preview)
 	}
 
+	i18n.SetLocale(i18n.LocaleEnUS)
+	t.Cleanup(func() {
+		i18n.SetLocale(i18n.LocaleZhCN)
+	})
+
+	preview, err = disableTool.InvokableRun(context.Background(), `{"task_name":"日报","confirm":false}`)
+	if err != nil {
+		t.Fatalf("disable preview returned error: %v", err)
+	}
+	if !strings.Contains(preview, `Multiple tasks matched`) {
+		t.Fatalf("expected English ambiguity issue in result: %s", preview)
+	}
+
+	preview, err = deleteTool.InvokableRun(context.Background(), `{"task_name":"销售日报","confirm":false}`)
+	if err != nil {
+		t.Fatalf("delete preview returned error: %v", err)
+	}
+	if !strings.Contains(preview, `Please confirm deleting scheduled task`) {
+		t.Fatalf("expected English confirmation message in result: %s", preview)
+	}
+
 	deleted, err := deleteTool.InvokableRun(context.Background(), `{"task_name":"销售日报","confirm":true}`)
 	if err != nil {
 		t.Fatalf("delete returned error: %v", err)
@@ -274,6 +297,19 @@ func TestScheduledTaskHistoryListTool(t *testing.T) {
 	}
 	if !strings.Contains(result, `匹配到多个任务`) {
 		t.Fatalf("expected ambiguity issue in result: %s", result)
+	}
+
+	i18n.SetLocale(i18n.LocaleEnUS)
+	t.Cleanup(func() {
+		i18n.SetLocale(i18n.LocaleZhCN)
+	})
+
+	result, err = tool.InvokableRun(context.Background(), `{"task_name":"未知任务","page":1,"page_size":10}`)
+	if err != nil {
+		t.Fatalf("InvokableRun returned error: %v", err)
+	}
+	if !strings.Contains(result, `No matching task was found`) {
+		t.Fatalf("expected English not-found issue in result: %s", result)
 	}
 
 	if _, err := tool.InvokableRun(context.Background(), `{"page":1,"page_size":10}`); err == nil {
