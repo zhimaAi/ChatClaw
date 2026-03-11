@@ -16,11 +16,13 @@ import {
   X,
   FileText,
   FileCode,
+  Plus,
 } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
@@ -88,6 +90,9 @@ const paginatedSkills = computed(() => {
 const installedHasMore = computed(
   () => paginatedSkills.value.length < filteredSkills.value.length,
 )
+
+const isLocalFilter = computed(() => installedFilter.value === 'local')
+const hasLocalSkills = computed(() => isLocalFilter.value && filteredSkills.value.length > 0)
 
 // --- Market tab ---
 const marketSkills = ref<RemoteSkill[]>([])
@@ -820,13 +825,31 @@ watch(activeTab, (tab) => {
               {{ t(opt.key) }}
             </button>
           </div>
-          <div class="relative ml-auto w-52">
-            <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              v-model="installedSearchQuery"
-              :placeholder="t('settings.skills.searchPlaceholder')"
-              class="h-7 pl-8 text-xs"
-            />
+          <div class="ml-auto flex items-center gap-2">
+            <TooltipProvider v-if="hasLocalSkills">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <button
+                    class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="handleOpenSkillsDir"
+                  >
+                    <Plus class="size-3.5" />
+                    {{ t('settings.skills.addLocalSkill') }}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" class="max-w-xs">
+                  {{ t('settings.skills.addLocalSkillHint') }}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <div class="relative w-52">
+              <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                v-model="installedSearchQuery"
+                :placeholder="t('settings.skills.searchPlaceholder')"
+                class="h-7 pl-8 text-xs"
+              />
+            </div>
           </div>
         </div>
 
@@ -837,6 +860,21 @@ watch(activeTab, (tab) => {
             class="flex items-center justify-center py-12"
           >
             <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div
+            v-else-if="filteredSkills.length === 0 && isLocalFilter"
+            class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
+          >
+            <Package class="size-8 opacity-40" />
+            <span class="text-sm font-medium">{{ t('settings.skills.noLocalSkills') }}</span>
+            <span class="text-center text-xs leading-relaxed">{{ t('settings.skills.noLocalSkillsHint') }}</span>
+            <button
+              class="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              @click="handleOpenSkillsDir"
+            >
+              <FolderOpen class="size-3.5" />
+              {{ t('settings.skills.openDir') }}
+            </button>
           </div>
           <div
             v-else-if="filteredSkills.length === 0"
@@ -903,11 +941,13 @@ watch(activeTab, (tab) => {
         <!-- Search + Sort -->
         <div class="flex shrink-0 items-center gap-3 px-4 py-2">
           <div class="relative flex-1">
-            <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Loader2 v-if="isSearching" class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+            <Search v-else class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               v-model="searchQuery"
               :placeholder="t('settings.skills.searchPlaceholder')"
               class="h-8 pl-8 text-sm"
+              :disabled="isSearching"
               @keyup.enter="handleSearch"
             />
           </div>
