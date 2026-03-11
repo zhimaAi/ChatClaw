@@ -218,6 +218,9 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		SandboxMode:    "codex",
 		SandboxNetwork: true,
 		WorkDir:        defaultWorkDir(),
+
+		MCPServerIDs:        "[]",
+		MCPServerEnabledIDs: "[]",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -398,6 +401,15 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	}
 	if input.WorkDir != nil {
 		q = q.Set("work_dir = ?", strings.TrimSpace(*input.WorkDir))
+	}
+	if input.MCPEnabled != nil {
+		q = q.Set("mcp_enabled = ?", *input.MCPEnabled)
+	}
+	if input.MCPServerIDs != nil {
+		q = q.Set("mcp_server_ids = ?", *input.MCPServerIDs)
+	}
+	if input.MCPServerEnabledIDs != nil {
+		q = q.Set("mcp_server_enabled_ids = ?", *input.MCPServerEnabledIDs)
 	}
 
 	result, err := q.Exec(ctx)
