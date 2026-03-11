@@ -73,7 +73,7 @@ async function selectRun(run: ScheduledTaskRun) {
       </DialogHeader>
 
       <div class="flex h-[70vh] min-h-0 gap-4">
-        <div class="shrink-0 overflow-auto rounded-lg border border-border sm:w-[150px]">
+        <div class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[210px]">
           <div v-if="loading" class="p-4 text-sm text-muted-foreground">加载中...</div>
           <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
             暂无运行记录
@@ -85,18 +85,20 @@ async function selectRun(run: ScheduledTaskRun) {
             :class="selectedRunId === run.id ? 'bg-accent/50' : ''"
             @click="selectRun(run)"
           >
-            <div class="flex items-center justify-between gap-2">
-              <TaskRunStatusBadge :status="run.status" :label="displayRunStatusLabel(run.status)" />
-              <span class="text-xs text-muted-foreground">{{
-                formatDuration(run.duration_ms)
-              }}</span>
+            <div class="flex items-start gap-3 overflow-hidden">
+              <TaskRunStatusBadge class="mt-0.5 shrink-0" :status="run.status" :label="displayRunStatusLabel(run.status)" />
+              <div class="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
+                <div class="w-full truncate text-xs text-foreground">
+                  {{ formatTaskTime(run.started_at) }}
+                </div>
+                <div class="flex w-full items-center gap-1 text-xs text-muted-foreground">
+                  <span class="shrink-0">{{ displayRunTriggerLabel(run.trigger_type) }}</span>
+                  <span class="shrink-0 text-muted-foreground/50">·</span>
+                  <span class="truncate">{{ formatDuration(run.duration_ms) }}</span>
+                </div>
+              </div>
             </div>
-            <div class="mt-2 whitespace-nowrap text-xs text-foreground">
-              {{ formatTaskTime(run.started_at) }}
-            </div>
-            <div class="mt-1 text-xs text-muted-foreground">
-              {{ displayRunTriggerLabel(run.trigger_type) }}
-            </div>
+    
             <TooltipProvider>
               <Tooltip v-if="run.error_message">
                 <TooltipTrigger as-child>
