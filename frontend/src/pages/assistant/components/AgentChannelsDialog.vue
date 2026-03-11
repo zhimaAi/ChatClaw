@@ -553,21 +553,21 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                 <div class="mt-4 flex items-center gap-2">
                   <Button
                     type="button"
-                    class="h-10 rounded-lg bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+                    class="h-10 gap-2 rounded-lg bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
                     :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
                     @click="handleInlineVerify"
                   >
-                    <LoaderCircle v-if="inlineFormVerifying" class="mr-2 size-4 animate-spin" />
-                    <ShieldCheck v-else class="mr-2 size-4" />
+                    <LoaderCircle v-if="inlineFormVerifying" class="size-4 shrink-0 animate-spin" />
+                    <ShieldCheck v-else class="size-4 shrink-0" />
                     {{ inlineFormVerifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
                   </Button>
 
                   <Button
-                    class="h-10 rounded-lg bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                    class="h-10 gap-2 rounded-lg bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
                     :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
                     @click="handleCreateChannel"
                   >
-                    <Plus class="mr-2 size-4" />
+                    <Plus class="size-4 shrink-0" />
                     {{ t('channels.inline.save', '保存添加') }}
                   </Button>
 
@@ -744,11 +744,11 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
 
         <!-- Add Bot Button -->
         <Button
-          class="mb-4 h-10 w-full shrink-0 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+          class="mb-4 h-10 w-full shrink-0 gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="addBotLoading"
           @click="showConfigChannelDialog = true; showAddBotDialog = false"
         >
-          <Plus class="mr-2 size-4" />
+          <Plus class="size-4 shrink-0" />
           {{ t('assistant.channels.addBot') }}
         </Button>
 

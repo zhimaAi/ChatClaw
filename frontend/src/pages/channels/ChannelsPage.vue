@@ -395,10 +395,10 @@ onMounted(loadData)
         <p class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.subtitle') }}</p>
       </div>
       <Button 
-        class="h-9 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
+        class="h-9 gap-1 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
         @click="handleAddChannel"
       >
-        <Plus class="mr-1.5 h-4 w-4" />
+        <Plus class="h-4 w-4 shrink-0" />
         {{ t('channels.addChannel') }}
       </Button>
     </div>
@@ -592,8 +592,8 @@ onMounted(loadData)
         <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
           {{ t('channels.empty.desc') }}
         </p>
-        <Button class="mt-6 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" @click="handleAddChannel">
-          <Plus class="mr-1.5 h-4 w-4" />
+        <Button class="mt-6 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" @click="handleAddChannel">
+          <Plus class="h-4 w-4 shrink-0" />
           {{ t('channels.addChannel') }}
         </Button>
       </div>
@@ -666,20 +666,20 @@ onMounted(loadData)
         <div class="flex items-center gap-3">
           <Button
             type="button"
-            class="h-10 bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+            class="h-10 gap-2 bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
             :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
             @click="handleInlineVerify"
           >
-            <LoaderCircle v-if="inlineFormVerifying" class="mr-2 h-4 w-4 animate-spin" />
-            <Check v-else class="mr-2 h-4 w-4" />
+            <LoaderCircle v-if="inlineFormVerifying" class="h-4 w-4 shrink-0 animate-spin" />
+            <Check v-else class="h-4 w-4 shrink-0" />
             {{ inlineFormVerifying ? t('channels.inline.verifying') : t('channels.inline.verifyConfig') }}
           </Button>
           <Button
-            class="h-10 bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+            class="h-10 gap-2 bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
             :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
             @click="handleInlineSave"
           >
-            <Plus class="mr-2 h-4 w-4" />
+            <Plus class="h-4 w-4 shrink-0" />
             {{ t('channels.inline.save') }}
           </Button>
           <Button

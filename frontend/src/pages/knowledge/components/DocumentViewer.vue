@@ -479,8 +479,8 @@ const handleOpenExternally = async () => {
         <!-- Error state -->
         <div v-else-if="error" class="flex flex-col items-center justify-center flex-1 py-12 gap-4">
           <div class="text-sm text-muted-foreground text-center">{{ error }}</div>
-          <Button variant="outline" @click="handleOpenExternally">
-            <ExternalLink class="size-4 mr-2" />
+          <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+            <ExternalLink class="size-4 shrink-0" />
             {{ t('knowledge.viewer.openExternally') }}
           </Button>
         </div>
@@ -490,8 +490,8 @@ const handleOpenExternally = async () => {
           <div class="text-sm text-muted-foreground text-center">
             {{ t('knowledge.viewer.unsupported', { type: document?.fileType.toUpperCase() }) }}
           </div>
-          <Button variant="outline" @click="handleOpenExternally">
-            <ExternalLink class="size-4 mr-2" />
+          <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+            <ExternalLink class="size-4 shrink-0" />
             {{ t('knowledge.viewer.openExternally') }}
           </Button>
         </div>
@@ -502,8 +502,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ renderError }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -521,8 +521,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -534,8 +534,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ renderError }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -553,8 +553,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -580,8 +580,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ renderError }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -615,8 +615,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ renderError }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -636,8 +636,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -661,8 +661,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -700,8 +700,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>
@@ -717,8 +717,8 @@ const handleOpenExternally = async () => {
             <div class="text-sm text-muted-foreground text-center">
               {{ t('knowledge.viewer.contentNotAvailable') }}
             </div>
-            <Button variant="outline" @click="handleOpenExternally">
-              <ExternalLink class="size-4 mr-2" />
+            <Button variant="outline" class="gap-2" @click="handleOpenExternally">
+              <ExternalLink class="size-4 shrink-0" />
               {{ t('knowledge.viewer.openExternally') }}
             </Button>
           </div>

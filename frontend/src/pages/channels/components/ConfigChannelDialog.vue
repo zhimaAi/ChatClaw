@@ -292,12 +292,12 @@ async function handleSave() {
           <Button
             type="button"
             variant="outline"
-            class="bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+            class="gap-2 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
             :disabled="saving || verifying || !isFormValid"
             @click="handleVerify"
           >
-            <LoaderCircle v-if="verifying" class="mr-2 size-4 animate-spin" />
-            <ShieldCheck v-else class="mr-2 size-4" />
+            <LoaderCircle v-if="verifying" class="size-4 shrink-0 animate-spin" />
+            <ShieldCheck v-else class="size-4 shrink-0" />
             {{ verifying ? t('channels.inline.verifying') : t('channels.inline.verifyConfig') }}
           </Button>
           <Button variant="outline" type="button" @click="open = false">
