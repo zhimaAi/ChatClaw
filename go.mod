@@ -1,12 +1,12 @@
 module chatclaw
 
-go 1.25
+go 1.26
 
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
-	github.com/cloudwego/eino v0.8.0-beta.1
+	github.com/cloudwego/eino v0.8.0
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260302070227-13ce9b3fa975
@@ -26,7 +26,9 @@ require (
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/go-ego/gse v1.0.0
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
+	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mozillazg/go-pinyin v0.21.0
@@ -108,6 +110,7 @@ require (
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-github/v74 v74.0.0 // indirect
@@ -116,7 +119,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect

@@ -17,6 +17,7 @@ import IconKnowledge from '@/assets/icons/knowledge.svg'
 import IconSkills from '@/assets/icons/skills.svg'
 import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
+import IconChannels from '@/assets/icons/channels.svg'
 import IconSettings from '@/assets/icons/settings.svg'
 
 const { t } = useI18n()
@@ -52,6 +53,11 @@ const allTopNavItems: NavItem[] = [
     key: 'skills',
     labelKey: 'nav.skills',
     icon: IconSkills,
+  },
+  {
+    key: 'channels',
+    labelKey: 'nav.channels',
+    icon: IconChannels,
   },
   {
     key: 'memory',
@@ -119,6 +125,8 @@ const handleNavClick = (module: NavModule) => {
       >
         <component
           :is="item.icon"
+          width="16"
+          height="16"
           :class="
             cn(
               'size-4 shrink-0 transition-opacity',
@@ -151,6 +159,8 @@ const handleNavClick = (module: NavModule) => {
       >
         <component
           :is="item.icon"
+          width="16"
+          height="16"
           :class="
             cn(
               'size-4 shrink-0 transition-opacity',

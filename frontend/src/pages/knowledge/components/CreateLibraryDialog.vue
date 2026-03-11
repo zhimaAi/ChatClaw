@@ -333,8 +333,8 @@ const handleSubmit = async () => {
           <Button variant="outline" :disabled="isSubmitting" @click="close">
             {{ t('knowledge.create.cancel') }}
           </Button>
-          <Button :disabled="!canSubmit" @click="handleSubmit">
-            <LoaderCircle v-if="isSubmitting" class="mr-2 size-4 animate-spin" />
+          <Button class="gap-2" :disabled="!canSubmit" @click="handleSubmit">
+            <LoaderCircle v-if="isSubmitting" class="size-4 shrink-0 animate-spin" />
             {{ t('knowledge.create.confirm') }}
           </Button>
         </div>

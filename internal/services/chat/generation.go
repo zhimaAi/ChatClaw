@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	feishutools "chatclaw/internal/eino/tools/im/feishu"
+	wecomtools "chatclaw/internal/eino/tools/im/wecom"
 	"chatclaw/internal/define"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
@@ -346,7 +349,69 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
+	if s.gateway != nil {
+		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
+
+		feishuCfg := &feishutools.FeishuSenderConfig{Gateway: s.gateway}
+		if hasChannelSource {
+			feishuCfg.DefaultChannelID = chID
+			feishuCfg.DefaultTargetID = tgtID
+		}
+		feishuTool, toolErr := feishutools.NewFeishuSenderTool(feishuCfg)
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create feishu_sender tool", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, feishuTool)
+			s.app.Logger.Info("[chat] feishu_sender tool added", "default_channel", feishuCfg.DefaultChannelID, "default_target", feishuCfg.DefaultTargetID)
+		}
+
+		wecomCfg := &wecomtools.WeComSenderConfig{Gateway: s.gateway}
+		if hasChannelSource {
+			wecomCfg.DefaultChannelID = chID
+			wecomCfg.DefaultTargetID = tgtID
+		}
+		wecomTool, toolErr := wecomtools.NewWeComSenderTool(wecomCfg)
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create wecom_sender tool", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, wecomTool)
+			s.app.Logger.Info("[chat] wecom_sender tool added", "default_channel", wecomCfg.DefaultChannelID, "default_target", wecomCfg.DefaultTargetID)
+		}
+	}
+
 	return extraTools, extraHandlers
+}
+
+// resolveChannelSource parses the conversation's external_id (format "ch:{channelID}:{targetID}")
+// to extract the source channel_id and target_id for auto-filling feishu_sender defaults.
+func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conversationID int64) (channelID int64, targetID string, ok bool) {
+	var externalID string
+	err := db.NewSelect().
+		Table("conversations").
+		Column("external_id").
+		Where("id = ?", conversationID).
+		Scan(ctx, &externalID)
+	if err != nil || externalID == "" {
+		return 0, "", false
+	}
+
+	// Format: "ch:{channelID}:{targetID}"
+	if !strings.HasPrefix(externalID, "ch:") {
+		return 0, "", false
+	}
+	parts := strings.SplitN(externalID, ":", 3)
+	if len(parts) != 3 {
+		return 0, "", false
+	}
+	chID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || chID <= 0 {
+		return 0, "", false
+	}
+	tgt := strings.TrimSpace(parts[2])
+	if tgt == "" {
+		return 0, "", false
+	}
+	return chID, tgt, true
 }
 
 // --- streaming / event processing ---
@@ -379,6 +444,9 @@ type streamState struct {
 
 	// Current RunPath from the AgentEvent being processed
 	currentRunPath []string
+
+	// Maps sub-agent name → active parent tool_call_id (for routing streaming events)
+	activeSubAgentToolCall map[string]string
 }
 
 type toolCallState struct {
@@ -389,12 +457,23 @@ type toolCallState struct {
 
 func newStreamState(gc *generationContext, assistantMsg *messageModel) *streamState {
 	return &streamState{
-		gc:              gc,
-		assistantMsg:    assistantMsg,
-		toolStatesByKey: make(map[string]*toolCallState),
-		toolOrder:       make([]string, 0),
-		indexKeyMap:     make(map[int]string),
+		gc:                     gc,
+		assistantMsg:           assistantMsg,
+		toolStatesByKey:        make(map[string]*toolCallState),
+		toolOrder:              make([]string, 0),
+		indexKeyMap:            make(map[int]string),
+		activeSubAgentToolCall: make(map[string]string),
 	}
+}
+
+// parentToolCallID returns the tool_call_id of the parent sub-agent invocation
+// for the current run_path, or empty string if not inside a sub-agent.
+func (ss *streamState) parentToolCallID() string {
+	if len(ss.currentRunPath) < 2 {
+		return ""
+	}
+	agentName := ss.currentRunPath[1]
+	return ss.activeSubAgentToolCall[agentName]
 }
 
 func runPathToStrings(runPath []adk.RunStep) []string {
@@ -720,9 +799,10 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			ss.thinkingBuilder.WriteString(msg.ReasoningContent)
 			ss.addThinkingToSegments(msg.ReasoningContent)
 			gc.emit(EventChatThinking, ChatThinkingEvent{
-				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-				Delta:     msg.ReasoningContent,
-				RunPath:   ss.currentRunPath,
+				ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+				Delta:            msg.ReasoningContent,
+				RunPath:          ss.currentRunPath,
+				ParentToolCallID: ss.parentToolCallID(),
 			})
 		}
 
@@ -730,9 +810,10 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 			ss.contentBuilder.WriteString(msg.Content)
 			ss.addContentToSegments(msg.Content)
 			gc.emit(EventChatChunk, ChatChunkEvent{
-				ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-				Delta:     msg.Content,
-				RunPath:   ss.currentRunPath,
+				ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+				Delta:            msg.Content,
+				RunPath:          ss.currentRunPath,
+				ParentToolCallID: ss.parentToolCallID(),
 			})
 		}
 
@@ -783,13 +864,19 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 			return
 		}
 
+		// Clear sub-agent tracking when the lead agent receives a tool result
+		if len(ss.currentRunPath) <= 1 {
+			delete(ss.activeSubAgentToolCall, toolName)
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
-			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
-			Type:       "result",
-			ToolCallID: msg.ToolCallID,
-			ToolName:   toolName,
-			ResultJSON: msg.Content,
-			RunPath:    ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Type:             "result",
+			ToolCallID:       msg.ToolCallID,
+			ToolName:         toolName,
+			ResultJSON:       msg.Content,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 
 		toolMsg := &messageModel{
@@ -810,9 +897,10 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 		ss.contentBuilder.WriteString(msg.Content)
 		ss.addContentToSegments(msg.Content)
 		gc.emit(EventChatChunk, ChatChunkEvent{
-			ChatEvent: gc.chatEvent(ss.assistantMsg.ID),
-			Delta:     msg.Content,
-			RunPath:   ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Delta:            msg.Content,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 	}
 
@@ -867,13 +955,21 @@ func (s *ChatService) emitToolCallChunks(gc *generationContext, ss *streamState,
 		if args != "" && !json.Valid([]byte(args)) {
 			s.app.Logger.Warn("[chat] tool arguments not valid JSON", "conv", gc.conversationID, "tab", gc.tabID, "req", gc.requestID, "tool", toolName, "call_id", resolvedID, "args", args)
 		}
+
+		// Track sub-agent tool calls from the lead agent layer so child
+		// streaming events can be routed to the correct parent tool_call_id.
+		if len(ss.currentRunPath) <= 1 {
+			ss.activeSubAgentToolCall[toolName] = resolvedID
+		}
+
 		gc.emit(EventChatTool, ChatToolEvent{
-			ChatEvent:  gc.chatEvent(ss.assistantMsg.ID),
-			Type:       "call",
-			ToolCallID: resolvedID,
-			ToolName:   toolName,
-			ArgsJSON:   args,
-			RunPath:    ss.currentRunPath,
+			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
+			Type:             "call",
+			ToolCallID:       resolvedID,
+			ToolName:         toolName,
+			ArgsJSON:         args,
+			RunPath:          ss.currentRunPath,
+			ParentToolCallID: ss.parentToolCallID(),
 		})
 	}
 }
@@ -1069,11 +1165,9 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				continue
 			}
 
-			// Log whether images are being passed to the model
+			// Log only when images are actually passed (text-only messages are the common case)
 			if len(images) > 0 {
 				s.app.Logger.Info("[chat] passing images to model", "msg_id", m.ID, "image_count", len(images))
-			} else {
-				s.app.Logger.Info("[chat] no images to pass to model", "msg_id", m.ID)
 			}
 
 			// If there are images, use multi-content form

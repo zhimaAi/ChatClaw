@@ -139,7 +139,7 @@ docker compose up -d
 | 层级 | 技术 |
 |------|------|
 | 桌面框架 | [Wails v3](https://wails.io/) (Go + WebView) |
-| 后端语言 | [Go 1.25](https://go.dev/) |
+| 后端语言 | [Go 1.26](https://go.dev/) |
 | 前端框架 | [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) |
 | UI 组件 | [shadcn-vue](https://www.shadcn-vue.com/) (New York 风格) + [Reka UI](https://reka-ui.com/) |
 | 样式方案 | [Tailwind CSS v4](https://tailwindcss.com/) |
