@@ -59,15 +59,20 @@ import { supportsMultimodal } from '@/composables/useMultimodal'
 const props = withDefaults(
   defineProps<{
     tabId: string
-    mode?: 'main' | 'snap'
+    mode?: 'main' | 'snap' | 'embedded'
+    initialConversationId?: number | null
+    initialAgentId?: number | null
   }>(),
   {
     mode: 'main',
+    initialConversationId: null,
+    initialAgentId: null,
   }
 )
 
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')
+const isEmbeddedMode = computed(() => props.mode === 'embedded')
 
 type ListMode = 'personal' | 'team'
 
@@ -347,7 +352,9 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
   try {
     await createAgent(data)
     createOpen.value = false
-    updateCurrentTab()
+    if (!isEmbeddedMode.value) {
+      updateCurrentTab()
+    }
     
     // Notify other windows/tabs to refresh agents list
     Events.Emit('agents:changed', {
@@ -386,7 +393,9 @@ const handleUpdated = (updated: Agent) => {
 
   // If updating the currently selected agent
   if (activeAgentId.value === updated.id) {
-    updateCurrentTab()
+    if (!isEmbeddedMode.value) {
+      updateCurrentTab()
+    }
     // Sync model selection if default model changed
     if (hasDefaultModel || hadDefaultModel) {
       selectDefaultModel(activeAgent.value, activeConversation.value)
@@ -1015,6 +1024,7 @@ const confirmDeleteConversation = async () => {
  * Update current tab's icon and title to match selected agent
  */
 const updateCurrentTab = () => {
+  if (isEmbeddedMode.value) return
   const agent = activeAgent.value
   // Use agent's custom icon or default logo
   const icon = agent?.icon || getLogoDataUrl()
@@ -1026,7 +1036,9 @@ const updateCurrentTab = () => {
 // Watch for active agent changes to update selected model, tab info, and load conversations
 watch(activeAgentId, async (newAgentId, oldAgentId) => {
   selectDefaultModel(activeAgent.value, activeConversation.value)
-  updateCurrentTab()
+  if (!isEmbeddedMode.value) {
+    updateCurrentTab()
+  }
   if (newAgentId && oldAgentId !== undefined) {
     const isRealSwitch = oldAgentId !== null && oldAgentId !== newAgentId
     await loadConversations(newAgentId, {
@@ -1112,8 +1124,33 @@ watch(activeTeamRobotId, (newId, oldId) => {
 })
 
 // 当前标签页是否激活
-// For snap mode, always consider it active since it's a standalone window
-const isTabActive = computed(() => isSnapMode.value || navigationStore.activeTabId === props.tabId)
+// For snap/embedded mode, always consider it active since it does not follow main tab visibility.
+const isTabActive = computed(() =>
+  isSnapMode.value || isEmbeddedMode.value || navigationStore.activeTabId === props.tabId
+)
+
+async function initializeEmbeddedConversation() {
+  if (!props.initialConversationId) return
+
+  try {
+    const conversation = await ConversationsService.GetConversation(props.initialConversationId)
+    if (!conversation) return
+
+    const nextAgentId = props.initialAgentId || conversation.agent_id
+    activeAgentId.value = nextAgentId
+
+    await loadConversations(nextAgentId, {
+      preserveSelection: true,
+      force: true,
+      activeAgentId: nextAgentId,
+    })
+
+    handleSelectConversation(conversation)
+  } catch (error) {
+    console.error('Failed to initialize embedded conversation:', error)
+    activeConversationId.value = null
+  }
+}
 
 
 // 监听标签页激活状态，激活时刷新模型/助手列表
@@ -1177,7 +1214,7 @@ const handleWakeAttachedPointerDown = (e: globalThis.PointerEvent) => {
 
 onMounted(() => {
   // In snap mode, default sidebar to collapsed
-  if (isSnapMode.value) {
+  if (isSnapMode.value || isEmbeddedMode.value) {
     sidebarCollapsed.value = true
   }
 
@@ -1186,91 +1223,95 @@ onMounted(() => {
     await loadModels()
     await loadLibrariesFn()
 
-    // Snap mode: restore list mode and assistant selection from cache (default: personal)
-    if (isSnapMode.value) {
-      await restoreSnapCache()
-    }
+    if (isEmbeddedMode.value) {
+      await initializeEmbeddedConversation()
+    } else {
+      // Snap mode: restore list mode and assistant selection from cache (default: personal)
+      if (isSnapMode.value) {
+        await restoreSnapCache()
+      }
+      // Check for pending chat data (e.g. from knowledge page shortcut)
+      const pendingData = navigationStore.consumePendingChatData(props.tabId)
 
-    // Check for pending chat data (e.g. from knowledge page shortcut)
-    const pendingData = navigationStore.consumePendingChatData(props.tabId)
-
-    if (activeAgentId.value != null) {
-      // Preserve current selection to avoid wiping the first message on cold start.
-      await loadConversations(activeAgentId.value, {
-        preserveSelection: true,
-        force: true,
-        activeAgentId: activeAgentId.value,
-      })
-    }
-
-    if (pendingData) {
-      // Apply pre-selected agent
-      if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
-        activeAgentId.value = pendingData.agentId
-        // Load conversations for the selected agent
-        await loadConversations(pendingData.agentId, {
-          preserveSelection: false,
+      if (activeAgentId.value != null) {
+        // Preserve current selection to avoid wiping the first message on cold start.
+        await loadConversations(activeAgentId.value, {
+          preserveSelection: true,
           force: true,
-          activeAgentId: pendingData.agentId,
+          activeAgentId: activeAgentId.value,
         })
       }
-      // Apply pre-selected model
-      if (pendingData.selectedModelKey) {
-        selectedModelKey.value = pendingData.selectedModelKey
-      }
-      // Apply library selection
-      if (pendingData.libraryIds && pendingData.libraryIds.length > 0) {
-        selectedLibraryIds.value = pendingData.libraryIds
-      }
-      // Apply thinking mode
-      if (pendingData.enableThinking != null) {
-        enableThinking.value = pendingData.enableThinking
-      }
-      // Apply chat mode
-      if (pendingData.chatMode) {
-        chatMode.value = pendingData.chatMode
-      }
-      // Apply chat input
-      if (pendingData.chatInput) {
-        chatInput.value = pendingData.chatInput
-      }
-      // Apply pending images (convert from serializable format to PendingImage)
-      if (pendingData.pendingImages && pendingData.pendingImages.length > 0) {
-        const converted: PendingImage[] = []
-        for (const img of pendingData.pendingImages as PendingChatImage[]) {
-          try {
-            const blob = await (await fetch(img.dataUrl)).blob()
-            const file = new File([blob], img.fileName, { type: img.mimeType })
-            converted.push({
-              id: img.id,
-              file,
-              mimeType: img.mimeType,
-              base64: img.base64,
-              dataUrl: img.dataUrl,
-              fileName: img.fileName,
-              size: img.size,
-            })
-          } catch (e) {
-            console.warn('Failed to convert pending image:', img.fileName, e)
-          }
-        }
-        pendingImages.value = converted
-      }
-      // Ensure we start with a new conversation
-      activeConversationId.value = null
 
-      // Auto-send after a short delay to let Vue reactivity settle (text or images)
-      const hasContent = (pendingData.chatInput?.trim() ?? '') !== '' || (pendingData.pendingImages?.length ?? 0) > 0
-      if (hasContent) {
-        window.setTimeout(() => {
-          if (canSend.value) {
-            handleSend()
+      if (pendingData) {
+      // Apply pre-selected agent
+        if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
+          activeAgentId.value = pendingData.agentId
+          // Load conversations for the selected agent
+          await loadConversations(pendingData.agentId, {
+            preserveSelection: false,
+            force: true,
+            activeAgentId: pendingData.agentId,
+          })
+        }
+        // Apply pre-selected model
+        if (pendingData.selectedModelKey) {
+          selectedModelKey.value = pendingData.selectedModelKey
+        }
+        // Apply library selection
+        if (pendingData.libraryIds && pendingData.libraryIds.length > 0) {
+          selectedLibraryIds.value = pendingData.libraryIds
+        }
+        // Apply thinking mode
+        if (pendingData.enableThinking != null) {
+          enableThinking.value = pendingData.enableThinking
+        }
+        // Apply chat mode
+        if (pendingData.chatMode) {
+          chatMode.value = pendingData.chatMode
+        }
+        // Apply chat input
+        if (pendingData.chatInput) {
+          chatInput.value = pendingData.chatInput
+        }
+        // Apply pending images (convert from serializable format to PendingImage)
+        if (pendingData.pendingImages && pendingData.pendingImages.length > 0) {
+          const converted: PendingImage[] = []
+          for (const img of pendingData.pendingImages as PendingChatImage[]) {
+            try {
+              const blob = await (await fetch(img.dataUrl)).blob()
+              const file = new File([blob], img.fileName, { type: img.mimeType })
+              converted.push({
+                id: img.id,
+                file,
+                mimeType: img.mimeType,
+                base64: img.base64,
+                dataUrl: img.dataUrl,
+                fileName: img.fileName,
+                size: img.size,
+              })
+            } catch (e) {
+              console.warn('Failed to convert pending image:', img.fileName, e)
+            }
           }
-        }, 200)
+          pendingImages.value = converted
+        }
+        // Ensure we start with a new conversation
+        activeConversationId.value = null
+
+        // Auto-send after a short delay to let Vue reactivity settle (text or images)
+        const hasContent = (pendingData.chatInput?.trim() ?? '') !== '' || (pendingData.pendingImages?.length ?? 0) > 0
+        if (hasContent) {
+          window.setTimeout(() => {
+            if (canSend.value) {
+              handleSend()
+            }
+          }, 200)
+        }
       }
-    } else {
-      // New tab starts with a fresh conversation (no auto-select).
-      // The user can pick an existing conversation from the sidebar.
+      if (!pendingData) {
+        // New tab starts with a fresh conversation (no auto-select).
+        // The user can pick an existing conversation from the sidebar.
+      }
     }
 
     // Snap mode initialization
@@ -1287,7 +1328,7 @@ onMounted(() => {
   chatStore.subscribe()
 
   // Listen for text selection to send to assistant (main mode only)
-  if (!isSnapMode.value) {
+  if (!isSnapMode.value && !isEmbeddedMode.value) {
     unsubscribeTextSelection = Events.On('text-selection:send-to-assistant', (event: any) => {
       const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
       const text = payload?.text ?? ''
@@ -1499,7 +1540,7 @@ onUnmounted(() => {
 
     <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded; always show so personal/team tab can switch when empty) -->
     <AgentSidebar
-      v-if="!sidebarCollapsed"
+      v-if="!isEmbeddedMode && !sidebarCollapsed"
       :agents="agents"
       :active-agent-id="activeAgentId"
       :active-conversation-id="activeDisplayConversationId"
@@ -1540,7 +1581,7 @@ onUnmounted(() => {
 
     <!-- Collapse/Expand button (snap mode: floating, draggable) -->
     <div
-      v-if="isSnapMode"
+      v-if="!isEmbeddedMode && isSnapMode"
       class="absolute left-0.5 z-[5] cursor-grab active:cursor-grabbing"
       :style="{ top: snapBtnTop + 'px' }"
       @pointerdown="onSnapBtnPointerDown"
@@ -1559,7 +1600,7 @@ onUnmounted(() => {
     </div>
     <!-- Collapse/Expand button (non-snap mode: in-flow) -->
     <div
-      v-if="!isSnapMode"
+      v-if="!isEmbeddedMode && !isSnapMode"
       class="flex w-8 shrink-0 items-center justify-center"
     >
       <Button
@@ -1578,7 +1619,7 @@ onUnmounted(() => {
     <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode) -->
       <div
-        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team' && activeConversationId && chatMode === 'task'"
+        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team' && chatMode === 'task'"
         class="flex shrink-0 items-center justify-end px-2 pt-1"
       >
         <Button
@@ -1718,7 +1759,7 @@ onUnmounted(() => {
 
     <!-- Workspace drawer panel (task mode only; hidden in team mode) -->
     <WorkspaceDrawer
-      v-if="!isSnapMode && listMode !== 'team' && activeConversationId && chatMode === 'task'"
+      v-if="!isSnapMode && listMode !== 'team' && chatMode === 'task'"
       :open="workspaceDrawerOpen"
       :agent="activeAgent"
       :conversation-id="activeConversationId"

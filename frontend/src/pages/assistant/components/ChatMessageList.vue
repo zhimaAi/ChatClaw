@@ -8,7 +8,7 @@ import ChatMessageItem from './ChatMessageItem.vue'
 const props = defineProps<{
   conversationId: number
   tabId: string
-  mode?: 'main' | 'snap'
+  mode?: 'main' | 'snap' | 'embedded'
   agentName?: string
   agentIcon?: string
   sandboxMode?: string

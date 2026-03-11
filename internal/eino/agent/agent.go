@@ -208,6 +208,17 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 		allowedNames["read_skill"] = true
 	}
 
+	// MCP tools (mcp__*) should be directly available to the lead agent
+	for _, t := range extraTools {
+		info, err := t.Info(context.Background())
+		if err != nil || info == nil {
+			continue
+		}
+		if strings.HasPrefix(info.Name, "mcp__") {
+			allowedNames[info.Name] = true
+		}
+	}
+
 	var result []tool.BaseTool
 	for _, t := range allTools {
 		info, err := t.Info(context.Background())
@@ -240,12 +251,15 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 	// 4. Sub-agent usage guide
 	handlers = append(handlers, NewInstructionHandler(buildSubAgentPrompt()))
 
-	// 5. PatchToolCalls
+	// 5. Scheduled task management guide
+	handlers = append(handlers, NewInstructionHandler(buildScheduledTaskPrompt()))
+
+	// 6. PatchToolCalls
 	if h := buildPatchToolCallsHandler(ctx, logger); h != nil {
 		handlers = append(handlers, h)
 	}
 
-	// 6. Reduction + Summarization (main agent paths)
+	// 7. Reduction + Summarization (main agent paths)
 	einoDir := filepath.Join(b.WorkDir(), einoMetaDir)
 	_ = os.MkdirAll(einoDir, 0o755)
 
