@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs } from '@wailsio/runtime'
-import { Check, Link2, LoaderCircle, MoreHorizontal, Plus, ShieldCheck, Unlink } from 'lucide-vue-next'
+import { Check, Link2, LoaderCircle, MoreHorizontal, Plus, ShieldCheck, Unlink, Edit } from 'lucide-vue-next'
 import { type Agent, AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
@@ -50,6 +50,7 @@ const showAddBotDialog = ref(false)
 const selectedBotId = ref<number | null>(null)
 const addBotLoading = ref(false)
 const showConfigChannelDialog = ref(false)
+const channelToEdit = ref<Channel | null>(null)
 
 const currentAgentId = computed(() => props.agent?.id ?? 0)
 const currentAgentName = computed(() => props.agent?.name || t('assistant.channels.currentAgent'))
@@ -352,6 +353,11 @@ function handleOpenAddBotDialog() {
   showAddBotDialog.value = true
 }
 
+function handleEditChannel(channel: Channel) {
+  channelToEdit.value = channel
+  showConfigChannelDialog.value = true
+}
+
 async function handleAddBotConfirm() {
   if (!props.agent || !selectedBotId.value) {
     toast.error(t('assistant.channels.selectBot'))
@@ -372,12 +378,15 @@ async function handleAddBotConfirm() {
   }
 }
 
-async function handleConfigChannelSaved(channel: Channel) {
+async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
   if (!props.agent) return
 
   try {
-    await ChannelService.BindAgent(channel.id, props.agent.id)
-    toast.success(t('assistant.channels.createAndBindSuccess'))
+    if (!isEdit) {
+      await ChannelService.BindAgent(channel.id, props.agent.id)
+      toast.success(t('assistant.channels.createAndBindSuccess'))
+    }
+    channelToEdit.value = null
     await loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -628,6 +637,13 @@ async function handleConfigChannelSaved(channel: Channel) {
                       >
                         <DropdownMenuItem
                           class="gap-2 rounded px-4 py-[5px]"
+                          @click="handleEditChannel(channel)"
+                        >
+                          <Edit class="size-4" />
+                          {{ t('common.edit', '编辑') }}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          class="gap-2 rounded px-4 py-[5px]"
                           @click="channel.agent_id === currentAgentId ? handleUnbindChannel(channel) : handleBindChannel(channel)"
                         >
                           <Unlink v-if="channel.agent_id === currentAgentId" class="size-4" />
@@ -819,6 +835,8 @@ async function handleConfigChannelSaved(channel: Channel) {
   <ConfigChannelDialog
     v-model:open="showConfigChannelDialog"
     :platform="selectedPlatformMeta"
+    :channel="channelToEdit"
     @saved="handleConfigChannelSaved"
+    @update:open="(val) => { if (!val) channelToEdit = null }"
   />
 </template>
