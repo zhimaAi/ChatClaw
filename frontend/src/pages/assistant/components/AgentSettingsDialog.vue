@@ -329,6 +329,7 @@ const handleSave = async () => {
       work_dir: workDir.value,
       mcp_enabled: null,
       mcp_server_ids: null,
+      mcp_server_enabled_ids: null,
     })
     if (!updated) {
       throw new Error(t('assistant.errors.updateFailed'))

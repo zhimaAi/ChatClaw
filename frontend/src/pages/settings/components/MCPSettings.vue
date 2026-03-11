@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  FolderOpen,
   Plus,
   Pencil,
   Trash2,
@@ -300,7 +299,6 @@ async function handleDelete() {
 
 // ==================== Settings tab ====================
 const mcpEnabled = ref(false)
-const mcpDir = ref('')
 
 async function loadSettings() {
   try {
@@ -312,13 +310,6 @@ async function loadSettings() {
   } catch (error) {
     console.error('Failed to load MCP settings:', error)
   }
-
-  try {
-    const dir = await SettingsService.GetMCPDir()
-    mcpDir.value = dir
-  } catch (error) {
-    console.error('Failed to get MCP directory:', error)
-  }
 }
 
 async function handleMCPEnabledChange(val: boolean) {
@@ -329,15 +320,6 @@ async function handleMCPEnabledChange(val: boolean) {
   } catch (error) {
     console.error('Failed to update mcp_enabled setting:', error)
     mcpEnabled.value = prev
-  }
-}
-
-async function handleOpenMCPDir() {
-  if (!mcpDir.value) return
-  try {
-    await BrowserService.OpenDirectory(mcpDir.value)
-  } catch (error) {
-    console.error('Failed to open MCP directory:', error)
   }
 }
 
@@ -770,24 +752,6 @@ onMounted(() => {
               @update:model-value="handleMCPEnabledChange"
             />
           </SettingsItem>
-
-          <div class="flex flex-col gap-1 p-4">
-            <span class="text-sm font-medium text-foreground">{{ t('settings.mcp.directory') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('settings.mcp.directoryHint') }}</span>
-            <div class="flex w-full items-center gap-2 pt-0.5">
-              <Input
-                :model-value="mcpDir"
-                readonly
-                class="flex-1 min-w-0 cursor-default bg-muted/30"
-              />
-              <button
-                class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                @click="handleOpenMCPDir"
-              >
-                <FolderOpen class="size-4" />
-              </button>
-            </div>
-          </div>
         </SettingsCard>
       </div>
     </template>
