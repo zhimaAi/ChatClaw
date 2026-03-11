@@ -15,13 +15,17 @@ import { useAppStore, type Theme } from '@/stores'
 import { useLocale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
-import { Download, Check, Loader2, Package, FolderOpen } from 'lucide-vue-next'
+import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
+import TestInstallDialog from './TestInstallDialog.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const { locale: currentLocale, switchLocale } = useLocale()
+
+// 测试安装对话框
+const testInstallOpen = ref(false)
 
 // 语言选项
 const languageOptions = [
@@ -90,6 +94,27 @@ const toolDefs: ToolDef[] = [
 const toolStatuses = reactive<Record<string, ToolStatus>>({})
 const installErrors = reactive<Record<string, boolean>>({})
 const downloadProgress = reactive<Record<string, DownloadProgress>>({})
+const isDevMode = ref(false)
+
+// 加载是否为开发模式
+const loadDevMode = async () => {
+  try {
+    isDevMode.value = await ToolchainService.IsDevMode()
+  } catch (e) {
+    console.error('Failed to load dev mode:', e)
+    isDevMode.value = false
+  }
+}
+
+// 清除卡住的安装状态
+const clearInstallingState = async (toolId: string) => {
+  try {
+    await ToolchainService.ClearInstallingState(toolId)
+    await loadToolStatuses()
+  } catch (e) {
+    console.error('Failed to clear installing state:', e)
+  }
+}
 
 // 格式化文件大小
 const formatFileSize = (bytes: number): string => {
@@ -127,6 +152,8 @@ const loadToolStatuses = async () => {
   } catch (e) {
     console.error('Failed to load toolchain statuses:', e)
   }
+  // 加载开发模式
+  await loadDevMode()
 }
 
 const handleInstall = async (toolId: string) => {
@@ -137,10 +164,12 @@ const handleInstall = async (toolId: string) => {
   }
   try {
     await ToolchainService.InstallTool(toolId)
-    await loadToolStatuses()
+    // 后端会通过 toolchain:status 事件通知安装完成
+    // 无需额外调用 loadToolStatuses()，避免状态被覆盖
   } catch (e) {
     console.error(`Failed to install ${toolId}:`, e)
     installErrors[toolId] = true
+    // 安装失败时需要重新加载状态
     await loadToolStatuses()
   }
 }
@@ -224,17 +253,46 @@ onUnmounted(() => {
           >
             <Package class="size-4" />
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <span class="text-sm font-medium text-foreground">{{ t(tool.nameKey) }}</span>
             <p class="text-xs text-muted-foreground truncate">{{ t(tool.descKey) }}</p>
             <p
-              v-if="toolStatuses[tool.id]?.installed && toolStatuses[tool.id]?.bin_path"
+              v-if="toolStatuses[tool.id]?.bin_path"
               class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
               :title="toolStatuses[tool.id]?.bin_path"
             >
               <FolderOpen class="size-3 shrink-0" />
               {{ toolStatuses[tool.id]?.bin_path }}
             </p>
+
+            <!-- Download Progress（放在工具信息下方，避免宽度跳动） -->
+            <div
+              v-if="downloadProgress[tool.id]"
+              class="mt-2 flex flex-col gap-1"
+            >
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground">
+                  {{ downloadProgress[tool.id].percent.toFixed(1) }}%
+                </span>
+                <span class="text-muted-foreground">
+                  {{ formatSpeed(downloadProgress[tool.id].speed) }}
+                </span>
+              </div>
+              <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  class="h-full bg-primary transition-all duration-300"
+                  :style="{ width: `${downloadProgress[tool.id].percent}%` }"
+                />
+              </div>
+              <div class="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {{ formatFileSize(downloadProgress[tool.id].downloaded) }} / {{ formatFileSize(downloadProgress[tool.id].totalSize) }}
+                </span>
+                <span v-if="downloadProgress[tool.id].remaining > 0">
+                  {{ formatRemaining(downloadProgress[tool.id].remaining) }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -248,43 +306,23 @@ onUnmounted(() => {
             {{ t('settings.general.toolchain.installed') }}
           </span>
 
-          <!-- Installing spinner -->
+          <!-- Installing state -->
           <span
             v-else-if="toolStatuses[tool.id]?.installing"
             class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
           >
             <Loader2 class="size-3 animate-spin" />
             {{ t('settings.general.toolchain.installing') }}
+            <Button
+              v-if="isDevMode"
+              size="sm"
+              variant="ghost"
+              class="ml-1 h-5 px-1 text-xs text-muted-foreground hover:text-destructive"
+              @click="clearInstallingState(tool.id)"
+            >
+              {{ t('settings.general.toolchain.clearState') }}
+            </Button>
           </span>
-
-          <!-- Download Progress -->
-          <div
-            v-else-if="downloadProgress[tool.id]"
-            class="flex flex-col gap-1 min-w-[120px]"
-          >
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-muted-foreground">
-                {{ downloadProgress[tool.id].percent.toFixed(1) }}%
-              </span>
-              <span class="text-muted-foreground">
-                {{ formatSpeed(downloadProgress[tool.id].speed) }}
-              </span>
-            </div>
-            <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                class="h-full bg-primary transition-all duration-300"
-                :style="{ width: `${downloadProgress[tool.id].percent}%` }"
-              />
-            </div>
-            <div class="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {{ formatFileSize(downloadProgress[tool.id].downloaded) }} / {{ formatFileSize(downloadProgress[tool.id].totalSize) }}
-              </span>
-              <span v-if="downloadProgress[tool.id].remaining > 0">
-                {{ formatRemaining(downloadProgress[tool.id].remaining) }}
-              </span>
-            </div>
-          </div>
 
           <!-- Install button -->
           <template v-else>
@@ -306,5 +344,16 @@ onUnmounted(() => {
         </div>
       </div>
     </SettingsCard>
+
+    <!-- 测试安装按钮（仅开发模式显示） -->
+    <div v-if="isDevMode" class="flex justify-end">
+      <Button variant="outline" size="sm" @click="testInstallOpen = true">
+        <Play class="mr-1 size-3.5" />
+        {{ t('settings.general.toolchain.testInstall.button') }}
+      </Button>
+    </div>
+
+    <!-- 测试安装对话框 -->
+    <TestInstallDialog v-model:open="testInstallOpen" />
   </div>
 </template>

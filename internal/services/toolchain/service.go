@@ -95,13 +95,21 @@ type ToolchainService struct {
 	installing  map[string]bool // tracks which tools are currently being installed
 	proxyProbed bool
 	needProxy   bool
+
+	// testInstall 用于测试安装的上下文（支持取消）
+	testInstallCtx    map[string]context.CancelFunc // tool name -> cancel function
+	testInstallCalled map[string]bool               // tool name -> 是否已调用过（用于触发进度事件）
 }
 
 // NewToolchainService creates a new ToolchainService.
 func NewToolchainService(app *application.App) *ToolchainService {
+	// 注意：installing map 初始为空，启动时会自动清除任何残留状态
+	// 因为这是内存中的状态，程序重启后本来就是空的
 	return &ToolchainService{
-		app:        app,
-		installing: make(map[string]bool),
+		app:               app,
+		installing:        make(map[string]bool),
+		testInstallCtx:    make(map[string]context.CancelFunc),
+		testInstallCalled: make(map[string]bool),
 	}
 }
 
@@ -193,9 +201,316 @@ func (s *ToolchainService) InstallTool(name string) (*ToolStatus, error) {
 	return &st, nil
 }
 
+// DownloadMethod 下载方式
+type DownloadMethod string
+
+const (
+	DownloadMethodDirect DownloadMethod = "direct" // 直连
+	DownloadMethodProxy  DownloadMethod = "proxy"  // 代理
+	DownloadMethodOSS    DownloadMethod = "oss"    // OSS 兜底
+)
+
+// TestInstallConfig 测试安装配置（从前端传入）
+type TestInstallConfig struct {
+	Tool           string         `json:"tool"`           // 工具名称
+	DownloadMethod DownloadMethod `json:"downloadMethod"` // 下载方式
+	ProxyURL       string         `json:"proxyURL"`       // 代理服务器地址（当 downloadMethod 为 proxy 时）
+}
+
+// TestInstallResult 测试安装结果
+type TestInstallResult struct {
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	Tool        string `json:"tool"`
+	Version     string `json:"version"`
+	DownloadURL string `json:"downloadURL"`
+	TotalSize   int64  `json:"totalSize"`
+	Downloaded  int64  `json:"downloaded"`
+	FinalURL    string `json:"finalURL"`
+	MethodUsed  string `json:"methodUsed"` // 最终使用的下载方式
+}
+
+// TestInstall 执行测试安装流程（模拟安装但不实际写入文件）
+// 支持取消操作
+func (s *ToolchainService) TestInstall(config TestInstallConfig) (*TestInstallResult, error) {
+	spec, ok := registry[config.Tool]
+	if !ok {
+		return nil, errs.Newf("error.toolchain_unknown_tool", map[string]any{"Name": config.Tool})
+	}
+
+	// 创建可取消的上下文
+	ctx, cancel := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.testInstallCtx[config.Tool] = cancel
+	s.testInstallCalled[config.Tool] = true
+	s.mu.Unlock()
+
+	// 确保清理
+	defer func() {
+		s.mu.Lock()
+		delete(s.testInstallCtx, config.Tool)
+		s.mu.Unlock()
+	}()
+
+	// 发送初始状态
+	s.emitTestInstallStatus(config.Tool, "fetching_version", "正在获取版本信息...")
+
+	// 获取版本信息（使用指定的方式或自动检测）
+	var latestVersion string
+	var err error
+
+	switch config.DownloadMethod {
+	case DownloadMethodDirect:
+		// 直连模式
+		s.emitTestInstallStatus(config.Tool, "fetching_version", "正在直连获取版本...")
+		latestVersion, err = s.fetchLatestVersion(spec)
+		if err != nil {
+			return &TestInstallResult{
+				Success:     false,
+				Message:     "直连获取版本失败: " + err.Error(),
+				Tool:        config.Tool,
+				DownloadURL: spec.latestReleaseAPI,
+			}, nil
+		}
+	case DownloadMethodProxy:
+		// 代理模式
+		s.emitTestInstallStatus(config.Tool, "fetching_version", "正在通过代理获取版本...")
+		latestVersion, err = s.fetchLatestVersion(spec)
+		if err != nil {
+			// 代理也失败，尝试直连
+			s.emitTestInstallStatus(config.Tool, "fetching_version", "代理获取版本失败，尝试直连...")
+			latestVersion, err = s.fetchLatestVersion(spec)
+			if err != nil {
+				return &TestInstallResult{
+					Success:     false,
+					Message:     "获取版本失败: " + err.Error(),
+					Tool:        config.Tool,
+					DownloadURL: spec.latestReleaseAPI,
+				}, nil
+			}
+		}
+	case DownloadMethodOSS:
+		// OSS 兜底模式
+		s.emitTestInstallStatus(config.Tool, "fetching_version", "正在通过 API/OSS 获取版本...")
+		version, ossURL, apiErr := s.fetchToolLatest(spec.name, runtime.GOOS, runtime.GOARCH)
+		if apiErr != nil {
+			return &TestInstallResult{
+				Success:     false,
+				Message:     "API/OSS 获取版本失败: " + apiErr.Error(),
+				Tool:        config.Tool,
+				DownloadURL: define.ServerURL + "/tool-latest",
+			}, nil
+		}
+		latestVersion = version
+		s.emitTestInstallStatus(config.Tool, "version_fetched", fmt.Sprintf("获取到版本: %s", latestVersion))
+
+		// 发送模拟的下载进度
+		s.simulateDownloadProgress(ctx, config.Tool, spec, ossURL)
+
+		return &TestInstallResult{
+			Success:     true,
+			Message:     "测试安装完成（OSS 模式）",
+			Tool:        config.Tool,
+			Version:     latestVersion,
+			DownloadURL: ossURL,
+			TotalSize:   0,
+			Downloaded:  0,
+			FinalURL:    ossURL,
+			MethodUsed:  string(DownloadMethodOSS),
+		}, nil
+	default:
+		// 默认自动检测
+		needProxy := s.resolveProxy()
+		if needProxy {
+			s.emitTestInstallStatus(config.Tool, "fetching_version", "检测到需要代理，正在获取版本...")
+		} else {
+			s.emitTestInstallStatus(config.Tool, "fetching_version", "直连获取版本...")
+		}
+		latestVersion, err = s.fetchLatestVersion(spec)
+		if err != nil {
+			// 尝试 API 兜底
+			version, ossURL, apiErr := s.fetchToolLatest(spec.name, runtime.GOOS, runtime.GOARCH)
+			if apiErr != nil {
+				return &TestInstallResult{
+					Success:     false,
+					Message:     "获取版本失败: " + err.Error(),
+					Tool:        config.Tool,
+					DownloadURL: spec.latestReleaseAPI,
+				}, nil
+			}
+			latestVersion = version
+			s.emitTestInstallStatus(config.Tool, "version_fetched", fmt.Sprintf("API 获取到版本: %s", latestVersion))
+
+			// 模拟 OSS 下载进度
+			s.simulateDownloadProgress(ctx, config.Tool, spec, ossURL)
+
+			return &TestInstallResult{
+				Success:     true,
+				Message:     "测试安装完成（API/OSS 模式）",
+				Tool:        config.Tool,
+				Version:     latestVersion,
+				DownloadURL: ossURL,
+				TotalSize:   0,
+				Downloaded:  0,
+				FinalURL:    ossURL,
+				MethodUsed:  string(DownloadMethodOSS),
+			}, nil
+		}
+	}
+
+	s.emitTestInstallStatus(config.Tool, "version_fetched", fmt.Sprintf("获取到版本: %s", latestVersion))
+
+	// 构建下载 URL
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	rawURL := spec.downloadURL(latestVersion, goos, goarch)
+
+	var finalURL string
+	var methodUsed string
+
+	// 根据下载方式进行下载
+	switch config.DownloadMethod {
+	case DownloadMethodDirect:
+		finalURL = rawURL
+		methodUsed = string(DownloadMethodDirect)
+	case DownloadMethodProxy:
+		if config.ProxyURL != "" {
+			finalURL = config.ProxyURL + rawURL
+		} else {
+			finalURL = ghProxyPrefix + rawURL
+		}
+		methodUsed = string(DownloadMethodProxy)
+	default:
+		// 获取 OSS URL
+		ossURL, ossErr := s.fetchLatestDownloadURL(spec.name, goos, goarch)
+		if ossErr == nil {
+			finalURL = ossURL
+			methodUsed = string(DownloadMethodOSS)
+		} else {
+			finalURL = rawURL
+			methodUsed = string(DownloadMethodDirect)
+		}
+	}
+
+	// 模拟下载进度（真正的下载会发送进度事件，这里我们模拟一些进度）
+	s.simulateDownloadProgress(ctx, config.Tool, spec, finalURL)
+
+	return &TestInstallResult{
+		Success:     true,
+		Message:     "测试安装完成",
+		Tool:        config.Tool,
+		Version:     latestVersion,
+		DownloadURL: rawURL,
+		TotalSize:   0,
+		Downloaded:  0,
+		FinalURL:    finalURL,
+		MethodUsed:  methodUsed,
+	}, nil
+}
+
+// simulateDownloadProgress 模拟下载进度（发送一些模拟的进度事件）
+func (s *ToolchainService) simulateDownloadProgress(ctx context.Context, toolName string, spec toolSpec, url string) {
+	// 模拟几个进度阶段
+	stages := []struct {
+		percent    float64
+		downloaded int64
+		totalSize  int64
+		message    string
+	}{
+		{10, 5 * 1024 * 1024, 50 * 1024 * 1024, "正在连接..."},
+		{30, 15 * 1024 * 1024, 50 * 1024 * 1024, "正在下载..."},
+		{60, 30 * 1024 * 1024, 50 * 1024 * 1024, "下载中..."},
+		{80, 40 * 1024 * 1024, 50 * 1024 * 1024, "即将完成..."},
+		{100, 50 * 1024 * 1024, 50 * 1024 * 1024, "下载完成"},
+	}
+
+	for i, stage := range stages {
+		select {
+		case <-ctx.Done():
+			s.emitTestInstallStatus(toolName, "cancelled", "已取消下载")
+			return
+		default:
+		}
+
+		s.emitProgress(DownloadProgress{
+			Tool:        toolName,
+			URL:         url,
+			TotalSize:   stage.totalSize,
+			Downloaded:  stage.downloaded,
+			Percent:     stage.percent,
+			Speed:       1024 * 1024 * 2, // 2 MB/s
+			ElapsedTime: int64(i * 1000),
+			Remaining:   int64((5 - i) * 500),
+		})
+
+		s.emitTestInstallStatus(toolName, "downloading", stage.message)
+
+		// 等待一小段时间模拟下载
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// emitTestInstallStatus 发送测试安装状态到前端
+func (s *ToolchainService) emitTestInstallStatus(toolName, status, message string) {
+	if s.app != nil {
+		s.app.Event.Emit("toolchain:test-install-status", map[string]string{
+			"tool":    toolName,
+			"status":  status,
+			"message": message,
+		})
+	}
+}
+
+// IsDevMode returns whether the application is running in development mode.
+func (s *ToolchainService) IsDevMode() bool {
+	return define.IsDev()
+}
+
+// AbortDownload 终止当前下载（仅对 TestInstall 有效）
+func (s *ToolchainService) AbortDownload(toolName string) {
+	s.mu.Lock()
+	cancel, ok := s.testInstallCtx[toolName]
+	s.mu.Unlock()
+
+	if ok && cancel != nil {
+		cancel()
+		s.emitTestInstallStatus(toolName, "aborted", "已终止下载")
+	}
+}
+
+// ClearInstallingState 清除工具的安装状态（用于恢复卡住的安装状态）
+func (s *ToolchainService) ClearInstallingState(toolName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.installing[toolName]; ok {
+		delete(s.installing, toolName)
+		s.app.Logger.Info("toolchain: cleared installing state", "tool", toolName)
+	}
+}
+
+// GetInstallingState 获取当前正在安装的工具列表
+func (s *ToolchainService) GetInstallingState() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	result := make([]string, 0, len(s.installing))
+	for name := range s.installing {
+		result = append(result, name)
+	}
+	return result
+}
+
 // EnsureAll checks and installs/updates all managed tools.
 // Can be called from bootstrap (background goroutine) or from the frontend.
 func (s *ToolchainService) EnsureAll() {
+	// 启动时清除所有残留的安装状态
+	s.mu.Lock()
+	for name := range s.installing {
+		s.app.Logger.Info("toolchain: clearing stale installing state on startup", "tool", name)
+	}
+	s.installing = make(map[string]bool)
+	s.mu.Unlock()
+
 	binDir := s.BinDir()
 	if binDir == "" {
 		return
