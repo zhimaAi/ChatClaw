@@ -137,6 +137,7 @@ async function loadRobots() {
   } catch (error) {
     console.error('[ChatWiki] Failed to load robots:', error)
     if (isChatWikiAuthExpiredError(error)) {
+      clearChatwikiCache()
       await loadBinding()
     }
     robots.value = []
@@ -160,6 +161,7 @@ async function loadLibraries(type: number = 0) {
   } catch (error) {
     console.error('[ChatWiki] Failed to load libraries:', error)
     if (isChatWikiAuthExpiredError(error)) {
+      clearChatwikiCache()
       await loadBinding()
     }
     libraries.value = []

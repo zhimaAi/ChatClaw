@@ -41,7 +41,9 @@ export async function getBinding(): Promise<Binding | null> {
       .then((data) => {
         bindingCacheRef = { data: data ?? null, cachedAt: Date.now() }
       })
-      .catch(() => {})
+      .catch(() => {
+        clearAll()
+      })
     return stale
   }
   const data = await ChatWikiService.GetBinding()
@@ -63,7 +65,9 @@ export async function getRobotList(): Promise<Robot[]> {
       .then((list) => {
         robotListCache = { data: list ?? [], cachedAt: Date.now() }
       })
-      .catch(() => {})
+      .catch(() => {
+        clearAll()
+      })
     return stale
   }
   const list = await ChatWikiService.GetRobotList()
@@ -86,7 +90,9 @@ export async function getRobotListAll(): Promise<Robot[]> {
       .then((list) => {
         robotListAllCache = { data: list ?? [], cachedAt: Date.now() }
       })
-      .catch(() => {})
+      .catch(() => {
+        clearAll()
+      })
     return stale
   }
   const list = await ChatWikiService.GetRobotListAll()
@@ -110,7 +116,9 @@ export async function getLibraryList(libType: number): Promise<Library[]> {
       .then((list) => {
         libraryListCache.set(libType, { data: list ?? [], cachedAt: Date.now() })
       })
-      .catch(() => {})
+      .catch(() => {
+        clearAll()
+      })
     return stale
   }
   const list = await ChatWikiService.GetLibraryList(libType)
@@ -137,7 +145,9 @@ export async function getLibraryListOnlyOpen(libType: number): Promise<Library[]
           cachedAt: Date.now(),
         })
       })
-      .catch(() => {})
+      .catch(() => {
+        clearAll()
+      })
     return stale
   }
   const list = await ChatWikiService.GetLibraryListOnlyOpen(libType)
