@@ -11,9 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +18,7 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/sqlite"
+	"chatclaw/internal/sysinfo"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -225,7 +223,11 @@ func (s *ChatWikiService) GetBinding() (*Binding, error) {
 	s.refreshMu.Lock()
 	defer s.refreshMu.Unlock()
 	// Re-fetch in case another goroutine already refreshed
-	m2, _ := s.getBindingFromDB()
+	m2, err2 := s.getBindingFromDB()
+	if err2 != nil {
+		s.app.Logger.Warn("[ChatWiki] Failed to re-fetch binding after refresh lock", "error", err2)
+		return b, nil
+	}
 	if m2 == nil {
 		return b, nil
 	}
@@ -362,68 +364,6 @@ func (s *ChatWikiService) updateBindingTokenAndExp(token string, exp int64) erro
 	return nil
 }
 
-// getOSTypeForRefresh returns display name for current OS (used in refreshToken body).
-func getOSTypeForRefresh() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "macOS"
-	case "windows":
-		return "Windows"
-	case "linux":
-		return "Linux"
-	default:
-		return runtime.GOOS
-	}
-}
-
-// getOSVersionForRefresh returns best-effort OS version (e.g. "14.2.1", "11", "22.04") for refreshToken body.
-func getOSVersionForRefresh() string {
-	switch runtime.GOOS {
-	case "windows":
-		return getWindowsVersionForRefresh()
-	case "darwin":
-		return getDarwinVersionForRefresh()
-	case "linux":
-		return getLinuxVersionForRefresh()
-	}
-	return ""
-}
-
-func getWindowsVersionForRefresh() string {
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
-		"$b = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').CurrentBuild; if ([int]$b -ge 22000) { '11' } else { '10' }")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func getDarwinVersionForRefresh() string {
-	cmd := exec.Command("sw_vers", "-productVersion")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func getLinuxVersionForRefresh() string {
-	data, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		return ""
-	}
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "VERSION_ID=") {
-			v := strings.TrimPrefix(line, "VERSION_ID=")
-			v = strings.Trim(v, "\"'\n\r\t ")
-			return v
-		}
-	}
-	return ""
-}
-
 // callRefreshTokenAPI calls POST /manage/chatclaw/refreshToken and returns new token and exp, or error.
 // On 401 it marks the binding expired and returns errChatWikiAuthExpired.
 func (s *ChatWikiService) callRefreshTokenAPI(binding *Binding) (newToken string, newExp int64, err error) {
@@ -431,8 +371,8 @@ func (s *ChatWikiService) callRefreshTokenAPI(binding *Binding) (newToken string
 	apiURL := baseURL + "/manage/chatclaw/refreshToken"
 
 	body := map[string]string{
-		"os_type":    getOSTypeForRefresh(),
-		"os_version": getOSVersionForRefresh(),
+		"os_type":    sysinfo.OSType(),
+		"os_version": sysinfo.OSVersion(),
 	}
 	bodyBytes, _ := json.Marshal(body)
 
@@ -457,11 +397,6 @@ func (s *ChatWikiService) callRefreshTokenAPI(binding *Binding) (newToken string
 		return "", 0, fmt.Errorf("read refresh response: %w", err)
 	}
 
-	s.app.Logger.Info("[ChatWiki] refreshToken response",
-		"status", resp.StatusCode,
-		"body", string(respBody),
-	)
-
 	var apiResp struct {
 		Res  int    `json:"res"`
 		Msg  string `json:"msg"`
@@ -473,6 +408,11 @@ func (s *ChatWikiService) callRefreshTokenAPI(binding *Binding) (newToken string
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return "", 0, fmt.Errorf("decode refresh response: %w", err)
 	}
+
+	s.app.Logger.Info("[ChatWiki] refreshToken response",
+		"status", resp.StatusCode,
+		"res", apiResp.Res,
+	)
 
 	if apiResp.Res == 401 || resp.StatusCode == http.StatusUnauthorized {
 		s.markBindingExpired()
