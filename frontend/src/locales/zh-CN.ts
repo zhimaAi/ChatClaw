@@ -714,6 +714,8 @@ export default {
       mcpNoSearchResults: '无匹配结果',
       mcpSelectAll: '全选',
       mcpDeselectAll: '取消全选',
+      mcpGoToSettings: '添加新 MCP',
+      mcpGoToSettingsHint: '前往设置页面添加新的 MCP 服务',
     },
   },
   knowledge: {

@@ -20,6 +20,8 @@ import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { Events } from '@wailsio/runtime'
+import { useNavigationStore } from '@/stores/navigation'
+import { useSettingsStore } from '@/stores/settings'
 import FileTreeNode from './FileTreeNode.vue'
 
 const FS_MUTATING_TOOLS = new Set([
@@ -38,6 +40,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const navigationStore = useNavigationStore()
+const settingsStore = useSettingsStore()
 const MAX_TREE_DEPTH = 3
 
 const workspaceDir = ref('')
@@ -262,6 +266,15 @@ function handleToggleAll() {
   } else {
     draftSelectedIDs.value = new Set(globalMCPServers.value.map((s) => s.id))
   }
+}
+
+function navigateToAddMCPServer() {
+  addDialogOpen.value = false
+  settingsStore.setActiveMenu('mcp')
+  navigationStore.navigateToModule('settings')
+  setTimeout(() => {
+    Events.Emit('mcp:open-add-dialog')
+  }, 100)
 }
 
 // ==================== Add MCP Picker Dialog ====================
@@ -510,7 +523,12 @@ onUnmounted(() => {
     <Dialog v-model:open="addDialogOpen">
       <DialogContent size="xl">
         <DialogHeader>
-          <DialogTitle>{{ t('assistant.workspaceDrawer.mcpAddFromGlobal') }}</DialogTitle>
+          <div class="flex items-center justify-between pr-8">
+            <DialogTitle>{{ t('assistant.workspaceDrawer.mcpAddFromGlobal') }}</DialogTitle>
+            <Button size="sm" @click="navigateToAddMCPServer">
+              {{ t('assistant.workspaceDrawer.mcpGoToSettings') }}
+            </Button>
+          </div>
           <DialogDescription class="sr-only">{{ t('assistant.workspaceDrawer.mcpAddFromGlobal') }}</DialogDescription>
         </DialogHeader>
 
