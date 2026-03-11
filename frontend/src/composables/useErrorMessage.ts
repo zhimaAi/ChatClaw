@@ -28,3 +28,13 @@ export function getErrorMessage(error: unknown): string {
   }
   return msg
 }
+
+/** True when the error is ChatWiki 401 (auth expired / no login info). Backend marks binding exp=0 and returns CHATWIKI_AUTH_EXPIRED. */
+export function isChatWikiAuthExpiredError(error: unknown): boolean {
+  const msg = getErrorMessage(error)
+  return (
+    msg.includes('CHATWIKI_AUTH_EXPIRED') ||
+    msg.includes('账号未获取登录信息') ||
+    (msg.includes('401') && msg.includes('未获取登录信息'))
+  )
+}
