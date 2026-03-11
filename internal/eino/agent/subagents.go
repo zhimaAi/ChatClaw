@@ -56,7 +56,6 @@ func excludeToolsByName(allTools []tool.BaseTool, names ...string) []tool.BaseTo
 }
 
 // buildSubAgentHandlers creates middleware handlers for a sub-agent.
-// Flags control which optional middleware layers are included.
 func buildSubAgentHandlers(
 	ctx context.Context,
 	backend *tools.Backend,
@@ -104,196 +103,20 @@ func buildSubAgentHandlers(
 	return handlers
 }
 
-// researcherMaxIterations caps the Researcher's ReAct loop. Each "iteration"
-// is one model call that may produce one or more tool calls. A typical research
-// task needs ~5-8 iterations (a few search rounds + browsing + conclusion).
-// 15 provides ample room while preventing runaway loops with weaker models.
-const researcherMaxIterations = 30
+// --- general-purpose sub-agent (DeerFlow-style: full toolset for any non-trivial task) ---
 
-func researcherInstruction(skillsEnabled bool) string {
+const generalPurposeMaxIterations = 50
+
+func generalPurposeDescription() string {
 	if isZhCN() {
-		inst := `你是一个深度调研助手，在独立上下文中工作。你的目标不是展示搜索过程，而是为主助手产出可直接引用、来源清晰、时间边界明确的调研结论。
-
-## 工作流程
-1. 先明确问题的主题、时间范围、地区范围和输出目标，再确定搜索方向和关键词
-2. 先用少量不同关键词快速摸清全局，再深入浏览高价值来源，不要反复搜索同一角度
-3. 对关键结论至少做一次交叉验证；优先使用官方公告、原始文档、研究机构、权威媒体等高可信来源
-4. 当信息已足够支撑回答时立即停止搜索，整理为结构化结论，而不是继续堆砌材料
-
-## 特别要求
-- 如果问题包含明确时间范围（如“2025年回顾”“预测2026年趋势”），必须严格区分：
-  - 已发生事实：只写可验证的事实，并尽量标注发布时间或事件时间
-  - 趋势预测：单独作为预测或判断输出，不要伪装成既成事实
-- 不要把上一年的旧信息误当作当年的代表性进展；如果某事件跨年，需说明时间关系
-- 对模型版本、发布时间、价格、市场规模、排名、性能结论等高风险信息，优先做交叉验证
-- 如果不同来源存在冲突，说明主流说法和不确定点，不要强行下单一结论
-
-## 输出格式
-### 结论摘要
-- 3-6 条最重要的发现或判断
-
-### 关键事实与证据
-对每个关键结论，尽量按“结论 / 证据 / 来源”方式组织，必要时补充时间信息
-
-### 分析与判断
-在事实基础上做归纳、对比和推演，明确哪些是分析，哪些是已验证信息
-
-### 信息来源
-列出主要参考来源及 URL；优先保留最关键、最可信的来源，不要堆砌长列表
-
-### 信息缺口与不确定性
-如果存在证据不足、统计口径不一致或预测性较强的部分，要明确说明
-
-## 规则
-- 避免用相似关键词反复搜索同一内容
-- 如果某个网页无法访问，跳过它继续下一个
-- 搜索到足以回答问题的信息后就开始撰写结论，不要追求穷尽所有来源
-- 输出要精炼，避免空话、套话和过程复述
-- 不要把工具调用、技能加载、搜索重试等内部过程写进最终结论
-- 关键发现必须带出处，结尾简要说明数据来源和可信度边界`
-
-		if skillsEnabled {
-			inst += `
-
-## 技能系统
-已安装的技能会自动加载到你的能力中，为你提供额外的调研方法和专业知识。
-- 优先使用你已有的搜索、浏览和阅读能力完成常规调研
-- 只有在当前主题明显需要专业方法，或现有工具不足以完成任务时，再考虑技能系统
-- 用 skill_list 查看已安装的技能
-- 如果已有启用的技能与当前调研任务高度相关，优先按照技能指引操作
-- 必要时再用 skill_search 搜索技能市场，查找相关技能
-- 找到合适技能后，用 skill_install 安装、skill_enable 启用，并用 read_skill 读取技能说明`
-		}
-		return inst
+		return "执行代理：拥有完整工具集（web_search、write_file、edit_file、execute、glob、grep 等）。处理调研搜索、写代码、文件操作、分析等任何需要独立上下文的任务。需要搜索或调研时必须用此代理。"
 	}
-
-	inst := `You are a deep research assistant working in an isolated context. Your goal is not to show the search process, but to produce directly usable research conclusions with clear sourcing and explicit time boundaries.
-
-## Workflow
-1. First identify the topic, time range, geography, and desired deliverable, then choose search directions and keywords
-2. Use a few varied searches to map the landscape, then go deeper on high-value sources instead of repeating the same angle
-3. Cross-check important claims at least once; prefer official announcements, primary documents, research institutions, and reputable media
-4. As soon as you have enough information to support the answer, stop searching and synthesize the result
-
-## Special Requirements
-- If the request includes a specific time range (for example, "2025 review" or "predict 2026 trends"), strictly separate:
-  - Verified facts: only include claims that can be supported as facts within that time frame
-  - Forecasts: present them separately as projections, expectations, or judgments
-- Do not mislabel prior-year information as representative of the target year; if a development spans multiple years, explain the timing
-- For model versions, release dates, pricing, market size, rankings, and performance claims, prioritize cross-verification
-- If sources conflict, explain the dominant view and the uncertainty instead of forcing a single definitive conclusion
-
-## Output Format
-### Executive Summary
-- 3-6 most important findings or judgments
-
-### Key Facts and Evidence
-For each major conclusion, organize the content as clearly as possible in terms of claim / evidence / source, and include timing when helpful
-
-### Analysis and Judgment
-Synthesize, compare, and infer from the facts; make it clear what is verified information versus analysis
-
-### Sources
-List the main references with URLs; keep the list focused on the most important and credible sources
-
-### Gaps and Uncertainty
-Explicitly note missing evidence, conflicting figures, or parts that are more speculative
-
-## Rules
-- Avoid repeatedly searching for the same content with similar keywords
-- If a page is inaccessible, skip it and move on
-- Start writing conclusions once you have enough information to answer the question; do not try to exhaust all possible sources
-- Keep the output concise; avoid fluff, boilerplate, and process narration
-- Do not include internal process details such as tool calls, skill loading, or retry behavior in the final result
-- Cite sources for key findings, and briefly summarize source quality and confidence boundaries at the end`
-
-	if skillsEnabled {
-		inst += `
-
-## Skill System
-Installed skills are automatically loaded into your capabilities, providing additional research methods and domain expertise.
-- Prefer your built-in search, browsing, and reading abilities for normal research tasks
-- Only use the skill system when the topic clearly needs specialized methods or your current tools are insufficient
-- Use skill_list to view installed skills
-- If an enabled skill is highly relevant to the current task, follow its guidance preferentially
-- Use skill_search only when needed to find a relevant skill
-- Once you identify a suitable skill, use skill_install, skill_enable, and read_skill as needed`
-	}
-	return inst
+	return "Execution agent with full toolset (web_search, write_file, edit_file, execute, glob, grep, etc.). Handles research/search, coding, file operations, analysis — any task requiring isolated context. MUST use this agent when search or research is needed."
 }
 
-func researcherDescription() string {
+func generalPurposeInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled, skillsEnabled bool) string {
 	if isZhCN() {
-		return "深度调研助手：在独立上下文中通过搜索引擎、浏览网页等方式收集信息，返回精炼的调研结论。适合综合多来源调研、对比分析、市场调查等需要大量信息收集的任务。"
-	}
-	return "Deep research assistant: investigates topics using search engines, web browsing, and document reading in an isolated context. Returns condensed, well-sourced findings. Call when you need thorough research across multiple sources, comparative analysis, or extensive information gathering that would clutter the main conversation."
-}
-
-// newResearcherSubAgent creates the Researcher sub-agent as a tool.
-// It has access to search, browsing, HTTP, read-only filesystem, thinking tools,
-// and optionally skill management tools (list, search, install, enable, read) when skills are enabled.
-func newResearcherSubAgent(
-	ctx context.Context,
-	chatModel model.BaseChatModel,
-	registeredTools []tool.BaseTool,
-	backend *tools.Backend,
-	config Config,
-	skillMgmtTools []tool.BaseTool,
-	skillBackend *filteringSkillBackend,
-	logger *slog.Logger,
-) (tool.BaseTool, error) {
-	researcherTools := filterToolsByName(registeredTools,
-		"duckduckgo_search", "wikipedia_search", "browser_use",
-		"http_request", "read_file", "ls", "sequential_thinking",
-		"memory_retriever", "library_retriever",
-	)
-
-	if config.SkillsEnabled && len(skillMgmtTools) > 0 {
-		researcherTools = append(researcherTools, skillMgmtTools...)
-		if skillBackend != nil {
-			researcherTools = append(researcherTools, &readSkillTool{backend: skillBackend})
-		}
-	}
-
-	handlers := buildSubAgentHandlers(ctx, backend, config, chatModel, logger,
-		researcherInstruction(config.SkillsEnabled), "researcher",
-		true, true, true,
-	)
-
-	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "researcher",
-		Description: researcherDescription(),
-		Model:       chatModel,
-		ToolsConfig: adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               researcherTools,
-				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(researcherTools, logger)},
-			},
-		},
-		Handlers:      handlers,
-		MaxIterations: researcherMaxIterations,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return adk.NewAgentTool(ctx, agent), nil
-}
-
-// workerMaxIterations caps the Worker's ReAct loop. Worker handles complex
-// multi-step tasks, so the limit is generous but still prevents runaway loops.
-const workerMaxIterations = 50
-
-func workerDescription() string {
-	if isZhCN() {
-		return "通用执行助手：在独立上下文中自主完成复杂的多步骤任务。拥有所有工具（文件操作、命令执行、浏览器等）。适合需要反复试错、多步调试、或会产生大量中间输出的任务。"
-	}
-	return "General-purpose worker: handles complex multi-step tasks autonomously in an isolated context. Has access to all tools including file operations, shell commands, and browser. Call when the task requires multiple dependent steps, trial-and-error debugging, or would generate too much intermediate output for the main conversation."
-}
-
-func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxNetworkEnabled, skillsEnabled bool) string {
-	if isZhCN() {
-		inst := fmt.Sprintf(`你是一个通用执行助手，在独立上下文中自主完成用户描述的任务。
+		inst := fmt.Sprintf(`你是执行代理，在独立上下文中自主完成委派的任务。
 
 ## 环境
 - 工作目录: %s
@@ -315,35 +138,26 @@ func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxN
 
 		inst += `
 
-## 工具使用
-- 创建/写入文件用 write_file，编辑现有文件用 edit_file
-- 运行命令用 execute，长时间运行的命令用 execute_background
-- 读取文件用 read_file，搜索文件用 glob/grep
-- 运行 Python 脚本优先用 uv run，运行 JS/TS 优先用 bun run
-- 运行 shell 脚本时用 "sh script.sh"（或 "bash script.sh" / "zsh script.sh"），不要用 "./script.sh"（没有执行权限），也不要尝试 chmod
-- 需要确认的危险命令先调用 confirm_execution
-
 ## 原则
-- 理解任务目标后立即开始执行
-- 遇到错误时自行诊断和修复，不要放弃
-- 完成后清晰总结：做了什么、生成了哪些文件、结果在哪里
-- 如果无法完成，说明原因和已尝试的方法`
+- 理解任务后立即执行，遇错自行诊断修复
+- 完成后清晰总结：做了什么、文件在哪
+- 调研类任务：产出精炼结论，带来源和证据，不要堆砌过程
+- 用 "sh script.sh" 运行脚本（不要用 "./script.sh"），破坏性命令先 confirm_execution`
 
 		if skillsEnabled {
 			inst += `
 
 ## 技能系统
-已安装的技能会自动加载到你的能力中，为你提供额外的专业知识和操作指南。
+已安装的技能会自动加载到你的能力中。
 - 用 skill_list 查看已安装的技能
 - 用 skill_search 搜索技能市场，查找与当前任务相关的技能
-- 用 skill_install 安装合适的技能，用 skill_enable 启用它
-- 用 read_skill 读取技能内容，获取专业的操作步骤
+- 用 skill_install 安装、skill_enable 启用、read_skill 读取技能内容
 - 遇到不熟悉的任务时，先搜索是否有相关技能可以指导`
 		}
 		return inst
 	}
 
-	inst := fmt.Sprintf(`You are a general-purpose execution assistant working autonomously in an isolated context.
+	inst := fmt.Sprintf(`You are an execution agent working autonomously in an isolated context.
 
 ## Environment
 - Working directory: %s
@@ -365,38 +179,28 @@ func workerInstruction(workDir, toolchainBinDir string, sandboxEnabled, sandboxN
 
 	inst += `
 
-## Tool Usage
-- Create/write files with write_file, edit existing files with edit_file
-- Run commands with execute, long-running commands with execute_background
-- Read files with read_file, search with glob/grep
-- Run Python scripts with uv run, JS/TS with bun run
-- Run shell scripts with "sh script.sh" (or "bash script.sh" / "zsh script.sh") — never use "./script.sh" (no execute permission) and do not attempt chmod
-- Call confirm_execution before dangerous commands
-
 ## Principles
-- Begin execution immediately after understanding the task goal
-- Self-diagnose and fix errors — do not give up
-- Summarize clearly when done: what was done, files created, where results are
-- If unable to complete, explain why and what was attempted`
+- Execute immediately after understanding the task; self-diagnose and fix errors
+- Summarize when done: what was done, where files are
+- Research tasks: condensed conclusions with sources, not process narration
+- Run scripts with "sh script.sh" (not "./script.sh"); call confirm_execution before destructive commands`
 
 	if skillsEnabled {
 		inst += `
 
 ## Skill System
-Installed skills are automatically loaded into your capabilities, providing additional expertise and operational guidance.
+Installed skills are automatically loaded into your capabilities.
 - Use skill_list to view installed skills
 - Use skill_search to search the marketplace for skills related to the current task
-- Use skill_install to install a suitable skill, then skill_enable to activate it
-- Use read_skill to read skill content for expert step-by-step instructions
+- Use skill_install, skill_enable, and read_skill as needed
 - When facing unfamiliar tasks, search for relevant skills first`
 	}
 	return inst
 }
 
-// newWorkerSubAgent creates the Worker sub-agent as a tool.
-// It inherits all tools from the main agent except the sub-agent tools themselves,
-// plus a read_skill tool when skills are enabled.
-func newWorkerSubAgent(
+// newGeneralPurposeSubAgent creates the general-purpose sub-agent (DeerFlow-style).
+// It has access to all tools except sub-agent tools.
+func newGeneralPurposeSubAgent(
 	ctx context.Context,
 	chatModel model.BaseChatModel,
 	allTools []tool.BaseTool,
@@ -405,32 +209,142 @@ func newWorkerSubAgent(
 	skillBackend *filteringSkillBackend,
 	logger *slog.Logger,
 ) (tool.BaseTool, error) {
-	workerTools := excludeToolsByName(allTools, "researcher", "worker", "skill_advisor")
-
-	if config.SkillsEnabled && skillBackend != nil {
-		workerTools = append(workerTools, &readSkillTool{backend: skillBackend})
-	}
+	// Exclude sub-agent tools to prevent nesting (read_skill is already in baseTools when SkillsEnabled)
+	tools := excludeToolsByName(allTools, "general_purpose", "bash")
 
 	handlers := buildSubAgentHandlers(ctx, backend, config, chatModel, logger,
-		workerInstruction(backend.WorkDir(), backend.ToolchainBinDir(),
+		generalPurposeInstruction(backend.WorkDir(), backend.ToolchainBinDir(),
 			backend.SandboxEnabled(), backend.SandboxEnabled() && config.SandboxNetwork,
 			config.SkillsEnabled),
-		"worker",
+		"general_purpose",
 		true, true, true,
 	)
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "worker",
-		Description: workerDescription(),
+		Name:        "general_purpose",
+		Description: generalPurposeDescription(),
 		Model:       chatModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools:               workerTools,
-				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(workerTools, logger)},
+				Tools:               tools,
+				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(tools, logger)},
 			},
 		},
 		Handlers:      handlers,
-		MaxIterations: workerMaxIterations,
+		MaxIterations: generalPurposeMaxIterations,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return adk.NewAgentTool(ctx, agent), nil
+}
+
+// --- bash sub-agent (DeerFlow-style: command execution specialist) ---
+
+const bashMaxIterations = 30
+
+func bashDescription() string {
+	if isZhCN() {
+		return "终端代理：仅用于运行 bash 命令序列（git、npm、docker、构建/测试/部署）。只有 execute、ls、read_file、write_file、edit_file，没有搜索能力。不要用于调研或搜索任务。"
+	}
+	return "Terminal agent for bash command sequences ONLY (git, npm, docker, build/test/deploy). Has only execute, ls, read_file, write_file, edit_file — NO search capability. Do NOT use for research or search tasks."
+}
+
+func bashInstruction(workDir string, sandboxEnabled, sandboxNetworkEnabled bool) string {
+	if isZhCN() {
+		inst := fmt.Sprintf(`你是命令执行助手，在独立上下文中运行 bash 命令。
+
+## 环境
+- 工作目录: %s
+- 使用绝对路径进行文件操作`, workDir)
+
+		if sandboxEnabled {
+			inst += fmt.Sprintf(`
+- 沙箱模式已启用：写入仅限 %s`, workDir)
+			if sandboxNetworkEnabled {
+				inst += "\n- 网络访问已启用"
+			} else {
+				inst += "\n- 网络访问已禁用"
+			}
+		}
+
+		inst += `
+
+## 原则
+- 相关命令逐个执行，相互独立的命令可并行
+- 报告 stdout 和 stderr（相关时）
+- 出错时解释原因
+- 对破坏性操作（rm、覆盖等）保持谨慎
+
+## 输出格式
+对每条或每组命令：1) 执行了什么 2) 结果（成功/失败）3) 相关输出（冗长则摘要）4) 错误或警告`
+		return inst
+	}
+
+	inst := fmt.Sprintf(`You are a bash command execution specialist. Execute the requested commands carefully and report results clearly.
+
+## Environment
+- Working directory: %s
+- Use absolute paths for file operations`, workDir)
+
+	if sandboxEnabled {
+		inst += fmt.Sprintf(`
+- Sandbox mode enabled: writes restricted to %s`, workDir)
+		if sandboxNetworkEnabled {
+			inst += "\n- Network access is enabled"
+		} else {
+			inst += "\n- Network access is disabled"
+		}
+	}
+
+	inst += `
+
+## Principles
+- Execute commands one at a time when they depend on each other
+- Use parallel execution when commands are independent
+- Report both stdout and stderr when relevant
+- Handle errors gracefully and explain what went wrong
+- Be cautious with destructive operations (rm, overwrite, etc.)
+
+## Output Format
+For each command or group: 1) What was executed 2) Result (success/failure) 3) Relevant output (summarized if verbose) 4) Any errors or warnings`
+	return inst
+}
+
+// newBashSubAgent creates the bash sub-agent (DeerFlow-style).
+// Tools: execute, ls, read_file, write_file, edit_file (sandbox tools only).
+func newBashSubAgent(
+	ctx context.Context,
+	chatModel model.BaseChatModel,
+	registeredTools []tool.BaseTool,
+	backend *tools.Backend,
+	config Config,
+	logger *slog.Logger,
+) (tool.BaseTool, error) {
+	bashTools := filterToolsByName(registeredTools,
+		"execute", "ls", "read_file", "write_file", "edit_file",
+	)
+
+	handlers := buildSubAgentHandlers(ctx, backend, config, chatModel, logger,
+		bashInstruction(backend.WorkDir(),
+			backend.SandboxEnabled(), backend.SandboxEnabled() && config.SandboxNetwork),
+		"bash",
+		true, true, false, // bash does not need skill middleware
+	)
+
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:        "bash",
+		Description: bashDescription(),
+		Model:       chatModel,
+		ToolsConfig: adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools:               bashTools,
+				ToolCallMiddlewares: []compose.ToolMiddleware{ErrorCatchingToolMiddleware(bashTools, logger)},
+			},
+		},
+		Handlers:      handlers,
+		MaxIterations: bashMaxIterations,
 	})
 	if err != nil {
 		return nil, err

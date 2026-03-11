@@ -13,24 +13,35 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
 } from '@/components/ui/select'
 import { useThemeLogo } from '@/composables/useLogo'
 import IconSnapAttached from '@/assets/icons/snap-attached.svg'
 import IconSnapDetached from '@/assets/icons/snap-detached.svg'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { Robot } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { Window } from '@wailsio/runtime'
 
-defineProps<{
+export type SnapListMode = 'personal' | 'team'
+
+const props = defineProps<{
+  listMode: SnapListMode
   agents: Agent[]
   activeAgent: Agent | null
   activeAgentId: number | null
+  teamRobots: Robot[]
+  activeTeamRobot: Robot | null
+  activeTeamRobotId: string | null
+  teamLoading: boolean
   hasAttachedTarget: boolean
 }>()
 
 const emit = defineEmits<{
+  'update:listMode': [value: SnapListMode]
   'update:activeAgentId': [value: number]
+  'update:activeTeamRobotId': [value: string | null]
   'newConversation': []
   'cancelSnap': []
   'findAndAttach': []
@@ -126,11 +137,22 @@ onUnmounted(() => {
   stopCustomDrag()
 })
 
-const handleAgentChange = (value: any) => {
-  if (value) {
-    emit('update:activeAgentId', Number(value))
-    emit('newConversation')
+const handleListModeChange = (value: unknown) => {
+  const s = value != null ? String(value) : ''
+  if (s === 'personal' || s === 'team') {
+    emit('update:listMode', s)
   }
+}
+
+const handleAssistantChange = (value: unknown) => {
+  const s = value != null ? String(value) : ''
+  if (s === '') return
+  if (props.listMode === 'personal') {
+    emit('update:activeAgentId', Number(s))
+  } else {
+    emit('update:activeTeamRobotId', s)
+  }
+  emit('newConversation')
 }
 </script>
 
@@ -144,31 +166,73 @@ const handleAgentChange = (value: any) => {
     @pointerup.capture="onHeaderPointerUp"
     @pointercancel.capture="onHeaderPointerUp"
   >
-    <!-- Left: Agent selector -->
-    <div data-no-drag="true" class="flex min-w-0 items-center gap-1" style="--wails-draggable: no-drag">
+    <!-- Left: List mode (personal/team) + Assistant selector -->
+    <div data-no-drag="true" class="flex min-w-0 items-center gap-1.5" style="--wails-draggable: no-drag">
+      <!-- First dropdown: Personal / Team -->
       <Select
-        :model-value="activeAgentId?.toString() ?? ''"
-        @update:model-value="handleAgentChange"
+        :model-value="listMode"
+        @update:model-value="handleListModeChange"
+      >
+        <SelectTrigger
+          class="h-7 w-auto min-w-[72px] max-w-[90px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50"
+        >
+          <span class="truncate">{{ listMode === 'personal' ? t('assistant.modes.personal') : t('assistant.modes.team') }}</span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectItem value="personal">{{ t('assistant.modes.personal') }}</SelectItem>
+            <SelectItem value="team">{{ t('assistant.modes.team') }}</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+
+      <!-- Second dropdown: Agent (personal) or Team robot (team) -->
+      <Select
+        :model-value="listMode === 'personal' ? (activeAgentId?.toString() ?? '') : (activeTeamRobotId ?? '')"
+        :disabled="listMode === 'personal' ? agents.length === 0 : (teamLoading || teamRobots.length === 0)"
+        @update:model-value="handleAssistantChange"
       >
         <SelectTrigger
           class="h-7 w-auto min-w-[120px] max-w-[180px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50"
         >
-          <div v-if="activeAgent" class="flex items-center gap-1.5">
-            <img v-if="activeAgent.icon" :src="activeAgent.icon" class="size-4 rounded object-contain" />
-            <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
-            <span class="truncate">{{ activeAgent.name }}</span>
-          </div>
-          <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+          <template v-if="listMode === 'personal'">
+            <div v-if="activeAgent" class="flex items-center gap-1.5">
+              <img v-if="activeAgent.icon" :src="activeAgent.icon" class="size-4 rounded object-contain" />
+              <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+              <span class="truncate">{{ activeAgent.name }}</span>
+            </div>
+            <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+          </template>
+          <template v-else>
+            <div v-if="activeTeamRobot" class="flex items-center gap-1.5">
+              <img v-if="activeTeamRobot.icon" :src="activeTeamRobot.icon" class="size-4 rounded object-contain" alt="" />
+              <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+              <span class="truncate">{{ activeTeamRobot.name }}</span>
+            </div>
+            <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+          </template>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem v-for="a in agents" :key="a.id" :value="a.id.toString()">
-              <div class="flex items-center gap-2">
-                <img v-if="a.icon" :src="a.icon" class="size-4 rounded object-contain" />
-                <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
-                <span>{{ a.name }}</span>
-              </div>
-            </SelectItem>
+            <SelectLabel>{{ t('assistant.placeholders.noAgentSelected') }}</SelectLabel>
+            <template v-if="listMode === 'personal'">
+              <SelectItem v-for="a in agents" :key="a.id" :value="a.id.toString()">
+                <div class="flex items-center gap-2">
+                  <img v-if="a.icon" :src="a.icon" class="size-4 rounded object-contain" />
+                  <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+                  <span>{{ a.name }}</span>
+                </div>
+              </SelectItem>
+            </template>
+            <template v-else>
+              <SelectItem v-for="r in teamRobots" :key="r.id" :value="r.id">
+                <div class="flex items-center gap-2">
+                  <img v-if="r.icon" :src="r.icon" class="size-4 rounded object-contain" alt="" />
+                  <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+                  <span>{{ r.name }}</span>
+                </div>
+              </SelectItem>
+            </template>
           </SelectGroup>
         </SelectContent>
       </Select>

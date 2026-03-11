@@ -36,11 +36,15 @@ func NewReadFileTool(b *Backend) (tool.BaseTool, error) {
 				limit = 200
 			}
 
-			return b.Read(ctx, &filesystem.ReadRequest{
+			fc, err := b.Read(ctx, &filesystem.ReadRequest{
 				FilePath: filePath,
 				Offset:   input.Offset + 1, // tool uses 0-based, backend uses 1-based
 				Limit:    limit,
 			})
+			if err != nil {
+				return "", err
+			}
+			return fc.Content, nil
 		})
 }
 

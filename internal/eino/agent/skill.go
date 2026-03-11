@@ -35,7 +35,7 @@ func buildSkillHandler(ctx context.Context, b *tools.Backend, logger *slog.Logge
 		logger:    logger,
 	}
 
-	mw, err := skill.NewChatModelAgentMiddleware(ctx, &skill.Config{
+	mw, err := skill.NewMiddleware(ctx, &skill.Config{
 		Backend: backend,
 	})
 	if err != nil {
@@ -148,14 +148,14 @@ func (b *filteringSkillBackend) list(ctx context.Context) ([]skill.Skill, error)
 }
 
 func (b *filteringSkillBackend) loadSkill(ctx context.Context, path string) (skill.Skill, error) {
-	data, err := b.fsBackend.Read(ctx, &filesystem.ReadRequest{
+	fc, err := b.fsBackend.Read(ctx, &filesystem.ReadRequest{
 		FilePath: path,
 	})
 	if err != nil {
 		return skill.Skill{}, err
 	}
 
-	fm, content, err := parseSkillFrontmatter(data)
+	fm, content, err := parseSkillFrontmatter(fc.Content)
 	if err != nil {
 		return skill.Skill{}, err
 	}

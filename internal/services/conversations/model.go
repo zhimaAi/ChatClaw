@@ -18,6 +18,12 @@ const (
 	ChatModeTask = "task" // ReAct agent with tool calling
 )
 
+// TeamType constants
+const (
+	TeamTypePerson = "person"
+	TeamTypeTeam   = "team"
+)
+
 // NormalizeChatMode validates and canonicalizes chat mode values.
 // Empty values default to task mode.
 func NormalizeChatMode(raw string) (string, bool) {
@@ -28,6 +34,21 @@ func NormalizeChatMode(raw string) (string, bool) {
 		return ChatModeChat, true
 	case ChatModeTask:
 		return ChatModeTask, true
+	default:
+		return "", false
+	}
+}
+
+// NormalizeTeamType validates and canonicalizes team type values.
+// Empty values default to person.
+func NormalizeTeamType(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return TeamTypePerson, true
+	case TeamTypePerson:
+		return TeamTypePerson, true
+	case TeamTypeTeam:
+		return TeamTypeTeam, true
 	default:
 		return "", false
 	}
@@ -46,6 +67,8 @@ type Conversation struct {
 	LibraryIDs     []int64 `json:"library_ids"`
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
+	TeamType       string  `json:"team_type"`
+	DialogueID     int64   `json:"dialogue_id"` // team mode only
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -61,6 +84,8 @@ type CreateConversationInput struct {
 	LibraryIDs     []int64 `json:"library_ids"`
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
+	TeamType       string  `json:"team_type"`
+	DialogueID     int64   `json:"dialogue_id"` // team mode only, default 0
 }
 
 // UpdateConversationInput 更新会话的输入参数
@@ -73,6 +98,8 @@ type UpdateConversationInput struct {
 	LibraryIDs     *[]int64 `json:"library_ids"`
 	EnableThinking *bool    `json:"enable_thinking"`
 	ChatMode       *string  `json:"chat_mode"`
+	TeamType       *string  `json:"team_type"`
+	DialogueID     *int64   `json:"dialogue_id"` // team mode only
 }
 
 // conversationModel 数据库模型
@@ -92,6 +119,8 @@ type conversationModel struct {
 	LibraryIDs     string `bun:"library_ids,notnull"` // JSON array stored as string
 	EnableThinking bool   `bun:"enable_thinking,notnull"`
 	ChatMode       string `bun:"chat_mode,notnull"`
+	TeamType       string `bun:"team_type,notnull"`
+	DialogueID     int64  `bun:"dialogue_id,notnull"` // team mode only, default 0
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at
@@ -130,6 +159,11 @@ func (m *conversationModel) toDTO() Conversation {
 		chatMode = ChatModeTask
 	}
 
+	teamType, ok := NormalizeTeamType(m.TeamType)
+	if !ok {
+		teamType = TeamTypePerson
+	}
+
 	return Conversation{
 		ID: m.ID,
 
@@ -142,6 +176,8 @@ func (m *conversationModel) toDTO() Conversation {
 		LibraryIDs:     libraryIDs,
 		EnableThinking: m.EnableThinking,
 		ChatMode:       chatMode,
+		TeamType:       teamType,
+		DialogueID:     m.DialogueID,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
