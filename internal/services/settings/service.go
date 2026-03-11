@@ -36,6 +36,7 @@ const (
 	CategoryTools     Category = "tools"     // 功能工具
 	CategoryWorkspace Category = "workspace" // 工作区设置
 	CategorySkills    Category = "skills"    // 技能设置
+	CategoryMCP       Category = "mcp"       // MCP 设置
 )
 
 type Setting struct {
@@ -181,6 +182,9 @@ func inferCategoryFromKey(key string) Category {
 	if strings.HasPrefix(key, "skills_") {
 		return CategorySkills
 	}
+	if strings.HasPrefix(key, "mcp_") {
+		return CategoryMCP
+	}
 	return CategoryGeneral
 }
 
@@ -273,6 +277,17 @@ func (s *SettingsService) GetSkillsDir() (string, error) {
 		return "", errs.Wrap("error.setting_read_failed", err)
 	}
 	return filepath.Join(homeDir, ".chatclaw", "skills"), nil
+}
+
+// GetMCPDir returns the fixed MCP servers directory path ($HOME/.chatclaw/mcp).
+func (s *SettingsService) GetMCPDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", errs.Wrap("error.setting_read_failed", err)
+	}
+	dir := filepath.Join(homeDir, ".chatclaw", "mcp")
+	_ = os.MkdirAll(dir, 0o755)
+	return dir, nil
 }
 
 // toNullString converts a string to sql.NullString

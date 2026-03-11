@@ -1619,7 +1619,7 @@ onUnmounted(() => {
     <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode) -->
       <div
-        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team' && activeConversationId && chatMode === 'task'"
+        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team' && chatMode === 'task'"
         class="flex shrink-0 items-center justify-end px-2 pt-1"
       >
         <Button
@@ -1759,7 +1759,7 @@ onUnmounted(() => {
 
     <!-- Workspace drawer panel (task mode only; hidden in team mode) -->
     <WorkspaceDrawer
-      v-if="!isSnapMode && listMode !== 'team' && activeConversationId && chatMode === 'task'"
+      v-if="!isSnapMode && listMode !== 'team' && chatMode === 'task'"
       :open="workspaceDrawerOpen"
       :agent="activeAgent"
       :conversation-id="activeConversationId"

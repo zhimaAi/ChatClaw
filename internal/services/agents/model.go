@@ -33,6 +33,10 @@ type Agent struct {
 	SandboxNetwork bool   `json:"sandbox_network"`
 	WorkDir        string `json:"work_dir"`
 
+	MCPEnabled           bool   `json:"mcp_enabled"`
+	MCPServerIDs         string `json:"mcp_server_ids"`
+	MCPServerEnabledIDs  string `json:"mcp_server_enabled_ids"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -69,6 +73,10 @@ type UpdateAgentInput struct {
 	SandboxMode    *string `json:"sandbox_mode"`
 	SandboxNetwork *bool   `json:"sandbox_network"`
 	WorkDir        *string `json:"work_dir"`
+
+	MCPEnabled          *bool   `json:"mcp_enabled"`
+	MCPServerIDs        *string `json:"mcp_server_ids"`
+	MCPServerEnabledIDs *string `json:"mcp_server_enabled_ids"`
 }
 
 type agentModel struct {
@@ -97,6 +105,10 @@ type agentModel struct {
 	SandboxMode    string `bun:"sandbox_mode,notnull"`
 	SandboxNetwork bool   `bun:"sandbox_network,notnull"`
 	WorkDir        string `bun:"work_dir,notnull"`
+
+	MCPEnabled          bool   `bun:"mcp_enabled,notnull"`
+	MCPServerIDs         string `bun:"mcp_server_ids,notnull"`
+	MCPServerEnabledIDs  string `bun:"mcp_server_enabled_ids,notnull"`
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at（字符串格式）
@@ -140,6 +152,10 @@ func (m *agentModel) toDTO() Agent {
 		SandboxMode:    m.SandboxMode,
 		SandboxNetwork: m.SandboxNetwork,
 		WorkDir:        m.WorkDir,
+
+		MCPEnabled:          m.MCPEnabled,
+		MCPServerIDs:        m.MCPServerIDs,
+		MCPServerEnabledIDs: m.MCPServerEnabledIDs,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
