@@ -358,15 +358,9 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-	// MCP tools: when enabled, load selected servers or all if none selected
-	if agentExtras.MCPEnabled {
-		var mcpServers []mcp.MCPServer
-		var mcpErr error
-		if len(agentExtras.MCPServerIDs) > 0 {
-			mcpServers, mcpErr = mcp.ListEnabledServersByIDs(agentExtras.MCPServerIDs)
-		} else {
-			mcpServers, mcpErr = mcp.ListEnabledServers()
-		}
+	// MCP tools: when enabled, load only the servers explicitly enabled for this agent
+	if agentExtras.MCPEnabled && len(agentExtras.MCPServerEnabledIDs) > 0 {
+		mcpServers, mcpErr := mcp.ListEnabledServersByIDs(agentExtras.MCPServerEnabledIDs)
 		if mcpErr != nil {
 			s.app.Logger.Warn("[chat] failed to list MCP servers for agent", "error", mcpErr)
 		} else if len(mcpServers) > 0 {
