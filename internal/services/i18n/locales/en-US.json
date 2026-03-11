@@ -172,5 +172,22 @@
   "error.toolchain_create_dir_failed": "failed to create tool directory",
   "error.toolchain_already_installing": "'{{.Name}}' is already being installed",
   "error.toolchain_fetch_version_failed": "failed to fetch latest version",
-  "error.toolchain_install_failed": "installation failed"
+  "error.toolchain_install_failed": "installation failed",
+  "error.channel_list_failed": "failed to list channels",
+  "error.channel_create_failed": "failed to create channel",
+  "error.channel_update_failed": "failed to update channel",
+  "error.channel_delete_failed": "failed to delete channel",
+  "error.channel_read_failed": "failed to read channel",
+  "error.channel_not_found": "channel '{{.ID}}' not found",
+  "error.channel_config_duplicate_app_id": "a channel with the same App ID already exists",
+  "error.channel_config_duplicate_app_secret": "a channel with the same App Secret already exists",
+  "error.channel_name_required": "channel name is required",
+  "error.channel_platform_required": "platform is required",
+  "error.channel_id_required": "channel ID is required",
+  "error.channel_connect_failed": "failed to connect channel '{{.Name}}'",
+  "error.channel_connect_requires_agent": "please bind an agent before connecting",
+  "error.channel_agent_create_failed": "failed to create AI agent for channel",
+  "error.channel_agent_create_not_available": "auto-create agent is not available",
+  "error.channel_ai_reply_failed": "AI reply failed: {{.Error}}",
+  "error.channel_ai_reply_empty": "AI reply failed: generated empty response"
 }

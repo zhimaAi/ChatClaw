@@ -756,8 +756,8 @@ onUnmounted(() => {
 
     <SettingsCard :title="t('settings.snap.appsTitle')">
       <template #header-right>
-        <Button variant="outline" size="sm" class="h-7" @click="openCustomAppPicker">
-          <Plus class="size-3.5 mr-1" />
+        <Button variant="outline" size="sm" class="h-7 gap-1" @click="openCustomAppPicker">
+          <Plus class="size-3.5 shrink-0" />
           {{ t('settings.snap.addCustomApp') }}
         </Button>
       </template>
