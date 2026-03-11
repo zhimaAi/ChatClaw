@@ -38,7 +38,7 @@ import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/
 
 defineProps<{ tabId: string }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const channels = ref<Channel[]>([])
 const stats = ref<ChannelStats>({ total: 0, connected: 0, disconnected: 0 })
@@ -79,8 +79,12 @@ const selectedPlatformMeta = computed(() => {
 })
 
 const isInlineWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
-const inlineAppIdLabel = computed(() => (isInlineWeCom.value ? 'Bot ID' : 'APPID'))
-const inlineAppSecretLabel = computed(() => (isInlineWeCom.value ? 'Secret' : 'APP Secret'))
+const inlineAppIdLabel = computed(() =>
+  isInlineWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId'),
+)
+const inlineAppSecretLabel = computed(() =>
+  isInlineWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret'),
+)
 const inlineAppIdPlaceholder = computed(() => (
   isInlineWeCom.value
     ? t('channels.config.wecomAppIdPlaceholder')
@@ -118,9 +122,9 @@ async function loadData() {
 }
 
 function getAgentName(agentId: number): string {
-  if (!agentId) return 'AI助手'
+  if (!agentId) return t('channels.agentFallback')
   const agent = agents.value.find(a => a.id === agentId)
-  return agent ? agent.name : 'AI助手'
+  return agent ? agent.name : t('channels.agentFallback')
 }
 
 function handleAddChannel() {
@@ -162,7 +166,7 @@ async function handleDelete() {
   if (!channelToDelete.value) return
   try {
     await ChannelService.DeleteChannel(channelToDelete.value.id)
-    toast.success(t('channels.delete.success', '删除成功'))
+    toast.success(t('channels.delete.success'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -176,7 +180,7 @@ async function handleEnableChannel(channel: Channel) {
   try {
     await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: true }))
     await ChannelService.ConnectChannel(channel.id)
-    toast.success(t('channels.toggle.enableSuccess', '开启成功'))
+    toast.success(t('channels.toggle.enableSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -188,7 +192,7 @@ async function handleDisableChannel(channel: Channel) {
   try {
     await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: false }))
     await ChannelService.DisconnectChannel(channel.id)
-    toast.success(t('channels.toggle.disableSuccess', '关闭成功'))
+    toast.success(t('channels.toggle.disableSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -224,7 +228,7 @@ async function confirmToggle() {
 async function handleUnbind(channel: Channel) {
   try {
     await ChannelService.UnbindAgent(channel.id)
-    toast.success('已解绑助手')
+    toast.success(t('channels.unbindSuccess'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -241,7 +245,7 @@ async function handleBindAgent(agentId: number) {
   if (!channelToBind.value) return
   try {
     await ChannelService.BindAgent(channelToBind.value.id, agentId)
-    toast.success('绑定助手成功')
+    toast.success(t('channels.bindSuccess'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -257,7 +261,7 @@ async function handleAutoGenerate() {
   try {
     await ChannelService.EnsureAgentForChannel(channelToBind.value.id)
     await ChannelService.ConnectChannel(channelToBind.value.id)
-    toast.success(t('channels.bindAgent.autoGenerateSuccess', '已自动创建助手并连接频道'))
+    toast.success(t('channels.bindAgent.autoGenerateSuccess'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -273,6 +277,8 @@ function getPlatformIcon(platformId: string): string | null {
 }
 
 function getPlatformName(platformId: string): string {
+  const key = `channels.platforms.${platformId}`
+  if (te(key)) return t(key)
   const platform = platforms.value.find(p => p.id === platformId)
   return platform?.name || platformId
 }
@@ -291,10 +297,10 @@ async function handleInlinePickAvatar() {
       CanChooseFiles: true,
       CanChooseDirectories: false,
       AllowsMultipleSelection: false,
-      Title: t('channels.config.pickAvatar', '选择头像'),
+      Title: t('channels.config.pickAvatar'),
       Filters: [
         {
-          DisplayName: t('channels.config.filterImages', '图片文件'),
+          DisplayName: t('channels.config.filterImages'),
           Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
         },
       ],
@@ -349,7 +355,7 @@ function openPlatformDocs() {
 
 async function handleInlineVerify() {
   if (!isInlineFormValid.value) {
-    toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
+    toast.error(t('channels.inline.fillRequired'))
     return
   }
   if (!selectedPlatformMeta.value) return
@@ -360,9 +366,9 @@ async function handleInlineVerify() {
   inlineFormVerifying.value = true
   try {
     await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
-    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+    toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
-    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
   } finally {
     inlineFormVerifying.value = false
   }
@@ -371,9 +377,9 @@ async function handleInlineVerify() {
 function getAppId(extraConfig: string): string {
   try {
     const config = JSON.parse(extraConfig)
-    return config.app_id || config.token || 'N/A'
+    return config.app_id || config.token || t('common.na')
   } catch {
-    return 'N/A'
+    return t('common.na')
   }
 }
 
@@ -385,15 +391,15 @@ onMounted(loadData)
     <!-- Page Header -->
     <div class="flex h-20 shrink-0 items-center justify-between px-6">
       <div class="flex flex-col gap-1">
-        <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.title', '频道') }}</h1>
-        <p class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.subtitle', '管理您的消息频道和连接') }}</p>
+        <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.title') }}</h1>
+        <p class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.subtitle') }}</p>
       </div>
       <Button 
         class="h-9 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
         @click="handleAddChannel"
       >
         <Plus class="mr-1.5 h-4 w-4" />
-        {{ t('channels.addChannel', '添加频道') }}
+        {{ t('channels.addChannel') }}
       </Button>
     </div>
 
@@ -407,7 +413,7 @@ onMounted(loadData)
           </div>
           <div class="flex flex-col gap-1">
             <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.total }}</span>
-            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.total', '频道总数') }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.total') }}</span>
           </div>
         </div>
         <!-- Card 2: Connected -->
@@ -417,7 +423,7 @@ onMounted(loadData)
           </div>
           <div class="flex flex-col gap-1">
             <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.connected }}</span>
-            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.connected', '已连接') }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.connected') }}</span>
           </div>
         </div>
         <!-- Card 3: Disconnected -->
@@ -427,13 +433,13 @@ onMounted(loadData)
           </div>
           <div class="flex flex-col gap-1">
             <span class="text-2xl font-semibold leading-none tracking-tight text-[#171717] dark:text-foreground">{{ stats.disconnected }}</span>
-            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.disconnected', '未连接') }}</span>
+            <span class="text-sm text-[#737373] dark:text-muted-foreground">{{ t('channels.stats.disconnected') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Section Header -->
-      <h2 class="mb-2 text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.available', '可用频道') }}</h2>
+      <h2 class="mb-2 text-base font-semibold text-[#262626] dark:text-foreground">{{ t('channels.available.title') }}</h2>
 
       <!-- Platform Filter Tabs -->
       <div class="mb-4 inline-flex overflow-x-auto rounded-lg border border-[#e5e5e5] bg-[rgba(0,0,0,0.05)] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-muted/50">
@@ -442,7 +448,7 @@ onMounted(loadData)
           :class="selectedFilter === 'all' ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50'"
           @click="selectedFilter = 'all'"
         >
-          {{ t('common.all', '全部') }}
+          {{ t('common.all') }}
         </button>
         <button
           v-for="platform in platforms"
@@ -452,7 +458,7 @@ onMounted(loadData)
             selectedFilter === platform.id ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
             platform.id !== 'feishu' ? 'opacity-50 cursor-not-allowed' : ''
           ]"
-          @click="platform.id === 'feishu' ? selectedFilter = platform.id : toast.default('即将上线')"
+          @click="platform.id === 'feishu' ? selectedFilter = platform.id : toast.default(t('channels.comingSoon'))"
         >
           {{ getPlatformName(platform.id) }}
         </button>
@@ -502,20 +508,20 @@ onMounted(loadData)
                 <DropdownMenuContent align="end" class="min-w-24 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover">
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleEditChannel(channel)">
                     <Edit class="h-4 w-4" />
-                    {{ t('common.edit', '编辑') }}
+                    {{ t('common.edit') }}
                   </DropdownMenuItem>
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleOpenBind(channel)">
                     <Link class="h-4 w-4" />
-                    {{ channel.agent_id === 0 ? '绑定' : '切换绑定' }}
+                    {{ channel.agent_id === 0 ? t('channels.card.bind') : t('channels.card.switchBind') }}
                   </DropdownMenuItem>
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleUnbind(channel)" :disabled="channel.agent_id === 0">
                     <Unlink class="h-4 w-4" />
-                    解绑
+                    {{ t('channels.card.unbind') }}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator class="my-0.5 bg-[#f0f0f0] dark:bg-border" />
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px] text-destructive focus:bg-destructive/10 focus:text-destructive" @click="confirmDelete(channel)">
                     <Trash2 class="h-4 w-4" />
-                    删除
+                    {{ t('common.delete') }}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -524,7 +530,7 @@ onMounted(loadData)
 
           <!-- Appid -->
           <p class="text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
-            Appid: {{ getAppId(channel.extra_config) }}
+            {{ t('channels.card.appId') }}: {{ getAppId(channel.extra_config) }}
           </p>
 
           <!-- Status Tags (bind status only; connection status removed) -->
@@ -540,7 +546,7 @@ onMounted(loadData)
                 }"
               ></div>
               <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
-                {{ channel.status === 'online' ? t('channels.status.online', '已连接') : channel.status === 'error' ? t('channels.status.error', '错误') : t('channels.status.offline', '未连接') }}
+                {{ channel.status === 'online' ? t('channels.status.online') : channel.status === 'error' ? t('channels.status.error') : t('channels.status.offline') }}
               </span>
             </div>
             <!-- Bind Status -->
@@ -551,7 +557,7 @@ onMounted(loadData)
             >
               <IconCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
               <IconClose v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? '绑定' : '未绑定' }}</span>
+              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound') }}</span>
             </div>
             <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted max-w-[120px]">
               <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground truncate" :title="getAgentName(channel.agent_id)">{{ getAgentName(channel.agent_id) }}</span>
@@ -565,13 +571,13 @@ onMounted(loadData)
         <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted mb-4">
           <SquareDashed class="h-6 w-6 text-[#737373] dark:text-muted-foreground" />
         </div>
-        <h3 class="text-base font-medium text-[#262626] dark:text-foreground">{{ t('channels.empty.title', '暂无频道') }}</h3>
+        <h3 class="text-base font-medium text-[#262626] dark:text-foreground">{{ t('channels.empty.title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
-          您还没有配置任何频道，点击上方按钮添加一个新频道。
+          {{ t('channels.empty.desc') }}
         </p>
         <Button class="mt-6 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" @click="handleAddChannel">
           <Plus class="mr-1.5 h-4 w-4" />
-          {{ t('channels.addChannel', '添加频道') }}
+          {{ t('channels.addChannel') }}
         </Button>
       </div>
 
@@ -583,7 +589,7 @@ onMounted(loadData)
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
             <label class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
               <span>*</span>
-              <span>{{ t('channels.inline.avatarName', '机器人头像/名称') }}</span>
+              <span>{{ t('channels.inline.avatarName') }}</span>
             </label>
             <div class="flex min-w-0 gap-2">
               <button
@@ -606,7 +612,7 @@ onMounted(loadData)
               <Input
                 v-model="inlineFormName"
                 class="h-10 min-w-0 flex-1 rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                :placeholder="t('channels.inline.namePlaceholder', '请输入')"
+                :placeholder="t('channels.inline.namePlaceholder')"
               />
             </div>
           </div>
@@ -649,7 +655,7 @@ onMounted(loadData)
           >
             <LoaderCircle v-if="inlineFormVerifying" class="mr-2 h-4 w-4 animate-spin" />
             <Check v-else class="mr-2 h-4 w-4" />
-            {{ inlineFormVerifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
+            {{ inlineFormVerifying ? t('channels.inline.verifying') : t('channels.inline.verifyConfig') }}
           </Button>
           <Button
             class="h-10 bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
@@ -657,14 +663,14 @@ onMounted(loadData)
             @click="handleInlineSave"
           >
             <Plus class="mr-2 h-4 w-4" />
-            {{ t('channels.inline.save', '保存添加') }}
+            {{ t('channels.inline.save') }}
           </Button>
           <Button
             variant="outline"
             class="h-10 border-[#d4d4d4] px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
             @click="openPlatformDocs"
           >
-            {{ t('channels.inline.configSteps', '配置步骤') }}
+            {{ t('channels.inline.configSteps') }}
           </Button>
         </div>
       </div>
@@ -699,18 +705,18 @@ onMounted(loadData)
     <AlertDialog :open="toggleDialogOpen" @update:open="(val) => { if (!val) cancelToggle() }">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{{ channelToToggle?.val ? t('channels.toggle.enableTitle', '确定要开启该频道吗？') : t('channels.toggle.disableTitle', '确定要关闭该频道吗？') }}</AlertDialogTitle>
+          <AlertDialogTitle>{{ channelToToggle?.val ? t('channels.toggle.enableTitle') : t('channels.toggle.disableTitle') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            {{ channelToToggle?.val ? t('channels.toggle.enableDesc', '开启后，系统将尝试连接该频道以接收并处理消息。') : t('channels.toggle.disableDesc', '关闭后，将断开与该频道的连接，系统不再接收其消息。') }}
+            {{ channelToToggle?.val ? t('channels.toggle.enableDesc') : t('channels.toggle.disableDesc') }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel', '取消') }}</AlertDialogCancel>
+          <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
           <Button
             class="bg-primary text-primary-foreground hover:bg-primary/90"
             @click="confirmToggle"
           >
-            {{ t('common.confirm', '确定') }}
+            {{ t('common.confirm') }}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
