@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, RefreshCw } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
+import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -114,7 +115,7 @@ const remainingTimeText = computed(() =>
 
 async function loadBinding() {
   try {
-    const binding = await ChatWikiService.GetBinding()
+    const binding = await getBindingCached()
     currentBinding.value = binding ?? null
   } catch (error) {
     console.error('Failed to load chatwiki binding:', error)
@@ -127,7 +128,7 @@ async function loadRobots() {
   robotsLoading.value = true
   try {
     console.log('[ChatWiki] Loading robot list...')
-    const list = await ChatWikiService.GetRobotListAll()
+    const list = await getRobotListAllCached()
     console.log('[ChatWiki] Robot list response:', list)
     robots.value = (list ?? []).map((r: any) => ({
       ...r,
@@ -150,7 +151,7 @@ async function loadLibraries(type: number = 0) {
   librariesLoading.value = true
   try {
     console.log('[ChatWiki] Loading library list, type:', type)
-    const list = await ChatWikiService.GetLibraryList(type)
+    const list = await getLibraryListCached(type)
     console.log('[ChatWiki] Library list response:', list)
     libraries.value = (list ?? []).map((l: any) => ({
       ...l,
@@ -171,6 +172,7 @@ async function loadLibraries(type: number = 0) {
 async function syncRobots() {
   syncingRobots.value = true
   try {
+    clearChatwikiCache()
     await loadRobots()
     toast.success(t('settings.chatwiki.syncSuccess'))
   } catch (error) {
@@ -187,6 +189,7 @@ async function syncRobots() {
 async function syncLibraries() {
   syncingLibraries.value = true
   try {
+    clearChatwikiCache()
     await loadLibraries(Number(libraryTab.value))
     toast.success(t('settings.chatwiki.syncSuccess'))
   } catch (error) {
@@ -229,6 +232,7 @@ async function onRobotSwitchChange(robot: RobotItem, checked: boolean | 'indeter
   robot.chat_claw_switch_status = nextEnabled ? 1 : 0
   try {
     await ChatWikiService.UpdateRobotSwitchStatus(robot.id, robot.chat_claw_switch_status)
+    clearChatwikiCache()
   } catch (error) {
     robot.enabled = previousEnabled
     robot.chat_claw_switch_status = previousStatus
@@ -245,6 +249,7 @@ async function onLibrarySwitchChange(lib: LibraryItem, checked: boolean | 'indet
   lib.chat_claw_switch_status = nextEnabled ? 1 : 0
   try {
     await ChatWikiService.UpdateLibrarySwitchStatus(lib.id, lib.chat_claw_switch_status)
+    clearChatwikiCache()
   } catch (error) {
     lib.enabled = previousEnabled
     lib.chat_claw_switch_status = previousStatus
