@@ -208,6 +208,17 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 		allowedNames["read_skill"] = true
 	}
 
+	// MCP tools (mcp__*) should be directly available to the lead agent
+	for _, t := range extraTools {
+		info, err := t.Info(context.Background())
+		if err != nil || info == nil {
+			continue
+		}
+		if strings.HasPrefix(info.Name, "mcp__") {
+			allowedNames[info.Name] = true
+		}
+	}
+
 	var result []tool.BaseTool
 	for _, t := range allTools {
 		info, err := t.Info(context.Background())
