@@ -361,6 +361,22 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
+	// MCP tools: when enabled, load only the servers explicitly enabled for this agent
+	if agentExtras.MCPEnabled && len(agentExtras.MCPServerEnabledIDs) > 0 {
+		mcpServers, mcpErr := mcp.ListEnabledServersByIDs(agentExtras.MCPServerEnabledIDs)
+		if mcpErr != nil {
+			s.app.Logger.Warn("[chat] failed to list MCP servers for agent", "error", mcpErr)
+		} else if len(mcpServers) > 0 {
+			mcpResult := tools.LoadMCPTools(ctx, mcpServers, s.app.Logger)
+			if len(mcpResult.Tools) > 0 {
+				extraTools = append(extraTools, mcpResult.Tools...)
+				s.app.Logger.Info("[chat] MCP tools added", "agent", agentExtras.AgentID, "servers", len(mcpServers), "tools", len(mcpResult.Tools))
+			}
+			cleanups = append(cleanups, mcpResult.Cleanup)
+		}
+	}
+
+
 	if s.gateway != nil {
 		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
 
@@ -388,21 +404,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		} else {
 			extraTools = append(extraTools, wecomTool)
 			s.app.Logger.Info("[chat] wecom_sender tool added", "default_channel", wecomCfg.DefaultChannelID, "default_target", wecomCfg.DefaultTargetID)
-		}
-	}
-
-	// MCP tools: when enabled, load only the servers explicitly enabled for this agent
-	if agentExtras.MCPEnabled && len(agentExtras.MCPServerEnabledIDs) > 0 {
-		mcpServers, mcpErr := mcp.ListEnabledServersByIDs(agentExtras.MCPServerEnabledIDs)
-		if mcpErr != nil {
-			s.app.Logger.Warn("[chat] failed to list MCP servers for agent", "error", mcpErr)
-		} else if len(mcpServers) > 0 {
-			mcpResult := tools.LoadMCPTools(ctx, mcpServers, s.app.Logger)
-			if len(mcpResult.Tools) > 0 {
-				extraTools = append(extraTools, mcpResult.Tools...)
-				s.app.Logger.Info("[chat] MCP tools added", "agent", agentExtras.AgentID, "servers", len(mcpServers), "tools", len(mcpResult.Tools))
-			}
-			cleanups = append(cleanups, mcpResult.Cleanup)
 		}
 	}
 
