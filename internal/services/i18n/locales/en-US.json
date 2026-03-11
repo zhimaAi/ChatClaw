@@ -179,6 +179,8 @@
   "error.channel_delete_failed": "failed to delete channel",
   "error.channel_read_failed": "failed to read channel",
   "error.channel_not_found": "channel '{{.ID}}' not found",
+  "error.channel_config_duplicate_app_id": "a channel with the same App ID already exists",
+  "error.channel_config_duplicate_app_secret": "a channel with the same App Secret already exists",
   "error.channel_name_required": "channel name is required",
   "error.channel_platform_required": "platform is required",
   "error.channel_id_required": "channel ID is required",

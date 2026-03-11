@@ -469,7 +469,7 @@ onMounted(loadData)
         <div
           v-for="channel in filteredChannels"
           :key="channel.id"
-          class="flex w-[300px] flex-col gap-2 rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm transition-all hover:border-[#171717] dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card dark:hover:border-primary/50"
+          class="flex w-[300px] min-w-0 flex-col gap-2 rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm transition-all hover:border-[#171717] dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card dark:hover:border-primary/50"
         >
           <!-- Card Header -->
           <div class="flex items-center justify-between">
@@ -533,34 +533,51 @@ onMounted(loadData)
             {{ t('channels.card.appId') }}: {{ getAppId(channel.extra_config) }}
           </p>
 
-          <!-- Status Tags (bind status only; connection status removed) -->
-          <div class="flex items-center gap-2">
+          <!-- Status tags: wrap on narrow card / long EN copy; pills truncate with title for full text -->
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <!-- Connection Status -->
-            <div class="inline-flex items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-              <div 
-                class="h-2 w-2 rounded-full" 
+            <div class="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
+              <div
+                class="h-2 w-2 shrink-0 rounded-full"
                 :class="{
                   'bg-green-500': channel.status === 'online',
                   'bg-red-500': channel.status === 'error',
                   'bg-gray-400': channel.status === 'offline' || !channel.status
                 }"
-              ></div>
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
+              />
+              <span
+                class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
+                :title="channel.status === 'online' ? t('channels.status.online') : channel.status === 'error' ? t('channels.status.error') : t('channels.status.offline')"
+              >
                 {{ channel.status === 'online' ? t('channels.status.online') : channel.status === 'error' ? t('channels.status.error') : t('channels.status.offline') }}
               </span>
             </div>
             <!-- Bind Status -->
-            <div 
-              class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+            <div
+              class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
               :class="{ 'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors': channel.agent_id === 0 }"
               @click="channel.agent_id === 0 ? handleOpenBind(channel) : undefined"
             >
-              <IconCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
-              <IconClose v-else class="h-3.5 w-3.5 text-[#595959] dark:text-muted-foreground" />
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">{{ channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound') }}</span>
+              <IconCheck v-if="channel.agent_id !== 0" class="h-3.5 w-3.5 shrink-0 text-[#595959] dark:text-muted-foreground" />
+              <IconClose v-else class="h-3.5 w-3.5 shrink-0 text-[#595959] dark:text-muted-foreground" />
+              <span
+                class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
+                :title="channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound')"
+              >
+                {{ channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound') }}
+              </span>
             </div>
-            <div v-if="channel.agent_id !== 0" class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted max-w-[120px]">
-              <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground truncate" :title="getAgentName(channel.agent_id)">{{ getAgentName(channel.agent_id) }}</span>
+            <!-- Agent name: grows into remaining space; when wrapped, fills row so truncate works -->
+            <div
+              v-if="channel.agent_id !== 0"
+              class="inline-flex min-w-0 max-w-full flex-1 basis-0 items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+            >
+              <span
+                class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
+                :title="getAgentName(channel.agent_id)"
+              >
+                {{ getAgentName(channel.agent_id) }}
+              </span>
             </div>
           </div>
         </div>

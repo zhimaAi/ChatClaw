@@ -3,6 +3,7 @@ package channels
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -98,6 +99,56 @@ func (s *ChannelService) GetSupportedPlatforms() []PlatformMeta {
 	return allPlatforms
 }
 
+// appCredentialsJSON is the common shape for Feishu/WeCom extra_config.
+type appCredentialsJSON struct {
+	AppID     string `json:"app_id"`
+	AppSecret string `json:"app_secret"`
+}
+
+func parseAppCredentials(extraConfig string) (appID, appSecret string) {
+	extraConfig = strings.TrimSpace(extraConfig)
+	if extraConfig == "" {
+		return "", ""
+	}
+	var cfg appCredentialsJSON
+	if err := json.Unmarshal([]byte(extraConfig), &cfg); err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(cfg.AppID), strings.TrimSpace(cfg.AppSecret)
+}
+
+// ensureNoDuplicateCredentials rejects create/update when another channel of the same
+// platform already uses the same app_id or app_secret (Feishu / WeCom).
+// excludeID > 0 skips that channel (for update).
+func (s *ChannelService) ensureNoDuplicateCredentials(ctx context.Context, db *bun.DB, platform, extraConfig string, excludeID int64) error {
+	platform = strings.TrimSpace(platform)
+	if platform != PlatformFeishu && platform != PlatformWeCom {
+		return nil
+	}
+	appID, appSecret := parseAppCredentials(extraConfig)
+	if appID == "" && appSecret == "" {
+		return nil
+	}
+
+	var models []channelModel
+	if err := db.NewSelect().Model(&models).Where("platform = ?", platform).Scan(ctx); err != nil {
+		return errs.Wrap("error.channel_list_failed", err)
+	}
+	for i := range models {
+		if excludeID > 0 && models[i].ID == excludeID {
+			continue
+		}
+		existID, existSecret := parseAppCredentials(models[i].ExtraConfig)
+		if appID != "" && existID != "" && appID == existID {
+			return errs.New("error.channel_config_duplicate_app_id")
+		}
+		if appSecret != "" && existSecret != "" && appSecret == existSecret {
+			return errs.New("error.channel_config_duplicate_app_secret")
+		}
+	}
+	return nil
+}
+
 // CreateChannel creates a new channel.
 func (s *ChannelService) CreateChannel(input CreateChannelInput) (*Channel, error) {
 	name := strings.TrimSpace(input.Name)
@@ -121,6 +172,10 @@ func (s *ChannelService) CreateChannel(input CreateChannelInput) (*Channel, erro
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+
+	if err := s.ensureNoDuplicateCredentials(ctx, db, platform, input.ExtraConfig, 0); err != nil {
+		return nil, err
+	}
 
 	m := &channelModel{
 		Platform:       platform,
@@ -172,6 +227,17 @@ func (s *ChannelService) UpdateChannel(id int64, input UpdateChannelInput) (*Cha
 		q = q.Set("enabled = ?", *input.Enabled)
 	}
 	if input.ExtraConfig != nil {
+		// Load platform for duplicate credential check when updating config
+		var existing channelModel
+		if err := db.NewSelect().Model(&existing).Where("id = ?", id).Limit(1).Scan(ctx); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errs.Newf("error.channel_not_found", map[string]any{"ID": id})
+			}
+			return nil, errs.Wrap("error.channel_read_failed", err)
+		}
+		if err := s.ensureNoDuplicateCredentials(ctx, db, existing.Platform, *input.ExtraConfig, id); err != nil {
+			return nil, err
+		}
 		q = q.Set("extra_config = ?", *input.ExtraConfig)
 	}
 
