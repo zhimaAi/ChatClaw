@@ -41,6 +41,11 @@ type Agent struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type AgentMatch struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 type CreateAgentInput struct {
 	Name   string `json:"name"`
 	Prompt string `json:"prompt"`

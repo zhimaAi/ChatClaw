@@ -31,6 +31,7 @@ import (
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/providers"
+	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/services/textselection"
@@ -45,6 +46,7 @@ import (
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/uptrace/bun"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -309,6 +311,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
+	// 注册定时任务服务
+	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
+	chatService.RegisterExtraToolFactory(func() ([]tool.BaseTool, error) {
+		return newScheduledTaskManagementTools(agentsService, scheduledTasksService)
+	})
+	app.RegisterService(application.NewService(scheduledTasksService))
 	// 注册记忆服务
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
@@ -501,6 +509,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		go skillsService.EnsureBuiltinSkills()
 		// Start all enabled channel gateway connections in background.
 		go channelGateway.StartAll(context.Background())
+		go func() {
+			if err := scheduledTasksService.Start(); err != nil {
+				app.Logger.Error("Failed to start scheduled tasks service", "error", err)
+			}
+		}()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -553,6 +566,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	return app, func() {
 		channelGateway.StopAll(context.Background())
+		scheduledTasksService.Stop()
 		chatService.Shutdown()
 		// Stop task manager before closing database
 		if tm := taskmanager.Get(); tm != nil {

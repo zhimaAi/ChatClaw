@@ -413,6 +413,17 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
+    for _, factory := range s.extraToolFactories {
+		factoryTools, toolErr := factory()
+		if toolErr != nil {
+			if s.app != nil {
+				s.app.Logger.Warn("[chat] failed to create extra tools", "error", toolErr)
+			}
+			continue
+		}
+		extraTools = append(extraTools, factoryTools...)
+	}
+
 	return extraTools, extraHandlers, cleanup
 }
 
