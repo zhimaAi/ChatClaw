@@ -501,7 +501,7 @@ export const useChatStore = defineStore('chat', () => {
     } as any)
   }
 
-  const SUB_AGENT_NAMES = new Set(['researcher', 'worker', 'skill_advisor'])
+  const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
 
   const extractSubAgentName = (runPath?: string[]): string | undefined => {
     if (!Array.isArray(runPath) || runPath.length < 2) return undefined
@@ -509,17 +509,25 @@ export const useChatStore = defineStore('chat', () => {
     return SUB_AGENT_NAMES.has(agentName) ? agentName : undefined
   }
 
-  const findActiveSubAgentToolCall = (streaming: StreamingMessageState, agentName: string): ToolCallInfo | undefined => {
-    return streaming.toolCalls.find(
-      (tc) => tc.toolName === agentName && (tc.status === 'calling' || tc.status === 'completed')
-    )
+  const findSubAgentToolCall = (streaming: StreamingMessageState, agentName: string, parentToolCallId?: string): ToolCallInfo | undefined => {
+    if (parentToolCallId) {
+      return streaming.toolCalls.find((tc) => tc.toolCallId === parentToolCallId)
+    }
+    let lastCalling: ToolCallInfo | undefined
+    let lastMatch: ToolCallInfo | undefined
+    for (const tc of streaming.toolCalls) {
+      if (tc.toolName !== agentName) continue
+      if (tc.status === 'calling') lastCalling = tc
+      else if (tc.status === 'completed') lastMatch = tc
+    }
+    return lastCalling ?? lastMatch
   }
 
   const handleChatChunk = (event: any) => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta, run_path } = data
+    const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
@@ -529,7 +537,7 @@ export const useChatStore = defineStore('chat', () => {
       const subAgentName = extractSubAgentName(run_path)
 
       if (subAgentName) {
-        const parent = findActiveSubAgentToolCall(streaming, subAgentName)
+        const parent = findSubAgentToolCall(streaming, subAgentName, parent_tool_call_id)
         if (parent) {
           parent.childContent = (parent.childContent || '') + chunk
           if (!parent.childSegments) parent.childSegments = []
@@ -563,7 +571,7 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta, run_path } = data
+    const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
@@ -573,7 +581,7 @@ export const useChatStore = defineStore('chat', () => {
       const subAgentName = extractSubAgentName(run_path)
 
       if (subAgentName) {
-        const parent = findActiveSubAgentToolCall(streaming, subAgentName)
+        const parent = findSubAgentToolCall(streaming, subAgentName, parent_tool_call_id)
         if (parent) {
           parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
           if (!parent.childSegments) parent.childSegments = []
@@ -607,7 +615,7 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json, run_path } =
+    const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json, run_path, parent_tool_call_id } =
       data
     const streaming = streamingByConversation.value[conversation_id]
 
@@ -645,16 +653,10 @@ export const useChatStore = defineStore('chat', () => {
 
     const subAgentName = extractSubAgentName(run_path)
 
-    const findParentToolCall = (agentName: string): ToolCallInfo | undefined => {
-      return streaming.toolCalls.find(
-        (tc) => tc.toolName === agentName && (tc.status === 'calling' || tc.status === 'completed')
-      )
-    }
-
     // Helper: add a new tool call to segments (or nest under parent sub-agent)
     const addToolCallToSegments = (toolCall: ToolCallInfo) => {
       if (subAgentName) {
-        const parent = findParentToolCall(subAgentName)
+        const parent = findSubAgentToolCall(streaming, subAgentName, parent_tool_call_id)
         if (parent) {
           if (!parent.childToolCalls) parent.childToolCalls = []
           parent.childToolCalls.push(toolCall)

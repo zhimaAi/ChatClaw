@@ -547,11 +547,12 @@ onUnmounted(() => {
           v-if="isBound"
           variant="outline"
           size="sm"
+          class="gap-1"
           :disabled="syncingRobots"
           @click="syncRobots"
         >
           <RefreshCw
-            class="mr-1 size-3.5"
+            class="size-3.5 shrink-0"
             :class="{ 'animate-spin': syncingRobots }"
           />
           {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
@@ -618,11 +619,12 @@ onUnmounted(() => {
           v-if="isBound"
           variant="outline"
           size="sm"
+          class="gap-1"
           :disabled="syncingLibraries"
           @click="syncLibraries"
         >
           <RefreshCw
-            class="mr-1 size-3.5"
+            class="size-3.5 shrink-0"
             :class="{ 'animate-spin': syncingLibraries }"
           />
           {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}

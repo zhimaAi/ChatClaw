@@ -1009,11 +1009,11 @@ watch(activeTab, (tab) => {
             <!-- Load more -->
             <div v-if="!searchMode && marketHasMore" class="flex justify-center py-4">
               <button
-                class="cursor-pointer rounded-md bg-muted px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                class="inline-flex cursor-pointer items-center gap-1 rounded-md bg-muted px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 :disabled="marketLoading"
                 @click="loadMarketSkills(true)"
               >
-                <Loader2 v-if="marketLoading" class="mr-1.5 inline size-3 animate-spin" />
+                <Loader2 v-if="marketLoading" class="size-3 shrink-0 animate-spin" />
                 {{ t('settings.skills.loadMore') }}
               </button>
             </div>

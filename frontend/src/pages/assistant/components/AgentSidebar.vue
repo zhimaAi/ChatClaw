@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -16,6 +15,8 @@ import {
 import IconAgentAdd from '@/assets/icons/agent-add.svg'
 import IconNewConversation from '@/assets/icons/new-conversation.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+import IconHistory from '@/assets/icons/history-icon.svg'
+import IconChannels from '@/assets/icons/channels.svg'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
@@ -62,6 +63,7 @@ const emit = defineEmits<{
   'update:listMode': [value: ListMode]
   'create': []
   'openSettings': [agent: Agent]
+  'openChannels': [agent: Agent]
   'newConversation': []
   'newConversationForAgent': [agentId: number]
   'newConversationForTeamRobot': [robotId: string]
@@ -266,14 +268,21 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" class="w-48">
-                  <DropdownMenuItem @click="emit('openSettings', a)">
+                  <DropdownMenuItem class="gap-2" @click="emit('openSettings', a)">
+                    <IconSettings class="size-4 text-muted-foreground" />
                     {{ t('assistant.menu.settings') }}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem class="gap-2" @click="emit('openChannels', a)">
+                    <IconChannels class="size-4 text-muted-foreground" />
+                    {{ t('assistant.menu.channels') }}
                   </DropdownMenuItem>
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger
+                      class="gap-2"
                       @mouseenter="ensureConversationsLoaded(a.id)"
                       @focus="ensureConversationsLoaded(a.id)"
                     >
+                      <IconHistory class="size-4 text-muted-foreground" />
                       {{ t('assistant.menu.history') }}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent class="max-h-[300px] w-56 overflow-y-auto">

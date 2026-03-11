@@ -60,6 +60,7 @@ type Conversation struct {
 
 	AgentID        int64   `json:"agent_id"`
 	Name           string  `json:"name"`
+	ExternalID     string  `json:"external_id"` // External unique identifier (e.g., channel conversation key)
 	LastMessage    string  `json:"last_message"`
 	IsPinned       bool    `json:"is_pinned"`
 	LLMProviderID  string  `json:"llm_provider_id"`
@@ -78,6 +79,7 @@ type Conversation struct {
 type CreateConversationInput struct {
 	AgentID        int64   `json:"agent_id"`
 	Name           string  `json:"name"`
+	ExternalID     string  `json:"external_id"` // Optional external unique identifier
 	LastMessage    string  `json:"last_message"`
 	LLMProviderID  string  `json:"llm_provider_id"`
 	LLMModelID     string  `json:"llm_model_id"`
@@ -112,6 +114,7 @@ type conversationModel struct {
 
 	AgentID        int64  `bun:"agent_id,notnull"`
 	Name           string `bun:"name,notnull"`
+	ExternalID     string `bun:"external_id,notnull"`
 	LastMessage    string `bun:"last_message,notnull"`
 	IsPinned       bool   `bun:"is_pinned,notnull"`
 	LLMProviderID  string `bun:"llm_provider_id,notnull"`
@@ -169,6 +172,7 @@ func (m *conversationModel) toDTO() Conversation {
 
 		AgentID:        m.AgentID,
 		Name:           m.Name,
+		ExternalID:     m.ExternalID,
 		LastMessage:    m.LastMessage,
 		IsPinned:       m.IsPinned,
 		LLMProviderID:  m.LLMProviderID,

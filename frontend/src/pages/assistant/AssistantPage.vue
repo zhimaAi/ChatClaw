@@ -12,6 +12,7 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import { getLogoDataUrl } from '@/composables/useLogo'
 import CreateAgentDialog from './components/CreateAgentDialog.vue'
 import AgentSettingsDialog from './components/AgentSettingsDialog.vue'
+import AgentChannelsDialog from './components/AgentChannelsDialog.vue'
 import RenameConversationDialog from './components/RenameConversationDialog.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import AgentSidebar from './components/AgentSidebar.vue'
@@ -152,6 +153,8 @@ const listMode = ref<ListMode>('personal')
 const createOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsAgent = ref<Agent | null>(null)
+const channelsOpen = ref(false)
+const channelsAgent = ref<Agent | null>(null)
 const settingsInitialTab = ref<string>('')
 const sidebarCollapsed = ref(false)
 const workspaceDrawerOpen = ref(false)
@@ -360,6 +363,11 @@ const openSettings = (agent: Agent, initialTab?: string) => {
   settingsAgent.value = agent
   settingsInitialTab.value = initialTab || ''
   settingsOpen.value = true
+}
+
+const openChannels = (agent: Agent) => {
+  channelsAgent.value = agent
+  channelsOpen.value = true
 }
 
 const handleOpenWorkspaceSettings = () => {
@@ -1144,6 +1152,7 @@ let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeConversationsChanged: (() => void) | null = null
 let unsubscribeAgentsChanged: (() => void) | null = null
 let unsubscribeModelsChanged: (() => void) | null = null
+let unsubscribeMessagesChanged: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -1391,6 +1400,15 @@ onMounted(() => {
     void loadAgents()
   })
 
+  // Listen for message changes
+  unsubscribeMessagesChanged = Events.On('chat:messages-changed', (event: any) => {
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+    const conversationId = Number(payload?.conversation_id)
+    if (conversationId && conversationId === activeConversationId.value) {
+      void chatStore.loadMessages(conversationId)
+    }
+  })
+
   // Listen for model/provider changes from settings page (e.g., add/delete model, enable/disable provider)
   unsubscribeModelsChanged = Events.On('models:changed', () => {
     void loadModels()
@@ -1427,6 +1445,8 @@ onUnmounted(() => {
   unsubscribeTextSelection = null
   unsubscribeConversationsChanged?.()
   unsubscribeConversationsChanged = null
+  unsubscribeMessagesChanged?.()
+  unsubscribeMessagesChanged = null
   unsubscribeAgentsChanged?.()
   unsubscribeAgentsChanged = null
   unsubscribeModelsChanged?.()
@@ -1502,6 +1522,7 @@ onUnmounted(() => {
       @update:list-mode="handleListModeChange"
       @create="createOpen = true"
       @open-settings="openSettings"
+      @open-channels="openChannels"
       @new-conversation="handleNewConversation"
       @new-conversation-for-agent="handleNewConversationForAgent"
       @new-conversation-for-team-robot="handleNewConversationForTeamRobot"
@@ -1754,6 +1775,7 @@ onUnmounted(() => {
 
     <!-- Dialogs (rendered outside main content wrapper for proper z-index) -->
     <CreateAgentDialog v-model:open="createOpen" :loading="loading" @create="handleCreate" />
+    <AgentChannelsDialog v-model:open="channelsOpen" :agent="channelsAgent" />
     <AgentSettingsDialog
       v-model:open="settingsOpen"
       :agent="settingsAgent"

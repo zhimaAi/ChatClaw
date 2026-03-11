@@ -110,8 +110,8 @@ const handleEnter = (event: KeyboardEvent) => {
         <Button variant="outline" :disabled="saving" @click="setOpen(false)">
           {{ t('assistant.actions.cancel') }}
         </Button>
-        <Button :disabled="!isValid || saving" @click="handleSave">
-          <LoaderCircle v-if="saving" class="mr-2 size-4 animate-spin" />
+        <Button class="gap-2" :disabled="!isValid || saving" @click="handleSave">
+          <LoaderCircle v-if="saving" class="size-4 shrink-0 animate-spin" />
           {{ t('assistant.conversation.rename.confirm') }}
         </Button>
       </DialogFooter>

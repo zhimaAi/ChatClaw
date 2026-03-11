@@ -271,8 +271,8 @@ const handleMove = async () => {
         <Button variant="outline" :disabled="moving" @click="close">
           {{ t('knowledge.create.cancel') }}
         </Button>
-        <Button :disabled="!canMoveHere" @click="handleMove">
-          <LoaderCircle v-if="moving" class="mr-2 size-4 animate-spin" />
+        <Button class="gap-2" :disabled="!canMoveHere" @click="handleMove">
+          <LoaderCircle v-if="moving" class="size-4 shrink-0 animate-spin" />
           {{ t('knowledge.content.moveToFolder.moveToHere') }}
         </Button>
       </DialogFooter>
