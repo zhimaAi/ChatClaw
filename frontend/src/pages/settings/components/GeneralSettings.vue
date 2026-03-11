@@ -15,7 +15,7 @@ import { useAppStore, type Theme } from '@/stores'
 import { useLocale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
-import { Download, Check, Loader2, Package } from 'lucide-vue-next'
+import { Download, Check, Loader2, Package, FolderOpen } from 'lucide-vue-next'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 
@@ -227,6 +227,14 @@ onUnmounted(() => {
           <div class="min-w-0">
             <span class="text-sm font-medium text-foreground">{{ t(tool.nameKey) }}</span>
             <p class="text-xs text-muted-foreground truncate">{{ t(tool.descKey) }}</p>
+            <p
+              v-if="toolStatuses[tool.id]?.installed && toolStatuses[tool.id]?.bin_path"
+              class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
+              :title="toolStatuses[tool.id]?.bin_path"
+            >
+              <FolderOpen class="size-3 shrink-0" />
+              {{ toolStatuses[tool.id]?.bin_path }}
+            </p>
           </div>
         </div>
 
