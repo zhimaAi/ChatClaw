@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	feishutools "chatclaw/internal/eino/tools/im/feishu"
+	wecomtools "chatclaw/internal/eino/tools/im/wecom"
 	"chatclaw/internal/define"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
@@ -373,6 +376,36 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
+	if s.gateway != nil {
+		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
+
+		feishuCfg := &feishutools.FeishuSenderConfig{Gateway: s.gateway}
+		if hasChannelSource {
+			feishuCfg.DefaultChannelID = chID
+			feishuCfg.DefaultTargetID = tgtID
+		}
+		feishuTool, toolErr := feishutools.NewFeishuSenderTool(feishuCfg)
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create feishu_sender tool", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, feishuTool)
+			s.app.Logger.Info("[chat] feishu_sender tool added", "default_channel", feishuCfg.DefaultChannelID, "default_target", feishuCfg.DefaultTargetID)
+		}
+
+		wecomCfg := &wecomtools.WeComSenderConfig{Gateway: s.gateway}
+		if hasChannelSource {
+			wecomCfg.DefaultChannelID = chID
+			wecomCfg.DefaultTargetID = tgtID
+		}
+		wecomTool, toolErr := wecomtools.NewWeComSenderTool(wecomCfg)
+		if toolErr != nil {
+			s.app.Logger.Warn("[chat] failed to create wecom_sender tool", "error", toolErr)
+		} else {
+			extraTools = append(extraTools, wecomTool)
+			s.app.Logger.Info("[chat] wecom_sender tool added", "default_channel", wecomCfg.DefaultChannelID, "default_target", wecomCfg.DefaultTargetID)
+		}
+	}
+
 	cleanup := func() {
 		for _, fn := range cleanups {
 			fn()
@@ -380,6 +413,38 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	}
 
 	return extraTools, extraHandlers, cleanup
+}
+
+// resolveChannelSource parses the conversation's external_id (format "ch:{channelID}:{targetID}")
+// to extract the source channel_id and target_id for auto-filling feishu_sender defaults.
+func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conversationID int64) (channelID int64, targetID string, ok bool) {
+	var externalID string
+	err := db.NewSelect().
+		Table("conversations").
+		Column("external_id").
+		Where("id = ?", conversationID).
+		Scan(ctx, &externalID)
+	if err != nil || externalID == "" {
+		return 0, "", false
+	}
+
+	// Format: "ch:{channelID}:{targetID}"
+	if !strings.HasPrefix(externalID, "ch:") {
+		return 0, "", false
+	}
+	parts := strings.SplitN(externalID, ":", 3)
+	if len(parts) != 3 {
+		return 0, "", false
+	}
+	chID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || chID <= 0 {
+		return 0, "", false
+	}
+	tgt := strings.TrimSpace(parts[2])
+	if tgt == "" {
+		return 0, "", false
+	}
+	return chID, tgt, true
 }
 
 // --- streaming / event processing ---
@@ -1133,11 +1198,9 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				continue
 			}
 
-			// Log whether images are being passed to the model
+			// Log only when images are actually passed (text-only messages are the common case)
 			if len(images) > 0 {
 				s.app.Logger.Info("[chat] passing images to model", "msg_id", m.ID, "image_count", len(images))
-			} else {
-				s.app.Logger.Info("[chat] no images to pass to model", "msg_id", m.ID)
 			}
 
 			// If there are images, use multi-content form

@@ -13,6 +13,7 @@ import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import MemoryPage from '@/pages/memory/MemoryPage.vue'
 import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import DocumentViewerPage from '@/pages/document/DocumentViewerPage.vue'
+import ChannelsPage from '@/pages/channels/ChannelsPage.vue'
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
 import { useI18n } from 'vue-i18n'
@@ -96,6 +97,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   settings: SettingsPage,
   multiask: MultiaskPage,
   document: DocumentViewerPage,
+  channels: ChannelsPage,
 }
 
 /**

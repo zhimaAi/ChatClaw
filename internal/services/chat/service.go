@@ -12,6 +12,7 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/channels"
 	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino/adk"
@@ -43,6 +44,7 @@ type ChatService struct {
 	bgProcessManager  *tools.BgProcessManager
 	checkpointStore   adk.CheckPointStore
 	activeGenerations sync.Map // map[int64]*activeGeneration
+	gateway           *channels.Gateway
 }
 
 // NewChatService creates a new ChatService
@@ -77,6 +79,12 @@ func (s *inMemoryCheckPointStore) Set(_ context.Context, id string, data []byte)
 	defer s.mu.Unlock()
 	s.m[id] = data
 	return nil
+}
+
+// SetGateway sets the channel gateway reference. Called after bootstrap since
+// the Gateway is created after the ChatService.
+func (s *ChatService) SetGateway(gw *channels.Gateway) {
+	s.gateway = gw
 }
 
 // Shutdown cleans up all resources held by the ChatService, including
@@ -363,6 +371,22 @@ func (s *ChatService) StopGeneration(conversationID int64) error {
 
 	gen := existing.(*activeGeneration)
 	gen.cancel()
+	return nil
+}
+
+// WaitForGeneration waits until the active generation for a conversation is finished.
+func (s *ChatService) WaitForGeneration(conversationID int64, requestID string) error {
+	existing, ok := s.activeGenerations.Load(conversationID)
+	if !ok {
+		return nil
+	}
+	
+	gen := existing.(*activeGeneration)
+	if gen.requestID != requestID {
+		return nil
+	}
+	
+	<-gen.done
 	return nil
 }
 
