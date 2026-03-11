@@ -11,6 +11,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,14 +108,14 @@ type TeamChatMessage struct {
 
 // TeamChatInput is the frontend input for team mode streaming chat.
 type TeamChatInput struct {
-	ConversationID  int64             `json:"conversation_id"`
-	TeamAgentID     int64             `json:"team_agent_id"` // team conversation group agent id
-	TabID           string            `json:"tab_id"`
-	RobotKey        string            `json:"robot_key"`
-	Content         string            `json:"content"`
-	Messages        []TeamChatMessage `json:"messages"`
-	UseNewDialogue  int               `json:"use_new_dialogue"`  // 1 = new session; 0 or omit = continue existing
-	DialogueID      string            `json:"dialogue_id"`     // from previous SSE response when continuing
+	ConversationID int64             `json:"conversation_id"`
+	TeamAgentID    int64             `json:"team_agent_id"` // team conversation group agent id
+	TabID          string            `json:"tab_id"`
+	RobotKey       string            `json:"robot_key"`
+	Content        string            `json:"content"`
+	Messages       []TeamChatMessage `json:"messages"`
+	UseNewDialogue int               `json:"use_new_dialogue"` // 1 = new session; 0 or omit = continue existing
+	DialogueID     string            `json:"dialogue_id"`      // from previous SSE response when continuing
 }
 
 // TeamChatResult returns request/message IDs so frontend can correlate state.
@@ -161,8 +164,11 @@ type ChatWikiService struct {
 	teamMu      sync.Mutex
 	teamCancels map[int64]context.CancelFunc
 	teamSeq     map[string]int32
+
+	refreshMu sync.Mutex // serializes token refresh inside GetBinding
 }
 
+// NewChatWikiService creates a new ChatWikiService instance (used by bootstrap and Wails bindings).
 func NewChatWikiService(app *application.App) *ChatWikiService {
 	return &ChatWikiService{
 		app:         app,
@@ -177,8 +183,8 @@ func (s *ChatWikiService) GetCloudURL() string {
 	return define.GetChatWikiCloudURL()
 }
 
-// GetBinding returns the current binding, or nil if none exists.
-func (s *ChatWikiService) GetBinding() (*Binding, error) {
+// getBindingFromDB reads the latest binding from DB only (no refresh logic). Returns (nil, nil) when no row.
+func (s *ChatWikiService) getBindingFromDB() (*bindingModel, error) {
 	db := sqlite.DB()
 	if db == nil {
 		return nil, nil
@@ -189,9 +195,61 @@ func (s *ChatWikiService) GetBinding() (*Binding, error) {
 	m := new(bindingModel)
 	err := db.NewSelect().Model(m).OrderExpr("id DESC").Limit(1).Scan(ctx)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return m, nil
+}
+
+// GetBinding returns the current binding, or nil if none exists.
+// If the token expires within 24 hours, it is refreshed first and the updated binding is returned.
+func (s *ChatWikiService) GetBinding() (*Binding, error) {
+	m, err := s.getBindingFromDB()
+	if err != nil {
+		return nil, err
+	}
+	if m == nil {
 		return nil, nil
 	}
-	return toBinding(m), nil
+	b := toBinding(m)
+	if b.Exp <= 0 {
+		return b, nil
+	}
+	now := time.Now().Unix()
+	if b.Exp-now >= refreshTokenExpireThreshold {
+		return b, nil
+	}
+
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	// Re-fetch in case another goroutine already refreshed
+	m2, _ := s.getBindingFromDB()
+	if m2 == nil {
+		return b, nil
+	}
+	b2 := toBinding(m2)
+	if b2.Exp-time.Now().Unix() >= refreshTokenExpireThreshold {
+		return b2, nil
+	}
+
+	s.app.Logger.Info("[ChatWiki] Token expires within 24h, refreshing",
+		"exp", b2.Exp, "remaining_sec", b2.Exp-time.Now().Unix())
+	newToken, newExp, err := s.callRefreshTokenAPI(b2)
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki] Token refresh failed", "error", err)
+		return b2, nil
+	}
+	if err := s.updateBindingTokenAndExp(newToken, newExp); err != nil {
+		s.app.Logger.Warn("[ChatWiki] Failed to save refreshed token", "error", err)
+		return b2, nil
+	}
+	m3, _ := s.getBindingFromDB()
+	if m3 == nil {
+		return b2, nil
+	}
+	return toBinding(m3), nil
 }
 
 // SaveBinding creates or replaces the binding. Called from deeplink handler.
@@ -269,6 +327,171 @@ func (s *ChatWikiService) markBindingExpired() {
 		return
 	}
 	s.app.Logger.Info("[ChatWiki] Binding marked expired (exp=0) for re-auth")
+}
+
+// refreshTokenExpireThreshold is the remaining time (seconds) below which we refresh the token.
+// If exp - now < refreshTokenExpireThreshold, we call the refresh API.
+const refreshTokenExpireThreshold = 24 * 3600 // 24 hours
+
+// updateBindingTokenAndExp updates the latest binding row with new token and exp (and TTL derived from exp).
+func (s *ChatWikiService) updateBindingTokenAndExp(token string, exp int64) error {
+	db := sqlite.DB()
+	if db == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC()
+	ttl := exp - now.Unix()
+	if ttl < 0 {
+		ttl = 0
+	}
+	_, err := db.NewUpdate().Model((*bindingModel)(nil)).
+		Set("token = ?", token).
+		Set("ttl = ?", ttl).
+		Set("exp = ?", exp).
+		Set("updated_at = ?", now).
+		Where("id = (SELECT MAX(id) FROM chatwiki_bindings)").
+		Exec(ctx)
+	if err != nil {
+		s.app.Logger.Warn("Failed to update chatwiki binding token/exp", "error", err)
+		return err
+	}
+	s.app.Logger.Info("[ChatWiki] Binding token refreshed", "exp", exp)
+	return nil
+}
+
+// getOSTypeForRefresh returns display name for current OS (used in refreshToken body).
+func getOSTypeForRefresh() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "macOS"
+	case "windows":
+		return "Windows"
+	case "linux":
+		return "Linux"
+	default:
+		return runtime.GOOS
+	}
+}
+
+// getOSVersionForRefresh returns best-effort OS version (e.g. "14.2.1", "11", "22.04") for refreshToken body.
+func getOSVersionForRefresh() string {
+	switch runtime.GOOS {
+	case "windows":
+		return getWindowsVersionForRefresh()
+	case "darwin":
+		return getDarwinVersionForRefresh()
+	case "linux":
+		return getLinuxVersionForRefresh()
+	}
+	return ""
+}
+
+func getWindowsVersionForRefresh() string {
+	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+		"$b = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').CurrentBuild; if ([int]$b -ge 22000) { '11' } else { '10' }")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func getDarwinVersionForRefresh() string {
+	cmd := exec.Command("sw_vers", "-productVersion")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func getLinuxVersionForRefresh() string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "VERSION_ID=") {
+			v := strings.TrimPrefix(line, "VERSION_ID=")
+			v = strings.Trim(v, "\"'\n\r\t ")
+			return v
+		}
+	}
+	return ""
+}
+
+// callRefreshTokenAPI calls POST /manage/chatclaw/refreshToken and returns new token and exp, or error.
+// On 401 it marks the binding expired and returns errChatWikiAuthExpired.
+func (s *ChatWikiService) callRefreshTokenAPI(binding *Binding) (newToken string, newExp int64, err error) {
+	baseURL := strings.TrimRight(binding.ServerURL, "/")
+	apiURL := baseURL + "/manage/chatclaw/refreshToken"
+
+	body := map[string]string{
+		"os_type":    getOSTypeForRefresh(),
+		"os_version": getOSVersionForRefresh(),
+	}
+	bodyBytes, _ := json.Marshal(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", 0, fmt.Errorf("create refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Token", binding.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", 0, fmt.Errorf("refresh request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", 0, fmt.Errorf("read refresh response: %w", err)
+	}
+
+	s.app.Logger.Info("[ChatWiki] refreshToken response",
+		"status", resp.StatusCode,
+		"body", string(respBody),
+	)
+
+	var apiResp struct {
+		Res  int    `json:"res"`
+		Msg  string `json:"msg"`
+		Data struct {
+			Token string `json:"token"`
+			Exp   int64  `json:"exp"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		return "", 0, fmt.Errorf("decode refresh response: %w", err)
+	}
+
+	if apiResp.Res == 401 || resp.StatusCode == http.StatusUnauthorized {
+		s.markBindingExpired()
+		msg := apiResp.Msg
+		if msg == "" {
+			msg = "账号未获取登录信息，请重新授权"
+		}
+		return "", 0, fmt.Errorf("%w: %s", errChatWikiAuthExpired, msg)
+	}
+
+	if apiResp.Res != 0 {
+		return "", 0, fmt.Errorf("refresh API error res=%d msg=%s", apiResp.Res, apiResp.Msg)
+	}
+
+	if apiResp.Data.Token == "" || apiResp.Data.Exp <= 0 {
+		return "", 0, fmt.Errorf("refresh response missing token or exp")
+	}
+
+	return apiResp.Data.Token, apiResp.Data.Exp, nil
 }
 
 // GetRobotList fetches the robot/application list from ChatWiki API (only robots with switch_status open).
@@ -877,8 +1100,8 @@ WHERE id = ?`,
 				)
 			} else {
 				_, updateErr = db.ExecContext(
-				ctx,
-				`UPDATE conversations
+					ctx,
+					`UPDATE conversations
 SET last_message = ?, chat_mode = ?, team_type = ?, updated_at = CURRENT_TIMESTAMP
 WHERE id = ?`,
 					trimmedLastMessage,

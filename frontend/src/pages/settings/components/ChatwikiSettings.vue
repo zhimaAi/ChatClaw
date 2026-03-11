@@ -136,10 +136,10 @@ async function loadRobots() {
   } catch (error) {
     console.error('[ChatWiki] Failed to load robots:', error)
     if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
       await loadBinding()
     }
     robots.value = []
+    throw error
   } finally {
     robotsLoading.value = false
   }
@@ -159,10 +159,10 @@ async function loadLibraries(type: number = 0) {
   } catch (error) {
     console.error('[ChatWiki] Failed to load libraries:', error)
     if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
       await loadBinding()
     }
     libraries.value = []
+    throw error
   } finally {
     librariesLoading.value = false
   }
@@ -173,8 +173,12 @@ async function syncRobots() {
   try {
     await loadRobots()
     toast.success(t('settings.chatwiki.syncSuccess'))
-  } catch {
-    toast.error(t('settings.chatwiki.syncFailed'))
+  } catch (error) {
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    } else {
+      toast.error(t('settings.chatwiki.syncFailed'))
+    }
   } finally {
     syncingRobots.value = false
   }
@@ -185,8 +189,12 @@ async function syncLibraries() {
   try {
     await loadLibraries(Number(libraryTab.value))
     toast.success(t('settings.chatwiki.syncSuccess'))
-  } catch {
-    toast.error(t('settings.chatwiki.syncFailed'))
+  } catch (error) {
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    } else {
+      toast.error(t('settings.chatwiki.syncFailed'))
+    }
   } finally {
     syncingLibraries.value = false
   }
@@ -251,6 +259,21 @@ function goToChoose() {
   showOpenSourceInput.value = false
 }
 
+/** Build login URL with os_type, os_version query params for account management redirect */
+async function buildLoginUrl(base: string): Promise<string> {
+  const path = `${base.replace(/\/+$/, '')}/#/chatclaw/login`
+  try {
+    const params = await BrowserService.GetLoginParams()
+    const q = new URLSearchParams()
+    if (params.os_type) q.set('os_type', params.os_type)
+    if (params.os_version) q.set('os_version', params.os_version)
+    const query = q.toString()
+    return query ? `${path}?${query}` : path
+  } catch {
+    return path
+  }
+}
+
 /** Re-auth: open current binding server_url login page directly (no choose step) */
 async function startReauthBinding() {
   const b = currentBinding.value
@@ -260,7 +283,7 @@ async function startReauthBinding() {
     return
   }
   isReauthFlow.value = true
-  const authUrl = `${base}/#/chatclaw/login`
+  const authUrl = await buildLoginUrl(base)
   await startBinding(authUrl)
 }
 
@@ -327,7 +350,8 @@ function listenAuthCallback() {
 async function handleLoginCloud() {
   isReauthFlow.value = false
   const base = cloudAuthUrl.value.replace(/\/+$/, '')
-  await startBinding(`${base}/#/chatclaw/login`)
+  const authUrl = await buildLoginUrl(base)
+  await startBinding(authUrl)
 }
 
 async function handleGoToAuth() {
@@ -337,7 +361,7 @@ async function handleGoToAuth() {
   }
   isReauthFlow.value = false
   const base = openSourceUrl.value.trim().replace(/\/+$/, '')
-  const authUrl = `${base}/#/chatclaw/login`
+  const authUrl = await buildLoginUrl(base)
   await startBinding(authUrl)
 }
 
@@ -379,8 +403,16 @@ async function confirmUnbind() {
 
 watch(isBound, (bound) => {
   if (bound) {
-    void loadRobots()
-    void loadLibraries(Number(libraryTab.value))
+    void loadRobots().catch((err) => {
+      if (isChatWikiAuthExpiredError(err)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      }
+    })
+    void loadLibraries(Number(libraryTab.value)).catch((err) => {
+      if (isChatWikiAuthExpiredError(err)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      }
+    })
   }
 })
 

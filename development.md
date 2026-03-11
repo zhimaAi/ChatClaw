@@ -87,14 +87,15 @@ wails3 task windows:package ARCH=amd64 DEV=false
 ```bash
 # arm64
 wails3 task darwin:sign:notarize ARCH=arm64 DEV=false
-cd bin && tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw && cd ..
+cd bin && tar -czf ChatClaw_darwin_arm64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw && mv ChatClaw-arm64.dmg ./ChatClaw_AppleCPU_arm64.dmg && cd ..
 
 # amd64
 wails3 task darwin:sign:notarize ARCH=amd64 DEV=false
-cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw && cd ..
+cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS ChatClaw &&  mv ChatClaw-amd64.dmg ./ChatClaw_IntelCPU_amd64.dmg && cd ..
 
 # arm64+amd64
 wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
+cd bin && mv ChatClaw-universal.dmg ./ChatClaw_MacOS_universal.dmg
 ```
 
 ## Linux Server 模式构建、打包
@@ -103,7 +104,7 @@ wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
 docker login registry.cn-hangzhou.aliyuncs.com
 cd frontend && npm run build && cd ..
 wails3 task build:docker PLATFORM=multi
-mv ./bin/linux_amd64/server ./bin/ChatClaw-server-linux-amd64
-mv ./bin/linux_arm64/server ./bin/ChatClaw-server-linux-arm64
+mv ./bin/linux_amd64/server ./bin/ChatClaw_server_linux_amd64
+mv ./bin/linux_arm64/server ./bin/ChatClaw_server_linux_arm64
 ```
 

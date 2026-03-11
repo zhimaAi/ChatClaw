@@ -8,7 +8,7 @@ import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 // 导入图标（作为 Vue 组件）
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
-import LinkIcon from '@/assets/icons/link.svg'
+import BindChatclawIcon from '@/assets/icons/bind_chatclaw.svg'
 import MemorySettingsIcon from '@/assets/icons/memory.svg'
 import SkillsIcon from '@/assets/icons/skills.svg'
 import SnapSettingsIcon from '@/assets/icons/snap-settings.svg'
@@ -30,7 +30,7 @@ interface MenuItem {
 const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
-  { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: LinkIcon },
+  { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: BindChatclawIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
