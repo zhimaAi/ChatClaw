@@ -161,7 +161,6 @@ func (s *ScheduledTasksService) GetScheduledTaskSummary() (*ScheduledTaskSummary
 	for _, task := range tasks {
 		if !task.Enabled {
 			summary.Paused++
-			continue
 		}
 		switch task.LastStatus {
 		case TaskStatusRunning:

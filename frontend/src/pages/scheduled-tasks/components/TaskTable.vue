@@ -81,9 +81,11 @@ function statusTextClass(task: ScheduledTask) {
             class="border-t border-[#e5e5e5] align-top transition-colors hover:bg-[#fafafa]"
           >
             <td class="px-5 py-3.5">
-              <div class="max-w-md space-y-1">
-                <div class="text-[15px] font-medium leading-6 text-[#171717]">{{ task.name }}</div>
-                <div class="line-clamp-2 text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
+              <div class="min-w-0 max-w-md space-y-1">
+                <div class="truncate text-[15px] font-medium leading-6 text-[#171717]">
+                  {{ task.name }}
+                </div>
+                <div class="truncate text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
               </div>
             </td>
             <td class="px-5 py-3.5">
