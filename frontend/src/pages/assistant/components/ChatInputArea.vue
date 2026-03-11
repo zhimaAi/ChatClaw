@@ -438,8 +438,8 @@ onUnmounted(() => {
           @keydown.enter.exact="handleChatEnter"
         />
 
-        <div class="mt-3 flex items-center justify-between">
-          <div :class="cn('flex items-center', isSnapMode ? 'gap-1' : 'gap-2')">
+        <div class="mt-3 flex items-center justify-between gap-2">
+          <div :class="cn('flex min-w-0 flex-1 flex-wrap items-center', isSnapMode ? 'gap-1' : 'gap-x-2 gap-y-1')">
             <!-- ChatModeSelector: show in both modes -->
             <ChatModeSelector
               v-if="!isTeamMode"
@@ -491,6 +491,7 @@ onUnmounted(() => {
             </TooltipProvider>
 
             <!-- Model selector: hidden in team mode -->
+            <div class="min-w-0 shrink">
             <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -502,8 +503,8 @@ onUnmounted(() => {
                     >
                       <SelectTrigger
                         :class="cn(
-                          'h-8 w-auto rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode ? 'min-w-0 max-w-[120px]' : 'min-w-[160px] max-w-[240px]'
+                          'h-8 w-auto min-w-0 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
+                          isSnapMode ? 'max-w-[120px]' : 'max-w-[200px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -579,6 +580,7 @@ onUnmounted(() => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            </div>
 
             <!-- Thinking mode toggle: hidden in team mode -->
             <TooltipProvider v-if="!isTeamMode">
