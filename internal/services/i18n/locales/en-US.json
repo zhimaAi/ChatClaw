@@ -165,6 +165,7 @@
   "scheduled_task.issue.task_ambiguous": "Multiple tasks matched. Please ask the user to specify the target task",
   "scheduled_task.confirm.create": "Please confirm creating scheduled task: name={{.Name}}, assistant={{.AgentName}}, cron={{.CronExpr}}, enabled={{.Enabled}}",
   "scheduled_task.confirm.mutation": "Please confirm {{.Action}} scheduled task: name={{.Name}}, ID={{.ID}}",
+  "scheduled_task.action.update": "updating",
   "scheduled_task.action.delete": "deleting",
   "scheduled_task.action.enable": "enabling",
   "scheduled_task.action.disable": "disabling",

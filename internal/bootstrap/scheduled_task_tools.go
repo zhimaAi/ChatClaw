@@ -104,6 +104,22 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			record := convertScheduledTaskRecord(*created)
 			return &record, nil
 		},
+		UpdateScheduledTaskFn: func(id int64, input tools.ScheduledTaskUpdateInput) (*tools.ScheduledTaskRecord, error) {
+			updated, err := scheduledTasksService.UpdateScheduledTask(id, scheduledtasks.UpdateScheduledTaskInput{
+				Name:          input.Name,
+				Prompt:        input.Prompt,
+				AgentID:       input.AgentID,
+				ScheduleType:  input.ScheduleType,
+				ScheduleValue: input.ScheduleValue,
+				CronExpr:      input.CronExpr,
+				Enabled:       input.Enabled,
+			})
+			if err != nil {
+				return nil, err
+			}
+			record := convertScheduledTaskRecord(*updated)
+			return &record, nil
+		},
 		DeleteScheduledTaskFn: func(id int64) error {
 			return scheduledTasksService.DeleteScheduledTask(id)
 		},

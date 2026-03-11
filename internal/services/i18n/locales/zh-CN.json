@@ -165,6 +165,7 @@
   "scheduled_task.issue.task_ambiguous": "匹配到多个任务，需要用户指定具体目标",
   "scheduled_task.confirm.create": "请确认创建计划任务：任务名={{.Name}}，助手={{.AgentName}}，cron={{.CronExpr}}，启用={{.Enabled}}",
   "scheduled_task.confirm.mutation": "请确认{{.Action}}计划任务：任务名={{.Name}}，ID={{.ID}}",
+  "scheduled_task.action.update": "更新",
   "scheduled_task.action.delete": "删除",
   "scheduled_task.action.enable": "启用",
   "scheduled_task.action.disable": "停用",

@@ -92,7 +92,7 @@ func buildToolsPrompt(workDir string, sandboxEnabled, sandboxNetworkEnabled bool
 - 用 "sh script.sh" 运行脚本，不要用 "./script.sh"（无执行权限）
 - 权限拒绝 = 可能在写工作目录外的路径，改用本地方案
 `, workDir, networkDesc)
-	} else {
+		} else {
 			networkDesc := "Network access is **disabled**"
 			if sandboxNetworkEnabled {
 				networkDesc = "Network access is **enabled**"
@@ -289,6 +289,10 @@ func buildScheduledTaskPrompt() string {
 1. ` + "`scheduled_task_create_preview`" + `: 预览任务草案，校验参数，生成确认摘要
 2. ` + "`scheduled_task_create_confirm`" + `: 用户确认后真正创建任务
 
+### 编辑任务（两步流程）
+1. ` + "`scheduled_task_update_preview`" + `: 预览任务修改，校验参数，生成确认摘要
+2. ` + "`scheduled_task_update_confirm`" + `: 用户确认后真正更新任务
+
 ### 管理任务
 - ` + "`scheduled_task_enable`" + `: 启用已停用的任务
 - ` + "`scheduled_task_disable`" + `: 停用已启用的任务
@@ -322,9 +326,21 @@ func buildScheduledTaskPrompt() string {
 1. 向用户复述任务摘要，请求确认
 2. 用户确认后，调用 ` + "`scheduled_task_create_confirm`" + `（使用 ` + "`agent_id`" + ` 而非 ` + "`agent_name`" + `）
 
+## 编辑任务流程
+
+**第一步：预览更新**
+1. 先通过 ` + "`task_id`" + ` 或 ` + "`task_name`" + ` 定位目标任务
+2. 将用户想修改的字段转换成结构化参数
+3. 调用 ` + "`scheduled_task_update_preview`" + `，传入目标任务标识和待更新字段
+4. 检查返回的 ` + "`issues`" + `，如无问题则向用户展示更新后摘要
+
+**第二步：确认更新**
+1. 用户确认后，调用 ` + "`scheduled_task_update_confirm`" + `
+2. 若修改助手，确认阶段使用 ` + "`agent_id`" + ` 而非 ` + "`agent_name`" + `
+
 ## 常见时间表达转换
 
-**重要：` + "`preset`" + ` 类型只支持以下固定预设值，其他时间必须使用 ` + "`cron`" + ` 类型并生成标准 cron 表达式。**
+**重要：创建和编辑时都必须按“快捷配置 > 自定义时间 > Linux crontab”，也就是 ` + "`preset > custom > cron`" + ` 的顺序解析时间。只有前两者都不适用时，才使用 ` + "`cron`" + `。**
 
 ### 支持的 preset 预设值（仅限以下值）
 - ` + "`every_minute`" + `: 每分钟执行
@@ -350,11 +366,12 @@ func buildScheduledTaskPrompt() string {
 | 每个工作日9点 | preset | weekdays_0900 | |
 | 每周一早上9点 | preset | every_monday_0900 | |
 | 每月1号早上9点 | preset | every_month_1_0900 | |
-| 每天15:20 | cron | | 20 15 * * * |
-| 每天下午3点半 | cron | | 30 15 * * * |
-| 每周一上午10点 | cron | | 0 10 * * 1 |
-| 每月1号0点 | cron | | 0 0 1 * * |
+| 每天15:20 | custom | {"minute":20,"hour":15} | |
+| 每天下午3点半 | custom | {"minute":30,"hour":15} | |
+| 每周一上午10点 | custom | {"minute":0,"hour":10,"weekdays":[1]} | |
+| 每月1号0点 | custom | {"minute":0,"hour":0,"day_of_month":1} | |
 | 每小时30分 | cron | | 30 * * * * |
+| 明确提供 crontab: 20 15 * * * | cron | | 20 15 * * * |
 
 ### Cron 表达式格式
 标准 5 字段 cron 表达式：` + "`分 时 日 月 周`" + `
@@ -372,6 +389,7 @@ func buildScheduledTaskPrompt() string {
 ## 重要规则
 
 - **创建、删除、启用、停用都必须先预览，用户确认后再执行**
+- **编辑也必须先预览，用户确认后再执行**
 - ` + "`confirm=false`" + ` 时只返回预览，不执行操作
 - ` + "`confirm=true`" + ` 时才真正执行
 - 助手名称匹配不唯一时，需让用户指定具体助手
@@ -381,6 +399,9 @@ func buildScheduledTaskPrompt() string {
 
 用户: "帮我创建一个每天早上9点执行的销售日报任务"
 助手: 调用 ` + "`scheduled_task_create_preview`" + ` → 向用户展示预览 → 用户确认 → 调用 ` + "`scheduled_task_create_confirm`" + `
+
+用户: "把销售日报改成每周一上午10点执行"
+助手: 优先按 ` + "`preset > custom > cron`" + ` 解析时间 → 调用 ` + "`scheduled_task_update_preview`" + ` → 向用户展示预览 → 用户确认 → 调用 ` + "`scheduled_task_update_confirm`" + `
 
 用户: "帮我看看销售日报这个任务最近执行历史"
 助手: 调用 ` + "`scheduled_task_history_list`" + ` → 如用户要复盘某次执行，再调用 ` + "`scheduled_task_history_detail`" + `
@@ -401,6 +422,10 @@ You can help users manage scheduled tasks. When users mention "scheduled tasks",
 ### Create Task (Two-Step Process)
 1. ` + "`scheduled_task_create_preview`" + `: Preview task draft, validate parameters, generate confirmation summary
 2. ` + "`scheduled_task_create_confirm`" + `: Actually create the task after user confirmation
+
+### Update Task (Two-Step Process)
+1. ` + "`scheduled_task_update_preview`" + `: Preview task updates, validate parameters, generate confirmation summary
+2. ` + "`scheduled_task_update_confirm`" + `: Actually update the task after user confirmation
 
 ### Manage Tasks
 - ` + "`scheduled_task_enable`" + `: Enable a disabled task
@@ -435,9 +460,21 @@ You can help users manage scheduled tasks. When users mention "scheduled tasks",
 1. Present task summary to user, ask for confirmation
 2. After user confirms, call ` + "`scheduled_task_create_confirm`" + ` (use ` + "`agent_id`" + ` instead of ` + "`agent_name`" + `)
 
+## Task Update Workflow
+
+**Step 1: Preview Update**
+1. Identify the target task via ` + "`task_id`" + ` or ` + "`task_name`" + `
+2. Convert the changed fields into structured parameters
+3. Call ` + "`scheduled_task_update_preview`" + ` with the target task and changed values
+4. Check returned ` + "`issues`" + ` and only proceed when the preview is valid
+
+**Step 2: Confirm Update**
+1. Show the updated summary to the user
+2. After the user confirms, call ` + "`scheduled_task_update_confirm`" + ` (use ` + "`agent_id`" + ` instead of ` + "`agent_name`" + ` when changing assistants)
+
 ## Common Time Expression Conversion
 
-**Important: ` + "`preset`" + ` type only supports the following fixed preset values. For other times, you MUST use ` + "`cron`" + ` type and generate a standard cron expression.**
+**Important: both create and update flows must parse time in the order ` + "`preset > custom > cron`" + `, meaning quick presets first, then custom structured time, and Linux crontab only last.**
 
 ### Supported Preset Values (Only These)
 - ` + "`every_minute`" + `: Execute every minute
@@ -463,11 +500,12 @@ You can help users manage scheduled tasks. When users mention "scheduled tasks",
 | Every weekday at 9am | preset | weekdays_0900 | |
 | Every Monday at 9am | preset | every_monday_0900 | |
 | Every month on day 1 at 9am | preset | every_month_1_0900 | |
-| Every day at 15:20 | cron | | 20 15 * * * |
-| Every day at 3:30pm | cron | | 30 15 * * * |
-| Every Monday at 10am | cron | | 0 10 * * 1 |
-| 1st of every month at midnight | cron | | 0 0 1 * * |
+| Every day at 15:20 | custom | {"minute":20,"hour":15} | |
+| Every day at 3:30pm | custom | {"minute":30,"hour":15} | |
+| Every Monday at 10am | custom | {"minute":0,"hour":10,"weekdays":[1]} | |
+| 1st of every month at midnight | custom | {"minute":0,"hour":0,"day_of_month":1} | |
 | Every hour at 30 min | cron | | 30 * * * * |
+| Explicit crontab: 20 15 * * * | cron | | 20 15 * * * |
 
 ### Cron Expression Format
 Standard 5-field cron expression: ` + "`minute hour day month weekday`" + `
@@ -484,7 +522,7 @@ Examples:
 
 ## Important Rules
 
-- **Create, delete, enable, disable MUST preview first, then execute after user confirmation**
+- **Create, update, delete, enable, disable MUST preview first, then execute after user confirmation**
 - ` + "`confirm=false`" + ` only returns preview, does not execute
 - ` + "`confirm=true`" + ` actually executes the operation
 - When agent name matches multiple candidates, ask user to specify
@@ -494,6 +532,9 @@ Examples:
 
 User: "Create a daily sales report task at 9am"
 Assistant: Call ` + "`scheduled_task_create_preview`" + ` → Show preview to user → User confirms → Call ` + "`scheduled_task_create_confirm`" + `
+
+User: "Change the sales report task to every Monday at 10am"
+Assistant: Parse time with ` + "`preset > custom > cron`" + ` → Call ` + "`scheduled_task_update_preview`" + ` → Show preview to user → User confirms → Call ` + "`scheduled_task_update_confirm`" + `
 
 User: "Show me the recent history for the sales report task"
 Assistant: Call ` + "`scheduled_task_history_list`" + ` → If the user wants one run in depth, call ` + "`scheduled_task_history_detail`" + `
