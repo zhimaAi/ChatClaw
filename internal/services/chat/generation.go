@@ -1165,11 +1165,9 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				continue
 			}
 
-			// Log whether images are being passed to the model
+			// Log only when images are actually passed (text-only messages are the common case)
 			if len(images) > 0 {
 				s.app.Logger.Info("[chat] passing images to model", "msg_id", m.ID, "image_count", len(images))
-			} else {
-				s.app.Logger.Info("[chat] no images to pass to model", "msg_id", m.ID)
 			}
 
 			// If there are images, use multi-content form

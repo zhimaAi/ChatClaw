@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"chatclaw/internal/define"
 	"chatclaw/internal/deeplink"
+	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"

@@ -53,9 +53,9 @@ type WeComAdapter struct {
 	seenMsgs  sync.Map // messageID -> struct{}, dedup within TTL
 
 	reconnectAttempts int
-	lastReqID         string   // for reply
-	lastResponseURL   string   // for HTTP reply fallback
-	pendingReplies    sync.Map // reqID -> chan error
+	lastReqID         string     // for reply
+	lastResponseURL   string     // for HTTP reply fallback
+	pendingReplies    sync.Map   // reqID -> chan error
 	authResult        chan error // channel for first auth result
 	authReqID         string     // req_id of the pending auth request
 }
