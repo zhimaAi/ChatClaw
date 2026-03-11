@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus,
@@ -66,6 +66,7 @@ import { SettingsService, Category } from '@bindings/chatclaw/internal/services/
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
+import { Events } from '@wailsio/runtime'
 
 const { t } = useI18n()
 
@@ -403,9 +404,22 @@ async function openMarketLink(url: string) {
 }
 
 // ==================== Init ====================
+let unsubOpenAdd: (() => void) | null = null
+
 onMounted(() => {
   void loadServers()
   void loadSettings()
+
+  unsubOpenAdd = Events.On('mcp:open-add-dialog', () => {
+    activeTopTab.value = 'servers'
+    activeSubTab.value = 'installed'
+    openAddDialog()
+  })
+})
+
+onUnmounted(() => {
+  unsubOpenAdd?.()
+  unsubOpenAdd = null
 })
 </script>
 

@@ -717,6 +717,8 @@ export default {
       mcpNoSearchResults: 'No matching results',
       mcpSelectAll: 'Select all',
       mcpDeselectAll: 'Deselect all',
+      mcpGoToSettings: 'Add new MCP',
+      mcpGoToSettingsHint: 'Go to Settings to add a new MCP server',
     },
   },
   knowledge: {
