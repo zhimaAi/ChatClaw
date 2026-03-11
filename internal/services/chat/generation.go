@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chatclaw/internal/define"
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	feishutools "chatclaw/internal/eino/tools/im/feishu"
 	wecomtools "chatclaw/internal/eino/tools/im/wecom"
-	"chatclaw/internal/define"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
@@ -189,7 +189,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agentResult.Agent,
-		EnableStreaming:  true,
+		EnableStreaming: true,
 		CheckPointStore: s.checkpointStore,
 	})
 
@@ -375,6 +375,7 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 			cleanups = append(cleanups, mcpResult.Cleanup)
 		}
 	}
+
 
 	if s.gateway != nil {
 		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
