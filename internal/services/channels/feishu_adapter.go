@@ -168,7 +168,7 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	content := deref(msg.Content)
 	msgType := deref(msg.MessageType)
 
-	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n", 
+	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n",
 		senderName, senderID, chatName, chatID, msgType, content)
 
 	a.handler(IncomingMessage{
@@ -212,6 +212,7 @@ func (a *FeishuAdapter) resolveSenderName(ctx context.Context, openID string) st
 		Build()
 
 	resp, err := client.Contact.User.Get(ctx, req)
+	fmt.Print("resp: ", resp, "err: ", err)
 	if err != nil || !resp.Success() || resp.Data == nil || resp.Data.User == nil {
 		return ""
 	}

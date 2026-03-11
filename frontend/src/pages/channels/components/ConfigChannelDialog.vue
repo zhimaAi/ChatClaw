@@ -16,16 +16,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
+import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 
 const props = defineProps<{
-  platform: PlatformMeta | null
+  platform?: PlatformMeta | null
+  channel?: Channel | null
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
-const emit = defineEmits<{ saved: [channel: Channel] }>()
+const emit = defineEmits<{ saved: [channel: Channel, isEdit: boolean] }>()
 
 const { t } = useI18n()
 
@@ -39,16 +40,31 @@ const verifying = ref(false)
 
 watch(open, (val) => {
   if (val) {
-    name.value = ''
-    avatar.value = ''
-    appId.value = ''
-    appSecret.value = ''
-    token.value = ''
+    if (props.channel) {
+      name.value = props.channel.name
+      avatar.value = props.channel.avatar
+      try {
+        const config = JSON.parse(props.channel.extra_config)
+        appId.value = config.app_id || config.token || ''
+        appSecret.value = config.app_secret || ''
+      } catch {
+        appId.value = ''
+        appSecret.value = ''
+      }
+    } else {
+      name.value = ''
+      avatar.value = ''
+      appId.value = ''
+      appSecret.value = ''
+      token.value = ''
+    }
   }
 })
 
-const isFeishu = computed(() => props.platform?.id === 'feishu')
-const isWeCom = computed(() => props.platform?.id === 'wecom')
+const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform)
+
+const isFeishu = computed(() => currentPlatformId.value === 'feishu')
+const isWeCom = computed(() => currentPlatformId.value === 'wecom')
 const appIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
 const appSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
 const appIdPlaceholder = computed(() => (
@@ -63,8 +79,12 @@ const appSecretPlaceholder = computed(() => (
 ))
 
 const dialogTitle = computed(() => {
-  if (!props.platform) return ''
-  const botName = t(`channels.meta.${props.platform.id}.botName`, props.platform.id)
+  const pid = currentPlatformId.value
+  if (!pid) return ''
+  const botName = t(`channels.meta.${pid}.botName`, pid)
+  if (props.channel) {
+    return t('channels.config.editTitle', '编辑 {platform} 频道').replace('{platform}', botName)
+  }
   return t('channels.config.title', { platform: botName })
 })
 
@@ -74,8 +94,9 @@ const isFormValid = computed(() => {
 })
 
 const defaultAvatarSrc = computed(() => {
-  if (!props.platform) return null
-  return platformIconMap[props.platform.id] || null
+  const pid = currentPlatformId.value
+  if (!pid) return null
+  return platformIconMap[pid] || null
 })
 
 const handlePickIcon = async () => {
@@ -102,7 +123,8 @@ const handlePickIcon = async () => {
 }
 
 async function handleVerify() {
-  if (!props.platform) return
+  const pid = currentPlatformId.value
+  if (!pid) return
   if (!isFormValid.value) {
     toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
     return
@@ -113,7 +135,7 @@ async function handleVerify() {
   })
   verifying.value = true
   try {
-    await ChannelService.VerifyChannelConfig(props.platform.id, extraConfig)
+    await ChannelService.VerifyChannelConfig(pid, extraConfig)
     toast.success(t('channels.inline.verifySuccess', '验证通过'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
@@ -123,7 +145,8 @@ async function handleVerify() {
 }
 
 async function handleSave() {
-  if (!props.platform) return
+  const pid = currentPlatformId.value
+  if (!pid) return
   if (!name.value.trim()) return
 
   saving.value = true
@@ -133,17 +156,28 @@ async function handleSave() {
       app_secret: appSecret.value.trim(),
     })
 
-    const channel = await ChannelService.CreateChannel({
-      platform: props.platform.id,
-      name: name.value.trim(),
-      avatar: avatar.value,
-      connection_type: 'gateway',
-      extra_config: extraConfig,
-    })
+    let channel: Channel | null = null
+    const isEdit = !!props.channel
+    if (isEdit) {
+      channel = await ChannelService.UpdateChannel(props.channel!.id, new UpdateChannelInput({
+        name: name.value.trim(),
+        avatar: avatar.value,
+        extra_config: extraConfig,
+      }))
+      toast.success(t('channels.config.editSuccess', '编辑成功'))
+    } else {
+      channel = await ChannelService.CreateChannel({
+        platform: pid,
+        name: name.value.trim(),
+        avatar: avatar.value,
+        connection_type: 'gateway',
+        extra_config: extraConfig,
+      })
+      toast.success(t('channels.config.success'))
+    }
 
-    toast.success(t('channels.config.success'))
     open.value = false
-    if (channel) emit('saved', channel)
+    if (channel) emit('saved', channel, isEdit)
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {

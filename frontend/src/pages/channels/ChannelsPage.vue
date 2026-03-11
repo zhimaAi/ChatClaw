@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed, Check, LoaderCircle } from 'lucide-vue-next'
+import { Plus, Trash2, MoreHorizontal, Unlink, Link, BadgeCheck, RouteOff, SquareDashed, Check, LoaderCircle, Edit } from 'lucide-vue-next'
 import IconChannels from '@/assets/icons/channelsMax.svg'
 import IconCheck from '@/assets/icons/check-icon.svg'
 import IconClose from '@/assets/icons/close-icon.svg'
@@ -48,6 +48,7 @@ const loading = ref(false)
 const addDialogOpen = ref(false)
 const configDialogOpen = ref(false)
 const selectedPlatform = ref<PlatformMeta | null>(null)
+const channelToEdit = ref<Channel | null>(null)
 const deleteDialogOpen = ref(false)
 const channelToDelete = ref<Channel | null>(null)
 const bindDialogOpen = ref(false)
@@ -128,17 +129,27 @@ function handleAddChannel() {
 
 function handleSelectPlatform(platform: PlatformMeta) {
   selectedPlatform.value = platform
+  channelToEdit.value = null
   addDialogOpen.value = false
   configDialogOpen.value = true
 }
 
-function handleConfigSaved(channel: Channel) {
+function handleEditChannel(channel: Channel) {
+  channelToEdit.value = channel
+  selectedPlatform.value = platforms.value.find(p => p.id === channel.platform) || null
+  configDialogOpen.value = true
+}
+
+function handleConfigSaved(channel: Channel, isEdit: boolean) {
   configDialogOpen.value = false
   selectedPlatform.value = null
+  channelToEdit.value = null
   loadData().then(() => {
-    channelToBind.value = channel
-    bindFromCreate.value = true
-    bindDialogOpen.value = true
+    if (!isEdit) {
+      channelToBind.value = channel
+      bindFromCreate.value = true
+      bindDialogOpen.value = true
+    }
   })
 }
 
@@ -489,6 +500,10 @@ onMounted(loadData)
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="min-w-24 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover">
+                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleEditChannel(channel)">
+                    <Edit class="h-4 w-4" />
+                    {{ t('common.edit', '编辑') }}
+                  </DropdownMenuItem>
                   <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" @click="handleOpenBind(channel)">
                     <Link class="h-4 w-4" />
                     {{ channel.agent_id === 0 ? '绑定' : '切换绑定' }}
@@ -666,7 +681,9 @@ onMounted(loadData)
     <ConfigChannelDialog
       v-model:open="configDialogOpen"
       :platform="selectedPlatform"
+      :channel="channelToEdit"
       @saved="handleConfigSaved"
+      @update:open="(val) => { if (!val) channelToEdit = null }"
     />
 
     <!-- Bind Agent Dialog -->
