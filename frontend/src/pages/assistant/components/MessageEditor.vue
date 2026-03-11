@@ -64,12 +64,12 @@ onMounted(() => {
       @keydown="handleKeydown"
     />
     <div class="flex items-center justify-end gap-2">
-      <Button size="sm" variant="ghost" class="h-7 px-2 text-xs" @click="handleCancel">
-        <X class="mr-1 size-3" />
+      <Button size="sm" variant="ghost" class="h-7 gap-1 px-2 text-xs" @click="handleCancel">
+        <X class="size-3 shrink-0" />
         {{ t('common.cancel') }}
       </Button>
-      <Button size="sm" class="h-7 px-2 text-xs" @click="handleSave">
-        <Check class="mr-1 size-3" />
+      <Button size="sm" class="h-7 gap-1 px-2 text-xs" @click="handleSave">
+        <Check class="size-3 shrink-0" />
         {{ t('assistant.chat.resend') }}
       </Button>
     </div>

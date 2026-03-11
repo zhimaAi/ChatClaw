@@ -186,5 +186,22 @@
   "error.toolchain_create_dir_failed": "创建工具目录失败",
   "error.toolchain_already_installing": "「{{.Name}}」正在安装中",
   "error.toolchain_fetch_version_failed": "获取最新版本失败",
-  "error.toolchain_install_failed": "安装失败"
+  "error.toolchain_install_failed": "安装失败",
+  "error.channel_list_failed": "获取频道列表失败",
+  "error.channel_create_failed": "创建频道失败",
+  "error.channel_update_failed": "更新频道失败",
+  "error.channel_delete_failed": "删除频道失败",
+  "error.channel_read_failed": "读取频道失败",
+  "error.channel_not_found": "未找到频道「{{.ID}}」",
+  "error.channel_config_duplicate_app_id": "已存在使用相同 App ID 的频道",
+  "error.channel_config_duplicate_app_secret": "已存在使用相同 App Secret 的频道",
+  "error.channel_name_required": "缺少频道名称",
+  "error.channel_platform_required": "缺少平台类型",
+  "error.channel_id_required": "缺少频道 ID",
+  "error.channel_connect_failed": "频道「{{.Name}}」连接失败",
+  "error.channel_connect_requires_agent": "请先绑定助手后再开启连接",
+  "error.channel_agent_create_failed": "为频道创建 AI 助手失败",
+  "error.channel_agent_create_not_available": "自动创建助手功能不可用",
+  "error.channel_ai_reply_failed": "AI回复失败: {{.Error}}",
+  "error.channel_ai_reply_empty": "AI回复失败: 生成了空回复"
 }

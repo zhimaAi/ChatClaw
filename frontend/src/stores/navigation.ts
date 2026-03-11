@@ -8,7 +8,7 @@ const createTabId = () => `tab-${uuidv4()}`
 /**
  * 导航模块类型
  */
-export type NavModule = 'assistant' | 'knowledge' | 'scheduled-tasks' | 'memory' | 'multiask' | 'settings' | 'document' | 'skills'
+export type NavModule = 'assistant' | 'knowledge' | 'scheduled-tasks' | 'memory' | 'multiask' | 'settings' | 'document' | 'skills' | 'channels'
 
 /**
  * 标签页类型
@@ -82,13 +82,14 @@ const moduleLabels: Record<NavModule, string> = {
   settings: 'nav.settings',
   document: 'nav.document',
   skills: 'nav.skills',
+  channels: 'nav.channels',
 }
 
 /**
  * 只允许单个标签页的模块列表
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
-const singleTabModules: NavModule[] = ['knowledge', 'scheduled-tasks', 'memory', 'multiask', 'settings', 'skills']
+const singleTabModules: NavModule[] = ['knowledge', 'scheduled-tasks', 'memory', 'multiask', 'settings', 'skills', 'channels']
 
 /**
  * Document viewer tab data
