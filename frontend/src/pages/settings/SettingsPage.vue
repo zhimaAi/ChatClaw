@@ -16,6 +16,7 @@ defineProps<{
 }>()
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
+import ChatwikiSettings from './components/ChatwikiSettings.vue'
 import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
 import SkillsSettings from './components/SkillsSettings.vue'
@@ -37,6 +38,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
   mcp: 'settings.menu.mcp',
   snapSettings: 'settings.menu.snapSettings',
   tools: 'settings.menu.tools',
+  chatwiki: 'settings.menu.chatwiki',
   about: 'settings.menu.about',
 }
 
@@ -49,6 +51,7 @@ const menuComponents: Record<SettingsMenuItem, Component | null> = {
   mcp: MCPSettings,
   snapSettings: SnapSettings,
   tools: ToolsSettings,
+  chatwiki: ChatwikiSettings,
   about: AboutSettings,
 }
 

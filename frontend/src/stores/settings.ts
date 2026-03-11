@@ -12,18 +12,15 @@ export type SettingsMenuItem =
   | 'mcp'
   | 'snapSettings'
   | 'tools'
+  | 'chatwiki'
   | 'about'
 
 /**
  * 设置页面状态管理
  */
 export const useSettingsStore = defineStore('settings', () => {
-  // 当前激活的菜单项
   const activeMenu = ref<SettingsMenuItem>('generalSettings')
 
-  /**
-   * 设置当前激活的菜单项
-   */
   const setActiveMenu = (menu: SettingsMenuItem) => {
     activeMenu.value = menu
   }

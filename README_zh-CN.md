@@ -1,8 +1,21 @@
-# ChatClaw
+<p align="center">
+<img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
+</p>
 
-[English](./README.md)
+<h1 align="center">ChatClaw</h1>
 
-ChatClaw 是一款桌面端 AI 工具，支持上传知识库创建自定义机器人，实现智能问答。安装即用，并提供免费 AI 模型。
+<p align="center">
+  5分钟拥有类 OpenClaw 的小龙虾个人AI智能体，沙箱安全，占资源少，运行快.
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README_zh-CN.md">简体中文</a>
+</p>
+
+5分钟拥有类 OpenClaw 的小龙虾个人AI智能体，沙箱安全防护， macOS/Windows 30M 极小安装包，1 分钟安装。连接 WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、知识库、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
+
+Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
 
 ## 功能预览
 
@@ -126,7 +139,7 @@ docker compose up -d
 | 层级 | 技术 |
 |------|------|
 | 桌面框架 | [Wails v3](https://wails.io/) (Go + WebView) |
-| 后端语言 | [Go 1.25](https://go.dev/) |
+| 后端语言 | [Go 1.26](https://go.dev/) |
 | 前端框架 | [Vue 3](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) |
 | UI 组件 | [shadcn-vue](https://www.shadcn-vue.com/) (New York 风格) + [Reka UI](https://reka-ui.com/) |
 | 样式方案 | [Tailwind CSS v4](https://tailwindcss.com/) |
@@ -142,7 +155,7 @@ docker compose up -d
 ## 项目结构
 
 ```
-WillChat_D2/
+ChatClaw_D2/
 ├── main.go                     # 应用入口
 ├── go.mod / go.sum             # Go 模块依赖
 ├── Taskfile.yml                # 任务运行器配置

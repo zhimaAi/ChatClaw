@@ -8,6 +8,7 @@ import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 // 导入图标（作为 Vue 组件）
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
+import LinkIcon from '@/assets/icons/link.svg'
 import MemorySettingsIcon from '@/assets/icons/memory.svg'
 import SkillsIcon from '@/assets/icons/skills.svg'
 import MCPIcon from '@/assets/icons/mcp.svg'
@@ -30,6 +31,7 @@ interface MenuItem {
 const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
+  { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: LinkIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'mcp', labelKey: 'settings.menu.mcp', icon: MCPIcon },

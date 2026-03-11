@@ -51,6 +51,7 @@ func (s *ConversationsService) ListConversations(agentID int64) ([]Conversation,
 	if agentID <= 0 {
 		return nil, errs.New("error.agent_id_required")
 	}
+	s.app.Logger.Info("[conversations] ListConversations start", "agent_id", agentID)
 
 	db, err := s.db()
 	if err != nil {
@@ -68,6 +69,7 @@ func (s *ConversationsService) ListConversations(agentID int64) ([]Conversation,
 		Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.conversation_list_failed", err)
 	}
+	s.app.Logger.Info("[conversations] ListConversations loaded", "agent_id", agentID, "count", len(models))
 
 	out := make([]Conversation, 0, len(models))
 	for i := range models {
@@ -108,10 +110,6 @@ func (s *ConversationsService) GetConversation(id int64) (*Conversation, error) 
 
 // CreateConversation 创建会话
 func (s *ConversationsService) CreateConversation(input CreateConversationInput) (*Conversation, error) {
-	if input.AgentID <= 0 {
-		return nil, errs.New("error.agent_id_required")
-	}
-
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, errs.New("error.conversation_name_required")
@@ -132,22 +130,46 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 验证助手是否存在
-	var agentCount int
-	if err := db.NewSelect().
-		Table("agents").
-		ColumnExpr("COUNT(1)").
-		Where("id = ?", input.AgentID).
-		Scan(ctx, &agentCount); err != nil {
-		return nil, errs.Wrap("error.conversation_create_failed", err)
-	}
-	if agentCount == 0 {
-		return nil, errs.Newf("error.agent_not_found", map[string]any{"ID": input.AgentID})
-	}
-
 	chatMode, ok := NormalizeChatMode(input.ChatMode)
 	if !ok {
 		return nil, errs.Newf("error.conversation_chat_mode_invalid", map[string]any{"ChatMode": input.ChatMode})
+	}
+
+	teamType, ok := NormalizeTeamType(input.TeamType)
+	if !ok {
+		return nil, errs.Newf("error.conversation_team_type_invalid", map[string]any{"TeamType": input.TeamType})
+	}
+	s.app.Logger.Info(
+		"[conversations] CreateConversation request",
+		"agent_id", input.AgentID,
+		"chat_mode", chatMode,
+		"team_type", teamType,
+		"dialogue_id", input.DialogueID,
+		"name", name,
+	)
+
+	if input.AgentID <= 0 {
+		return nil, errs.New("error.agent_id_required")
+	}
+
+	// Team conversations use virtual agent groups, so no agent table validation is needed.
+	if teamType != TeamTypeTeam {
+		var agentCount int
+		if err := db.NewSelect().
+			Table("agents").
+			ColumnExpr("COUNT(1)").
+			Where("id = ?", input.AgentID).
+			Scan(ctx, &agentCount); err != nil {
+			return nil, errs.Wrap("error.conversation_create_failed", err)
+		}
+		if agentCount == 0 {
+			return nil, errs.Newf("error.agent_not_found", map[string]any{"ID": input.AgentID})
+		}
+	}
+
+	dialogueID := input.DialogueID
+	if dialogueID < 0 {
+		dialogueID = 0
 	}
 
 	m := &conversationModel{
@@ -160,6 +182,8 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		LibraryIDs:     s.serializeLibraryIDs(input.LibraryIDs),
 		EnableThinking: input.EnableThinking,
 		ChatMode:       chatMode,
+		TeamType:       teamType,
+		DialogueID:     dialogueID,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -262,6 +286,22 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 				return errs.Newf("error.conversation_chat_mode_invalid", map[string]any{"ChatMode": *input.ChatMode})
 			}
 			q = q.Set("chat_mode = ?", chatMode)
+		}
+
+		if input.TeamType != nil {
+			teamType, ok := NormalizeTeamType(*input.TeamType)
+			if !ok {
+				return errs.Newf("error.conversation_team_type_invalid", map[string]any{"TeamType": *input.TeamType})
+			}
+			q = q.Set("team_type = ?", teamType)
+		}
+
+		if input.DialogueID != nil {
+			dialogueID := *input.DialogueID
+			if dialogueID < 0 {
+				dialogueID = 0
+			}
+			q = q.Set("dialogue_id = ?", dialogueID)
 		}
 
 		res, err := q.Exec(ctx)

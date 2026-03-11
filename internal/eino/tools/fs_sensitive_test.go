@@ -244,7 +244,7 @@ func TestRead_Native_AllowsSensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, err := b.Read(context.Background(), &filesystem.ReadRequest{
+	fc, err := b.Read(context.Background(), &filesystem.ReadRequest{
 		FilePath: keyFile,
 		Offset:   1,
 		Limit:    100,
@@ -252,8 +252,8 @@ func TestRead_Native_AllowsSensitive(t *testing.T) {
 	if err != nil {
 		t.Errorf("native Read on .ssh/id_rsa: unexpected error: %v", err)
 	}
-	if content != "secret-key" {
-		t.Errorf("native Read: got %q, want %q", content, "secret-key")
+	if fc.Content != "secret-key" {
+		t.Errorf("native Read: got %q, want %q", fc.Content, "secret-key")
 	}
 }
 
