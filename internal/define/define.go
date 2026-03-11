@@ -1,5 +1,7 @@
 package define
 
+import "os"
+
 // AppID 用于文件系统/配置目录等"标识用途"
 const AppID = "chatclaw"
 
@@ -12,7 +14,16 @@ const AppDisplayName = "ChatClaw"
 // DefaultSQLiteFileName 默认 SQLite 数据库文件名
 const DefaultSQLiteFileName = "data.sqlite"
 
-// Env / ServerURL 的默认值由编译 tag 决定（见 env_dev.go / env_prod.go）
+// Env / ServerURL / ChatWikiCloudURL 的默认值由编译 tag 决定（见 env_dev.go / env_prod.go）
+
+// GetChatWikiCloudURL returns the ChatWiki Cloud server URL.
+// Overridable via CHATWIKI_CLOUD_URL environment variable.
+func GetChatWikiCloudURL() string {
+	if v := os.Getenv("CHATWIKI_CLOUD_URL"); v != "" {
+		return v
+	}
+	return ChatWikiCloudURL
+}
 
 // IsDev 是否为开发环境
 func IsDev() bool {

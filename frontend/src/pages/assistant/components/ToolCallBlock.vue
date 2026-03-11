@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const SUB_AGENT_TOOLS = new Set(['researcher', 'worker', 'skill_advisor'])
+const SUB_AGENT_TOOLS = new Set(['general_purpose', 'bash'])
 const isSubAgentTool = (toolName: string) => SUB_AGENT_TOOLS.has(toolName)
 
 const expandedCalls = ref<Set<string>>(new Set())
@@ -86,9 +86,8 @@ const getToolDisplayName = (toolName: string) => {
     skill: t('tools.skill.name'),
     write_todos: t('tools.writeTodos.name'),
     task: t('tools.task.name'),
-    researcher: t('assistant.chat.subAgentResearcher'),
-    worker: t('assistant.chat.subAgentWorker'),
-    skill_advisor: t('assistant.chat.subAgentSkillAdvisor'),
+    general_purpose: t('assistant.chat.subAgentGeneralPurpose'),
+    bash: t('assistant.chat.subAgentBash'),
   }
   return nameMap[toolName] ?? toolName
 }
@@ -100,6 +99,22 @@ const safeParse = (json?: string): any | null => {
   } catch {
     return null
   }
+}
+
+const MAX_SUB_AGENT_TITLE_LEN = 40
+
+const getSubAgentTitle = (toolCall: ToolCallInfo): string => {
+  const prefix = t('assistant.chat.subAgentPrefix')
+  const parsed = safeParse(toolCall.argsJson)
+  const request = parsed?.request
+  if (typeof request === 'string' && request.trim()) {
+    const firstLine = request.trim().split('\n')[0]
+    if (firstLine.length > MAX_SUB_AGENT_TITLE_LEN) {
+      return `${prefix} ${firstLine.slice(0, MAX_SUB_AGENT_TITLE_LEN)}…`
+    }
+    return `${prefix} ${firstLine}`
+  }
+  return getToolDisplayName(toolCall.toolName)
 }
 
 // --- File-write tool streaming preview ---
@@ -241,7 +256,7 @@ const getTaskResult = (resultJson?: string): string => {
         >
           <Bot class="size-4 shrink-0 text-muted-foreground/70" />
           <span class="flex-1 truncate font-medium text-xs">
-            {{ getToolDisplayName(toolCall.toolName) }}
+            {{ getSubAgentTitle(toolCall) }}
           </span>
           <span class="flex items-center gap-1.5 text-xs tabular-nums">
             <template v-if="toolCall.status === 'calling'">
