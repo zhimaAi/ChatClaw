@@ -4,5 +4,17 @@ package skills
 // They are silently installed on startup and cannot be uninstalled.
 // Maintain display order here; update with each release.
 var BuiltinSlugs = []string{
-	// TODO: populate with curated slugs
+	"word-docx",
+	"web-search",
+	"Excel-xlsx",
+	"ppt-generator",
+	"pdf",
+	"remotion-best-practices",
+	"playwright",
+	"canvas-design-2",
+	"frontend-design",
+	"weather",
+	"imap-smtp-email",
+	"seedance",
+	"Seedream-image-for-openclaw",
 }

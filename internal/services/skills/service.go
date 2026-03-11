@@ -131,18 +131,8 @@ func (s *SkillsService) installSkill(slug, version, source string) error {
 		return fmt.Errorf("failed to access existing skill directory: %w", statErr)
 	}
 
-	if err := os.Rename(stagingDir, destDir); err != nil {
-		if backupDir != "" {
-			_ = os.Rename(backupDir, destDir)
-		}
-		return fmt.Errorf("failed to activate installed skill files: %w", err)
-	}
-	cleanupStaging = false
-
-	if backupDir != "" {
-		_ = os.RemoveAll(backupDir)
-	}
-
+	// Write DB record before activating files to prevent SyncInstalledSkills
+	// from racing and marking the skill as "local".
 	db := s.db()
 	_, err = db.NewInsert().
 		TableExpr("installed_skills").
@@ -154,13 +144,27 @@ func (s *SkillsService) installSkill(slug, version, source string) error {
 		Value("installed_at", "CURRENT_TIMESTAMP").
 		Exec(context.Background())
 	if err != nil {
-		// ON CONFLICT: update version and source
 		_, err = db.ExecContext(context.Background(),
 			`INSERT OR REPLACE INTO installed_skills (slug, version, source, enabled, installed_at)
 			 VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)`, slug, version, source)
 		if err != nil {
 			return fmt.Errorf("failed to save skill record: %w", err)
 		}
+	}
+
+	if err := os.Rename(stagingDir, destDir); err != nil {
+		if backupDir != "" {
+			_ = os.Rename(backupDir, destDir)
+		}
+		// Rollback DB record on file activation failure
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM installed_skills WHERE slug = ?`, slug)
+		return fmt.Errorf("failed to activate installed skill files: %w", err)
+	}
+	cleanupStaging = false
+
+	if backupDir != "" {
+		_ = os.RemoveAll(backupDir)
 	}
 
 	return nil
