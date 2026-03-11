@@ -748,8 +748,8 @@ const handleDelete = async () => {
                     >
                       {{ workDir || defaultWorkDir }}
                     </span>
-                    <Button variant="outline" size="sm" class="shrink-0" @click="handleSelectWorkDir">
-                      <FolderOpen class="mr-1.5 size-3.5" />
+                    <Button variant="outline" size="sm" class="shrink-0 gap-1.5" @click="handleSelectWorkDir">
+                      <FolderOpen class="size-3.5 shrink-0" />
                       {{ t('assistant.settings.workspace.changeDir') }}
                     </Button>
                     <Button
