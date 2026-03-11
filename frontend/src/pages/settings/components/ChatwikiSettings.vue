@@ -400,6 +400,8 @@ async function finishSuccess() {
   try {
     // Sync apps and knowledge bases after (re-)binding so list view has fresh data
     await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    // Reload binding so list view shows latest auth status (bound/expired, user info)
+    await loadBinding()
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
   } catch (error) {
