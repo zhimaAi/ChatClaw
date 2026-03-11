@@ -253,8 +253,8 @@ const handleSave = async () => {
         <Button variant="outline" :disabled="saving" @click="close">
           {{ t('knowledge.create.cancel') }}
         </Button>
-        <Button :disabled="!isValid || saving" @click="handleSave">
-          <LoaderCircle v-if="saving" class="mr-2 size-4 animate-spin" />
+        <Button class="gap-2" :disabled="!isValid || saving" @click="handleSave">
+          <LoaderCircle v-if="saving" class="size-4 shrink-0 animate-spin" />
           {{ t('knowledge.embeddingSettings.save') }}
         </Button>
       </div>

@@ -222,8 +222,8 @@ defineExpose({ resetSaving })
         <Button variant="outline" :disabled="isSaving" @click="handleClose">
           {{ t('settings.modelService.cancel') }}
         </Button>
-        <Button :disabled="!isFormValid || isSaving" @click="handleSave">
-          <LoaderCircle v-if="isSaving" class="mr-2 size-4 animate-spin" />
+        <Button class="gap-2" :disabled="!isFormValid || isSaving" @click="handleSave">
+          <LoaderCircle v-if="isSaving" class="size-4 shrink-0 animate-spin" />
           {{ t('settings.modelService.save') }}
         </Button>
       </DialogFooter>

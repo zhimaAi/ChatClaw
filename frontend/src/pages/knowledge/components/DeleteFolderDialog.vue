@@ -75,11 +75,11 @@ const handleDelete = async () => {
           {{ t('knowledge.folder.deleteCancel') }}
         </AlertDialogCancel>
         <AlertDialogAction
-          class="bg-foreground text-background hover:bg-foreground/90"
+          class="inline-flex gap-2 bg-foreground text-background hover:bg-foreground/90"
           :disabled="deleting"
           @click.prevent="handleDelete"
         >
-          <LoaderCircle v-if="deleting" class="mr-2 size-4 animate-spin" />
+          <LoaderCircle v-if="deleting" class="size-4 shrink-0 animate-spin" />
           {{ t('knowledge.folder.deleteConfirm') }}
         </AlertDialogAction>
       </AlertDialogFooter>

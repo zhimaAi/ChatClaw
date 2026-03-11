@@ -93,10 +93,11 @@ function handleClose() {
       <DialogFooter>
         <template v-if="mode === 'new-version'">
           <Button
+            class="gap-2"
             :disabled="isInstalling"
             @click="handleInstallAndRestart"
           >
-            <LoaderCircle v-if="isInstalling" class="mr-2 size-4 animate-spin" />
+            <LoaderCircle v-if="isInstalling" class="size-4 shrink-0 animate-spin" />
             {{ isInstalling ? t('settings.about.installing') : t('settings.about.installAndRestart') }}
           </Button>
         </template>
