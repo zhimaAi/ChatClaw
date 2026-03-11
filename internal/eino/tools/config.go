@@ -67,4 +67,8 @@ const (
 	ToolIDGrep      = "grep"
 	ToolIDExecute           = "execute"
 	ToolIDExecuteBackground = "execute_background"
+
+	// Channel tool IDs
+	ToolIDFeishuSender = "feishu_sender"
+	ToolIDWeComSender  = "wecom_sender"
 )

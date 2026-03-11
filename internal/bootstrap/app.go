@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -11,12 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"chatclaw/internal/define"
 	"chatclaw/internal/deeplink"
+	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
 	"chatclaw/internal/services/browser"
+	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/chatwiki"
 	"chatclaw/internal/services/conversations"
@@ -41,6 +43,7 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -292,9 +295,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 	// 注册助手服务
-	app.RegisterService(application.NewService(agents.NewAgentsService(app)))
+	agentsService := agents.NewAgentsService(app)
+	app.RegisterService(application.NewService(agentsService))
 	// 注册会话服务
-	app.RegisterService(application.NewService(conversations.NewConversationsService(app)))
+	conversationsService := conversations.NewConversationsService(app)
+	app.RegisterService(application.NewService(conversationsService))
 	// 注册 Skill 管理服务
 	skillsService := skills.NewSkillsService(app)
 	app.RegisterService(application.NewService(skillsService))
@@ -307,6 +312,18 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
+	// 注册频道网关 + 频道管理服务
+	// Use indirection so the handler closure can reference the gateway.
+	var channelGW *channels.Gateway
+	channelGateway := channels.NewGateway(app.Logger, func(msg channels.IncomingMessage) {
+		handleChannelMessage(app, chatService, conversationsService, channelGW, msg)
+	})
+	channelGW = channelGateway
+	chatService.SetGateway(channelGateway)
+	channelService := channels.NewChannelService(app, channelGateway, func(channelName string) (int64, error) {
+		return ensureChannelAgent(agentsService, channelName)
+	})
+	app.RegisterService(application.NewService(channelService))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
@@ -479,6 +496,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		go toolchainService.EnsureAll()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
+		// Start all enabled channel gateway connections in background.
+		go channelGateway.StartAll(context.Background())
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -530,6 +549,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		channelGateway.StopAll(context.Background())
 		chatService.Shutdown()
 		// Stop task manager before closing database
 		if tm := taskmanager.Get(); tm != nil {
@@ -540,4 +560,339 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		// Close log file last so all shutdown logs are captured.
 		logCleanup()
 	}, nil
+}
+
+// ensureChannelAgent creates a new AI agent for a channel if needed.
+// The agent is assigned the first available enabled LLM model as its default.
+func ensureChannelAgent(agentsService *agents.AgentsService, channelName string) (int64, error) {
+	agent, err := agentsService.CreateAgent(agents.CreateAgentInput{
+		Name:   channelName,
+		Prompt: "You are a helpful AI assistant connected to a messaging channel. Be concise and friendly in your responses.",
+	})
+	if err != nil {
+		return 0, fmt.Errorf("create agent: %w", err)
+	}
+
+	// Try to assign the first available LLM model as default
+	db := sqlite.DB()
+	if db != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		type modelRow struct {
+			ProviderID string `bun:"provider_id"`
+			ModelID    string `bun:"model_id"`
+		}
+		var m modelRow
+		err := db.NewSelect().
+			Table("models").
+			Column("provider_id", "model_id").
+			Where("type = ?", "llm").
+			Where("enabled = ?", true).
+			Where("provider_id IN (SELECT provider_id FROM providers WHERE enabled = true)").
+			OrderExpr("sort_order ASC").
+			Limit(1).
+			Scan(ctx, &m)
+		if err == nil && m.ProviderID != "" && m.ModelID != "" {
+			providerID := m.ProviderID
+			modelID := m.ModelID
+			_, _ = agentsService.UpdateAgent(agent.ID, agents.UpdateAgentInput{
+				DefaultLLMProviderID: &providerID,
+				DefaultLLMModelID:    &modelID,
+			})
+		}
+	}
+
+	return agent.ID, nil
+}
+
+// handleChannelMessage processes an incoming message from a channel platform.
+// It extracts text content, finds or creates a conversation for the sender,
+// generates an AI reply, and sends it back through the channel adapter.
+func handleChannelMessage(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	gateway *channels.Gateway,
+	msg channels.IncomingMessage,
+) {
+	app.Logger.Info("channel message received",
+		"channel_id", msg.ChannelID,
+		"platform", msg.Platform,
+		"message_id", msg.MessageID,
+		"sender", msg.SenderID,
+		"sender_name", msg.SenderName,
+		"chat_id", msg.ChatID,
+		"msg_type", msg.MsgType,
+	)
+
+	if gateway == nil {
+		app.Logger.Warn("channel gateway not ready, dropping message")
+		return
+	}
+
+	sendReply := func(text string) {
+		replyTarget := msg.ChatID
+		if replyTarget == "" {
+			replyTarget = msg.SenderID
+		}
+		if replyTarget == "" {
+			app.Logger.Warn("channel message: no reply target available", "channel_id", msg.ChannelID)
+			return
+		}
+
+		adapter := gateway.GetAdapter(msg.ChannelID)
+		if adapter == nil {
+			app.Logger.Warn("channel adapter not found, cannot reply", "channel_id", msg.ChannelID)
+			return
+		}
+
+		replyCtx, replyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer replyCancel()
+
+		if err := adapter.SendMessage(replyCtx, replyTarget, text); err != nil {
+			app.Logger.Error("channel message: send reply failed", "channel_id", msg.ChannelID, "target", replyTarget, "error", err)
+			return
+		}
+
+		app.Logger.Info("channel reply sent", "channel_id", msg.ChannelID, "target", replyTarget, "response_len", len(text))
+	}
+
+	// Extract text content from platform-specific format
+	textContent := extractTextContent(msg)
+	if textContent == "" {
+		app.Logger.Info("channel message has no text content, skipping", "msg_type", msg.MsgType)
+		return
+	}
+
+	// Look up channel to get agent_id
+	db := sqlite.DB()
+	if db == nil {
+		app.Logger.Error("channel message: database not initialized")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	var agentID int64
+	err := db.NewSelect().
+		Table("channels").
+		Column("agent_id").
+		Where("id = ?", msg.ChannelID).
+		Scan(ctx, &agentID)
+	if err != nil || agentID == 0 {
+		app.Logger.Warn("channel has no linked agent, dropping message", "channel_id", msg.ChannelID, "error", err)
+		return
+	}
+
+	// Use ChatID as conversation key so different Feishu chats get separate conversations.
+	// Fall back to SenderID for direct messages (where ChatID may be empty).
+	convKey := msg.ChatID
+	if convKey == "" {
+		convKey = msg.SenderID
+	}
+	externalID := fmt.Sprintf("ch:%d:%s", msg.ChannelID, convKey)
+
+	// Use ChatName (group name) or SenderName (user name) as display name
+	displayName := msg.ChatName
+	if displayName == "" {
+		displayName = msg.SenderName
+	}
+	if displayName == "" {
+		displayName = externalID
+	}
+
+	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName)
+	if err != nil {
+		app.Logger.Error("channel message: find/create conversation failed", "error", err)
+		return
+	}
+
+	// Notify frontend that conversation list has changed (e.g. new conversation created)
+	app.Event.Emit("conversations:changed", map[string]any{
+		"agent_id": agentID,
+	})
+
+	// Prepend sender name so the AI can distinguish who sent the message in a group chat.
+	aiContent := textContent
+	if msg.SenderName != "" {
+		aiContent = fmt.Sprintf("%s：%s", msg.SenderName, textContent)
+	}
+
+	// Wait for the full response to be generated so we can send it back to the channel.
+	// We want the frontend to show the streaming process, so we use SendMessage
+	// which creates a normal streaming context. We wait for it to complete.
+	var finalResponse string
+	res, err := chatService.SendMessage(chat.SendMessageInput{
+		ConversationID: conv.ID,
+		Content:        aiContent,
+		TabID:          "channel_backend", // Special tab ID to prevent frontend errors
+	})
+	if err != nil {
+		app.Logger.Error("channel message: AI generation failed to start", "conv", conv.ID, "error", err)
+		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
+		return
+	}
+
+	// Notify frontend that there's a new user message
+	app.Event.Emit("chat:messages-changed", map[string]any{
+		"conversation_id": conv.ID,
+	})
+
+	// Wait for the background generation to complete
+	if err := chatService.WaitForGeneration(conv.ID, res.RequestID); err != nil {
+		app.Logger.Error("channel message: AI generation wait failed", "conv", conv.ID, "error", err)
+		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
+		// Not returning here in case some partial response was generated
+	}
+
+	// Fetch the final assistant message from the DB
+	var assistantMsg struct {
+		Content string `bun:"content"`
+	}
+	err = db.NewSelect().
+		Table("messages").
+		Column("content").
+		Where("conversation_id = ?", conv.ID).
+		Where("role = ?", "assistant").
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(ctx, &assistantMsg)
+
+	if err == nil {
+		finalResponse = assistantMsg.Content
+	}
+
+	// Notify frontend again after AI reply is generated
+	_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
+		LastMessage: &finalResponse,
+	})
+	app.Event.Emit("conversations:changed", map[string]any{
+		"agent_id": agentID,
+	})
+	app.Event.Emit("chat:messages-changed", map[string]any{
+		"conversation_id": conv.ID,
+	})
+
+	if finalResponse == "" {
+		app.Logger.Warn("channel message: empty AI response", "conv", conv.ID)
+		sendReply(i18n.T("error.channel_ai_reply_empty"))
+		return
+	}
+
+	sendReply(finalResponse)
+}
+
+// extractTextContent extracts plain text from platform-specific message formats.
+func extractTextContent(msg channels.IncomingMessage) string {
+	if msg.MsgType != "text" && msg.MsgType != "post" && msg.MsgType != "" {
+		return ""
+	}
+
+	content := strings.TrimSpace(msg.Content)
+	if content == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(content, "{") {
+		// Handle Feishu text messages: {"text":"actual message"}
+		if msg.MsgType == "text" || msg.MsgType == "" {
+			var parsed struct {
+				Text string `json:"text"`
+			}
+			if err := json.Unmarshal([]byte(content), &parsed); err == nil && parsed.Text != "" {
+				return strings.TrimSpace(parsed.Text)
+			}
+		}
+
+		// Handle Feishu post (rich text) messages
+		if msg.MsgType == "post" {
+			var parsed struct {
+				Title   string `json:"title"`
+				Content [][]struct {
+					Tag  string `json:"tag"`
+					Text string `json:"text"`
+				} `json:"content"`
+			}
+			if err := json.Unmarshal([]byte(content), &parsed); err == nil {
+				var sb strings.Builder
+				if parsed.Title != "" {
+					sb.WriteString(parsed.Title)
+					sb.WriteString("\n")
+				}
+				for _, line := range parsed.Content {
+					for _, item := range line {
+						if item.Tag == "text" || item.Tag == "a" {
+							sb.WriteString(item.Text)
+						}
+					}
+					sb.WriteString("\n")
+				}
+				return strings.TrimSpace(sb.String())
+			}
+		}
+	}
+
+	return content
+}
+
+// findOrCreateConversation finds an existing conversation by agent_id and external_id,
+// or creates a new one if it doesn't exist.
+// externalID is a stable key (e.g., "ch:1:oc_xxx") for lookup.
+// displayName is a human-readable name (e.g., group/user name) for display.
+func findOrCreateConversation(
+	ctx context.Context,
+	db *bun.DB,
+	convService *conversations.ConversationsService,
+	agentID int64,
+	externalID string,
+	displayName string,
+) (*conversations.Conversation, error) {
+	// Try to find existing conversation by external_id
+	type convRow struct {
+		ID int64 `bun:"id"`
+	}
+	var existing convRow
+	err := db.NewSelect().
+		Table("conversations").
+		Column("id").
+		Where("agent_id = ?", agentID).
+		Where("external_id = ?", externalID).
+		Limit(1).
+		Scan(ctx, &existing)
+	if err == nil && existing.ID > 0 {
+		conv, err := convService.GetConversation(existing.ID)
+		if err == nil {
+			return conv, nil
+		}
+	}
+
+	// Fall back to legacy lookup by name for backward compatibility
+	err = db.NewSelect().
+		Table("conversations").
+		Column("id").
+		Where("agent_id = ?", agentID).
+		Where("name = ?", externalID).
+		Limit(1).
+		Scan(ctx, &existing)
+	if err == nil && existing.ID > 0 {
+		conv, err := convService.GetConversation(existing.ID)
+		if err == nil {
+			return conv, nil
+		}
+	}
+
+	// Create new conversation with chat mode (simple LLM, no tools)
+	conv, err := convService.CreateConversation(conversations.CreateConversationInput{
+		AgentID:    agentID,
+		Name:       displayName,
+		ExternalID: externalID,
+		ChatMode:   "chat",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create conversation: %w", err)
+	}
+
+	return conv, nil
 }
