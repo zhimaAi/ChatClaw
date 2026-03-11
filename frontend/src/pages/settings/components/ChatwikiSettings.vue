@@ -97,6 +97,8 @@ const librariesLoading = ref(false)
 
 const syncingRobots = ref(false)
 const syncingLibraries = ref(false)
+/** Loading when user clicks "开始使用" to sync and go back to list */
+const finishSuccessLoading = ref(false)
 
 const isOpenSourceUrlValid = computed(() => {
   const u = openSourceUrl.value.trim()
@@ -171,35 +173,41 @@ async function loadLibraries(type: number = 0) {
   }
 }
 
-async function syncRobots() {
+async function syncRobots(options?: { silent?: boolean }) {
   syncingRobots.value = true
   try {
     clearChatwikiCache()
     await loadRobots()
-    toast.success(t('settings.chatwiki.syncSuccess'))
+    if (!options?.silent) toast.success(t('settings.chatwiki.syncSuccess'))
   } catch (error) {
-    if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
-    } else {
-      toast.error(t('settings.chatwiki.syncFailed'))
+    if (!options?.silent) {
+      if (isChatWikiAuthExpiredError(error)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      } else {
+        toast.error(t('settings.chatwiki.syncFailed'))
+      }
     }
+    throw error
   } finally {
     syncingRobots.value = false
   }
 }
 
-async function syncLibraries() {
+async function syncLibraries(options?: { silent?: boolean }) {
   syncingLibraries.value = true
   try {
     clearChatwikiCache()
     await loadLibraries(Number(libraryTab.value))
-    toast.success(t('settings.chatwiki.syncSuccess'))
+    if (!options?.silent) toast.success(t('settings.chatwiki.syncSuccess'))
   } catch (error) {
-    if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
-    } else {
-      toast.error(t('settings.chatwiki.syncFailed'))
+    if (!options?.silent) {
+      if (isChatWikiAuthExpiredError(error)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      } else {
+        toast.error(t('settings.chatwiki.syncFailed'))
+      }
     }
+    throw error
   } finally {
     syncingLibraries.value = false
   }
@@ -387,8 +395,22 @@ function retry() {
   showOpenSourceInput.value = false
 }
 
-function finishSuccess() {
-  view.value = 'list'
+async function finishSuccess() {
+  finishSuccessLoading.value = true
+  try {
+    // Sync apps and knowledge bases after (re-)binding so list view has fresh data
+    await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    toast.success(t('settings.chatwiki.syncSuccess'))
+    view.value = 'list'
+  } catch (error) {
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    } else {
+      toast.error(t('settings.chatwiki.syncFailed'))
+    }
+  } finally {
+    finishSuccessLoading.value = false
+  }
 }
 
 function requestUnbind() {
@@ -773,8 +795,14 @@ onUnmounted(() => {
           {{ t('settings.chatwiki.freeVersion') }}
         </span>
       </div>
-      <Button class="w-full" size="lg" @click="finishSuccess">
-        {{ t('settings.chatwiki.startUsing') }}
+      <Button
+        class="w-full"
+        size="lg"
+        :disabled="finishSuccessLoading"
+        @click="finishSuccess"
+      >
+        <Loader2 v-if="finishSuccessLoading" class="size-4 shrink-0 animate-spin" />
+        {{ finishSuccessLoading ? t('settings.chatwiki.syncing') : t('settings.chatwiki.startUsing') }}
       </Button>
       <button
         type="button"
