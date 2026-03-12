@@ -45,8 +45,8 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/uptrace/bun"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -310,6 +310,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(mcp.NewMCPService(app)))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
+	chatWikiService := chatwiki.NewChatWikiService(app)
+	chatService.SetChatWikiService(chatWikiService)
 	app.RegisterService(application.NewService(chatService))
 	// 注册定时任务服务
 	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
@@ -341,7 +343,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 ChatWiki 绑定服务
-	app.RegisterService(application.NewService(chatwiki.NewChatWikiService(app)))
+	app.RegisterService(application.NewService(chatWikiService))
 
 	// ========== macOS 应用菜单 ==========
 	if runtime.GOOS == "darwin" {

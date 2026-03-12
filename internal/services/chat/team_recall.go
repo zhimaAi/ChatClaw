@@ -9,8 +9,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/uptrace/bun"
 )
 
 const (
@@ -32,29 +30,8 @@ type teamRecallItem struct {
 	Similarity float64 `json:"similarity"`
 }
 
-// getChatWikiBindingBaseAndToken returns the latest binding server_url (same base as team library list API) and token.
-// Recall API path is appended to this base, e.g. /manage/chatclaw/libraryRecall.
-func getChatWikiBindingBaseAndToken(ctx context.Context, db *bun.DB) (baseURL string, token string, err error) {
-	var row struct {
-		ServerURL string `bun:"server_url"`
-		Token     string `bun:"token"`
-	}
-	err = db.NewSelect().
-		Table("chatwiki_bindings").
-		Column("server_url", "token").
-		OrderExpr("id DESC").
-		Limit(1).
-		Scan(ctx, &row)
-	if err != nil {
-		return "", "", err
-	}
-	baseURL = strings.TrimSuffix(strings.TrimSpace(row.ServerURL), "/")
-	token = strings.TrimSpace(row.Token)
-	return baseURL, token, nil
-}
-
 // retrieveFromTeamLibrary calls the external library recall API and returns results in the same shape as local retrieval.
-func (s *ChatService) retrieveFromTeamLibrary(ctx context.Context, db *bun.DB, teamLibraryID string, question string, size int) []retrievalResult {
+func (s *ChatService) retrieveFromTeamLibrary(ctx context.Context, teamLibraryID string, question string, size int) []retrievalResult {
 	if teamLibraryID == "" || strings.TrimSpace(question) == "" {
 		return nil
 	}
@@ -62,9 +39,19 @@ func (s *ChatService) retrieveFromTeamLibrary(ctx context.Context, db *bun.DB, t
 		size = teamRecallSize
 	}
 
-	baseURL, token, err := getChatWikiBindingBaseAndToken(ctx, db)
-	if err != nil || token == "" || baseURL == "" {
-		s.app.Logger.Warn("[chat] team recall: no ChatWiki binding (server_url/token)", "error", err)
+	if s.chatWikiService == nil {
+		s.app.Logger.Warn("[chat] team recall: chatwiki service not configured")
+		return nil
+	}
+	binding, err := s.chatWikiService.GetBinding()
+	if err != nil || binding == nil {
+		s.app.Logger.Warn("[chat] team recall: no ChatWiki binding", "error", err)
+		return nil
+	}
+	baseURL := strings.TrimSuffix(strings.TrimSpace(binding.ServerURL), "/")
+	token := strings.TrimSpace(binding.Token)
+	if token == "" || baseURL == "" {
+		s.app.Logger.Warn("[chat] team recall: empty binding fields")
 		return nil
 	}
 
@@ -118,6 +105,13 @@ func (s *ChatService) retrieveFromTeamLibrary(ctx context.Context, db *bun.DB, t
 		}
 		return teamRecallItemsToResults(list)
 	}
+	if wrap.Code != 0 {
+		s.app.Logger.Warn("[chat] team recall: business error", "code", wrap.Code)
+		return nil
+	}
+	if len(wrap.Data) == 0 || string(wrap.Data) == "null" {
+		return nil
+	}
 
 	// Data may be array or wrapped
 	var list []teamRecallItem
@@ -137,11 +131,15 @@ func (s *ChatService) retrieveFromTeamLibrary(ctx context.Context, db *bun.DB, t
 func teamRecallItemsToResults(list []teamRecallItem) []retrievalResult {
 	out := make([]retrievalResult, 0, len(list))
 	for _, it := range list {
+		content := strings.TrimSpace(it.Content)
+		if content == "" {
+			continue
+		}
 		score := it.Score
 		if score == 0 {
 			score = it.Similarity
 		}
-		out = append(out, retrievalResult{Content: strings.TrimSpace(it.Content), Score: score})
+		out = append(out, retrievalResult{Content: content, Score: score})
 	}
 	return out
 }
@@ -150,13 +148,17 @@ func parseTeamRecallMaps(list []map[string]interface{}) []retrievalResult {
 	out := make([]retrievalResult, 0, len(list))
 	for _, m := range list {
 		c, _ := m["content"].(string)
+		content := strings.TrimSpace(c)
+		if content == "" {
+			continue
+		}
 		s := 0.0
 		if v, ok := m["score"].(float64); ok {
 			s = v
 		} else if v, ok := m["similarity"].(float64); ok {
 			s = v
 		}
-		out = append(out, retrievalResult{Content: strings.TrimSpace(c), Score: s})
+		out = append(out, retrievalResult{Content: content, Score: s})
 	}
 	return out
 }

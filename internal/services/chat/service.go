@@ -13,6 +13,7 @@ import (
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/channels"
+	"chatclaw/internal/services/chatwiki"
 	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino/adk"
@@ -40,13 +41,14 @@ type activeGeneration struct {
 
 // ChatService handles chat operations
 type ChatService struct {
-	app               *application.App
-	toolRegistry      *tools.ToolRegistry
-	bgProcessManager  *tools.BgProcessManager
-	checkpointStore   adk.CheckPointStore
+	app                *application.App
+	toolRegistry       *tools.ToolRegistry
+	bgProcessManager   *tools.BgProcessManager
+	checkpointStore    adk.CheckPointStore
+	chatWikiService    *chatwiki.ChatWikiService
 	extraToolFactories []func() ([]tool.BaseTool, error)
-	activeGenerations sync.Map // map[int64]*activeGeneration
-	gateway           *channels.Gateway
+	activeGenerations  sync.Map // map[int64]*activeGeneration
+	gateway            *channels.Gateway
 }
 
 // NewChatService creates a new ChatService
@@ -64,6 +66,12 @@ func (s *ChatService) RegisterExtraToolFactory(factory func() ([]tool.BaseTool, 
 		return
 	}
 	s.extraToolFactories = append(s.extraToolFactories, factory)
+}
+
+// SetChatWikiService injects ChatWiki service so chat features can reuse
+// binding/token logic via unified entry points.
+func (s *ChatService) SetChatWikiService(svc *chatwiki.ChatWikiService) {
+	s.chatWikiService = svc
 }
 
 // inMemoryCheckPointStore is a simple in-memory implementation of adk.CheckPointStore.
@@ -158,8 +166,8 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	// Validate images
 	if hasImages {
 		const maxImages = 4
-		const maxImageSize = 2 * 1024 * 1024  // 2MB per image
-		const maxTotalSize = 8 * 1024 * 1024  // 8MB total
+		const maxImageSize = 2 * 1024 * 1024 // 2MB per image
+		const maxTotalSize = 8 * 1024 * 1024 // 8MB total
 
 		if len(input.Images) > maxImages {
 			return nil, errs.New("error.chat_too_many_images")
@@ -389,12 +397,12 @@ func (s *ChatService) WaitForGeneration(conversationID int64, requestID string) 
 	if !ok {
 		return nil
 	}
-	
+
 	gen := existing.(*activeGeneration)
 	if gen.requestID != requestID {
 		return nil
 	}
-	
+
 	<-gen.done
 	return nil
 }

@@ -324,7 +324,19 @@ func (s *ChatWikiService) TokenForceOffline() error {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(resp.Body)
-	s.app.Logger.Info("[ChatWiki] tokenForceOffline response", "status", resp.StatusCode, "body", string(respBody))
+	bodyPreview := strings.TrimSpace(string(respBody))
+	if len(bodyPreview) > 256 {
+		bodyPreview = bodyPreview[:256] + "...(truncated)"
+	}
+	s.app.Logger.Info(
+		"[ChatWiki] tokenForceOffline response",
+		"status",
+		resp.StatusCode,
+		"body_size",
+		len(respBody),
+		"body_preview",
+		bodyPreview,
+	)
 	return nil
 }
 
