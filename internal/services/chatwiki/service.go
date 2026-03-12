@@ -291,6 +291,43 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 	return nil
 }
 
+// TokenForceOffline calls POST /manage/chatclaw/tokenForceOffline with reason "logout"
+// so the server can invalidate the current token. Call before DeleteBinding when user unbinds.
+// If there is no binding or the request fails, it returns nil so local unbind can still proceed.
+func (s *ChatWikiService) TokenForceOffline() error {
+	binding, err := s.GetBinding()
+	if err != nil || binding == nil {
+		return nil
+	}
+	baseURL := strings.TrimRight(binding.ServerURL, "/")
+	apiURL := baseURL + "/manage/chatclaw/tokenForceOffline"
+
+	body := map[string]string{"reason": "logout"}
+	bodyBytes, _ := json.Marshal(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki] tokenForceOffline create request failed", "error", err)
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Token", binding.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki] tokenForceOffline request failed", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	s.app.Logger.Info("[ChatWiki] tokenForceOffline response", "status", resp.StatusCode, "body", string(respBody))
+	return nil
+}
+
 // DeleteBinding removes the current binding.
 func (s *ChatWikiService) DeleteBinding() error {
 	db := sqlite.DB()
