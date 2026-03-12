@@ -183,8 +183,9 @@ const selectedModelCapabilities = computed(() => {
 })
 
 // Whether the currently selected model supports image/vision
+// 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制
 const supportsImage = computed(() => {
-  return selectedModelCapabilities.value.includes('image')
+  return true
 })
 
 // 能力图标映射
@@ -701,7 +702,6 @@ onUnmounted(() => {
                       size="icon"
                       variant="ghost"
                       class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                      :disabled="!supportsImage"
                       @click="handleSelectImagesClick"
                     >
                       <ImageIcon class="size-4 text-muted-foreground" />
@@ -709,7 +709,7 @@ onUnmounted(() => {
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ supportsImage ? t('assistant.chat.selectImages') : t('assistant.chat.selectImagesDisabled') }}</p>
+                  <p>{{ t('assistant.chat.selectImages') }}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

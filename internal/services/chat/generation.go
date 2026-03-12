@@ -1198,11 +1198,11 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				}
 			}
 
-			// Filter out images if model doesn't support multimodal
-			if !supportsMultimodal && len(images) > 0 {
-				s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
-				images = nil
-			}
+			// 不再根据模型能力过滤图片，因为不支持图片识别的模型可以通过调用技能去识别图片
+			// if !supportsMultimodal && len(images) > 0 {
+			// 	s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
+			// 	images = nil
+			// }
 
 			hasText := strings.TrimSpace(m.Content) != ""
 			if !hasText && len(images) == 0 {

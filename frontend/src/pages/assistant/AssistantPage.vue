@@ -832,12 +832,12 @@ const handleAddImages = async (files: FileList | File[]) => {
     toast.error(t('assistant.errors.teamImageNotSupported'))
     return
   }
-  // Check if current model supports multimodal (vision)
-  const modelInfo = selectedModelInfo.value
-  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
-    toast.error(t('assistant.errors.modelNotSupportVision'))
-    return
-  }
+  // 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制模型能力
+  // const modelInfo = selectedModelInfo.value
+  // if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+  //   toast.error(t('assistant.errors.modelNotSupportVision'))
+  //   return
+  // }
 
   const fileArray = Array.from(files)
   const MAX_IMAGES = 4
