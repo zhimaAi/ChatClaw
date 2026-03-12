@@ -8,9 +8,17 @@ import (
 	"strings"
 
 	"chatclaw/internal/errs"
+	"chatclaw/internal/sysinfo"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+
+// LoginParams holds query parameters for the ChatClaw login page (e.g. /chatclaw/login?os_type=...).
+type LoginParams struct {
+	OsType    string `json:"os_type"`    // e.g. "Windows", "macOS", "Linux"
+	OsVersion string `json:"os_version"` // e.g. "11", "14.2.1", best-effort
+}
 
 // BrowserService 浏览器服务（暴露给前端调用）
 type BrowserService struct {
@@ -69,6 +77,15 @@ func (s *BrowserService) OpenDirectory(dir string) error {
 		return errs.Wrap("error.browser_open_failed", err)
 	}
 	return nil
+}
+
+// GetLoginParams returns os_type and os_version for appending to the login URL.
+// Used when redirecting to /chatclaw/login from account management.
+func (s *BrowserService) GetLoginParams() LoginParams {
+	return LoginParams{
+		OsType:    sysinfo.OSType(),
+		OsVersion: sysinfo.OSVersion(),
+	}
 }
 
 // urlpkgParse is a small wrapper for testability and to keep imports clean.
