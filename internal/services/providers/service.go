@@ -23,6 +23,7 @@ import (
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/uptrace/bun"
@@ -890,6 +891,8 @@ func (s *ProvidersService) CheckAPIKey(providerID string, input CheckAPIKeyInput
 	case "ollama":
 		// Ollama 本地运行，直接尝试连接检测
 		return s.checkOllama(ctx, input, testModelID)
+	case "qwen":
+		return s.checkQwen(ctx, input, testModelID)
 	default:
 		return nil, errs.Newf("error.unsupported_provider_type", map[string]any{"Type": provider.Type})
 	}
@@ -950,9 +953,10 @@ func testChatModel(ctx context.Context, chatModel ChatModelGenerator) *CheckAPIK
 // checkOpenAI 使用 OpenAI SDK 检测
 func (s *ProvidersService) checkOpenAI(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:  input.APIKey,
-		Model:   modelID,
-		BaseURL: input.APIEndpoint,
+		APIKey:      input.APIKey,
+		Model:       modelID,
+		BaseURL:     input.APIEndpoint,
+		ExtraFields: map[string]any{"enable_thinking": false},
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{
@@ -979,11 +983,12 @@ func (s *ProvidersService) checkAzure(ctx context.Context, input CheckAPIKeyInpu
 	}
 
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:     input.APIKey,
-		Model:      modelID,
-		BaseURL:    input.APIEndpoint,
-		ByAzure:    true,
-		APIVersion: extraConfig.APIVersion,
+		APIKey:      input.APIKey,
+		Model:       modelID,
+		BaseURL:     input.APIEndpoint,
+		ByAzure:     true,
+		APIVersion:  extraConfig.APIVersion,
+		ExtraFields: map[string]any{"enable_thinking": false},
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{
@@ -1052,6 +1057,24 @@ func (s *ProvidersService) checkOllama(ctx context.Context, input CheckAPIKeyInp
 	chatModel, err := ollama.NewChatModel(ctx, &ollama.ChatModelConfig{
 		BaseURL: input.APIEndpoint,
 		Model:   modelID,
+	})
+	if err != nil {
+		return &CheckAPIKeyResult{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+	return testChatModel(ctx, chatModel), nil
+}
+
+// checkQwen 使用 Qwen SDK 检测
+func (s *ProvidersService) checkQwen(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
+	disableThinking := false
+	chatModel, err := qwen.NewChatModel(ctx, &qwen.ChatModelConfig{
+		APIKey:         input.APIKey,
+		BaseURL:        input.APIEndpoint,
+		Model:          modelID,
+		EnableThinking: &disableThinking,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{
