@@ -749,8 +749,11 @@ onUnmounted(() => {
                       {{ t('assistant.chat.clearSelected') }}
                     </div>
                     <SelectSeparator v-if="libraries.length > 0 || (assistantTeamLibraries && assistantTeamLibraries.length > 0)" class="mx-1 my-1 h-px bg-muted" />
-                    <!-- Library list -->
+                    <!-- Personal libraries (multi-select) -->
                     <template v-if="libraries.length > 0">
+                      <div class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                        {{ t('assistant.chat.personalKnowledgeSection') }}
+                      </div>
                       <SelectItemRaw
                         v-for="lib in libraries"
                         :key="lib.id"
@@ -770,10 +773,11 @@ onUnmounted(() => {
                         {{ t('assistant.chat.noKnowledge') }}
                       </div>
                     </template>
-                    <!-- Team libraries (ChatWiki): multi-select like personal; recall id = comma-separated -->
+                    <!-- ChatWiki team libraries: multi-select like personal; recall id = comma-separated -->
                     <template v-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
+                      <SelectSeparator v-if="libraries.length > 0" class="mx-1 my-1 h-px bg-muted" />
                       <div class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
-                        {{ t('assistant.chat.teamKnowledgeSection') }}
+                        {{ t('assistant.chat.chatwikiSection') }}
                       </div>
                       <div
                         v-for="lib in assistantTeamLibraries"
