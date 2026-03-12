@@ -172,6 +172,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		dialogueID = 0
 	}
 
+	teamLibraryID := strings.TrimSpace(input.TeamLibraryID)
 	m := &conversationModel{
 		AgentID:        input.AgentID,
 		Name:           name,
@@ -185,6 +186,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		ChatMode:       chatMode,
 		TeamType:       teamType,
 		DialogueID:     dialogueID,
+		TeamLibraryID:  teamLibraryID,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
@@ -303,6 +305,10 @@ func (s *ConversationsService) UpdateConversation(id int64, input UpdateConversa
 				dialogueID = 0
 			}
 			q = q.Set("dialogue_id = ?", dialogueID)
+		}
+
+		if input.TeamLibraryID != nil {
+			q = q.Set("team_library_id = ?", strings.TrimSpace(*input.TeamLibraryID))
 		}
 
 		res, err := q.Exec(ctx)

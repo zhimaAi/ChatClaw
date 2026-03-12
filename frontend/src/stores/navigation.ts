@@ -54,8 +54,10 @@ export interface PendingChatImage {
 export interface PendingChatData {
   /** Pre-filled chat input text */
   chatInput: string
-  /** Pre-selected library IDs */
+  /** Pre-selected library IDs (personal) */
   libraryIds: number[]
+  /** Team library id(s) for recall when from knowledge team tab (comma-separated if multiple) */
+  teamLibraryId?: string
   /** Pre-selected model key (providerId::modelId) */
   selectedModelKey?: string
   /** Pre-selected agent ID */

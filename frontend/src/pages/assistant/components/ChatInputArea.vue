@@ -66,9 +66,28 @@ const props = withDefaults(
     isSnapMode?: boolean
     /** Team mode: only plain chat, hide mode/model/thinking/knowledge controls */
     isTeamMode?: boolean
+    /** When in knowledge page team tab: current selected team library (display only, like personal selected libraries) */
+    selectedTeamLibrary?: { id: string; name: string } | null
+    /** When in knowledge page team tab: list of team libraries in current category for the selector dropdown */
+    teamLibraries?: { id: string; name: string }[]
+    /** When in knowledge page team tab: currently selected team library id (v-model from parent) */
+    selectedTeamLibraryId?: string | null
+    /** Assistant page (personal list): full team library list when ChatWiki bound; recall uses team_library_id (comma-separated ids) */
+    assistantTeamLibraries?: { id: string; name: string }[]
+    /** Assistant page: selected team library ids (multi-select; persisted as comma-separated) */
+    assistantSelectedTeamLibraryIds?: string[]
     pendingImages?: PendingImage[]
   }>(),
-  { mode: 'assistant', isTeamMode: false, pendingImages: () => [] }
+  {
+    mode: 'assistant',
+    isTeamMode: false,
+    selectedTeamLibrary: null,
+    teamLibraries: () => [],
+    selectedTeamLibraryId: null,
+    assistantTeamLibraries: () => [],
+    assistantSelectedTeamLibraryIds: () => [],
+    pendingImages: () => [],
+  }
 )
 
 const currentMode = computed(() => props.mode || 'assistant')
@@ -89,6 +108,9 @@ const emit = defineEmits<{
   addImages: [files: FileList | File[]]
   removeImage: [id: string]
   clearImages: []
+  'update:selectedTeamLibraryId': [value: string | null]
+  /** Assistant page: toggle one team library id in multi-select (personal + team can coexist) */
+  toggleAssistantTeamLibrary: [id: string]
 }>()
 
 const { t } = useI18n()
@@ -148,6 +170,27 @@ const visibleLibraries = computed(() =>
 const overflowCount = computed(() =>
   Math.max(0, selectedLibraries.value.length - MAX_VISIBLE_LIBRARIES)
 )
+
+/** Team libraries selected for chips (same row as personal) */
+const selectedTeamLibraries = computed(() => {
+  const ids = props.assistantSelectedTeamLibraryIds || []
+  const list = props.assistantTeamLibraries || []
+  return ids
+    .map((id) => list.find((l) => l.id === id))
+    .filter((l): l is { id: string; name: string } => Boolean(l))
+})
+
+const MAX_VISIBLE_TEAM = 3
+const visibleTeamLibraries = computed(() =>
+  selectedTeamLibraries.value.slice(0, MAX_VISIBLE_TEAM)
+)
+const teamOverflowCount = computed(() =>
+  Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
+)
+
+function handleRemoveTeamLibrary(id: string) {
+  emit('toggleAssistantTeamLibrary', id)
+}
 
 const handleRemoveLibrary = (id: number) => {
   emit('removeLibrary', id)
@@ -402,14 +445,19 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Selected knowledge bases (hidden in team mode) -->
+        <!-- Selected knowledge bases: personal + team chips (both removable; same style) -->
         <div
-          v-if="!isTeamMode && selectedLibraryIds.length > 0"
+          v-if="
+            !isTeamMode &&
+            (selectedLibraryIds.length > 0 ||
+              (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0))
+          "
           class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
         >
+          <!-- Personal libraries -->
           <div
             v-for="lib in visibleLibraries"
-            :key="lib.id"
+            :key="'p-' + lib.id"
             class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
           >
             <span class="max-w-[120px] truncate">{{ lib.name }}</span>
@@ -426,6 +474,38 @@ onUnmounted(() => {
           >
             +{{ overflowCount }}
           </span>
+          <!-- Team libraries (ChatWiki) -->
+          <div
+            v-for="lib in visibleTeamLibraries"
+            :key="'t-' + lib.id"
+            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+            :title="lib.name"
+          >
+            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <button
+              class="rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 group-hover:opacity-100"
+              @click="handleRemoveTeamLibrary(lib.id)"
+            >
+              <X class="size-3" />
+            </button>
+          </div>
+          <span
+            v-if="teamOverflowCount > 0"
+            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+          >
+            +{{ teamOverflowCount }}
+          </span>
+        </div>
+        <div
+          v-else-if="selectedTeamLibrary"
+          class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
+        >
+          <div
+            class="flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-2 py-0.5 text-xs text-muted-foreground"
+            :title="selectedTeamLibrary.name"
+          >
+            <span class="max-w-[160px] truncate">{{ selectedTeamLibrary.name }}</span>
+          </div>
         </div>
 
         <textarea
@@ -618,9 +698,9 @@ onUnmounted(() => {
               @change="handleFilesSelected"
             />
 
-            <!-- Knowledge base multi-select: hidden in team mode -->
+            <!-- Knowledge base select: same slot for personal (multi-select) and team (single from current category); position unchanged -->
             <SelectRoot
-              v-if="!isTeamMode"
+              v-if="!isTeamMode && !selectedTeamLibrary"
               :model-value="selectedLibraryIds"
               multiple
               @update:model-value="(v: any) => { emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v]); handleLibrarySelectionChange() }"
@@ -629,9 +709,13 @@ onUnmounted(() => {
               <SelectTriggerRaw
                 as-child
                 :title="
-                  selectedLibraryIds.length > 0
-                    ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
-                    : t('assistant.chat.selectKnowledge')
+                  assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0
+                    ? assistantSelectedTeamLibraryIds.length === 1
+                      ? (assistantTeamLibraries.find((l) => l.id === assistantSelectedTeamLibraryIds[0])?.name ?? '')
+                      : t('assistant.chat.selectedCount', { count: assistantSelectedTeamLibraryIds.length })
+                    : selectedLibraryIds.length > 0
+                      ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
+                      : t('assistant.chat.selectKnowledge')
                 "
               >
                 <Button
@@ -639,14 +723,14 @@ onUnmounted(() => {
                   variant="ghost"
                   class="size-8 rounded-full border border-border bg-background"
                   :class="
-                    selectedLibraryIds.length > 0
+                    (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
                       ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
                       : 'hover:bg-muted/40'
                   "
                 >
                   <IconSelectKnowledge
                     class="size-4 pointer-events-none"
-                    :class="selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'"
+                    :class="(assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'"
                   />
                 </Button>
               </SelectTriggerRaw>
@@ -660,11 +744,11 @@ onUnmounted(() => {
                     <!-- Clear selection option - use a div with click handler since SelectItem would add it to selection -->
                     <div
                       class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground"
-                      @click="handleClearLibrarySelection"
+                      @click.stop="handleClearLibrarySelection"
                     >
                       {{ t('assistant.chat.clearSelected') }}
                     </div>
-                    <SelectSeparator v-if="libraries.length > 0" class="mx-1 my-1 h-px bg-muted" />
+                    <SelectSeparator v-if="libraries.length > 0 || (assistantTeamLibraries && assistantTeamLibraries.length > 0)" class="mx-1 my-1 h-px bg-muted" />
                     <!-- Library list -->
                     <template v-if="libraries.length > 0">
                       <SelectItemRaw
@@ -681,11 +765,86 @@ onUnmounted(() => {
                         <SelectItemText>{{ lib.name }}</SelectItemText>
                       </SelectItemRaw>
                     </template>
-                    <template v-else>
+                    <template v-else-if="!(assistantTeamLibraries && assistantTeamLibraries.length > 0)">
                       <div class="px-2 py-1.5 text-sm text-muted-foreground">
                         {{ t('assistant.chat.noKnowledge') }}
                       </div>
                     </template>
+                    <!-- Team libraries (ChatWiki): multi-select like personal; recall id = comma-separated -->
+                    <template v-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
+                      <div class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                        {{ t('assistant.chat.teamKnowledgeSection') }}
+                      </div>
+                      <div
+                        v-for="lib in assistantTeamLibraries"
+                        :key="`team-${lib.id}`"
+                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                        @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
+                      >
+                        <span
+                          v-if="assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.includes(lib.id)"
+                          class="absolute left-2 flex size-4 items-center justify-center"
+                        >
+                          <Check class="size-4 text-primary" />
+                        </span>
+                        <span class="pl-0">{{ lib.name }}</span>
+                      </div>
+                    </template>
+                  </SelectViewport>
+                </SelectContentRaw>
+              </SelectPortal>
+            </SelectRoot>
+
+            <!-- Team tab: same icon position as personal, opens current category team library list -->
+            <SelectRoot
+              v-else-if="selectedTeamLibrary && teamLibraries && teamLibraries.length > 0"
+              :model-value="selectedTeamLibraryId ?? undefined"
+              @update:model-value="(v: string | undefined) => emit('update:selectedTeamLibraryId', v ?? null)"
+            >
+              <SelectTriggerRaw
+                as-child
+                :title="
+                  selectedTeamLibrary
+                    ? selectedTeamLibrary.name
+                    : t('assistant.chat.selectKnowledge')
+                "
+              >
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="size-8 rounded-full border border-border bg-background"
+                  :class="
+                    selectedTeamLibrary
+                      ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
+                      : 'hover:bg-muted/40'
+                  "
+                >
+                  <IconSelectKnowledge
+                    class="size-4 pointer-events-none"
+                    :class="selectedTeamLibrary ? 'text-primary' : 'text-muted-foreground'"
+                  />
+                </Button>
+              </SelectTriggerRaw>
+              <SelectPortal>
+                <SelectContentRaw
+                  class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                  position="popper"
+                  :side-offset="5"
+                >
+                  <SelectViewport>
+                    <SelectItemRaw
+                      v-for="lib in teamLibraries"
+                      :key="lib.id"
+                      :value="lib.id"
+                      class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                    >
+                      <SelectItemIndicator
+                        class="absolute left-2 flex size-4 items-center justify-center"
+                      >
+                        <Check class="size-4 text-primary" />
+                      </SelectItemIndicator>
+                      <SelectItemText>{{ lib.name }}</SelectItemText>
+                    </SelectItemRaw>
                   </SelectViewport>
                 </SelectContentRaw>
               </SelectPortal>

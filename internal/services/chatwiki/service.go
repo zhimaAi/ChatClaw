@@ -1190,6 +1190,12 @@ func (s *ChatWikiService) GetLibraryListOnlyOpen(libType int) ([]Library, error)
 	return s.getLibraryList(libType, 1)
 }
 
+// GetLibraryListOnlyOpenAll fetches all enabled knowledge bases without type filter.
+// Same endpoint as getLibraryList but omits type so the server returns the full list (personal + team categories).
+func (s *ChatWikiService) GetLibraryListOnlyOpenAll() ([]Library, error) {
+	return s.getLibraryList(-1, 1)
+}
+
 func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, error) {
 	binding, err := s.GetBinding()
 	if err != nil || binding == nil {
@@ -1198,7 +1204,10 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 
 	baseURL := strings.TrimRight(binding.ServerURL, "/")
 	q := url.Values{}
-	q.Set("type", strconv.Itoa(libType))
+	// Omit type when libType < 0 so server returns full list (no type filter).
+	if libType >= 0 {
+		q.Set("type", strconv.Itoa(libType))
+	}
 	q.Set("only_open", strconv.Itoa(onlyOpen))
 	apiURL := baseURL + "/manage/chatclaw/getLibraryList?" + q.Encode()
 
@@ -1206,6 +1215,7 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 		"url", apiURL,
 		"type", libType,
 		"only_open", onlyOpen,
+		"type_omitted", libType < 0,
 		"token_length", len(binding.Token),
 	)
 

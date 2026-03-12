@@ -628,6 +628,7 @@ export default {
       clearSelected: 'Clear selected',
       selectedCount: '{count} knowledge base(s) selected',
       noKnowledge: 'No knowledge base available',
+      teamKnowledgeSection: 'Team knowledge bases (ChatWiki)',
       send: 'Send',
       stop: 'Stop',
       copy: 'Copy',
