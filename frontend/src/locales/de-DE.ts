@@ -208,6 +208,7 @@ export default {
       extractModel: 'Erinnerungs-Extraktionsmodell',
       extractModelHint: 'Wird verwendet, um nach jedem Gespräch wertvolle Erinnerungsinformationen zusammenzufassen und zu extrahieren.',
       embeddingModel: 'Erinnerungs-Embedding-Modell',
+      embeddingModelHint: 'Wird verwendet, um Erinnerungstext in Vektoren umzuwandeln, um semantische Abrufe während der Gespräche zu ermöglichen.',
       embeddingDimension: 'Embedding-Dimension',
       embeddingDimensionHint: 'Embedding-Vektor-Dimension muss mit der Ausgabe des gewählten Modells übereinstimmen.',
       save: 'Einstellungen speichern',

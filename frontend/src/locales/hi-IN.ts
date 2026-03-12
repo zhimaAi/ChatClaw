@@ -450,7 +450,6 @@ export default {
     languages: {
       zhCN: 'चीनी',
       enUS: 'अंग्रेज़ी',
-      jaJP: 'जापानी',
     },
     themes: {
       light: 'लाइट',
@@ -878,6 +877,9 @@ export default {
       confirm: 'सहेजें',
       success: 'नाम बदला गया',
       failed: 'नाम बदलने में विफल',
+    },
+    settingsDialog: {
+      title: 'ज्ञान आधार सेटिंग्स',
     },
     settings: {
       title: 'नॉलेज बेस सेटिंग्स',

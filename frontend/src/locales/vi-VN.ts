@@ -208,6 +208,7 @@ export default {
       extractModel: 'Mô hình trích xuất bộ nhớ',
       extractModelHint: 'Được sử dụng để tóm tắt và trích xuất thông tin bộ nhớ có giá trị sau mỗi cuộc trò chuyện.',
       embeddingModel: 'Mô hình embedding bộ nhớ',
+      embeddingModelHint: 'Được sử dụng để chuyển văn bản bộ nhớ thành vector để truy xuất ngữ nghĩa trong các cuộc trò chuyện.',
       embeddingDimension: 'Kích thước embedding',
       embeddingDimensionHint: 'Kích thước vector embedding phải khớp với đầu ra của mô hình đã chọn.',
       save: 'Lưu cài đặt',
@@ -757,8 +758,8 @@ export default {
         topP: 'Top-P',
         topPHint: 'Kiểm soát phạm vi lấy mẫu',
         contextCount: 'Số lượng ngữ cảnh',
-        maxTokens: 'Token t',
-        unlimited:ối đa 'Không giới hạn',
+        maxTokens: 'Token tối đa',
+        unlimited: 'Không giới hạn',
       },
       retrieval: {
         matchThreshold: 'Ngưỡng khớp',

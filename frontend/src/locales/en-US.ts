@@ -470,6 +470,21 @@ export default {
     languages: {
       zhCN: 'Chinese',
       enUS: 'English',
+      arSA: 'Arabic',
+      bnBD: 'Bengali',
+      deDE: 'German',
+      esES: 'Spanish',
+      frFR: 'French',
+      hiIN: 'Hindi',
+      itIT: 'Italian',
+      jaJP: 'Japanese',
+      koKR: 'Korean',
+      ptBR: 'Portuguese',
+      slSI: 'Slovenian',
+      tlh: 'Klingon',
+      trTR: 'Turkish',
+      viVN: 'Vietnamese',
+      zhTW: 'Traditional Chinese',
     },
     // Theme options
     themes: {
@@ -916,6 +931,9 @@ export default {
       confirm: 'Save',
       success: 'Renamed',
       failed: 'Failed to rename',
+    },
+    settingsDialog: {
+      title: 'Knowledge base settings',
     },
     settings: {
       title: 'Knowledge base settings',

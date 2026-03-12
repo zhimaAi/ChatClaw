@@ -450,7 +450,6 @@ export default {
     languages: {
       zhCN: '中国語',
       enUS: '英語',
-      jaJP: '日本語',
     },
     themes: {
       light: 'ライト',
@@ -892,6 +891,9 @@ export default {
       confirm: '保存',
       success: '名前を変更しました',
       failed: '名前変更に失敗しました',
+    },
+    settingsDialog: {
+      title: 'ナレッジベース設定',
     },
     settings: {
       title: 'ナレッジベース設定',

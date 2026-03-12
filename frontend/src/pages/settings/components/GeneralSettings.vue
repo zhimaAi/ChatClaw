@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useAppStore, type Theme } from '@/stores'
-import { useLocale } from '@/composables/useLocale'
+import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen } from 'lucide-vue-next'
@@ -23,11 +23,32 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const { locale: currentLocale, switchLocale } = useLocale()
 
-// 语言选项
-const languageOptions = [
-  { value: 'zh-CN', label: 'settings.languages.zhCN' },
-  { value: 'en-US', label: 'settings.languages.enUS' },
-]
+// 语言选项 - 动态生成
+const languageOptions = computed(() => {
+  const labels: Record<Locale, string> = {
+    'zh-CN': 'settings.languages.zhCN',
+    'en-US': 'settings.languages.enUS',
+    'ar-SA': 'settings.languages.arSA',
+    'bn-BD': 'settings.languages.bnBD',
+    'de-DE': 'settings.languages.deDE',
+    'es-ES': 'settings.languages.esES',
+    'fr-FR': 'settings.languages.frFR',
+    'hi-IN': 'settings.languages.hiIN',
+    'it-IT': 'settings.languages.itIT',
+    'ja-JP': 'settings.languages.jaJP',
+    'ko-KR': 'settings.languages.koKR',
+    'pt-BR': 'settings.languages.ptBR',
+    'sl-SI': 'settings.languages.slSI',
+    'tlh': 'settings.languages.tlh',
+    'tr-TR': 'settings.languages.trTR',
+    'vi-VN': 'settings.languages.viVN',
+    'zh-TW': 'settings.languages.zhTW',
+  }
+  return SUPPORTED_LOCALES.map((locale) => ({
+    value: locale,
+    label: labels[locale] || locale,
+  }))
+})
 
 // 主题选项
 const themeOptions = [
@@ -38,7 +59,7 @@ const themeOptions = [
 
 // 当前语言显示文本
 const currentLanguageLabel = computed(() => {
-  const option = languageOptions.find((opt) => opt.value === currentLocale.value)
+  const option = languageOptions.value.find((opt) => opt.value === currentLocale.value)
   return option ? t(option.label) : ''
 })
 
@@ -50,8 +71,8 @@ const currentThemeLabel = computed(() => {
 
 // 处理语言切换
 const handleLanguageChange = (value: AcceptableValue) => {
-  if (typeof value === 'string') {
-    void switchLocale(value as 'zh-CN' | 'en-US')
+  if (typeof value === 'string' && SUPPORTED_LOCALES.includes(value as Locale)) {
+    void switchLocale(value as Locale)
   }
 }
 

@@ -208,6 +208,7 @@ export default {
       extractModel: 'Bellek çıkarma modeli',
       extractModelHint: 'Her konuşmadan sonra değerli bellek bilgilerini özetlemek ve çıkarmak için kullanılır.',
       embeddingModel: 'Bellek gömme modeli',
+      embeddingModelHint: 'Konuşmalar sırasında anlamsal alma için bellek metnini vektörlere dönüştürmek için kullanılır.',
       embeddingDimension: 'Gömme boyutu',
       embeddingDimensionHint: 'Gömme vektör boyutu, seçilen modelin çıktısıyla eşleşmelidir.',
       save: 'Ayarları kaydet',
