@@ -616,7 +616,7 @@ export default {
       clearSelected: '清空选中',
       selectedCount: '已选 {count} 个知识库',
       noKnowledge: '暂无知识库',
-      teamKnowledgeSection: '团队知识库（ChatWiki）',
+      teamKnowledgeSection: '团队知识库',
       send: '发送',
       stop: '停止',
       copy: '复制',
