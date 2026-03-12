@@ -477,8 +477,13 @@ async function handleSaveAssistantMcp() {
       await AssistantMCPService.Create({ name: form.name.trim(), description: form.description.trim() })
       toast.success(t('settings.mcp.assistantMcpCreateSuccess'))
     } else {
-      await AssistantMCPService.Update({ id: form.id, name: form.name.trim(), description: form.description.trim() })
+      const updated = await AssistantMCPService.Update({ id: form.id, name: form.name.trim(), description: form.description.trim() })
       toast.success(t('settings.mcp.assistantMcpUpdateSuccess'))
+      if (updated && amcpDetail.value?.id === form.id) {
+        amcpDetail.value = updated
+      }
+      const idx = assistantMcps.value.findIndex((a) => a.id === form.id)
+      if (idx >= 0 && updated) assistantMcps.value[idx] = updated
     }
     amcpDialogOpen.value = false
     void loadAssistantMcps()
@@ -1025,6 +1030,13 @@ onUnmounted(() => {
                 <div class="flex shrink-0 items-center gap-2">
                   <button
                     class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="openEditAssistantMcpDialog(amcpDetail)"
+                  >
+                    <Pencil class="size-3.5" />
+                    {{ t('settings.mcp.assistantMcpEdit') }}
+                  </button>
+                  <button
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     @click="openLinkAgentsDialog(amcpDetail)"
                   >
                     <Plus class="size-3.5" />
@@ -1517,7 +1529,7 @@ onUnmounted(() => {
             <Package class="size-6 opacity-40" />
             <span class="text-sm">{{ t('settings.mcp.assistantMcpNoAgents') }}</span>
           </div>
-          <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div v-else class="grid grid-cols-2 gap-2">
             <div
               v-for="agent in allAgents"
               :key="agent.id"
