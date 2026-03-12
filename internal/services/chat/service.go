@@ -23,6 +23,14 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+// chatWikiBindingGetter is a narrow interface so other packages (e.g. chat) can depend on
+// ChatWiki binding access without referencing *chatwiki.ChatWikiService in signatures.
+// Referencing the concrete service type in exported APIs causes Wails bindings to register
+// ChatWikiService as a model type and duplicate the TS identifier with the service module.
+type chatWikiBindingGetter interface {
+	GetBinding() (*chatwiki.Binding, error)
+}
+
 // activeGeneration tracks an active generation
 type activeGeneration struct {
 	cancel    context.CancelFunc
@@ -45,7 +53,7 @@ type ChatService struct {
 	toolRegistry       *tools.ToolRegistry
 	bgProcessManager   *tools.BgProcessManager
 	checkpointStore    adk.CheckPointStore
-	chatWikiService    *chatwiki.ChatWikiService
+	chatWikiService    chatWikiBindingGetter
 	extraToolFactories []func() ([]tool.BaseTool, error)
 	activeGenerations  sync.Map // map[int64]*activeGeneration
 	gateway            *channels.Gateway
@@ -70,7 +78,7 @@ func (s *ChatService) RegisterExtraToolFactory(factory func() ([]tool.BaseTool, 
 
 // SetChatWikiService injects ChatWiki service so chat features can reuse
 // binding/token logic via unified entry points.
-func (s *ChatService) SetChatWikiService(svc *chatwiki.ChatWikiService) {
+func (s *ChatService) SetChatWikiService(svc chatWikiBindingGetter) {
 	s.chatWikiService = svc
 }
 
