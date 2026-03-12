@@ -12,7 +12,7 @@ var BuiltinSlugs = []string{
 	"remotion-best-practices",
 	"playwright",
 	"canvas-design-2",
-	"frontend-design",
+	"frontend-design-3",
 	"weather",
 	"imap-smtp-email",
 	"seedance",
