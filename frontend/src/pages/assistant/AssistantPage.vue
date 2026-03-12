@@ -22,6 +22,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -968,11 +969,11 @@ const syncLibraryIdsFromConversation = async () => {
 
 
 // Handle message editing (resend from that point)
-const handleEditMessage = async (messageId: number, newContent: string) => {
+const handleEditMessage = async (messageId: number, newContent: string, images: ImagePayload[]) => {
   if (!activeConversationId.value) return
 
   try {
-    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId)
+    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId, images)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.resendFailed'))
   }

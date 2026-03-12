@@ -78,7 +78,7 @@ wails3 task run:server
 ```bash
 # amd64
 wails3 task windows:build ARCH=amd64 DEV=false
-cd bin && zip ChatClaw_windows_amd64.zip ChatClaw.exe && cd ..
+cd bin && 7z a ChatClaw_windows_amd64.zip ChatClaw.exe && cd ..
 wails3 task windows:package ARCH=amd64 DEV=false
 ```
 
