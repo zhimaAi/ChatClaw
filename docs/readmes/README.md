@@ -9,30 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="./docs/readmes/README.md">English</a> |
-  <a href="./docs/readmes/README_zh-CN.md">简体中文</a> |
-  <a href="./docs/readmes/README_zh-TW.md">繁體中文</a> |
-  <a href="./docs/readmes/README_ja-JP.md">日本語</a> |
-  <a href="./docs/readmes/README_ko-KR.md">한국어</a> |
-  <a href="./docs/readmes/README_ar-SA.md">العربية</a> |
-  <a href="./docs/readmes/README_bn-BD.md">বাংলা</a> |
-  <a href="./docs/readmes/README_de-DE.md">Deutsch</a> |
-  <a href="./docs/readmes/README_es-ES.md">Español</a> |
-  <a href="./docs/readmes/README_fr-FR.md">Français</a> |
-  <a href="./docs/readmes/README_hi-IN.md">हिन्दी</a> |
-  <a href="./docs/readmes/README_it-IT.md">Italiano</a> |
-  <a href="./docs/readmes/README_pt-BR.md">Português</a> |
-  <a href="./docs/readmes/README_sl-SI.md">Slovenščina</a> |
-  <a href="./docs/readmes/README_tlh.md">Klingon</a> |
-  <a href="./docs/readmes/README_tr-TR.md">Türkçe</a> |
-  <a href="./docs/readmes/README_vi-VN.md">Tiếng Việt</a>
+  <a href="./docs/readmes/README.md" target="_blank">English</a> |
+  <a href="./docs/readmes/README_zh-CN.md" target="_blank">简体中文</a>
 </p>
 
 Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
 
  5分钟拥有类 OpenClaw 的小龙虾个人AI智能体,沙箱安全防护,支持macOS/Windows 30M 极小安装包,1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、IMA开源版本地知识库平替、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
  
-
+ 
 <p align="center">
 <a href="https://github.com/zhimaAi/ChatClaw/releases" target="_blank" >Windows/Mac/Linux (Releases)</a>  
 </p>
@@ -43,51 +28,51 @@ Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-sm
 
 Ask your AI assistant any question, and it will intelligently search your knowledge base to generate a relevant answer.
 
-![](./images/1.png)
+![](../../images/1.png)
 
 ### PPT Quick Generate
 
 Send a one-sentence command to the smart assistant to automatically create and generate a PowerPoint presentation.
 
-![](./images/2.png)
+![](../../images/2.png)
 
 ### Skill Manager
 
 Use a command to have the robot help you find installed features on your computer or install new extension plugins.
 
-![](./images/3.png)
+![](../../images/3.png)
 
 ### Knowledge | Document Vectorization Storage
 
 Upload your documents (e.g., TXT, PDF, Word, Excel, CSV, HTML, Markdown). The system will automatically parse, split, and convert them into vector embeddings, storing them in your private knowledge base for precise retrieval and utilization by the AI model.
 
-![](./images/4.png)
+![](../../images/4.png)
 
 ### Text Selection for Instant Q&A
 
 Select any text on your screen, and it will be automatically copied and filled into a floating quick-ask box. With one click, send it to the AI assistant for an immediate answer.
 
-![](./images/5.png)
+![](../../images/5.png)
 
-![](./images/6.png)
+![](../../images/6.png)
 
 ### Smart Snap Window
 
 An intelligent assistant that can snap alongside other application windows. Quickly switch between differently configured AI assistants within it to ask questions. The bot generates answers based on your connected knowledge base and supports one-click sending of responses directly into your conversation.
 
-![](./images/7.png)
+![](../../images/7.png)
 
 ### One Question, Multiple Answers: Compare with Ease
 
 No need to repeat your query. Consult multiple "AI experts" simultaneously and view their responses side-by-side in a single interface. This allows for easy comparison and helps you arrive at the best conclusion.
 
-![](./images/8.png)
+![](../../images/8.png)
 
 ### One-Click Launcher Ball
 
 Click the floating ball on your desktop to instantly wake up or open the main ChatClaw application window.
 
-![](./images/9.png)
+![](../../images/9.png)
 
 ## Server Mode Deployment
 
@@ -256,15 +241,11 @@ ChatClaw_D2/
 │   ├── winsnap/                # Window snapping engine (macOS/Windows/Linux)
 │   └── winutil/                # Window activation utilities
 ├── docs/                       # Development documentation
-│   └── readmes/                # Multi-language README files
-│       ├── README.md           # English README
-│       ├── README_zh-CN.md    # Simplified Chinese README
-│       └── images/             # README screenshots
-└── images/                     # README screenshots (legacy)
+└── images/                     # README screenshots
 ```
 
 ### Changelog
-To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
+To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
 ### 2026/03/10
 1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
