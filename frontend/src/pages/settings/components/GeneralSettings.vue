@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AcceptableValue } from 'reka-ui'
 import { Events } from '@wailsio/runtime'
@@ -164,8 +164,10 @@ const handleInstall = async (toolId: string) => {
   }
   try {
     await ToolchainService.InstallTool(toolId)
-    // 后端会通过 toolchain:status 事件通知安装完成
-    // 无需额外调用 loadToolStatuses()，避免状态被覆盖
+    // When InstallTool resolves, install is done; refresh from backend so UI updates
+    // even if toolchain:status event was delivered in a context that didn't trigger re-render
+    await nextTick()
+    await loadToolStatuses()
   } catch (e) {
     console.error(`Failed to install ${toolId}:`, e)
     installErrors[toolId] = true
@@ -179,15 +181,17 @@ let unsubscribeProgress: (() => void) | null = null
 
 onMounted(() => {
   void loadToolStatuses()
-  unsubscribeToolchain = Events.On('toolchain:status', (event: any) => {
+  unsubscribeToolchain = Events.On('toolchain:status', async (event: any) => {
     const data = event?.data?.[0] ?? event?.data ?? event
     if (data && data.name) {
-      toolStatuses[data.name] = ToolStatus.createFrom(data)
+      // Assign plain object so Vue reactivity tracks the update reliably
+      const status = ToolStatus.createFrom(data)
+      toolStatuses[data.name] = { ...status }
       installErrors[data.name] = false
-      // 安装完成后清除进度
       if (!data.installing) {
         delete downloadProgress[data.name]
       }
+      await nextTick()
     }
   })
   // 监听下载进度
@@ -265,9 +269,9 @@ onUnmounted(() => {
               {{ toolStatuses[tool.id]?.bin_path }}
             </p>
 
-            <!-- Download Progress（放在工具信息下方，避免宽度跳动） -->
+            <!-- Download Progress（仅安装中时显示，完成后隐藏，不依赖后端事件顺序） -->
             <div
-              v-if="downloadProgress[tool.id]"
+              v-if="downloadProgress[tool.id] && toolStatuses[tool.id]?.installing"
               class="mt-2 flex flex-col gap-1"
             >
               <div class="flex items-center justify-between text-xs">

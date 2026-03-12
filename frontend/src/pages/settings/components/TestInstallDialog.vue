@@ -323,8 +323,8 @@ onUnmounted(() => {
           />
         </div>
 
-        <!-- 进度显示 -->
-        <div v-if="isRunning || isFinished" class="rounded-lg border border-border bg-muted/50 p-4">
+        <!-- 进度显示（仅下载中显示，完成后隐藏） -->
+        <div v-if="isRunning" class="rounded-lg border border-border bg-muted/50 p-4">
           <div class="mb-2 flex items-center justify-between">
             <span class="text-sm font-medium">
               {{ progress.status === 'completed' ? t('settings.general.toolchain.testInstall.completed') : progress.status === 'failed' ? t('settings.general.toolchain.testInstall.failed') : t('settings.general.toolchain.testInstall.downloading') }}

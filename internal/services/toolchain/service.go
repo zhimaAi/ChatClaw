@@ -672,7 +672,10 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 				"tool", spec.name)
 			return
 		}
-		defer s.clearInstalling(spec.name)
+		defer func() {
+			s.clearInstalling(spec.name)
+			s.emitStatus(spec.name)
+		}()
 		s.emitStatus(spec.name)
 
 		if installedVersion != "" {
@@ -687,12 +690,10 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
 			s.app.Logger.Error("toolchain: install failed",
 				"tool", spec.name, "error", err)
-			s.emitStatus(spec.name)
 			return
 		}
 		s.app.Logger.Info("toolchain: installed successfully via OSS",
 			"tool", spec.name, "path", binPath)
-		s.emitStatus(spec.name)
 		return
 	}
 
@@ -707,7 +708,11 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 			"tool", spec.name)
 		return
 	}
-	defer s.clearInstalling(spec.name)
+	// defer 必须在所有 return 之前，确保 installing 状态被清除并通知前端
+	defer func() {
+		s.clearInstalling(spec.name)
+		s.emitStatus(spec.name)
+	}()
 	s.emitStatus(spec.name)
 
 	if installedVersion != "" {
@@ -726,21 +731,21 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 		if ossErr != nil {
 			s.app.Logger.Error("toolchain: install failed (GitHub and API both failed)",
 				"tool", spec.name, "version", latestVersion, "error", err)
-			s.emitStatus(spec.name)
+			// defer 会处理状态更新
 			return
 		}
 		s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
 		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
 			s.app.Logger.Error("toolchain: install failed",
 				"tool", spec.name, "version", latestVersion, "error", err)
-			s.emitStatus(spec.name)
+			// defer 会处理状态更新
 			return
 		}
 	}
 
 	s.app.Logger.Info("toolchain: installed successfully",
 		"tool", spec.name, "version", latestVersion, "path", binPath)
-	s.emitStatus(spec.name)
+	// defer 会处理状态更新
 }
 
 // getInstalledVersion runs the binary with version args and parses the output.
