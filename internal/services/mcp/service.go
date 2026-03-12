@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -643,12 +642,9 @@ func StdioCmdFunc(ctx context.Context, command string, envVars []string, args []
 	cmd := exec.CommandContext(ctx, resolved, args...)
 	cmd.Env = mergedEnv
 
-	// Hide console window on Windows to avoid flashing CMD popup
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow: true,
-		}
-	}
+	// Platform-specific helper: on Windows this hides the console window,
+	// on other platforms it is a no-op (implemented in separate files).
+	setCmdHideWindow(cmd)
 
 	return cmd, nil
 }
