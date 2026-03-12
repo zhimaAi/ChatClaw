@@ -45,8 +45,8 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/uptrace/bun"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )

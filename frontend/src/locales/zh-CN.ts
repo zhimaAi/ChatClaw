@@ -616,9 +616,7 @@ export default {
       clearSelected: '清空选中',
       selectedCount: '已选 {count} 个知识库',
       noKnowledge: '暂无知识库',
-      /** Section label above personal libraries in knowledge selector dropdown */
       personalKnowledgeSection: '个人',
-      /** Section label above ChatWiki team libraries (branded) */
       chatwikiSection: 'ChatWiki',
       send: '发送',
       stop: '停止',

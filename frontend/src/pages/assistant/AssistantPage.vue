@@ -788,8 +788,7 @@ const handleSend = async () => {
           library_ids: selectedLibraryIds.value,
           team_library_id:
             pendingTeamLibraryId.value ??
-            teamLibraryIdsToString(assistantSelectedTeamLibraryIds.value) ??
-            '',
+            teamLibraryIdsToString(assistantSelectedTeamLibraryIds.value),
           enable_thinking: enableThinking.value,
           chat_mode: chatMode.value,
         })
