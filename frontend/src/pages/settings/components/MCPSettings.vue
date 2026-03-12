@@ -330,6 +330,12 @@ async function handleMCPEnabledChange(val: boolean) {
   mcpEnabled.value = val
   try {
     await SettingsService.SetValue('mcp_enabled', String(val))
+    if (val) {
+      await AssistantMCPService.StartEnabledServers()
+    } else {
+      await AssistantMCPService.StopAllServers()
+    }
+    void loadAssistantMcps()
   } catch (error) {
     console.error('Failed to update mcp_enabled setting:', error)
     mcpEnabled.value = prev
@@ -1152,7 +1158,11 @@ onUnmounted(() => {
               <span class="text-sm">{{ t('settings.mcp.assistantMcpNoItems') }}</span>
               <span class="text-xs">{{ t('settings.mcp.assistantMcpNoItemsHint') }}</span>
             </div>
-            <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+            <div v-else class="space-y-3">
+              <p v-if="!mcpEnabled && assistantMcps.length > 0" class="text-xs text-muted-foreground">
+                {{ t('assistant.workspaceDrawer.mcpGlobalDisabled') }}
+              </p>
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
               <div
                 v-for="amcp in assistantMcps"
                 :key="amcp.id"
@@ -1164,6 +1174,7 @@ onUnmounted(() => {
                   <div @click.stop>
                     <Switch
                       :model-value="amcp.enabled"
+                      :disabled="!mcpEnabled"
                       class="scale-90"
                       @update:model-value="() => handleToggleAssistantMcp(amcp)"
                     />
@@ -1207,6 +1218,7 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </template>
@@ -1515,7 +1527,7 @@ onUnmounted(() => {
 
     <!-- ==================== Link Agents Dialog ==================== -->
     <Dialog v-model:open="linkAgentsDialogOpen">
-      <DialogContent class="sm:max-w-2xl">
+      <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>{{ t('settings.mcp.assistantMcpLinkAgentsTitle') }}</DialogTitle>
           <DialogDescription>{{ t('settings.mcp.assistantMcpLinkAgentsDesc') }}</DialogDescription>

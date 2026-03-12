@@ -529,6 +529,10 @@ func (s *AssistantMCPService) startServer(item AssistantMCP) error {
 		return nil
 	}
 
+	if !s.getMCPEnabled() {
+		return nil
+	}
+
 	tools := item.ParseTools()
 	if len(tools) == 0 {
 		return nil
@@ -693,8 +697,12 @@ func (s *AssistantMCPService) createToolHandler(entry ToolEntry) mcpserver.ToolH
 }
 
 // StartEnabledServers starts MCP HTTP servers for all enabled assistant MCPs.
-// Called during application startup.
+// Called during application startup and when the user turns global MCP on.
 func (s *AssistantMCPService) StartEnabledServers() {
+	if !s.getMCPEnabled() {
+		return
+	}
+
 	items, err := s.List()
 	if err != nil {
 		if s.app != nil {
@@ -868,4 +876,26 @@ func isPortAvailable(port int) bool {
 	}
 	listener.Close()
 	return true
+}
+
+// getMCPEnabled reads the global mcp_enabled setting from the settings table.
+// When false, assistant MCP servers must not start (client and server both disabled).
+func (s *AssistantMCPService) getMCPEnabled() bool {
+	db := s.db()
+	if db == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var value string
+	err := db.NewSelect().
+		Table("settings").
+		Column("value").
+		Where("key = ?", "mcp_enabled").
+		Limit(1).
+		Scan(ctx, &value)
+	if err != nil {
+		return false
+	}
+	return value == "true"
 }
