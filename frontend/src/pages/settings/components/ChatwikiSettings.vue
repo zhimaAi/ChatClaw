@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, RefreshCw } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
+import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,6 +97,8 @@ const librariesLoading = ref(false)
 
 const syncingRobots = ref(false)
 const syncingLibraries = ref(false)
+/** Loading when user clicks "开始使用" to sync and go back to list */
+const finishSuccessLoading = ref(false)
 
 const isOpenSourceUrlValid = computed(() => {
   const u = openSourceUrl.value.trim()
@@ -114,7 +117,7 @@ const remainingTimeText = computed(() =>
 
 async function loadBinding() {
   try {
-    const binding = await ChatWikiService.GetBinding()
+    const binding = await getBindingCached()
     currentBinding.value = binding ?? null
   } catch (error) {
     console.error('Failed to load chatwiki binding:', error)
@@ -127,7 +130,7 @@ async function loadRobots() {
   robotsLoading.value = true
   try {
     console.log('[ChatWiki] Loading robot list...')
-    const list = await ChatWikiService.GetRobotListAll()
+    const list = await getRobotListAllCached()
     console.log('[ChatWiki] Robot list response:', list)
     robots.value = (list ?? []).map((r: any) => ({
       ...r,
@@ -136,10 +139,11 @@ async function loadRobots() {
   } catch (error) {
     console.error('[ChatWiki] Failed to load robots:', error)
     if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      clearChatwikiCache()
       await loadBinding()
     }
     robots.value = []
+    throw error
   } finally {
     robotsLoading.value = false
   }
@@ -150,7 +154,7 @@ async function loadLibraries(type: number = 0) {
   librariesLoading.value = true
   try {
     console.log('[ChatWiki] Loading library list, type:', type)
-    const list = await ChatWikiService.GetLibraryList(type)
+    const list = await getLibraryListCached(type)
     console.log('[ChatWiki] Library list response:', list)
     libraries.value = (list ?? []).map((l: any) => ({
       ...l,
@@ -159,34 +163,51 @@ async function loadLibraries(type: number = 0) {
   } catch (error) {
     console.error('[ChatWiki] Failed to load libraries:', error)
     if (isChatWikiAuthExpiredError(error)) {
-      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      clearChatwikiCache()
       await loadBinding()
     }
     libraries.value = []
+    throw error
   } finally {
     librariesLoading.value = false
   }
 }
 
-async function syncRobots() {
+async function syncRobots(options?: { silent?: boolean }) {
   syncingRobots.value = true
   try {
+    clearChatwikiCache()
     await loadRobots()
-    toast.success(t('settings.chatwiki.syncSuccess'))
-  } catch {
-    toast.error(t('settings.chatwiki.syncFailed'))
+    if (!options?.silent) toast.success(t('settings.chatwiki.syncSuccess'))
+  } catch (error) {
+    if (!options?.silent) {
+      if (isChatWikiAuthExpiredError(error)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      } else {
+        toast.error(t('settings.chatwiki.syncFailed'))
+      }
+    }
+    throw error
   } finally {
     syncingRobots.value = false
   }
 }
 
-async function syncLibraries() {
+async function syncLibraries(options?: { silent?: boolean }) {
   syncingLibraries.value = true
   try {
+    clearChatwikiCache()
     await loadLibraries(Number(libraryTab.value))
-    toast.success(t('settings.chatwiki.syncSuccess'))
-  } catch {
-    toast.error(t('settings.chatwiki.syncFailed'))
+    if (!options?.silent) toast.success(t('settings.chatwiki.syncSuccess'))
+  } catch (error) {
+    if (!options?.silent) {
+      if (isChatWikiAuthExpiredError(error)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      } else {
+        toast.error(t('settings.chatwiki.syncFailed'))
+      }
+    }
+    throw error
   } finally {
     syncingLibraries.value = false
   }
@@ -221,6 +242,7 @@ async function onRobotSwitchChange(robot: RobotItem, checked: boolean | 'indeter
   robot.chat_claw_switch_status = nextEnabled ? 1 : 0
   try {
     await ChatWikiService.UpdateRobotSwitchStatus(robot.id, robot.chat_claw_switch_status)
+    clearChatwikiCache()
   } catch (error) {
     robot.enabled = previousEnabled
     robot.chat_claw_switch_status = previousStatus
@@ -237,6 +259,7 @@ async function onLibrarySwitchChange(lib: LibraryItem, checked: boolean | 'indet
   lib.chat_claw_switch_status = nextEnabled ? 1 : 0
   try {
     await ChatWikiService.UpdateLibrarySwitchStatus(lib.id, lib.chat_claw_switch_status)
+    clearChatwikiCache()
   } catch (error) {
     lib.enabled = previousEnabled
     lib.chat_claw_switch_status = previousStatus
@@ -251,6 +274,21 @@ function goToChoose() {
   showOpenSourceInput.value = false
 }
 
+/** Build login URL with os_type, os_version query params for account management redirect */
+async function buildLoginUrl(base: string): Promise<string> {
+  const path = `${base.replace(/\/+$/, '')}/#/chatclaw/login`
+  try {
+    const params = await BrowserService.GetLoginParams()
+    const q = new URLSearchParams()
+    if (params.os_type) q.set('os_type', params.os_type)
+    if (params.os_version) q.set('os_version', params.os_version)
+    const query = q.toString()
+    return query ? `${path}?${query}` : path
+  } catch {
+    return path
+  }
+}
+
 /** Re-auth: open current binding server_url login page directly (no choose step) */
 async function startReauthBinding() {
   const b = currentBinding.value
@@ -260,7 +298,7 @@ async function startReauthBinding() {
     return
   }
   isReauthFlow.value = true
-  const authUrl = `${base}/#/chatclaw/login`
+  const authUrl = await buildLoginUrl(base)
   await startBinding(authUrl)
 }
 
@@ -327,7 +365,8 @@ function listenAuthCallback() {
 async function handleLoginCloud() {
   isReauthFlow.value = false
   const base = cloudAuthUrl.value.replace(/\/+$/, '')
-  await startBinding(`${base}/#/chatclaw/login`)
+  const authUrl = await buildLoginUrl(base)
+  await startBinding(authUrl)
 }
 
 async function handleGoToAuth() {
@@ -337,7 +376,7 @@ async function handleGoToAuth() {
   }
   isReauthFlow.value = false
   const base = openSourceUrl.value.trim().replace(/\/+$/, '')
-  const authUrl = `${base}/#/chatclaw/login`
+  const authUrl = await buildLoginUrl(base)
   await startBinding(authUrl)
 }
 
@@ -356,8 +395,24 @@ function retry() {
   showOpenSourceInput.value = false
 }
 
-function finishSuccess() {
-  view.value = 'list'
+async function finishSuccess() {
+  finishSuccessLoading.value = true
+  try {
+    // Sync apps and knowledge bases after (re-)binding so list view has fresh data
+    await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    // Reload binding so list view shows latest auth status (bound/expired, user info)
+    await loadBinding()
+    toast.success(t('settings.chatwiki.syncSuccess'))
+    view.value = 'list'
+  } catch (error) {
+    if (isChatWikiAuthExpiredError(error)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    } else {
+      toast.error(t('settings.chatwiki.syncFailed'))
+    }
+  } finally {
+    finishSuccessLoading.value = false
+  }
 }
 
 function requestUnbind() {
@@ -379,8 +434,16 @@ async function confirmUnbind() {
 
 watch(isBound, (bound) => {
   if (bound) {
-    void loadRobots()
-    void loadLibraries(Number(libraryTab.value))
+    void loadRobots().catch((err) => {
+      if (isChatWikiAuthExpiredError(err)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      }
+    })
+    void loadLibraries(Number(libraryTab.value)).catch((err) => {
+      if (isChatWikiAuthExpiredError(err)) {
+        toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+      }
+    })
   }
 })
 
@@ -736,8 +799,14 @@ onUnmounted(() => {
           {{ t('settings.chatwiki.freeVersion') }}
         </span>
       </div>
-      <Button class="w-full" size="lg" @click="finishSuccess">
-        {{ t('settings.chatwiki.startUsing') }}
+      <Button
+        class="w-full"
+        size="lg"
+        :disabled="finishSuccessLoading"
+        @click="finishSuccess"
+      >
+        <Loader2 v-if="finishSuccessLoading" class="size-4 shrink-0 animate-spin" />
+        {{ finishSuccessLoading ? t('settings.chatwiki.syncing') : t('settings.chatwiki.startUsing') }}
       </Button>
       <button
         type="button"

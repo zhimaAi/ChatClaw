@@ -2,7 +2,8 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage, isChatWikiAuthExpiredError } from '@/composables/useErrorMessage'
-import { ChatWikiService, type Binding, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
+import { type Binding, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
+import { getBinding as getBindingCached, getRobotList as getRobotListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
 
 /**
  * Team mode: loads ChatWiki binding (chatwiki_bindings table) and robot list
@@ -35,7 +36,7 @@ export function useTeamRobots() {
     teamRobots.value = []
     activeTeamRobotId.value = null
     try {
-      const latestBinding = await ChatWikiService.GetBinding()
+      const latestBinding = await getBindingCached()
       if (!latestBinding) {
         console.warn('[assistant][team] load robots: no chatwiki binding')
         return
@@ -50,7 +51,7 @@ export function useTeamRobots() {
         server_url: latestBinding.server_url,
         token_length: String(latestBinding.token ?? '').length,
       })
-      const list = await ChatWikiService.GetRobotList()
+      const list = await getRobotListCached()
       teamRobots.value = list ?? []
       activeTeamRobotId.value =
         teamRobots.value.length > 0 ? teamRobots.value[0].id : null
@@ -62,8 +63,9 @@ export function useTeamRobots() {
       console.error('[assistant][team] load robots: failed', error)
       if (isChatWikiAuthExpiredError(error)) {
         toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
-        // Refetch binding so teamBound becomes false (backend already set exp=0)
-        const latest = await ChatWikiService.GetBinding()
+        // Clear cache first so the next call reads the backend's updated exp=0
+        clearChatwikiCache()
+        const latest = await getBindingCached()
         binding.value = latest ?? null
       } else {
         toast.error(getErrorMessage(error) || t('knowledge.team.needsBinding'))
