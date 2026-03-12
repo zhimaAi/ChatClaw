@@ -208,6 +208,7 @@ export default {
       extractModel: 'Modèle d\'extraction de mémoire',
       extractModelHint: 'Utilisé pour résumer et extraire les informations de mémoire précieuses après chaque conversation.',
       embeddingModel: 'Modèle d\'embedding de mémoire',
+      embeddingModelHint: 'Utilisé pour convertir le texte de mémoire en vecteurs pour la récupération sémantique pendant les conversations.',
       embeddingDimension: 'Dimension d\'embedding',
       embeddingDimensionHint: 'La dimension du vecteur d\'embedding doit correspondre à la sortie du modèle sélectionné.',
       save: 'Enregistrer les paramètres',

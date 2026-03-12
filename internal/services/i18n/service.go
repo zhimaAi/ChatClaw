@@ -19,6 +19,21 @@ var localesFS embed.FS
 const (
 	LocaleZhCN = "zh-CN"
 	LocaleEnUS = "en-US"
+	LocaleArSA = "ar-SA"
+	LocaleBnBD = "bn-BD"
+	LocaleDeDE = "de-DE"
+	LocaleEsES = "es-ES"
+	LocaleFrFR = "fr-FR"
+	LocaleHiIN = "hi-IN"
+	LocaleItIT = "it-IT"
+	LocaleJaJP = "ja-JP"
+	LocaleKoKR = "ko-KR"
+	LocalePtBR = "pt-BR"
+	LocaleSlSI = "sl-SI"
+	LocaleTlh  = "tlh"
+	LocaleTrTR = "tr-TR"
+	LocaleViVN = "vi-VN"
+	LocaleZhTW = "zh-TW"
 )
 
 var (
@@ -40,9 +55,24 @@ func init() {
 	bundle = i18n.NewBundle(language.Chinese)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 
-	// 加载翻译文件
+	// 加载所有翻译文件
 	bundle.LoadMessageFileFS(localesFS, "locales/zh-CN.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/en-US.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/ar-SA.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/bn-BD.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/de-DE.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/es-ES.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/fr-FR.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/hi-IN.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/it-IT.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/ja-JP.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/ko-KR.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/pt-BR.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/sl-SI.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/tlh.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/tr-TR.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/vi-VN.json")
+	bundle.LoadMessageFileFS(localesFS, "locales/zh-TW.json")
 
 	// 默认使用中文
 	localizer = i18n.NewLocalizer(bundle, LocaleZhCN)
@@ -80,11 +110,90 @@ func DetectLocale() string {
 
 	// 系统语言可能是 "zh"、"zh-CN"、"zh_CN"、"zh-Hans" 等格式
 	lang = strings.ToLower(lang)
+
+	// 精确匹配
+	switch lang {
+	case "zh", "zh-cn", "zh_cn", "zh-hans", "zh-hant":
+		return LocaleZhCN
+	case "zh-tw", "zh-hk", "zh-mo", "zh-hant-tw":
+		return LocaleZhTW
+	case "en", "en-us", "en-gb", "en-au", "en-ca", "en-nz":
+		return LocaleEnUS
+	case "ar", "ar-sa", "ar-ae", "ar-eg":
+		return LocaleArSA
+	case "bn", "bn-bd", "bn-in":
+		return LocaleBnBD
+	case "de", "de-de", "de-at", "de-ch":
+		return LocaleDeDE
+	case "es", "es-es", "es-mx", "es-ar":
+		return LocaleEsES
+	case "fr", "fr-fr", "fr-ca", "fr-be":
+		return LocaleFrFR
+	case "hi", "hi-in":
+		return LocaleHiIN
+	case "it", "it-it":
+		return LocaleItIT
+	case "ja", "ja-jp":
+		return LocaleJaJP
+	case "ko", "ko-kr":
+		return LocaleKoKR
+	case "pt", "pt-br", "pt-pt":
+		return LocalePtBR
+	case "sl", "sl-si":
+		return LocaleSlSI
+	case "tlh":
+		return LocaleTlh
+	case "tr", "tr-tr":
+		return LocaleTrTR
+	case "vi", "vi-vn":
+		return LocaleViVN
+	}
+
+	// 检查前缀匹配
 	if strings.HasPrefix(lang, "zh") {
 		return LocaleZhCN
 	}
 	if strings.HasPrefix(lang, "en") {
 		return LocaleEnUS
+	}
+	if strings.HasPrefix(lang, "ar") {
+		return LocaleArSA
+	}
+	if strings.HasPrefix(lang, "bn") {
+		return LocaleBnBD
+	}
+	if strings.HasPrefix(lang, "de") {
+		return LocaleDeDE
+	}
+	if strings.HasPrefix(lang, "es") {
+		return LocaleEsES
+	}
+	if strings.HasPrefix(lang, "fr") {
+		return LocaleFrFR
+	}
+	if strings.HasPrefix(lang, "hi") {
+		return LocaleHiIN
+	}
+	if strings.HasPrefix(lang, "it") {
+		return LocaleItIT
+	}
+	if strings.HasPrefix(lang, "ja") {
+		return LocaleJaJP
+	}
+	if strings.HasPrefix(lang, "ko") {
+		return LocaleKoKR
+	}
+	if strings.HasPrefix(lang, "pt") {
+		return LocalePtBR
+	}
+	if strings.HasPrefix(lang, "sl") {
+		return LocaleSlSI
+	}
+	if strings.HasPrefix(lang, "tr") {
+		return LocaleTrTR
+	}
+	if strings.HasPrefix(lang, "vi") {
+		return LocaleViVN
 	}
 
 	// 不支持的语言默认使用中文
@@ -104,8 +213,30 @@ func SetLocale(locale string) {
 
 	if locale == "" {
 		locale = DetectLocale()
-	} else if locale != LocaleZhCN && locale != LocaleEnUS {
-		locale = LocaleZhCN
+	} else {
+		// 验证语言是否支持
+		supported := map[string]bool{
+			LocaleZhCN: true,
+			LocaleEnUS: true,
+			LocaleArSA: true,
+			LocaleBnBD: true,
+			LocaleDeDE: true,
+			LocaleEsES: true,
+			LocaleFrFR: true,
+			LocaleHiIN: true,
+			LocaleItIT: true,
+			LocaleJaJP: true,
+			LocaleKoKR: true,
+			LocalePtBR: true,
+			LocaleSlSI: true,
+			LocaleTlh:  true,
+			LocaleTrTR: true,
+			LocaleViVN: true,
+			LocaleZhTW: true,
+		}
+		if !supported[locale] {
+			locale = LocaleZhCN
+		}
 	}
 	currentLocale = locale
 	localizer = i18n.NewLocalizer(bundle, locale)

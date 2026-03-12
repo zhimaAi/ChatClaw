@@ -40,7 +40,7 @@ export default {
     },
     httpRequest: {
       name: 'HTTP请求',
-      description: 'boghpu\',
+      description: 'boghpu',
     },
     sequentialThinking: {
       name: 'vo\'',
@@ -208,6 +208,7 @@ export default {
       extractModel: '记忆提取模型',
       extractModelHint: '用于在每次对话后总结并提取有价值的记忆信息。',
       embeddingModel: '记忆嵌入模型',
+      embeddingModelHint: 'boghpu',
       embeddingDimension: '嵌入维度',
       embeddingDimensionHint: '嵌入向量维度需与所选模型的输出一致。',
       save: '保存设置',
