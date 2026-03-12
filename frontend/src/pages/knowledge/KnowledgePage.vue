@@ -62,6 +62,7 @@ import {
   type LibraryGroup as ChatWikiLibraryGroup,
   type LibraryParagraph as ChatWikiLibraryParagraph,
 } from '@bindings/chatclaw/internal/services/chatwiki'
+import { getBinding as getBindingCached, getLibraryListOnlyOpen as getLibraryListOnlyOpenCached } from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { Book, BookOpen, ChevronRight, FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
@@ -515,7 +516,7 @@ const goToChatwikiBindingSettings = () => {
 const loadTeamLibraries = async () => {
   teamLibrariesLoading.value = true
   try {
-    const list = await ChatWikiService.GetLibraryListOnlyOpen(teamLibraryTab.value)
+    const list = await getLibraryListOnlyOpenCached(teamLibraryTab.value)
     teamLibraries.value = (list || []).map((item: any) => ({
       id: String(item?.id ?? ''),
       name: String(item?.name ?? ''),
@@ -829,7 +830,7 @@ const handleTeamFilesScroll = () => {
 const checkTeamBindingAndLoad = async () => {
   teamBindingChecked.value = false
   try {
-    const binding = await ChatWikiService.GetBinding()
+    const binding = await getBindingCached()
     // Valid only when binding exists and exp (Unix seconds) not expired
     const exp = binding?.exp != null ? Number(binding.exp) : 0
     teamBound.value = !!binding && exp > Math.floor(Date.now() / 1000)
