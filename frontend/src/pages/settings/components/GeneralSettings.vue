@@ -23,6 +23,7 @@ import TestInstallDialog from './TestInstallDialog.vue'
 const { t } = useI18n()
 const appStore = useAppStore()
 const { locale: currentLocale, switchLocale } = useLocale()
+const testInstallOpen = ref(false)
 
 // 语言选项 - 直接用对应语言的名称显示
 const languageOptions = computed(() => {

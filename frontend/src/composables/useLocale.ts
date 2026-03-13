@@ -5,6 +5,9 @@ import { type Locale } from '../locales'
 import { Service as I18nService } from '@bindings/chatclaw/internal/services/i18n'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
+// Re-export Locale type so consumers can import from this composable
+export type { Locale } from '../locales'
+
 const DEFAULT_LOCALE: Locale = 'zh-CN'
 
 // 支持的语言列表

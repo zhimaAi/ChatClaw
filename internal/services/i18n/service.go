@@ -225,7 +225,6 @@ func SetLocale(locale string) {
 			LocaleKoKR: true,
 			LocalePtBR: true,
 			LocaleSlSI: true,
-			LocaleTlh:  true,
 			LocaleTrTR: true,
 			LocaleViVN: true,
 			LocaleZhTW: true,
