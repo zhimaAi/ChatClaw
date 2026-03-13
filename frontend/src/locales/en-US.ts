@@ -1448,6 +1448,5 @@ export default {
       weekly: 'Weekly',
       monthly: 'Monthly',
     },
-    emptyDescription: "Create scheduled tasks to automate AI workflows. Tasks can send messages, run queries, or perform actions at specified times.",
   },
 }
