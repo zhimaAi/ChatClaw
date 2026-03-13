@@ -446,10 +446,6 @@ export default {
         enable: 'البحث بالتمييز',
       },
     },
-    languages: {
-      zhCN: '中文',
-      enUS: 'English',
-    },
     themes: {
       light: 'فاتح',
       dark: 'داكن',

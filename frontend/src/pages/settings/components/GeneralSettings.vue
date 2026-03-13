@@ -23,26 +23,26 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const { locale: currentLocale, switchLocale } = useLocale()
 
-// 语言选项 - 动态生成
+// 语言选项 - 直接用对应语言的名称显示
 const languageOptions = computed(() => {
   const labels: Record<Locale, string> = {
-    'zh-CN': 'settings.languages.zhCN',
-    'en-US': 'settings.languages.enUS',
-    'ar-SA': 'settings.languages.arSA',
-    'bn-BD': 'settings.languages.bnBD',
-    'de-DE': 'settings.languages.deDE',
-    'es-ES': 'settings.languages.esES',
-    'fr-FR': 'settings.languages.frFR',
-    'hi-IN': 'settings.languages.hiIN',
-    'it-IT': 'settings.languages.itIT',
-    'ja-JP': 'settings.languages.jaJP',
-    'ko-KR': 'settings.languages.koKR',
-    'pt-BR': 'settings.languages.ptBR',
-    'sl-SI': 'settings.languages.slSI',
-    'tlh': 'settings.languages.tlh',
-    'tr-TR': 'settings.languages.trTR',
-    'vi-VN': 'settings.languages.viVN',
-    'zh-TW': 'settings.languages.zhTW',
+    'zh-CN': '简体中文',
+    'en-US': 'English',
+    'ar-SA': 'العربية',
+    'bn-BD': 'বাংলা',
+    'de-DE': 'Deutsch',
+    'es-ES': 'Español',
+    'fr-FR': 'Français',
+    'hi-IN': 'हिन्दी',
+    'it-IT': 'Italiano',
+    'ja-JP': '日本語',
+    'ko-KR': '한국어',
+    'pt-BR': 'Português',
+    'sl-SI': 'Slovenščina',
+    'tlh': 'Klingon',
+    'tr-TR': 'Türkçe',
+    'vi-VN': 'Tiếng Việt',
+    'zh-TW': '繁體中文',
   }
   return SUPPORTED_LOCALES.map((locale) => ({
     value: locale,
@@ -60,7 +60,7 @@ const themeOptions = [
 // 当前语言显示文本
 const currentLanguageLabel = computed(() => {
   const option = languageOptions.value.find((opt) => opt.value === currentLocale.value)
-  return option ? t(option.label) : ''
+  return option ? option.label : ''
 })
 
 // 当前主题显示文本
@@ -157,7 +157,7 @@ onUnmounted(() => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem v-for="option in languageOptions" :key="option.value" :value="option.value">
-              {{ t(option.label) }}
+              {{ option.label }}
             </SelectItem>
           </SelectContent>
         </Select>

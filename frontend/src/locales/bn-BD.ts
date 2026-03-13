@@ -446,10 +446,6 @@ export default {
         enable: 'সিলেকশন সার্চ',
       },
     },
-    languages: {
-      zhCN: '中文',
-      enUS: 'English',
-    },
     themes: {
       light: 'লাইট',
       dark: 'ডার্ক',

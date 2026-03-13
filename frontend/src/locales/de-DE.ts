@@ -446,10 +446,6 @@ export default {
         enable: 'Markierungssuche',
       },
     },
-    languages: {
-      zhCN: '中文',
-      enUS: 'English',
-    },
     themes: {
       light: 'Hell',
       dark: 'Dunkel',

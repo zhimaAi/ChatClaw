@@ -446,10 +446,6 @@ export default {
         enable: 'Búsqueda por selección',
       },
     },
-    languages: {
-      zhCN: '中文',
-      enUS: 'English',
-    },
     themes: {
       light: 'Claro',
       dark: 'Oscuro',

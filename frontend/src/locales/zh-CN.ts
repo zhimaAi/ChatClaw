@@ -457,26 +457,6 @@ export default {
         enable: '划词搜索',
       },
     },
-    // 语言选项
-    languages: {
-      zhCN: '中文',
-      enUS: 'English',
-      arSA: 'العربية',
-      bnBD: 'বাংলা',
-      deDE: 'Deutsch',
-      esES: 'Español',
-      frFR: 'Français',
-      hiIN: 'हिन्दी',
-      itIT: 'Italiano',
-      jaJP: '日本語',
-      koKR: '한국어',
-      ptBR: 'Português',
-      slSI: 'Slovenščina',
-      tlh: 'Klingon',
-      trTR: 'Türkçe',
-      viVN: 'Tiếng Việt',
-      zhTW: '繁體中文',
-    },
     // 主题选项
     themes: {
       light: '浅色',
