@@ -7,6 +7,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_LOCALES_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..', '..', '..', '..', 'frontend', 'src', 'locales'))
 
 def parse_ts_file(content):
+    """Parse TS file to flat dict with dot-notation keys"""
     code = re.sub(r'^export\s+default\s*', '', content.strip())
     code = re.sub(r';\s*$', '', code)
 
@@ -43,13 +44,26 @@ def parse_ts_file(content):
                 current_path.pop()
             continue
 
-        value_match = re.match(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*[\"']([^\"']*)[\"']", line)
+        # Parse string value - properly handle escaped quotes
+        value_match = re.match(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*', line)
         if value_match:
             key = value_match.group(1)
-            value = value_match.group(2)
-            full_path = '.'.join(current_path + [key])
-            result[full_path] = value
-            continue
+            rest = line[value_match.end():].strip()
+            
+            if rest.startswith('"'):
+                # Parse double-quoted string with escape handling
+                value = parse_double_quoted_string(rest)
+                if value is not None:
+                    full_path = '.'.join(current_path + [key])
+                    result[full_path] = value
+                    continue
+            elif rest.startswith("'"):
+                # Parse single-quoted string
+                value = parse_single_quoted_string(rest)
+                if value is not None:
+                    full_path = '.'.join(current_path + [key])
+                    result[full_path] = value
+                    continue
 
         if line.strip() == '}' or line.strip().startswith('},'):
             if current_path:
@@ -57,6 +71,77 @@ def parse_ts_file(content):
             continue
 
     return result
+
+
+def parse_double_quoted_string(s):
+    """Parse a double-quoted string, handling escaped quotes and other escapes"""
+    if not s.startswith('"'):
+        return None
+    
+    result = []
+    s = s[1:]  # Skip opening quote
+    
+    i = 0
+    while i < len(s):
+        if s[i] == '\\' and i + 1 < len(s):
+            # Handle escape sequences
+            next_char = s[i + 1]
+            if next_char == 'n':
+                result.append('\n')
+            elif next_char == 'r':
+                result.append('\r')
+            elif next_char == 't':
+                result.append('\t')
+            elif next_char == '\\':
+                result.append('\\')
+            elif next_char == '"':
+                result.append('"')
+            elif next_char == "'":
+                result.append("'")
+            else:
+                # Keep the escape sequence as-is for unknown escapes
+                result.append(s[i:i+2])
+            i += 2
+        elif s[i] == '"':
+            # End of string
+            return ''.join(result)
+        else:
+            result.append(s[i])
+            i += 1
+    
+    # Unterminated string - return what we have
+    return ''.join(result)
+
+
+def parse_single_quoted_string(s):
+    """Parse a single-quoted string, handling escaped quotes"""
+    if not s.startswith("'"):
+        return None
+    
+    result = []
+    s = s[1:]  # Skip opening quote
+    
+    i = 0
+    while i < len(s):
+        if s[i] == '\\' and i + 1 < len(s):
+            # Handle escape sequences
+            next_char = s[i + 1]
+            if next_char == "'":
+                result.append("'")
+            elif next_char == '\\':
+                result.append('\\')
+            else:
+                result.append(s[i:i+2])
+            i += 2
+        elif s[i] == "'":
+            # End of string
+            return ''.join(result)
+        else:
+            result.append(s[i])
+            i += 1
+    
+    # Unterminated string - return what we have
+    return ''.join(result)
 
 def to_nested_format(flat_obj):
     lines = ['export default {']
