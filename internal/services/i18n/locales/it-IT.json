@@ -203,5 +203,6 @@
   "error.channel_agent_create_failed": "Creazione assistente IA per il canale non riuscita",
   "error.channel_agent_create_not_available": "Creazione automatica assistente non disponibile",
   "error.channel_ai_reply_failed": "Risposta IA non riuscita: {{.Error}}",
-  "error.channel_ai_reply_empty": "Risposta IA non riuscita: generata risposta vuota"
+  "error.channel_ai_reply_empty": "Risposta IA non riuscita: generata risposta vuota",
+  "scheduled_task.issue.schedule_invalid": "调度参数校验失败: {{.Error}}"
 }

@@ -585,6 +585,9 @@ export default {
       capabilityAudio: "オーディオ",
       capabilityVideo: "ビデオ",
       capabilityFile: "ファイル",
+      deleteBlockedByAgent: "该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除",
+      deleteConfirmMessage: "确定要删除模型「{name}」吗？此操作无法撤销。",
+      disableBlockedByAgent: "该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭",
     },
   },
   assistant: {
@@ -794,6 +797,8 @@ export default {
         changeDir: "変更",
         resetDir: "デフォルトにリセット",
         selectDir: "作業ディレクトリを選択",
+        nativeDesc: "直接在本机执行命令，无沙箱隔离。命令拥有当前用户的完整权限。",
+        workDirHint: "结构：{basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}",
       },
       model: {
         defaultModel: "デフォルトモデル",
@@ -858,6 +863,8 @@ export default {
       matchThreshold: "このしきい値より類似度が低い結果はフィルタリングされます（0〜1）。",
       embeddingModel: "テキストをベクトルに変換するための埋め込みモデル。",
       embeddingDimension: "埋め込みベクトルの次元は選択したモデルの出力と一致する必要があります。",
+      chunkOverlap: "相邻分片的重叠大小（字符数，0~1000），用于减少跨分片断句导致的信息丢失。",
+      chunkSize: "分片大小（字符数，500~5000）。分片越大，上下文越完整，但召回粒度更粗。",
     },
     tabs: {
       personal: "パーソナル",
@@ -1079,6 +1086,8 @@ export default {
       nameHelp: "フォルダ名（最大50文字）。",
       parentFolder: "親フォルダ",
       rootFolder: "ルート（親フォルダなし）",
+      deleteDesc: "删除文件夹「{name}」后，其下的文档将移动到「未分组」。此操作无法撤销。",
+      parentFolderHelp: "选择父文件夹以创建嵌套文件夹。留空则在根目录创建。",
     },
     detail: {
       title: "ドキュメント詳細",
@@ -1149,6 +1158,8 @@ export default {
     content: "コンテンツ",
     loadingMore: "読み込み中…",
     noMore: "もっと",
+    deleteEventStreamConfirm: "确定要删除这条对话记录吗？此操作不可撤销。",
+    deleteThematicFactConfirm: "确定要删除这条话题摘要吗？此操作不可撤销。",
   },
   channels: {
     title: "チャンネル",
@@ -1382,5 +1393,6 @@ export default {
       weekly: "毎週",
       monthly: "毎月",
     },
+    emptyDescription: "创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。",
   },
 }
