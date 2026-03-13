@@ -5,33 +5,108 @@ import { type Locale } from '../locales'
 import { Service as I18nService } from '@bindings/chatclaw/internal/services/i18n'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
-const DEFAULT_LOCALE: Locale = 'zh-CN'
+// Re-export Locale type so consumers can import from this composable
+export type { Locale } from '../locales'
+
+const DEFAULT_LOCALE: Locale = 'en-US'
+
+// 支持的语言列表
+export const SUPPORTED_LOCALES: Locale[] = [
+  'zh-CN',
+  'en-US',
+  'ar-SA',
+  'bn-BD',
+  'de-DE',
+  'es-ES',
+  'fr-FR',
+  'hi-IN',
+  'it-IT',
+  'ja-JP',
+  'ko-KR',
+  'pt-BR',
+  'sl-SI',
+  'tr-TR',
+  'vi-VN',
+  'zh-TW',
+]
+
+function detectSystemLocale(): Locale | null {
+  if (typeof navigator === 'undefined') {
+    return null
+  }
+
+  const candidates: string[] = []
+  const primary =
+    navigator.language ||
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (navigator as any).userLanguage
+  if (primary) {
+    candidates.push(primary)
+  }
+  if (Array.isArray(navigator.languages)) {
+    candidates.push(...navigator.languages)
+  }
+
+  for (const raw of candidates) {
+    if (!raw) continue
+    const normalized = raw.trim().replace('_', '-')
+    if (!normalized) continue
+
+    const lower = normalized.toLowerCase()
+    const fullMatch = SUPPORTED_LOCALES.find(
+      (l) => l.toLowerCase() === lower,
+    )
+    if (fullMatch) {
+      return fullMatch
+    }
+
+    const base = lower.split('-')[0]
+    if (!base) continue
+    const baseMatch = SUPPORTED_LOCALES.find((l) =>
+      l.toLowerCase().startsWith(`${base}-`),
+    )
+    if (baseMatch) {
+      return baseMatch
+    }
+  }
+
+  return null
+}
 
 /**
  * 从后端获取语言配置
  */
 export async function fetchLocale(): Promise<Locale> {
   try {
-    // Prefer persisted settings value
     const s = await SettingsService.Get('language')
     const v = (s?.value || '').trim()
-    if (v === 'zh-CN' || v === 'en-US') {
-      // keep backend localizer consistent
+    if (SUPPORTED_LOCALES.includes(v as Locale)) {
       try {
         await I18nService.SetLocale(v)
       } catch {
         // ignore
       }
-      return v
+      return v as Locale
     }
 
     const locale = await I18nService.GetLocale()
-    if (locale === 'zh-CN' || locale === 'en-US') {
-      return locale
+    if (SUPPORTED_LOCALES.includes(locale as Locale)) {
+      return locale as Locale
     }
   } catch (e) {
     console.warn('Failed to fetch locale from backend:', e)
   }
+
+  const systemLocale = detectSystemLocale()
+  if (systemLocale) {
+    try {
+      await I18nService.SetLocale(systemLocale)
+    } catch {
+      // ignore
+    }
+    return systemLocale
+  }
+
   return DEFAULT_LOCALE
 }
 
@@ -76,7 +151,7 @@ export function useLocaleSync(localeRef?: Ref<string>) {
     // Wails wraps it as event.data (object or array).
     const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
     const newLocale = payload?.locale
-    if (newLocale && (newLocale === 'zh-CN' || newLocale === 'en-US')) {
+    if (newLocale && SUPPORTED_LOCALES.includes(newLocale as Locale)) {
       i18n.value = newLocale
     }
   })
