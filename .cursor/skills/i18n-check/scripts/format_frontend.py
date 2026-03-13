@@ -79,7 +79,12 @@ def to_nested_format(flat_obj):
                 print_object(value, indent + 1)
                 lines.append(f'{indent_str}}},')
             else:
-                escaped_value = str(value).replace('\\', '\\\\').replace('"', '\\"')
+                # Unescape first (handle already escaped backslashes), then re-escape
+                try:
+                    unescaped = value.encode('utf-8').decode('unicode_escape')
+                except:
+                    unescaped = value
+                escaped_value = unescaped.replace('\\', '\\\\').replace('"', '\\"')
                 lines.append(f'{indent_str}{key}: "{escaped_value}",')
 
     print_object(nested)
