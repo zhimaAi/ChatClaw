@@ -146,3 +146,18 @@ func myFunc(param string) uintptr {
     return result
 }
 ```
+
+## Windows 隐藏控制台窗口
+
+在 Windows 上执行外部命令时（如 MCP stdio 模式），**必须**隐藏控制台窗口以避免弹窗闪烁。使用 `syscall.SysProcAttr` 设置 `HideWindow: true`。
+
+```go
+import "syscall"
+
+// 在 exec.CommandContext 后添加
+if runtime.GOOS == "windows" {
+    cmd.SysProcAttr = &syscall.SysProcAttr{
+        HideWindow: true,
+    }
+}
+```
