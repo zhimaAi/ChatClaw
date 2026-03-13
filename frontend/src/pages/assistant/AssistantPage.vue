@@ -22,6 +22,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -146,6 +147,7 @@ const {
   teamBindingChecked,
   teamBound,
   loadTeamRobots,
+  ensureBindingLoaded,
 } = useTeamRobots()
 
 function goToChatwikiBindingSettings() {
@@ -207,7 +209,24 @@ const chatInput = ref('')
 const chatMode = ref('task')
 const enableThinking = ref(false)
 const libraries = ref<Library[]>([])
+/** ChatWiki team libraries (all types) when bound; used in personal assistant knowledge selector */
+const assistantTeamLibraries = ref<{ id: string; name: string }[]>([])
+/** Selected team library ids for recall (comma-separated in conversation.team_library_id; distinct from personal library_ids) */
+const assistantSelectedTeamLibraryIds = ref<string[]>([])
 const selectedLibraryIds = ref<number[]>([])
+/** When opening from knowledge team tab: team library id(s) for recall, comma-separated (consumed on first conversation create) */
+const pendingTeamLibraryId = ref<string | null>(null)
+
+function parseTeamLibraryIds(s: string | null | undefined): string[] {
+  if (!s || !String(s).trim()) return []
+  return String(s)
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+}
+function teamLibraryIdsToString(ids: string[]): string {
+  return [...new Set(ids.map((x) => String(x).trim()).filter(Boolean))].join(',')
+}
 const renameConversationOpen = ref(false)
 const deleteConversationOpen = ref(false)
 const actionConversation = ref<Conversation | null>(null)
@@ -292,9 +311,10 @@ const isAgentEmpty = computed(() => {
   return !loading.value && agents.value.length === 0
 })
 
-// Helper function to clear knowledge base selection
+// Helper function to clear knowledge base selection (personal + team)
 const clearKnowledgeSelection = () => {
   selectedLibraryIds.value = []
+  assistantSelectedTeamLibraryIds.value = []
 }
 
 // Check if currently generating
@@ -338,11 +358,26 @@ const sendDisabledReason = computed(() => {
   return ''
 })
 
-// Load knowledge base list
+// Load knowledge base list (personal) + team list when ChatWiki is bound (getLibraryList without type = full list)
 const loadLibrariesFn = async () => {
   try {
+    // Binding is normally set only by loadTeamRobots (team tab). Personal tab
+    // must load binding first or teamBound stays false and team list never loads.
+    await ensureBindingLoaded()
     const list = await LibraryService.ListLibraries()
     libraries.value = list || []
+    assistantTeamLibraries.value = []
+    if (teamBound.value) {
+      try {
+        const teamList = await ChatWikiService.GetLibraryListOnlyOpenAll()
+        assistantTeamLibraries.value = (teamList || []).map((lib: { id?: string; name?: string }) => ({
+          id: String(lib?.id ?? ''),
+          name: String(lib?.name ?? ''),
+        })).filter((x) => x.id)
+      } catch {
+        // binding expired or network
+      }
+    }
   } catch (error: unknown) {
     console.error('Failed to load libraries:', error)
   }
@@ -548,8 +583,9 @@ const handleSelectConversation = async (conversation: Conversation) => {
     selectedModelKey.value = `${conversation.llm_provider_id}::${conversation.llm_model_id}`
   }
 
-  // Set knowledge base selection from conversation
+  // Personal + team knowledge can both be selected; recall runs both paths when set
   selectedLibraryIds.value = conversation.library_ids || []
+  assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(conversation.team_library_id)
 
   // Set thinking mode from conversation (skip toast notification)
   isRestoringConversation = true
@@ -750,10 +786,14 @@ const handleSend = async () => {
           llm_provider_id: providerId || '',
           llm_model_id: modelId || '',
           library_ids: selectedLibraryIds.value,
+          team_library_id:
+            pendingTeamLibraryId.value ??
+            teamLibraryIdsToString(assistantSelectedTeamLibraryIds.value),
           enable_thinking: enableThinking.value,
           chat_mode: chatMode.value,
         })
       )
+      pendingTeamLibraryId.value = null
     } catch {
       // Error already handled in composable
       return
@@ -817,7 +857,19 @@ const handleLibrarySelectionChange = async () => {
 // Clear all selected libraries (for UI button)
 const clearLibrarySelection = async () => {
   clearKnowledgeSelection()
-  await saveLibraryIdsToConversation()
+  if (activeConversationId.value) {
+    try {
+      await ConversationsService.UpdateConversation(
+        activeConversationId.value,
+        new UpdateConversationInput({
+          library_ids: [] as number[],
+          team_library_id: '',
+        })
+      )
+    } catch {
+      // non-critical
+    }
+  }
 }
 
 // Remove a single library from selection
@@ -832,12 +884,12 @@ const handleAddImages = async (files: FileList | File[]) => {
     toast.error(t('assistant.errors.teamImageNotSupported'))
     return
   }
-  // Check if current model supports multimodal (vision)
-  const modelInfo = selectedModelInfo.value
-  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
-    toast.error(t('assistant.errors.modelNotSupportVision'))
-    return
-  }
+  // 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制模型能力
+  // const modelInfo = selectedModelInfo.value
+  // if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+  //   toast.error(t('assistant.errors.modelNotSupportVision'))
+  //   return
+  // }
 
   const fileArray = Array.from(files)
   const MAX_IMAGES = 4
@@ -935,7 +987,7 @@ watch(chatMode, () => {
   void saveChatModeToConversation()
 })
 
-// Save library_ids to current conversation
+// Save library_ids only; keeps team_library_id unchanged so both can coexist
 const saveLibraryIdsToConversation = async () => {
   if (!activeConversationId.value) return
 
@@ -951,6 +1003,31 @@ const saveLibraryIdsToConversation = async () => {
   }
 }
 
+// Team knowledge multi-select: persists team_library_id as comma-separated ids; keeps library_ids
+const saveTeamLibraryIdsToConversation = async (ids: string[]) => {
+  assistantSelectedTeamLibraryIds.value = [...new Set(ids.map((x) => String(x).trim()).filter(Boolean))]
+  const teamStr = teamLibraryIdsToString(assistantSelectedTeamLibraryIds.value)
+  if (!activeConversationId.value) return
+  try {
+    await ConversationsService.UpdateConversation(
+      activeConversationId.value,
+      new UpdateConversationInput({
+        team_library_id: teamStr,
+      })
+    )
+  } catch (error: unknown) {
+    console.error('Failed to save team library selection:', error)
+  }
+}
+
+/** Toggle one team library id in the selection (same interaction pattern as personal multi-select). */
+const toggleAssistantTeamLibraryId = async (id: string) => {
+  const set = new Set(assistantSelectedTeamLibraryIds.value)
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  await saveTeamLibraryIdsToConversation([...set])
+}
+
 // Sync library_ids from current conversation (for multi-tab sync)
 const syncLibraryIdsFromConversation = async () => {
   if (!activeConversationId.value || !activeAgentId.value) {
@@ -963,16 +1040,17 @@ const syncLibraryIdsFromConversation = async () => {
   const currentConversation = conversations.find((c) => c.id === activeConversationId.value)
   if (currentConversation) {
     selectedLibraryIds.value = currentConversation.library_ids || []
+    assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(currentConversation.team_library_id)
   }
 }
 
 
 // Handle message editing (resend from that point)
-const handleEditMessage = async (messageId: number, newContent: string) => {
+const handleEditMessage = async (messageId: number, newContent: string, images: ImagePayload[]) => {
   if (!activeConversationId.value) return
 
   try {
-    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId)
+    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId, images)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.resendFailed'))
   }
@@ -1260,6 +1338,10 @@ onMounted(() => {
         // Apply library selection
         if (pendingData.libraryIds && pendingData.libraryIds.length > 0) {
           selectedLibraryIds.value = pendingData.libraryIds
+        }
+        if (pendingData.teamLibraryId) {
+          pendingTeamLibraryId.value = pendingData.teamLibraryId
+          assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(pendingData.teamLibraryId)
         }
         // Apply thinking mode
         if (pendingData.enableThinking != null) {
@@ -1729,6 +1811,8 @@ onUnmounted(() => {
         :enable-thinking="enableThinking"
         :selected-library-ids="selectedLibraryIds"
         :libraries="libraries"
+        :assistant-team-libraries="listMode !== 'team' && teamBound ? assistantTeamLibraries : []"
+        :assistant-selected-team-library-ids="listMode !== 'team' ? assistantSelectedTeamLibraryIds : []"
         :is-generating="isGenerating"
         :can-send="canSend"
         :send-disabled-reason="sendDisabledReason"
@@ -1750,6 +1834,7 @@ onUnmounted(() => {
         @library-selection-change="handleLibrarySelectionChange"
         @clear-library-selection="clearLibrarySelection"
         @load-libraries="loadLibrariesFn"
+        @toggle-assistant-team-library="toggleAssistantTeamLibraryId"
         @remove-library="handleRemoveLibrary"
         @add-images="handleAddImages"
         @remove-image="handleRemoveImage"
@@ -1786,6 +1871,8 @@ onUnmounted(() => {
       :enable-thinking="enableThinking"
       :selected-library-ids="selectedLibraryIds"
       :libraries="libraries"
+      :assistant-team-libraries="listMode !== 'team' && teamBound ? assistantTeamLibraries : []"
+      :assistant-selected-team-library-ids="listMode !== 'team' ? assistantSelectedTeamLibraryIds : []"
       :is-generating="isGenerating"
       :can-send="canSend"
       :send-disabled-reason="sendDisabledReason"
@@ -1807,6 +1894,7 @@ onUnmounted(() => {
       @library-selection-change="handleLibrarySelectionChange"
       @clear-library-selection="clearLibrarySelection"
       @load-libraries="loadLibrariesFn"
+      @toggle-assistant-team-library="toggleAssistantTeamLibraryId"
       @remove-library="handleRemoveLibrary"
       @add-images="handleAddImages"
       @remove-image="handleRemoveImage"

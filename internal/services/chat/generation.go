@@ -2,9 +2,11 @@ package chat
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -168,6 +170,37 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		return
 	}
 
+	// Task mode: local KB uses retriever tool, but team recall has no tool — inject team
+	// retrieval into instruction when team_library_id is set (same merge as chat mode).
+	// Build teamRetrievalItems so we can emit chat:retrieval and add segment for UI display (like local KB).
+	var teamRetrievalItems []RetrievalItem
+	if strings.TrimSpace(agentExtras.TeamLibraryID) != "" {
+		userQuery := ""
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == schema.User {
+				userQuery = messages[i].Content
+				break
+			}
+		}
+		if strings.TrimSpace(userQuery) != "" {
+			teamResults := s.retrieveFromTeamLibrary(ctx, agentExtras.TeamLibraryID, userQuery, teamRecallSize)
+			if len(teamResults) > 0 {
+				teamRetrievalItems = make([]RetrievalItem, 0, len(teamResults))
+				for _, r := range teamResults {
+					teamRetrievalItems = append(teamRetrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
+				}
+			var sb strings.Builder
+			sb.WriteString(teamRecallContextHeader)
+			for i, r := range teamResults {
+				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+			}
+			sb.WriteString(teamRecallContextFooter)
+			gc.agentConfig.Instruction += sb.String()
+				s.app.Logger.Info("[chat] task mode team recall injected", "conv", conversationID, "results", len(teamResults))
+			}
+		}
+	}
+
 	// Build extra tools and handlers
 	extraTools, extraHandlers, extrasCleanup := s.buildExtras(ctx, gc)
 
@@ -194,7 +227,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	})
 
 	checkpointID := fmt.Sprintf("conv_%d_%s", conversationID, gc.requestID)
-	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID)
+	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID, teamRetrievalItems)
 
 	if result.interrupted {
 		if existing, ok := s.activeGenerations.Load(conversationID); ok {
@@ -361,9 +394,15 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-	// MCP tools: when enabled, load only the servers explicitly enabled for this agent
-	if agentExtras.MCPEnabled && len(agentExtras.MCPServerEnabledIDs) > 0 {
-		mcpServers, mcpErr := mcp.ListEnabledServersByIDs(agentExtras.MCPServerEnabledIDs)
+	// MCP tools: when enabled, load agent-selected servers or fall back to all enabled servers
+	if agentExtras.MCPEnabled {
+		var mcpServers []mcp.MCPServer
+		var mcpErr error
+		if len(agentExtras.MCPServerEnabledIDs) > 0 {
+			mcpServers, mcpErr = mcp.ListEnabledServersByIDs(agentExtras.MCPServerEnabledIDs)
+		} else {
+			mcpServers, mcpErr = mcp.ListEnabledServers()
+		}
 		if mcpErr != nil {
 			s.app.Logger.Warn("[chat] failed to list MCP servers for agent", "error", mcpErr)
 		} else if len(mcpServers) > 0 {
@@ -375,7 +414,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 			cleanups = append(cleanups, mcpResult.Cleanup)
 		}
 	}
-
 
 	if s.gateway != nil {
 		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
@@ -413,7 +451,7 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-    for _, factory := range s.extraToolFactories {
+	for _, factory := range s.extraToolFactories {
 		factoryTools, toolErr := factory()
 		if toolErr != nil {
 			if s.app != nil {
@@ -685,8 +723,16 @@ type processStreamResult struct {
 }
 
 // processStream runs the ADK runner and processes all streaming events.
-func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message, checkpointID string) processStreamResult {
+// initialRetrievalItems: task-mode team recall results; when non-empty, emit chat:retrieval and add segment for UI.
+func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message, checkpointID string, initialRetrievalItems []RetrievalItem) processStreamResult {
 	ss := newStreamState(gc, assistantMsg)
+	if len(initialRetrievalItems) > 0 {
+		ss.addRetrievalToSegments(initialRetrievalItems)
+		gc.emit(EventChatRetrieval, ChatRetrievalEvent{
+			ChatEvent: gc.chatEvent(assistantMsg.ID),
+			Items:     initialRetrievalItems,
+		})
+	}
 
 	iter := runner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
 	return s.consumeEventIter(ctx, gc, ss, assistantMsg, iter)
@@ -1143,9 +1189,6 @@ func supportsMultimodal(providerID, modelID string) bool {
 func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int, providerID, modelID string) ([]*schema.Message, error) {
 	var models []messageModel
 
-	// Check if the model supports multimodal capabilities
-	supportsMultimodal := supportsMultimodal(providerID, modelID)
-
 	needLimit := contextCount > 0 && contextCount < 200
 
 	q := db.NewSelect().
@@ -1198,11 +1241,11 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				}
 			}
 
-			// Filter out images if model doesn't support multimodal
-			if !supportsMultimodal && len(images) > 0 {
-				s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
-				images = nil
-			}
+			// 不再根据模型能力过滤图片，因为不支持图片识别的模型可以通过调用技能去识别图片
+			// if !supportsMultimodal && len(images) > 0 {
+			// 	s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
+			// 	images = nil
+			// }
 
 			hasText := strings.TrimSpace(m.Content) != ""
 			if !hasText && len(images) == 0 {
@@ -1218,6 +1261,10 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 			// If there are images, use multi-content form
 			if len(images) > 0 {
 				var parts []schema.MessageInputPart
+
+				// Build image references text for skills to find
+				var imageRefs []string
+
 				if hasText {
 					parts = append(parts, schema.MessageInputPart{
 						Type: schema.ChatMessagePartTypeText,
@@ -1226,6 +1273,32 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				}
 
 				for _, img := range images {
+					// Handle local file images
+					if img.Source == "local_file" && img.FilePath != "" {
+						// Add reference text so skills can find the image
+						imageRefs = append(imageRefs, img.FilePath)
+
+						// Read file and convert to base64 for model
+						data, err := os.ReadFile(img.FilePath)
+						if err != nil {
+							s.app.Logger.Warn("[chat] failed to read image file", "path", img.FilePath, "error", err)
+							continue
+						}
+						base64Data := base64.StdEncoding.EncodeToString(data)
+
+						parts = append(parts, schema.MessageInputPart{
+							Type: schema.ChatMessagePartTypeImageURL,
+							Image: &schema.MessageInputImage{
+								MessagePartCommon: schema.MessagePartCommon{
+									Base64Data: &base64Data,
+									MIMEType:   img.MimeType,
+								},
+							},
+						})
+						continue
+					}
+
+					// Handle inline base64 images
 					if img.Source != "inline_base64" || img.Base64 == "" || img.MimeType == "" {
 						continue
 					}
@@ -1239,6 +1312,15 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 								MIMEType:   img.MimeType,
 							},
 						},
+					})
+				}
+
+				// Add image file path references as a text part for skills
+				if len(imageRefs) > 0 {
+					refText := "\n\n[Attached Images]\n" + strings.Join(imageRefs, "\n")
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: refText,
 					})
 				}
 

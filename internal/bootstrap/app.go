@@ -17,6 +17,7 @@ import (
 	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
+	"chatclaw/internal/services/assistantmcp"
 	"chatclaw/internal/services/browser"
 	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/chat"
@@ -308,9 +309,31 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(skillsService))
 	// 注册 MCP 服务
 	app.RegisterService(application.NewService(mcp.NewMCPService(app)))
+	// 注册助手 MCP 服务
+	assistantMCPService := assistantmcp.NewAssistantMCPService(app)
+	app.RegisterService(application.NewService(assistantMCPService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
+	chatWikiService := chatwiki.NewChatWikiService(app)
+	chatService.SetChatWikiService(chatWikiService)
 	app.RegisterService(application.NewService(chatService))
+	// Wire chat bridge for assistant MCP (avoids cyclic import)
+	assistantMCPService.SetChatBridge(assistantmcp.NewChatBridge(
+		conversationsService.FindOrCreateByExternalID,
+		func(convID int64, content, tabID string) (string, int64, error) {
+			res, err := chatService.SendMessage(chat.SendMessageInput{
+				ConversationID: convID,
+				Content:        content,
+				TabID:          tabID,
+			})
+			if err != nil {
+				return "", 0, err
+			}
+			return res.RequestID, res.MessageID, nil
+		},
+		chatService.WaitForGeneration,
+		conversationsService.GetLatestAssistantReply,
+	))
 	// 注册定时任务服务
 	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
 	chatService.RegisterExtraToolFactory(func() ([]tool.BaseTool, error) {
@@ -341,7 +364,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 ChatWiki 绑定服务
-	app.RegisterService(application.NewService(chatwiki.NewChatWikiService(app)))
+	app.RegisterService(application.NewService(chatWikiService))
 
 	// ========== macOS 应用菜单 ==========
 	if runtime.GOOS == "darwin" {
@@ -466,6 +489,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
+		// Register chatclaw:// URL scheme on Windows so browser can launch app after OAuth.
+		// Fixes "scheme does not have a registered handler" when installer did not run or registration was lost.
+		if err := windows.RegisterChatClawProtocol(); err != nil {
+			app.Logger.Warn("Failed to register chatclaw protocol", "error", err)
+		}
 		trayService.InitFromSettings()
 		// 根据 settings 中的开关状态启动/停止吸附功能
 		_, _ = snapService.SyncFromSettings()
@@ -514,6 +542,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 				app.Logger.Error("Failed to start scheduled tasks service", "error", err)
 			}
 		}()
+		// Start all enabled assistant MCP servers in background.
+		go assistantMCPService.StartEnabledServers()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -565,6 +595,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()
 		chatService.Shutdown()
