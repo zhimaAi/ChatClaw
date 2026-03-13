@@ -16,6 +16,7 @@ export default {
     detail: 'Details',
     hide: 'Hide',
     retry: 'Retry',
+    close: 'Close',
   },
   tools: {
     calculator: {
@@ -190,6 +191,32 @@ export default {
         installed: 'Installed',
         notInstalled: 'Not Installed',
         installFailed: 'Installation failed',
+        clearState: 'Clear',
+        // Test Install
+        testInstall: {
+          title: 'Test Install',
+          button: 'Test Install',
+          selectTool: 'Select Tool',
+          downloadMethod: 'Download Method',
+          direct: 'Direct',
+          proxy: 'Proxy',
+          oss: 'API/OSS Fallback',
+          selectProxy: 'Select Proxy',
+          custom: 'Custom',
+          customProxyURL: 'Custom Proxy URL',
+          customProxyPlaceholder: 'https://your-proxy.com/',
+          start: 'Start Test',
+          abort: 'Abort',
+          cancel: 'Cancel',
+          close: 'Close',
+          starting: 'Starting...',
+          downloading: 'Downloading...',
+          completed: 'Completed',
+          failed: 'Failed',
+          success: 'Success',
+          version: 'Version',
+          methodUsed: 'Method Used',
+        },
         uv: {
           name: 'Python Runtime',
           description:
