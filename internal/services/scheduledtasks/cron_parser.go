@@ -17,10 +17,11 @@ type scheduleDefinition struct {
 }
 
 type customScheduleValue struct {
-	Minute     int   `json:"minute"`
-	Hour       int   `json:"hour"`
-	Weekdays   []int `json:"weekdays,omitempty"`
-	DayOfMonth *int  `json:"day_of_month,omitempty"`
+	Minute          int   `json:"minute"`
+	Hour            int   `json:"hour"`
+	Weekdays        []int `json:"weekdays,omitempty"`
+	DayOfMonth      *int  `json:"day_of_month,omitempty"`
+	IntervalMinutes *int  `json:"interval_minutes,omitempty"`
 }
 
 func parseSchedule(scheduleType, scheduleValue, cronExpr string, now time.Time) (scheduleDefinition, error) {
@@ -65,6 +66,17 @@ func parseCustomSchedule(scheduleValue string, now time.Time) (scheduleDefinitio
 	var custom customScheduleValue
 	if err := json.Unmarshal([]byte(scheduleValue), &custom); err != nil {
 		return scheduleDefinition{}, fmt.Errorf("invalid custom schedule value: %w", err)
+	}
+	if custom.IntervalMinutes != nil {
+		if *custom.IntervalMinutes < 1 || *custom.IntervalMinutes > 59 {
+			return scheduleDefinition{}, fmt.Errorf("interval_minutes out of range")
+		}
+		return buildScheduleDefinition(
+			ScheduleTypeCustom,
+			scheduleValue,
+			fmt.Sprintf("*/%d * * * *", *custom.IntervalMinutes),
+			now,
+		)
 	}
 	if custom.Minute < 0 || custom.Minute > 59 {
 		return scheduleDefinition{}, fmt.Errorf("minute out of range")

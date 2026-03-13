@@ -19,7 +19,7 @@ export type SchedulePresetValue =
   | 'every_monday_0900'
   | 'every_month_1_0900'
 
-export type ScheduleCustomMode = 'daily' | 'weekly' | 'monthly'
+export type ScheduleCustomMode = 'interval' | 'daily' | 'weekly' | 'monthly'
 
 export interface ScheduledTaskFormState {
   id: number | null
@@ -32,6 +32,7 @@ export interface ScheduledTaskFormState {
   customMode: ScheduleCustomMode
   customHour: number
   customMinute: number
+  customIntervalMinutes: number
   customWeekdays: number[]
   customDayOfMonth: number
   cronExpr: string

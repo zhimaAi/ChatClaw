@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -17,16 +19,34 @@ import (
 )
 
 type ScheduledTasksService struct {
-	app        *application.App
-	db         *bun.DB
-	scheduler  *scheduler
-	runnerDeps runDependencies
+	app             *application.App
+	db              *bun.DB
+	scheduler       *scheduler
+	runnerDeps      runDependencies
+	createMu        sync.Mutex
+	createRuns      map[string]*createCall
+	recentCreates   map[string]recentCreate
+	now             func() time.Time
+	duplicateWindow time.Duration
+}
+
+type createCall struct {
+	done chan struct{}
+	task *ScheduledTask
+	err  error
+}
+
+type recentCreate struct {
+	task      ScheduledTask
+	expiresAt time.Time
 }
 
 func NewScheduledTasksService(app *application.App, convSvc *conversations.ConversationsService, chatSvc *chat.ChatService) *ScheduledTasksService {
 	svc := &ScheduledTasksService{
-		app:       app,
-		scheduler: newScheduler(),
+		app:             app,
+		scheduler:       newScheduler(),
+		now:             time.Now,
+		duplicateWindow: time.Second,
 	}
 	if convSvc != nil {
 		svc.runnerDeps.conversations = convSvc
@@ -39,9 +59,11 @@ func NewScheduledTasksService(app *application.App, convSvc *conversations.Conve
 
 func NewScheduledTasksServiceForTest(app *application.App, db *bun.DB, convSvc conversationService, chatSvc chatService) *ScheduledTasksService {
 	return &ScheduledTasksService{
-		app:       app,
-		db:        db,
-		scheduler: newScheduler(),
+		app:             app,
+		db:              db,
+		scheduler:       newScheduler(),
+		now:             time.Now,
+		duplicateWindow: time.Second,
 		runnerDeps: runDependencies{
 			conversations: convSvc,
 			chat:          chatSvc,
@@ -88,6 +110,9 @@ func (s *ScheduledTasksService) ListScheduledTasks() ([]ScheduledTask, error) {
 
 	out := make([]ScheduledTask, 0, len(models))
 	for i := range models {
+		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
+			return nil, err
+		}
 		out = append(out, models[i].toDTO())
 	}
 	return out, nil
@@ -159,13 +184,12 @@ func (s *ScheduledTasksService) GetScheduledTaskSummary() (*ScheduledTaskSummary
 	}
 	summary := &ScheduledTaskSummary{Total: len(tasks)}
 	for _, task := range tasks {
-		if !task.Enabled {
+		if task.Enabled {
+			summary.Running++
+		} else {
 			summary.Paused++
 		}
-		switch task.LastStatus {
-		case TaskStatusRunning:
-			summary.Running++
-		case TaskStatusFailed:
+		if task.LastStatus == TaskStatusFailed {
 			summary.Failed++
 		}
 	}
@@ -195,20 +219,38 @@ func (s *ScheduledTasksService) CreateScheduledTask(input CreateScheduledTaskInp
 	if err != nil {
 		return nil, err
 	}
+	fingerprint := createTaskFingerprint(model)
+	cachedTask, call, isLeader := s.beginCreateCall(fingerprint)
+	if cachedTask != nil {
+		return cachedTask, nil
+	}
+	if !isLeader {
+		<-call.done
+		if call.task == nil {
+			return nil, call.err
+		}
+		taskCopy := *call.task
+		return &taskCopy, call.err
+	}
+	defer s.finishCreateCall(fingerprint, call)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := s.ensureAgentExists(ctx, db, model.AgentID); err != nil {
+		call.err = err
 		return nil, err
 	}
 	if _, err := db.NewInsert().Model(model).Exec(ctx); err != nil {
-		return nil, errs.Wrap("error.scheduled_task_create_failed", err)
+		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
+		return nil, call.err
 	}
 
 	dto := model.toDTO()
 	if err := s.scheduler.register(dto, func() { s.runScheduledTask(dto.ID, RunTriggerSchedule) }); err != nil {
-		return nil, errs.Wrap("error.scheduled_task_create_failed", err)
+		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
+		return nil, call.err
 	}
+	call.task = &dto
 	return &dto, nil
 }
 
@@ -424,6 +466,71 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 	return model, nil
 }
 
+func createTaskFingerprint(model *scheduledTaskModel) string {
+	return strings.Join([]string{
+		model.Name,
+		model.Prompt,
+		strconv.FormatInt(model.AgentID, 10),
+		model.ScheduleType,
+		model.ScheduleValue,
+		model.CronExpr,
+		model.Timezone,
+		strconv.FormatBool(model.Enabled),
+	}, "\x00")
+}
+
+func (s *ScheduledTasksService) beginCreateCall(fingerprint string) (*ScheduledTask, *createCall, bool) {
+	s.createMu.Lock()
+	defer s.createMu.Unlock()
+
+	now := s.currentTime()
+	for key, entry := range s.recentCreates {
+		if !entry.expiresAt.After(now) {
+			delete(s.recentCreates, key)
+		}
+	}
+	if entry, ok := s.recentCreates[fingerprint]; ok {
+		taskCopy := entry.task
+		return &taskCopy, nil, false
+	}
+	if s.createRuns == nil {
+		s.createRuns = make(map[string]*createCall)
+	}
+	if s.recentCreates == nil {
+		s.recentCreates = make(map[string]recentCreate)
+	}
+	if existing, ok := s.createRuns[fingerprint]; ok {
+		return nil, existing, false
+	}
+
+	call := &createCall{done: make(chan struct{})}
+	s.createRuns[fingerprint] = call
+	return nil, call, true
+}
+
+func (s *ScheduledTasksService) finishCreateCall(fingerprint string, call *createCall) {
+	s.createMu.Lock()
+	delete(s.createRuns, fingerprint)
+	if call.task != nil && call.err == nil {
+		if s.recentCreates == nil {
+			s.recentCreates = make(map[string]recentCreate)
+		}
+		s.recentCreates[fingerprint] = recentCreate{
+			task:      *call.task,
+			expiresAt: s.currentTime().Add(s.duplicateWindow),
+		}
+	}
+	s.createMu.Unlock()
+	close(call.done)
+}
+
+func (s *ScheduledTasksService) currentTime() time.Time {
+	if s.now == nil {
+		return time.Now().UTC()
+	}
+	return s.now().UTC()
+}
+
 func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, input UpdateScheduledTaskInput) error {
 	if input.Name != nil {
 		value := strings.TrimSpace(*input.Name)
@@ -585,11 +692,36 @@ func (s *ScheduledTasksService) reloadEnabledTasks() error {
 	}
 
 	for i := range models {
+		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
+			return err
+		}
 		task := models[i].toDTO()
 		if err := s.scheduler.register(task, func() { s.runScheduledTask(task.ID, RunTriggerSchedule) }); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+func (s *ScheduledTasksService) ensureTaskNextRunAt(ctx context.Context, db *bun.DB, model *scheduledTaskModel) error {
+	if !model.Enabled || model.NextRunAt != nil || strings.TrimSpace(model.CronExpr) == "" {
+		return nil
+	}
+
+	nextRunAt, err := s.scheduler.next(model.CronExpr, time.Now())
+	if err != nil {
+		return nil
+	}
+
+	if _, err := db.NewUpdate().
+		Model((*scheduledTaskModel)(nil)).
+		Set("next_run_at = ?", nextRunAt).
+		Where("id = ?", model.ID).
+		Exec(ctx); err != nil {
+		return errs.Wrap("error.scheduled_task_update_failed", err)
+	}
+
+	model.NextRunAt = nextRunAt
 	return nil
 }
 
