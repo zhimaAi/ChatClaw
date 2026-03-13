@@ -4,11 +4,11 @@ export default {
     theme: "mIr",
   },
   common: {
-    all: "qa\\\\",
+    all: "qa",
     na: "n",
     loading: "yIwIv...",
     cancel: "choy",
-    confirm: "Qapla\\\\",
+    confirm: "Qapla",
     save: "DI",
     delete: "楚",
     edit: "yIrat",
@@ -20,7 +20,7 @@ export default {
   tools: {
     calculator: {
       name: "wotlh",
-      description: "teQw \\\\",
+      description: "teQw ",
     },
     duckduckgo: {
       name: "wav",
@@ -28,11 +28,11 @@ export default {
     },
     libraryRetriever: {
       name: "wI",
-      description: "qamu\\\\",
+      description: "qamu",
     },
     memoryRetriever: {
       name: "vI",
-      description: "vay\\\\",
+      description: "vay",
     },
     execute: {
       name: "execute command",
@@ -43,8 +43,8 @@ export default {
       description: "boghpu",
     },
     sequentialThinking: {
-      name: "vo\\\\",
-      description: "ghojmo\\\\",
+      name: "vo",
+      description: "ghojmo",
     },
     wikipedia: {
       name: "qan",
