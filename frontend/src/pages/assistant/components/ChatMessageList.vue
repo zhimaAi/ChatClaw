@@ -2,7 +2,7 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores'
-import type { Message } from '@bindings/chatclaw/internal/services/chat'
+import type { ImagePayload, Message } from '@bindings/chatclaw/internal/services/chat'
 import ChatMessageItem from './ChatMessageItem.vue'
 
 const props = defineProps<{
@@ -18,7 +18,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  editMessage: [messageId: number, newContent: string]
+  editMessage: [messageId: number, newContent: string, images: ImagePayload[]]
   snapSendAndTrigger: [content: string]
   snapSendToEdit: [content: string]
   snapCopy: [content: string]
@@ -113,8 +113,8 @@ const handleScroll = () => {
 }
 
 // Handle message edit
-const handleEdit = (messageId: number, newContent: string) => {
-  emit('editMessage', messageId, newContent)
+const handleEdit = (messageId: number, newContent: string, images: ImagePayload[]) => {
+  emit('editMessage', messageId, newContent, images)
 }
 
 // Watch for new messages and scroll
