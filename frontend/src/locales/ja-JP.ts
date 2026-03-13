@@ -585,9 +585,9 @@ export default {
       capabilityAudio: "オーディオ",
       capabilityVideo: "ビデオ",
       capabilityFile: "ファイル",
-      deleteBlockedByAgent: "该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除",
-      deleteConfirmMessage: "确定要删除模型「{name}」吗？此操作无法撤销。",
-      disableBlockedByAgent: "该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭",
+      deleteBlockedByAgent: "このモデルはアシスタント「{name}」のデフォルトモデルとして使用されています。削除する前にアシスタントの設定を変更してください",
+      deleteConfirmMessage: "モデル「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
+      disableBlockedByAgent: "このプロバイダはアシスタント「{name}」のデフォルトモデルとして使用されています。無効にする前にアシスタントの設定を変更してください",
     },
   },
   assistant: {
@@ -1086,8 +1086,8 @@ export default {
       nameHelp: "フォルダ名（最大50文字）。",
       parentFolder: "親フォルダ",
       rootFolder: "ルート（親フォルダなし）",
-      deleteDesc: "删除文件夹「{name}」后，其下的文档将移动到「未分组」。此操作无法撤销。",
-      parentFolderHelp: "选择父文件夹以创建嵌套文件夹。留空则在根目录创建。",
+      deleteDesc: "フォルダ「{name}」を削除すると、その下のドキュメントは「未グループ」に移動します。この操作は元に戻せません。",
+      parentFolderHelp: "親フォルダを選択してネストフォルダを作成します。空の場合はルートディレクトリに作成されます。",
     },
     detail: {
       title: "ドキュメント詳細",
@@ -1158,8 +1158,8 @@ export default {
     content: "コンテンツ",
     loadingMore: "読み込み中…",
     noMore: "もっと",
-    deleteEventStreamConfirm: "确定要删除这条对话记录吗？此操作不可撤销。",
-    deleteThematicFactConfirm: "确定要删除这条话题摘要吗？此操作不可撤销。",
+    deleteEventStreamConfirm: "この会話記録を削除してもよろしいですか？この操作は元に戻せません。",
+    deleteThematicFactConfirm: "このトピックサマリーを削除してもよろしいですか？この操作は元に戻せません。",
   },
   channels: {
     title: "チャンネル",
@@ -1393,6 +1393,6 @@ export default {
       weekly: "毎週",
       monthly: "毎月",
     },
-    emptyDescription: "创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。",
+    emptyDescription: "AIワークフローを自動化するためのスケジュールタスクを作成します。タスクは指定された時間にメッセージを送信、クエリを実行、またはアクションを実行できます。",
   },
 }
