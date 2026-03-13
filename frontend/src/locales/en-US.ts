@@ -233,12 +233,15 @@ export default {
         installFailed: "Installation failed",
         uv: {
           name: "Python Runtime",
+          description: "Enables AI assistant to write and run Python scripts to complete complex tasks.",
         },
         bun: {
           name: "JavaScript Runtime",
+          description: "Enables AI assistant to write and run JavaScript scripts to complete complex tasks.",
         },
         codex: {
           name: "Security Sandbox",
+          description: "Execute commands in an isolated environment to protect system security and prevent misoperations from affecting local files.",
         },
       },
     },
@@ -256,6 +259,10 @@ export default {
       rebuildSuccess: "Memory vectors rebuilt successfully",
       rebuildFailed: "Failed to rebuild memory vectors",
       confirmRebuildTitle: "Confirm Rebuild Memory Vectors",
+      embeddingModelHint: "Converts memory text into vectors for semantic retrieval in conversations.",
+      enableHint: "When enabled, AI will automatically extract and remember your preferences, habits, and important facts during conversations.",
+      extractModelHint: "Summarizes and extracts valuable memory information after each conversation.",
+      rebuildWarning: "修改向量模型或维度后，所有已有记忆的向量数据将被异步重建。",
     },
     skills: {
       title: "Skills",
@@ -312,6 +319,8 @@ export default {
       binaryFile: "Binary file, cannot preview",
       rateLimited: "Too many requests, please try again later",
       loadFailed: "Failed to load, please try again later",
+      directoryHint: "将下载好的技能文件夹放入该目录，AI 对话时会自动识别并加载。",
+      enableHint: "开启后，AI 助手在对话时会自动加载并使用已安装的技能。",
     },
     mcp: {
       title: "MCP",
@@ -557,6 +566,9 @@ export default {
       capabilityAudio: "Audio",
       capabilityVideo: "Video",
       capabilityFile: "File",
+      deleteBlockedByAgent: "该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除",
+      deleteConfirmMessage: "确定要删除模型「{name}」吗？此操作无法撤销。",
+      disableBlockedByAgent: "该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭",
     },
   },
   assistant: {
@@ -766,6 +778,8 @@ export default {
         changeDir: "Change",
         resetDir: "Reset to default",
         selectDir: "Select Working Directory",
+        nativeDesc: "直接在本机执行命令，无沙箱隔离。命令拥有当前用户的完整权限。",
+        workDirHint: "结构：{basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}",
       },
       model: {
         defaultModel: "Default Model",
@@ -830,6 +844,8 @@ export default {
       matchThreshold: "Results with similarity lower than this threshold will be filtered (0~1).",
       embeddingModel: "Embedding model used to convert text into vectors.",
       embeddingDimension: "Embedding vector dimension must match the selected model output.",
+      chunkOverlap: "相邻分片的重叠大小（字符数，0~1000），用于减少跨分片断句导致的信息丢失。",
+      chunkSize: "分片大小（字符数，500~5000）。分片越大，上下文越完整，但召回粒度更粗。",
     },
     tabs: {
       personal: "Personal",
@@ -1051,6 +1067,8 @@ export default {
       nameHelp: "Folder name (max 50 characters).",
       parentFolder: "Parent Folder",
       rootFolder: "Root (No Parent)",
+      deleteDesc: "删除文件夹「{name}」后，其下的文档将移动到「未分组」。此操作无法撤销。",
+      parentFolderHelp: "选择父文件夹以创建嵌套文件夹。留空则在根目录创建。",
     },
     detail: {
       title: "Document Details",
@@ -1121,6 +1139,8 @@ export default {
     content: "Content",
     loadingMore: "Loading…",
     noMore: "No more",
+    deleteEventStreamConfirm: "确定要删除这条对话记录吗？此操作不可撤销。",
+    deleteThematicFactConfirm: "确定要删除这条话题摘要吗？此操作不可撤销。",
   },
   channels: {
     title: "Channels",
@@ -1354,5 +1374,6 @@ export default {
       weekly: "Weekly",
       monthly: "Monthly",
     },
+    emptyDescription: "创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。",
   },
 }

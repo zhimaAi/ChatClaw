@@ -73,16 +73,32 @@ def to_nested_format(flat_obj):
         for i, part in enumerate(parts[:-1]):
             if part not in current:
                 current[part] = {}
+            # If the current path is already a string, convert to dict
+            if isinstance(current[part], str):
+                current[part] = {'_value': current[part]}
             current = current[part]
-        current[parts[-1]] = value
+        # If the final key already exists as a dict, we need to handle it
+        if parts[-1] in current and isinstance(current[parts[-1]], dict) and not isinstance(value, dict):
+            # Merge: keep existing nested keys and add new value
+            current[parts[-1]]['_value'] = value
+        else:
+            current[parts[-1]] = value
 
     def print_object(obj, indent=1):
         indent_str = '  ' * indent
         for key, value in obj.items():
+            # Skip _value keys (they were used for conflict resolution)
+            if key == '_value':
+                continue
             if isinstance(value, dict):
-                lines.append(f'{indent_str}{key}: {{')
-                print_object(value, indent + 1)
-                lines.append(f'{indent_str}}},')
+                # Check if it's a wrapper dict with _value
+                if '_value' in value and len(value) == 1:
+                    escaped_value = str(value['_value']).replace('\\', '\\\\').replace('"', '\\"')
+                    lines.append(f'{indent_str}{key}: "{escaped_value}",')
+                else:
+                    lines.append(f'{indent_str}{key}: {{')
+                    print_object(value, indent + 1)
+                    lines.append(f'{indent_str}}},')
             else:
                 escaped_value = str(value).replace('\\', '\\\\').replace('"', '\\"')
                 lines.append(f'{indent_str}{key}: "{escaped_value}",')
