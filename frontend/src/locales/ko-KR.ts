@@ -849,11 +849,11 @@ export default {
       confirmTitle: "삭제 확인",
       confirmDesc: "",
       tabs: {
-        delete: "删除助手",
-        model: "模型设置",
-        prompt: "提示词设置",
-        retrieval: "知识库检索",
-        workspace: "工作区",
+        delete: "어시스턴트 삭제",
+        model: "모델 설정",
+        prompt: "프롬프트 설정",
+        retrieval: "지식베이스 검색",
+        workspace: "작업 공간",
       },
     },
     workspaceDrawer: {

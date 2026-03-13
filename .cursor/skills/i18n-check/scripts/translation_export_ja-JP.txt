@@ -1,0 +1,35 @@
+# CJK Translation Export: ja-JP.ts
+# Target: ja-JP
+# Reference: non-CJK locale (en-US)
+# Total: 28 items
+
+## Translations (key = baseline | reference | current)
+
+app.title = ChatClaw | ChatClaw | ChatClaw
+assistant.settings.model.topP = Top-P | Top-P | Top-P
+channels.meta.dingtalk.botName = 钉钉 | DingTalk | DingTalk
+channels.meta.dingtalk.name = DingTalk | DingTalk | DingTalk
+channels.meta.discord.botName = Discord | Discord | Discord
+channels.meta.discord.name = Discord | Discord | Discord
+channels.meta.feishu.botName = 飞书 | Feishu | Feishu
+channels.meta.feishu.name = Feishu / Lark | Feishu / Lark | Feishu / Lark
+channels.meta.telegram.botName = Telegram | Telegram | Telegram
+channels.meta.telegram.name = Telegram | Telegram | Telegram
+channels.meta.wecom.botName = 企微 | WeCom | WeCom
+channels.meta.wecom.name = WeCom | WeCom | WeCom
+channels.meta.whatsapp.botName = WhatsApp | WhatsApp | WhatsApp
+channels.meta.whatsapp.description = WhatsApp Business API 接入 | WhatsApp Business API | WhatsApp Business API
+channels.meta.whatsapp.name = WhatsApp | WhatsApp | WhatsApp
+channels.platforms.dingtalk = 钉钉 | DingTalk | DingTalk
+channels.platforms.feishu = 飞书 | Feishu | Feishu
+channels.platforms.qq = QQ | QQ | QQ
+channels.platforms.twitter = X（Twitter） | X (Twitter) | X (Twitter)
+channels.platforms.wecom = 企微 | WeCom | WeCom
+scheduledTasks.form.cronExpr = Cron | Cron | Cron
+settings.about.appName = ChatClaw | ChatClaw | ChatClaw
+settings.chatwiki.title = ChatWiki | ChatWiki | ChatWiki
+settings.mcp.serverUrl = URL | URL | URL
+settings.mcp.tabServers = MCP | MCP | MCP
+settings.mcp.title = MCP | MCP | MCP
+settings.snap.apps.qq = QQ | QQ | QQ
+winsnap.title = ChatClaw | ChatClaw | ChatClaw

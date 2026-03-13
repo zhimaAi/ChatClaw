@@ -10,6 +10,9 @@ BACKEND_LOCALES_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..', '..', '..'
 
 DEFAULT_BASELINE = 'zh-CN'
 
+# CJK languages that need special handling
+CJK_LANGUAGES = ['ja-JP', 'ko-KR', 'zh-TW']
+
 def parse_ts_file(content):
     """Parse TS file to flat dict with dot-notation keys"""
     code = re.sub(r'^export\s+default\s*', '', content.strip())
@@ -93,6 +96,25 @@ def detect_chinese(text):
     """Check if text contains Chinese characters"""
     return bool(re.search(r'[\u4e00-\u9fff]', text))
 
+
+def get_non_cjk_locales(locale_type='frontend'):
+    """Get all non-CJK locale files"""
+    if locale_type == 'frontend':
+        locale_dir = FRONTEND_LOCALES_DIR
+        ext = '.ts'
+    else:
+        locale_dir = BACKEND_LOCALES_DIR
+        ext = '.json'
+    
+    files = []
+    for f in os.listdir(locale_dir):
+        if f.endswith(ext):
+            lang_code = f.replace(ext, '')
+            if lang_code not in CJK_LANGUAGES and lang_code != DEFAULT_BASELINE:
+                files.append(f)
+    return sorted(files)
+
+
 def get_missing_with_chinese(baseline_data, target_data, baseline_keys):
     """Get missing keys that have Chinese values in baseline"""
     missing_chinese = {}
@@ -106,65 +128,150 @@ def get_missing_with_chinese(baseline_data, target_data, baseline_keys):
             missing_chinese[key] = target_data[key]
     return missing_chinese
 
-def export_frontend(target_file, output_file):
-    """Export missing Chinese translations for frontend"""
+
+def get_cjk_untranslated(target_data, baseline_data, locale_type='frontend'):
+    """
+    For CJK languages, get keys that match reference (untranslated).
+    Compares with non-CJK locales to find untranslated content.
+    """
+    non_cjk_files = get_non_cjk_locales(locale_type)
+    
+    if not non_cjk_files:
+        return {}
+    
+    # Use first non-CJK as reference
+    ref_file = non_cjk_files[0]
+    if locale_type == 'frontend':
+        ref_filepath = os.path.join(FRONTEND_LOCALES_DIR, ref_file)
+        ref_data = parse_ts_file(open(ref_filepath, 'r', encoding='utf-8').read())
+    else:
+        ref_filepath = os.path.join(BACKEND_LOCALES_DIR, ref_file)
+        ref_data = json.load(open(ref_filepath, 'r', encoding='utf-8'))
+    
+    untranslated = {}
+    for key, target_value in target_data.items():
+        if key in ref_data:
+            ref_value = ref_data[key]
+            # If target equals reference (or empty), mark as needing translation
+            if target_value == ref_value or not target_value.strip():
+                # Include baseline for reference
+                baseline_value = baseline_data.get(key, '')
+                untranslated[key] = {
+                    'target': target_value,
+                    'baseline': baseline_value,
+                    'reference': ref_value
+                }
+    
+    return untranslated
+
+def export_frontend(target_file, output_file, cjk_mode=False):
+    """Export missing translations for frontend"""
     baseline_file = f"{DEFAULT_BASELINE}.ts"
     baseline_keys = load_baseline_ts(baseline_file)
     target_keys = load_target_ts(target_file)
     
-    missing_chinese = get_missing_with_chinese(baseline_keys, target_keys, baseline_keys.keys())
+    lang_code = target_file.replace('.ts', '')
     
-    if not missing_chinese:
-        print(f"No Chinese translations needed for {target_file}")
-        return None
-    
-    # Generate output
-    lines = []
-    lines.append(f"# Translation Export: {target_file}")
-    lines.append(f"# Total: {len(missing_chinese)} items")
-    lines.append("")
-    lines.append("## Translations (key = value)")
-    lines.append("")
-    
-    for key, value in sorted(missing_chinese.items()):
-        lines.append(f"{key} = {value}")
+    if cjk_mode and lang_code in CJK_LANGUAGES:
+        # For CJK languages, check against non-CJK reference
+        missing_data = get_cjk_untranslated(target_keys, baseline_keys, 'frontend')
+        
+        if not missing_data:
+            print(f"No untranslated keys found for {target_file}")
+            return None
+        
+        # Generate output for CJK
+        lines = []
+        lines.append(f"# CJK Translation Export: {target_file}")
+        lines.append(f"# Target: {lang_code}")
+        lines.append(f"# Reference: non-CJK locale (en-US)")
+        lines.append(f"# Total: {len(missing_data)} items")
+        lines.append("")
+        lines.append("## Translations (key = baseline | reference | current)")
+        lines.append("")
+        
+        for key, data in sorted(missing_data.items()):
+            lines.append(f"{key} = {data['baseline']} | {data['reference']} | {data['target']}")
+    else:
+        # Standard Chinese detection
+        missing_data = get_missing_with_chinese(baseline_keys, target_keys, baseline_keys.keys())
+        
+        if not missing_data:
+            print(f"No Chinese translations needed for {target_file}")
+            return None
+        
+        # Generate output
+        lines = []
+        lines.append(f"# Translation Export: {target_file}")
+        lines.append(f"# Total: {len(missing_data)} items")
+        lines.append("")
+        lines.append("## Translations (key = value)")
+        lines.append("")
+        
+        for key, value in sorted(missing_data.items()):
+            lines.append(f"{key} = {value}")
     
     output_path = os.path.join(SCRIPT_DIR, output_file)
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     
-    print(f"Exported {len(missing_chinese)} items to {output_file}")
-    return missing_chinese
+    print(f"Exported {len(missing_data)} items to {output_file}")
+    return missing_data
 
-def export_backend(target_file, output_file):
-    """Export missing Chinese translations for backend"""
+
+def export_backend(target_file, output_file, cjk_mode=False):
+    """Export missing translations for backend"""
     baseline_file = f"{DEFAULT_BASELINE}.json"
     baseline_data = load_baseline_json(baseline_file)
     target_data = load_target_json(target_file)
     
-    missing_chinese = get_missing_with_chinese(baseline_data, target_data, baseline_data.keys())
+    lang_code = target_file.replace('.json', '')
     
-    if not missing_chinese:
-        print(f"No Chinese translations needed for {target_file}")
-        return None
-    
-    # Generate output
-    lines = []
-    lines.append(f"# Translation Export: {target_file}")
-    lines.append(f"# Total: {len(missing_chinese)} items")
-    lines.append("")
-    lines.append("## Translations (key = value)")
-    lines.append("")
-    
-    for key, value in sorted(missing_chinese.items()):
-        lines.append(f"{key} = {value}")
+    if cjk_mode and lang_code in CJK_LANGUAGES:
+        # For CJK languages, check against non-CJK reference
+        missing_data = get_cjk_untranslated(target_data, baseline_data, 'backend')
+        
+        if not missing_data:
+            print(f"No untranslated keys found for {target_file}")
+            return None
+        
+        # Generate output for CJK
+        lines = []
+        lines.append(f"# CJK Translation Export: {target_file}")
+        lines.append(f"# Target: {lang_code}")
+        lines.append(f"# Reference: non-CJK locale")
+        lines.append(f"# Total: {len(missing_data)} items")
+        lines.append("")
+        lines.append("## Translations (key = baseline | reference | current)")
+        lines.append("")
+        
+        for key, data in sorted(missing_data.items()):
+            lines.append(f"{key} = {data['baseline']} | {data['reference']} | {data['target']}")
+    else:
+        # Standard Chinese detection
+        missing_data = get_missing_with_chinese(baseline_data, target_data, baseline_data.keys())
+        
+        if not missing_data:
+            print(f"No Chinese translations needed for {target_file}")
+            return None
+        
+        # Generate output
+        lines = []
+        lines.append(f"# Translation Export: {target_file}")
+        lines.append(f"# Total: {len(missing_data)} items")
+        lines.append("")
+        lines.append("## Translations (key = value)")
+        lines.append("")
+        
+        for key, value in sorted(missing_data.items()):
+            lines.append(f"{key} = {value}")
     
     output_path = os.path.join(SCRIPT_DIR, output_file)
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
     
-    print(f"Exported {len(missing_chinese)} items to {output_file}")
-    return missing_chinese
+    print(f"Exported {len(missing_data)} items to {output_file}")
+    return missing_data
 
 def main():
     parser = argparse.ArgumentParser(description='Export missing translations for AI translation')
@@ -174,6 +281,8 @@ def main():
                         help='Target language file (e.g., en-US, ja-JP)')
     parser.add_argument('--output', '-o',
                         help='Output file name (default: translation_export_<lang>.txt)')
+    parser.add_argument('--cjk', action='store_true',
+                        help='For CJK languages (ja-JP, ko-KR, zh-TW), export by comparing with non-CJK locales')
     
     args = parser.parse_args()
     
@@ -181,7 +290,7 @@ def main():
         if args.target:
             target_file = args.target if args.target.endswith('.ts') else f"{args.target}.ts"
             output_file = args.output or f"translation_export_{args.target}.txt"
-            export_frontend(target_file, output_file)
+            export_frontend(target_file, output_file, args.cjk)
         else:
             # Export for all languages
             locales = [f.replace('.ts', '') for f in os.listdir(FRONTEND_LOCALES_DIR) 
@@ -189,12 +298,14 @@ def main():
             for locale in locales:
                 target_file = f"{locale}.ts"
                 output_file = f"translation_export_{locale}.txt"
-                export_frontend(target_file, output_file)
+                # Auto-detect CJK for ja-JP, ko-KR, zh-TW
+                cjk_mode = args.cjk or locale in CJK_LANGUAGES
+                export_frontend(target_file, output_file, cjk_mode)
     else:
         if args.target:
             target_file = args.target if args.target.endswith('.json') else f"{args.target}.json"
             output_file = args.output or f"translation_export_{args.target}.txt"
-            export_backend(target_file, output_file)
+            export_backend(target_file, output_file, args.cjk)
         else:
             # Export for all languages
             locales = [f.replace('.json', '') for f in os.listdir(BACKEND_LOCALES_DIR) 
@@ -202,7 +313,9 @@ def main():
             for locale in locales:
                 target_file = f"{locale}.json"
                 output_file = f"translation_export_{locale}.txt"
-                export_backend(target_file, output_file)
+                # Auto-detect CJK for ja-JP, ko-KR, zh-TW
+                cjk_mode = args.cjk or locale in CJK_LANGUAGES
+                export_backend(target_file, output_file, cjk_mode)
 
 if __name__ == '__main__':
     main()

@@ -8,8 +8,21 @@ FRONTEND_LOCALES_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..', '..', '..
 
 DEFAULT_BASELINE = 'zh-CN.ts'
 
+# For CJK languages (ja-JP, ko-KR, zh-TW), use English as baseline
+CJK_BASELINE = 'en-US.ts'
+
 # Languages that use Chinese characters natively (don't need Chinese translation)
 CHINESE_SCRIPT_LANGUAGES = ['zh-TW', 'zh-HK', 'zh-MO', 'ja-JP', 'ko-KR']
+
+# CJK languages that need special handling (compare against non-CJK languages)
+CJK_LANGUAGES = ['ja-JP', 'ko-KR', 'zh-TW']
+
+
+def get_baseline_for_lang(lang_code):
+    """Get the appropriate baseline file for a given language"""
+    if lang_code in CJK_LANGUAGES:
+        return CJK_BASELINE
+    return DEFAULT_BASELINE
 
 def detect_chinese(text):
     """Check if text contains Simplified or Traditional Chinese characters"""
@@ -151,6 +164,31 @@ def get_language_code(filename):
     """Extract language code from filename (e.g., en-US from en-US.ts)"""
     return filename.replace('.ts', '')
 
+def get_non_cjk_locales():
+    """Get all non-CJK locale files (for CJK language filling)"""
+    files = []
+    for f in os.listdir(FRONTEND_LOCALES_DIR):
+        if f.endswith('.ts') and f != 'index.ts':
+            lang_code = f.replace('.ts', '')
+            if lang_code not in CJK_LANGUAGES:
+                files.append(f)
+    return sorted(files)
+
+def detect_untranslated_for_cjk(target_keys, ref_keys):
+    """
+    For CJK languages, detect keys that need translation.
+    If target value equals reference value, it's likely untranslated.
+    """
+    untranslated = []
+    for key in target_keys:
+        if key in ref_keys:
+            target_value = target_keys[key]
+            ref_value = ref_keys[key]
+            # If target equals reference (or empty), mark as needing translation
+            if target_value == ref_value or not target_value.strip():
+                untranslated.append(key)
+    return untranslated
+
 def needs_translation_check(lang_code):
     """Check if this language needs Chinese translation detection"""
     # Chinese script languages (zh-TW, zh-HK, ja, ko) don't need Chinese detection
@@ -160,12 +198,20 @@ def needs_translation_check(lang_code):
             return False
     return True
 
-def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lang_code):
+def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lang_code, use_cjk_mode=False):
     """Fill missing keys with baseline values as placeholder"""
     needs_translation = []
     
     # Check if this language needs Chinese detection
     check_translation = needs_translation_check(lang_code)
+    
+    # For CJK languages, get reference keys from non-CJK locales
+    ref_keys = {}
+    if use_cjk_mode and lang_code in CJK_LANGUAGES:
+        non_cjk_files = get_non_cjk_locales()
+        if non_cjk_files:
+            ref_file = non_cjk_files[0]
+            ref_keys = load_target(ref_file)
     
     for key in missing_keys:
         baseline_value = baseline_keys[key]
@@ -174,9 +220,37 @@ def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lan
         # If key was newly added and contains Chinese, mark for translation
         if check_translation and detect_chinese(baseline_value):
             needs_translation.append(key)
+        
+        # For CJK languages, also check if value matches reference (untranslated)
+        if use_cjk_mode and lang_code in CJK_LANGUAGES and key in ref_keys:
+            ref_value = ref_keys[key]
+            if baseline_value == ref_value or not baseline_value.strip():
+                if key not in needs_translation:
+                    needs_translation.append(key)
     
     save_target(target_file, target_keys)
     return needs_translation
+
+
+def check_cjk_untranslated(target_file, lang_code):
+    """
+    Check for untranslated keys in CJK language files.
+    Returns keys that match reference (non-CJK) values.
+    """
+    if lang_code not in CJK_LANGUAGES:
+        return []
+    
+    target_keys = load_target(target_file)
+    non_cjk_files = get_non_cjk_locales()
+    
+    if not non_cjk_files:
+        return []
+    
+    # Use first non-CJK as reference
+    ref_file = non_cjk_files[0]
+    ref_keys = load_target(ref_file)
+    
+    return detect_untranslated_for_cjk(target_keys, ref_keys)
 
 def save_translation_needed(translation_needed):
     """Save the list of keys that need translation to a JSON file"""
@@ -187,27 +261,41 @@ def save_translation_needed(translation_needed):
 
 def main():
     parser = argparse.ArgumentParser(description='Fill missing i18n keys in frontend TS files')
-    parser.add_argument('--baseline', '-b', default=DEFAULT_BASELINE, 
-                        help=f'Baseline language file (default: {DEFAULT_BASELINE})')
+    parser.add_argument('--baseline', '-b', default=None, 
+                        help=f'Baseline language file (auto-detect for CJK)')
     parser.add_argument('--target', '-t', 
                         help='Target language file to fill (fills all if not specified)')
     parser.add_argument('--dry-run', '-n', action='store_true',
                         help='Show what would be filled without making changes')
+    parser.add_argument('--cjk', action='store_true',
+                        help='For CJK languages (ja-JP, ko-KR, zh-TW), use en-US as baseline')
+    parser.add_argument('--check-cjk', action='store_true',
+                        help='Check CJK languages for untranslated keys (after fill)')
     
     args = parser.parse_args()
     
     print(f"Frontend locales dir: {FRONTEND_LOCALES_DIR}")
     
-    baseline_file = args.baseline
-    if not baseline_file.endswith('.ts'):
-        baseline_file += '.ts'
-    
-    if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
-        print(f"Error: Baseline file {baseline_file} not found!")
+    # Check CJK untranslated mode
+    if args.check_cjk:
+        print("\n=== Checking CJK languages for untranslated keys ===")
+        translation_needed = {}
+        for cjk_lang in CJK_LANGUAGES:
+            target_file = f"{cjk_lang}.ts"
+            if target_file in os.listdir(FRONTEND_LOCALES_DIR):
+                untranslated = check_cjk_untranslated(target_file, cjk_lang)
+                if untranslated:
+                    print(f"\n{target_file}: {len(untranslated)} untranslated keys")
+                    translation_needed[target_file] = untranslated
+                    for key in untranslated[:10]:
+                        print(f"  - {key}")
+                    if len(untranslated) > 10:
+                        print(f"  ... and {len(untranslated) - 10} more")
+                else:
+                    print(f"\n{target_file}: All keys translated!")
+        if translation_needed:
+            save_translation_needed(translation_needed)
         return
-    
-    baseline_keys = load_baseline(baseline_file)
-    print(f"Baseline: {baseline_file} ({len(baseline_keys)} keys)")
     
     translation_needed = {}
     
@@ -221,6 +309,23 @@ def main():
             return
         
         lang_code = get_language_code(target_file)
+        
+        # Auto-detect baseline based on target language
+        if args.baseline:
+            baseline_file = args.baseline
+            if not baseline_file.endswith('.ts'):
+                baseline_file += '.ts'
+        else:
+            baseline_file = get_baseline_for_lang(lang_code) if args.cjk else DEFAULT_BASELINE
+        
+        if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
+            print(f"Error: Baseline file {baseline_file} not found!")
+            return
+        
+        use_cjk_mode = args.cjk and lang_code in CJK_LANGUAGES
+        baseline_keys = load_baseline(baseline_file)
+        print(f"Baseline: {baseline_file} ({len(baseline_keys)} keys)")
+        
         target_keys = load_target(target_file)
         missing = get_missing_keys(baseline_keys, target_keys)
         
@@ -230,7 +335,7 @@ def main():
                 for key in missing:
                     print(f"  - {key}: {baseline_keys[key]}")
             else:
-                needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code)
+                needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code, use_cjk_mode)
                 print(f"  Filled {len(missing)} keys with baseline values")
                 if needs_trans:
                     translation_needed[target_file] = needs_trans
@@ -242,20 +347,35 @@ def main():
         total_filled = 0
         
         for target_file in locales:
+            lang_code = get_language_code(target_file)
+            
+            # Auto-detect baseline based on target language
+            if args.baseline:
+                baseline_file = args.baseline
+                if not baseline_file.endswith('.ts'):
+                    baseline_file += '.ts'
+            else:
+                baseline_file = get_baseline_for_lang(lang_code) if args.cjk else DEFAULT_BASELINE
+            
+            if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
+                print(f"Warning: Baseline file {baseline_file} not found, skipping {target_file}")
+                continue
+            
             if target_file == baseline_file:
                 continue
             
-            lang_code = get_language_code(target_file)
+            use_cjk_mode = args.cjk and lang_code in CJK_LANGUAGES
+            baseline_keys = load_baseline(baseline_file)
             target_keys = load_target(target_file)
             missing = get_missing_keys(baseline_keys, target_keys)
             
             if missing:
-                print(f"\n{target_file}: {len(missing)} missing keys")
+                print(f"\n{target_file} (baseline: {baseline_file}): {len(missing)} missing keys")
                 if args.dry_run:
                     for key in missing:
                         print(f"  - {key}: {baseline_keys[key]}")
                 else:
-                    needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code)
+                    needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code, use_cjk_mode)
                     print(f"  Filled {len(missing)} keys")
                     total_filled += len(missing)
                     if needs_trans:
