@@ -92,8 +92,29 @@ function statusTextClass(task: ScheduledTask) {
               <div class="space-y-1 text-sm">
                 <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
                 <div class="flex items-center gap-1.5 text-[#8c8c8c]">
+                  <TooltipProvider v-if="task.last_status === 'failed' && task.last_error">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <button
+                          type="button"
+                          class="inline-flex shrink-0 items-center justify-center rounded-full"
+                          :aria-label="t('scheduledTasks.errorReason')"
+                        >
+                          <component
+                            :is="lastRunIcon(task)"
+                            class="size-4"
+                            :class="lastRunIconClass(task)"
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p class="max-w-sm whitespace-pre-wrap text-xs">{{ task.last_error }}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <component
                     :is="lastRunIcon(task)"
+                    v-else
                     class="size-4 shrink-0"
                     :class="lastRunIconClass(task)"
                   />
@@ -124,22 +145,6 @@ function statusTextClass(task: ScheduledTask) {
                 <span class="text-sm" :class="statusTextClass(task)">
                   {{ displayTaskStatusLabel(task) }}
                 </span>
-                <TooltipProvider v-if="task.last_error">
-                  <Tooltip>
-                    <TooltipTrigger as-child>
-                      <button
-                        type="button"
-                        class="inline-flex size-5 items-center justify-center rounded-full text-[#a3a3a3] transition-colors hover:bg-[#f5f5f5] hover:text-[#171717]"
-                        :aria-label="t('scheduledTasks.errorReason')"
-                      >
-                        <CircleAlert class="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p class="max-w-sm whitespace-pre-wrap text-xs">{{ task.last_error }}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </div>
             </td>
             <td class="w-[88px] min-w-[88px] px-5 py-3.5 text-right">

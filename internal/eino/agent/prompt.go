@@ -360,6 +360,7 @@ func buildScheduledTaskPrompt() string {
 | 每分钟 | preset | every_minute | |
 | 每5分钟 | preset | every_5_minutes | |
 | 每15分钟 | preset | every_15_minutes | |
+| 每3分钟 | custom | {"interval_minutes":3} | |
 | 每小时整点 | preset | every_hour | |
 | 每天早上9点 | preset | every_day_0900 | |
 | 每天下午6点 | preset | every_day_1800 | |
@@ -494,6 +495,7 @@ You can help users manage scheduled tasks. When users mention "scheduled tasks",
 | Every minute | preset | every_minute | |
 | Every 5 minutes | preset | every_5_minutes | |
 | Every 15 minutes | preset | every_15_minutes | |
+| Every 3 minutes | custom | {"interval_minutes":3} | |
 | Every hour on the hour | preset | every_hour | |
 | Every day at 9am | preset | every_day_0900 | |
 | Every day at 6pm | preset | every_day_1800 | |

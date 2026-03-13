@@ -45,8 +45,13 @@ const summaryLabels = computed(() => ({
 const hasTasks = computed(() => tasks.value.length > 0)
 
 function buildPayload(state: ScheduledTaskFormState) {
+  const normalizedIntervalMinutes = Math.min(59, Math.max(1, Number(state.customIntervalMinutes) || 1))
   const customPayload =
-    state.customMode === 'monthly'
+    state.customMode === 'interval'
+      ? JSON.stringify({
+          interval_minutes: normalizedIntervalMinutes,
+        })
+      : state.customMode === 'monthly'
       ? JSON.stringify({
           hour: state.customHour,
           minute: state.customMinute,
@@ -94,6 +99,7 @@ function buildPayload(state: ScheduledTaskFormState) {
 }
 
 async function handleSubmit() {
+  if (saving.value) return
   await submitForm(buildPayload)
 }
 
