@@ -17,6 +17,7 @@ import (
 	"chatclaw/internal/logger"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
+	"chatclaw/internal/services/assistantmcp"
 	"chatclaw/internal/services/browser"
 	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/chat"
@@ -308,9 +309,29 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(skillsService))
 	// 注册 MCP 服务
 	app.RegisterService(application.NewService(mcp.NewMCPService(app)))
+	// 注册助手 MCP 服务
+	assistantMCPService := assistantmcp.NewAssistantMCPService(app)
+	app.RegisterService(application.NewService(assistantMCPService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	app.RegisterService(application.NewService(chatService))
+	// Wire chat bridge for assistant MCP (avoids cyclic import)
+	assistantMCPService.SetChatBridge(assistantmcp.NewChatBridge(
+		conversationsService.FindOrCreateByExternalID,
+		func(convID int64, content, tabID string) (string, int64, error) {
+			res, err := chatService.SendMessage(chat.SendMessageInput{
+				ConversationID: convID,
+				Content:        content,
+				TabID:          tabID,
+			})
+			if err != nil {
+				return "", 0, err
+			}
+			return res.RequestID, res.MessageID, nil
+		},
+		chatService.WaitForGeneration,
+		conversationsService.GetLatestAssistantReply,
+	))
 	// 注册定时任务服务
 	scheduledTasksService := scheduledtasks.NewScheduledTasksService(app, conversationsService, chatService)
 	chatService.RegisterExtraToolFactory(func() ([]tool.BaseTool, error) {
@@ -514,6 +535,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 				app.Logger.Error("Failed to start scheduled tasks service", "error", err)
 			}
 		}()
+		// Start all enabled assistant MCP servers in background.
+		go assistantMCPService.StartEnabledServers()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -565,6 +588,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()
 		chatService.Shutdown()

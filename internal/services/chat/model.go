@@ -31,13 +31,14 @@ const (
 type ImagePayload struct {
 	ID       string `json:"id,omitempty"`
 	Kind     string `json:"kind"`                 // "image"
-	Source   string `json:"source"`               // "inline_base64"
+	Source   string `json:"source"`               // "inline_base64" or "local_file"
 	MimeType string `json:"mime_type"`
 	Base64   string `json:"base64"`               // without "data:" prefix
 	DataURL  string `json:"data_url,omitempty"`   // optional convenience field for frontend
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
 	FileName string `json:"file_name,omitempty"`
+	FilePath string `json:"file_path,omitempty"`   // local file path when saved to work dir
 	Size     int64  `json:"size,omitempty"`
 }
 
@@ -74,10 +75,11 @@ type SendMessageInput struct {
 
 // EditAndResendInput input for editing and resending a message
 type EditAndResendInput struct {
-	ConversationID int64  `json:"conversation_id"`
-	MessageID      int64  `json:"message_id"`
-	NewContent     string `json:"new_content"`
-	TabID          string `json:"tab_id"`
+	ConversationID int64          `json:"conversation_id"`
+	MessageID      int64          `json:"message_id"`
+	NewContent     string         `json:"new_content"`
+	TabID          string         `json:"tab_id"`
+	Images         []ImagePayload `json:"images,omitempty"` // images to attach (for resending with new images)
 }
 
 // SendMessageResult result of sending a message

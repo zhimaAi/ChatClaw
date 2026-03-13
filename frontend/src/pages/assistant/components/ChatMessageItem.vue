@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
-import type { Message } from '@bindings/chatclaw/internal/services/chat'
+import type { Message, ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useThemeLogo } from '@/composables/useLogo'
 import ThinkingBlock from './ThinkingBlock.vue'
@@ -38,7 +38,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  edit: [messageId: number, newContent: string]
+  edit: [messageId: number, newContent: string, images: ImagePayload[]]
   snapSendAndTrigger: [content: string]
   snapSendToEdit: [content: string]
   snapCopy: [content: string]
@@ -139,17 +139,6 @@ const isTool = computed(() => props.message.role === MessageRole.TOOL)
 const isSnapMode = computed(() => props.mode === 'snap')
 
 // Parse images from images_json
-interface ImagePayload {
-  id?: string
-  kind: string
-  source: string
-  mime_type: string
-  base64: string
-  data_url?: string
-  file_name?: string
-  size?: number
-}
-
 const images = computed<ImagePayload[]>(() => {
   if (!props.message.images_json) return []
   try {
@@ -273,9 +262,9 @@ const handleEdit = () => {
   isEditing.value = true
 }
 
-const handleSaveEdit = (newContent: string) => {
+const handleSaveEdit = (payload: { newContent: string; images: ImagePayload[] }) => {
   isEditing.value = false
-  emit('edit', props.message.id, newContent)
+  emit('edit', props.message.id, payload.newContent, payload.images)
 }
 
 const handleCancelEdit = () => {
@@ -465,6 +454,7 @@ onUnmounted(() => {
         <MessageEditor
           v-if="isEditing"
           :initial-content="message.content"
+          :initial-images="images"
           @save="handleSaveEdit"
           @cancel="handleCancelEdit"
         />

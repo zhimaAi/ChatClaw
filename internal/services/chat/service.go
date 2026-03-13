@@ -2,9 +2,16 @@ package chat
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +81,118 @@ type inMemoryCheckPointStore struct {
 
 func newInMemoryCheckPointStore() *inMemoryCheckPointStore {
 	return &inMemoryCheckPointStore{m: make(map[string][]byte)}
+}
+
+// idHash generates a short hash for IDs
+func idHash(id int64) string {
+	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
+	return hex.EncodeToString(h[:6])
+}
+
+// resolveWorkDir resolves the workspace directory for a given agent and conversation
+func (s *ChatService) resolveWorkDir(ctx context.Context, db *bun.DB, agentID, conversationID int64) (string, error) {
+	type agentRow struct {
+		WorkDir string `bun:"work_dir"`
+	}
+	var agent agentRow
+	if err := db.NewSelect().
+		Table("agents").
+		Column("work_dir").
+		Where("id = ?", agentID).
+		Scan(ctx, &agent); err != nil {
+		return "", errs.Wrap("error.chat_agent_read_failed", err)
+	}
+
+	workDir := agent.WorkDir
+	if workDir == "" {
+		// Use default work dir
+		workDir = defaultWorkDir()
+	}
+
+	dir := filepath.Join(workDir, "sessions", idHash(agentID))
+	if conversationID > 0 {
+		dir = filepath.Join(dir, idHash(conversationID))
+	}
+	return dir, nil
+}
+
+// defaultWorkDir returns the default working directory for agents
+func defaultWorkDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".chatclaw")
+}
+
+// saveImagesToWorkDir saves images to the conversation's work directory and returns updated image payloads
+func (s *ChatService) saveImagesToWorkDir(ctx context.Context, db *bun.DB, agentID, conversationID int64, images []ImagePayload) ([]ImagePayload, error) {
+	if len(images) == 0 {
+		return images, nil
+	}
+
+	workDir, err := s.resolveWorkDir(ctx, db, agentID, conversationID)
+	if err != nil {
+		return nil, errs.Wrap("error.chat_resolve_workdir_failed", err)
+	}
+
+	imagesDir := filepath.Join(workDir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return nil, errs.Wrap("error.chat_create_images_dir_failed", err)
+	}
+
+	updatedImages := make([]ImagePayload, len(images))
+	for i, img := range images {
+		// Generate unique filename
+		ext := ".png"
+		if idx := strings.LastIndex(img.MimeType, "/"); idx >= 0 {
+			switch img.MimeType[idx+1:] {
+			case "jpeg", "jpg":
+				ext = ".jpg"
+			case "gif":
+				ext = ".gif"
+			case "webp":
+				ext = ".webp"
+			case "svg+xml":
+				ext = ".svg"
+			case "bmp":
+				ext = ".bmp"
+			}
+		}
+		filename := fmt.Sprintf("image_%d_%d%s", conversationID, time.Now().UnixNano(), ext)
+		filepath := filepath.Join(imagesDir, filename)
+
+		// Decode base64 and write to file
+		data, err := base64.StdEncoding.DecodeString(img.Base64)
+		if err != nil {
+			s.app.Logger.Warn("[chat] failed to decode image base64", "error", err)
+			// Keep original if decode fails
+			updatedImages[i] = img
+			continue
+		}
+
+		if err := os.WriteFile(filepath, data, 0644); err != nil {
+			s.app.Logger.Warn("[chat] failed to write image file", "error", err)
+			// Keep original if write fails
+			updatedImages[i] = img
+			continue
+		}
+
+		// Update payload: keep Base64 for frontend display when loading history; add FilePath for skills
+		updatedImages[i] = ImagePayload{
+			ID:       img.ID,
+			Kind:     "image",
+			Source:   "local_file",
+			MimeType: img.MimeType,
+			Base64:   img.Base64, // Keep for frontend to display in chat history
+			FilePath: filepath,
+			FileName: filename,
+			Size:     int64(len(data)),
+		}
+		s.app.Logger.Info("[chat] image saved to workdir", "path", filepath)
+	}
+
+	return updatedImages, nil
 }
 
 func (s *inMemoryCheckPointStore) Get(_ context.Context, id string) ([]byte, bool, error) {
@@ -227,6 +346,23 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		return nil, err
 	}
 
+	// Save images to work directory and update image payloads
+	if hasImages && len(input.Images) > 0 {
+		updatedImages, saveErr := s.saveImagesToWorkDir(ctx, db, agentConfig.AgentID, input.ConversationID, input.Images)
+		if saveErr != nil {
+			s.app.Logger.Warn("[chat] failed to save images to workdir, using original", "error", saveErr)
+			// Continue with original images if save fails
+		} else {
+			// Update imagesJSON with saved image paths
+			b, err := json.Marshal(updatedImages)
+			if err != nil {
+				s.app.Logger.Warn("[chat] failed to serialize updated images", "error", err)
+			} else {
+				imagesJSON = string(b)
+			}
+		}
+	}
+
 	if agentExtras.ChatMode == "chat" {
 		return s.startGeneration(db, input.ConversationID, input.TabID, agentConfig, providerConfig, agentExtras, func(genCtx context.Context, requestID string) {
 			s.runChatModeGeneration(genCtx, db, input.ConversationID, input.TabID, requestID, content, imagesJSON, agentConfig, providerConfig, agentExtras)
@@ -337,17 +473,41 @@ func (s *ChatService) EditAndResend(input EditAndResendInput) (*SendMessageResul
 		return nil, err
 	}
 
-	if _, err := db.NewUpdate().
-		Model((*messageModel)(nil)).
-		Set("content = ?", content).
-		Where("id = ?", input.MessageID).
-		Exec(ctx); err != nil {
-		return nil, errs.Wrap("error.chat_message_update_failed", err)
-	}
-
+	// Get agent config first (needed for saving images to workdir)
 	agentConfig, providerConfig, agentExtras, err := s.getAgentAndProviderConfig(ctx, db, input.ConversationID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Update message content and images
+	// If new images are provided, update them; otherwise keep existing images
+	updateQuery := db.NewUpdate().Model((*messageModel)(nil)).Where("id = ?", input.MessageID)
+	imagesJSON := msg.ImagesJSON // keep existing by default
+	if len(input.Images) > 0 {
+		// Save new images to work directory
+		updatedImages, saveErr := s.saveImagesToWorkDir(ctx, db, agentConfig.AgentID, input.ConversationID, input.Images)
+		if saveErr != nil {
+			s.app.Logger.Warn("[chat] failed to save images to workdir, using original", "error", saveErr)
+			// Use original input images if save fails
+			b, err := json.Marshal(input.Images)
+			if err != nil {
+				return nil, errs.Wrap("error.chat_images_serialize_failed", err)
+			}
+			imagesJSON = string(b)
+		} else {
+			// Use updated images with file paths
+			b, err := json.Marshal(updatedImages)
+			if err != nil {
+				return nil, errs.Wrap("error.chat_images_serialize_failed", err)
+			}
+			imagesJSON = string(b)
+		}
+		updateQuery = updateQuery.Set("content = ?, images_json = ?", content, imagesJSON)
+	} else {
+		updateQuery = updateQuery.Set("content = ?", content)
+	}
+	if _, err := updateQuery.Exec(ctx); err != nil {
+		return nil, errs.Wrap("error.chat_message_update_failed", err)
 	}
 
 	var result *SendMessageResult
