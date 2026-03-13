@@ -100,18 +100,86 @@ def load_baseline(locale_type='frontend'):
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-def get_needs_translation(target_file, baseline_data, locale_type='frontend'):
+def get_non_cjk_locales(locale_type='frontend'):
+    """Get all non-CJK locale files"""
+    if locale_type == 'frontend':
+        locale_dir = FRONTEND_LOCALES_DIR
+        ext = '.ts'
+    else:
+        locale_dir = BACKEND_LOCALES_DIR
+        ext = '.json'
+    
+    files = []
+    for f in os.listdir(locale_dir):
+        if f.endswith(ext):
+            lang_code = f.replace(ext, '')
+            if lang_code not in CJK_LANGUAGES and lang_code != DEFAULT_BASELINE:
+                files.append(f)
+    return sorted(files)
+
+
+def get_needs_translation_cjk(target_file, baseline_data, locale_type='frontend'):
+    """
+    Get keys that need translation for CJK languages (ja-JP, ko-KR, zh-TW).
+    Compares with non-CJK languages to find untranslated content.
+    """
+    lang_code = target_file.replace('.ts', '').replace('.json', '')
+    
+    if lang_code not in CJK_LANGUAGES:
+        return {}
+    
+    if locale_type == 'frontend':
+        filepath = os.path.join(FRONTEND_LOCALES_DIR, target_file)
+        target_data = parse_ts_file(open(filepath, 'r', encoding='utf-8').read())
+        non_cjk_files = get_non_cjk_locales('frontend')
+    else:
+        filepath = os.path.join(BACKEND_LOCALES_DIR, target_file)
+        target_data = json.load(open(filepath, 'r', encoding='utf-8'))
+        non_cjk_files = get_non_cjk_locales('backend')
+    
+    if not non_cjk_files:
+        return {}
+    
+    # Use first non-CJK as reference
+    ref_file = non_cjk_files[0]
+    if locale_type == 'frontend':
+        ref_filepath = os.path.join(FRONTEND_LOCALES_DIR, ref_file)
+        ref_data = parse_ts_file(open(ref_filepath, 'r', encoding='utf-8').read())
+    else:
+        ref_filepath = os.path.join(BACKEND_LOCALES_DIR, ref_file)
+        ref_data = json.load(open(ref_filepath, 'r', encoding='utf-8'))
+    
+    needs_translation = {}
+    
+    for key, target_value in target_data.items():
+        if key in ref_data:
+            ref_value = ref_data[key]
+            # If target equals reference (untranslated), mark for translation
+            if target_value == ref_value or not target_value.strip():
+                # Also get the baseline (zh-CN) value for reference
+                if key in baseline_data:
+                    needs_translation[key] = {
+                        'target': target_value,
+                        'baseline': baseline_data[key],
+                        'reference': ref_value
+                    }
+    
+    return needs_translation
+
+
+def get_needs_translation(target_file, baseline_data, locale_type='frontend', cjk_mode=False):
     """
     Get keys that need translation.
     
     For non-CJK languages: keys with Chinese values need translation
-    For CJK languages (zh-TW, ja, ko): skip - these need manual translation
+    For CJK languages (zh-TW, ja, ko): compare with non-CJK to find untranslated
     """
     lang_code = target_file.replace('.ts', '').replace('.json', '')
     
-    # Skip CJK languages - they need special handling
-    is_cjk = any(lang_code.startswith(cjk.split('-')[0]) for cjk in CJK_LANGUAGES)
-    if is_cjk:
+    # For CJK languages, use separate detection
+    if lang_code in CJK_LANGUAGES:
+        if cjk_mode:
+            return get_needs_translation_cjk(target_file, baseline_data, locale_type)
         return {}
     
     if locale_type == 'frontend':
@@ -130,15 +198,33 @@ def get_needs_translation(target_file, baseline_data, locale_type='frontend'):
     
     return needs_translation
 
-def translate_with_ai(translations, target_lang, target_lang_name):
+def translate_with_ai(translations, target_lang, target_lang_name, source_lang='zh-CN', is_cjk=False):
     """Generate AI translation prompt"""
-    prompt = f"""Translate the following Chinese texts to {target_lang_name}. 
+    if is_cjk:
+        # For CJK languages, show baseline, reference, and target
+        prompt = f"""Translate the following texts from {source_lang} to {target_lang_name}.
+Keep the same meaning and tone. Preserve any placeholders like {{name}}, {{count}}, etc.
+
+Note: Some texts may appear similar to the reference language (non-CJK), but should be properly translated to {target_lang_name}.
+
+Translations:
+"""
+        for i, (key, data) in enumerate(translations.items(), 1):
+            if isinstance(data, dict):
+                prompt += f"{i}. [{key}]\n"
+                prompt += f"   Baseline ({source_lang}): {data.get('baseline', '')}\n"
+                prompt += f"   Reference (non-CJK): {data.get('reference', '')}\n"
+                prompt += f"   Current: {data.get('target', '')}\n"
+            else:
+                prompt += f"{i}. {data}\n"
+    else:
+        prompt = f"""Translate the following {source_lang} texts to {target_lang_name}. 
 Keep the same meaning and tone. Preserve any placeholders like {{name}}, {{count}}, etc.
 
 Translations:
 """
-    for i, (key, text) in enumerate(translations.items(), 1):
-        prompt += f"{i}. {text}\n"
+        for i, (key, text) in enumerate(translations.items(), 1):
+            prompt += f"{i}. {text}\n"
     
     prompt += f"""
 
@@ -165,6 +251,8 @@ def main():
                         help='Target language file (e.g., en-US.ts)')
     parser.add_argument('--all', '-a', action='store_true',
                         help='Translate all languages with Chinese values')
+    parser.add_argument('--cjk', action='store_true',
+                        help='Also check CJK languages (ja-JP, ko-KR, zh-TW) for untranslated keys')
     
     args = parser.parse_args()
     
@@ -184,12 +272,13 @@ def main():
         
         lang_code = target_file.replace(ext, '')
         lang_name = LANGUAGE_NAMES.get(lang_code, lang_code)
+        is_cjk = lang_code in CJK_LANGUAGES
         
-        needs_trans = get_needs_translation(target_file, baseline_data, args.type)
+        needs_trans = get_needs_translation(target_file, baseline_data, args.type, args.cjk)
         
         if needs_trans:
             print(f"Found {len(needs_trans)} keys need translation in {target_file}")
-            translate_with_ai(needs_trans, lang_code, lang_name)
+            translate_with_ai(needs_trans, lang_code, lang_name, is_cjk=is_cjk)
         else:
             print(f"No keys need translation in {target_file}")
     else:
@@ -199,26 +288,29 @@ def main():
         all_needs_trans = {}
         for target_file in files:
             lang_code = target_file.replace(ext, '')
-            needs_trans = get_needs_translation(target_file, baseline_data, args.type)
+            needs_trans = get_needs_translation(target_file, baseline_data, args.type, args.cjk)
             if needs_trans:
-                all_needs_trans[target_file] = needs_trans
+                all_needs_trans[target_file] = {
+                    'data': needs_trans,
+                    'is_cjk': lang_code in CJK_LANGUAGES
+                }
         
         if all_needs_trans:
             print(f"Languages needing translation:")
             total = 0
-            for target_file, needs_trans in all_needs_trans.items():
+            for target_file, info in all_needs_trans.items():
                 lang_code = target_file.replace(ext, '')
                 lang_name = LANGUAGE_NAMES.get(lang_code, lang_code)
-                print(f"  {lang_name}: {len(needs_trans)} items")
-                total += len(needs_trans)
+                print(f"  {lang_name}: {len(info['data'])} items")
+                total += len(info['data'])
             print(f"\nTotal: {total} keys need translation")
             
             if args.all:
-                for target_file, needs_trans in all_needs_trans.items():
+                for target_file, info in all_needs_trans.items():
                     lang_code = target_file.replace(ext, '')
                     lang_name = LANGUAGE_NAMES.get(lang_code, lang_code)
                     print(f"\n--- Translating {lang_name} ---")
-                    translate_with_ai(needs_trans, lang_code, lang_name)
+                    translate_with_ai(info['data'], lang_code, lang_name, is_cjk=info['is_cjk'])
         else:
             print("No keys need translation in any locale files.")
 

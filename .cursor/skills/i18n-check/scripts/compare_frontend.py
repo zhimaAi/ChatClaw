@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import argparse
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9,6 +10,19 @@ FRONTEND_LOCALES_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..', '..', '..
 
 # Default baseline language
 DEFAULT_BASELINE = 'zh-CN'
+
+# For CJK languages (ja-JP, ko-KR, zh-TW), use English as baseline
+CJK_BASELINE = 'en-US'
+
+# CJK languages that need special handling (compare against non-CJK languages instead of zh-CN)
+CJK_LANGUAGES = ['ja-JP', 'ko-KR', 'zh-TW']
+
+
+def get_baseline_for_lang(lang_code):
+    """Get the appropriate baseline file for a given language"""
+    if lang_code in CJK_LANGUAGES:
+        return f"{CJK_BASELINE}.ts"
+    return f"{DEFAULT_BASELINE}.ts"
 
 def parse_ts_file(content):
     """Parse TS file to flat dict with dot-notation keys"""
@@ -118,6 +132,67 @@ def compare_files(baseline_file, target_file):
     
     return missing, extra
 
+
+def get_non_cjk_locales():
+    """Get all non-CJK locale files (for CJK language comparison)"""
+    files = []
+    for f in os.listdir(FRONTEND_LOCALES_DIR):
+        if f.endswith('.ts') and f != 'index.ts':
+            lang_code = f.replace('.ts', '')
+            if lang_code not in CJK_LANGUAGES:
+                files.append(f)
+    return sorted(files)
+
+
+def compare_cjk_with_non_cjk(target_file, target_lang):
+    """
+    For CJK languages (ja-JP, ko-KR, zh-TW), compare with non-CJK languages.
+    Find keys that exist in non-CJK languages but have the same value in target (untranslated).
+    """
+    target_keys = load_target(target_file)
+    non_cjk_files = get_non_cjk_locales()
+    
+    if not non_cjk_files:
+        print(f"Warning: No non-CJK locales found for comparison!")
+        return [], []
+    
+    # Use the first non-CJK locale as reference (usually en-US)
+    ref_file = non_cjk_files[0]
+    ref_keys = load_target(ref_file)
+    
+    # Find keys that exist in both target and reference
+    common_keys = set(target_keys.keys()) & set(ref_keys.keys())
+    
+    untranslated = []
+    for key in sorted(common_keys):
+        target_value = target_keys[key]
+        ref_value = ref_keys[key]
+        
+        # If target value equals reference value (or is empty), it's likely untranslated
+        if target_value == ref_value or not target_value.strip():
+            untranslated.append(key)
+    
+    return untranslated, ref_file
+
+
+def format_cjk_output(target_file, target_lang, untranslated, ref_file):
+    """Format output for CJK language comparison"""
+    output = []
+    output.append(f"CJK Comparison for {target_file}")
+    output.append(f"Reference: {ref_file} (non-CJK)")
+    output.append("=" * 60)
+    
+    if untranslated:
+        output.append(f"\nUntranslated keys (same as {ref_file}) in {target_file} ({len(untranslated)}):")
+        for key in untranslated[:20]:  # Show first 20
+            output.append(f"  - {key}")
+        if len(untranslated) > 20:
+            output.append(f"  ... and {len(untranslated) - 20} more")
+    else:
+        output.append(f"\nNo untranslated keys found!")
+    
+    return '\n'.join(output)
+
 def get_all_locales():
     """Get all locale files except index.ts"""
     files = []
@@ -130,12 +205,16 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Compare frontend i18n TS files')
-    parser.add_argument('--baseline', '-b', default=DEFAULT_BASELINE, 
-                        help=f'Baseline language file (default: {DEFAULT_BASELINE})')
+    parser.add_argument('--baseline', '-b', default=None, 
+                        help=f'Baseline language file (auto-detect for CJK)')
     parser.add_argument('--target', '-t', 
                         help='Target language file to compare (optional, compares all if not specified)')
     parser.add_argument('--list', '-l', action='store_true',
                         help='List all available locale files')
+    parser.add_argument('--cjk', action='store_true',
+                        help='For CJK languages (ja-JP, ko-KR, zh-TW), compare with non-CJK locales instead of zh-CN')
+    parser.add_argument('--cjk-only', action='store_true',
+                        help='Only compare CJK languages with non-CJK locales')
     
     args = parser.parse_args()
     
@@ -148,28 +227,73 @@ def main():
             print(f"  - {f}")
         return
     
-    baseline_file = args.baseline
-    if not baseline_file.endswith('.ts'):
-        baseline_file += '.ts'
-    
-    # Check baseline exists
-    if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
-        print(f"Error: Baseline file {baseline_file} not found!")
+    if args.cjk_only:
+        # Only compare CJK languages
+        for cjk_lang in CJK_LANGUAGES:
+            target_file = f"{cjk_lang}.ts"
+            if target_file in os.listdir(FRONTEND_LOCALES_DIR):
+                print()
+                untranslated, ref_file = compare_cjk_with_non_cjk(target_file, cjk_lang)
+                print(format_cjk_output(target_file, cjk_lang, untranslated, ref_file))
+                print()
         return
     
+    # Determine baseline file for each target
     if args.target:
         target_file = args.target
         if not target_file.endswith('.ts'):
             target_file += '.ts'
-        compare_files(baseline_file, target_file)
+        
+        target_lang = target_file.replace('.ts', '')
+        
+        # Auto-detect baseline based on target language
+        if args.baseline:
+            baseline_file = args.baseline
+            if not baseline_file.endswith('.ts'):
+                baseline_file += '.ts'
+        else:
+            baseline_file = get_baseline_for_lang(target_lang)
+        
+        # Check baseline exists
+        if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
+            print(f"Error: Baseline file {baseline_file} not found!")
+            return
+        
+        # Use CJK comparison if target is CJK language
+        if args.cjk and target_lang in CJK_LANGUAGES:
+            untranslated, ref_file = compare_cjk_with_non_cjk(target_file, target_lang)
+            print(format_cjk_output(target_file, target_lang, untranslated, ref_file))
+        else:
+            compare_files(baseline_file, target_file)
     else:
-        # Compare all files except baseline
+        # Compare all files
         locales = get_all_locales()
         for target_file in locales:
-            if target_file != baseline_file:
-                print()
+            target_lang = target_file.replace('.ts', '')
+            
+            # Skip if same as baseline (auto-detect)
+            if args.baseline:
+                baseline_file = args.baseline
+                if not baseline_file.endswith('.ts'):
+                    baseline_file += '.ts'
+            else:
+                baseline_file = get_baseline_for_lang(target_lang)
+            
+            # Check baseline exists
+            if baseline_file not in os.listdir(FRONTEND_LOCALES_DIR):
+                print(f"Warning: Baseline file {baseline_file} not found, skipping {target_file}")
+                continue
+            
+            if target_file == baseline_file:
+                continue
+            
+            print()
+            if args.cjk and target_lang in CJK_LANGUAGES:
+                untranslated, ref_file = compare_cjk_with_non_cjk(target_file, target_lang)
+                print(format_cjk_output(target_file, target_lang, untranslated, ref_file))
+            else:
                 compare_files(baseline_file, target_file)
-                print()
+            print()
 
 if __name__ == '__main__':
     main()
