@@ -3,11 +3,17 @@ import re
 import json
 import argparse
 
-# Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_LOCALES_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, '..', '..', '..', '..', 'frontend', 'src', 'locales'))
 
 DEFAULT_BASELINE = 'zh-CN.ts'
+
+# Languages that use Chinese characters natively (don't need Chinese translation)
+CHINESE_SCRIPT_LANGUAGES = ['zh-TW', 'zh-HK', 'zh-MO', 'ja-JP', 'ko-KR']
+
+def detect_chinese(text):
+    """Check if text contains Simplified or Traditional Chinese characters"""
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
 
 def parse_ts_file(content):
     """Parse TS file to flat dict with dot-notation keys"""
@@ -73,13 +79,10 @@ def to_nested_format(flat_obj):
         for i, part in enumerate(parts[:-1]):
             if part not in current:
                 current[part] = {}
-            # If the current path is already a string, convert to dict
             if isinstance(current[part], str):
                 current[part] = {'_value': current[part]}
             current = current[part]
-        # If the final key already exists as a dict, we need to handle it
         if parts[-1] in current and isinstance(current[parts[-1]], dict) and not isinstance(value, dict):
-            # Merge: keep existing nested keys and add new value
             current[parts[-1]]['_value'] = value
         else:
             current[parts[-1]] = value
@@ -87,20 +90,26 @@ def to_nested_format(flat_obj):
     def print_object(obj, indent=1):
         indent_str = '  ' * indent
         for key, value in obj.items():
-            # Skip _value keys (they were used for conflict resolution)
             if key == '_value':
                 continue
             if isinstance(value, dict):
-                # Check if it's a wrapper dict with _value
                 if '_value' in value and len(value) == 1:
-                    escaped_value = str(value['_value']).replace('\\', '\\\\').replace('"', '\\"')
+                    try:
+                        unescaped = value['_value'].encode('utf-8').decode('unicode_escape')
+                    except:
+                        unescaped = value['_value']
+                    escaped_value = unescaped.replace('\\', '\\\\').replace('"', '\\"')
                     lines.append(f'{indent_str}{key}: "{escaped_value}",')
                 else:
                     lines.append(f'{indent_str}{key}: {{')
                     print_object(value, indent + 1)
                     lines.append(f'{indent_str}}},')
             else:
-                escaped_value = str(value).replace('\\', '\\\\').replace('"', '\\"')
+                try:
+                    unescaped = value.encode('utf-8').decode('unicode_escape')
+                except:
+                    unescaped = value
+                escaped_value = unescaped.replace('\\', '\\\\').replace('"', '\\"')
                 lines.append(f'{indent_str}{key}: "{escaped_value}",')
 
     print_object(nested)
@@ -109,49 +118,72 @@ def to_nested_format(flat_obj):
     return '\n'.join(lines)
 
 def load_baseline(baseline_file):
-    """Load baseline TS file"""
     filepath = os.path.join(FRONTEND_LOCALES_DIR, baseline_file)
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
     return parse_ts_file(content)
 
 def load_target(target_file):
-    """Load target TS file"""
     filepath = os.path.join(FRONTEND_LOCALES_DIR, target_file)
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
     return parse_ts_file(content)
 
 def save_target(target_file, flat_obj):
-    """Save target TS file with missing keys filled"""
     output = to_nested_format(flat_obj)
     filepath = os.path.join(FRONTEND_LOCALES_DIR, target_file)
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(output)
 
 def get_missing_keys(baseline_keys, target_keys):
-    """Get missing keys from target"""
     baseline_set = set(baseline_keys.keys())
     target_set = set(target_keys.keys())
     return sorted(baseline_set - target_set)
 
 def get_all_locales():
-    """Get all locale files except index.ts"""
     files = []
     for f in os.listdir(FRONTEND_LOCALES_DIR):
         if f.endswith('.ts') and f != 'index.ts':
             files.append(f)
     return sorted(files)
 
-def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys):
+def get_language_code(filename):
+    """Extract language code from filename (e.g., en-US from en-US.ts)"""
+    return filename.replace('.ts', '')
+
+def needs_translation_check(lang_code):
+    """Check if this language needs Chinese translation detection"""
+    # Chinese script languages (zh-TW, zh-HK, ja, ko) don't need Chinese detection
+    # They have their own character systems
+    for cjk_lang in CHINESE_SCRIPT_LANGUAGES:
+        if lang_code.startswith(cjk_lang.replace('-', '')):
+            return False
+    return True
+
+def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lang_code):
     """Fill missing keys with baseline values as placeholder"""
-    # Add missing keys with baseline values
-    for key in missing_keys:
-        target_keys[key] = baseline_keys[key]
+    needs_translation = []
     
-    # Save updated target file
+    # Check if this language needs Chinese detection
+    check_translation = needs_translation_check(lang_code)
+    
+    for key in missing_keys:
+        baseline_value = baseline_keys[key]
+        target_keys[key] = baseline_value
+        
+        # If key was newly added and contains Chinese, mark for translation
+        if check_translation and detect_chinese(baseline_value):
+            needs_translation.append(key)
+    
     save_target(target_file, target_keys)
-    return missing_keys
+    return needs_translation
+
+def save_translation_needed(translation_needed):
+    """Save the list of keys that need translation to a JSON file"""
+    output_file = os.path.join(SCRIPT_DIR, 'translation_needed.json')
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(translation_needed, f, ensure_ascii=False, indent=2)
+    print(f"\nTranslation needed list saved to: {output_file}")
 
 def main():
     parser = argparse.ArgumentParser(description='Fill missing i18n keys in frontend TS files')
@@ -177,6 +209,8 @@ def main():
     baseline_keys = load_baseline(baseline_file)
     print(f"Baseline: {baseline_file} ({len(baseline_keys)} keys)")
     
+    translation_needed = {}
+    
     if args.target:
         target_file = args.target
         if not target_file.endswith('.ts'):
@@ -186,6 +220,7 @@ def main():
             print(f"Error: Target file {target_file} not found!")
             return
         
+        lang_code = get_language_code(target_file)
         target_keys = load_target(target_file)
         missing = get_missing_keys(baseline_keys, target_keys)
         
@@ -195,12 +230,14 @@ def main():
                 for key in missing:
                     print(f"  - {key}: {baseline_keys[key]}")
             else:
-                fill_missing_keys(target_file, baseline_keys, target_keys, missing)
+                needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code)
                 print(f"  Filled {len(missing)} keys with baseline values")
+                if needs_trans:
+                    translation_needed[target_file] = needs_trans
+                    print(f"  {len(needs_trans)} keys need translation")
         else:
             print(f"\n{target_file}: No missing keys")
     else:
-        # Process all files except baseline
         locales = get_all_locales()
         total_filled = 0
         
@@ -208,6 +245,7 @@ def main():
             if target_file == baseline_file:
                 continue
             
+            lang_code = get_language_code(target_file)
             target_keys = load_target(target_file)
             missing = get_missing_keys(baseline_keys, target_keys)
             
@@ -217,12 +255,17 @@ def main():
                     for key in missing:
                         print(f"  - {key}: {baseline_keys[key]}")
                 else:
-                    fill_missing_keys(target_file, baseline_keys, target_keys, missing)
+                    needs_trans = fill_missing_keys(target_file, baseline_keys, target_keys, missing, lang_code)
                     print(f"  Filled {len(missing)} keys")
                     total_filled += len(missing)
+                    if needs_trans:
+                        translation_needed[target_file] = needs_trans
+                        print(f"  {len(needs_trans)} keys need translation")
         
         if not args.dry_run:
             print(f"\nTotal: Filled {total_filled} missing keys")
+            if translation_needed:
+                save_translation_needed(translation_needed)
 
 if __name__ == '__main__':
     main()

@@ -25,20 +25,13 @@ description: 检查并补充前端和后端的i18n翻译文件。以中文（zh-
    python .cursor/skills/i18n-check/scripts/fill_backend.py
    ```
 
-4. **导出待翻译内容**:
+4. **AI 翻译** (自动检测需要翻译的内容):
    ```bash
-   # 导出前端所有语言
-   python .cursor/skills/i18n-check/scripts/export_translations.py --type frontend
+   # 翻译特定语言
+   python .cursor/skills/i18n-check/scripts/translate_with_ai.py --target en-US
 
-   # 导出特定语言
-   python .cursor/skills/i18n-check/scripts/export_translations.py --type frontend --target en-US
-   ```
-
-5. **AI 翻译**: 将导出的翻译文件发送给 AI 进行翻译
-
-6. **导入翻译结果**:
-   ```bash
-   python .cursor/skills/i18n-check/scripts/import_translations.py --type frontend --target en-US.ts --file translation_export_en-US.txt
+   # 翻译所有语言
+   python .cursor/skills/i18n-check/scripts/translate_with_ai.py --all
    ```
 
 ## 完整工作流程
@@ -56,18 +49,9 @@ python .cursor/skills/i18n-check/scripts/compare_backend.py
 python .cursor/skills/i18n-check/scripts/fill_frontend.py
 python .cursor/skills/i18n-check/scripts/fill_backend.py
 
-# Step 4: 导出待翻译内容
-python .cursor/skills/i18n-check/scripts/export_translations.py --type frontend
-
-# Step 5: AI 翻译
-# - 打开生成的 translation_export_*.txt 文件
-# - 将内容发送给 AI 进行翻译
-# - AI 翻译完成后，复制翻译结果
-
-# Step 6: 导入翻译结果
-# - 创建新的翻译文件，格式: key = translated_value
-# - 运行导入脚本
-python .cursor/skills/i18n-check/scripts/import_translations.py --type frontend --target en-US.ts --file <翻译文件>
+# Step 4: AI 翻译
+# 脚本会自动检测需要翻译的内容并生成翻译提示
+python .cursor/skills/i18n-check/scripts/translate_with_ai.py --all
 ```
 
 ## 脚本说明
@@ -80,62 +64,41 @@ python .cursor/skills/i18n-check/scripts/import_translations.py --type frontend 
 | `format_frontend.py` | 格式化前端 TS 翻译文件 |
 | `compare_frontend.py` | 对比前端翻译差异 |
 | `fill_frontend.py` | 补全前端缺失的 key |
-| `export_translations.py` | 导出待翻译的中文内容 |
-| `import_translations.py` | 导入 AI 翻译结果 |
+| `translate_with_ai.py` | AI 翻译：自动检测需要翻译的内容并生成翻译提示 |
+| `import_translations.py` | 导入翻译结果 |
 | `format_backend.py` | 格式化后端 JSON 翻译文件 |
 | `compare_backend.py` | 对比后端翻译差异 |
 | `fill_backend.py` | 补全后端缺失的 key |
 
 ### 使用示例
 
-**导出脚本**
+**AI 翻译脚本**
 ```bash
-# 导出前端所有语言
-python export_translations.py --type frontend
+# 翻译特定语言
+python translate_with_ai.py --type frontend --target en-US
 
-# 导出后端所有语言
-python export_translations.py --type backend
+# 翻译后端
+python translate_with_ai.py --type backend --target ja-JP
 
-# 导出特定语言
-python export_translations.py --type frontend --target en-US
-python export_translations.py --type backend --target ja-JP
+# 翻译所有语言
+python translate_with_ai.py --all
 ```
 
-**导入脚本**
-```bash
-# 导入前端翻译结果
-python import_translations.py --type frontend --target en-US.ts --file translation_en-US.txt
+### 翻译检测逻辑
 
-# 导入后端翻译结果
-python import_translations.py --type backend --target en-US.json --file translation_en-US.txt
-```
+- **非 CJK 语言** (en-US, de-DE, fr-FR 等): 检测含有中文的 key，需要翻译
+- **CJK 语言** (zh-TW, ja-JP, ko-KR): 检测与基准文件(zh-CN)相同的 key，需要翻译成对应语言
 
-### 导出文件格式
+### AI 翻译流程
 
-导出的文件格式如下：
-
-```
-# Translation Export: en-US.ts
-# Total: 15 items
-
-## Translations (key = value)
-
-assistant.settings.workspace.nativeDesc = 直接在本机执行命令，无沙箱隔离。命令拥有当前用户的完整权限。
-assistant.settings.workspace.workDirHint = 结构：{basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}
-...
-```
-
-### AI 翻译格式
-
-将上述导出内容发送给 AI，AI 翻译完成后，按以下格式返回：
-
-```
-assistant.settings.workspace.nativeDesc = Execute commands directly on the native machine without sandbox isolation. Commands have full permissions of the current user.
-assistant.settings.workspace.workDirHint = Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}
-...
-```
-
-将 AI 翻译结果保存为 `translation_en-US.txt`，然后运行导入脚本。
+1. 运行 `translate_with_ai.py` 脚本
+2. 脚本会自动：
+   - 读取目标语言文件
+   - 检测需要翻译的中文内容
+   - 生成 AI 翻译提示 (prompt)
+3. 将生成的提示复制给 AI 进行翻译
+4. AI 返回 JSON 格式的翻译结果
+5. 使用 `import_translations.py` 导入翻译结果
 
 ## 文件位置
 
@@ -150,4 +113,4 @@ assistant.settings.workspace.workDirHint = Structure: {basePath}{sep}sessions{se
 - **不要删除任何内容**: 只能添加缺失的 key，不能删除现有的 key
 - **变量占位符**: 后端 JSON 使用 `{{.xxx}}` 格式，前端使用 `{xxx}` 格式，必须保留
 - **格式化后再对比**: 每次对比前先运行格式化脚本，确保格式统一
-- **AI 翻译**: 补全 key 后，导出待翻译内容，AI 翻译完成后导入
+- **CJK 语言处理**: 繁体中文(zh-TW)、日语(ja-JP)、韩语(ko-KR)使用单独的检测逻辑
