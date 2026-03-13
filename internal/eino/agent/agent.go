@@ -18,7 +18,10 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
+	feishutools "chatclaw/internal/eino/tools/im/feishu"
+	wecomtools "chatclaw/internal/eino/tools/im/wecom"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/channels"
 
 	"errors"
 
@@ -81,6 +84,10 @@ type Config struct {
 
 	ToolchainBinDir string // Directory containing managed tool binaries (uv, bun, etc.)
 	SkillsEnabled   bool   // Global skills toggle from settings
+
+	IMGateway          *channels.Gateway // Gateway for IM tools (nil = no IM tools)
+	IMDefaultChannelID int64              // Auto-filled from channel source context (0 = not set)
+	IMDefaultTargetID  string             // Auto-filled from channel source context ("" = not set)
 }
 
 // AgentResult holds the created agent and a cleanup function that should be
@@ -117,10 +124,12 @@ func NewChatModelAgent(ctx context.Context, config Config, toolRegistry *tools.T
 	backend := buildBackend(config, logger)
 
 	fsTools := buildFilesystemTools(backend, bgMgr, logger)
+	imTools := buildIMTools(config, logger)
 
 	// Full toolset for sub-agents (everything available)
-	subAgentTools := make([]tool.BaseTool, 0, len(fsTools)+len(enabledTools)+len(extraTools)+3)
+	subAgentTools := make([]tool.BaseTool, 0, len(fsTools)+len(imTools)+len(enabledTools)+len(extraTools)+3)
 	subAgentTools = append(subAgentTools, fsTools...)
+	subAgentTools = append(subAgentTools, imTools...)
 	subAgentTools = append(subAgentTools, enabledTools...)
 	subAgentTools = append(subAgentTools, browserTool)
 	subAgentTools = append(subAgentTools, NewConfirmExecutionTool())
@@ -208,6 +217,10 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 		allowedNames["read_skill"] = true
 	}
 
+	// IM sender tools should be directly available to the lead agent
+	allowedNames[tools.ToolIDFeishuSender] = true
+	allowedNames[tools.ToolIDWeComSender] = true
+
 	// MCP tools (mcp__*) should be directly available to the lead agent
 	for _, t := range extraTools {
 		info, err := t.Info(context.Background())
@@ -249,7 +262,7 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 			b.SandboxEnabled() && config.SandboxNetwork, b.ToolchainBinDir())))
 
 	// 4. Sub-agent usage guide
-	handlers = append(handlers, NewInstructionHandler(buildSubAgentPrompt()))
+	handlers = append(handlers, NewInstructionHandler(buildSubAgentPrompt(config)))
 
 	// 5. Scheduled task management guide
 	handlers = append(handlers, NewInstructionHandler(buildScheduledTaskPrompt()))
@@ -322,6 +335,40 @@ func buildFilesystemTools(backend *tools.Backend, bgMgr *tools.BgProcessManager,
 		result = append(result, bgTool)
 	}
 
+	return result
+}
+
+// buildIMTools creates IM sender tools when a Gateway is configured.
+func buildIMTools(config Config, logger *slog.Logger) []tool.BaseTool {
+	if config.IMGateway == nil {
+		return nil
+	}
+	type toolFactory struct {
+		name string
+		fn   func() (tool.BaseTool, error)
+	}
+	factories := []toolFactory{
+		{"feishu_sender", func() (tool.BaseTool, error) {
+			return feishutools.NewFeishuSenderTool(&feishutools.FeishuSenderConfig{
+				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
+			})
+		}},
+		{"wecom_sender", func() (tool.BaseTool, error) {
+			return wecomtools.NewWeComSenderTool(&wecomtools.WeComSenderConfig{
+				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
+			})
+		}},
+	}
+	var result []tool.BaseTool
+	for _, f := range factories {
+		t, err := f.fn()
+		if err != nil {
+			logger.Warn("[agent] failed to create IM tool", "tool", f.name, "error", err)
+			continue
+		}
+		result = append(result, t)
+		logger.Info("[agent] IM tool created", "tool", f.name)
+	}
 	return result
 }
 
