@@ -30,6 +30,11 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
 
+/** Platforms that support create/bind in UI (feishu + wecom). */
+function isChannelPlatformSelectable(platformId: string) {
+  return platformId === 'feishu' || platformId === 'wecom'
+}
+
 const channels = ref<Channel[]>([])
 const platforms = ref<PlatformMeta[]>([])
 const agents = ref<Agent[]>([])
@@ -187,9 +192,12 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
+    const selectableIds = ['feishu', 'wecom']
     const hasSelectedPlatform = platforms.value.some((platform) => platform.id === selectedPlatformId.value)
-    if (!hasSelectedPlatform || selectedPlatformId.value !== 'feishu') {
-      selectedPlatformId.value = platforms.value.find(p => p.id === 'feishu')?.id || platforms.value[0]?.id || ''
+    const currentIsSelectable = selectableIds.includes(selectedPlatformId.value)
+    if (!hasSelectedPlatform || !currentIsSelectable) {
+      selectedPlatformId.value =
+        platforms.value.find((p) => selectableIds.includes(p.id))?.id || platforms.value[0]?.id || ''
     }
     if (selectedPlatformId.value) {
       syncCreateFormVisibility(selectedPlatformId.value)
@@ -327,9 +335,16 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
   }
 }
 
+function isSelectableChannelPlatform(platformId: string) {
+  return platformId === 'feishu' || platformId === 'wecom'
+}
+
 function openPlatformDocs() {
-  if (selectedPlatformMeta.value?.id === 'feishu') {
+  const id = selectedPlatformMeta.value?.id
+  if (id === 'feishu') {
     window.open('https://open.feishu.cn/', '_blank')
+  } else if (id === 'wecom') {
+    window.open('https://developer.work.weixin.qq.com/', '_blank')
   }
 }
 
@@ -430,11 +445,11 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                   cn(
                     'flex h-8 items-center rounded-md px-3 text-left text-sm text-[#404040] transition-colors dark:text-muted-foreground',
                     selectedPlatformId === platform.id && 'bg-[#f5f5f5] text-[#171717] dark:bg-muted dark:text-foreground',
-                    selectedPlatformId !== platform.id && platform.id === 'feishu' && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
-                    platform.id !== 'feishu' && 'opacity-50 cursor-not-allowed'
+                    selectedPlatformId !== platform.id && isSelectableChannelPlatform(platform.id) && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
+                    !isSelectableChannelPlatform(platform.id) && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="platform.id === 'feishu' ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
+                @click="isSelectableChannelPlatform(platform.id) ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
                 <span class="truncate">{{ getPlatformDisplayName(platform.id, platform.name) }}</span>
               </button>
