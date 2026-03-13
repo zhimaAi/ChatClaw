@@ -108,6 +108,43 @@ func (s *ConversationsService) GetConversation(id int64) (*Conversation, error) 
 	return &dto, nil
 }
 
+// FindOrCreateByExternalID looks up a conversation by agent_id + external_id.
+// If none exists, it creates one with the given name and returns the ID.
+func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalID, name string) (int64, error) {
+	db, err := s.db()
+	if err != nil {
+		return 0, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var m conversationModel
+	findErr := db.NewSelect().
+		Model(&m).
+		Where("agent_id = ?", agentID).
+		Where("external_id = ?", externalID).
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(ctx)
+
+	if findErr == nil && m.ID > 0 {
+		return m.ID, nil
+	}
+
+	conv, createErr := s.CreateConversation(CreateConversationInput{
+		AgentID:    agentID,
+		Name:       name,
+		ExternalID: externalID,
+		ChatMode:   ChatModeTask,
+		TeamType:   TeamTypePerson,
+	})
+	if createErr != nil {
+		return 0, createErr
+	}
+	return conv.ID, nil
+}
+
 // CreateConversation 创建会话
 func (s *ConversationsService) CreateConversation(input CreateConversationInput) (*Conversation, error) {
 	name := strings.TrimSpace(input.Name)
@@ -383,4 +420,30 @@ func (s *ConversationsService) DeleteConversationsByAgentID(agentID int64) error
 	}
 
 	return nil
+}
+
+// GetLatestAssistantReply returns the content of the most recent assistant
+// message in the given conversation. Used by MCP tool handlers.
+func (s *ConversationsService) GetLatestAssistantReply(conversationID int64) (string, error) {
+	db, err := s.db()
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var content string
+	scanErr := db.NewSelect().
+		Table("messages").
+		Column("content").
+		Where("conversation_id = ?", conversationID).
+		Where("role = ?", "assistant").
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(ctx, &content)
+	if scanErr != nil {
+		return "", scanErr
+	}
+	return content, nil
 }
