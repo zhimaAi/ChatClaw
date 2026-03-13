@@ -2,9 +2,11 @@ package chat
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1187,9 +1189,6 @@ func supportsMultimodal(providerID, modelID string) bool {
 func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, conversationID int64, contextCount int, providerID, modelID string) ([]*schema.Message, error) {
 	var models []messageModel
 
-	// Check if the model supports multimodal capabilities
-	supportsMultimodal := supportsMultimodal(providerID, modelID)
-
 	needLimit := contextCount > 0 && contextCount < 200
 
 	q := db.NewSelect().
@@ -1242,11 +1241,11 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				}
 			}
 
-			// Filter out images if model doesn't support multimodal
-			if !supportsMultimodal && len(images) > 0 {
-				s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
-				images = nil
-			}
+			// 不再根据模型能力过滤图片，因为不支持图片识别的模型可以通过调用技能去识别图片
+			// if !supportsMultimodal && len(images) > 0 {
+			// 	s.app.Logger.Info("[chat] filtering out images - model does not support multimodal", "msg_id", m.ID, "provider", providerID, "model", modelID, "image_count", len(images))
+			// 	images = nil
+			// }
 
 			hasText := strings.TrimSpace(m.Content) != ""
 			if !hasText && len(images) == 0 {
@@ -1262,6 +1261,10 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 			// If there are images, use multi-content form
 			if len(images) > 0 {
 				var parts []schema.MessageInputPart
+
+				// Build image references text for skills to find
+				var imageRefs []string
+
 				if hasText {
 					parts = append(parts, schema.MessageInputPart{
 						Type: schema.ChatMessagePartTypeText,
@@ -1270,6 +1273,32 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 				}
 
 				for _, img := range images {
+					// Handle local file images
+					if img.Source == "local_file" && img.FilePath != "" {
+						// Add reference text so skills can find the image
+						imageRefs = append(imageRefs, img.FilePath)
+
+						// Read file and convert to base64 for model
+						data, err := os.ReadFile(img.FilePath)
+						if err != nil {
+							s.app.Logger.Warn("[chat] failed to read image file", "path", img.FilePath, "error", err)
+							continue
+						}
+						base64Data := base64.StdEncoding.EncodeToString(data)
+
+						parts = append(parts, schema.MessageInputPart{
+							Type: schema.ChatMessagePartTypeImageURL,
+							Image: &schema.MessageInputImage{
+								MessagePartCommon: schema.MessagePartCommon{
+									Base64Data: &base64Data,
+									MIMEType:   img.MimeType,
+								},
+							},
+						})
+						continue
+					}
+
+					// Handle inline base64 images
 					if img.Source != "inline_base64" || img.Base64 == "" || img.MimeType == "" {
 						continue
 					}
@@ -1283,6 +1312,15 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 								MIMEType:   img.MimeType,
 							},
 						},
+					})
+				}
+
+				// Add image file path references as a text part for skills
+				if len(imageRefs) > 0 {
+					refText := "\n\n[Attached Images]\n" + strings.Join(imageRefs, "\n")
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: refText,
 					})
 				}
 
