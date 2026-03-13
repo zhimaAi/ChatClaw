@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialogs } from '@wailsio/runtime'
+import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import {
   Dialog,
@@ -188,6 +189,14 @@ async function handleSave() {
     saving.value = false
   }
 }
+
+async function handleOpenExternalLink(url: string) {
+  try {
+    await BrowserService.OpenURL(url)
+  } catch (error) {
+    console.error('Failed to open external link:', error)
+  }
+}
 </script>
 
 <template>
@@ -210,13 +219,17 @@ async function handleSave() {
             <a
               href="https://open.feishu.cn/"
               target="_blank"
+              rel="noopener noreferrer"
               class="underline hover:text-primary"
+              @click.prevent="handleOpenExternalLink('https://open.feishu.cn/')"
             >{{ t('channels.config.feishuPlatformLink') }}</a>
             {{ t('channels.config.feishuTipMiddle') }}
             <a
-              href="https://www.feishu.cn/hc/zh-CN/articles/360024984973"
+              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu"
               target="_blank"
+              rel="noopener noreferrer"
               class="underline hover:text-primary"
+              @click.prevent="handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu')"
             >{{ t('channels.config.feishuGuideLink') }}</a>
             {{ t('channels.config.feishuTipSuffix') }}
           </p>

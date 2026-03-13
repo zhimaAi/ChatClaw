@@ -180,8 +180,17 @@ Destructive commands (rm -rf, sudo, mkfs, shutdown, kill -9, chmod -R 777, etc.)
 
 // buildSubAgentPrompt generates orchestration guidance for the lead agent.
 // Since the lead agent only has read-only tools, delegation is architecturally enforced.
-func buildSubAgentPrompt() string {
+func buildSubAgentPrompt(config Config) string {
+	hasIM := config.IMGateway != nil
+
 	if isZhCN() {
+		imToolsZH := ""
+		imSelectionZH := ""
+		if hasIM {
+			imToolsZH = "\n- IM 消息发送工具：feishu_sender（飞书）、wecom_sender（企业微信）— 可向已连接的渠道发送消息或文件"
+			imSelectionZH = "\n- 需要发送飞书/企业微信消息 → general_purpose（拥有 feishu_sender、wecom_sender）"
+		}
+
 		return `
 # 任务委派
 
@@ -191,7 +200,7 @@ func buildSubAgentPrompt() string {
 
 ### general_purpose（执行代理）
 适用于：调研、搜索、写代码、文件操作、分析、多步执行 — 任何非琐碎任务。
-- 拥有完整工具集：web_search、write_file、edit_file、execute、glob、grep 等
+- 拥有完整工具集：web_search、write_file、edit_file、execute、glob、grep 等` + imToolsZH + `
 - 给它完整的任务描述（包含背景、目标、工作目录路径），因为它看不到你的对话历史
 
 ### bash（终端代理）
@@ -201,7 +210,7 @@ func buildSubAgentPrompt() string {
 
 ## 选择规则（严格遵守）
 - 需要搜索/调研 → general_purpose（bash 没有搜索能力）
-- 需要写代码/编辑文件 → general_purpose
+- 需要写代码/编辑文件 → general_purpose` + imSelectionZH + `
 - 只需要运行命令 → bash
 - 不确定时 → general_purpose（它能做 bash 能做的一切）
 
@@ -217,6 +226,14 @@ func buildSubAgentPrompt() string {
 - 子代理返回后，综合结果再回复用户
 `
 	}
+
+	imToolsEN := ""
+	imSelectionEN := ""
+	if hasIM {
+		imToolsEN = "\n- IM messaging tools: feishu_sender (Feishu/Lark), wecom_sender (WeCom) — send messages or files via connected channels"
+		imSelectionEN = "\n- Needs to send Feishu/WeCom messages → general_purpose (has feishu_sender, wecom_sender)"
+	}
+
 	return `
 # Task Delegation
 
@@ -226,7 +243,7 @@ You are a task orchestrator. You only have read-only tools (read_file, ls) — a
 
 ### general_purpose (Execution agent)
 Use for: research, search, coding, file operations, analysis, multi-step execution — any non-trivial task.
-- Has full toolset: web_search, write_file, edit_file, execute, glob, grep, etc.
+- Has full toolset: web_search, write_file, edit_file, execute, glob, grep, etc.` + imToolsEN + `
 - Provide complete task descriptions (background, goal, working directory path) — it cannot see your conversation history
 
 ### bash (Terminal agent)
@@ -236,7 +253,7 @@ Use ONLY for: pure bash command sequences (git, npm, docker, build/test/deploy).
 
 ## Selection Rules (strict)
 - Needs search/research → general_purpose (bash has no search capability)
-- Needs coding/file editing → general_purpose
+- Needs coding/file editing → general_purpose` + imSelectionEN + `
 - Only needs to run commands → bash
 - When in doubt → general_purpose (it can do everything bash can)
 

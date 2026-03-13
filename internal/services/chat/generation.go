@@ -15,8 +15,6 @@ import (
 	"chatclaw/internal/define"
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
-	feishutools "chatclaw/internal/eino/tools/im/feishu"
-	wecomtools "chatclaw/internal/eino/tools/im/wecom"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
@@ -204,6 +202,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	// Build extra tools and handlers
 	extraTools, extraHandlers, extrasCleanup := s.buildExtras(ctx, gc)
 
+	agentConfig = gc.agentConfig
 	agentConfig.Provider = providerConfig
 	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraHandlers, s.app.Logger, len(messages))
 	if err != nil {
@@ -416,32 +415,11 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	}
 
 	if s.gateway != nil {
+		agentConfig.IMGateway = s.gateway
 		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
-
-		feishuCfg := &feishutools.FeishuSenderConfig{Gateway: s.gateway}
 		if hasChannelSource {
-			feishuCfg.DefaultChannelID = chID
-			feishuCfg.DefaultTargetID = tgtID
-		}
-		feishuTool, toolErr := feishutools.NewFeishuSenderTool(feishuCfg)
-		if toolErr != nil {
-			s.app.Logger.Warn("[chat] failed to create feishu_sender tool", "error", toolErr)
-		} else {
-			extraTools = append(extraTools, feishuTool)
-			s.app.Logger.Info("[chat] feishu_sender tool added", "default_channel", feishuCfg.DefaultChannelID, "default_target", feishuCfg.DefaultTargetID)
-		}
-
-		wecomCfg := &wecomtools.WeComSenderConfig{Gateway: s.gateway}
-		if hasChannelSource {
-			wecomCfg.DefaultChannelID = chID
-			wecomCfg.DefaultTargetID = tgtID
-		}
-		wecomTool, toolErr := wecomtools.NewWeComSenderTool(wecomCfg)
-		if toolErr != nil {
-			s.app.Logger.Warn("[chat] failed to create wecom_sender tool", "error", toolErr)
-		} else {
-			extraTools = append(extraTools, wecomTool)
-			s.app.Logger.Info("[chat] wecom_sender tool added", "default_channel", wecomCfg.DefaultChannelID, "default_target", wecomCfg.DefaultTargetID)
+			agentConfig.IMDefaultChannelID = chID
+			agentConfig.IMDefaultTargetID = tgtID
 		}
 	}
 
