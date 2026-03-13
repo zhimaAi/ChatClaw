@@ -22,7 +22,7 @@ describe('createSubmitLock', () => {
     assert.equal(lock.isLocked(), false)
   })
 
-  it('blocks submits while external saving is true and allows immediate retry after reset', () => {
+  it('blocks submits while external saving is true and allows retry after reset', () => {
     const lock = createSubmitLock()
 
     assert.equal(lock.acquire(true), false)
@@ -32,21 +32,6 @@ describe('createSubmitLock', () => {
     assert.equal(lock.acquire(true), false)
 
     lock.syncSaving(false)
-    assert.equal(lock.acquire(false), false)
-
-    lock.reset()
-    assert.equal(lock.acquire(false), true)
-  })
-
-  it('keeps submit locked for at least one second after saving finishes', async () => {
-    const lock = createSubmitLock()
-
-    assert.equal(lock.acquire(false), true)
-    lock.syncSaving(false)
-
-    assert.equal(lock.acquire(false), false)
-
-    await new Promise((resolve) => setTimeout(resolve, 1050))
     assert.equal(lock.acquire(false), true)
   })
 })

@@ -10,6 +10,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Switch } from '@/components/ui/switch'
 import type { Agent, ScheduledTask } from '../types'
+import { buildTaskTableDisplay } from './taskTableDisplay'
 import { describeSchedule, formatTaskTime } from '../utils'
 
 const props = defineProps<{
@@ -36,10 +37,6 @@ function displayTaskStatusLabel(task: ScheduledTask) {
   if (status === 'paused') return t('scheduledTasks.disabled')
   if (status === 'running') return t('scheduledTasks.statusRunning')
   return t('scheduledTasks.statusPending')
-}
-
-function resolveAgentName(task: ScheduledTask) {
-  return props.agents.find((agent) => agent.id === task.agent_id)?.name || '-'
 }
 
 function lastRunIcon(task: ScheduledTask) {
@@ -89,6 +86,7 @@ function statusTextClass(task: ScheduledTask) {
               </div>
             </td>
             <td class="px-5 py-3.5">
+              <template v-if="buildTaskTableDisplay(task, agents).schedule.showLastRun">
               <div class="space-y-1 text-sm">
                 <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
                 <div class="flex items-center gap-1.5 text-[#8c8c8c]">
@@ -123,15 +121,15 @@ function statusTextClass(task: ScheduledTask) {
                   </span>
                 </div>
               </div>
+              </template>
+              <div v-else class="space-y-1 text-sm">
+                <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
+              </div>
             </td>
             <td class="px-5 py-3.5">
               <div class="space-y-1">
-                <div class="text-[15px] leading-6 text-[#171717]">{{ resolveAgentName(task) }}</div>
-                <div class="flex items-center gap-1.5 text-sm text-[#8c8c8c]">
-                  <Clock3 class="size-4 shrink-0 text-[#a3a3a3]" />
-                  <span class="truncate">
-                    {{ t('scheduledTasks.nextRunPrefix') }}{{ formatTaskTime(task.next_run_at) }}
-                  </span>
+                <div class="text-[15px] leading-6 text-[#171717]">
+                  {{ buildTaskTableDisplay(task, agents).agent.name }}
                 </div>
               </div>
             </td>

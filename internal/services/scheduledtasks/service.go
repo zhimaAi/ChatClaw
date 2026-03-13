@@ -19,12 +19,15 @@ import (
 )
 
 type ScheduledTasksService struct {
-	app        *application.App
-	db         *bun.DB
-	scheduler  *scheduler
-	runnerDeps runDependencies
-	createMu   sync.Mutex
-	createRuns map[string]*createCall
+	app             *application.App
+	db              *bun.DB
+	scheduler       *scheduler
+	runnerDeps      runDependencies
+	createMu        sync.Mutex
+	createRuns      map[string]*createCall
+	recentCreates   map[string]recentCreate
+	now             func() time.Time
+	duplicateWindow time.Duration
 }
 
 type createCall struct {
@@ -33,10 +36,17 @@ type createCall struct {
 	err  error
 }
 
+type recentCreate struct {
+	task      ScheduledTask
+	expiresAt time.Time
+}
+
 func NewScheduledTasksService(app *application.App, convSvc *conversations.ConversationsService, chatSvc *chat.ChatService) *ScheduledTasksService {
 	svc := &ScheduledTasksService{
-		app:       app,
-		scheduler: newScheduler(),
+		app:             app,
+		scheduler:       newScheduler(),
+		now:             time.Now,
+		duplicateWindow: time.Second,
 	}
 	if convSvc != nil {
 		svc.runnerDeps.conversations = convSvc
@@ -49,9 +59,11 @@ func NewScheduledTasksService(app *application.App, convSvc *conversations.Conve
 
 func NewScheduledTasksServiceForTest(app *application.App, db *bun.DB, convSvc conversationService, chatSvc chatService) *ScheduledTasksService {
 	return &ScheduledTasksService{
-		app:       app,
-		db:        db,
-		scheduler: newScheduler(),
+		app:             app,
+		db:              db,
+		scheduler:       newScheduler(),
+		now:             time.Now,
+		duplicateWindow: time.Second,
 		runnerDeps: runDependencies{
 			conversations: convSvc,
 			chat:          chatSvc,
@@ -208,7 +220,10 @@ func (s *ScheduledTasksService) CreateScheduledTask(input CreateScheduledTaskInp
 		return nil, err
 	}
 	fingerprint := createTaskFingerprint(model)
-	call, isLeader := s.beginCreateCall(fingerprint)
+	cachedTask, call, isLeader := s.beginCreateCall(fingerprint)
+	if cachedTask != nil {
+		return cachedTask, nil
+	}
 	if !isLeader {
 		<-call.done
 		if call.task == nil {
@@ -464,27 +479,56 @@ func createTaskFingerprint(model *scheduledTaskModel) string {
 	}, "\x00")
 }
 
-func (s *ScheduledTasksService) beginCreateCall(fingerprint string) (*createCall, bool) {
+func (s *ScheduledTasksService) beginCreateCall(fingerprint string) (*ScheduledTask, *createCall, bool) {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
 
+	now := s.currentTime()
+	for key, entry := range s.recentCreates {
+		if !entry.expiresAt.After(now) {
+			delete(s.recentCreates, key)
+		}
+	}
+	if entry, ok := s.recentCreates[fingerprint]; ok {
+		taskCopy := entry.task
+		return &taskCopy, nil, false
+	}
 	if s.createRuns == nil {
 		s.createRuns = make(map[string]*createCall)
 	}
+	if s.recentCreates == nil {
+		s.recentCreates = make(map[string]recentCreate)
+	}
 	if existing, ok := s.createRuns[fingerprint]; ok {
-		return existing, false
+		return nil, existing, false
 	}
 
 	call := &createCall{done: make(chan struct{})}
 	s.createRuns[fingerprint] = call
-	return call, true
+	return nil, call, true
 }
 
 func (s *ScheduledTasksService) finishCreateCall(fingerprint string, call *createCall) {
 	s.createMu.Lock()
 	delete(s.createRuns, fingerprint)
+	if call.task != nil && call.err == nil {
+		if s.recentCreates == nil {
+			s.recentCreates = make(map[string]recentCreate)
+		}
+		s.recentCreates[fingerprint] = recentCreate{
+			task:      *call.task,
+			expiresAt: s.currentTime().Add(s.duplicateWindow),
+		}
+	}
 	s.createMu.Unlock()
 	close(call.done)
+}
+
+func (s *ScheduledTasksService) currentTime() time.Time {
+	if s.now == nil {
+		return time.Now().UTC()
+	}
+	return s.now().UTC()
 }
 
 func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, input UpdateScheduledTaskInput) error {
