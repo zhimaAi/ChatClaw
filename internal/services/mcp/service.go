@@ -641,6 +641,11 @@ func StdioCmdFunc(ctx context.Context, command string, envVars []string, args []
 
 	cmd := exec.CommandContext(ctx, resolved, args...)
 	cmd.Env = mergedEnv
+
+	// Platform-specific helper: on Windows this hides the console window,
+	// on other platforms it is a no-op (implemented in separate files).
+	setCmdHideWindow(cmd)
+
 	return cmd, nil
 }
 
