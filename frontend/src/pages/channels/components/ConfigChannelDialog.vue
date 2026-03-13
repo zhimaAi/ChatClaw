@@ -64,6 +64,7 @@ watch(open, (val) => {
 const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform)
 
 const isFeishu = computed(() => currentPlatformId.value === 'feishu')
+const isDingTalk = computed(() => currentPlatformId.value === 'dingtalk')
 const isWeCom = computed(() => currentPlatformId.value === 'wecom')
 const appIdLabel = computed(() =>
   isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId'),
@@ -219,6 +220,28 @@ async function handleSave() {
               class="underline hover:text-primary"
             >{{ t('channels.config.feishuGuideLink') }}</a>
             {{ t('channels.config.feishuTipSuffix') }}
+          </p>
+        </div>
+
+        <!-- DingTalk tip card -->
+        <div
+          v-if="isDingTalk"
+          class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
+        >
+          <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            {{ t('channels.config.dingtalkTipPrefix') }}
+            <a
+              href="https://open.dingtalk.com/"
+              target="_blank"
+              class="underline hover:text-primary"
+            >{{ t('channels.config.dingtalkPlatformLink') }}</a>
+            {{ t('channels.config.dingtalkTipMiddle') }}
+            <a
+              href="https://open.dingtalk.com/document/orgapp/enterprise-created-chatbot"
+              target="_blank"
+              class="underline hover:text-primary"
+            >{{ t('channels.config.dingtalkGuideLink') }}</a>
+            {{ t('channels.config.dingtalkTipSuffix') }}
           </p>
         </div>
 

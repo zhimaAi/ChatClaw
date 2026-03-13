@@ -1227,6 +1227,11 @@ export default {
       feishuTipSuffix: '设置',
       feishuPlatformLink: '飞书开放平台',
       feishuGuideLink: '配置步骤',
+      dingtalkTipPrefix: '登录',
+      dingtalkTipMiddle: '创建机器人，按照',
+      dingtalkTipSuffix: '完成配置',
+      dingtalkPlatformLink: '钉钉开放平台',
+      dingtalkGuideLink: '配置文档',
     },
     delete: {
       title: '确认删除',

@@ -1244,6 +1244,11 @@ export default {
       feishuTipSuffix: 'to configure',
       feishuPlatformLink: 'Feishu Open Platform',
       feishuGuideLink: 'configuration guide',
+      dingtalkTipPrefix: 'Login to',
+      dingtalkTipMiddle: 'to create a bot, follow',
+      dingtalkTipSuffix: 'to complete setup',
+      dingtalkPlatformLink: 'DingTalk Open Platform',
+      dingtalkGuideLink: 'configuration guide',
     },
     delete: {
       title: 'Confirm Delete',

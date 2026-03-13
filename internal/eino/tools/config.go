@@ -69,6 +69,7 @@ const (
 	ToolIDExecuteBackground = "execute_background"
 
 	// Channel tool IDs
-	ToolIDFeishuSender = "feishu_sender"
-	ToolIDWeComSender  = "wecom_sender"
+	ToolIDFeishuSender   = "feishu_sender"
+	ToolIDWeComSender    = "wecom_sender"
+	ToolIDDingTalkSender = "dingtalk_sender"
 )

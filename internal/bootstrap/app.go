@@ -810,13 +810,26 @@ func handleChannelMessage(
 
 // extractTextContent extracts plain text from platform-specific message formats.
 func extractTextContent(msg channels.IncomingMessage) string {
-	if msg.MsgType != "text" && msg.MsgType != "post" && msg.MsgType != "" {
-		return ""
+	// DingTalk media types (picture/file/audio/video) are handled below;
+	// skip the text-only guard for DingTalk so media descriptions reach the AI.
+	if msg.Platform != channels.PlatformDingTalk {
+		if msg.MsgType != "text" && msg.MsgType != "post" && msg.MsgType != "" {
+			return ""
+		}
 	}
 
 	content := strings.TrimSpace(msg.Content)
 	if content == "" {
 		return ""
+	}
+
+	// DingTalk: content is already extracted/described by the adapter.
+	// - text/audio(ASR) → plain string, pass directly
+	// - picture/file/video/audio-no-ASR → descriptive string like "[图片]", "[文件: xxx.pdf]"
+	// Non-text media types (picture/file/video) are described but not useful as AI input;
+	// we pass the description so the AI can at least acknowledge the message.
+	if msg.Platform == channels.PlatformDingTalk {
+		return content
 	}
 
 	if strings.HasPrefix(content, "{") {

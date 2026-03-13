@@ -350,6 +350,8 @@ async function handleInlineSave() {
 function openPlatformDocs() {
   if (selectedPlatformMeta.value?.id === 'feishu') {
     window.open('https://open.feishu.cn/', '_blank')
+  } else if (selectedPlatformMeta.value?.id === 'dingtalk') {
+    window.open('https://open.dingtalk.com/', '_blank')
   }
 }
 
@@ -456,9 +458,9 @@ onMounted(loadData)
           class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg border-l border-[#e5e5e5] dark:border-border"
           :class="[
             selectedFilter === platform.id ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
-            platform.id !== 'feishu' ? 'opacity-50 cursor-not-allowed' : ''
+            platform.id !== 'feishu' && platform.id !== 'dingtalk' ? 'opacity-50 cursor-not-allowed' : ''
           ]"
-          @click="platform.id === 'feishu' ? selectedFilter = platform.id : toast.default(t('channels.comingSoon'))"
+          @click="platform.id === 'feishu' || platform.id === 'dingtalk' ? selectedFilter = platform.id : toast.default(t('channels.comingSoon'))"
         >
           {{ getPlatformName(platform.id) }}
         </button>

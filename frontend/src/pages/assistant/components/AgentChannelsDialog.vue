@@ -70,6 +70,7 @@ const selectedPlatformChannels = computed(() => {
 })
 
 const isFeishu = computed(() => selectedPlatformMeta.value?.id === 'feishu')
+const isDingTalk = computed(() => selectedPlatformMeta.value?.id === 'dingtalk')
 const isWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
 const inlineAppIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
 const inlineAppSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
@@ -188,8 +189,9 @@ async function loadData() {
     agents.value = agentList || []
 
     const hasSelectedPlatform = platforms.value.some((platform) => platform.id === selectedPlatformId.value)
-    if (!hasSelectedPlatform || selectedPlatformId.value !== 'feishu') {
-      selectedPlatformId.value = platforms.value.find(p => p.id === 'feishu')?.id || platforms.value[0]?.id || ''
+    const enabledPlatforms = ['feishu', 'dingtalk']
+    if (!hasSelectedPlatform || !enabledPlatforms.includes(selectedPlatformId.value)) {
+      selectedPlatformId.value = platforms.value.find(p => enabledPlatforms.includes(p.id))?.id || platforms.value[0]?.id || ''
     }
     if (selectedPlatformId.value) {
       syncCreateFormVisibility(selectedPlatformId.value)
@@ -330,6 +332,8 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
 function openPlatformDocs() {
   if (selectedPlatformMeta.value?.id === 'feishu') {
     window.open('https://open.feishu.cn/', '_blank')
+  } else if (selectedPlatformMeta.value?.id === 'dingtalk') {
+    window.open('https://open.dingtalk.com/', '_blank')
   }
 }
 
@@ -430,11 +434,11 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                   cn(
                     'flex h-8 items-center rounded-md px-3 text-left text-sm text-[#404040] transition-colors dark:text-muted-foreground',
                     selectedPlatformId === platform.id && 'bg-[#f5f5f5] text-[#171717] dark:bg-muted dark:text-foreground',
-                    selectedPlatformId !== platform.id && platform.id === 'feishu' && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
-                    platform.id !== 'feishu' && 'opacity-50 cursor-not-allowed'
+                    selectedPlatformId !== platform.id && (platform.id === 'feishu' || platform.id === 'dingtalk') && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
+                    platform.id !== 'feishu' && platform.id !== 'dingtalk' && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="platform.id === 'feishu' ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
+                @click="platform.id === 'feishu' || platform.id === 'dingtalk' ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
                 <span class="truncate">{{ getPlatformDisplayName(platform.id, platform.name) }}</span>
               </button>
