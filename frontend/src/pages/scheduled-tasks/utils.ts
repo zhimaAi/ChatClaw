@@ -23,8 +23,12 @@ export function describeSchedule(task: Pick<ScheduledTask, 'schedule_type' | 'sc
       const parsed = JSON.parse(task.schedule_value) as {
         hour: number
         minute: number
+        interval_minutes?: number
         weekdays?: number[]
         day_of_month?: number
+      }
+      if (parsed.interval_minutes) {
+        return `每隔 ${parsed.interval_minutes} 分钟`
       }
       const hh = String(parsed.hour).padStart(2, '0')
       const mm = String(parsed.minute).padStart(2, '0')
@@ -57,6 +61,7 @@ export function createEmptyForm(): ScheduledTaskFormState {
     customMode: 'daily',
     customHour: 9,
     customMinute: 0,
+    customIntervalMinutes: 15,
     customWeekdays: [1, 2, 3, 4, 5],
     customDayOfMonth: 1,
     cronExpr: '0 9 * * *',
@@ -82,8 +87,14 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
       const parsed = JSON.parse(task.schedule_value) as {
         hour: number
         minute: number
+        interval_minutes?: number
         weekdays?: number[]
         day_of_month?: number
+      }
+      if (parsed.interval_minutes) {
+        form.customMode = 'interval'
+        form.customIntervalMinutes = parsed.interval_minutes
+        return form
       }
       form.customHour = parsed.hour ?? 9
       form.customMinute = parsed.minute ?? 0
