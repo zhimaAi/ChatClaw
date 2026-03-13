@@ -27,6 +27,22 @@ export function useTeamRobots() {
 
   const teamBound = computed(() => isBindingValid(binding.value))
 
+  /**
+   * Load binding only (no robot list). Use before personal-assistant knowledge
+   * list load so teamBound is true on first open without visiting team tab.
+   */
+  const ensureBindingLoaded = async () => {
+    if (teamBound.value) return
+    try {
+      const latestBinding = await getBindingCached()
+      binding.value = latestBinding
+      hasBinding.value = !!latestBinding
+      teamBindingChecked.value = true
+    } catch {
+      // ignore; teamBound stays false
+    }
+  }
+
   const loadTeamRobots = async () => {
     console.info('[assistant][team] load robots: start')
     teamLoading.value = true
@@ -95,6 +111,7 @@ export function useTeamRobots() {
     hasBinding,
     binding,
     loadTeamRobots,
+    ensureBindingLoaded,
     isTeamEmpty,
   }
 }

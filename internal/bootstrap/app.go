@@ -314,6 +314,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(assistantMCPService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
+	chatWikiService := chatwiki.NewChatWikiService(app)
+	chatService.SetChatWikiService(chatWikiService)
 	app.RegisterService(application.NewService(chatService))
 	// Wire chat bridge for assistant MCP (avoids cyclic import)
 	assistantMCPService.SetChatBridge(assistantmcp.NewChatBridge(
@@ -362,7 +364,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 ChatWiki 绑定服务
-	app.RegisterService(application.NewService(chatwiki.NewChatWikiService(app)))
+	app.RegisterService(application.NewService(chatWikiService))
 
 	// ========== macOS 应用菜单 ==========
 	if runtime.GOOS == "darwin" {
@@ -487,6 +489,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
+		// Register chatclaw:// URL scheme on Windows so browser can launch app after OAuth.
+		// Fixes "scheme does not have a registered handler" when installer did not run or registration was lost.
+		if err := windows.RegisterChatClawProtocol(); err != nil {
+			app.Logger.Warn("Failed to register chatclaw protocol", "error", err)
+		}
 		trayService.InitFromSettings()
 		// 根据 settings 中的开关状态启动/停止吸附功能
 		_, _ = snapService.SyncFromSettings()

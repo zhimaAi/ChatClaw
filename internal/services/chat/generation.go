@@ -170,6 +170,37 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		return
 	}
 
+	// Task mode: local KB uses retriever tool, but team recall has no tool — inject team
+	// retrieval into instruction when team_library_id is set (same merge as chat mode).
+	// Build teamRetrievalItems so we can emit chat:retrieval and add segment for UI display (like local KB).
+	var teamRetrievalItems []RetrievalItem
+	if strings.TrimSpace(agentExtras.TeamLibraryID) != "" {
+		userQuery := ""
+		for i := len(messages) - 1; i >= 0; i-- {
+			if messages[i].Role == schema.User {
+				userQuery = messages[i].Content
+				break
+			}
+		}
+		if strings.TrimSpace(userQuery) != "" {
+			teamResults := s.retrieveFromTeamLibrary(ctx, agentExtras.TeamLibraryID, userQuery, teamRecallSize)
+			if len(teamResults) > 0 {
+				teamRetrievalItems = make([]RetrievalItem, 0, len(teamResults))
+				for _, r := range teamResults {
+					teamRetrievalItems = append(teamRetrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
+				}
+			var sb strings.Builder
+			sb.WriteString(teamRecallContextHeader)
+			for i, r := range teamResults {
+				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+			}
+			sb.WriteString(teamRecallContextFooter)
+			gc.agentConfig.Instruction += sb.String()
+				s.app.Logger.Info("[chat] task mode team recall injected", "conv", conversationID, "results", len(teamResults))
+			}
+		}
+	}
+
 	// Build extra tools and handlers
 	extraTools, extraHandlers, extrasCleanup := s.buildExtras(ctx, gc)
 
@@ -196,7 +227,7 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	})
 
 	checkpointID := fmt.Sprintf("conv_%d_%s", conversationID, gc.requestID)
-	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID)
+	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID, teamRetrievalItems)
 
 	if result.interrupted {
 		if existing, ok := s.activeGenerations.Load(conversationID); ok {
@@ -384,7 +415,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-
 	if s.gateway != nil {
 		chID, tgtID, hasChannelSource := s.resolveChannelSource(ctx, gc.db, gc.conversationID)
 
@@ -421,7 +451,7 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		}
 	}
 
-    for _, factory := range s.extraToolFactories {
+	for _, factory := range s.extraToolFactories {
 		factoryTools, toolErr := factory()
 		if toolErr != nil {
 			if s.app != nil {
@@ -693,8 +723,16 @@ type processStreamResult struct {
 }
 
 // processStream runs the ADK runner and processes all streaming events.
-func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message, checkpointID string) processStreamResult {
+// initialRetrievalItems: task-mode team recall results; when non-empty, emit chat:retrieval and add segment for UI.
+func (s *ChatService) processStream(ctx context.Context, gc *generationContext, runner *adk.Runner, assistantMsg *messageModel, messages []*schema.Message, checkpointID string, initialRetrievalItems []RetrievalItem) processStreamResult {
 	ss := newStreamState(gc, assistantMsg)
+	if len(initialRetrievalItems) > 0 {
+		ss.addRetrievalToSegments(initialRetrievalItems)
+		gc.emit(EventChatRetrieval, ChatRetrievalEvent{
+			ChatEvent: gc.chatEvent(assistantMsg.ID),
+			Items:     initialRetrievalItems,
+		})
+	}
 
 	iter := runner.Run(ctx, messages, adk.WithCheckPointID(checkpointID))
 	return s.consumeEventIter(ctx, gc, ss, assistantMsg, iter)

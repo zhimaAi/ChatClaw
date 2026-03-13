@@ -18,14 +18,15 @@ import (
 
 // AgentExtras contains additional agent configuration not in einoagent.Config
 type AgentExtras struct {
-	AgentID               int64
-	LibraryIDs            []int64
-	MatchThreshold        float64
-	MemoryEnabled         bool
-	ChatMode              string // "chat" or "task"
-	MCPEnabled            bool
-	MCPServerIDs          []string // IDs in agent list
-	MCPServerEnabledIDs   []string // IDs enabled for generation (subset)
+	AgentID             int64
+	LibraryIDs          []int64
+	TeamLibraryID       string   // optional: ChatWiki team library id for external recall
+	MatchThreshold      float64
+	MemoryEnabled       bool
+	ChatMode            string   // "chat" or "task"
+	MCPEnabled          bool
+	MCPServerIDs        []string // IDs in agent list
+	MCPServerEnabledIDs []string // IDs enabled for generation (subset)
 }
 
 // getAgentAndProviderConfig gets the agent and provider configuration for a conversation
@@ -35,13 +36,14 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		LLMProviderID  string `bun:"llm_provider_id"`
 		LLMModelID     string `bun:"llm_model_id"`
 		LibraryIDs     string `bun:"library_ids"`
+		TeamLibraryID  string `bun:"team_library_id"`
 		EnableThinking bool   `bun:"enable_thinking"`
 		ChatMode       string `bun:"chat_mode"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "enable_thinking", "chat_mode").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "team_library_id", "enable_thinking", "chat_mode").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -199,9 +201,11 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		mcpServerEnabledIDs = mcpServerIDs
 	}
 
+	teamLibraryID := strings.TrimSpace(conv.TeamLibraryID)
 	extras := AgentExtras{
 		AgentID:             conv.AgentID,
 		LibraryIDs:          convLibraryIDs,
+		TeamLibraryID:       teamLibraryID,
 		MatchThreshold:      agent.RetrievalMatchThreshold,
 		MemoryEnabled:       memoryEnabled,
 		ChatMode:            chatMode,
