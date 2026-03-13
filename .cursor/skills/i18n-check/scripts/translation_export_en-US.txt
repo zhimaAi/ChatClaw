@@ -1,0 +1,20 @@
+# Translation Export: en-US.ts
+# Total: 15 items
+
+## Translations (key = value)
+
+assistant.settings.workspace.nativeDesc = 直接在本机执行命令，无沙箱隔离。命令拥有当前用户的完整权限。
+assistant.settings.workspace.workDirHint = 结构：{basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}
+knowledge.folder.deleteDesc = 删除文件夹「{name}」后，其下的文档将移动到「未分组」。此操作无法撤销。
+knowledge.folder.parentFolderHelp = 选择父文件夹以创建嵌套文件夹。留空则在根目录创建。
+knowledge.help.chunkOverlap = 相邻分片的重叠大小（字符数，0~1000），用于减少跨分片断句导致的信息丢失。
+knowledge.help.chunkSize = 分片大小（字符数，500~5000）。分片越大，上下文越完整，但召回粒度更粗。
+memory.deleteEventStreamConfirm = 确定要删除这条对话记录吗？此操作不可撤销。
+memory.deleteThematicFactConfirm = 确定要删除这条话题摘要吗？此操作不可撤销。
+scheduledTasks.emptyDescription = 创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。
+settings.memory.rebuildWarning = 修改向量模型或维度后，所有已有记忆的向量数据将被异步重建。
+settings.modelService.deleteBlockedByAgent = 该模型正在被助手「{name}」用作默认模型，请先修改助手设置后再删除
+settings.modelService.deleteConfirmMessage = 确定要删除模型「{name}」吗？此操作无法撤销。
+settings.modelService.disableBlockedByAgent = 该供应商正在被助手「{name}」用作默认模型，请先修改助手设置后再关闭
+settings.skills.directoryHint = 将下载好的技能文件夹放入该目录，AI 对话时会自动识别并加载。
+settings.skills.enableHint = 开启后，AI 助手在对话时会自动加载并使用已安装的技能。
