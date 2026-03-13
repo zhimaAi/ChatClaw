@@ -23,12 +23,12 @@ type Document struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	LibraryID    int64   `json:"library_id"`
-	FolderID     *int64  `json:"folder_id"` // nil 表示未分组
-	OriginalName string  `json:"original_name"`
-	ThumbIcon    string  `json:"thumb_icon"`
-	FileSize     int64   `json:"file_size"`
-	ContentHash  string  `json:"content_hash"`
+	LibraryID    int64  `json:"library_id"`
+	FolderID     *int64 `json:"folder_id"` // nil 表示未分组
+	OriginalName string `json:"original_name"`
+	ThumbIcon    string `json:"thumb_icon"`
+	FileSize     int64  `json:"file_size"`
+	ContentHash  string `json:"content_hash"`
 
 	Extension  string `json:"extension"`
 	MimeType   string `json:"mime_type"`
@@ -57,6 +57,19 @@ type UploadInput struct {
 	LibraryID int64    `json:"library_id"`
 	FilePaths []string `json:"file_paths"`
 	FolderID  *int64   `json:"folder_id,omitempty"` // nil 表示未分组，可选字段
+}
+
+// BrowserUploadFile 上传文档的浏览器文件数据
+type BrowserUploadFile struct {
+	FileName   string `json:"file_name"`
+	Base64Data string `json:"base64_data"`
+}
+
+// UploadBrowserInput 上传浏览器选择的文档
+type UploadBrowserInput struct {
+	LibraryID int64               `json:"library_id"`
+	Files     []BrowserUploadFile `json:"files"`
+	FolderID  *int64              `json:"folder_id,omitempty"` // nil 表示未分组，可选字段
 }
 
 // UploadProgressEvent 上传进度事件（发送给前端）
@@ -113,13 +126,13 @@ type documentModel struct {
 	CreatedAt time.Time `bun:"created_at,notnull"`
 	UpdatedAt time.Time `bun:"updated_at,notnull"`
 
-	LibraryID    int64   `bun:"library_id,notnull"`
-	FolderID     *int64  `bun:"folder_id"`
-	OriginalName string  `bun:"original_name,notnull"`
-	NameTokens   string  `bun:"name_tokens,notnull"`
-	ThumbIcon    string  `bun:"thumb_icon"`
-	FileSize     int64   `bun:"file_size,notnull"`
-	ContentHash  string  `bun:"content_hash,notnull"`
+	LibraryID    int64  `bun:"library_id,notnull"`
+	FolderID     *int64 `bun:"folder_id"`
+	OriginalName string `bun:"original_name,notnull"`
+	NameTokens   string `bun:"name_tokens,notnull"`
+	ThumbIcon    string `bun:"thumb_icon"`
+	FileSize     int64  `bun:"file_size,notnull"`
+	ContentHash  string `bun:"content_hash,notnull"`
 
 	Extension  string `bun:"extension,notnull"`
 	MimeType   string `bun:"mime_type,notnull"`
