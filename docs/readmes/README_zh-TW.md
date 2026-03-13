@@ -1,5 +1,5 @@
 <p align="center">
-<img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
+<img src="../../frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
 </p>
 
 <h1 align="center">ChatClaw</h1>
