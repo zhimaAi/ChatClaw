@@ -1443,6 +1443,10 @@ export default {
       daily: "يومي",
       weekly: "أسبوعي",
       monthly: "شهري",
+      interval: "كل X دقيقة",
     },
+    confirmDelete: "حذف",
+    deleteConfirmDescription: "هل أنت متأكد من حذف المهمة \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+    deleteConfirmTitle: "تأكيد الحذف",
   },
 }

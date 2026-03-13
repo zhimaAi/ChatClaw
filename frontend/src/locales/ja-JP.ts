@@ -434,7 +434,7 @@ export default {
       assistantMcpUpdateFailed: "更新に失敗しました",
       assistantMcpUpdateSuccess: "更新に成功しました",
       assistantMcpUrl: "URL",
-      tabAssistantMcp: "Assistant MCP",
+      tabAssistantMcp: "アシスタント MCP",
     },
     snap: {
       title: "設定",
@@ -1232,7 +1232,7 @@ export default {
       feishu: "Feishu",
       wecom: "WeCom",
       qq: "QQ",
-      twitter: "X (Twitter)",
+      twitter: "X（Twitter）",
     },
     config: {
       title: "{platform} ボットを設定",
@@ -1296,7 +1296,7 @@ export default {
       whatsapp: {
         name: "WhatsApp",
         botName: "WhatsApp",
-        description: "WhatsApp Business API",
+        description: "WhatsApp Business API 連携",
       },
       dingtalk: {
         name: "DingTalk",
@@ -1432,7 +1432,11 @@ export default {
       daily: "毎日",
       weekly: "毎週",
       monthly: "毎月",
+      interval: "Every X Minutes",
     },
     emptyDescription: "AIワークフローを自動化するためのスケジュールタスクを作成します。タスクは指定された時間にメッセージを送信、クエリを実行、またはアクションを実行できます。",
+    confirmDelete: "Delete",
+    deleteConfirmDescription: "Are you sure you want to delete task \"{name}\"? This action cannot be undone.",
+    deleteConfirmTitle: "Confirm Delete",
   },
 }

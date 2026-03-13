@@ -1442,6 +1442,10 @@ export default {
       daily: "Diario",
       weekly: "Semanal",
       monthly: "Mensual",
+      interval: "Cada X minutos",
     },
+    confirmDelete: "Eliminar",
+    deleteConfirmDescription: "¿Seguro que quieres eliminar la tarea \"{name}\"? Esta acción no se puede deshacer.",
+    deleteConfirmTitle: "Confirmar eliminación",
   },
 }

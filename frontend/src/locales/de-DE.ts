@@ -1442,6 +1442,10 @@ export default {
       daily: "Täglich",
       weekly: "Wöchentlich",
       monthly: "Monatlich",
+      interval: "Alle X Minuten",
     },
+    confirmDelete: "Löschen",
+    deleteConfirmDescription: "Möchten Sie die Aufgabe „{name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    deleteConfirmTitle: "Löschen bestätigen",
   },
 }

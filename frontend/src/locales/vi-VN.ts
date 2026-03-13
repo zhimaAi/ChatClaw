@@ -1442,6 +1442,10 @@ export default {
       daily: "Hàng ngày",
       weekly: "Hàng tuần",
       monthly: "Hàng tháng",
+      interval: "Mỗi X phút",
     },
+    confirmDelete: "Xóa",
+    deleteConfirmDescription: "Bạn có chắc chắn muốn xóa tác vụ \"{name}\" không? Hành động này không thể hoàn tác.",
+    deleteConfirmTitle: "Xác nhận xóa",
   },
 }

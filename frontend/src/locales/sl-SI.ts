@@ -1442,6 +1442,10 @@ export default {
       daily: "Dnevno",
       weekly: "Tedensko",
       monthly: "Mesečno",
+      interval: "Vsakih X minut",
     },
+    confirmDelete: "Izbriši",
+    deleteConfirmDescription: "Ali ste prepričani, da želite izbrisati opravilo »{name}«? Tega dejanja ni mogoče razveljaviti.",
+    deleteConfirmTitle: "Potrditev brisanja",
   },
 }

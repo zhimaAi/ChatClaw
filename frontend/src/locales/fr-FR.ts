@@ -1442,6 +1442,10 @@ export default {
       daily: "Quotidien",
       weekly: "Hebdomadaire",
       monthly: "Mensuel",
+      interval: "Toutes les X minutes",
     },
+    confirmDelete: "Supprimer",
+    deleteConfirmDescription: "Voulez-vous vraiment supprimer la tâche « {name} » ? Cette action est irréversible.",
+    deleteConfirmTitle: "Confirmer la suppression",
   },
 }

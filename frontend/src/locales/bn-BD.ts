@@ -1442,6 +1442,10 @@ export default {
       daily: "দৈনিক",
       weekly: "সাপ্তাহিক",
       monthly: "মাসিক",
+      interval: "প্রতি X মিনিটে",
     },
+    confirmDelete: "মুছে ফেলা",
+    deleteConfirmDescription: "আপনি কি নিশ্চিত যে \"{name}\" কাজটি মুছে ফেলতে চান? এই কার্যটি পূর্বাবস্থায় ফেরানো যাবে না।",
+    deleteConfirmTitle: "মুছে ফেলার নিশ্চিতকরণ",
   },
 }

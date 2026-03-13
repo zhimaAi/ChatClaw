@@ -1460,6 +1460,10 @@ export default {
       daily: "प्रतिदिन",
       weekly: "साप्ताहिक",
       monthly: "मासिक",
+      interval: "हर X मिनट में",
     },
+    confirmDelete: "हटाएं",
+    deleteConfirmDescription: "क्या आप वाकई कार्य \"{name}\" को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।",
+    deleteConfirmTitle: "हटाने की पुष्टि",
   },
 }

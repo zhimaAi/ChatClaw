@@ -204,7 +204,7 @@
   "error.channel_agent_create_not_available": "Creazione automatica assistente non disponibile",
   "error.channel_ai_reply_failed": "Risposta IA non riuscita: {{.Error}}",
   "error.channel_ai_reply_empty": "Risposta IA non riuscita: generata risposta vuota",
-  "scheduled_task.issue.schedule_invalid": "调度参数校验失败: {{.Error}}",
+  "scheduled_task.issue.schedule_invalid": "Convalida dei parametri di pianificazione non riuscita: {{.Error}}",
   "error.assistant_mcp_create_failed": "Creazione dell'Assistant MCP non riuscita",
   "error.assistant_mcp_delete_failed": "Eliminazione dell'Assistant MCP non riuscita",
   "error.assistant_mcp_id_required": "È richiesto l'ID dell'Assistant MCP",

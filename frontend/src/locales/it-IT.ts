@@ -1436,6 +1436,10 @@ export default {
       daily: "Giornaliero",
       weekly: "Settimanale",
       monthly: "Mensile",
+      interval: "每间隔 X 分钟",
     },
+    confirmDelete: "删除",
+    deleteConfirmDescription: "确定要删除任务“{name}”吗？此操作无法撤销。",
+    deleteConfirmTitle: "确认删除",
   },
 }

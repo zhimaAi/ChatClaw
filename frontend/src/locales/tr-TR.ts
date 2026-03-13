@@ -1442,6 +1442,10 @@ export default {
       daily: "Günlük",
       weekly: "Haftalık",
       monthly: "Aylık",
+      interval: "Her X dakikada",
     },
+    confirmDelete: "Sil",
+    deleteConfirmDescription: "\"{name}\" görevini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
+    deleteConfirmTitle: "Silme onayı",
   },
 }

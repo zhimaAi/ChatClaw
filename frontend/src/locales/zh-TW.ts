@@ -435,7 +435,7 @@ export default {
       assistantMcpUpdateFailed: "更新失敗",
       assistantMcpUpdateSuccess: "更新成功",
       assistantMcpUrl: "URL",
-      tabAssistantMcp: "Assistant MCP",
+      tabAssistantMcp: "助手 MCP",
     },
     snap: {
       title: "設定",
@@ -1442,6 +1442,10 @@ export default {
       daily: "每天",
       weekly: "每週",
       monthly: "每月",
+      interval: "Every X Minutes",
     },
+    confirmDelete: "Delete",
+    deleteConfirmDescription: "Are you sure you want to delete task \"{name}\"? This action cannot be undone.",
+    deleteConfirmTitle: "Confirm Delete",
   },
 }
