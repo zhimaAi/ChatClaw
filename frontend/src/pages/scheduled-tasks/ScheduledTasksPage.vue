@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Clock3, Plus, RefreshCcw } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Clock3, LoaderCircle, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { CreateScheduledTaskInput, UpdateScheduledTaskInput } from '@bindings/chatclaw/internal/services/scheduledtasks'
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { useScheduledTasks } from './composables/useScheduledTasks'
 import CreateTaskDialog from './components/CreateTaskDialog.vue'
 import TaskRunHistoryDialog from './components/TaskRunHistoryDialog.vue'
 import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
+import { createDeleteTaskConfirmation } from './deleteTaskConfirmation'
 import type { ScheduledTaskFormState, ScheduledTask } from './types'
 import { taskToForm } from './utils'
 
@@ -43,10 +54,26 @@ const summaryLabels = computed(() => ({
 }))
 
 const hasTasks = computed(() => tasks.value.length > 0)
+const deleteDialogOpen = ref(false)
+const deletingTask = ref(false)
+const pendingDeleteTask = ref<Pick<ScheduledTask, 'id' | 'name'> | null>(null)
+const deleteTaskConfirmation = createDeleteTaskConfirmation(async (task) => {
+  deletingTask.value = true
+  try {
+    await deleteTask(task as ScheduledTask)
+  } finally {
+    deletingTask.value = false
+  }
+})
 
 function buildPayload(state: ScheduledTaskFormState) {
+  const normalizedIntervalMinutes = Math.min(59, Math.max(1, Number(state.customIntervalMinutes) || 1))
   const customPayload =
-    state.customMode === 'monthly'
+    state.customMode === 'interval'
+      ? JSON.stringify({
+          interval_minutes: normalizedIntervalMinutes,
+        })
+      : state.customMode === 'monthly'
       ? JSON.stringify({
           hour: state.customHour,
           minute: state.customMinute,
@@ -94,11 +121,39 @@ function buildPayload(state: ScheduledTaskFormState) {
 }
 
 async function handleSubmit() {
+  if (saving.value) return
   await submitForm(buildPayload)
 }
 
 async function handleEdit(task: ScheduledTask) {
   await openEditDialog(task, taskToForm)
+}
+
+function syncPendingDeleteTask() {
+  pendingDeleteTask.value = deleteTaskConfirmation.pendingTask()
+}
+
+function handleDeleteRequest(task: ScheduledTask) {
+  deleteTaskConfirmation.request({
+    id: task.id,
+    name: task.name,
+  })
+  syncPendingDeleteTask()
+  deleteDialogOpen.value = true
+}
+
+function handleDeleteCancel() {
+  if (deletingTask.value) return
+  deleteTaskConfirmation.cancel()
+  syncPendingDeleteTask()
+  deleteDialogOpen.value = false
+}
+
+async function handleDeleteConfirm() {
+  if (deletingTask.value) return
+  await deleteTaskConfirmation.confirm()
+  syncPendingDeleteTask()
+  deleteDialogOpen.value = false
 }
 </script>
 
@@ -175,7 +230,7 @@ async function handleEdit(task: ScheduledTask) {
         @run="runTaskNow"
         @history="(task) => (historyTask = task)"
         @toggle="toggleTask"
-        @delete="deleteTask"
+        @delete="handleDeleteRequest"
       />
     </div>
 
@@ -194,5 +249,29 @@ async function handleEdit(task: ScheduledTask) {
       :task="historyTask"
       @update:open="(value) => !value && (historyTask = null)"
     />
+
+    <AlertDialog :open="deleteDialogOpen" @update:open="(value) => !value && handleDeleteCancel()">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('scheduledTasks.deleteConfirmTitle') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('scheduledTasks.deleteConfirmDescription', { name: pendingDeleteTask?.name || '' }) }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="deletingTask" @click="handleDeleteCancel">
+            {{ t('common.cancel', '取消') }}
+          </AlertDialogCancel>
+          <Button
+            :disabled="deletingTask"
+            variant="default"
+            @click.prevent="handleDeleteConfirm"
+          >
+            <LoaderCircle v-if="deletingTask" class="size-4 shrink-0 animate-spin" />
+            {{ t('scheduledTasks.confirmDelete') }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>
