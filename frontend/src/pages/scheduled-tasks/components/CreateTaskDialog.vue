@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Check, ChevronDown, Clock3 } from 'lucide-vue-next'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
 import type { Agent, ScheduledTaskFormState } from '../types'
+import { createSubmitLock } from './submitLock'
 
 const props = defineProps<{
   open: boolean
@@ -27,6 +28,7 @@ const scheduleTypeOptions = [
 ] as const
 
 const customModeOptions = [
+  { value: 'interval', label: '每间隔' },
   { value: 'daily', label: '每天执行' },
   { value: 'weekly', label: '每周执行' },
   { value: 'monthly', label: '每月执行' },
@@ -34,6 +36,9 @@ const customModeOptions = [
 
 const dialogSubtitle = computed(() => (props.form.id ? '更新自动化的 AI 任务' : '安排自动化的 AI 任务'))
 const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
+const submitLock = createSubmitLock()
+const submitLocked = ref(false)
+const submitDisabled = computed(() => props.saving || submitLocked.value)
 
 const customTimeValue = computed({
   get() {
@@ -56,7 +61,13 @@ const selectedWeeklyDay = computed({
 })
 
 function closeDialog() {
+  submitLock.reset()
+  submitLocked.value = submitLock.isLocked()
   emit('update:open', false)
+}
+
+function syncSubmitLockedState() {
+  submitLocked.value = submitLock.isLocked()
 }
 
 function selectScheduleType(value: ScheduledTaskFormState['scheduleType']) {
@@ -80,6 +91,34 @@ function selectWeeklyDay(value: number) {
 function selectMonthlyDay(value: number) {
   props.form.customDayOfMonth = value
 }
+
+function handleSubmit() {
+  if (!submitLock.acquire(props.saving)) {
+    syncSubmitLockedState()
+    return
+  }
+
+  syncSubmitLockedState()
+  emit('submit')
+}
+
+watch(
+  () => props.saving,
+  (saving) => {
+    submitLock.syncSaving(saving)
+    syncSubmitLockedState()
+  },
+)
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) {
+      submitLock.reset()
+      syncSubmitLockedState()
+    }
+  },
+)
 </script>
 
 <template>
@@ -88,8 +127,8 @@ function selectMonthlyDay(value: number) {
       :show-close-button="true"
       class="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
     >
-      <DialogHeader class="flex shrink-0 flex-row items-baseline gap-3 border-b border-[#eef2f6] px-7 py-6">
-        <DialogTitle class="text-[32px] font-semibold tracking-[-0.03em] text-[#111827]">
+        <DialogHeader class="flex shrink-0 flex-row items-baseline gap-3 border-b border-[#eef2f6] px-7 py-6">
+        <DialogTitle class="text-lg font-semibold text-[#111827]">
           {{ title }}
         </DialogTitle>
         <p class="text-sm font-medium text-[#94a3b8]">
@@ -180,72 +219,97 @@ function selectMonthlyDay(value: number) {
             </div>
 
             <div v-else-if="form.scheduleType === 'custom'" class="space-y-4">
-              <div class="inline-flex overflow-hidden rounded-2xl border border-[#dbe3ec] bg-white">
-                <div class="w-[140px] shrink-0">
-                  <button
-                    v-for="item in customModeOptions"
-                    :key="item.value"
-                    type="button"
-                    class="flex h-12 w-full items-center justify-between px-4 text-sm font-medium transition-colors"
-                    :class="
-                      form.customMode === item.value
-                        ? 'bg-[#f3f4f6] text-[#111827]'
-                        : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
-                    "
-                    @click="selectCustomMode(item.value)"
+              <div class="flex items-start gap-5">
+                <div class="inline-flex overflow-hidden rounded-2xl border border-[#dbe3ec] bg-white">
+                  <div class="w-[140px] shrink-0">
+                    <button
+                      v-for="item in customModeOptions"
+                      :key="item.value"
+                      type="button"
+                      class="flex h-12 w-full items-center justify-between px-4 text-sm font-medium transition-colors"
+                      :class="
+                        form.customMode === item.value
+                          ? 'bg-[#f3f4f6] text-[#111827]'
+                          : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                      "
+                      @click="selectCustomMode(item.value)"
+                    >
+                      <span>{{ item.label }}</span>
+                      <ChevronDown
+                        v-if="item.value !== 'daily' && item.value !== 'interval'"
+                        class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
+                        :class="form.customMode === item.value ? 'opacity-100' : 'opacity-40'"
+                      />
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="form.customMode === 'weekly'"
+                    class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
                   >
-                    <span>{{ item.label }}</span>
-                    <ChevronDown
-                      v-if="item.value !== 'daily'"
-                      class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
-                      :class="form.customMode === item.value ? 'opacity-100' : 'opacity-40'"
-                    />
-                  </button>
+                    <button
+                      v-for="item in WEEKDAY_OPTIONS"
+                      :key="item.value"
+                      type="button"
+                      class="flex h-12 w-full items-center justify-between px-4 text-sm transition-colors"
+                      :class="
+                        selectedWeeklyDay === item.value
+                          ? 'bg-[#f3f4f6] font-medium text-[#111827]'
+                          : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                      "
+                      @click="selectWeeklyDay(item.value)"
+                    >
+                      <span>{{ item.label }}</span>
+                      <Check v-if="selectedWeeklyDay === item.value" class="size-4 shrink-0 text-[#2563eb]" />
+                    </button>
+                  </div>
+
+                  <div
+                    v-else-if="form.customMode === 'monthly'"
+                    class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
+                  >
+                    <button
+                      v-for="day in monthlyOptions"
+                      :key="day"
+                      type="button"
+                      class="flex h-12 w-full items-center px-4 text-sm transition-colors"
+                      :class="
+                        form.customDayOfMonth === day
+                          ? 'bg-[#f3f4f6] font-medium text-[#111827]'
+                          : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                      "
+                      @click="selectMonthlyDay(day)"
+                    >
+                      {{ day }}号
+                    </button>
+                  </div>
                 </div>
 
                 <div
-                  v-if="form.customMode === 'weekly'"
-                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
+                  v-if="form.customMode === 'interval'"
+                  class="flex min-h-12 items-center"
                 >
-                  <button
-                    v-for="item in WEEKDAY_OPTIONS"
-                    :key="item.value"
-                    type="button"
-                    class="flex h-12 w-full items-center justify-between px-4 text-sm transition-colors"
-                    :class="
-                      selectedWeeklyDay === item.value
-                        ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                        : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
-                    "
-                    @click="selectWeeklyDay(item.value)"
-                  >
-                    <span>{{ item.label }}</span>
-                    <Check v-if="selectedWeeklyDay === item.value" class="size-4 shrink-0 text-[#2563eb]" />
-                  </button>
+                  <Input
+                    v-model.number="form.customIntervalMinutes"
+                    type="number"
+                    min="1"
+                    max="59"
+                    step="1"
+                    class="h-9 w-[120px] rounded-md border-[#dbe3ec] bg-white text-sm shadow-none"
+                  />
+                  <span class="ml-3 text-sm text-[#64748b]">分钟</span>
                 </div>
 
-                <div
-                  v-else-if="form.customMode === 'monthly'"
-                  class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
-                >
-                  <button
-                    v-for="day in monthlyOptions"
-                    :key="day"
-                    type="button"
-                    class="flex h-12 w-full items-center px-4 text-sm transition-colors"
-                    :class="
-                      form.customDayOfMonth === day
-                        ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                        : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
-                    "
-                    @click="selectMonthlyDay(day)"
-                  >
-                    {{ day }}号
-                  </button>
-                </div>
+                <Input
+                  v-else-if="form.customMode === 'daily'"
+                  v-model="customTimeValue"
+                  type="time"
+                  class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm"
+                />
               </div>
 
               <Input
+                v-if="form.customMode === 'weekly' || form.customMode === 'monthly'"
                 v-model="customTimeValue"
                 type="time"
                 class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm"
@@ -287,11 +351,11 @@ function selectMonthlyDay(value: number) {
         </button>
         <button
           type="button"
-          :disabled="saving"
+          :disabled="submitDisabled"
           class="inline-flex h-11 min-w-[116px] items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f172a] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
-          @click="emit('submit')"
+          @click="handleSubmit"
         >
-          {{ saving ? '提交中...' : '确定' }}
+          {{ submitDisabled ? '提交中...' : '确定' }}
         </button>
       </DialogFooter>
     </DialogContent>
