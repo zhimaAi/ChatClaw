@@ -23,7 +23,6 @@
   <a href="./docs/readmes/README_it-IT.md">Italiano</a> |
   <a href="./docs/readmes/README_pt-BR.md">Português</a> |
   <a href="./docs/readmes/README_sl-SI.md">Slovenščina</a> |
-  <a href="./docs/readmes/README_tlh.md">Klingon</a> |
   <a href="./docs/readmes/README_tr-TR.md">Türkçe</a> |
   <a href="./docs/readmes/README_vi-VN.md">Tiếng Việt</a>
 </p>

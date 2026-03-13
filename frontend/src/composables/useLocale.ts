@@ -22,7 +22,6 @@ export const SUPPORTED_LOCALES: Locale[] = [
   'ko-KR',
   'pt-BR',
   'sl-SI',
-  'tlh',
   'tr-TR',
   'vi-VN',
   'zh-TW',

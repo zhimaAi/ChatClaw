@@ -11,7 +11,6 @@ import jaJP from './ja-JP'
 import koKR from './ko-KR'
 import ptBR from './pt-BR'
 import slSI from './sl-SI'
-import tlh from './tlh'
 import trTR from './tr-TR'
 import viVN from './vi-VN'
 import zhTW from './zh-TW'
@@ -30,7 +29,6 @@ export const messages = {
   'ko-KR': koKR,
   'pt-BR': ptBR,
   'sl-SI': slSI,
-  'tlh': tlh,
   'tr-TR': trTR,
   'vi-VN': viVN,
   'zh-TW': zhTW,

@@ -30,7 +30,6 @@ const (
 	LocaleKoKR = "ko-KR"
 	LocalePtBR = "pt-BR"
 	LocaleSlSI = "sl-SI"
-	LocaleTlh  = "tlh"
 	LocaleTrTR = "tr-TR"
 	LocaleViVN = "vi-VN"
 	LocaleZhTW = "zh-TW"
@@ -69,7 +68,6 @@ func init() {
 	bundle.LoadMessageFileFS(localesFS, "locales/ko-KR.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/pt-BR.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/sl-SI.json")
-	bundle.LoadMessageFileFS(localesFS, "locales/tlh.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/tr-TR.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/vi-VN.json")
 	bundle.LoadMessageFileFS(localesFS, "locales/zh-TW.json")
@@ -141,8 +139,6 @@ func DetectLocale() string {
 		return LocalePtBR
 	case "sl", "sl-si":
 		return LocaleSlSI
-	case "tlh":
-		return LocaleTlh
 	case "tr", "tr-tr":
 		return LocaleTrTR
 	case "vi", "vi-vn":

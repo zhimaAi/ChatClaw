@@ -23,7 +23,6 @@
   <a href="README_it-IT.md">Italiano</a> |
   <a href="README_pt-BR.md">Português</a> |
   <a href="README_sl-SI.md">Slovenščina</a> |
-  <a href="README_tlh.md">tlhIngan</a> |
   <a href="README_tr-TR.md">Türkçe</a> |
   <a href="README_vi-VN.md">Tiếng Việt</a>
 </p>

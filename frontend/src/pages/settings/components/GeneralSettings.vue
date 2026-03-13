@@ -39,7 +39,6 @@ const languageOptions = computed(() => {
     'ko-KR': '한국어',
     'pt-BR': 'Português',
     'sl-SI': 'Slovenščina',
-    'tlh': 'Klingon',
     'tr-TR': 'Türkçe',
     'vi-VN': 'Tiếng Việt',
     'zh-TW': '繁體中文',
