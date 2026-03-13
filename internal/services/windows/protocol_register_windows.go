@@ -9,10 +9,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-const (
-	chatclawProtocolKey = `Software\Classes\chatclaw`
-	chatclawProtocolDesc = "URL:ChatClaw Protocol"
-)
+const chatclawProtocolDesc = "URL:ChatClaw Protocol"
 
 // RegisterChatClawProtocol registers the chatclaw:// URL scheme in the current user's
 // registry (HKCU\Software\Classes\chatclaw) so that browsers can launch the app
