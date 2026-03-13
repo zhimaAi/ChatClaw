@@ -137,7 +137,7 @@ tasks:
           --name "{{.APP_NAME}}" \
           --executable "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" \
           --arch "{{.ARCH}}" \
-          --out "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH}}.msix" \
+          --out "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}_windows_{{.ARCH}}.msix" \
           {{if .CERT_PATH}}--cert "{{.CERT_PATH}}"{{end}} \
           {{if .PUBLISHER}}--publisher "{{.PUBLISHER}}"{{end}} \
           {{if .USE_MSIX_TOOL}}--use-msix-tool{{else}}--use-makeappx{{end}}
@@ -179,7 +179,7 @@ tasks:
     deps:
       - task: create:nsis:installer
     cmds:
-      - wails3 tool sign --input "build/windows/nsis/{{.APP_NAME}}-installer.exe" {{if .SIGN_CERTIFICATE}}--certificate {{.SIGN_CERTIFICATE}}{{end}} {{if .SIGN_THUMBPRINT}}--thumbprint {{.SIGN_THUMBPRINT}}{{end}} {{if .TIMESTAMP_SERVER}}--timestamp {{.TIMESTAMP_SERVER}}{{end}}
+      - wails3 tool sign --input "build/windows/nsis/{{.APP_NAME}}_installer.exe" {{if .SIGN_CERTIFICATE}}--certificate {{.SIGN_CERTIFICATE}}{{end}} {{if .SIGN_THUMBPRINT}}--thumbprint {{.SIGN_THUMBPRINT}}{{end}} {{if .TIMESTAMP_SERVER}}--timestamp {{.TIMESTAMP_SERVER}}{{end}}
     preconditions:
       - sh: '[ -n "{{.SIGN_CERTIFICATE}}" ] || [ -n "{{.SIGN_THUMBPRINT}}" ]'
         msg: "Either SIGN_CERTIFICATE or SIGN_THUMBPRINT is required. Set it in the vars section at the top of build/windows/Taskfile.yml"

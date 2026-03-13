@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { platformIconMap } from '@/assets/icons/snap/platformIcons'
+import { getPlatformDocsUrl, openExternalLink } from '@/pages/channels/platformDocs'
 
 const props = defineProps<{
   agent: Agent | null
@@ -29,6 +30,11 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
+
+/** Platforms that support create/bind in UI (feishu + wecom + dingtalk). */
+function isChannelPlatformSelectable(platformId: string) {
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
+}
 
 const channels = ref<Channel[]>([])
 const platforms = ref<PlatformMeta[]>([])
@@ -188,10 +194,12 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
+    const selectableIds = ['feishu', 'wecom', 'dingtalk']
     const hasSelectedPlatform = platforms.value.some((platform) => platform.id === selectedPlatformId.value)
-    const enabledPlatforms = ['feishu', 'dingtalk']
-    if (!hasSelectedPlatform || !enabledPlatforms.includes(selectedPlatformId.value)) {
-      selectedPlatformId.value = platforms.value.find(p => enabledPlatforms.includes(p.id))?.id || platforms.value[0]?.id || ''
+    const currentIsSelectable = selectableIds.includes(selectedPlatformId.value)
+    if (!hasSelectedPlatform || !currentIsSelectable) {
+      selectedPlatformId.value =
+        platforms.value.find((p) => selectableIds.includes(p.id))?.id || platforms.value[0]?.id || ''
     }
     if (selectedPlatformId.value) {
       syncCreateFormVisibility(selectedPlatformId.value)
@@ -329,12 +337,13 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
   }
 }
 
+function isSelectableChannelPlatform(platformId: string) {
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
+}
+
 function openPlatformDocs() {
-  if (selectedPlatformMeta.value?.id === 'feishu') {
-    window.open('https://open.feishu.cn/', '_blank')
-  } else if (selectedPlatformMeta.value?.id === 'dingtalk') {
-    window.open('https://open.dingtalk.com/', '_blank')
-  }
+  const url = getPlatformDocsUrl(selectedPlatformMeta.value?.id)
+  void openExternalLink(url)
 }
 
 async function handleInlineVerify() {
@@ -434,11 +443,11 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                   cn(
                     'flex h-8 items-center rounded-md px-3 text-left text-sm text-[#404040] transition-colors dark:text-muted-foreground',
                     selectedPlatformId === platform.id && 'bg-[#f5f5f5] text-[#171717] dark:bg-muted dark:text-foreground',
-                    selectedPlatformId !== platform.id && (platform.id === 'feishu' || platform.id === 'dingtalk') && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
-                    platform.id !== 'feishu' && platform.id !== 'dingtalk' && 'opacity-50 cursor-not-allowed'
+                    selectedPlatformId !== platform.id && isSelectableChannelPlatform(platform.id) && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
+                    !isSelectableChannelPlatform(platform.id) && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="platform.id === 'feishu' || platform.id === 'dingtalk' ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
+                @click="isSelectableChannelPlatform(platform.id) ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
                 <span class="truncate">{{ getPlatformDisplayName(platform.id, platform.name) }}</span>
               </button>

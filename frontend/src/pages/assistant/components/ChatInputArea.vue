@@ -226,8 +226,9 @@ const selectedModelCapabilities = computed(() => {
 })
 
 // Whether the currently selected model supports image/vision
+// 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制
 const supportsImage = computed(() => {
-  return selectedModelCapabilities.value.includes('image')
+  return true
 })
 
 // 能力图标映射
@@ -799,60 +800,63 @@ onUnmounted(() => {
               </SelectPortal>
             </SelectRoot>
 
-            <!-- Team tab: same icon position as personal, opens current category team library list -->
-            <SelectRoot
-              v-else-if="selectedTeamLibrary && teamLibraries && teamLibraries.length > 0"
-              :model-value="selectedTeamLibraryId ?? undefined"
-              @update:model-value="(v: string | undefined) => emit('update:selectedTeamLibraryId', v ?? null)"
-            >
-              <SelectTriggerRaw
-                as-child
-                :title="
-                  selectedTeamLibrary
-                    ? selectedTeamLibrary.name
-                    : t('assistant.chat.selectKnowledge')
-                "
+            <!-- Team tab: same icon position as personal, opens current category team library list.
+                 Rendered whenever selectedTeamLibrary is set; disabled when list is empty so the
+                 icon stays visible and the user can see which library is active. -->
+            <template v-else-if="selectedTeamLibrary">
+              <SelectRoot
+                v-if="teamLibraries && teamLibraries.length > 0"
+                :model-value="selectedTeamLibraryId ?? undefined"
+                @update:model-value="(v: string | undefined) => emit('update:selectedTeamLibraryId', v ?? null)"
               >
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background"
-                  :class="
-                    selectedTeamLibrary
-                      ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
-                      : 'hover:bg-muted/40'
-                  "
+                <SelectTriggerRaw
+                  as-child
+                  :title="selectedTeamLibrary.name"
                 >
-                  <IconSelectKnowledge
-                    class="size-4 pointer-events-none"
-                    :class="selectedTeamLibrary ? 'text-primary' : 'text-muted-foreground'"
-                  />
-                </Button>
-              </SelectTriggerRaw>
-              <SelectPortal>
-                <SelectContentRaw
-                  class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-                  position="popper"
-                  :side-offset="5"
-                >
-                  <SelectViewport>
-                    <SelectItemRaw
-                      v-for="lib in teamLibraries"
-                      :key="lib.id"
-                      :value="lib.id"
-                      class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
-                    >
-                      <SelectItemIndicator
-                        class="absolute left-2 flex size-4 items-center justify-center"
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10 hover:bg-primary/10"
+                  >
+                    <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+                  </Button>
+                </SelectTriggerRaw>
+                <SelectPortal>
+                  <SelectContentRaw
+                    class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                    position="popper"
+                    :side-offset="5"
+                  >
+                    <SelectViewport>
+                      <SelectItemRaw
+                        v-for="lib in teamLibraries"
+                        :key="lib.id"
+                        :value="lib.id"
+                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
                       >
-                        <Check class="size-4 text-primary" />
-                      </SelectItemIndicator>
-                      <SelectItemText>{{ lib.name }}</SelectItemText>
-                    </SelectItemRaw>
-                  </SelectViewport>
-                </SelectContentRaw>
-              </SelectPortal>
-            </SelectRoot>
+                        <SelectItemIndicator
+                          class="absolute left-2 flex size-4 items-center justify-center"
+                        >
+                          <Check class="size-4 text-primary" />
+                        </SelectItemIndicator>
+                        <SelectItemText>{{ lib.name }}</SelectItemText>
+                      </SelectItemRaw>
+                    </SelectViewport>
+                  </SelectContentRaw>
+                </SelectPortal>
+              </SelectRoot>
+              <!-- Library list not yet loaded: show icon in active state but non-interactive -->
+              <Button
+                v-else
+                size="icon"
+                variant="ghost"
+                disabled
+                :title="selectedTeamLibrary.name"
+                class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10"
+              >
+                <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+              </Button>
+            </template>
 
             <!-- Image selection button (not supported in team mode) -->
             <TooltipProvider v-if="!isTeamMode">
@@ -864,7 +868,6 @@ onUnmounted(() => {
                       size="icon"
                       variant="ghost"
                       class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
-                      :disabled="!supportsImage"
                       @click="handleSelectImagesClick"
                     >
                       <ImageIcon class="size-4 text-muted-foreground" />
@@ -872,7 +875,7 @@ onUnmounted(() => {
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ supportsImage ? t('assistant.chat.selectImages') : t('assistant.chat.selectImagesDisabled') }}</p>
+                  <p>{{ t('assistant.chat.selectImages') }}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

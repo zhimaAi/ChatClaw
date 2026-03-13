@@ -22,6 +22,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -584,8 +585,7 @@ const handleSelectConversation = async (conversation: Conversation) => {
 
   // Personal + team knowledge can both be selected; recall runs both paths when set
   selectedLibraryIds.value = conversation.library_ids || []
-  const teamLibIdStr = (conversation as unknown as { team_library_id?: string }).team_library_id || ''
-  assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(teamLibIdStr)
+  assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(conversation.team_library_id)
 
   // Set thinking mode from conversation (skip toast notification)
   isRestoringConversation = true
@@ -884,12 +884,12 @@ const handleAddImages = async (files: FileList | File[]) => {
     toast.error(t('assistant.errors.teamImageNotSupported'))
     return
   }
-  // Check if current model supports multimodal (vision)
-  const modelInfo = selectedModelInfo.value
-  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
-    toast.error(t('assistant.errors.modelNotSupportVision'))
-    return
-  }
+  // 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制模型能力
+  // const modelInfo = selectedModelInfo.value
+  // if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+  //   toast.error(t('assistant.errors.modelNotSupportVision'))
+  //   return
+  // }
 
   const fileArray = Array.from(files)
   const MAX_IMAGES = 4
@@ -1040,19 +1040,17 @@ const syncLibraryIdsFromConversation = async () => {
   const currentConversation = conversations.find((c) => c.id === activeConversationId.value)
   if (currentConversation) {
     selectedLibraryIds.value = currentConversation.library_ids || []
-    const teamLibIdStr =
-      (currentConversation as unknown as { team_library_id?: string }).team_library_id || ''
-    assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(teamLibIdStr)
+    assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(currentConversation.team_library_id)
   }
 }
 
 
 // Handle message editing (resend from that point)
-const handleEditMessage = async (messageId: number, newContent: string) => {
+const handleEditMessage = async (messageId: number, newContent: string, images: ImagePayload[]) => {
   if (!activeConversationId.value) return
 
   try {
-    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId)
+    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId, images)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.resendFailed'))
   }

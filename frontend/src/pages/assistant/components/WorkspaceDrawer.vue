@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ShieldCheck, Monitor, FolderOpen, X, Terminal, Globe, Plus, Search } from 'lucide-vue-next'
+import { ShieldCheck, Monitor, FolderOpen, X, Terminal, Globe, Plus, Search, Check } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -175,10 +175,6 @@ function isInAgent(id: string): boolean {
   return agentMCPServerIDs.value.includes(id)
 }
 
-function isEnabledForAgent(id: string): boolean {
-  return agentMCPServerEnabledIDs.value.includes(id)
-}
-
 async function loadMCPServers() {
   try {
     const [all, settings] = await Promise.all([
@@ -245,19 +241,18 @@ function handleModalCancel() {
   addDialogOpen.value = false
 }
 
-// Workspace: toggle enable/disable for generation (mcp_server_enabled_ids)
-async function handleWorkspaceToggleEnabled(serverId: string, enabled: boolean) {
+async function handleRemoveServer(serverId: string) {
   if (!props.agent) return
-  const current = agentMCPServerEnabledIDs.value
-  const updated = enabled
-    ? [...current, serverId]
-    : current.filter((id) => id !== serverId)
-  const json = JSON.stringify(updated)
+  const newIds = agentMCPServerIDs.value.filter((id) => id !== serverId)
+  const newEnabledIds = agentMCPServerEnabledIDs.value.filter((id) => id !== serverId)
+  const idsJson = JSON.stringify(newIds)
+  const enabledJson = JSON.stringify(newEnabledIds)
   try {
-    await AgentsService.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_server_enabled_ids: json }))
-    props.agent.mcp_server_enabled_ids = json
+    await AgentsService.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_server_ids: idsJson, mcp_server_enabled_ids: enabledJson }))
+    props.agent.mcp_server_ids = idsJson
+    props.agent.mcp_server_enabled_ids = enabledJson
   } catch (error) {
-    console.error('Failed to update MCP enabled:', error)
+    console.error('Failed to remove MCP server:', error)
   }
 }
 
@@ -524,12 +519,13 @@ onUnmounted(() => {
                 <Globe v-else class="size-3 shrink-0 text-muted-foreground" />
                 <span class="truncate text-xs text-foreground">{{ server.name }}</span>
               </div>
-              <Switch
-                :model-value="isEnabledForAgent(server.id)"
-                :disabled="!globalMCPEnabled"
-                class="scale-75"
-                @update:model-value="(val: boolean) => handleWorkspaceToggleEnabled(server.id, val)"
-              />
+              <button
+                type="button"
+                class="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                @click.stop="handleRemoveServer(server.id)"
+              >
+                <X class="size-3.5" />
+              </button>
             </div>
           </div>
         </template>
@@ -581,22 +577,27 @@ onUnmounted(() => {
               <div
                 v-for="server in mcpModalFiltered"
                 :key="server.id"
-                class="flex flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+                :class="cn(
+                  'relative flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors dark:border-white/10',
+                  isDraftSelected(server.id)
+                    ? 'bg-primary/5'
+                    : 'hover:bg-accent/30'
+                )"
+                @click="handleDraftToggle(server.id, !isDraftSelected(server.id))"
               >
-                <div class="flex items-center justify-between gap-2">
-                  <div class="flex min-w-0 items-center gap-2">
-                    <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
-                    <span class="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
-                      <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
-                      <Globe v-else class="mr-0.5 size-2.5" />
-                      {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
-                    </span>
-                  </div>
-                  <Switch
-                    :model-value="isDraftSelected(server.id)"
-                    class="scale-90 shrink-0"
-                    @update:model-value="(val: boolean) => handleDraftToggle(server.id, val)"
-                  />
+                <div
+                  v-if="isDraftSelected(server.id)"
+                  class="absolute right-2 top-2 flex size-5 items-center justify-center rounded-full bg-primary"
+                >
+                  <Check class="size-3 text-primary-foreground" />
+                </div>
+                <div class="flex items-center gap-2 pr-6">
+                  <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
+                  <span class="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                    <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
+                    <Globe v-else class="mr-0.5 size-2.5" />
+                    {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
+                  </span>
                 </div>
                 <p v-if="server.description" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
                   {{ server.description }}
