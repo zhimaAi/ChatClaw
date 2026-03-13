@@ -491,7 +491,7 @@ export default {
       },
     },
     languages: {
-      zhCN: "中文",
+      zhCN: "Tiếng Trung",
       enUS: "English",
       arSA: "العربية",
       bnBD: "বাংলা",

@@ -473,8 +473,8 @@ export default {
       startUsingHint: "Clicca ",
       startUsing: "Inizia a usare",
       freeVersion: "Versione gratuita",
-      unbindConfirmDesc: "解除绑定后，将无法使用 ChatWiki 提供的应用和知识库。确定要继续吗？",
-      unbindConfirmTitle: "确认解除绑定",
+      unbindConfirmDesc: "Dopo la rimozione del binding, non sarà più possibile utilizzare le applicazioni e le knowledge base fornite da ChatWiki. Continuare?",
+      unbindConfirmTitle: "Conferma rimozione binding",
     },
     tools: {
       tray: {
@@ -492,7 +492,7 @@ export default {
       },
     },
     languages: {
-      zhCN: "中文",
+      zhCN: "Cinese",
       enUS: "English",
       arSA: "العربية",
       bnBD: "বাংলা",
@@ -501,14 +501,14 @@ export default {
       frFR: "Français",
       hiIN: "हिन्दी",
       itIT: "Italiano",
-      jaJP: "日本語",
+      jaJP: "Giapponese",
       koKR: "한국어",
       ptBR: "Português",
       slSI: "Slovenščina",
       tlh: "Klingon",
       trTR: "Türkçe",
       viVN: "Tiếng Việt",
-      zhTW: "繁體中文",
+      zhTW: "Cinese tradizionale",
     },
     themes: {
       light: "Chiaro",
