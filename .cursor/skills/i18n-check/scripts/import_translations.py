@@ -133,7 +133,14 @@ def parse_single_quoted_string(s):
     return ''.join(result)
 
 def to_nested_format(flat_obj):
-    """Convert flat dict to nested TS format"""
+    """Convert flat dict to nested TS format.
+
+    NOTE:
+    - This function assumes `value` is a correct Python str in UTF-8.
+    - We ONLY escape double quotes for TS string literals.
+    - We deliberately avoid blindly doubling backslashes to prevent turning
+      `\"` into `\\\"` in the source file.
+    """
     lines = ['export default {']
     nested = {}
     for key, value in flat_obj.items():
@@ -150,6 +157,10 @@ def to_nested_format(flat_obj):
         else:
             current[parts[-1]] = value
 
+    def escape_ts_string(value: str) -> str:
+        # Only escape double quotes; keep backslashes as-is to avoid over-escaping
+        return str(value).replace('"', '\\"')
+
     def print_object(obj, indent=1):
         indent_str = '  ' * indent
         for key, value in obj.items():
@@ -157,14 +168,14 @@ def to_nested_format(flat_obj):
                 continue
             if isinstance(value, dict):
                 if '_value' in value and len(value) == 1:
-                    escaped_value = str(value['_value']).replace('\\', '\\\\').replace('"', '\\"')
+                    escaped_value = escape_ts_string(value['_value'])
                     lines.append(f'{indent_str}{key}: "{escaped_value}",')
                 else:
                     lines.append(f'{indent_str}{key}: {{')
                     print_object(value, indent + 1)
                     lines.append(f'{indent_str}}},')
             else:
-                escaped_value = str(value).replace('\\', '\\\\').replace('"', '\\"')
+                escaped_value = escape_ts_string(value)
                 lines.append(f'{indent_str}{key}: "{escaped_value}",')
 
     print_object(nested)

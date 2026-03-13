@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "KI-Assistent für Kanal erstellen fehlgeschlagen",
   "error.channel_agent_create_not_available": "Auto-Assistent-Erstellung nicht verfügbar",
   "error.channel_ai_reply_failed": "KI-Antwort fehlgeschlagen: {{.Error}}",
-  "error.channel_ai_reply_empty": "KI-Antwort fehlgeschlagen: Leere Antwort generiert"
+  "error.channel_ai_reply_empty": "KI-Antwort fehlgeschlagen: Leere Antwort generiert",
+  "error.assistant_mcp_create_failed": "Erstellen des Assistant MCP ist fehlgeschlagen",
+  "error.assistant_mcp_delete_failed": "Löschen des Assistant MCP ist fehlgeschlagen",
+  "error.assistant_mcp_id_required": "Assistant-MCP-ID ist erforderlich",
+  "error.assistant_mcp_list_failed": "Abrufen der Assistant-MCP-Liste fehlgeschlagen",
+  "error.assistant_mcp_name_required": "MCP-Plugin-Name ist erforderlich",
+  "error.assistant_mcp_not_found": "Assistant MCP wurde nicht gefunden",
+  "error.assistant_mcp_tool_name_duplicate": "Werkzeugname ist bereits vorhanden",
+  "error.assistant_mcp_tool_name_invalid": "Werkzeugname darf nur Buchstaben, Ziffern und Unterstriche enthalten und muss mit einem Buchstaben beginnen",
+  "error.assistant_mcp_tool_name_required": "Werkzeugname ist erforderlich",
+  "error.assistant_mcp_tool_not_found": "Werkzeug wurde nicht gefunden",
+  "error.assistant_mcp_update_failed": "Aktualisieren des Assistant MCP ist fehlgeschlagen"
 }

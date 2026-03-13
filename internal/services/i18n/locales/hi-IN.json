@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "चैनल के लिए AI सहायक बनाने में विफल",
   "error.channel_agent_create_not_available": "स्वतः सहायक निर्माण उपलब्ध नहीं है",
   "error.channel_ai_reply_failed": "AI उत्तर विफल: {{.Error}}",
-  "error.channel_ai_reply_empty": "AI उत्तर विफल: खाली प्रतिक्रिया उत्पन्न हुई"
+  "error.channel_ai_reply_empty": "AI उत्तर विफल: खाली प्रतिक्रिया उत्पन्न हुई",
+  "error.assistant_mcp_create_failed": "Assistant MCP बनाना विफल रहा",
+  "error.assistant_mcp_delete_failed": "Assistant MCP हटाना विफल रहा",
+  "error.assistant_mcp_id_required": "Assistant MCP ID आवश्यक है",
+  "error.assistant_mcp_list_failed": "Assistant MCP सूची प्राप्त करने में विफल",
+  "error.assistant_mcp_name_required": "MCP प्लगइन नाम आवश्यक है",
+  "error.assistant_mcp_not_found": "Assistant MCP नहीं मिला",
+  "error.assistant_mcp_tool_name_duplicate": "टूल नाम पहले से मौजूद है",
+  "error.assistant_mcp_tool_name_invalid": "टूल नाम में केवल अक्षर, अंक और अंडरस्कोर हो सकते हैं, और इसे किसी अक्षर से शुरू होना चाहिए",
+  "error.assistant_mcp_tool_name_required": "टूल नाम आवश्यक है",
+  "error.assistant_mcp_tool_not_found": "टूल नहीं मिला",
+  "error.assistant_mcp_update_failed": "Assistant MCP अपडेट करना विफल रहा"
 }

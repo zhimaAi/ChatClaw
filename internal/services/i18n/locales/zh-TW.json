@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "為頻道建立 AI 助理失敗",
   "error.channel_agent_create_not_available": "無法使用自動建立助理",
   "error.channel_ai_reply_failed": "AI 回覆失敗：{{.Error}}",
-  "error.channel_ai_reply_empty": "AI 回覆失敗：產生空白回覆"
+  "error.channel_ai_reply_empty": "AI 回覆失敗：產生空白回覆",
+  "error.assistant_mcp_create_failed": "建立 Assistant MCP 失敗",
+  "error.assistant_mcp_delete_failed": "刪除 Assistant MCP 失敗",
+  "error.assistant_mcp_id_required": "必須填寫 Assistant MCP ID",
+  "error.assistant_mcp_list_failed": "取得 Assistant MCP 清單失敗",
+  "error.assistant_mcp_name_required": "必須填寫 MCP 外掛名稱",
+  "error.assistant_mcp_not_found": "找不到 Assistant MCP",
+  "error.assistant_mcp_tool_name_duplicate": "工具名稱已經存在",
+  "error.assistant_mcp_tool_name_invalid": "工具名稱只能包含英文字母、數字與底線，且必須以字母開頭",
+  "error.assistant_mcp_tool_name_required": "必須填寫工具名稱",
+  "error.assistant_mcp_tool_not_found": "找不到該工具",
+  "error.assistant_mcp_update_failed": "更新 Assistant MCP 失敗"
 }

@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "Ustvarjanje AI pomočnika za kanal ni uspelo",
   "error.channel_agent_create_not_available": "Samodejno ustvarjanje pomočnika ni na voljo",
   "error.channel_ai_reply_failed": "AI odgovor ni uspel: {{.Error}}",
-  "error.channel_ai_reply_empty": "AI odgovor ni uspel: ustvarjen je prazen odgovor"
+  "error.channel_ai_reply_empty": "AI odgovor ni uspel: ustvarjen je prazen odgovor",
+  "error.assistant_mcp_create_failed": "Ustvarjanje Assistant MCP ni uspelo",
+  "error.assistant_mcp_delete_failed": "Brisanje Assistant MCP ni uspelo",
+  "error.assistant_mcp_id_required": "ID Assistant MCP je obvezen",
+  "error.assistant_mcp_list_failed": "Pridobivanje seznama Assistant MCP ni uspelo",
+  "error.assistant_mcp_name_required": "Ime vtičnika MCP je obvezno",
+  "error.assistant_mcp_not_found": "Assistant MCP ni bil najden",
+  "error.assistant_mcp_tool_name_duplicate": "Ime orodja že obstaja",
+  "error.assistant_mcp_tool_name_invalid": "Ime orodja lahko vsebuje le črke, številke in podčrtaje ter se mora začeti s črko",
+  "error.assistant_mcp_tool_name_required": "Ime orodja je obvezno",
+  "error.assistant_mcp_tool_not_found": "Orodje ni bilo najdeno",
+  "error.assistant_mcp_update_failed": "Posodobitev Assistant MCP ni uspela"
 }
