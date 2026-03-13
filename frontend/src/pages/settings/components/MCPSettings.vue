@@ -16,6 +16,8 @@ import {
   ExternalLink,
   X,
   RefreshCw,
+  MoreHorizontal,
+  Check,
 } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -51,6 +53,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 import logoBigmodel from '@/assets/icons/mcp-market/bigmodel.png'
 import logoModelscope from '@/assets/icons/mcp-market/modelscope.png'
@@ -65,6 +73,10 @@ import logoGithub from '@/assets/icons/mcp-market/github.png'
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
+import { AssistantMCPService } from '@bindings/chatclaw/internal/services/assistantmcp'
+import type { AssistantMCP } from '@bindings/chatclaw/internal/services/assistantmcp'
+import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { Events } from '@wailsio/runtime'
 
@@ -75,7 +87,7 @@ type TopTab = 'servers' | 'settings'
 const activeTopTab = ref<TopTab>('servers')
 
 // ==================== MCP tab: sub-tabs ====================
-type SubTab = 'installed' | 'market'
+type SubTab = 'installed' | 'market' | 'assistantMcp'
 const activeSubTab = ref<SubTab>('installed')
 
 // ==================== Server list ====================
@@ -318,6 +330,12 @@ async function handleMCPEnabledChange(val: boolean) {
   mcpEnabled.value = val
   try {
     await SettingsService.SetValue('mcp_enabled', String(val))
+    if (val) {
+      await AssistantMCPService.StartEnabledServers()
+    } else {
+      await AssistantMCPService.StopAllServers()
+    }
+    void loadAssistantMcps()
   } catch (error) {
     console.error('Failed to update mcp_enabled setting:', error)
     mcpEnabled.value = prev
@@ -403,12 +421,255 @@ async function openMarketLink(url: string) {
   }
 }
 
+// ==================== Assistant MCP ====================
+const assistantMcps = ref<AssistantMCP[]>([])
+const assistantMcpsLoading = ref(false)
+
+async function loadAssistantMcps() {
+  assistantMcpsLoading.value = true
+  try {
+    assistantMcps.value = await AssistantMCPService.List()
+  } catch (error) {
+    console.error('Failed to load assistant MCPs:', error)
+  } finally {
+    assistantMcpsLoading.value = false
+  }
+}
+
+async function handleToggleAssistantMcp(item: AssistantMCP) {
+  const newEnabled = !item.enabled
+  try {
+    if (newEnabled) {
+      await AssistantMCPService.Enable(item.id)
+    } else {
+      await AssistantMCPService.Disable(item.id)
+    }
+    item.enabled = newEnabled
+    void loadAssistantMcps()
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+  }
+}
+
+// Add/Edit assistant MCP dialog
+const amcpDialogOpen = ref(false)
+const amcpDialogMode = ref<'add' | 'edit'>('add')
+const amcpDialogForm = ref({ id: '', name: '', description: '', port: 0 })
+const amcpDialogSaving = ref(false)
+
+function openAddAssistantMcpDialog() {
+  amcpDialogMode.value = 'add'
+  amcpDialogForm.value = { id: '', name: '', description: '', port: 0 }
+  amcpDialogOpen.value = true
+}
+
+function openEditAssistantMcpDialog(item: AssistantMCP) {
+  amcpDialogMode.value = 'edit'
+  amcpDialogForm.value = { id: item.id, name: item.name, description: item.description, port: item.port }
+  amcpDialogOpen.value = true
+}
+
+const amcpCanSave = computed(() => {
+  return amcpDialogForm.value.name.trim().length > 0
+})
+
+async function handleSaveAssistantMcp() {
+  const form = amcpDialogForm.value
+  if (!form.name.trim()) return
+
+  amcpDialogSaving.value = true
+  try {
+    if (amcpDialogMode.value === 'add') {
+      await AssistantMCPService.Create({ name: form.name.trim(), description: form.description.trim() })
+      toast.success(t('settings.mcp.assistantMcpCreateSuccess'))
+    } else {
+      const updated = await AssistantMCPService.Update({ id: form.id, name: form.name.trim(), description: form.description.trim() })
+      toast.success(t('settings.mcp.assistantMcpUpdateSuccess'))
+      if (updated && amcpDetail.value?.id === form.id) {
+        amcpDetail.value = updated
+      }
+      const idx = assistantMcps.value.findIndex((a) => a.id === form.id)
+      if (idx >= 0 && updated) assistantMcps.value[idx] = updated
+    }
+    amcpDialogOpen.value = false
+    void loadAssistantMcps()
+  } catch (error) {
+    toast.error(
+      getErrorMessage(error) ||
+        t(amcpDialogMode.value === 'add' ? 'settings.mcp.assistantMcpCreateFailed' : 'settings.mcp.assistantMcpUpdateFailed'),
+    )
+  } finally {
+    amcpDialogSaving.value = false
+  }
+}
+
+// Delete assistant MCP
+const amcpDeleteTarget = ref<AssistantMCP | null>(null)
+
+function confirmDeleteAssistantMcp(item: AssistantMCP) {
+  amcpDeleteTarget.value = item
+}
+
+async function handleDeleteAssistantMcp() {
+  const item = amcpDeleteTarget.value
+  if (!item) return
+  amcpDeleteTarget.value = null
+  try {
+    await AssistantMCPService.Delete(item.id)
+    assistantMcps.value = assistantMcps.value.filter((a) => a.id !== item.id)
+    toast.success(t('settings.mcp.assistantMcpDeleteSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpDeleteFailed'))
+  }
+}
+
+// Tool entry type matching backend ToolEntry
+interface ToolEntry {
+  agentId: number
+  toolName: string
+  toolDescription: string
+}
+
+function parseTools(item: AssistantMCP): ToolEntry[] {
+  try {
+    const parsed = JSON.parse(item.tools || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+
+// Link agents dialog
+const linkAgentsDialogOpen = ref(false)
+const linkAgentsTarget = ref<AssistantMCP | null>(null)
+const allAgents = ref<Agent[]>([])
+const selectedAgentIds = ref<Set<number>>(new Set())
+const linkAgentsSaving = ref(false)
+
+async function openLinkAgentsDialog(item: AssistantMCP) {
+  linkAgentsTarget.value = item
+  linkAgentsDialogOpen.value = true
+
+  try {
+    allAgents.value = await AgentsService.ListAgents()
+  } catch (error) {
+    console.error('Failed to load agents:', error)
+    allAgents.value = []
+  }
+
+  const existingTools = parseTools(item)
+  selectedAgentIds.value = new Set(existingTools.map((t) => t.agentId))
+}
+
+function toggleAgentSelection(agentId: number) {
+  const newSet = new Set(selectedAgentIds.value)
+  if (newSet.has(agentId)) {
+    newSet.delete(agentId)
+  } else {
+    newSet.add(agentId)
+  }
+  selectedAgentIds.value = newSet
+}
+
+async function handleSaveLinkAgents() {
+  const target = linkAgentsTarget.value
+  if (!target) return
+
+  linkAgentsSaving.value = true
+  try {
+    const ids = Array.from(selectedAgentIds.value)
+    const updated = await AssistantMCPService.AddTools({ id: target.id, agentIds: ids })
+    if (updated) {
+      const idx = assistantMcps.value.findIndex((a) => a.id === target.id)
+      if (idx >= 0) assistantMcps.value[idx] = updated
+      if (amcpDetail.value?.id === target.id) amcpDetail.value = updated
+    }
+    linkAgentsDialogOpen.value = false
+    toast.success(t('settings.mcp.assistantMcpUpdateSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpUpdateFailed'))
+  } finally {
+    linkAgentsSaving.value = false
+  }
+}
+
+// Detail view for assistant MCP
+const amcpDetail = ref<AssistantMCP | null>(null)
+const editingTool = ref<ToolEntry | null>(null)
+const editToolForm = ref({ toolName: '', toolDescription: '' })
+const editToolSaving = ref(false)
+const connectionInfo = ref<{ url: string; authorization: string } | null>(null)
+
+async function showAmcpDetail(item: AssistantMCP) {
+  amcpDetail.value = item
+  connectionInfo.value = null
+  try {
+    connectionInfo.value = await AssistantMCPService.GetConnectionInfo(item.id)
+  } catch { /* ignore */ }
+}
+
+function goBackFromAmcpDetail() {
+  amcpDetail.value = null
+  editingTool.value = null
+  connectionInfo.value = null
+}
+
+function startEditTool(tool: ToolEntry) {
+  editingTool.value = tool
+  editToolForm.value = { toolName: tool.toolName, toolDescription: tool.toolDescription }
+}
+
+function cancelEditTool() {
+  editingTool.value = null
+}
+
+async function handleSaveEditTool() {
+  if (!amcpDetail.value || !editingTool.value) return
+  editToolSaving.value = true
+  try {
+    const updated = await AssistantMCPService.UpdateTool({
+      id: amcpDetail.value.id,
+      agentId: editingTool.value.agentId,
+      toolName: editToolForm.value.toolName.trim(),
+      toolDescription: editToolForm.value.toolDescription.trim(),
+    })
+    if (updated) {
+      amcpDetail.value = updated
+      const idx = assistantMcps.value.findIndex((a) => a.id === updated.id)
+      if (idx >= 0) assistantMcps.value[idx] = updated
+    }
+    editingTool.value = null
+    toast.success(t('settings.mcp.assistantMcpUpdateSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpUpdateFailed'))
+  } finally {
+    editToolSaving.value = false
+  }
+}
+
+async function handleRemoveTool(tool: ToolEntry) {
+  if (!amcpDetail.value) return
+  try {
+    const updated = await AssistantMCPService.RemoveTool({
+      id: amcpDetail.value.id,
+      agentId: tool.agentId,
+    })
+    if (updated) {
+      amcpDetail.value = updated
+      const idx = assistantMcps.value.findIndex((a) => a.id === updated.id)
+      if (idx >= 0) assistantMcps.value[idx] = updated
+    }
+    toast.success(t('settings.mcp.assistantMcpDeleteSuccess'))
+  } catch (error) {
+    toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpUpdateFailed'))
+  }
+}
+
 // ==================== Init ====================
 let unsubOpenAdd: (() => void) | null = null
 
 onMounted(() => {
   void loadServers()
   void loadSettings()
+  void loadAssistantMcps()
 
   unsubOpenAdd = Events.On('mcp:open-add-dialog', () => {
     activeTopTab.value = 'servers'
@@ -626,48 +887,52 @@ onUnmounted(() => {
         <div class="flex items-center justify-between px-4 py-2">
           <div class="flex gap-1">
             <button
+              v-for="subTab in ([
+                { key: 'installed' as SubTab, label: t('settings.mcp.tabInstalled') },
+                { key: 'assistantMcp' as SubTab, label: t('settings.mcp.tabAssistantMcp') },
+                { key: 'market' as SubTab, label: t('settings.mcp.tabMarket') },
+              ])"
+              :key="subTab.key"
               :class="
                 cn(
                   'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                  activeSubTab === 'installed'
+                  activeSubTab === subTab.key
                     ? 'bg-foreground text-background'
                     : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
                 )
               "
-              @click="activeSubTab = 'installed'"
+              @click="activeSubTab = subTab.key"
             >
-              {{ t('settings.mcp.tabInstalled') }}
-            </button>
-            <button
-              :class="
-                cn(
-                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                  activeSubTab === 'market'
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
-                )
-              "
-              @click="activeSubTab = 'market'"
-            >
-              {{ t('settings.mcp.tabMarket') }}
+              {{ subTab.label }}
             </button>
           </div>
-          <div v-if="activeSubTab === 'installed'" class="flex items-center gap-1">
-            <button
-              class="inline-flex cursor-pointer items-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="validating"
-              :title="t('settings.mcp.validateAll')"
-              @click="handleValidateAll"
-            >
-              <RefreshCw class="size-3.5" :class="validating && 'animate-spin'" />
-            </button>
-            <button
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              @click="openAddDialog"
-            >
-              <Plus class="size-3.5" />
-              {{ t('settings.mcp.addServer') }}
-            </button>
+          <div class="flex min-h-[28px] items-center gap-1">
+            <template v-if="activeSubTab === 'installed'">
+              <button
+                class="inline-flex cursor-pointer items-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="validating"
+                :title="t('settings.mcp.validateAll')"
+                @click="handleValidateAll"
+              >
+                <RefreshCw class="size-3.5" :class="validating && 'animate-spin'" />
+              </button>
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="openAddDialog"
+              >
+                <Plus class="size-3.5" />
+                {{ t('settings.mcp.addServer') }}
+              </button>
+            </template>
+            <template v-else-if="activeSubTab === 'assistantMcp'">
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="openAddAssistantMcpDialog"
+              >
+                <Plus class="size-3.5" />
+                {{ t('settings.mcp.assistantMcpAdd') }}
+              </button>
+            </template>
           </div>
         </div>
 
@@ -748,6 +1013,215 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- Assistant MCP tab -->
+        <template v-if="activeSubTab === 'assistantMcp'">
+          <!-- Detail view -->
+          <template v-if="amcpDetail">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div class="flex shrink-0 items-center border-b border-border px-4 py-2">
+                <button
+                  class="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  @click="goBackFromAmcpDetail"
+                >
+                  <ChevronLeft class="size-4" />
+                  {{ t('settings.mcp.tabAssistantMcp') }}
+                </button>
+              </div>
+              <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+                <div class="min-w-0 flex-1">
+                  <span class="text-base font-semibold text-foreground">{{ amcpDetail.name }}</span>
+                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ amcpDetail.description }}</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="openEditAssistantMcpDialog(amcpDetail)"
+                  >
+                    <Pencil class="size-3.5" />
+                    {{ t('settings.mcp.assistantMcpEdit') }}
+                  </button>
+                  <button
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    @click="openLinkAgentsDialog(amcpDetail)"
+                  >
+                    <Plus class="size-3.5" />
+                    {{ t('settings.mcp.assistantMcpAddTool') }}
+                  </button>
+                </div>
+              </div>
+              <div class="shrink-0 border-b border-border px-4 py-3">
+                <div class="rounded-md border border-border bg-muted/30 p-3">
+                  <div class="flex flex-col gap-3 text-xs">
+                    <div class="flex flex-col gap-1">
+                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
+                      <code class="select-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
+                      <code class="select-all break-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="flex-1 overflow-auto px-4 py-3">
+                <div v-if="parseTools(amcpDetail).length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                  <Wrench class="size-8 opacity-40" />
+                  <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
+                </div>
+                <div v-else class="flex flex-col gap-1">
+                  <div
+                    v-for="tool in parseTools(amcpDetail)"
+                    :key="tool.agentId"
+                    class="rounded-md border border-border p-3 dark:border-white/10"
+                  >
+                    <template v-if="editingTool && editingTool.agentId === tool.agentId">
+                      <div class="flex flex-col gap-2">
+                        <div class="flex flex-col gap-1">
+                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolName') }}</Label>
+                          <Input
+                            v-model="editToolForm.toolName"
+                            class="font-mono text-xs"
+                            :placeholder="t('settings.mcp.assistantMcpToolNamePlaceholder')"
+                          />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
+                          <textarea
+                            v-model="editToolForm.toolDescription"
+                            rows="2"
+                            class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                          />
+                        </div>
+                        <div class="flex items-center justify-end gap-2">
+                          <button
+                            class="rounded-md px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            @click="cancelEditTool"
+                          >
+                            {{ t('common.cancel') }}
+                          </button>
+                          <button
+                            class="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                            :disabled="editToolSaving || !editToolForm.toolName.trim()"
+                            @click="handleSaveEditTool"
+                          >
+                            <Loader2 v-if="editToolSaving" class="mr-1 inline size-3 animate-spin" />
+                            {{ t('common.save') }}
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                          <Wrench class="size-3.5 shrink-0 text-muted-foreground" />
+                          <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                          <button
+                            class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            @click="startEditTool(tool)"
+                          >
+                            <Pencil class="size-3" />
+                          </button>
+                          <button
+                            class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            @click="handleRemoveTool(tool)"
+                          >
+                            <Trash2 class="size-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <p v-if="tool.toolDescription" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                        {{ tool.toolDescription }}
+                      </p>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- List view -->
+          <div v-else class="flex-1 overflow-auto px-4 pb-4">
+            <div
+              v-if="assistantMcpsLoading && assistantMcps.length === 0"
+              class="flex items-center justify-center py-12"
+            >
+              <Loader2 class="size-5 animate-spin text-muted-foreground" />
+            </div>
+            <div
+              v-else-if="assistantMcps.length === 0"
+              class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+            >
+              <Package class="size-8 opacity-40" />
+              <span class="text-sm">{{ t('settings.mcp.assistantMcpNoItems') }}</span>
+              <span class="text-xs">{{ t('settings.mcp.assistantMcpNoItemsHint') }}</span>
+            </div>
+            <div v-else class="space-y-3">
+              <p v-if="!mcpEnabled && assistantMcps.length > 0" class="text-xs text-muted-foreground">
+                {{ t('assistant.workspaceDrawer.mcpGlobalDisabled') }}
+              </p>
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+              <div
+                v-for="amcp in assistantMcps"
+                :key="amcp.id"
+                class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+                @click="showAmcpDetail(amcp)"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="truncate text-sm font-medium text-foreground">{{ amcp.name }}</span>
+                  <div @click.stop>
+                    <Switch
+                      :model-value="amcp.enabled"
+                      :disabled="!mcpEnabled"
+                      class="scale-90"
+                      @update:model-value="() => handleToggleAssistantMcp(amcp)"
+                    />
+                  </div>
+                </div>
+                <p class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                  {{ amcp.description }}
+                </p>
+                <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                  <span v-if="parseTools(amcp).length > 0" class="text-[10px] text-muted-foreground">
+                    {{ t('settings.mcp.assistantMcpToolCount', { count: parseTools(amcp).length }) }}
+                  </span>
+                  <span v-else />
+                  <div @click.stop>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <button
+                          class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          <MoreHorizontal class="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" class="w-36">
+                        <DropdownMenuItem @click="openLinkAgentsDialog(amcp)">
+                          <Plus class="mr-2 size-3.5" />
+                          {{ t('settings.mcp.assistantMcpAddTool') }}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem @click="openEditAssistantMcpDialog(amcp)">
+                          <Pencil class="mr-2 size-3.5" />
+                          {{ t('settings.mcp.assistantMcpEdit') }}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          class="text-destructive focus:text-destructive"
+                          @click="confirmDeleteAssistantMcp(amcp)"
+                        >
+                          <Trash2 class="mr-2 size-3.5" />
+                          {{ t('settings.mcp.assistantMcpDelete') }}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+        </template>
       </template>
     </template>
 
@@ -974,5 +1448,147 @@ onUnmounted(() => {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <!-- ==================== Assistant MCP Add/Edit Dialog ==================== -->
+    <Dialog v-model:open="amcpDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {{ amcpDialogMode === 'add' ? t('settings.mcp.assistantMcpAddTitle') : t('settings.mcp.assistantMcpEditTitle') }}
+          </DialogTitle>
+          <DialogDescription class="sr-only">
+            {{ amcpDialogMode === 'add' ? t('settings.mcp.assistantMcpAddTitle') : t('settings.mcp.assistantMcpEditTitle') }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="flex flex-col gap-4 py-2">
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm">{{ t('settings.mcp.assistantMcpName') }}</Label>
+            <Input
+              v-model="amcpDialogForm.name"
+              :placeholder="t('settings.mcp.assistantMcpNamePlaceholder')"
+            />
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <Label class="text-sm">{{ t('settings.mcp.assistantMcpDescription') }}</Label>
+            <textarea
+              v-model="amcpDialogForm.description"
+              :placeholder="t('settings.mcp.assistantMcpDescriptionPlaceholder')"
+              :maxlength="300"
+              rows="2"
+              class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            />
+          </div>
+
+          <div class="rounded-md border border-border bg-muted/30 p-3">
+            <div class="flex flex-col gap-2 text-xs">
+              <div class="flex flex-col gap-1">
+                <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
+                <code v-if="amcpDialogMode === 'edit'" class="rounded bg-background px-2 py-1 font-mono text-foreground">http://localhost:{{ amcpDialogForm.port }}/mcp</code>
+                <span v-else class="text-muted-foreground/70">{{ t('settings.mcp.assistantMcpAutoPort') }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
+                <span class="text-foreground">Bearer Token</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <button
+            class="cursor-pointer rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!amcpCanSave || amcpDialogSaving"
+            @click="handleSaveAssistantMcp"
+          >
+            <Loader2 v-if="amcpDialogSaving" class="mr-1.5 inline size-3.5 animate-spin" />
+            {{ amcpDialogMode === 'add' ? t('settings.mcp.assistantMcpAdd') : t('common.save') }}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- ==================== Assistant MCP Delete Confirm ==================== -->
+    <AlertDialog :open="!!amcpDeleteTarget">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('common.delete') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('settings.mcp.assistantMcpDeleteConfirm') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel @click="amcpDeleteTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction @click="handleDeleteAssistantMcp">{{ t('common.confirm') }}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- ==================== Link Agents Dialog ==================== -->
+    <Dialog v-model:open="linkAgentsDialogOpen">
+      <DialogContent size="xl">
+        <DialogHeader>
+          <DialogTitle>{{ t('settings.mcp.assistantMcpLinkAgentsTitle') }}</DialogTitle>
+          <DialogDescription>{{ t('settings.mcp.assistantMcpLinkAgentsDesc') }}</DialogDescription>
+        </DialogHeader>
+
+        <div class="max-h-[420px] overflow-auto py-2">
+          <div
+            v-if="allAgents.length === 0"
+            class="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground"
+          >
+            <Package class="size-6 opacity-40" />
+            <span class="text-sm">{{ t('settings.mcp.assistantMcpNoAgents') }}</span>
+          </div>
+          <div v-else class="grid grid-cols-2 gap-2">
+            <div
+              v-for="agent in allAgents"
+              :key="agent.id"
+              :class="cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-accent/50',
+                selectedAgentIds.has(agent.id) ? 'border-foreground/40 bg-accent/30' : 'border-border',
+              )"
+              @click="toggleAgentSelection(agent.id)"
+            >
+              <div
+                v-if="agent.icon"
+                class="size-8 shrink-0 overflow-hidden rounded-md"
+              >
+                <img :src="agent.icon" :alt="agent.name" class="size-full object-cover" />
+              </div>
+              <div
+                v-else
+                class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground"
+              >
+                {{ agent.name.charAt(0) }}
+              </div>
+              <span class="flex-1 truncate text-sm text-foreground">{{ agent.name }}</span>
+              <div
+                :class="cn(
+                  'flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+                  selectedAgentIds.has(agent.id)
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border',
+                )"
+              >
+                <Check v-if="selectedAgentIds.has(agent.id)" class="size-3" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <button
+            class="cursor-pointer rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="linkAgentsSaving"
+            @click="handleSaveLinkAgents"
+          >
+            <Loader2 v-if="linkAgentsSaving" class="mr-1.5 inline size-3.5 animate-spin" />
+            {{ t('common.save') }}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
