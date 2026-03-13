@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "চ্যানেলের জন্য AI অ্যাসিস্ট্যান্ট তৈরি ব্যর্থ",
   "error.channel_agent_create_not_available": "অটো-ক্রিয়েট অ্যাসিস্ট্যান্ট উপলব্ধ নয়",
   "error.channel_ai_reply_failed": "AI রিপ্লাই ব্যর্থ: {{.Error}}",
-  "error.channel_ai_reply_empty": "AI রিপ্লাই ব্যর্থ: খালি রেসপন্স তৈরি হয়েছে"
+  "error.channel_ai_reply_empty": "AI রিপ্লাই ব্যর্থ: খালি রেসপন্স তৈরি হয়েছে",
+  "error.assistant_mcp_create_failed": "Assistant MCP তৈরি করতে ব্যর্থ হয়েছে",
+  "error.assistant_mcp_delete_failed": "Assistant MCP মুছে ফেলতে ব্যর্থ হয়েছে",
+  "error.assistant_mcp_id_required": "Assistant MCP আইডি প্রয়োজন",
+  "error.assistant_mcp_list_failed": "Assistant MCP তালিকা আনতে ব্যর্থ হয়েছে",
+  "error.assistant_mcp_name_required": "MCP প্লাগইনের নাম প্রয়োজন",
+  "error.assistant_mcp_not_found": "Assistant MCP পাওয়া যায়নি",
+  "error.assistant_mcp_tool_name_duplicate": "টুলের নাম ইতিমধ্যে বিদ্যমান",
+  "error.assistant_mcp_tool_name_invalid": "টুলের নাম শুধুমাত্র অক্ষর, সংখ্যা এবং আন্ডারস্কোর থাকতে পারবে এবং অবশ্যই একটি অক্ষর দিয়ে শুরু হতে হবে",
+  "error.assistant_mcp_tool_name_required": "টুলের নাম প্রয়োজন",
+  "error.assistant_mcp_tool_not_found": "টুল পাওয়া যায়নি",
+  "error.assistant_mcp_update_failed": "Assistant MCP হালনাগাদ করতে ব্যর্থ হয়েছে"
 }

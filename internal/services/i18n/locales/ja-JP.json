@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "チャンネルのAIアシスタントの作成に失敗しました",
   "error.channel_agent_create_not_available": "自動アシスタント作成は利用できません",
   "error.channel_ai_reply_failed": "AI返信に失敗しました：{{.Error}}",
-  "error.channel_ai_reply_empty": "AI返信に失敗しました：空のレスポンスが生成されました"
+  "error.channel_ai_reply_empty": "AI返信に失敗しました：空のレスポンスが生成されました",
+  "error.assistant_mcp_create_failed": "Assistant MCP の作成に失敗しました",
+  "error.assistant_mcp_delete_failed": "Assistant MCP の削除に失敗しました",
+  "error.assistant_mcp_id_required": "Assistant MCP ID は必須です",
+  "error.assistant_mcp_list_failed": "Assistant MCP の一覧の取得に失敗しました",
+  "error.assistant_mcp_name_required": "MCP プラグイン名は必須です",
+  "error.assistant_mcp_not_found": "Assistant MCP が見つかりません",
+  "error.assistant_mcp_tool_name_duplicate": "ツール名は既に存在します",
+  "error.assistant_mcp_tool_name_invalid": "ツール名は英字で始まり、英数字とアンダースコアのみを含めることができます",
+  "error.assistant_mcp_tool_name_required": "ツール名は必須です",
+  "error.assistant_mcp_tool_not_found": "ツールが見つかりません",
+  "error.assistant_mcp_update_failed": "Assistant MCP の更新に失敗しました"
 }

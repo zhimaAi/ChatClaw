@@ -81,9 +81,11 @@ python .cursor/skills/i18n-check/scripts/compare_backend.py
 python .cursor/skills/i18n-check/scripts/fill_frontend.py --target en-US
 python .cursor/skills/i18n-check/scripts/fill_backend.py
 
-# Step 4: AI 翻译
-# 脚本会自动检测需要翻译的内容并生成翻译提示
+# Step 4: AI 翻译（前端 + 后端）
+# 脚本会自动检测需要翻译的内容并生成翻译提示（只读，不改 TS/JSON）
 python .cursor/skills/i18n-check/scripts/translate_with_ai.py --all
+# 仅处理后端 JSON 时，可显式指定：
+# python .cursor/skills/i18n-check/scripts/translate_with_ai.py --type backend --all
 
 # Step 5: 翻译完成后检测 CJK 语言
 # 对于 ja-JP, ko-KR, zh-TW，检测是否还有未翻译内容

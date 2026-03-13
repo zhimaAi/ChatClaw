@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "Kanal için AI asistanı oluşturma başarısız",
   "error.channel_agent_create_not_available": "Otomatik asistan oluşturma mevcut değil",
   "error.channel_ai_reply_failed": "AI yanıtı başarısız: {{.Error}}",
-  "error.channel_ai_reply_empty": "AI yanıtı başarısız: Boş yanıt oluşturuldu"
+  "error.channel_ai_reply_empty": "AI yanıtı başarısız: Boş yanıt oluşturuldu",
+  "error.assistant_mcp_create_failed": "Assistant MCP oluşturma başarısız oldu",
+  "error.assistant_mcp_delete_failed": "Assistant MCP silme başarısız oldu",
+  "error.assistant_mcp_id_required": "Assistant MCP kimliği gereklidir",
+  "error.assistant_mcp_list_failed": "Assistant MCP listesini alma başarısız oldu",
+  "error.assistant_mcp_name_required": "MCP eklenti adı gereklidir",
+  "error.assistant_mcp_not_found": "Assistant MCP bulunamadı",
+  "error.assistant_mcp_tool_name_duplicate": "Araç adı zaten mevcut",
+  "error.assistant_mcp_tool_name_invalid": "Araç adı yalnızca harf, rakam ve alt çizgi içerebilir ve bir harfle başlamalıdır",
+  "error.assistant_mcp_tool_name_required": "Araç adı gereklidir",
+  "error.assistant_mcp_tool_not_found": "Araç bulunamadı",
+  "error.assistant_mcp_update_failed": "Assistant MCP güncelleme başarısız oldu"
 }
