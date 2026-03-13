@@ -584,8 +584,7 @@ const handleSelectConversation = async (conversation: Conversation) => {
 
   // Personal + team knowledge can both be selected; recall runs both paths when set
   selectedLibraryIds.value = conversation.library_ids || []
-  const teamLibIdStr = (conversation as unknown as { team_library_id?: string }).team_library_id || ''
-  assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(teamLibIdStr)
+  assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(conversation.team_library_id)
 
   // Set thinking mode from conversation (skip toast notification)
   isRestoringConversation = true
@@ -1040,9 +1039,7 @@ const syncLibraryIdsFromConversation = async () => {
   const currentConversation = conversations.find((c) => c.id === activeConversationId.value)
   if (currentConversation) {
     selectedLibraryIds.value = currentConversation.library_ids || []
-    const teamLibIdStr =
-      (currentConversation as unknown as { team_library_id?: string }).team_library_id || ''
-    assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(teamLibIdStr)
+    assistantSelectedTeamLibraryIds.value = parseTeamLibraryIds(currentConversation.team_library_id)
   }
 }
 
