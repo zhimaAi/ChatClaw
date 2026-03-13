@@ -66,13 +66,26 @@ def parse_ts_file(content):
                 current_path.pop()
             continue
 
-        value_match = re.match(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*[\"']([^\"']*)[\"']", line)
+        # Parse string value - properly handle escaped quotes
+        value_match = re.match(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*', line)
         if value_match:
             key = value_match.group(1)
-            value = value_match.group(2)
-            full_path = '.'.join(current_path + [key])
-            result[full_path] = value
-            continue
+            rest = line[value_match.end():].strip()
+
+            if rest.startswith('"'):
+                # Parse double-quoted string with escape handling
+                value = parse_double_quoted_string(rest)
+                if value is not None:
+                    full_path = '.'.join(current_path + [key])
+                    result[full_path] = value
+                    continue
+            elif rest.startswith("'"):
+                # Parse single-quoted string
+                value = parse_single_quoted_string(rest)
+                if value is not None:
+                    full_path = '.'.join(current_path + [key])
+                    result[full_path] = value
+                    continue
 
         if line.strip() == '}' or line.strip().startswith('},'):
             if current_path:
@@ -80,6 +93,77 @@ def parse_ts_file(content):
             continue
 
     return result
+
+
+def parse_double_quoted_string(s):
+    """Parse a double-quoted string, handling escaped quotes and other escapes"""
+    if not s.startswith('"'):
+        return None
+
+    result = []
+    s = s[1:]  # Skip opening quote
+
+    i = 0
+    while i < len(s):
+        if s[i] == '\\' and i + 1 < len(s):
+            # Handle escape sequences
+            next_char = s[i + 1]
+            if next_char == 'n':
+                result.append('\n')
+            elif next_char == 'r':
+                result.append('\r')
+            elif next_char == 't':
+                result.append('\t')
+            elif next_char == '\\':
+                result.append('\\')
+            elif next_char == '"':
+                result.append('"')
+            elif next_char == "'":
+                result.append("'")
+            else:
+                # Keep the escape sequence as-is for unknown escapes
+                result.append(s[i:i+2])
+            i += 2
+        elif s[i] == '"':
+            # End of string
+            return ''.join(result)
+        else:
+            result.append(s[i])
+            i += 1
+
+    # Unterminated string - return what we have
+    return ''.join(result)
+
+
+def parse_single_quoted_string(s):
+    """Parse a single-quoted string, handling escaped quotes"""
+    if not s.startswith("'"):
+        return None
+
+    result = []
+    s = s[1:]  # Skip opening quote
+
+    i = 0
+    while i < len(s):
+        if s[i] == '\\' and i + 1 < len(s):
+            # Handle escape sequences
+            next_char = s[i + 1]
+            if next_char == "'":
+                result.append("'")
+            elif next_char == '\\':
+                result.append('\\')
+            else:
+                result.append(s[i:i+2])
+            i += 2
+        elif s[i] == "'":
+            # End of string
+            return ''.join(result)
+        else:
+            result.append(s[i])
+            i += 1
+
+    # Unterminated string - return what we have
+    return ''.join(result)
 
 def to_nested_format(flat_obj):
     """Convert flat dict to nested TS format"""
@@ -201,10 +285,10 @@ def needs_translation_check(lang_code):
 def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lang_code, use_cjk_mode=False):
     """Fill missing keys with baseline values as placeholder"""
     needs_translation = []
-    
+
     # Check if this language needs Chinese detection
     check_translation = needs_translation_check(lang_code)
-    
+
     # For CJK languages, get reference keys from non-CJK locales
     ref_keys = {}
     if use_cjk_mode and lang_code in CJK_LANGUAGES:
@@ -212,22 +296,33 @@ def fill_missing_keys(target_file, baseline_keys, target_keys, missing_keys, lan
         if non_cjk_files:
             ref_file = non_cjk_files[0]
             ref_keys = load_target(ref_file)
-    
+
     for key in missing_keys:
         baseline_value = baseline_keys[key]
-        target_keys[key] = baseline_value
-        
-        # If key was newly added and contains Chinese, mark for translation
-        if check_translation and detect_chinese(baseline_value):
-            needs_translation.append(key)
-        
-        # For CJK languages, also check if value matches reference (untranslated)
+
+        # For CJK languages, check if the value from baseline equals the reference (English) value
+        # If so, this key needs translation - DON'T replace with English, keep baseline value
         if use_cjk_mode and lang_code in CJK_LANGUAGES and key in ref_keys:
             ref_value = ref_keys[key]
-            if baseline_value == ref_value or not baseline_value.strip():
+            # If baseline equals reference (e.g., both are English like "ChatClaw"),
+            # this key doesn't need translation - it's already correct
+            if baseline_value == ref_value:
+                # Value is the same in baseline and reference (e.g., brand name), keep it
+                target_keys[key] = baseline_value
+            else:
+                # Value differs - baseline has Chinese, reference has English
+                # Use baseline value (Chinese) as placeholder, mark for translation
+                target_keys[key] = baseline_value
                 if key not in needs_translation:
                     needs_translation.append(key)
-    
+        else:
+            # Normal mode - use baseline value directly
+            target_keys[key] = baseline_value
+
+            # If key was newly added and contains Chinese, mark for translation
+            if check_translation and detect_chinese(baseline_value):
+                needs_translation.append(key)
+
     save_target(target_file, target_keys)
     return needs_translation
 

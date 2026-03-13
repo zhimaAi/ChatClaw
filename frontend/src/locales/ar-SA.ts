@@ -36,7 +36,7 @@ export default {
     },
     execute: {
       name: "تنفيذ الأمر",
-      description: "تنفيذ أمر Shell في终端 النظام",
+      description: "Execute shell commands on the system",
     },
     httpRequest: {
       name: "طلب HTTP",
@@ -218,7 +218,7 @@ export default {
       snapSettings: "إعدادات الالتقاط",
       tools: "أدوات الوظائف",
       chatwiki: "إدارة الحساب",
-      about: "عناصر关于我们",
+      about: "About Us",
     },
     general: {
       title: "الإعدادات العامة",
@@ -470,7 +470,7 @@ export default {
       timeoutReason: "انتهت المهلة",
       retry: "إعادة المحاولة",
       authSuccess: "تم التفويض بنجاح",
-      authExpiredPleaseReauth: "انتهت صلاحية登录 أو غير موجود، يرجى إعادة التفويض",
+      authExpiredPleaseReauth: "Login expired or not found, please re-authorize.",
       startUsingHint: "انقر على ",
       startUsing: "ابدأ الاستخدام",
       freeVersion: "مجاني",
@@ -496,9 +496,9 @@ export default {
       system: "النظام",
     },
     about: {
-      title: "عناصر关于我们",
+      title: "About Us",
       appName: "ChatClaw",
-      copyright: "© 2026 武汉芝麻小客服网络科技有限公司 版权所有",
+      copyright: "© 2026 ChatClaw Sesame Network Technology  All rights reserved",
       officialWebsite: "الموقع الرسمي",
       view: "عرض",
       checkUpdate: "التحقق من التحديثات",
@@ -666,7 +666,7 @@ export default {
       taskAgentResult: "نتيجة الوكيل الفرعي",
       subAgentPrefix: "مهمة فرعية",
       subAgentGeneralPurpose: "مهمة فرعية · وكيل",
-      subAgentBash: "مهمة فرعية ·终端",
+      subAgentBash: "Subtask · Terminal",
       subAgentRunning: "قيد التنفيذ",
       subAgentCompleted: "مكتمل",
       subAgentStopped: "متوقف",
