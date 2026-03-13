@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useAppStore, type Theme } from '@/stores'
-import { useLocale } from '@/composables/useLocale'
+import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
@@ -23,15 +23,33 @@ import TestInstallDialog from './TestInstallDialog.vue'
 const { t } = useI18n()
 const appStore = useAppStore()
 const { locale: currentLocale, switchLocale } = useLocale()
-
-// 测试安装对话框
 const testInstallOpen = ref(false)
 
-// 语言选项
-const languageOptions = [
-  { value: 'zh-CN', label: 'settings.languages.zhCN' },
-  { value: 'en-US', label: 'settings.languages.enUS' },
-]
+// 语言选项 - 直接用对应语言的名称显示
+const languageOptions = computed(() => {
+  const labels: Record<Locale, string> = {
+    'zh-CN': '简体中文',
+    'en-US': 'English',
+    'ar-SA': 'العربية',
+    'bn-BD': 'বাংলা',
+    'de-DE': 'Deutsch',
+    'es-ES': 'Español',
+    'fr-FR': 'Français',
+    'hi-IN': 'हिन्दी',
+    'it-IT': 'Italiano',
+    'ja-JP': '日本語',
+    'ko-KR': '한국어',
+    'pt-BR': 'Português',
+    'sl-SI': 'Slovenščina',
+    'tr-TR': 'Türkçe',
+    'vi-VN': 'Tiếng Việt',
+    'zh-TW': '繁體中文',
+  }
+  return SUPPORTED_LOCALES.map((locale) => ({
+    value: locale,
+    label: labels[locale] || locale,
+  }))
+})
 
 // 主题选项
 const themeOptions = [
@@ -42,8 +60,8 @@ const themeOptions = [
 
 // 当前语言显示文本
 const currentLanguageLabel = computed(() => {
-  const option = languageOptions.find((opt) => opt.value === currentLocale.value)
-  return option ? t(option.label) : ''
+  const option = languageOptions.value.find((opt) => opt.value === currentLocale.value)
+  return option ? option.label : ''
 })
 
 // 当前主题显示文本
@@ -54,8 +72,8 @@ const currentThemeLabel = computed(() => {
 
 // 处理语言切换
 const handleLanguageChange = (value: AcceptableValue) => {
-  if (typeof value === 'string') {
-    void switchLocale(value as 'zh-CN' | 'en-US')
+  if (typeof value === 'string' && SUPPORTED_LOCALES.includes(value as Locale)) {
+    void switchLocale(value as Locale)
   }
 }
 
@@ -222,7 +240,7 @@ onUnmounted(() => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem v-for="option in languageOptions" :key="option.value" :value="option.value">
-              {{ t(option.label) }}
+              {{ option.label }}
             </SelectItem>
           </SelectContent>
         </Select>
