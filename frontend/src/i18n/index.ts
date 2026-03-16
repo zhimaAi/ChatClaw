@@ -6,7 +6,8 @@ export let i18n: I18n
 const FALLBACK_LOCALE: Locale = "en-US"
 
 export async function initI18n(locale: Locale) {
-  const msgs: Record<string, Record<string, unknown>> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const msgs: Record<string, any> = {}
 
   const targets = locale === FALLBACK_LOCALE ? [locale] : [locale, FALLBACK_LOCALE]
   const loaded = await Promise.all(targets.map((l) => loadLocaleMessages(l)))
