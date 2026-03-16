@@ -931,7 +931,7 @@ onUnmounted(() => {
               <div class="flex flex-col gap-3 text-xs">
                 <div class="flex flex-col gap-1">
                   <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                  <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
+                  <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://127.0.0.1:${amcpDetail.port}/mcp` }}</code>
                 </div>
                 <div class="flex flex-col gap-1">
                   <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
@@ -1503,7 +1503,7 @@ onUnmounted(() => {
             <div class="flex flex-col gap-2 text-xs">
               <div class="flex flex-col gap-1">
                 <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                <code v-if="amcpDialogMode === 'edit'" class="rounded bg-background px-2 py-1 font-mono text-foreground">http://localhost:{{ amcpDialogForm.port }}/mcp</code>
+                <code v-if="amcpDialogMode === 'edit'" class="rounded bg-background px-2 py-1 font-mono text-foreground">http://127.0.0.1:{{ amcpDialogForm.port }}/mcp</code>
                 <span v-else class="text-muted-foreground/70">{{ t('settings.mcp.assistantMcpAutoPort') }}</span>
               </div>
               <div class="flex items-center justify-between">

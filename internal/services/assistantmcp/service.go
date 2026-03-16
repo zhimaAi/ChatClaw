@@ -582,13 +582,29 @@ func (s *AssistantMCPService) startServer(item AssistantMCP) error {
 
 	mcpHTTP := mcpserver.NewStreamableHTTPServer(mcpSrv)
 
-	// Wrap with Bearer token auth middleware
 	expectedToken := item.Token
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id")
+		w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if s.app != nil {
+			s.app.Logger.Info("[assistant-mcp] request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
+		}
+
 		if expectedToken != "" {
 			auth := r.Header.Get("Authorization")
 			if auth != "Bearer "+expectedToken {
+				if s.app != nil {
+					s.app.Logger.Warn("[assistant-mcp] unauthorized request", "remote", r.RemoteAddr)
+				}
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -764,7 +780,7 @@ func (s *AssistantMCPService) GetConnectionInfo(id string) (*ConnectionInfo, err
 		return nil, errs.New("error.assistant_mcp_not_found")
 	}
 
-	host := "localhost"
+	host := "127.0.0.1"
 	if define.IsServerMode() {
 		if ip := getPublicIP(); ip != "" {
 			host = ip
