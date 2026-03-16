@@ -95,7 +95,7 @@ cd bin && tar -czf ChatClaw_darwin_amd64.tar.gz -C ChatClaw.app/Contents/MacOS C
 
 # arm64+amd64
 wails3 task darwin:sign:notarize UNIVERSAL=true DEV=false
-cd bin && mv ChatClaw-universal.dmg ./ChatClaw_MacOS_universal.dmg
+cd bin && mv ChatClaw-universal.dmg ./ChatClaw_MacOS_universal.dmg && cd ..
 ```
 
 ## Linux Server 模式构建、打包

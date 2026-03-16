@@ -167,6 +167,9 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, "Failed to load messages", "")
 		return
 	}
+	// Normalize tool-call history to avoid malformed role=tool chains
+	// when context truncation cuts away preceding assistant tool_calls.
+	messages = normalizeToolCallHistory(messages)
 
 	// Task mode: local KB uses retriever tool, but team recall has no tool — inject team
 	// retrieval into instruction when team_library_id is set (same merge as chat mode).
@@ -444,7 +447,8 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 }
 
 // resolveChannelSource parses the conversation's external_id (format "ch:{channelID}:{targetID}")
-// to extract the source channel_id and target_id for auto-filling feishu_sender defaults.
+// to extract the source channel_id and target_id for auto-filling IM sender tool defaults
+// (feishu_sender, wecom_sender, dingtalk_sender).
 func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conversationID int64) (channelID int64, targetID string, ok bool) {
 	var externalID string
 	err := db.NewSelect().
@@ -1333,6 +1337,54 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 	}
 
 	return messages, nil
+}
+
+// normalizeToolCallHistory ensures tool-role messages are only kept when they
+// immediately follow an assistant message with tool_calls. It also strips
+// unresolved tool_calls from assistant messages (e.g. after context truncation).
+func normalizeToolCallHistory(messages []*schema.Message) []*schema.Message {
+	out := make([]*schema.Message, 0, len(messages))
+
+	for i := 0; i < len(messages); i++ {
+		msg := messages[i]
+
+		// Orphan tool message (not consumed by a preceding assistant tool_calls block)
+		if msg.Role == schema.Tool {
+			continue
+		}
+
+		if msg.Role == schema.Assistant && len(msg.ToolCalls) > 0 {
+			// Collect contiguous tool messages right after this assistant message.
+			j := i + 1
+			block := make([]*schema.Message, 0, 2)
+			for j < len(messages) && messages[j].Role == schema.Tool {
+				block = append(block, messages[j])
+				j++
+			}
+
+			if len(block) == 0 {
+				// No tool result follows this tool_calls message in current context.
+				// Strip tool_calls to keep provider input valid.
+				cleaned := *msg
+				cleaned.ToolCalls = nil
+				if strings.TrimSpace(cleaned.Content) != "" {
+					out = append(out, &cleaned)
+				}
+				i = j - 1
+				continue
+			}
+
+			// Keep assistant + its contiguous tool results.
+			out = append(out, msg)
+			out = append(out, block...)
+			i = j - 1
+			continue
+		}
+
+		out = append(out, msg)
+	}
+
+	return out
 }
 
 // updateMessageStatus updates the message status

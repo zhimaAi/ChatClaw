@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"runtime"
 	"strings"
 	"sync"
@@ -152,6 +153,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		// Fallback: if file logger fails, continue without it (Wails will use its default).
 		appLogger = nil
 		logCleanup = func() {}
+	}
+	if appLogger != nil {
+		slog.SetDefault(appLogger)
 	}
 
 	// 初始化多语言（设置全局语言）
@@ -799,18 +803,41 @@ func handleChannelMessage(
 	var assistantMsg struct {
 		Content string `bun:"content"`
 	}
+	// Use a fresh short-lived context for post-generation reads. The outer ctx may
+	// already be near deadline (or expired) after long tool executions.
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer fetchCancel()
+
+	// Prefer the latest successful, non-empty assistant reply.
 	err = db.NewSelect().
 		Table("messages").
 		Column("content").
 		Where("conversation_id = ?", conv.ID).
 		Where("role = ?", "assistant").
+		Where("status = ?", "success").
+		Where("TRIM(content) <> ''").
 		OrderExpr("id DESC").
 		Limit(1).
-		Scan(ctx, &assistantMsg)
+		Scan(fetchCtx, &assistantMsg)
 
-	if err == nil {
-		finalResponse = assistantMsg.Content
+	// Fallback: if no non-empty success message exists, read the latest assistant
+	// record (useful for troubleshooting / partial generations).
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_ = db.NewSelect().
+				Table("messages").
+				Column("content").
+				Where("conversation_id = ?", conv.ID).
+				Where("role = ?", "assistant").
+				OrderExpr("id DESC").
+				Limit(1).
+				Scan(fetchCtx, &assistantMsg)
+		} else {
+			app.Logger.Warn("channel message: fetch final assistant message failed", "conv", conv.ID, "error", err)
+		}
 	}
+
+	finalResponse = strings.TrimSpace(assistantMsg.Content)
 
 	// Notify frontend again after AI reply is generated
 	_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{

@@ -187,8 +187,8 @@ func buildSubAgentPrompt(config Config) string {
 		imToolsZH := ""
 		imSelectionZH := ""
 		if hasIM {
-			imToolsZH = "\n- IM 消息发送工具：feishu_sender（飞书）、wecom_sender（企业微信）— 可向已连接的渠道发送消息或文件"
-			imSelectionZH = "\n- 需要发送飞书/企业微信消息 → general_purpose（拥有 feishu_sender、wecom_sender）"
+			imToolsZH = "\n- IM 消息发送工具：feishu_sender（飞书）、wecom_sender（企业微信）、dingtalk_sender（钉钉）— 可向已连接的渠道发送消息或文件"
+			imSelectionZH = "\n- 需要发送飞书/企业微信/钉钉消息 → general_purpose（拥有 feishu_sender、wecom_sender、dingtalk_sender）"
 		}
 
 		return `
@@ -230,8 +230,8 @@ func buildSubAgentPrompt(config Config) string {
 	imToolsEN := ""
 	imSelectionEN := ""
 	if hasIM {
-		imToolsEN = "\n- IM messaging tools: feishu_sender (Feishu/Lark), wecom_sender (WeCom) — send messages or files via connected channels"
-		imSelectionEN = "\n- Needs to send Feishu/WeCom messages → general_purpose (has feishu_sender, wecom_sender)"
+		imToolsEN = "\n- IM messaging tools: feishu_sender (Feishu/Lark), wecom_sender (WeCom), dingtalk_sender (DingTalk) — send messages or files via connected channels"
+		imSelectionEN = "\n- Needs to send Feishu/WeCom/DingTalk messages → general_purpose (has feishu_sender, wecom_sender, dingtalk_sender)"
 	}
 
 	return `

@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	dingclient "github.com/open-dingtalk/dingtalk-stream-sdk-go/client"
 	dingchatbot "github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
+	dingclient "github.com/open-dingtalk/dingtalk-stream-sdk-go/client"
 )
 
 // ---- Incoming media content models ----------------------------------------
@@ -49,7 +52,15 @@ type DingTalkVideoContent struct {
 
 // ---- Access token cache ----------------------------------------------------
 
+// dingTalkTokenEntry caches a new-style api.dingtalk.com OAuth2 access token.
 type dingTalkTokenEntry struct {
+	token     string
+	expiresAt time.Time
+}
+
+// dingTalkOApiTokenEntry caches the legacy oapi.dingtalk.com access token,
+// which is required by older endpoints such as /media/upload.
+type dingTalkOApiTokenEntry struct {
 	token     string
 	expiresAt time.Time
 }
@@ -75,19 +86,21 @@ type webhookEntry struct {
 
 // DingTalkAdapter implements PlatformAdapter for DingTalk using Stream (长连接).
 type DingTalkAdapter struct {
-	mu           sync.Mutex
-	streamClient *dingclient.StreamClient
-	replier      *dingchatbot.ChatbotReplier
-	connected    atomic.Bool
-	cancel       context.CancelFunc
-	channelID    int64
-	handler      MessageHandler
-	config       DingTalkConfig
-	webhookCache sync.Map // conversationId -> *webhookEntry
-	nameCache    sync.Map // senderID -> displayName
-	seenMsgs     sync.Map // msgId -> struct{}, dedup within TTL
-	tokenMu      sync.Mutex
-	tokenEntry   *dingTalkTokenEntry // cached access token
+	mu             sync.Mutex
+	streamClient   *dingclient.StreamClient
+	replier        *dingchatbot.ChatbotReplier
+	connected      atomic.Bool
+	cancel         context.CancelFunc
+	channelID      int64
+	handler        MessageHandler
+	config         DingTalkConfig
+	webhookCache   sync.Map // conversationId -> *webhookEntry
+	nameCache      sync.Map // senderID -> displayName
+	seenMsgs       sync.Map // msgId -> struct{}, dedup within TTL
+	tokenMu        sync.Mutex
+	tokenEntry     *dingTalkTokenEntry // cached api.dingtalk.com OAuth2 token
+	oapiTokenMu    sync.Mutex
+	oapiTokenEntry *dingTalkOApiTokenEntry // cached oapi.dingtalk.com legacy token
 }
 
 func (a *DingTalkAdapter) Platform() string { return PlatformDingTalk }
@@ -213,6 +226,22 @@ func (a *DingTalkAdapter) onMessageReceive(ctx context.Context, data *dingchatbo
 			url:       data.SessionWebhook,
 			expiresAt: data.SessionWebhookExpiredTime,
 		})
+		nowMs := time.Now().UnixMilli()
+		slog.Info("[dingtalk] session webhook cached",
+			"conversation_id", data.ConversationId,
+			"webhook_len", len(data.SessionWebhook),
+			"expires_at", data.SessionWebhookExpiredTime,
+			"now", nowMs,
+			"remaining_ms", data.SessionWebhookExpiredTime-nowMs,
+		)
+	} else {
+		slog.Warn("[dingtalk] session webhook missing in callback",
+			"conversation_id", data.ConversationId,
+			"has_session_webhook", data.SessionWebhook != "",
+			"session_webhook_expired_time", data.SessionWebhookExpiredTime,
+			"msg_id", data.MsgId,
+			"msg_type", data.Msgtype,
+		)
 	}
 
 	senderID := data.SenderId
@@ -396,45 +425,62 @@ func (a *DingTalkAdapter) getAccessToken(ctx context.Context) (string, error) {
 	return result.AccessToken, nil
 }
 
-// DownloadFile downloads a DingTalk media file by its downloadCode and returns the raw bytes.
-// downloadCode is obtained from incoming picture/file/audio/video messages.
-func (a *DingTalkAdapter) DownloadFile(ctx context.Context, downloadCode string) ([]byte, error) {
+// getOApiAccessToken returns a valid legacy oapi.dingtalk.com access token,
+// refreshing when expired. This token is required by the media upload endpoint
+// (https://oapi.dingtalk.com/media/upload) which does not accept the newer
+// api.dingtalk.com OAuth2 token.
+func (a *DingTalkAdapter) getOApiAccessToken(ctx context.Context) (string, error) {
+	a.oapiTokenMu.Lock()
+	defer a.oapiTokenMu.Unlock()
+
+	if a.oapiTokenEntry != nil && time.Now().Before(a.oapiTokenEntry.expiresAt) {
+		return a.oapiTokenEntry.token, nil
+	}
+
 	a.mu.Lock()
-	clientID := a.config.AppID
+	appKey := a.config.AppID
+	appSecret := a.config.AppSecret
 	a.mu.Unlock()
 
-	token, err := a.getAccessToken(ctx)
+	tokenURL := fmt.Sprintf("https://oapi.dingtalk.com/gettoken?appkey=%s&appsecret=%s", appKey, appSecret)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("dingtalk download: %w", err)
+		return "", fmt.Errorf("build oapi token request: %w", err)
 	}
-
-	url := fmt.Sprintf(
-		"https://api.dingtalk.com/v1.0/robot/messageFiles/download?downloadCode=%s&robotCode=%s",
-		downloadCode, clientID,
-	)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build download request: %w", err)
-	}
-	req.Header.Set("x-acs-dingtalk-access-token", token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("download request failed: %w", err)
+		return "", fmt.Errorf("oapi token request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("download failed (http %d): %s", resp.StatusCode, string(body))
+	respBody, _ := io.ReadAll(resp.Body)
+	var result struct {
+		ErrCode     int    `json:"errcode"`
+		ErrMsg      string `json:"errmsg"`
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"` // seconds
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("parse oapi token response: %w", err)
+	}
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("get oapi access token failed (code: %d, msg: %s)", result.ErrCode, result.ErrMsg)
+	}
+	if result.AccessToken == "" {
+		return "", fmt.Errorf("get oapi access token failed: empty token in response")
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read download body: %w", err)
+	// Cache with 3-minute safety margin to avoid using an almost-expired token.
+	expiry := time.Duration(result.ExpiresIn)*time.Second - 3*time.Minute
+	if expiry < 0 {
+		expiry = 0
 	}
-	return data, nil
+	a.oapiTokenEntry = &dingTalkOApiTokenEntry{
+		token:     result.AccessToken,
+		expiresAt: time.Now().Add(expiry),
+	}
+	return result.AccessToken, nil
 }
 
 func (a *DingTalkAdapter) Disconnect(ctx context.Context) error {
@@ -458,21 +504,180 @@ func (a *DingTalkAdapter) IsConnected() bool {
 // SendMessage sends a text reply to a DingTalk conversation.
 // targetID should be the conversationId (as stored in chatID from IncomingMessage).
 func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, content string) error {
+	slog.Info("[dingtalk] send message start",
+		"target_id", targetID,
+		"content_len", len(content),
+	)
 	webhook, err := a.resolveWebhook(targetID)
 	if err != nil {
+		slog.Error("[dingtalk] resolve webhook failed",
+			"target_id", targetID,
+			"error", err,
+		)
 		return err
 	}
+	slog.Info("[dingtalk] resolve webhook ok",
+		"target_id", targetID,
+		"content", content,
+		"webhook_len", len(webhook),
+	)
 
 	msgType, requestBody, err := buildDingTalkOutgoingMessage(content)
 	if err != nil {
+		slog.Error("[dingtalk] build outgoing message failed",
+			"target_id", targetID,
+			"content", content,
+			"error", err,
+		)
 		return err
 	}
-	_ = msgType
+
+	reqJSON, _ := json.Marshal(requestBody)
+	const maxLogLen = 1024
+	reqLog := string(reqJSON)
+	if len(reqLog) > maxLogLen {
+		reqLog = reqLog[:maxLogLen] + "...(truncated)"
+	}
+	slog.Error("[dingtalk] send message request",
+		"target_id", targetID,
+		"msg_type", msgType,
+		"body", reqLog,
+	)
 
 	replyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if deadline, ok := replyCtx.Deadline(); ok {
+		slog.Info("[dingtalk] reply context prepared",
+			"target_id", targetID,
+			"msg_type", msgType,
+			"deadline", deadline.UnixMilli(),
+		)
+	}
 
-	return a.replier.ReplyMessage(replyCtx, webhook, requestBody)
+	err = a.replier.ReplyMessage(replyCtx, webhook, requestBody)
+	if err != nil {
+		slog.Error("[dingtalk] send message response error",
+			"target_id", targetID,
+			"msg_type", msgType,
+			"error", err,
+		)
+		return err
+	}
+	slog.Info("[dingtalk] send message response ok",
+		"target_id", targetID,
+		"msg_type", msgType,
+	)
+	return nil
+}
+
+// detectDingTalkMediaType infers the DingTalk media type from a file name.
+// DingTalk supports: image (jpg/jpeg/gif/png/bmp ≤1 MB), voice (amr/mp3/wav ≤2 MB),
+// video (mp4 ≤10 MB), and file (doc/docx/xls/xlsx/ppt/pptx/zip/pdf/rar ≤20 MB).
+func detectDingTalkMediaType(fileName string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
+	switch ext {
+	case "jpg", "jpeg", "gif", "png", "bmp":
+		return "image"
+	case "amr", "mp3", "wav":
+		return "voice"
+	case "mp4":
+		return "video"
+	default:
+		return "file"
+	}
+}
+
+// UploadMessageFile uploads a local file to DingTalk and returns (mediaId, mediaType, error).
+// mediaId is the DingTalk media resource identifier used when sending file/audio/video messages.
+// mediaType is one of: image, voice, video, file (derived from the file extension).
+//
+// Uses the legacy oapi endpoint which accepts a single multipart form with:
+//   - media: the file binary
+//   - type:  one of image / voice / video / file
+//
+// Reference: https://open.dingtalk.com/document/development/upload-media-files
+// Equivalent curl:
+//
+//	curl -X POST 'https://oapi.dingtalk.com/media/upload?access_token=TOKEN' \
+//	  --form 'media=@"/path/to/file"' \
+//	  --form 'type="file"'
+func (a *DingTalkAdapter) UploadMessageFile(ctx context.Context, filePath string) (mediaID string, mediaType string, err error) {
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: file not accessible: %w", err)
+	}
+	if stat.IsDir() {
+		return "", "", fmt.Errorf("dingtalk upload: path is a directory")
+	}
+
+	token, err := a.getOApiAccessToken(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: %w", err)
+	}
+
+	fileName := filepath.Base(filePath)
+	mediaType = detectDingTalkMediaType(fileName)
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: open file: %w", err)
+	}
+	defer file.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile("media", fileName)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: create multipart field: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: copy file data: %w", err)
+	}
+	if err := writer.WriteField("type", mediaType); err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: write type field: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: finalize multipart body: %w", err)
+	}
+
+	uploadURL := fmt.Sprintf("https://oapi.dingtalk.com/media/upload?access_token=%s", token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &body)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", "", fmt.Errorf("dingtalk upload failed (http %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		ErrCode   int    `json:"errcode"`
+		ErrMsg    string `json:"errmsg"`
+		Type      string `json:"type"`
+		MediaID   string `json:"media_id"`
+		CreatedAt int64  `json:"created_at"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", "", fmt.Errorf("dingtalk upload: parse response: %w", err)
+	}
+	if result.ErrCode != 0 {
+		return "", "", fmt.Errorf("dingtalk upload failed (code: %d, msg: %s)", result.ErrCode, result.ErrMsg)
+	}
+
+	mediaID = strings.TrimSpace(result.MediaID)
+	if mediaID == "" {
+		return "", "", fmt.Errorf("dingtalk upload failed: empty media_id in response")
+	}
+	return mediaID, mediaType, nil
 }
 
 // resolveWebhook retrieves a cached session webhook for the given conversationId.
@@ -480,13 +685,29 @@ func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, cont
 // they expire after SessionWebhookExpiredTime and cannot be used for proactive messages.
 // For proactive messages, the DingTalk OpenAPI with an access token is required (TODO).
 func (a *DingTalkAdapter) resolveWebhook(conversationID string) (string, error) {
+	nowMs := time.Now().UnixMilli()
 	if v, ok := a.webhookCache.Load(conversationID); ok {
 		entry := v.(*webhookEntry)
+		slog.Info("[dingtalk] webhook cache hit",
+			"conversation_id", conversationID,
+			"expires_at", entry.expiresAt,
+			"now", nowMs,
+			"remaining_ms", entry.expiresAt-nowMs,
+		)
 		// Allow 30s grace period before expiry
-		if entry.expiresAt == 0 || time.Now().UnixMilli() < entry.expiresAt-30000 {
+		if entry.expiresAt == 0 || nowMs < entry.expiresAt-30000 {
 			return entry.url, nil
 		}
+		slog.Warn("[dingtalk] webhook expired, evict from cache",
+			"conversation_id", conversationID,
+			"expires_at", entry.expiresAt,
+			"now", nowMs,
+		)
 		a.webhookCache.Delete(conversationID)
+	} else {
+		slog.Warn("[dingtalk] webhook cache miss",
+			"conversation_id", conversationID,
+		)
 	}
 	return "", fmt.Errorf("no valid session webhook for conversation %s (webhook expired or not yet received)", conversationID)
 }
@@ -495,21 +716,30 @@ func (a *DingTalkAdapter) resolveWebhook(conversationID string) (string, error) 
 // Supported msg_type values (in JSON payload):
 //   - "text"     → plain text message
 //   - "markdown" → Markdown message (default for plain strings)
-//   - "image"    → image by public URL (uses sampleImageMsg via session webhook)
+//   - "image"    → image by public URL (pic_url/photo_url) or media_id
 //
 // JSON format examples:
 //
 //	{"msg_type":"text","text":"hello"}
 //	{"msg_type":"markdown","title":"Title","markdown":"## Hello\nworld"}
 //	{"msg_type":"image","pic_url":"https://example.com/img.png"}
+//	{"msg_type":"image","photo_url":"https://example.com/img.png"}
+//	{"msg_type":"image","media_id":"@lALPDfJ6..."}
 func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 	trimmed := strings.TrimSpace(raw)
+	slog.Info("[dingtalk] build outgoing message start",
+		"raw_len", len(raw),
+		"trimmed_len", len(trimmed),
+		"looks_like_json", strings.HasPrefix(trimmed, "{"),
+	)
 	if trimmed == "" {
+		slog.Warn("[dingtalk] build outgoing message failed: empty content")
 		return "", nil, fmt.Errorf("dingtalk message content is empty")
 	}
 
 	// If content is plain text (not JSON), send as markdown for richer rendering
 	if !strings.HasPrefix(trimmed, "{") {
+		slog.Info("[dingtalk] build outgoing message fallback plain text -> markdown")
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]any{
@@ -526,8 +756,17 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 		Title    string `json:"title"`
 		Markdown string `json:"markdown"`
 		PicURL   string `json:"pic_url"` // for image type
+		PhotoURL string `json:"photo_url"`
+		// For file type.
+		MediaID      string `json:"media_id"`
+		FileName     string `json:"file_name"`
+		DownloadCode string `json:"download_code"` // backward compatibility
 	}
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
+		slog.Warn("[dingtalk] build outgoing message json parse failed, fallback markdown",
+			"error", err,
+			"raw", raw,
+		)
 		// Fall back to markdown
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
@@ -537,6 +776,28 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 			},
 		}, nil
 	}
+	// Compatibility: allow camelCase image URL keys in JSON payload.
+	if payload.MsgType == "image" && strings.TrimSpace(payload.PicURL) == "" && strings.TrimSpace(payload.PhotoURL) == "" {
+		var rawMap map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &rawMap); err == nil {
+			if v, ok := rawMap["photoURL"].(string); ok {
+				payload.PhotoURL = v
+			}
+			if v, ok := rawMap["picURL"].(string); ok {
+				payload.PicURL = v
+			}
+		}
+	}
+	slog.Info("[dingtalk] build outgoing message parsed",
+		"msg_type", payload.MsgType,
+		"text_len", len(payload.Text),
+		"title", payload.Title,
+		"markdown_len", len(payload.Markdown),
+		"pic_url", strings.TrimSpace(payload.PicURL),
+		"photo_url", strings.TrimSpace(payload.PhotoURL),
+		"media_id", strings.TrimSpace(payload.MediaID),
+		"download_code", strings.TrimSpace(payload.DownloadCode),
+	)
 
 	switch payload.MsgType {
 	case "text":
@@ -544,6 +805,7 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 		if text == "" {
 			text = raw
 		}
+		slog.Info("[dingtalk] build outgoing message -> text")
 		return "text", map[string]any{
 			"msgtype": "text",
 			"text": map[string]any{
@@ -560,6 +822,10 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 		if md == "" {
 			md = raw
 		}
+		slog.Info("[dingtalk] build outgoing message -> markdown",
+			"title", title,
+			"markdown_len", len(md),
+		)
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]any{
@@ -569,20 +835,70 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 		}, nil
 
 	case "image":
-		// DingTalk session webhook uses sampleImageMsg for image-by-URL
+		// Per DingTalk robot single-chat message spec, image template key is
+		// sampleImageMsg and parameter key is photoURL.
 		picURL := strings.TrimSpace(payload.PicURL)
 		if picURL == "" {
-			return "", nil, fmt.Errorf("dingtalk image message requires pic_url")
+			picURL = strings.TrimSpace(payload.PhotoURL)
 		}
-		return "sampleImageMsg", map[string]any{
-			"msgtype": "sampleImageMsg",
-			"sampleImageMsg": map[string]any{
-				"picURL": picURL,
+		if picURL != "" {
+			slog.Info("[dingtalk] build outgoing message -> sampleImageMsg",
+				"pic_url", picURL,
+			)
+			return "sampleImageMsg", map[string]any{
+				"msgtype": "sampleImageMsg",
+				"sampleImageMsg": map[string]any{
+					"photoURL": picURL,
+					// Keep backward compatibility for old clients that used picURL.
+					"picURL": picURL,
+				},
+			}, nil
+		}
+		// Fallback: support image by media_id (for uploaded local image files).
+		mediaID := strings.TrimSpace(payload.MediaID)
+		if mediaID == "" {
+			mediaID = strings.TrimSpace(payload.DownloadCode)
+		}
+		if mediaID == "" {
+			slog.Warn("[dingtalk] build outgoing image failed: empty pic_url and media_id")
+			return "", nil, fmt.Errorf("dingtalk image message requires pic_url or media_id")
+		}
+		slog.Info("[dingtalk] build outgoing message -> image(media_id)",
+			"media_id", mediaID,
+		)
+		return "image", map[string]any{
+			"msgtype": "image",
+			"image": map[string]any{
+				"media_id": mediaID,
 			},
+		}, nil
+
+	case "file":
+		mediaID := strings.TrimSpace(payload.MediaID)
+		if mediaID == "" {
+			// Backward compatibility with old internal payload key.
+			mediaID = strings.TrimSpace(payload.DownloadCode)
+		}
+		if mediaID == "" {
+			slog.Warn("[dingtalk] build outgoing file failed: empty media_id")
+			return "", nil, fmt.Errorf("dingtalk file message requires media_id")
+		}
+		fileBody := map[string]any{
+			"media_id": mediaID,
+		}
+		slog.Info("[dingtalk] build outgoing message -> file",
+			"media_id", mediaID,
+		)
+		return "file", map[string]any{
+			"msgtype": "file",
+			"file":    fileBody,
 		}, nil
 
 	default:
 		// Default to markdown
+		slog.Info("[dingtalk] build outgoing message unknown msg_type, fallback markdown",
+			"msg_type", payload.MsgType,
+		)
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]any{

@@ -18,6 +18,7 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
+	dingtalktools "chatclaw/internal/eino/tools/im/dingtalk"
 	feishutools "chatclaw/internal/eino/tools/im/feishu"
 	wecomtools "chatclaw/internal/eino/tools/im/wecom"
 	"chatclaw/internal/errs"
@@ -86,8 +87,8 @@ type Config struct {
 	SkillsEnabled   bool   // Global skills toggle from settings
 
 	IMGateway          *channels.Gateway // Gateway for IM tools (nil = no IM tools)
-	IMDefaultChannelID int64              // Auto-filled from channel source context (0 = not set)
-	IMDefaultTargetID  string             // Auto-filled from channel source context ("" = not set)
+	IMDefaultChannelID int64             // Auto-filled from channel source context (0 = not set)
+	IMDefaultTargetID  string            // Auto-filled from channel source context ("" = not set)
 }
 
 // AgentResult holds the created agent and a cleanup function that should be
@@ -220,6 +221,7 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 	// IM sender tools should be directly available to the lead agent
 	allowedNames[tools.ToolIDFeishuSender] = true
 	allowedNames[tools.ToolIDWeComSender] = true
+	allowedNames[tools.ToolIDDingTalkSender] = true
 
 	// MCP tools (mcp__*) should be directly available to the lead agent
 	for _, t := range extraTools {
@@ -355,6 +357,11 @@ func buildIMTools(config Config, logger *slog.Logger) []tool.BaseTool {
 		}},
 		{"wecom_sender", func() (tool.BaseTool, error) {
 			return wecomtools.NewWeComSenderTool(&wecomtools.WeComSenderConfig{
+				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
+			})
+		}},
+		{"dingtalk_sender", func() (tool.BaseTool, error) {
+			return dingtalktools.NewDingTalkSenderTool(&dingtalktools.DingTalkSenderConfig{
 				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
 			})
 		}},
