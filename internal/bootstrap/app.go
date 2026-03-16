@@ -178,8 +178,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		// Server mode: listen on all interfaces by default.
 		// Can be overridden by WAILS_SERVER_HOST / WAILS_SERVER_PORT env vars.
 		Server: application.ServerOptions{
-			Host: "0.0.0.0",
-			Port: 8080,
+			Host:         "0.0.0.0",
+			Port:         8080,
+			WriteTimeout: 30 * time.Second,
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,

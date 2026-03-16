@@ -8,7 +8,6 @@ import (
 	"runtime/debug"
 
 	"chatclaw/internal/bootstrap"
-	"chatclaw/internal/define"
 )
 
 //go:embed all:frontend/dist
@@ -22,11 +21,6 @@ var sysIconWindows []byte
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU() / 2)
-
-	if define.IsServerMode() {
-		debug.SetGCPercent(50)
-		debug.SetMemoryLimit(256 * 1024 * 1024) // 256 MiB
-	}
 }
 
 func main() {
