@@ -64,7 +64,7 @@ import {
 } from '@bindings/chatclaw/internal/services/chatwiki'
 import { getBinding as getBindingCached, getLibraryListOnlyOpen as getLibraryListOnlyOpenCached } from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { Book, BookOpen, ChevronRight, FileStack } from 'lucide-vue-next'
+import { Book, BookOpen, FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
@@ -367,6 +367,7 @@ const loadLibraries = async () => {
 const loadFoldersForLibrary = async (libraryId: number, force = false) => {
   if (!force && libraryFolders.value.has(libraryId)) return
   try {
+    // 后端已经返回的是树形结构，这里直接缓存整棵树
     const folders = await LibraryService.ListFolders(libraryId)
     libraryFolders.value.set(libraryId, folders)
   } catch (error) {
@@ -375,22 +376,26 @@ const loadFoldersForLibrary = async (libraryId: number, force = false) => {
   }
 }
 
-const toggleLibraryExpanded = async (libraryId: number) => {
-  if (expandedLibraries.value.has(libraryId)) {
-    expandedLibraries.value.delete(libraryId)
-  } else {
-    expandedLibraries.value.add(libraryId)
-    await loadFoldersForLibrary(libraryId)
-  }
-}
-
 const toggleFolderExpanded = (folderId: number) => {
-  if (expandedFolders.value.has(folderId)) {
-    expandedFolders.value.delete(folderId)
-  } else {
-    expandedFolders.value.add(folderId)
+  // 防抖：10ms 内不重复处理同一个 folderId
+  if (toggleFolderExpanded.lastFolderId === folderId && Date.now() - toggleFolderExpanded.lastTime < 10) {
+    return
   }
+  toggleFolderExpanded.lastFolderId = folderId
+  toggleFolderExpanded.lastTime = Date.now()
+
+  // 创建新的 Set 以触发响应式更新
+  const newSet = new Set(expandedFolders.value)
+  if (newSet.has(folderId)) {
+    newSet.delete(folderId)
+  } else {
+    newSet.add(folderId)
+  }
+  expandedFolders.value = newSet
 }
+// 防抖辅助变量
+toggleFolderExpanded.lastFolderId = -1
+toggleFolderExpanded.lastTime = 0
 
 const handleFolderClick = (folderId: number | -1, libraryId: number) => {
   // 切换文件夹时，始终同步当前知识库，避免出现“文件夹属于库 B，但右侧仍显示库 A”的情况
@@ -403,10 +408,13 @@ const handleLibraryClick = async (libraryId: number) => {
   selectedLibraryId.value = libraryId
   // 切换知识库时默认展示该库根目录（文件夹 + 未分组文件）
   selectedFolderId.value = null
-  if (!expandedLibraries.value.has(libraryId)) {
-    expandedLibraries.value.add(libraryId)
-    await loadFoldersForLibrary(libraryId)
+  // 再次点击同一条目时折叠，符合“点击一行展开/收起”的交互预期
+  if (expandedLibraries.value.has(libraryId)) {
+    expandedLibraries.value.delete(libraryId)
+    return
   }
+  expandedLibraries.value.add(libraryId)
+  await loadFoldersForLibrary(libraryId)
 }
 
 const handleCollapsedPersonalLibraryClick = async (libraryId: number) => {
@@ -437,14 +445,21 @@ const handleFolderSelected = (folderId: number | null) => {
           const found = findFolder(folder.children, id)
           if (found) {
             // 确保父文件夹展开
-            expandedFolders.value.add(folder.id)
+            const newSet = new Set(expandedFolders.value)
+            newSet.add(folder.id)
+            expandedFolders.value = newSet
             return found
           }
         }
       }
       return null
     }
-    findFolder(folders, folderId)
+    const current = findFolder(folders, folderId)
+    if (current) {
+      const newSet = new Set(expandedFolders.value)
+      newSet.add(folderId)
+      expandedFolders.value = newSet
+    }
   }
 }
 
@@ -467,6 +482,11 @@ const handleFolderDeleted = () => {
   if (selectedLibrary.value) {
     void loadFoldersForLibrary(selectedLibrary.value.id, true)
   }
+}
+
+// 从右侧内容区域同步完整文件夹树到左侧树，确保两边展示一致
+const handleFolderTreeUpdated = (libraryId: number, tree: Folder[]) => {
+  libraryFolders.value.set(libraryId, tree)
 }
 
 // 监听知识库删除，清理相关状态
@@ -1274,37 +1294,34 @@ const handleRemoveImage = (id: string) => {
         </div>
 
         <div v-else class="flex flex-col gap-1">
-          <div v-for="lib in libraries" :key="lib.id" class="flex flex-col gap-0.5">
-            <!-- 知识库项 -->
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                @click.stop="toggleLibraryExpanded(lib.id)"
-              >
-                <ChevronRight
-                  :class="
-                    cn(
-                      'size-3.5 transition-transform',
-                      expandedLibraries.has(lib.id) && 'rotate-90'
-                    )
-                  "
-                />
-              </button>
+          <div
+            v-for="lib in libraries"
+            :key="lib.id"
+            class="group/library mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow hover:border-muted-foreground/60"
+          >
+            <!-- 知识库行：点击整行即可展开/收起 -->
+            <div class="flex items-center gap-1.5">
               <div
                 role="button"
-                tabindex="0"
                 :class="
                   cn(
-                    'group flex h-10 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
+                    'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
                     selectedLibraryId === lib.id
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground hover:bg-accent/50'
+                      ? 'bg-accent/60 text-accent-foreground'
+                      : 'text-foreground hover:bg-accent/40'
                   )
                 "
                 @click="handleLibraryClick(lib.id)"
               >
-                <span class="min-w-0 flex-1 truncate" :title="lib.name">
+                <BookOpen
+                  v-if="expandedLibraries.has(lib.id)"
+                  class="size-4 shrink-0 text-primary"
+                />
+                <Book
+                  v-else
+                  class="size-4 shrink-0 text-muted-foreground"
+                />
+                <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                   {{ lib.name }}
                 </span>
                 <DropdownMenu>
@@ -1339,7 +1356,7 @@ const handleRemoveImage = (id: string) => {
             <!-- Folder tree -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="flex flex-col overflow-hidden border-t border-border/50 px-1 pb-1.5 pt-0.5"
+              class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
             >
               <!-- Uncategorized option: full-width clickable row -->
               <div
@@ -1368,6 +1385,7 @@ const handleRemoveImage = (id: string) => {
                   :selected-folder-id="selectedFolderId"
                   :selected-library-id="lib.id"
                   :expanded-folders="expandedFolders"
+                  :root-library-id="lib.id"
                   @toggle-expanded="toggleFolderExpanded"
                   @folder-click="(folderId) => handleFolderClick(folderId, lib.id)"
                 />
@@ -1853,6 +1871,7 @@ const handleRemoveImage = (id: string) => {
         @folder-created="handleFolderCreated"
         @folder-updated="handleFolderUpdated"
         @folder-deleted="handleFolderDeleted"
+        @folder-tree-updated="handleFolderTreeUpdated"
       />
 
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->

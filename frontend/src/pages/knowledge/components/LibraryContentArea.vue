@@ -80,6 +80,7 @@ const emit = defineEmits<{
   'folder-created': []
   'folder-updated': []
   'folder-deleted': []
+  'folder-tree-updated': [libraryId: number, folders: Folder[]]
 }>()
 
 const { t } = useI18n()
@@ -198,7 +199,10 @@ const convertDocument = (doc: BackendDocument): Document => {
 const loadFolders = async () => {
   if (!props.library?.id) return
   try {
+    // 后端已经返回树形结构，前端直接使用
     folders.value = await LibraryService.ListFolders(props.library.id)
+    // 将最新的完整树结构同步给父组件，用于左侧树保持一致
+    emit('folder-tree-updated', props.library.id, folders.value)
     // 每次文件夹结构变化时，同步刷新统计信息，确保"X项"显示准确
     void loadFolderStats()
   } catch (error) {
