@@ -34,8 +34,7 @@ import IconMarkdown from '@/assets/icons/file-markdown.svg'
 import IconHtml from '@/assets/icons/file-html.svg'
 import IconCsv from '@/assets/icons/file-csv.svg'
 import IconOfd from '@/assets/icons/file-ofd.svg'
-import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
-import IconSidebarExpand from '@/assets/icons/sidebar-expand.svg'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +89,7 @@ const selectedLibraryId = ref<number | null>(null)
 const libraryFolders = ref<Map<number, Folder[]>>(new Map())
 const expandedLibraries = ref<Set<number>>(new Set())
 const expandedFolders = ref<Set<number>>(new Set())
+const expandedTeamLibraries = ref<Set<string>>(new Set())
 // null = 根目录, -1 = 未分组, >0 = 文件夹ID
 const selectedFolderId = ref<number | null>(null)
 // Left sidebar collapsed state (narrow strip with icons only)
@@ -209,6 +209,28 @@ const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
 )
+
+// Team sidebar group cache (per library)
+const teamLibraryGroupsByLibraryId = ref<Map<string, ChatWikiLibraryGroup[]>>(new Map())
+const teamLibraryGroupsLoadingByLibraryId = ref<Set<string>>(new Set())
+
+const loadTeamGroupsForSidebar = async (libraryID: string) => {
+  if (!libraryID) return
+  if (teamLibraryGroupsByLibraryId.value.has(libraryID)) return
+  if (teamLibraryGroupsLoadingByLibraryId.value.has(libraryID)) return
+  teamLibraryGroupsLoadingByLibraryId.value = new Set(teamLibraryGroupsLoadingByLibraryId.value).add(libraryID)
+  try {
+    const groups = await ChatWikiService.GetLibraryGroup(libraryID, 1)
+    teamLibraryGroupsByLibraryId.value.set(libraryID, groups || [])
+  } catch (error) {
+    console.error('Failed to load team library groups (sidebar):', error)
+    teamLibraryGroupsByLibraryId.value.set(libraryID, [])
+  } finally {
+    const next = new Set(teamLibraryGroupsLoadingByLibraryId.value)
+    next.delete(libraryID)
+    teamLibraryGroupsLoadingByLibraryId.value = next
+  }
+}
 
 
 const getTeamFileExtension = (file: ChatWikiLibraryFile) => {
@@ -430,6 +452,18 @@ const handleCollapsedPersonalLibraryClick = async (libraryId: number) => {
 const handleCollapsedTeamLibraryClick = (libraryId: string) => {
   selectedTeamLibraryId.value = libraryId
   sidebarCollapsed.value = false
+}
+
+const handleTeamLibraryClick = async (libraryId: string) => {
+  // Toggle: if already expanded, collapse; otherwise expand
+  if (expandedTeamLibraries.value.has(libraryId)) {
+    expandedTeamLibraries.value.delete(libraryId)
+  } else {
+    expandedTeamLibraries.value.add(libraryId)
+    selectedTeamLibraryId.value = libraryId
+    // Preload groups for sidebar display
+    void loadTeamGroupsForSidebar(libraryId)
+  }
 }
 
 // 处理文件夹选择
@@ -1076,32 +1110,12 @@ const handleRemoveImage = (id: string) => {
     <aside
       :class="
         cn(
-          'flex shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200',
+          'relative flex shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200',
           sidebarCollapsed ? 'w-14' : 'w-sidebar'
         )
       "
     >
       <div class="flex items-center gap-2 border-b border-border px-2 py-2">
-        <Button
-          v-if="!sidebarCollapsed"
-          variant="ghost"
-          size="icon"
-          class="h-8 w-8 shrink-0"
-          :title="t('knowledge.sidebar.collapse')"
-          @click="sidebarCollapsed = true"
-        >
-          <IconSidebarCollapse class="size-4 text-muted-foreground" />
-        </Button>
-        <Button
-          v-else
-          variant="ghost"
-          size="icon"
-          class="h-8 w-8 shrink-0"
-          :title="t('knowledge.sidebar.expand')"
-          @click="sidebarCollapsed = false"
-        >
-          <IconSidebarExpand class="size-4 text-muted-foreground" />
-        </Button>
         <template v-if="!sidebarCollapsed">
           <div class="inline-flex min-w-0 flex-1 rounded-md bg-muted p-1">
             <button
@@ -1155,6 +1169,36 @@ const handleRemoveImage = (id: string) => {
           </div>
         </template>
       </div>
+
+      <!-- Sidebar collapse/expand handle (AI assistant style) -->
+      <button
+        type="button"
+        class="group/handle absolute -right-3 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
+        :aria-label="sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse')"
+        @click="sidebarCollapsed = !sidebarCollapsed"
+      >
+        <div
+          class="relative flex h-12 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur transition-colors dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          <!-- Default: | -->
+          <span
+            class="h-6 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
+          />
+          <!-- Hover: < or > -->
+          <span
+            class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
+          >
+            <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
+            <ChevronRight v-else class="size-4" />
+          </span>
+        </div>
+        <!-- Bubble tooltip -->
+        <span
+          class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 group-hover/handle:translate-x-0 dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          {{ sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse') }}
+        </span>
+      </button>
 
       <div class="flex-1 overflow-auto px-2 pb-2 pt-2">
         <div v-if="loading" class="px-2 py-6 text-sm text-muted-foreground">
@@ -1270,24 +1314,109 @@ const handleRemoveImage = (id: string) => {
             >
               {{ t('knowledge.team.empty') }}
             </div>
+            <!-- Team library cards with same style as personal libraries -->
             <template v-else>
               <div
                 v-for="lib in teamLibraries"
                 :key="lib.id"
-                class="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors"
+                class="group/teamlib mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow"
                 :class="
-                  cn(
-                    selectedTeamLibraryId === lib.id
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground hover:bg-accent/50'
-                  )
+                  selectedTeamLibraryId === lib.id
+                    ? 'border-primary/60'
+                    : 'hover:border-muted-foreground/60'
                 "
-                role="button"
-                @click="selectedTeamLibraryId = lib.id"
               >
-                <span class="min-w-0 flex-1 truncate" :title="lib.name">
-                  {{ lib.name }}
-                </span>
+                <!-- Team library row: click to expand/collapse -->
+                <div class="flex items-center gap-1.5">
+                  <div
+                    role="button"
+                    :class="
+                      cn(
+                        'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
+                        selectedTeamLibraryId === lib.id
+                          ? 'bg-accent/60 text-accent-foreground'
+                          : 'text-foreground hover:bg-accent/40'
+                      )
+                    "
+                    @click="handleTeamLibraryClick(lib.id)"
+                  >
+                    <component
+                      :is="expandedTeamLibraries.has(lib.id) ? BookOpen : Book"
+                      :class="
+                        cn(
+                          'size-4 shrink-0',
+                          expandedTeamLibraries.has(lib.id)
+                            ? 'text-primary'
+                            : 'text-muted-foreground'
+                        )
+                      "
+                    />
+                    <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
+                      {{ lib.name }}
+                    </span>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                      :title="t('knowledge.item.menu')"
+                      @click.stop
+                    >
+                      <MoreHorizontal class="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" class="w-40">
+                      <DropdownMenuItem class="gap-2">
+                        <IconLibSettings class="size-4 text-muted-foreground" />
+                        {{ t('knowledge.item.settings') }}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <!-- Team groups (sidebar): shown when expanded -->
+                <div
+                  v-if="expandedTeamLibraries.has(lib.id)"
+                  class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
+                >
+                  <!-- All groups -->
+                  <div
+                    class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                    :class="
+                      selectedTeamLibraryId === lib.id && selectedTeamGroupId === TEAM_ALL_GROUP_ID
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    "
+                    @click.stop="handleTeamGroupSelect(TEAM_ALL_GROUP_ID)"
+                  >
+                    <FolderIcon class="size-4 shrink-0" />
+                    <span class="min-w-0 flex-1 truncate text-xs">
+                      {{ t('knowledge.team.allGroups') }}
+                    </span>
+                  </div>
+
+                  <div v-if="teamLibraryGroupsLoadingByLibraryId.has(lib.id)" class="px-1 py-2 text-xs text-muted-foreground">
+                    {{ t('knowledge.loading') }}
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="group in (teamLibraryGroupsByLibraryId.get(lib.id) || []).filter((g) => g.id !== TEAM_ALL_GROUP_ID)"
+                      :key="`team-sidebar-group-${lib.id}-${group.id}`"
+                      class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                      :class="
+                        selectedTeamLibraryId === lib.id && selectedTeamGroupId === group.id
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                      "
+                      @click.stop="handleTeamGroupSelect(group.id)"
+                    >
+                      <FolderIcon class="size-4 shrink-0" />
+                      <span class="min-w-0 flex-1 truncate text-xs" :title="group.name">
+                        {{ group.name }}
+                      </span>
+                      <span class="shrink-0 text-[10px] text-muted-foreground/80">
+                        {{ Math.max(0, Number(group.total || 0)) }}
+                      </span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </template>
           </div>

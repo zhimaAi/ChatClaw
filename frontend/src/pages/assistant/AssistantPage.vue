@@ -3,8 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PanelRight } from 'lucide-vue-next'
 import IconAssistant from '@/assets/icons/assistant.svg'
-import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
-import IconSidebarExpand from '@/assets/icons/sidebar-expand.svg'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -1661,7 +1660,7 @@ onUnmounted(() => {
     <!-- Upper row: expand button + messages -->
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
 
-    <!-- Collapse/Expand button (snap mode: floating, draggable) -->
+    <!-- Collapse/Expand handle (snap mode: floating, draggable) -->
     <div
       v-if="!isEmbeddedMode && isSnapMode"
       class="absolute left-0.5 z-[5] cursor-grab active:cursor-grabbing"
@@ -1670,31 +1669,57 @@ onUnmounted(() => {
       @pointermove="onSnapBtnPointerMove"
       @pointerup="onSnapBtnPointerUp"
     >
-      <Button
-        size="icon"
-        variant="ghost"
-        class="size-7 pointer-events-none"
-        :title="sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')"
-      >
-        <IconSidebarExpand v-if="sidebarCollapsed" class="size-5 text-muted-foreground" />
-        <IconSidebarCollapse v-else class="size-5 text-muted-foreground" />
-      </Button>
+      <div class="group/handle relative flex h-7 w-6 items-center justify-center pointer-events-none">
+        <div
+          class="relative flex h-7 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          <span
+            class="h-5 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
+          />
+          <span
+            class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
+          >
+            <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
+            <ChevronRight v-else class="size-4" />
+          </span>
+        </div>
+        <span
+          class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          {{ sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse') }}
+        </span>
+      </div>
     </div>
-    <!-- Collapse/Expand button (non-snap mode: in-flow) -->
+    <!-- Collapse/Expand handle (non-snap mode: in-flow) -->
     <div
       v-if="!isEmbeddedMode && !isSnapMode"
       class="flex w-8 shrink-0 items-center justify-center"
     >
-      <Button
-        size="icon"
-        variant="ghost"
-        class="size-6"
-        :title="sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')"
+      <button
+        type="button"
+        class="group/handle relative flex h-16 w-6 items-center justify-center"
+        :aria-label="sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')"
         @click="sidebarCollapsed = !sidebarCollapsed"
       >
-        <IconSidebarExpand v-if="sidebarCollapsed" class="size-5 text-muted-foreground" />
-        <IconSidebarCollapse v-else class="size-5 text-muted-foreground" />
-      </Button>
+        <div
+          class="relative flex h-12 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur transition-colors dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          <span
+            class="h-6 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
+          />
+          <span
+            class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
+          >
+            <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
+            <ChevronRight v-else class="size-4" />
+          </span>
+        </div>
+        <span
+          class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          {{ sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse') }}
+        </span>
+      </button>
     </div>
 
     <!-- Right side: Chat area -->
