@@ -4,6 +4,7 @@ import { Events } from '@wailsio/runtime'
 import {
   ChatService,
   type Message,
+  type ImagePayload,
   SendMessageInput,
   EditAndResendInput,
 } from '@bindings/chatclaw/internal/services/chat'
@@ -400,17 +401,46 @@ export const useChatStore = defineStore('chat', () => {
     conversationId: number,
     messageId: number,
     newContent: string,
-    tabId: string
+    tabId: string,
+    images?: ImagePayload[]
   ) => {
     if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
 
+    // Get existing images from the message being edited
+    const current = messagesByConversation.value[conversationId]
+    const msgToEdit = current?.find((m) => m.id === messageId)
+    let existingImagesJson = msgToEdit?.images_json
+
+    // Parse existing images if any
+    let existingImages: ImagePayload[] = []
+    if (existingImagesJson) {
+      try {
+        existingImages = JSON.parse(existingImagesJson) as ImagePayload[]
+      } catch (e) {
+        console.warn('Failed to parse existing images_json:', e)
+      }
+    }
+
+    // Map new images to ImagePayload format (if they have different structure)
+    const newImagePayloads: ImagePayload[] =
+      images?.map((img) => ({
+        kind: img.kind || 'image',
+        source: img.source || 'inline_base64',
+        mime_type: img.mime_type,
+        base64: img.base64,
+        file_name: img.file_name,
+        size: img.size,
+      })) || []
+
+    // Combine existing images with new images (if new images are provided, they replace existing)
+    const imagePayloads: ImagePayload[] = newImagePayloads.length > 0 ? newImagePayloads : existingImages
+
     // Optimistic UX: immediately update the edited message and truncate following messages
     ensureConversationMessages(conversationId)
-    const current = messagesByConversation.value[conversationId]
-    const idx = current.findIndex((m) => m.id === messageId)
-    if (idx >= 0) {
+    const idx = current?.findIndex((m) => m.id === messageId) ?? -1
+    if (idx >= 0 && current) {
       const next = [...current]
-      next[idx] = { ...next[idx], content: newContent.trim() } as Message
+      next[idx] = { ...next[idx], content: newContent.trim(), images_json: JSON.stringify(imagePayloads) } as Message
       messagesByConversation.value[conversationId] = next.slice(0, idx + 1)
     }
 
@@ -425,6 +455,7 @@ export const useChatStore = defineStore('chat', () => {
           message_id: messageId,
           new_content: newContent.trim(),
           tab_id: tabId,
+          images: imagePayloads,
         })
       )
 

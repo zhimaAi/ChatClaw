@@ -422,7 +422,9 @@ function requestUnbind() {
 async function confirmUnbind() {
   showUnbindConfirm.value = false
   try {
+    await ChatWikiService.TokenForceOffline()
     await ChatWikiService.DeleteBinding()
+    clearChatwikiCache()
     currentBinding.value = null
     authUser.value = null
     robots.value = []
@@ -448,6 +450,7 @@ watch(isBound, (bound) => {
 })
 
 onMounted(() => {
+  clearChatwikiCache()
   void loadBinding()
   void ChatWikiService.GetCloudURL().then((url) => {
     cloudAuthUrl.value = url ?? ''

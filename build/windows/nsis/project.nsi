@@ -36,6 +36,10 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 
+# Per-user install: register URL scheme under HKCU so browser can launch the app without admin.
+# SHELL_CONTEXT is used by wails macros and our chatclaw registration; must match REQUEST_EXECUTION_LEVEL.
+!define SHELL_CONTEXT HKCU
+
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
 VIFileVersion    "${INFO_PRODUCTVERSION}.0"
@@ -77,7 +81,7 @@ ManifestDPIAware true
 #!finalize 'signtool --file "%1"'
 
 Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
+OutFile "..\..\..\bin\${INFO_PROJECTNAME}_windows_${ARCH}_installer.exe" # Name of the installer's file.
 InstallDir "$LOCALAPPDATA\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Per-user install so auto-update works without UAC elevation.
 ShowInstDetails show # This will always show the installation details.
 

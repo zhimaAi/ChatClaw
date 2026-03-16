@@ -32,6 +32,7 @@ import {
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
+import { getPlatformDocsUrl, openExternalLink } from './platformDocs'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, ChannelStats, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
@@ -39,6 +40,11 @@ import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/
 defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
+
+/** Platforms that support add/filter in UI (feishu + wecom). */
+function isChannelPlatformSelectable(platformId: string) {
+  return platformId === 'feishu' || platformId === 'wecom'
+}
 
 const channels = ref<Channel[]>([])
 const stats = ref<ChannelStats>({ total: 0, connected: 0, disconnected: 0 })
@@ -348,9 +354,8 @@ async function handleInlineSave() {
 }
 
 function openPlatformDocs() {
-  if (selectedPlatformMeta.value?.id === 'feishu') {
-    window.open('https://open.feishu.cn/', '_blank')
-  }
+  const url = getPlatformDocsUrl(selectedPlatformMeta.value?.id)
+  void openExternalLink(url)
 }
 
 async function handleInlineVerify() {
@@ -456,9 +461,9 @@ onMounted(loadData)
           class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg border-l border-[#e5e5e5] dark:border-border"
           :class="[
             selectedFilter === platform.id ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground' : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
-            platform.id !== 'feishu' ? 'opacity-50 cursor-not-allowed' : ''
+            !isChannelPlatformSelectable(platform.id) ? 'opacity-50 cursor-not-allowed' : ''
           ]"
-          @click="platform.id === 'feishu' ? selectedFilter = platform.id : toast.default(t('channels.comingSoon'))"
+          @click="isChannelPlatformSelectable(platform.id) ? selectedFilter = platform.id : toast.default(t('channels.comingSoon'))"
         >
           {{ getPlatformName(platform.id) }}
         </button>

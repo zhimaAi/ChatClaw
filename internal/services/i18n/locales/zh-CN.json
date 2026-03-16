@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "为频道创建 AI 助手失败",
   "error.channel_agent_create_not_available": "自动创建助手功能不可用",
   "error.channel_ai_reply_failed": "AI回复失败: {{.Error}}",
-  "error.channel_ai_reply_empty": "AI回复失败: 生成了空回复"
+  "error.channel_ai_reply_empty": "AI回复失败: 生成了空回复",
+  "error.assistant_mcp_list_failed": "获取助手 MCP 列表失败",
+  "error.assistant_mcp_name_required": "缺少 MCP 插件名称",
+  "error.assistant_mcp_id_required": "缺少助手 MCP ID",
+  "error.assistant_mcp_not_found": "未找到助手 MCP",
+  "error.assistant_mcp_create_failed": "创建助手 MCP 失败",
+  "error.assistant_mcp_update_failed": "更新助手 MCP 失败",
+  "error.assistant_mcp_delete_failed": "删除助手 MCP 失败",
+  "error.assistant_mcp_tool_name_required": "工具名称不能为空",
+  "error.assistant_mcp_tool_name_invalid": "工具名称只能包含字母、数字和下划线，且必须以字母开头",
+  "error.assistant_mcp_tool_name_duplicate": "工具名称已存在",
+  "error.assistant_mcp_tool_not_found": "未找到该工具"
 }

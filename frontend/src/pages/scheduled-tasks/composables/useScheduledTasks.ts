@@ -63,6 +63,7 @@ export function useScheduledTasks() {
     create: CreateScheduledTaskInput
     update: UpdateScheduledTaskInput
   }) {
+    if (saving.value) return
     saving.value = true
     try {
       const payload = buildPayload(form.value)
