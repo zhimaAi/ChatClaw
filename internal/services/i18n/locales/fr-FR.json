@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "Échec de la création de l'assistant IA pour le canal",
   "error.channel_agent_create_not_available": "Création automatique d'assistant non disponible",
   "error.channel_ai_reply_failed": "Échec de la réponse IA : {{.Error}}",
-  "error.channel_ai_reply_empty": "Échec de la réponse IA : réponse vide générée"
+  "error.channel_ai_reply_empty": "Échec de la réponse IA : réponse vide générée",
+  "error.assistant_mcp_create_failed": "Échec de la création de l'Assistant MCP",
+  "error.assistant_mcp_delete_failed": "Échec de la suppression de l'Assistant MCP",
+  "error.assistant_mcp_id_required": "L'identifiant de l'Assistant MCP est requis",
+  "error.assistant_mcp_list_failed": "Échec du chargement de la liste des Assistant MCP",
+  "error.assistant_mcp_name_required": "Le nom du plugin MCP est requis",
+  "error.assistant_mcp_not_found": "Assistant MCP introuvable",
+  "error.assistant_mcp_tool_name_duplicate": "Le nom de l'outil existe déjà",
+  "error.assistant_mcp_tool_name_invalid": "Le nom de l'outil ne peut contenir que des lettres, des chiffres et des underscores, et doit commencer par une lettre",
+  "error.assistant_mcp_tool_name_required": "Le nom de l'outil est requis",
+  "error.assistant_mcp_tool_not_found": "Outil introuvable",
+  "error.assistant_mcp_update_failed": "Échec de la mise à jour de l'Assistant MCP"
 }

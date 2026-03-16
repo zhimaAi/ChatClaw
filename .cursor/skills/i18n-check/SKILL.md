@@ -5,27 +5,45 @@ description: 检查并补充前端和后端的i18n翻译文件。以中文（zh-
 
 # i18n 翻译检查与补充
 
-## 快速开始
+## 快速开始（推荐安全用法）
 
-1. **格式化翻译文件** (确保格式统一):
+> **强制前提**：先用 Git 保证当前工作区是干净的（或至少 locales 相关改动可回滚），再运行下面任何脚本。
+
+1. **只在必要范围格式化翻译文件**（建议从后端/英文开始）
+
+   - 后端 JSON 一般是纯英文，占位少，**优先安全**：
+
    ```bash
    python .cursor/skills/i18n-check/scripts/format_frontend.py
    python .cursor/skills/i18n-check/scripts/format_backend.py
    ```
 
-2. **对比翻译差异**:
+   - `format_frontend.py` 会**重写所有 `frontend/src/locales/*.ts`**：
+     - 仅做语法级重排与缩进，不再对字符做任何再编码；
+     - 仍然建议：**先只在当前分支本地运行，确认 diff 可接受后再提交**。
+
+2. **对比翻译差异（只读，不改文件）**:
    ```bash
    python .cursor/skills/i18n-check/scripts/compare_frontend.py
    python .cursor/skills/i18n-check/scripts/compare_backend.py
    ```
 
-3. **补全缺失的 key** (使用中文作为占位符):
+3. **补全缺失的 key（使用中文作为占位符）**
+
+   - **推荐做法：先只对英文和后端补全，再视情况扩展到其他语言。**
+
    ```bash
+   # 仅补前端英文（安全范围小）
+   python .cursor/skills/i18n-check/scripts/fill_frontend.py --target en-US
+
+   # 补全所有前端语言（会改动所有 locales，务必在 Git 干净时使用）
    python .cursor/skills/i18n-check/scripts/fill_frontend.py
+
+   # 补全所有后端语言（JSON，风险相对可控）
    python .cursor/skills/i18n-check/scripts/fill_backend.py
    ```
 
-4. **AI 翻译** (自动检测需要翻译的内容):
+4. **AI 翻译**（自动检测需要翻译的内容，**不会直接改 TS/JSON 文件**）
    ```bash
    # 翻译特定语言
    python .cursor/skills/i18n-check/scripts/translate_with_ai.py --target en-US
@@ -34,7 +52,7 @@ description: 检查并补充前端和后端的i18n翻译文件。以中文（zh-
    python .cursor/skills/i18n-check/scripts/translate_with_ai.py --all --cjk
    ```
 
-5. **CJK 语言翻译后检测** (翻译完成后检查是否还有未翻译):
+5. **CJK 语言翻译后检测**（翻译完成后检查是否还有未翻译）
    ```bash
    # 导出 CJK 语言未翻译内容到文本文件
    python .cursor/skills/i18n-check/scripts/export_translations.py --target ja-JP --cjk
@@ -43,24 +61,31 @@ description: 检查并补充前端和后端的i18n翻译文件。以中文（zh-
    python .cursor/skills/i18n-check/scripts/fill_frontend.py --check-cjk
    ```
 
-## 完整工作流程
+## 完整工作流程（推荐顺序）
 
 ```bash
-# Step 1: 格式化
+# Step 0: 确认 Git 状态
+# - 确保 frontend/src/locales 和 internal/services/i18n/locales 内的改动都可回滚
+# - 不要在未提交的重要改动上直接批量格式化/补全
+
+# Step 1: 格式化（可选，但推荐先只在后端/英文上尝试）
 python .cursor/skills/i18n-check/scripts/format_frontend.py
 python .cursor/skills/i18n-check/scripts/format_backend.py
 
-# Step 2: 对比
+# Step 2: 对比（只读）
 python .cursor/skills/i18n-check/scripts/compare_frontend.py
 python .cursor/skills/i18n-check/scripts/compare_backend.py
 
-# Step 3: 补全缺失 key (中文占位)
-python .cursor/skills/i18n-check/scripts/fill_frontend.py
+# Step 3: 补全缺失 key（中文占位）
+# 先补英文，再按需扩展其他语言
+python .cursor/skills/i18n-check/scripts/fill_frontend.py --target en-US
 python .cursor/skills/i18n-check/scripts/fill_backend.py
 
-# Step 4: AI 翻译
-# 脚本会自动检测需要翻译的内容并生成翻译提示
+# Step 4: AI 翻译（前端 + 后端）
+# 脚本会自动检测需要翻译的内容并生成翻译提示（只读，不改 TS/JSON）
 python .cursor/skills/i18n-check/scripts/translate_with_ai.py --all
+# 仅处理后端 JSON 时，可显式指定：
+# python .cursor/skills/i18n-check/scripts/translate_with_ai.py --type backend --all
 
 # Step 5: 翻译完成后检测 CJK 语言
 # 对于 ja-JP, ko-KR, zh-TW，检测是否还有未翻译内容

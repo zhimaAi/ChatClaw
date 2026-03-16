@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "Error al crear el asistente de IA para el canal",
   "error.channel_agent_create_not_available": "Creación automática de asistente no disponible",
   "error.channel_ai_reply_failed": "Respuesta de IA fallida: {{.Error}}",
-  "error.channel_ai_reply_empty": "Respuesta de IA fallida: Se generó una respuesta vacía"
+  "error.channel_ai_reply_empty": "Respuesta de IA fallida: Se generó una respuesta vacía",
+  "error.assistant_mcp_create_failed": "Error al crear el Assistant MCP",
+  "error.assistant_mcp_delete_failed": "Error al eliminar el Assistant MCP",
+  "error.assistant_mcp_id_required": "Se requiere el ID del Assistant MCP",
+  "error.assistant_mcp_list_failed": "Error al obtener la lista de Assistant MCP",
+  "error.assistant_mcp_name_required": "Se requiere el nombre del plugin MCP",
+  "error.assistant_mcp_not_found": "No se encontró el Assistant MCP",
+  "error.assistant_mcp_tool_name_duplicate": "El nombre de la herramienta ya existe",
+  "error.assistant_mcp_tool_name_invalid": "El nombre de la herramienta solo puede contener letras, dígitos y guiones bajos, y debe empezar por una letra",
+  "error.assistant_mcp_tool_name_required": "Se requiere el nombre de la herramienta",
+  "error.assistant_mcp_tool_not_found": "No se encontró la herramienta",
+  "error.assistant_mcp_update_failed": "Error al actualizar el Assistant MCP"
 }

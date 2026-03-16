@@ -166,7 +166,14 @@ def parse_single_quoted_string(s):
     return ''.join(result)
 
 def to_nested_format(flat_obj):
-    """Convert flat dict to nested TS format"""
+    """Convert flat dict to nested TS format without re-decoding unicode.
+
+    注意：
+    - 这里假设传入的 value 已经是正确的 Python str（经过 UTF-8 正确解码）。
+    - 之前的实现尝试使用 `.encode('utf-8').decode('unicode_escape')` 去“反解转义”，
+      会把合法的非 ASCII 字符当成转义序列重新解码，直接导致 hi-IN/ar-SA 等语言乱码。
+    - 正确做法是：仅做必要的反斜杠和双引号转义，**绝不**再做编码/解码转换。
+    """
     lines = ['export default {']
 
     nested = {}
@@ -184,6 +191,10 @@ def to_nested_format(flat_obj):
         else:
             current[parts[-1]] = value
 
+    def escape_ts_string(value: str) -> str:
+        """Escape value for TS string literal."""
+        return value.replace('\\', '\\\\').replace('"', '\\"')
+
     def print_object(obj, indent=1):
         indent_str = '  ' * indent
         for key, value in obj.items():
@@ -191,22 +202,14 @@ def to_nested_format(flat_obj):
                 continue
             if isinstance(value, dict):
                 if '_value' in value and len(value) == 1:
-                    try:
-                        unescaped = value['_value'].encode('utf-8').decode('unicode_escape')
-                    except:
-                        unescaped = value['_value']
-                    escaped_value = unescaped.replace('\\', '\\\\').replace('"', '\\"')
+                    escaped_value = escape_ts_string(value['_value'])
                     lines.append(f'{indent_str}{key}: "{escaped_value}",')
                 else:
                     lines.append(f'{indent_str}{key}: {{')
                     print_object(value, indent + 1)
                     lines.append(f'{indent_str}}},')
             else:
-                try:
-                    unescaped = value.encode('utf-8').decode('unicode_escape')
-                except:
-                    unescaped = value
-                escaped_value = unescaped.replace('\\', '\\\\').replace('"', '\\"')
+                escaped_value = escape_ts_string(value)
                 lines.append(f'{indent_str}{key}: "{escaped_value}",')
 
     print_object(nested)

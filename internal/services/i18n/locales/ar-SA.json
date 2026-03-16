@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "فشل في إنشاء مساعد AI للقناة",
   "error.channel_agent_create_not_available": "إنشاء المساعد تلقائياً غير متاح",
   "error.channel_ai_reply_failed": "فشل رد AI: {{.Error}}",
-  "error.channel_ai_reply_empty": "فشل رد AI: الاستجابة فارغة"
+  "error.channel_ai_reply_empty": "فشل رد AI: الاستجابة فارغة",
+  "error.assistant_mcp_create_failed": "فشل في إنشاء Assistant MCP",
+  "error.assistant_mcp_delete_failed": "فشل في حذف Assistant MCP",
+  "error.assistant_mcp_id_required": "معرف Assistant MCP مطلوب",
+  "error.assistant_mcp_list_failed": "فشل في جلب قائمة Assistant MCP",
+  "error.assistant_mcp_name_required": "اسم إضافة MCP مطلوب",
+  "error.assistant_mcp_not_found": "لم يتم العثور على Assistant MCP",
+  "error.assistant_mcp_tool_name_duplicate": "اسم الأداة موجود بالفعل",
+  "error.assistant_mcp_tool_name_invalid": "يجب أن يحتوي اسم الأداة على أحرف وأرقام وشرطات سفلية فقط، وأن يبدأ بحرف",
+  "error.assistant_mcp_tool_name_required": "اسم الأداة مطلوب",
+  "error.assistant_mcp_tool_not_found": "لم يتم العثور على الأداة",
+  "error.assistant_mcp_update_failed": "فشل في تحديث Assistant MCP"
 }
