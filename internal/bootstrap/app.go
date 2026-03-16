@@ -46,8 +46,8 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/uptrace/bun"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -424,6 +424,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(winsnapchat.NewWinsnapChatService(app)))
 
 	// 创建划词弹窗服务
+	// - getSnapState: 获取吸附窗体状态（attached/standalone/hidden/stopped）
+	// - wakeSnapWindow: 唤醒吸附窗体（当划词点击时吸附窗体可见则唤醒吸附窗体）
 	textSelectionService := textselection.NewWithSnapCallbacks(
 		func() windows.SnapState {
 			return snapService.GetStatus().State
@@ -437,7 +439,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 创建系统托盘
 	systrayMenu := app.NewMenu()
 	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
+		// 安全地显示主窗口
 		mainWinMgr.safeShow()
+		// 若悬浮球开关为开启，则在唤醒主窗口时恢复悬浮球
 		if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
 			_ = floatingBallService.SetVisible(true)
 		}
@@ -486,6 +490,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		// Register chatclaw:// URL scheme on Windows so browser can launch app after OAuth.
+		// Fixes "scheme does not have a registered handler" when installer did not run or registration was lost.
 		if err := windows.RegisterChatClawProtocol(); err != nil {
 			app.Logger.Warn("Failed to register chatclaw protocol", "error", err)
 		}
@@ -584,6 +589,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 点击 Dock 图标时显示窗口
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+		// 安全地唤醒主窗口
 		mainWinMgr.safeUnMinimiseAndShow()
 		restoreFloatingBall("mac_reopen")
 	})
