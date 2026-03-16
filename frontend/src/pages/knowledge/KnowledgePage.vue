@@ -335,6 +335,13 @@ const isLibraryEmpty = computed(
 )
 const isPersonalTab = computed(() => activeTab.value === 'personal')
 
+// Show bottom chat input: personal tab with a library, or team tab with a selected team library
+const showChatInputArea = computed(
+  () =>
+    (activeTab.value === 'personal' && !isLibraryEmpty.value) ||
+    (activeTab.value === 'team' && !!selectedTeamLibrary.value)
+)
+
 const loadLibraries = async () => {
   loading.value = true
   try {
@@ -974,13 +981,17 @@ const handleSendMessage = () => {
   const messageContent = chatInput.value.trim()
   const imagesToSend = [...pendingImages.value]
 
-  // Build library IDs array from the selected library
-  const libraryIds = selectedLibraryId.value ? [selectedLibraryId.value] : []
+  // Build library IDs array: personal tab uses selected library; team tab uses team library id for recall
+  const libraryIds =
+    activeTab.value === 'personal' && selectedLibraryId.value ? [selectedLibraryId.value] : []
+  const teamLibraryId =
+    activeTab.value === 'team' && selectedTeamLibraryId.value ? selectedTeamLibraryId.value : undefined
 
   // Set pending chat data and open a new assistant tab
   navigationStore.setPendingChatAndOpenAssistant({
     chatInput: messageContent,
     libraryIds,
+    ...(teamLibraryId && { teamLibraryId }),
     selectedModelKey: selectedModelKey.value,
     agentId: activeAgentId.value ?? undefined,
     enableThinking: enableThinking.value,
@@ -1003,13 +1014,13 @@ const handleSendMessage = () => {
 }
 
 // Handle add images
+// 支持图片识别的模型可以通过调用技能去识别图片，所以不再限制模型能力
 const handleAddImages = (files: FileList | File[]) => {
-  // Check if current model supports multimodal (vision)
-  const modelInfo = selectedModelInfo.value
-  if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
-    toast.error(t('assistant.errors.modelNotSupportVision'))
-    return
-  }
+  // const modelInfo = selectedModelInfo.value
+  // if (modelInfo && !supportsMultimodal(modelInfo.providerId, modelInfo.modelId, modelInfo.capabilities)) {
+  //   toast.error(t('assistant.errors.modelNotSupportVision'))
+  //   return
+  // }
 
   for (const file of Array.from(files)) {
     if (!file.type.startsWith('image/')) continue
@@ -1844,9 +1855,8 @@ const handleRemoveImage = (id: string) => {
         @folder-deleted="handleFolderDeleted"
       />
 
-      <!-- Bottom chat input using shared ChatInputArea component (personal tab only; hidden on team tab) -->
-      <!-- 分割线在输入框容器上，随输入框高度变化而移动 -->
-      <div v-if="!isLibraryEmpty && isPersonalTab" class="bg-background pt-3">
+      <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->
+      <div v-if="showChatInputArea" class="bg-background pt-3">
         <ChatInputArea
           mode="knowledge"
           v-model:chat-input="chatInput"
@@ -1857,8 +1867,12 @@ const handleRemoveImage = (id: string) => {
           :providers-with-models="providersWithModels"
           :has-models="hasModels"
           :selected-model-info="selectedModelInfo"
-          :selected-library-ids="selectedLibraryId ? [selectedLibraryId] : []"
-          :libraries="libraries"
+          :selected-library-ids="isPersonalTab ? (selectedLibraryId ? [selectedLibraryId] : []) : []"
+          :libraries="isPersonalTab ? libraries : []"
+          :selected-team-library="activeTab === 'team' ? selectedTeamLibrary : null"
+          :team-libraries="activeTab === 'team' ? teamLibraries : []"
+          :selected-team-library-id="activeTab === 'team' ? selectedTeamLibraryId : null"
+          @update:selected-team-library-id="selectedTeamLibraryId = $event"
           :is-generating="false"
           :can-send="canSend"
           :send-disabled-reason="sendDisabledReason"

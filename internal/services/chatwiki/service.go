@@ -291,6 +291,55 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 	return nil
 }
 
+// TokenForceOffline calls POST /manage/chatclaw/tokenForceOffline with reason "logout"
+// so the server can invalidate the current token. Call before DeleteBinding when user unbinds.
+// If there is no binding or the request fails, it returns nil so local unbind can still proceed.
+func (s *ChatWikiService) TokenForceOffline() error {
+	binding, err := s.GetBinding()
+	if err != nil || binding == nil {
+		return nil
+	}
+	baseURL := strings.TrimRight(binding.ServerURL, "/")
+	apiURL := baseURL + "/manage/chatclaw/tokenForceOffline"
+
+	body := map[string]string{"reason": "logout"}
+	bodyBytes, _ := json.Marshal(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki] tokenForceOffline create request failed", "error", err)
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Token", binding.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.app.Logger.Warn("[ChatWiki] tokenForceOffline request failed", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	bodyPreview := strings.TrimSpace(string(respBody))
+	if len(bodyPreview) > 256 {
+		bodyPreview = bodyPreview[:256] + "...(truncated)"
+	}
+	s.app.Logger.Info(
+		"[ChatWiki] tokenForceOffline response",
+		"status",
+		resp.StatusCode,
+		"body_size",
+		len(respBody),
+		"body_preview",
+		bodyPreview,
+	)
+	return nil
+}
+
 // DeleteBinding removes the current binding.
 func (s *ChatWikiService) DeleteBinding() error {
 	db := sqlite.DB()
@@ -1153,6 +1202,12 @@ func (s *ChatWikiService) GetLibraryListOnlyOpen(libType int) ([]Library, error)
 	return s.getLibraryList(libType, 1)
 }
 
+// GetLibraryListOnlyOpenAll fetches all enabled knowledge bases without type filter.
+// Same endpoint as getLibraryList but omits type so the server returns the full list (personal + team categories).
+func (s *ChatWikiService) GetLibraryListOnlyOpenAll() ([]Library, error) {
+	return s.getLibraryList(-1, 1)
+}
+
 func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, error) {
 	binding, err := s.GetBinding()
 	if err != nil || binding == nil {
@@ -1161,7 +1216,10 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 
 	baseURL := strings.TrimRight(binding.ServerURL, "/")
 	q := url.Values{}
-	q.Set("type", strconv.Itoa(libType))
+	// Omit type when libType < 0 so server returns full list (no type filter).
+	if libType >= 0 {
+		q.Set("type", strconv.Itoa(libType))
+	}
 	q.Set("only_open", strconv.Itoa(onlyOpen))
 	apiURL := baseURL + "/manage/chatclaw/getLibraryList?" + q.Encode()
 
@@ -1169,6 +1227,7 @@ func (s *ChatWikiService) getLibraryList(libType int, onlyOpen int) ([]Library, 
 		"url", apiURL,
 		"type", libType,
 		"only_open", onlyOpen,
+		"type_omitted", libType < 0,
 		"token_length", len(binding.Token),
 	)
 

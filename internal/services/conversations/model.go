@@ -69,7 +69,8 @@ type Conversation struct {
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
 	TeamType       string  `json:"team_type"`
-	DialogueID     int64   `json:"dialogue_id"` // team mode only
+	DialogueID     int64   `json:"dialogue_id"`    // team mode only
+	TeamLibraryID  string  `json:"team_library_id"` // optional: ChatWiki team library id for recall
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -87,7 +88,8 @@ type CreateConversationInput struct {
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
 	TeamType       string  `json:"team_type"`
-	DialogueID     int64   `json:"dialogue_id"` // team mode only, default 0
+	DialogueID     int64   `json:"dialogue_id"`    // team mode only, default 0
+	TeamLibraryID  string  `json:"team_library_id"` // optional: ChatWiki team library id for recall
 }
 
 // UpdateConversationInput 更新会话的输入参数
@@ -101,7 +103,8 @@ type UpdateConversationInput struct {
 	EnableThinking *bool    `json:"enable_thinking"`
 	ChatMode       *string  `json:"chat_mode"`
 	TeamType       *string  `json:"team_type"`
-	DialogueID     *int64   `json:"dialogue_id"` // team mode only
+	DialogueID     *int64   `json:"dialogue_id"`   // team mode only
+	TeamLibraryID  *string  `json:"team_library_id"` // optional
 }
 
 // conversationModel 数据库模型
@@ -123,7 +126,8 @@ type conversationModel struct {
 	EnableThinking bool   `bun:"enable_thinking,notnull"`
 	ChatMode       string `bun:"chat_mode,notnull"`
 	TeamType       string `bun:"team_type,notnull"`
-	DialogueID     int64  `bun:"dialogue_id,notnull"` // team mode only, default 0
+	DialogueID     int64  `bun:"dialogue_id,notnull"`    // team mode only, default 0
+	TeamLibraryID  string `bun:"team_library_id,notnull"` // optional, default ''
 }
 
 // BeforeInsert 在 INSERT 时自动设置 created_at 和 updated_at
@@ -182,6 +186,7 @@ func (m *conversationModel) toDTO() Conversation {
 		ChatMode:       chatMode,
 		TeamType:       teamType,
 		DialogueID:     m.DialogueID,
+		TeamLibraryID:  m.TeamLibraryID,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

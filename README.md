@@ -9,15 +9,29 @@
 </p>
 
 <p align="center">
-  <a href="README.md" target="_blank">English</a> |
-  <a href="README_zh-CN.md" target="_blank">简体中文</a>
+  <a href="./docs/readmes/README.md">English</a> |
+  <a href="./docs/readmes/README_zh-CN.md">简体中文</a> |
+  <a href="./docs/readmes/README_zh-TW.md">繁體中文</a> |
+  <a href="./docs/readmes/README_ja-JP.md">日本語</a> |
+  <a href="./docs/readmes/README_ko-KR.md">한국어</a> |
+  <a href="./docs/readmes/README_ar-SA.md">العربية</a> |
+  <a href="./docs/readmes/README_bn-BD.md">বাংলা</a> |
+  <a href="./docs/readmes/README_de-DE.md">Deutsch</a> |
+  <a href="./docs/readmes/README_es-ES.md">Español</a> |
+  <a href="./docs/readmes/README_fr-FR.md">Français</a> |
+  <a href="./docs/readmes/README_hi-IN.md">हिन्दी</a> |
+  <a href="./docs/readmes/README_it-IT.md">Italiano</a> |
+  <a href="./docs/readmes/README_pt-BR.md">Português</a> |
+  <a href="./docs/readmes/README_sl-SI.md">Slovenščina</a> |
+  <a href="./docs/readmes/README_tr-TR.md">Türkçe</a> |
+  <a href="./docs/readmes/README_vi-VN.md">Tiếng Việt</a>
 </p>
 
-Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
+Get OpenClaw-like knowledge base personal AI agent in 5 mins. Sandbox-secured, with an ultra-small 30MB installer for macOS & Windows (install in 1 min). Connects to WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu & other messaging apps. Built-in Skill Market, Knowledge Base, Memory, MCP, Scheduled Tasks. Developed in Go: fast & low resource usage.
 
- 5分钟拥有类 OpenClaw 的小龙虾个人AI智能体,沙箱安全防护,支持macOS/Windows 30M 极小安装包,1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、IMA开源版本地知识库平替、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
+ 5分钟拥有类 OpenClaw 本地知识库个人AI智能体,沙箱安全防护,支持macOS/Windows 30M 极小安装包,1 分钟安装。连接WhatsApp、Telegram、Slack、Discord、Gmail、钉钉、企业微信、QQ、飞书等主流通讯应用，内置技能市场、IMA开源版本地知识库平替、记忆、MCP、计划任务等核心功能。Go语言开发，运行快、占资源少。
  
- 
+
 <p align="center">
 <a href="https://github.com/zhimaAi/ChatClaw/releases" target="_blank" >Windows/Mac/Linux (Releases)</a>  
 </p>
@@ -241,26 +255,32 @@ ChatClaw_D2/
 │   ├── winsnap/                # Window snapping engine (macOS/Windows/Linux)
 │   └── winutil/                # Window activation utilities
 ├── docs/                       # Development documentation
-└── images/                     # README screenshots
+│   └── readmes/                # Multi-language README files
+│       ├── README.md           # English README
+│       ├── README_zh-CN.md    # Simplified Chinese README
+│       └── images/             # README screenshots
+└── images/                     # README screenshots (legacy)
 ```
 
 ### Changelog
-To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
+To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
 
-### 2026/03/10
-1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
-2. **ChatWiki Backend Service**: Introduced `ChatWikiService` with binding persistence, robot/library management APIs, and auth-expired handling.<br/>
-3. **Team Chat Streaming**: Implemented team-mode SSE streaming with `dialogue_id` continuation support and conversation/message persistence for team sessions.<br/>
-4. **DB Migrations**: Added SQLite migrations for ChatWiki binding storage and team conversation fields (`team_type`, `dialogue_id`).<br/>
-5. **UI & i18n Updates**: Updated assistant/settings/knowledge pages and added new locales to support ChatWiki integration and related UI states.<br/>
 
-### 2026/03/09
-1. **Branding Assets Refresh**: Updated app icons and frontend logo assets across Windows/macOS builds and UI images.<br/>
+### 2026/03/13
+1. **Internationalization Overhaul & i18n Skill**: Added `i18n-check` skill, AI-powered translation scripts, and formatting/comparison utilities to auto-fill missing keys across frontend and backend locales, with improved key detection for CJK and multi-script strings.<br/>
+2. **Locale Management Improvements**: Changed default UI language to English, added system locale detection, reworked language options and labels in settings, and cleaned up legacy languages while fixing escape and spacing issues in multiple translations.<br/>
+3. **Assistant MCP & Server UX**: Refined MCP server management in `WorkspaceDrawer`, improved server selection and removal logic, and optimized how MCP servers are attached to agents and governed by global settings, along with list performance and debouncing fixes.<br/>
+4. **Brand & Version Update**: Refreshed application icons and images with a new logo set and bumped application version to `0.5.0`, aligning related configuration and dependency versions.<br/>
 
-### 2026/03/06
-1. **Multimodal Support**: Added image input capability to assistant and knowledge pages, with model capability checks to detect multimodal support.<br/>
-2. **Model Configuration Updates**: Updated OpenAI, Anthropic, Zhipu (GLM), and Qwen model configurations with refined capabilities and new model additions.<br/>
-3. **Thinking Mode Control**: Added `DisableThinking` option to `ProviderConfig` and streamlined enable-thinking logic; added toast notifications for thinking mode changes.<br/>
-4. **Sandbox Security**: Implemented sensitive path protection in sandbox mode to prevent unauthorized file access.<br/>
-5. **Build System Improvements**: Replaced shell commands with Go tools for directory creation, file existence checks, and platform detection in Taskfile.<br/>
-6. **License Update**: Switched from GNU Affero GPL to GNU General Public License.<br/>
+### 2026/03/12
+1. **Assistant MCP Integration**: Added Assistant MCP functionality with UI and backend support, including server control based on a global MCP setting and updated indicators to reflect MCP availability in the workspace.<br/>
+2. **Rich Message Editing with Images**: Enhanced chat message editing to support attaching images and saving image payloads into the work directory, reusing the multimodal image upload pipeline for edited messages.<br/>
+3. **Team Library Recall Chat**: Introduced team library recall chat support, enabling conversations that can recall and use team libraries within shared team sessions.<br/>
+4. **MCP Command UX on Windows**: Implemented console window hiding for MCP command execution on Windows and registered the Windows URL scheme to improve deep-link and protocol handling.<br/>
+5. **Model & Auth Tweaks**: Updated model detection to support additional Qwen types, refined ChatWiki bind/logout flows, and adjusted tool status reporting for MCP-related tools.<br/>
+
+### 2026/03/11
+1. **MCP Toolchain for Agents**: Enabled MCP tools to be directly exposed to the lead agent via `mcp__`-prefixed tools, and added per-agent MCP server enable/disable controls with quick navigation from the workspace drawer to MCP settings.<br/>
+2. **Task & Cron Management**: Extended scheduled task features with execution history, improved failure statistics and success criteria, and new tools for querying runs, alongside a new task-creation dialog workflow.<br/>
+3. **Toolchain Installation UX**: Added test installation features and download progress tracking for the toolchain, increased download/read timeouts for long-running installs, and improved GitHub proxy and mirror handling for version fetching.<br/>
+4. **ChatWiki & Token Handling**: Improved ChatWiki token management with better reload behavior and local caching, and refined related editing tools and prompts with updated Chinese/English copy.<br/>
