@@ -1,13 +1,11 @@
 package main
 
 import (
+	"chatclaw/internal/bootstrap"
 	"embed"
 	_ "embed"
 	"log"
 	"runtime"
-	"runtime/debug"
-
-	"chatclaw/internal/bootstrap"
 )
 
 //go:embed all:frontend/dist
