@@ -41,9 +41,9 @@ defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** Platforms that support add/filter in UI (feishu + wecom). */
+/** Platforms that support add/filter in UI (feishu + wecom + qq). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
 }
 
 const channels = ref<Channel[]>([])

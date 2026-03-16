@@ -193,7 +193,7 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
-    const selectableIds = ['feishu', 'wecom']
+    const selectableIds = ['feishu', 'wecom', 'qq']
     const hasSelectedPlatform = platforms.value.some((platform) => platform.id === selectedPlatformId.value)
     const currentIsSelectable = selectableIds.includes(selectedPlatformId.value)
     if (!hasSelectedPlatform || !currentIsSelectable) {
@@ -337,7 +337,7 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
 }
 
 function isSelectableChannelPlatform(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
 }
 
 function openPlatformDocs() {
