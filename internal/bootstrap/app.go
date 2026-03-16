@@ -188,11 +188,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: define.SingleInstanceUniqueID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				if define.IsGUIMode() {
-					mainWinMgr.safeWake()
-					if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
-						_ = floatingBallService.SetVisible(true)
-					}
+				mainWinMgr.safeWake()
+				if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
+					_ = floatingBallService.SetVisible(true)
 				}
 				deeplink.HandleSecondInstance(app, data)
 			},
@@ -388,199 +386,207 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		app.Menu.Set(appMenu)
 	}
 
-	// ========== GUI-only: windows + desktop services ==========
-	// In server mode mainWindow stays nil; AppService.ShowMainWindow() has a nil guard.
-	var mainWindow *application.WebviewWindow
-	if define.IsGUIMode() {
-		mainWindow = windows.NewMainWindow(app)
-		mainWinMgr.app = app
-		mainWinMgr.window = mainWindow
+	// ========== 创建窗口 ==========
 
-		multiaskService := multiask.NewMultiaskService(app, mainWindow)
-		app.RegisterService(application.NewService(multiaskService))
+	// 创建主窗口
+	mainWindow := windows.NewMainWindow(app)
+	mainWinMgr.app = app
+	mainWinMgr.window = mainWindow
 
-		floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
-		app.RegisterService(application.NewService(floatingBallService))
+	// 注册多问服务（管理多个 AI WebView 面板，传入主窗口引用）
+	multiaskService := multiask.NewMultiaskService(app, mainWindow)
+	app.RegisterService(application.NewService(multiaskService))
 
-		windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
-		if err != nil {
-			sqlite.Close()
-			return nil, nil, fmt.Errorf("init window service: %w", err)
-		}
-		app.RegisterService(application.NewService(windowService))
-
-		snapService, err := windows.NewSnapService(app, windowService)
-		if err != nil {
-			sqlite.Close()
-			return nil, nil, fmt.Errorf("init snap service: %w", err)
-		}
-		app.RegisterService(application.NewService(snapService))
-
-		app.RegisterService(application.NewService(winsnapchat.NewWinsnapChatService(app)))
-
-		textSelectionService := textselection.NewWithSnapCallbacks(
-			func() windows.SnapState {
-				return snapService.GetStatus().State
-			},
-			func() {
-				snapService.WakeWindow()
-			},
-		)
-		app.RegisterService(application.NewService(textSelectionService))
-
-		systrayMenu := app.NewMenu()
-		systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
-			mainWinMgr.safeShow()
-			if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
-				_ = floatingBallService.SetVisible(true)
-			}
-		})
-		systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
-			app.Quit()
-		})
-
-		var systray *application.SystemTray
-		if runtime.GOOS == "darwin" {
-			systray = app.SystemTray.New().SetTemplateIcon(opts.Icon).SetMenu(systrayMenu).
-				OnClick(func() {
-					go func() {
-						mainWinMgr.safeShow()
-						if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
-							_ = floatingBallService.SetVisible(true)
-						}
-					}()
-				})
-		} else {
-			systray = app.SystemTray.New().SetIcon(opts.Icon).SetMenu(systrayMenu).
-				OnClick(func() {
-					go func() {
-						mainWinMgr.safeShow()
-						if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
-							_ = floatingBallService.SetVisible(true)
-						}
-					}()
-				})
-		}
-		systray.SetTooltip("ChatClaw")
-
-		trayService := tray.NewTrayService(app, systray)
-		app.RegisterService(application.NewService(trayService))
-
-		app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
-			urlStr := event.Context().URL()
-			app.Logger.Info("ApplicationLaunchedWithUrl received", "url", urlStr)
-			mainWinMgr.safeWake()
-			deeplink.HandleURL(app, urlStr)
-		})
-
-		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
-			if err := windows.RegisterChatClawProtocol(); err != nil {
-				app.Logger.Warn("Failed to register chatclaw protocol", "error", err)
-			}
-			trayService.InitFromSettings()
-			_, _ = snapService.SyncFromSettings()
-			textSelectionService.Attach(app, mainWindow, application.WebviewWindowOptions{
-				Name:                       textselection.WindowTextSelection,
-				Title:                      "TextSelection",
-				Width:                      140,
-				Height:                     50,
-				Hidden:                     true,
-				Frameless:                  true,
-				AlwaysOnTop:                true,
-				DisableResize:              true,
-				BackgroundType:             application.BackgroundTypeTransparent,
-				DefaultContextMenuDisabled: true,
-				InitialPosition:            application.WindowXY,
-				URL:                        "/selection.html",
-				Windows: application.WindowsWindow{
-					HiddenOnTaskbar: true,
-				},
-				Mac: application.MacWindow{
-					Backdrop:    application.MacBackdropTransparent,
-					WindowLevel: application.MacWindowLevelFloating,
-					CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
-						application.MacWindowCollectionBehaviorTransient |
-						application.MacWindowCollectionBehaviorIgnoresCycle,
-				},
-			})
-			_, _ = textSelectionService.SyncFromSettings()
-			go func() {
-				if err := multiaskService.Initialize("ChatClaw"); err != nil {
-					app.Logger.Error("Failed to initialize multiask service", "error", err)
-				}
-			}()
-			floatingBallService.InitFromSettings()
-			go toolchainService.EnsureAll()
-			go skillsService.EnsureBuiltinSkills()
-			go channelGateway.StartAll(context.Background())
-			go func() {
-				if err := scheduledTasksService.Start(); err != nil {
-					app.Logger.Error("Failed to start scheduled tasks service", "error", err)
-				}
-			}()
-			go assistantMCPService.StartEnabledServers()
-		})
-
-		mainWindow.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
-			files := event.Context().DroppedFiles()
-			if len(files) == 0 {
-				return
-			}
-			app.Event.Emit("filedrop:files", map[string]any{
-				"files": files,
-			})
-		})
-
-		mainWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-			minimizeEnabled := trayService.IsMinimizeToTrayEnabled()
-			if minimizeEnabled {
-				app.Logger.Info("WindowClosing: hiding window to tray")
-				mainWinMgr.safeHide()
-				e.Cancel()
-			} else {
-				app.Quit()
-			}
-		})
-
-		restoreFloatingBall := func(reason string) {
-			if floatingBallService == nil {
-				return
-			}
-			if !settings.GetBool("show_floating_window", false) {
-				return
-			}
-			if floatingBallService.IsVisible() {
-				return
-			}
-			_ = floatingBallService.SetVisible(true)
-		}
-		mainWindow.RegisterHook(events.Common.WindowShow, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_show") })
-		mainWindow.RegisterHook(events.Common.WindowRestore, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_restore") })
-
-		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
-			mainWinMgr.safeUnMinimiseAndShow()
-			restoreFloatingBall("mac_reopen")
-		})
-	}
-
-	// AppService is registered in both modes (provides GetVersion/GetRunMode to frontend).
-	// In server mode mainWindow is nil; ShowMainWindow() has a nil guard.
+	// 注册应用服务（传入主窗口引用，用于 ShowMainWindow API）
 	app.RegisterService(application.NewService(appservice.NewAppService(app, mainWindow)))
 
-	// ========== Server-mode: lightweight ApplicationStarted handler ==========
-	if define.IsServerMode() {
-		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
-			go toolchainService.EnsureAll()
-			go skillsService.EnsureBuiltinSkills()
-			go channelGateway.StartAll(context.Background())
-			go func() {
-				if err := scheduledTasksService.Start(); err != nil {
-					app.Logger.Error("Failed to start scheduled tasks service", "error", err)
-				}
-			}()
-			go assistantMCPService.StartEnabledServers()
-		})
+	// 创建悬浮球服务（独立 AlwaysOnTop 小窗）
+	floatingBallService = floatingball.NewFloatingBallService(app, mainWindow)
+	app.RegisterService(application.NewService(floatingBallService))
+
+	// 创建子窗口服务
+	windowService, err := windows.NewWindowService(app, windows.DefaultDefinitions())
+	if err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("init window service: %w", err)
 	}
+	app.RegisterService(application.NewService(windowService))
+
+	// 创建吸附（winsnap）服务
+	snapService, err := windows.NewSnapService(app, windowService)
+	if err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("init snap service: %w", err)
+	}
+	app.RegisterService(application.NewService(snapService))
+
+	// winsnap AI chat stream service
+	app.RegisterService(application.NewService(winsnapchat.NewWinsnapChatService(app)))
+
+	// 创建划词弹窗服务
+	textSelectionService := textselection.NewWithSnapCallbacks(
+		func() windows.SnapState {
+			return snapService.GetStatus().State
+		},
+		func() {
+			snapService.WakeWindow()
+		},
+	)
+	app.RegisterService(application.NewService(textSelectionService))
+
+	// 创建系统托盘
+	systrayMenu := app.NewMenu()
+	systrayMenu.Add(i18n.T("systray.show")).OnClick(func(ctx *application.Context) {
+		mainWinMgr.safeShow()
+		if floatingBallService != nil && settings.GetBool("show_floating_window", false) && !floatingBallService.IsVisible() {
+			_ = floatingBallService.SetVisible(true)
+		}
+	})
+	systrayMenu.Add(i18n.T("systray.quit")).OnClick(func(ctx *application.Context) {
+		app.Quit()
+	})
+
+	// macOS 使用模板图标，自动适应深色/浅色模式
+	var systray *application.SystemTray
+	if runtime.GOOS == "darwin" {
+		systray = app.SystemTray.New().SetTemplateIcon(opts.Icon).SetMenu(systrayMenu).
+			OnClick(func() {
+				go func() {
+					mainWinMgr.safeShow()
+					if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+						_ = floatingBallService.SetVisible(true)
+					}
+				}()
+			})
+	} else {
+		systray = app.SystemTray.New().SetIcon(opts.Icon).SetMenu(systrayMenu).
+			OnClick(func() {
+				go func() {
+					mainWinMgr.safeShow()
+					if floatingBallService != nil && settings.GetBool("show_floating_window", true) && !floatingBallService.IsVisible() {
+						_ = floatingBallService.SetVisible(true)
+					}
+				}()
+			})
+	}
+	systray.SetTooltip("ChatClaw")
+
+	// 创建托盘服务（用于前端动态控制 show/hide + 缓存关闭策略）
+	trayService := tray.NewTrayService(app, systray)
+	app.RegisterService(application.NewService(trayService))
+	// macOS: URL Scheme is delivered via Apple Event, not via command-line args.
+	// Listen for ApplicationLaunchedWithUrl to handle chatclaw:// deep links.
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+		urlStr := event.Context().URL()
+		app.Logger.Info("ApplicationLaunchedWithUrl received", "url", urlStr)
+		mainWinMgr.safeWake()
+		deeplink.HandleURL(app, urlStr)
+	})
+
+	// 应用启动后再加载设置并应用 Show/Hide（确保 sqlite 已初始化）
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
+		// Register chatclaw:// URL scheme on Windows so browser can launch app after OAuth.
+		if err := windows.RegisterChatClawProtocol(); err != nil {
+			app.Logger.Warn("Failed to register chatclaw protocol", "error", err)
+		}
+		trayService.InitFromSettings()
+		// 根据 settings 中的开关状态启动/停止吸附功能
+		_, _ = snapService.SyncFromSettings()
+		// 根据 settings 中的开关状态启动/停止划词功能
+		textSelectionService.Attach(app, mainWindow, application.WebviewWindowOptions{
+			Name:                       textselection.WindowTextSelection,
+			Title:                      "TextSelection",
+			Width:                      140,
+			Height:                     50,
+			Hidden:                     true,
+			Frameless:                  true,
+			AlwaysOnTop:                true,
+			DisableResize:              true,
+			BackgroundType:             application.BackgroundTypeTransparent,
+			DefaultContextMenuDisabled: true,
+			InitialPosition:            application.WindowXY,
+			URL:                        "/selection.html",
+			// Windows specific: hide from taskbar
+			Windows: application.WindowsWindow{
+				HiddenOnTaskbar: true,
+			},
+			Mac: application.MacWindow{
+				Backdrop:    application.MacBackdropTransparent,
+				WindowLevel: application.MacWindowLevelFloating,
+				CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+					application.MacWindowCollectionBehaviorTransient |
+					application.MacWindowCollectionBehaviorIgnoresCycle,
+			},
+		})
+		_, _ = textSelectionService.SyncFromSettings()
+		// 初始化多问服务（需要窗口已创建，在后台进行以避免阻塞）
+		go func() {
+			if err := multiaskService.Initialize("ChatClaw"); err != nil {
+				app.Logger.Error("Failed to initialize multiask service", "error", err)
+			}
+		}()
+		floatingBallService.InitFromSettings()
+		// Ensure external toolchain binaries (uv, bun) are installed/updated in background.
+		go toolchainService.EnsureAll()
+		// Ensure builtin skills are installed in background.
+		go skillsService.EnsureBuiltinSkills()
+		// Start all enabled channel gateway connections in background.
+		go channelGateway.StartAll(context.Background())
+		go func() {
+			if err := scheduledTasksService.Start(); err != nil {
+				app.Logger.Error("Failed to start scheduled tasks service", "error", err)
+			}
+		}()
+		// Start all enabled assistant MCP servers in background.
+		go assistantMCPService.StartEnabledServers()
+	})
+
+	// 监听文件拖拽事件，将文件路径转发到前端
+	mainWindow.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		files := event.Context().DroppedFiles()
+		if len(files) == 0 {
+			return
+		}
+		app.Event.Emit("filedrop:files", map[string]any{
+			"files": files,
+		})
+	})
+
+	// 监听主窗口关闭事件，实现"关闭时最小化"
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		minimizeEnabled := trayService.IsMinimizeToTrayEnabled()
+		if minimizeEnabled {
+			app.Logger.Info("WindowClosing: hiding window to tray")
+			mainWinMgr.safeHide()
+			e.Cancel()
+		} else {
+			app.Quit()
+		}
+	})
+
+	// 主窗口被唤醒/恢复/聚焦时：若悬浮球开关为开启，则恢复悬浮球
+	restoreFloatingBall := func(reason string) {
+		if floatingBallService == nil {
+			return
+		}
+		if !settings.GetBool("show_floating_window", false) {
+			return
+		}
+		if floatingBallService.IsVisible() {
+			return
+		}
+		_ = floatingBallService.SetVisible(true)
+	}
+	mainWindow.RegisterHook(events.Common.WindowShow, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_show") })
+	mainWindow.RegisterHook(events.Common.WindowRestore, func(_ *application.WindowEvent) { restoreFloatingBall("main_window_restore") })
+	// NOTE: Don't restore on WindowFocus. Closing the floating ball shifts focus back to main window,
+	// which would immediately re-show the floating ball and make it impossible to close.
+
+	// 点击 Dock 图标时显示窗口
+	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+		mainWinMgr.safeUnMinimiseAndShow()
+		restoreFloatingBall("mac_reopen")
+	})
 
 	return app, func() {
 		assistantMCPService.StopAllServers()
