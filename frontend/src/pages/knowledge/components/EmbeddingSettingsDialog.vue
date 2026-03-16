@@ -38,6 +38,24 @@ const saving = ref(false)
 type Group = { provider: Provider; models: Model[] }
 const embeddingGroups = ref<Group[]>([])
 
+type ChatwikiDisplayModel = Model & {
+  model_supplier?: string
+  uni_model_name?: string
+}
+
+const normalizeText = (value?: string | null) => value?.trim() || ''
+
+const getEmbeddingModelLabel = (providerId: string, model: Model) => {
+  if (providerId === 'chatwiki') {
+    const chatwikiModel = model as ChatwikiDisplayModel
+    const supplier = normalizeText(chatwikiModel.model_supplier)
+    const uniModelName = normalizeText(chatwikiModel.uni_model_name)
+    if (supplier && uniModelName) return `${supplier}/${uniModelName}`
+    if (uniModelName) return uniModelName
+  }
+  return normalizeText(model.name) || normalizeText(model.model_id) || '-'
+}
+
 const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
 const embeddingDimension = ref<string>('1536')
 
@@ -46,7 +64,7 @@ const embeddingCurrentLabel = computed(() => {
   if (!pid || !mid) return ''
   const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
   const model = provider?.models.find((m) => m.model_id === mid)
-  return model?.name || ''
+  return model ? getEmbeddingModelLabel(pid, model) : ''
 })
 
 function isProviderFree(g: Group): boolean {
@@ -226,7 +244,7 @@ const handleSave = async () => {
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
                 >
-                  {{ m.name }}
+                  {{ getEmbeddingModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>
