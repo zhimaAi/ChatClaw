@@ -597,7 +597,11 @@ func (s *AssistantMCPService) startServer(item AssistantMCP) error {
 	})
 
 	_, srvCancel := context.WithCancel(context.Background())
-	addr := fmt.Sprintf(":%d", port)
+	listenHost := "127.0.0.1"
+	if define.IsServerMode() {
+		listenHost = "0.0.0.0"
+	}
+	addr := fmt.Sprintf("%s:%d", listenHost, port)
 	httpSrv := &http.Server{Addr: addr, Handler: mux}
 
 	s.servers[item.ID] = &runningServer{
@@ -860,7 +864,7 @@ func generateToken() string {
 }
 
 func findAvailablePort() (int, error) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
@@ -870,7 +874,7 @@ func findAvailablePort() (int, error) {
 }
 
 func isPortAvailable(port int) bool {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return false
 	}
