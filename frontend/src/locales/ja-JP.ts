@@ -423,7 +423,7 @@ export default {
       assistantMcpLinkAgentsDesc: "この MCP でツールとして使用する AI アシスタントを選択します",
       assistantMcpLinkAgentsTitle: "アシスタントをリンク",
       assistantMcpName: "MCP プラグイン名",
-      assistantMcpNamePlaceholder: "MCP プラグイン名を入力",
+      assistantMcpNamePlaceholder: "MCP プラグイン名を入力（最大20文字）",
       assistantMcpNoAgents: "利用可能な AI アシスタントがありません",
       assistantMcpNoItems: "Assistant MCP が設定されていません",
       assistantMcpNoItemsHint: "「追加」をクリックして MCP サービスを設定します",

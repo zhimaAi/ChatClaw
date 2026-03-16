@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "Chọn trợ lý AI sẽ được dùng làm công cụ cho MCP này",
       assistantMcpLinkAgentsTitle: "Liên kết trợ lý",
       assistantMcpName: "Tên plugin MCP",
-      assistantMcpNamePlaceholder: "Nhập tên plugin MCP",
+      assistantMcpNamePlaceholder: "Nhập tên plugin MCP, tối đa 20 ký tự",
       assistantMcpNoAgents: "Không có trợ lý AI khả dụng",
       assistantMcpNoItems: "Chưa cấu hình Assistant MCP nào",
       assistantMcpNoItemsHint: "Nhấn \"Thêm\" để cấu hình một dịch vụ MCP",

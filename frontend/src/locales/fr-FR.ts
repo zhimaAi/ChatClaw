@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "Sélectionnez les assistants IA à utiliser comme outils pour ce MCP",
       assistantMcpLinkAgentsTitle: "Lier des assistants",
       assistantMcpName: "Nom du plugin MCP",
-      assistantMcpNamePlaceholder: "Saisissez le nom du plugin MCP",
+      assistantMcpNamePlaceholder: "Saisissez le nom du plugin MCP, 20 caractères max",
       assistantMcpNoAgents: "Aucun assistant IA disponible",
       assistantMcpNoItems: "Aucun Assistant MCP configuré",
       assistantMcpNoItemsHint: "Cliquez sur « Ajouter » pour configurer un service MCP",

@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "এই MCP-এর জন্য টুল হিসেবে ব্যবহার করতে AI সহকারী নির্বাচন করুন",
       assistantMcpLinkAgentsTitle: "সহকারী সংযুক্ত করুন",
       assistantMcpName: "MCP প্লাগইন নাম",
-      assistantMcpNamePlaceholder: "MCP প্লাগইন নাম লিখুন",
+      assistantMcpNamePlaceholder: "MCP প্লাগইন নাম লিখুন, সর্বোচ্চ ২০ অক্ষর",
       assistantMcpNoAgents: "কোনো AI সহকারী উপলব্ধ নেই",
       assistantMcpNoItems: "কোনো Assistant MCP কনফিগার করা হয়নি",
       assistantMcpNoItemsHint: "MCP সার্ভিস কনফিগার করতে \"যোগ করুন\" ক্লিক করুন",

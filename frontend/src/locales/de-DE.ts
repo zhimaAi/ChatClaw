@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "Wählen Sie KI-Assistenten, die als Tools für diesen MCP verwendet werden sollen",
       assistantMcpLinkAgentsTitle: "Assistenten verknüpfen",
       assistantMcpName: "MCP-Plugin-Name",
-      assistantMcpNamePlaceholder: "MCP-Plugin-Namen eingeben",
+      assistantMcpNamePlaceholder: "MCP-Plugin-Namen eingeben, maximal 20 Zeichen",
       assistantMcpNoAgents: "Keine KI-Assistenten verfügbar",
       assistantMcpNoItems: "Kein Assistant MCP konfiguriert",
       assistantMcpNoItemsHint: "Klicken Sie auf „Hinzufügen“, um einen MCP-Dienst zu konfigurieren",

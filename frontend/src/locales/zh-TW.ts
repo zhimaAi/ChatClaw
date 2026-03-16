@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "選擇要做為此 MCP 工具的 AI 助理",
       assistantMcpLinkAgentsTitle: "連結助理",
       assistantMcpName: "MCP 外掛名稱",
-      assistantMcpNamePlaceholder: "輸入 MCP 外掛名稱",
+      assistantMcpNamePlaceholder: "請輸入 MCP 外掛名稱，最多 20 個字",
       assistantMcpNoAgents: "沒有可用的 AI 助理",
       assistantMcpNoItems: "尚未設定任何 Assistant MCP",
       assistantMcpNoItemsHint: "點選「新增」來設定 MCP 服務",

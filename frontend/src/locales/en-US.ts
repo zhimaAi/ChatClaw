@@ -409,7 +409,7 @@ export default {
       assistantMcpAddTitle: "Add Assistant MCP",
       assistantMcpEditTitle: "Edit Assistant MCP",
       assistantMcpName: "MCPPlugin Name",
-      assistantMcpNamePlaceholder: "Enter MCPplugin name",
+      assistantMcpNamePlaceholder: "Enter MCP plugin name, max 20 characters",
       assistantMcpDescription: "Description",
       assistantMcpDescriptionPlaceholder: "Brief description of this MCPplugin",
       assistantMcpUrl: "URL",

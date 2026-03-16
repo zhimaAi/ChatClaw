@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "Izberite pomočnike AI, ki bodo uporabljeni kot orodja za ta MCP",
       assistantMcpLinkAgentsTitle: "Poveži pomočnike",
       assistantMcpName: "Ime vtičnika MCP",
-      assistantMcpNamePlaceholder: "Vnesite ime vtičnika MCP",
+      assistantMcpNamePlaceholder: "Vnesite ime vtičnika MCP, največ 20 znakov",
       assistantMcpNoAgents: "Ni razpoložljivih AI pomočnikov",
       assistantMcpNoItems: "Noben Assistant MCP ni konfiguriran",
       assistantMcpNoItemsHint: "Kliknite »Dodaj«, da konfigurirate storitev MCP",

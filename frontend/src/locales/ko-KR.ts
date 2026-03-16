@@ -439,7 +439,7 @@ export default {
       assistantMcpLinkAgentsDesc: "이 MCP의 도구로 사용할 AI 어시스턴트를 선택합니다",
       assistantMcpLinkAgentsTitle: "어시스턴트 연결",
       assistantMcpName: "MCP 플러그인 이름",
-      assistantMcpNamePlaceholder: "MCP 플러그인 이름 입력",
+      assistantMcpNamePlaceholder: "MCP 플러그인 이름을 입력하세요 (최대 20자)",
       assistantMcpNoAgents: "사용 가능한 AI 어시스턴트가 없습니다",
       assistantMcpNoItems: "구성된 Assistant MCP가 없습니다",
       assistantMcpNoItemsHint: "MCP 서비스를 구성하려면 \"추가\"를 클릭하세요",

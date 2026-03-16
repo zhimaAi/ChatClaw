@@ -78,9 +78,11 @@ import type { AssistantMCP } from '@bindings/chatclaw/internal/services/assistan
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
+import { useThemeLogo } from '@/composables/useLogo'
 import { Events } from '@wailsio/runtime'
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 // ==================== Top-level tabs ====================
 type TopTab = 'servers' | 'settings'
@@ -470,7 +472,8 @@ function openEditAssistantMcpDialog(item: AssistantMCP) {
 }
 
 const amcpCanSave = computed(() => {
-  return amcpDialogForm.value.name.trim().length > 0
+  const len = amcpDialogForm.value.name.trim().length
+  return len > 0 && len <= 20
 })
 
 async function handleSaveAssistantMcp() {
@@ -549,7 +552,9 @@ async function openLinkAgentsDialog(item: AssistantMCP) {
   linkAgentsDialogOpen.value = true
 
   try {
-    allAgents.value = await AgentsService.ListAgents()
+    const agents = await AgentsService.ListAgents()
+    allAgents.value = agents
+    agentMap.value = new Map(agents.map((a) => [a.id, a]))
   } catch (error) {
     console.error('Failed to load agents:', error)
     allAgents.value = []
@@ -597,12 +602,17 @@ const editingTool = ref<ToolEntry | null>(null)
 const editToolForm = ref({ toolName: '', toolDescription: '' })
 const editToolSaving = ref(false)
 const connectionInfo = ref<{ url: string; authorization: string } | null>(null)
+const agentMap = ref<Map<number, Agent>>(new Map())
 
 async function showAmcpDetail(item: AssistantMCP) {
   amcpDetail.value = item
   connectionInfo.value = null
   try {
     connectionInfo.value = await AssistantMCPService.GetConnectionInfo(item.id)
+  } catch { /* ignore */ }
+  try {
+    const agents = await AgentsService.ListAgents()
+    agentMap.value = new Map(agents.map((a) => [a.id, a]))
   } catch { /* ignore */ }
 }
 
@@ -1055,11 +1065,11 @@ onUnmounted(() => {
                   <div class="flex flex-col gap-3 text-xs">
                     <div class="flex flex-col gap-1">
                       <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                      <code class="select-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
+                      <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
                     </div>
                     <div class="flex flex-col gap-1">
                       <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
-                      <code class="select-all break-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
+                      <code class="break-all rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
                     </div>
                   </div>
                 </div>
@@ -1087,11 +1097,9 @@ onUnmounted(() => {
                         </div>
                         <div class="flex flex-col gap-1">
                           <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
-                          <textarea
-                            v-model="editToolForm.toolDescription"
-                            rows="2"
-                            class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                          />
+                          <p class="rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                            {{ editToolForm.toolDescription || '—' }}
+                          </p>
                         </div>
                         <div class="flex items-center justify-end gap-2">
                           <button
@@ -1114,7 +1122,10 @@ onUnmounted(() => {
                     <template v-else>
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
-                          <Wrench class="size-3.5 shrink-0 text-muted-foreground" />
+                          <div class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5">
+                            <img v-if="agentMap.get(tool.agentId)?.icon" :src="agentMap.get(tool.agentId)!.icon" class="size-4 object-contain" />
+                            <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
+                          </div>
                           <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
                         </div>
                         <div class="flex items-center gap-1">
@@ -1132,7 +1143,7 @@ onUnmounted(() => {
                           </button>
                         </div>
                       </div>
-                      <p v-if="tool.toolDescription" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                      <p v-if="tool.toolDescription" class="mt-1 pl-7 text-xs leading-relaxed text-muted-foreground">
                         {{ tool.toolDescription }}
                       </p>
                     </template>
@@ -1152,11 +1163,17 @@ onUnmounted(() => {
             </div>
             <div
               v-else-if="assistantMcps.length === 0"
-              class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+              class="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
             >
               <Package class="size-8 opacity-40" />
               <span class="text-sm">{{ t('settings.mcp.assistantMcpNoItems') }}</span>
-              <span class="text-xs">{{ t('settings.mcp.assistantMcpNoItemsHint') }}</span>
+              <button
+                class="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                @click="openAddAssistantMcpDialog"
+              >
+                <Plus class="size-3.5" />
+                {{ t('settings.mcp.assistantMcpAdd') }}
+              </button>
             </div>
             <div v-else class="space-y-3">
               <p v-if="!mcpEnabled && assistantMcps.length > 0" class="text-xs text-muted-foreground">
@@ -1467,6 +1484,7 @@ onUnmounted(() => {
             <Input
               v-model="amcpDialogForm.name"
               :placeholder="t('settings.mcp.assistantMcpNamePlaceholder')"
+              :maxlength="20"
             />
           </div>
 
@@ -1552,16 +1570,10 @@ onUnmounted(() => {
               @click="toggleAgentSelection(agent.id)"
             >
               <div
-                v-if="agent.icon"
-                class="size-8 shrink-0 overflow-hidden rounded-md"
+                class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white dark:border-white/15 dark:bg-white/5"
               >
-                <img :src="agent.icon" :alt="agent.name" class="size-full object-cover" />
-              </div>
-              <div
-                v-else
-                class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground"
-              >
-                {{ agent.name.charAt(0) }}
+                <img v-if="agent.icon" :src="agent.icon" :alt="agent.name" class="size-6 object-contain" />
+                <img v-else :src="logoSrc" class="size-6 opacity-90" alt="ChatClaw logo" />
               </div>
               <span class="flex-1 truncate text-sm text-foreground">{{ agent.name }}</span>
               <div

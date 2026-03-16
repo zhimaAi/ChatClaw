@@ -423,7 +423,7 @@ export default {
       assistantMcpLinkAgentsDesc: "इस MCP के लिए टूल के रूप में उपयोग करने हेतु AI असिस्टेंट चुनें",
       assistantMcpLinkAgentsTitle: "असिस्टेंट लिंक करें",
       assistantMcpName: "MCP प्लगइन नाम",
-      assistantMcpNamePlaceholder: "MCP प्लगइन नाम दर्ज करें",
+      assistantMcpNamePlaceholder: "MCP प्लगइन नाम दर्ज करें, अधिकतम 20 अक्षर",
       assistantMcpNoAgents: "कोई AI असिस्टेंट उपलब्ध नहीं",
       assistantMcpNoItems: "कोई Assistant MCP कॉन्फ़िगर नहीं है",
       assistantMcpNoItemsHint: "MCP सेवा कॉन्फ़िगर करने के लिए \"जोड़ें\" पर क्लिक करें",

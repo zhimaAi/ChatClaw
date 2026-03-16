@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "Bu MCP için araç olarak kullanılacak yapay zekâ asistanlarını seçin",
       assistantMcpLinkAgentsTitle: "Asistanları bağla",
       assistantMcpName: "MCP eklenti adı",
-      assistantMcpNamePlaceholder: "MCP eklenti adını girin",
+      assistantMcpNamePlaceholder: "MCP eklenti adını girin, en fazla 20 karakter",
       assistantMcpNoAgents: "Kullanılabilir yapay zekâ asistanı yok",
       assistantMcpNoItems: "Yapılandırılmış Assistant MCP yok",
       assistantMcpNoItemsHint: "Bir MCP hizmeti yapılandırmak için \"Ekle\" düğmesine tıklayın",

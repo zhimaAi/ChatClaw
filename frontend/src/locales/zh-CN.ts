@@ -409,7 +409,7 @@ export default {
       assistantMcpAddTitle: "添加助手 MCP",
       assistantMcpEditTitle: "编辑助手 MCP",
       assistantMcpName: "MCP插件名称",
-      assistantMcpNamePlaceholder: "输入 MCP插件名称",
+      assistantMcpNamePlaceholder: "请输入 MCP插件名称，最多 20 个字",
       assistantMcpDescription: "描述",
       assistantMcpDescriptionPlaceholder: "输入 MCP插件的简要描述",
       assistantMcpUrl: "URL 地址",

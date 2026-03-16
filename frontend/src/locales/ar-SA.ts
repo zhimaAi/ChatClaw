@@ -424,7 +424,7 @@ export default {
       assistantMcpLinkAgentsDesc: "اختر مساعدين للذكاء الاصطناعي لاستخدامهم كأدوات لهذا الـ MCP",
       assistantMcpLinkAgentsTitle: "ربط المساعدين",
       assistantMcpName: "اسم مكوّن MCP",
-      assistantMcpNamePlaceholder: "أدخل اسم مكوّن MCP",
+      assistantMcpNamePlaceholder: "أدخل اسم مكوّن MCP، بحد أقصى 20 حرفًا",
       assistantMcpNoAgents: "لا يوجد أي مساعدين متاحين",
       assistantMcpNoItems: "لا يوجد أي Assistant MCP مُكوَّن",
       assistantMcpNoItemsHint: "انقر على \"إضافة\" لتكوين خدمة MCP",
