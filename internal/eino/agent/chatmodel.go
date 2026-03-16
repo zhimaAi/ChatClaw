@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 
 	"chatclaw/internal/eino/openaiutil"
@@ -47,7 +46,7 @@ func CreateChatModel(ctx context.Context, config Config) (model.ToolCallingChatM
 		"api_key_len", len(config.Provider.APIKey),
 		"enable_thinking", config.EnableThinking,
 	)
-	fmt.Printf(`当前的服务商类型 %s`, config.Provider.Type)
+
 	switch config.Provider.Type {
 	case "openai":
 		return createOpenAIChatModel(ctx, config)
@@ -72,7 +71,7 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		Model:   config.ModelID,
 		BaseURL: config.Provider.APIEndpoint,
 	}
-	chatModelLogger().Info("[chatmodel] 创建OpenAi参数",
+	chatModelLogger().Info("[chatmodel] create openai config",
 		"provider_id", config.Provider.ProviderID,
 		"model_id", config.ModelID,
 		"base_url", config.Provider.APIEndpoint,
@@ -92,7 +91,7 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		cfg.ExtraFields["self_owned_model_config_id"] = configID
 		cfg.Model = ""
 	}
-	fmt.Println(`构造openai的请求 %#v`, cfg)
+
 	chatModel, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {
 		return nil, err
