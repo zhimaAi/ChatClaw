@@ -620,6 +620,7 @@ function goBackFromAmcpDetail() {
   amcpDetail.value = null
   editingTool.value = null
   connectionInfo.value = null
+  activeSubTab.value = 'assistantMcp'
 }
 
 function startEditTool(tool: ToolEntry) {
@@ -891,6 +892,133 @@ onUnmounted(() => {
         </div>
       </template>
 
+      <!-- ==================== Assistant MCP Detail View ==================== -->
+      <template v-else-if="amcpDetail">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div class="flex shrink-0 items-center border-b border-border px-4 py-2">
+            <button
+              class="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              @click="goBackFromAmcpDetail"
+            >
+              <ChevronLeft class="size-4" />
+              {{ t('settings.mcp.tabAssistantMcp') }}
+            </button>
+          </div>
+          <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+            <div class="min-w-0 flex-1">
+              <span class="text-base font-semibold text-foreground">{{ amcpDetail.name }}</span>
+              <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ amcpDetail.description }}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="openEditAssistantMcpDialog(amcpDetail)"
+              >
+                <Pencil class="size-3.5" />
+                {{ t('settings.mcp.assistantMcpEdit') }}
+              </button>
+              <button
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                @click="openLinkAgentsDialog(amcpDetail)"
+              >
+                <Plus class="size-3.5" />
+                {{ t('settings.mcp.assistantMcpAddTool') }}
+              </button>
+            </div>
+          </div>
+          <div class="shrink-0 border-b border-border px-4 py-3">
+            <div class="rounded-md border border-border bg-muted/30 p-3">
+              <div class="flex flex-col gap-3 text-xs">
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
+                  <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
+                  <code class="break-all rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex-1 overflow-auto px-4 py-3">
+            <div v-if="parseTools(amcpDetail).length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+              <Wrench class="size-8 opacity-40" />
+              <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
+            </div>
+            <div v-else class="flex flex-col gap-1">
+              <div
+                v-for="tool in parseTools(amcpDetail)"
+                :key="tool.agentId"
+                class="rounded-md border border-border p-3 dark:border-white/10"
+              >
+                <template v-if="editingTool && editingTool.agentId === tool.agentId">
+                  <div class="flex flex-col gap-2">
+                    <div class="flex flex-col gap-1">
+                      <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolName') }}</Label>
+                      <Input
+                        v-model="editToolForm.toolName"
+                        class="font-mono text-xs"
+                        :placeholder="t('settings.mcp.assistantMcpToolNamePlaceholder')"
+                      />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
+                      <p class="rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        {{ editToolForm.toolDescription || '—' }}
+                      </p>
+                    </div>
+                    <div class="flex items-center justify-end gap-2">
+                      <button
+                        class="rounded-md px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        @click="cancelEditTool"
+                      >
+                        {{ t('common.cancel') }}
+                      </button>
+                      <button
+                        class="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+                        :disabled="editToolSaving || !editToolForm.toolName.trim()"
+                        @click="handleSaveEditTool"
+                      >
+                        <Loader2 v-if="editToolSaving" class="mr-1 inline size-3 animate-spin" />
+                        {{ t('common.save') }}
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5">
+                        <img v-if="agentMap.get(tool.agentId)?.icon" :src="agentMap.get(tool.agentId)!.icon" class="size-4 object-contain" />
+                        <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
+                      </div>
+                      <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <button
+                        class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        @click="startEditTool(tool)"
+                      >
+                        <Pencil class="size-3" />
+                      </button>
+                      <button
+                        class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        @click="handleRemoveTool(tool)"
+                      >
+                        <Trash2 class="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <p v-if="tool.toolDescription" class="mt-1 pl-7 text-xs leading-relaxed text-muted-foreground">
+                    {{ tool.toolDescription }}
+                  </p>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- ==================== List View ==================== -->
       <template v-else>
         <!-- Sub tab bar: Installed | Market + Add button -->
@@ -1026,135 +1154,7 @@ onUnmounted(() => {
 
         <!-- Assistant MCP tab -->
         <template v-if="activeSubTab === 'assistantMcp'">
-          <!-- Detail view -->
-          <template v-if="amcpDetail">
-            <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div class="flex shrink-0 items-center border-b border-border px-4 py-2">
-                <button
-                  class="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  @click="goBackFromAmcpDetail"
-                >
-                  <ChevronLeft class="size-4" />
-                  {{ t('settings.mcp.tabAssistantMcp') }}
-                </button>
-              </div>
-              <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
-                <div class="min-w-0 flex-1">
-                  <span class="text-base font-semibold text-foreground">{{ amcpDetail.name }}</span>
-                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ amcpDetail.description }}</p>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <button
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    @click="openEditAssistantMcpDialog(amcpDetail)"
-                  >
-                    <Pencil class="size-3.5" />
-                    {{ t('settings.mcp.assistantMcpEdit') }}
-                  </button>
-                  <button
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    @click="openLinkAgentsDialog(amcpDetail)"
-                  >
-                    <Plus class="size-3.5" />
-                    {{ t('settings.mcp.assistantMcpAddTool') }}
-                  </button>
-                </div>
-              </div>
-              <div class="shrink-0 border-b border-border px-4 py-3">
-                <div class="rounded-md border border-border bg-muted/30 p-3">
-                  <div class="flex flex-col gap-3 text-xs">
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                      <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
-                      <code class="break-all rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="flex-1 overflow-auto px-4 py-3">
-                <div v-if="parseTools(amcpDetail).length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-                  <Wrench class="size-8 opacity-40" />
-                  <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
-                </div>
-                <div v-else class="flex flex-col gap-1">
-                  <div
-                    v-for="tool in parseTools(amcpDetail)"
-                    :key="tool.agentId"
-                    class="rounded-md border border-border p-3 dark:border-white/10"
-                  >
-                    <template v-if="editingTool && editingTool.agentId === tool.agentId">
-                      <div class="flex flex-col gap-2">
-                        <div class="flex flex-col gap-1">
-                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolName') }}</Label>
-                          <Input
-                            v-model="editToolForm.toolName"
-                            class="font-mono text-xs"
-                            :placeholder="t('settings.mcp.assistantMcpToolNamePlaceholder')"
-                          />
-                        </div>
-                        <div class="flex flex-col gap-1">
-                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
-                          <p class="rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                            {{ editToolForm.toolDescription || '—' }}
-                          </p>
-                        </div>
-                        <div class="flex items-center justify-end gap-2">
-                          <button
-                            class="rounded-md px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                            @click="cancelEditTool"
-                          >
-                            {{ t('common.cancel') }}
-                          </button>
-                          <button
-                            class="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background transition-opacity hover:opacity-80 disabled:opacity-50"
-                            :disabled="editToolSaving || !editToolForm.toolName.trim()"
-                            @click="handleSaveEditTool"
-                          >
-                            <Loader2 v-if="editToolSaving" class="mr-1 inline size-3 animate-spin" />
-                            {{ t('common.save') }}
-                          </button>
-                        </div>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                          <div class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5">
-                            <img v-if="agentMap.get(tool.agentId)?.icon" :src="agentMap.get(tool.agentId)!.icon" class="size-4 object-contain" />
-                            <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
-                          </div>
-                          <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                          <button
-                            class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                            @click="startEditTool(tool)"
-                          >
-                            <Pencil class="size-3" />
-                          </button>
-                          <button
-                            class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                            @click="handleRemoveTool(tool)"
-                          >
-                            <Trash2 class="size-3" />
-                          </button>
-                        </div>
-                      </div>
-                      <p v-if="tool.toolDescription" class="mt-1 pl-7 text-xs leading-relaxed text-muted-foreground">
-                        {{ tool.toolDescription }}
-                      </p>
-                    </template>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- List view -->
-          <div v-else class="flex-1 overflow-auto px-4 pb-4">
+          <div class="flex-1 overflow-auto px-4 pb-4">
             <div
               v-if="assistantMcpsLoading && assistantMcps.length === 0"
               class="flex items-center justify-center py-12"
