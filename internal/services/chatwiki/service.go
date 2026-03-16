@@ -204,19 +204,33 @@ func (s *ChatWikiService) getBindingFromDB() (*bindingModel, error) {
 // GetBinding returns the current binding, or nil if none exists.
 // If the token expires within 24 hours, it is refreshed first and the updated binding is returned.
 func (s *ChatWikiService) GetBinding() (*Binding, error) {
+	s.app.Logger.Info("[chatwiki] GetBinding start")
 	m, err := s.getBindingFromDB()
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GetBinding db read failed", "error", err)
 		return nil, err
 	}
 	if m == nil {
+		s.app.Logger.Warn("[chatwiki] GetBinding no binding found")
 		return nil, nil
 	}
 	b := toBinding(m)
 	if b.Exp <= 0 {
+		s.app.Logger.Info("[chatwiki] GetBinding returning binding without exp",
+			"user_id", b.UserID,
+			"server_url", strings.TrimSpace(b.ServerURL),
+			"token_len", len(strings.TrimSpace(b.Token)),
+		)
 		return b, nil
 	}
 	now := time.Now().Unix()
 	if b.Exp-now >= refreshTokenExpireThreshold {
+		s.app.Logger.Info("[chatwiki] GetBinding using cached binding",
+			"user_id", b.UserID,
+			"server_url", strings.TrimSpace(b.ServerURL),
+			"token_len", len(strings.TrimSpace(b.Token)),
+			"remaining_sec", b.Exp-now,
+		)
 		return b, nil
 	}
 
@@ -1849,6 +1863,7 @@ func (s *ChatWikiService) chatWikiGET(token string, apiURL string) ([]byte, erro
 func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	s.app.Logger.Info("[chatwiki] GET start", "url", apiURL, "token_len", len(strings.TrimSpace(token)))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -1858,14 +1873,22 @@ func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.Ra
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GET request failed", "url", apiURL, "error", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GET read response failed", "url", apiURL, "error", err)
 		return nil, fmt.Errorf("read response body: %w", err)
 	}
+	s.app.Logger.Info("[chatwiki] GET response",
+		"url", apiURL,
+		"status", resp.StatusCode,
+		"body_len", len(body),
+		"body_preview", previewChatWikiLogBody(body),
+	)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
@@ -1887,21 +1910,34 @@ func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.Ra
 			resultCode = apiResp.Code
 		}
 		if resultCode != 0 {
+			s.app.Logger.Warn("[chatwiki] GET API envelope error",
+				"url", apiURL,
+				"result_code", resultCode,
+				"msg", apiResp.Msg,
+			)
 			return nil, fmt.Errorf("API error code=%d msg=%s", resultCode, apiResp.Msg)
 		}
 		dataTrimmed := strings.TrimSpace(string(apiResp.Data))
 		if dataTrimmed == "" || strings.EqualFold(dataTrimmed, "null") {
+			s.app.Logger.Info("[chatwiki] GET API envelope empty data", "url", apiURL)
 			return json.RawMessage("[]"), nil
 		}
+		s.app.Logger.Info("[chatwiki] GET API envelope ok",
+			"url", apiURL,
+			"data_len", len(apiResp.Data),
+			"data_preview", previewChatWikiLogBody(apiResp.Data),
+		)
 		return apiResp.Data, nil
 	}
 
 	if json.Valid([]byte(trimmed)) {
+		s.app.Logger.Info("[chatwiki] GET raw JSON payload", "url", apiURL)
 		return json.RawMessage(trimmed), nil
 	}
 
 	// Some deployments may return plain "NULL" as empty payload.
 	if strings.EqualFold(trimmed, "NULL") {
+		s.app.Logger.Info("[chatwiki] GET payload NULL treated as empty", "url", apiURL)
 		return json.RawMessage("[]"), nil
 	}
 

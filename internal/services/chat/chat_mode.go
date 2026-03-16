@@ -77,6 +77,41 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	agentConfig := gc.agentConfig
 	providerConfig := gc.providerConfig
 	agentExtras := gc.agentExtras
+	s.app.Logger.Info("[chat] chat_mode generation start",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"provider_type", providerConfig.Type,
+		"model_id", agentConfig.ModelID,
+		"api_endpoint", providerConfig.APIEndpoint,
+		"api_key_len", len(strings.TrimSpace(providerConfig.APIKey)),
+		"is_chatwiki", providerConfig.ProviderID == "chatwiki",
+		"latest_user_len", len(strings.TrimSpace(latestUserContent)),
+		"latest_user_preview", previewChatLogContent(latestUserContent),
+		"context_count", agentConfig.ContextCount,
+		"enable_thinking", agentConfig.EnableThinking,
+		"enable_temperature", agentConfig.EnableTemp,
+		"temperature", func() float64 {
+			if agentConfig.Temperature == nil {
+				return 0
+			}
+			return *agentConfig.Temperature
+		}(),
+		"enable_top_p", agentConfig.EnableTopP,
+		"top_p", func() float64 {
+			if agentConfig.TopP == nil {
+				return 0
+			}
+			return *agentConfig.TopP
+		}(),
+		"enable_max_tokens", agentConfig.EnableMaxTokens,
+		"max_tokens", func() int {
+			if agentConfig.MaxTokens == nil {
+				return 0
+			}
+			return *agentConfig.MaxTokens
+		}(),
+	)
 
 	assistantMsg := &messageModel{
 		ConversationID: conversationID,
@@ -137,7 +172,7 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	s.app.Logger.Info("[chat] chat_mode start", "conv", conversationID, "req", gc.requestID,
 		"model", agentConfig.ModelID, "messages", len(messages))
 	if len(messages) <= 1 {
-		s.app.Logger.Info("[chat] system_prompt", "instruction", augmentedInstruction)
+		//s.app.Logger.Info("[chat] system_prompt", "instruction", augmentedInstruction)
 	}
 
 	agentConfig.Instruction = augmentedInstruction
@@ -149,6 +184,13 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
 		return
 	}
+	s.app.Logger.Info("[chat] chat_mode model created",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+		"message_count", len(messages)+1,
+	)
 
 	// Build full message list: system prompt + history
 	fullMessages := make([]*schema.Message, 0, len(messages)+1)
@@ -157,14 +199,37 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		Content: augmentedInstruction,
 	})
 	fullMessages = append(fullMessages, messages...)
+	s.app.Logger.Info("[chat] chat_mode call model",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+		"api_endpoint", providerConfig.APIEndpoint,
+		"message_count", len(fullMessages),
+		"system_prompt_len", len(augmentedInstruction),
+		"last_user_preview", previewChatLogContent(userQuery),
+	)
 
 	stream, err := chatModel.Stream(ctx, fullMessages)
 	if err != nil {
 		errMsg := err.Error()
+		s.app.Logger.Error("[chat] chat_mode stream start failed",
+			"conv", conversationID,
+			"req", gc.requestID,
+			"provider_id", providerConfig.ProviderID,
+			"model_id", agentConfig.ModelID,
+			"error", errMsg,
+		)
 		gc.emitError("error.chat_generation_failed", map[string]any{"Error": errMsg})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, errMsg, "")
 		return
 	}
+	s.app.Logger.Info("[chat] chat_mode stream started",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+	)
 
 	streamFailed := false
 	streamErrMsg := ""
@@ -218,6 +283,13 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	}
 
 	if ctx.Err() != nil {
+		s.app.Logger.Warn("[chat] chat_mode stream cancelled",
+			"conv", conversationID,
+			"req", gc.requestID,
+			"provider_id", providerConfig.ProviderID,
+			"model_id", agentConfig.ModelID,
+			"content_len", ss.contentBuilder.Len(),
+		)
 		s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusCancelled, "", "cancelled", ss.inputTokens, ss.outputTokens)
 		gc.emit(EventChatStopped, ChatStoppedEvent{
 			ChatEvent: gc.chatEvent(assistantMsg.ID),
@@ -227,9 +299,27 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 	}
 
 	if streamFailed {
+		s.app.Logger.Error("[chat] chat_mode stream failed",
+			"conv", conversationID,
+			"req", gc.requestID,
+			"provider_id", providerConfig.ProviderID,
+			"model_id", agentConfig.ModelID,
+			"error", streamErrMsg,
+			"content_len", ss.contentBuilder.Len(),
+		)
 		s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusError, streamErrMsg, "", ss.inputTokens, ss.outputTokens)
 		return
 	}
+	s.app.Logger.Info("[chat] chat_mode stream completed",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+		"finish_reason", ss.finishReason,
+		"input_tokens", ss.inputTokens,
+		"output_tokens", ss.outputTokens,
+		"content_len", ss.contentBuilder.Len(),
+	)
 
 	s.updateMessageFinal(db, assistantMsg.ID, ss.contentBuilder.String(), ss.thinkingBuilder.String(), "[]", ss.segmentsStr(), StatusSuccess, "", ss.finishReason, ss.inputTokens, ss.outputTokens)
 
@@ -335,6 +425,7 @@ func (s *ChatService) retrieveFromKnowledgeBase(ctx context.Context, db *bun.DB,
 	}
 
 	embedder, err := einoembed.NewEmbedder(ctx, &einoembed.ProviderConfig{
+		ProviderID:   embeddingConfig.ProviderID,
 		ProviderType: embeddingConfig.ProviderType,
 		APIKey:       embeddingConfig.APIKey,
 		APIEndpoint:  embeddingConfig.APIEndpoint,

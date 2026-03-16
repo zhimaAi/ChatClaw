@@ -118,3 +118,29 @@ func TestDecodeModelCatalogResponse_DetectsImageCapabilityFromInputImage(t *test
 		t.Fatalf("expected image capability from input_image, got %#v", catalog.LLMModels[0].Capabilities)
 	}
 }
+
+func TestDecodeModelCatalogResponse_ExtractsSelfOwnedModelConfigID(t *testing.T) {
+	raw := json.RawMessage(`{
+		"data": {
+			"language_models": [
+				{
+					"id": 12,
+					"model_name": "deepseek-r1",
+					"type": "llm",
+					"enabled": 1
+				}
+			]
+		}
+	}`)
+
+	catalog, err := decodeModelCatalogResponse(raw)
+	if err != nil {
+		t.Fatalf("decodeModelCatalogResponse returned error: %v", err)
+	}
+	if len(catalog.LLMModels) != 1 {
+		t.Fatalf("expected one llm model, got %#v", catalog.LLMModels)
+	}
+	if catalog.LLMModels[0].SelfOwnedModelConfigID != 12 {
+		t.Fatalf("expected self owned model config id 12, got %#v", catalog.LLMModels[0])
+	}
+}

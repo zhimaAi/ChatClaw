@@ -3,8 +3,12 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 
+	"chatclaw/internal/eino/openaiutil"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/chatwiki"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -14,6 +18,10 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 )
+
+func chatModelLogger() *slog.Logger {
+	return slog.Default()
+}
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
 	if config.EnableTemp && config.Temperature != nil {
@@ -31,6 +39,15 @@ func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
 
 // CreateChatModel creates a ToolCallingChatModel based on the provider type.
 func CreateChatModel(ctx context.Context, config Config) (model.ToolCallingChatModel, error) {
+	chatModelLogger().Info("[chatmodel] CreateChatModel start",
+		"provider_id", config.Provider.ProviderID,
+		"provider_type", config.Provider.Type,
+		"model_id", config.ModelID,
+		"api_endpoint", config.Provider.APIEndpoint,
+		"api_key_len", len(config.Provider.APIKey),
+		"enable_thinking", config.EnableThinking,
+	)
+	fmt.Printf(`当前的服务商类型 %s`, config.Provider.Type)
 	switch config.Provider.Type {
 	case "openai":
 		return createOpenAIChatModel(ctx, config)
@@ -55,14 +72,35 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		Model:   config.ModelID,
 		BaseURL: config.Provider.APIEndpoint,
 	}
+	chatModelLogger().Info("[chatmodel] 创建OpenAi参数",
+		"provider_id", config.Provider.ProviderID,
+		"model_id", config.ModelID,
+		"base_url", config.Provider.APIEndpoint,
+		"api_key_len", len(config.Provider.APIKey),
+	)
 	applyOpenAIModelParams(cfg, config)
 
 	if cfg.ExtraFields == nil {
 		cfg.ExtraFields = make(map[string]any)
 	}
 	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
-
-	return openai.NewChatModel(ctx, cfg)
+	if config.Provider.ProviderID == "chatwiki" {
+		configID, err := chatwiki.ResolveSelfOwnedModelConfigID(config.Provider.APIKey, config.Provider.APIEndpoint, config.ModelID, "llm")
+		if err != nil {
+			return nil, err
+		}
+		cfg.ExtraFields["self_owned_model_config_id"] = configID
+		cfg.Model = ""
+	}
+	fmt.Println(`构造openai的请求 %#v`, cfg)
+	chatModel, err := openai.NewChatModel(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if config.Provider.ProviderID == "chatwiki" {
+		return openaiutil.WrapToolCallingChatModelWithToken(chatModel, config.Provider.APIKey), nil
+	}
+	return chatModel, nil
 }
 
 func createAzureChatModel(ctx context.Context, config Config) (model.ToolCallingChatModel, error) {
