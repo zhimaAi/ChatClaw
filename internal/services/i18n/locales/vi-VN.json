@@ -203,5 +203,16 @@
   "error.channel_agent_create_failed": "Tạo trợ lý AI cho kênh thất bại",
   "error.channel_agent_create_not_available": "Tự động tạo trợ lý không khả dụng",
   "error.channel_ai_reply_failed": "Phản hồi AI thất bại: {{.Error}}",
-  "error.channel_ai_reply_empty": "Phản hồi AI thất bại: Phản hồi trống được tạo"
+  "error.channel_ai_reply_empty": "Phản hồi AI thất bại: Phản hồi trống được tạo",
+  "error.assistant_mcp_create_failed": "Tạo Assistant MCP không thành công",
+  "error.assistant_mcp_delete_failed": "Xóa Assistant MCP không thành công",
+  "error.assistant_mcp_id_required": "Cần có ID Assistant MCP",
+  "error.assistant_mcp_list_failed": "Không thể lấy danh sách Assistant MCP",
+  "error.assistant_mcp_name_required": "Cần có tên plugin MCP",
+  "error.assistant_mcp_not_found": "Không tìm thấy Assistant MCP",
+  "error.assistant_mcp_tool_name_duplicate": "Tên công cụ đã tồn tại",
+  "error.assistant_mcp_tool_name_invalid": "Tên công cụ chỉ được chứa chữ cái, chữ số và dấu gạch dưới, và phải bắt đầu bằng một chữ cái",
+  "error.assistant_mcp_tool_name_required": "Cần có tên công cụ",
+  "error.assistant_mcp_tool_not_found": "Không tìm thấy công cụ",
+  "error.assistant_mcp_update_failed": "Cập nhật Assistant MCP không thành công"
 }
