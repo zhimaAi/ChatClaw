@@ -1,7 +1,8 @@
 import { computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
-import { type Locale } from '../locales'
+import { LOCALE_KEYS, loadLocaleMessages, type Locale } from '../locales'
+import { i18n } from '../i18n'
 import { Service as I18nService } from '@bindings/chatclaw/internal/services/i18n'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
@@ -10,25 +11,7 @@ export type { Locale } from '../locales'
 
 const DEFAULT_LOCALE: Locale = 'en-US'
 
-// 支持的语言列表
-export const SUPPORTED_LOCALES: Locale[] = [
-  'zh-CN',
-  'en-US',
-  'ar-SA',
-  'bn-BD',
-  'de-DE',
-  'es-ES',
-  'fr-FR',
-  'hi-IN',
-  'it-IT',
-  'ja-JP',
-  'ko-KR',
-  'pt-BR',
-  'sl-SI',
-  'tr-TR',
-  'vi-VN',
-  'zh-TW',
-]
+export const SUPPORTED_LOCALES: readonly Locale[] = LOCALE_KEYS
 
 function detectSystemLocale(): Locale | null {
   if (typeof navigator === 'undefined') {
@@ -110,25 +93,29 @@ export async function fetchLocale(): Promise<Locale> {
   return DEFAULT_LOCALE
 }
 
+async function ensureLocaleLoaded(locale: Locale) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const global = i18n.global as any
+  if (!global.availableLocales.includes(locale)) {
+    const messages = await loadLocaleMessages(locale)
+    global.setLocaleMessage(locale, messages)
+  }
+}
+
 /**
  * 组件内使用的 locale composable
  */
 export function useLocale() {
   const { locale } = useI18n()
 
-  // 当前语言（响应式）
   const currentLocale = computed(() => locale.value as Locale)
 
-  // 切换语言（同时更新前端和后端）
   async function switchLocale(newLocale: Locale) {
-    // Persist to DB and update backend localizer.
-    // I18nService.SetLocale also emits 'locale:changed' from Go backend
-    // so all windows (snap, selection) will be notified.
+    await ensureLocaleLoaded(newLocale)
     await Promise.all([
       SettingsService.SetValue('language', newLocale),
       I18nService.SetLocale(newLocale),
     ])
-    // 更新当前窗口前端
     locale.value = newLocale
   }
 
@@ -144,15 +131,14 @@ export function useLocale() {
  * Returns an unsubscribe function.
  */
 export function useLocaleSync(localeRef?: Ref<string>) {
-  const i18n = localeRef ?? useI18n().locale
+  const localeValue = localeRef ?? useI18n().locale
 
-  const unsubscribe = Events.On('locale:changed', (event: any) => {
-    // Go backend emits map[string]string{"locale": "xx"}.
-    // Wails wraps it as event.data (object or array).
+  const unsubscribe = Events.On('locale:changed', async (event: any) => {
     const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
     const newLocale = payload?.locale
     if (newLocale && SUPPORTED_LOCALES.includes(newLocale as Locale)) {
-      i18n.value = newLocale
+      await ensureLocaleLoaded(newLocale as Locale)
+      localeValue.value = newLocale
     }
   })
 

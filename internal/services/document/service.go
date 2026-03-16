@@ -135,6 +135,7 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 // - 无关键词时：按 sort_by 排序，支持 before_id 游标分页
 //   - "created_desc"（默认）: id DESC, before_id 为上一页最小 id
 //   - "created_asc": id ASC, before_id 为上一页最大 id（此时 before_id 语义变为 after_id）
+//
 // - 有关键词时：按 FTS5 BM25 相关度降序排列，不使用 before_id（搜索结果一次性返回），sort_by 被忽略
 // - 每次返回 limit（默认/最大 100）
 func (s *DocumentService) ListDocumentsPage(input ListDocumentsPageInput) ([]Document, error) {
@@ -400,6 +401,68 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 	return uploaded, nil
 }
 
+// UploadBrowserDocuments 上传浏览器中的文档内容（用于 server 模式）
+func (s *DocumentService) UploadBrowserDocuments(input UploadBrowserInput) ([]Document, error) {
+	if input.LibraryID <= 0 {
+		return nil, errs.New("error.library_id_required")
+	}
+	if len(input.Files) == 0 {
+		return nil, errs.New("error.document_file_required")
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	docsDir, err := s.GetDocumentsDir()
+	if err != nil {
+		return nil, err
+	}
+
+	libraryDir := filepath.Join(docsDir, fmt.Sprintf("%d", input.LibraryID))
+	if err := os.MkdirAll(libraryDir, 0o755); err != nil {
+		return nil, errs.Wrap("error.document_upload_failed", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	uploaded := make([]Document, 0, len(input.Files))
+	total := len(input.Files)
+	done := 0
+
+	emitUploadProgress := func() {
+		s.app.Event.Emit("document:upload_progress", UploadProgressEvent{
+			LibraryID: input.LibraryID,
+			Total:     total,
+			Done:      done,
+		})
+	}
+	emitUploadProgress()
+
+	for _, file := range input.Files {
+		doc, err := s.uploadSingleBrowserFile(ctx, db, input.LibraryID, input.FolderID, libraryDir, file)
+		done++
+		emitUploadProgress()
+		if err != nil {
+			s.app.Logger.Warn("upload browser file failed", "fileName", file.FileName, "error", err)
+			continue
+		}
+		uploaded = append(uploaded, *doc)
+
+		s.app.Event.Emit("document:uploaded", *doc)
+		s.startProcessingTask(doc)
+		s.startThumbnailTask(doc)
+	}
+
+	if len(uploaded) == 0 {
+		return nil, errs.New("error.document_upload_failed")
+	}
+
+	return uploaded, nil
+}
+
 // uploadSingleFile 上传单个文件
 func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libraryID int64, folderID *int64, libraryDir, srcPath string) (*Document, error) {
 	// 检查文件是否存在
@@ -420,9 +483,77 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 		return nil, fmt.Errorf("calculate hash: %w", err)
 	}
 
+	originalName := filepath.Base(srcPath)
+	return s.saveUploadedDocument(
+		ctx,
+		db,
+		libraryID,
+		folderID,
+		libraryDir,
+		originalName,
+		srcInfo.Size(),
+		ext,
+		hash,
+		func(destPath string) error {
+			return s.copyFile(srcPath, destPath)
+		},
+	)
+}
+
+func (s *DocumentService) uploadSingleBrowserFile(ctx context.Context, db *bun.DB, libraryID int64, folderID *int64, libraryDir string, file BrowserUploadFile) (*Document, error) {
+	originalName := filepath.Base(strings.TrimSpace(file.FileName))
+	if originalName == "" {
+		return nil, errs.New("error.document_file_required")
+	}
+
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(originalName)), ".")
+	if !IsSupportedExtension(ext) {
+		return nil, errs.Newf("error.document_file_type_not_supported", map[string]any{"Ext": ext})
+	}
+
+	base64Data := strings.TrimSpace(file.Base64Data)
+	if base64Data == "" {
+		return nil, errs.New("error.document_file_required")
+	}
+	if idx := strings.Index(base64Data, ","); idx >= 0 && strings.HasPrefix(base64Data[:idx], "data:") {
+		base64Data = base64Data[idx+1:]
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, fmt.Errorf("decode file data: %w", err)
+	}
+	hash := s.calculateBytesHash(data)
+
+	return s.saveUploadedDocument(
+		ctx,
+		db,
+		libraryID,
+		folderID,
+		libraryDir,
+		originalName,
+		int64(len(data)),
+		ext,
+		hash,
+		func(destPath string) error {
+			return s.writeFileBytes(destPath, data)
+		},
+	)
+}
+
+func (s *DocumentService) saveUploadedDocument(
+	ctx context.Context,
+	db *bun.DB,
+	libraryID int64,
+	folderID *int64,
+	libraryDir, originalName string,
+	fileSize int64,
+	ext, hash string,
+	writeContent func(destPath string) error,
+) (*Document, error) {
 	// 检查是否已存在相同文件，如果存在则删除旧记录（覆盖上传）
 	var existingDoc documentModel
-	err = db.NewSelect().
+	err := db.NewSelect().
 		Model(&existingDoc).
 		Where("library_id = ?", libraryID).
 		Where("content_hash = ?", hash).
@@ -444,13 +575,12 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 	}
 
 	// 生成目标文件名：hash_原始文件名
-	originalName := filepath.Base(srcPath)
 	destName := fmt.Sprintf("%s_%s", hash[:8], originalName)
 	destPath := filepath.Join(libraryDir, destName)
 
-	// 复制文件
-	if err := s.copyFile(srcPath, destPath); err != nil {
-		return nil, fmt.Errorf("copy file: %w", err)
+	// 写入文件
+	if err := writeContent(destPath); err != nil {
+		return nil, fmt.Errorf("write file: %w", err)
 	}
 
 	// 生成运行 ID
@@ -463,7 +593,7 @@ func (s *DocumentService) uploadSingleFile(ctx context.Context, db *bun.DB, libr
 		OriginalName:    originalName,
 		NameTokens:      tokenizer.TokenizeName(originalName),
 		ThumbIcon:       "",
-		FileSize:        srcInfo.Size(),
+		FileSize:        fileSize,
 		ContentHash:     hash,
 		Extension:       ext,
 		MimeType:        GetMimeType(ext),
@@ -918,6 +1048,11 @@ func (s *DocumentService) calculateFileHash(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+func (s *DocumentService) calculateBytesHash(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 // copyFile 复制文件
 func (s *DocumentService) copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
@@ -933,6 +1068,20 @@ func (s *DocumentService) copyFile(src, dst string) error {
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	return dstFile.Sync()
+}
+
+func (s *DocumentService) writeFileBytes(dst string, data []byte) error {
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := dstFile.Write(data); err != nil {
 		return err
 	}
 
