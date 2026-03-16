@@ -294,6 +294,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 
 	// 注册设置服务
 	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
+	chatWikiService := chatwiki.NewChatWikiService(app)
 	// 注册供应商服务
 	app.RegisterService(application.NewService(providers.NewProvidersService(app)))
 	// 注册浏览器服务
@@ -314,7 +315,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(assistantMCPService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
-	chatWikiService := chatwiki.NewChatWikiService(app)
 	chatService.SetChatWikiService(chatWikiService)
 	app.RegisterService(application.NewService(chatService))
 	// Wire chat bridge for assistant MCP (avoids cyclic import)
@@ -535,6 +535,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		go toolchainService.EnsureAll()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
+		// Warm Chatwiki model cache when account is already bound.
+		go func() {
+			if _, err := chatWikiService.RefreshModelCatalog(); err != nil {
+				app.Logger.Warn("RefreshModelCatalog failed (non-fatal)", "error", err)
+			}
+		}()
 		// Start all enabled channel gateway connections in background.
 		go channelGateway.StartAll(context.Background())
 		go func() {

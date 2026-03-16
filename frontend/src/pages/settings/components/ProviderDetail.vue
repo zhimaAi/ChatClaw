@@ -28,6 +28,7 @@ import {
   UpdateModelInput,
 } from '@/../bindings/chatclaw/internal/services/providers'
 import ModelFormDialog from './ModelFormDialog.vue'
+import ChatwikiProviderDetail from './ChatwikiProviderDetail.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +79,7 @@ const isOllama = computed(() => props.providerWithModels?.provider.provider_id =
 
 // 判断是否为 ChatClaw（ChatClaw 支持一键生成密钥）
 const isChatClaw = computed(() => props.providerWithModels?.provider.provider_id === 'chatclaw')
+const isChatWiki = computed(() => props.providerWithModels?.provider.provider_id === 'chatwiki')
 
 // 检测按钮是否禁用
 const isCheckDisabled = computed(
@@ -589,7 +591,17 @@ const confirmDeleteModel = async () => {
       {{ t('settings.modelService.loadingProviders') }}
     </div>
 
-    <!-- 详情内容 -->
+    <!-- Chatwiki 专属详情 -->
+    <ChatwikiProviderDetail
+      v-else-if="providerWithModels && isChatWiki"
+      :provider-with-models="providerWithModels"
+      :loading="loading"
+      :error-message="errorMessage"
+      @update="emit('update', $event)"
+      @refresh="emit('refresh')"
+    />
+
+    <!-- 通用详情内容 -->
     <div v-else class="mx-auto w-full max-w-settings-card">
       <div
         class="rounded-xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"

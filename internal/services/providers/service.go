@@ -17,6 +17,7 @@ import (
 	"chatclaw/internal/define"
 	"chatclaw/internal/device"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/chatwiki"
 	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
@@ -252,6 +253,9 @@ func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
 	}
+	if providerID == "chatwiki" && s.app != nil {
+		_ = chatwiki.NewChatWikiService(s.app).SyncProviderState()
+	}
 
 	db, err := s.db()
 	if err != nil {
@@ -282,6 +286,16 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	provider, err := s.GetProvider(providerID)
 	if err != nil {
 		return nil, err
+	}
+	if providerID == "chatwiki" {
+		if s.app == nil {
+			return s.buildChatWikiProviderWithModels(provider, &chatwiki.ModelCatalog{}), nil
+		}
+		catalog, err := chatwiki.NewChatWikiService(s.app).GetModelCatalog(true)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildChatWikiProviderWithModels(provider, catalog), nil
 	}
 
 	db, err := s.db()
@@ -1094,6 +1108,9 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if providerID == "chatclaw" {
 		return nil, errs.New("error.chatclaw_models_readonly")
 	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatclaw_models_readonly")
+	}
 
 	input.ModelID = strings.TrimSpace(input.ModelID)
 	if input.ModelID == "" {
@@ -1198,6 +1215,9 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	if providerID == "chatclaw" {
 		return nil, errs.New("error.chatclaw_models_readonly")
 	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatclaw_models_readonly")
+	}
 
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
@@ -1298,6 +1318,9 @@ func (s *ProvidersService) GetModel(providerID string, modelID string) (*Model, 
 func (s *ProvidersService) DeleteModel(providerID string, modelID string) error {
 	providerID = strings.TrimSpace(providerID)
 	if providerID == "chatclaw" {
+		return errs.New("error.chatclaw_models_readonly")
+	}
+	if providerID == "chatwiki" {
 		return errs.New("error.chatclaw_models_readonly")
 	}
 	if providerID == "" {

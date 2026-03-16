@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, RefreshCw } from 'lucide-vue-next'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
+import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
@@ -400,6 +401,7 @@ async function finishSuccess() {
   try {
     // Sync apps and knowledge bases after (re-)binding so list view has fresh data
     await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    await ProvidersService.GetProviderWithModels('chatwiki')
     // Reload binding so list view shows latest auth status (bound/expired, user info)
     await loadBinding()
     toast.success(t('settings.chatwiki.syncSuccess'))
