@@ -1663,7 +1663,7 @@ onUnmounted(() => {
     <!-- Collapse/Expand handle (snap mode: floating, draggable) -->
     <div
       v-if="!isEmbeddedMode && isSnapMode"
-      class="absolute left-0.5 z-[5] cursor-grab active:cursor-grabbing"
+      class="absolute left-0.5 z-10 cursor-grab active:cursor-grabbing"
       :style="{ top: snapBtnTop + 'px' }"
       @pointerdown="onSnapBtnPointerDown"
       @pointermove="onSnapBtnPointerMove"
@@ -1693,7 +1693,7 @@ onUnmounted(() => {
     <!-- Collapse/Expand handle (non-snap mode: in-flow) -->
     <div
       v-if="!isEmbeddedMode && !isSnapMode"
-      class="flex w-8 shrink-0 items-center justify-center"
+      class="relative z-10 flex w-8 shrink-0 items-center justify-center"
     >
       <button
         type="button"

@@ -22,6 +22,8 @@ import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
 import EditLibraryDialog from './components/EditLibraryDialog.vue'
 import LibraryContentArea from './components/LibraryContentArea.vue'
 import FolderTreeItem from './components/FolderTreeItem.vue'
+import TeamFolderCard from './components/TeamFolderCard.vue'
+import TeamFileCard from './components/TeamFileCard.vue'
 import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
@@ -1625,61 +1627,17 @@ const handleRemoveImage = (id: string) => {
             class="grid auto-rows-max gap-4"
             style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
           >
-            <button
+            <TeamFolderCard
               v-for="group in teamGroupCards"
               :key="`team-group-${group.id}`"
-              type="button"
-              class="group rounded-xl border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent/20 dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+              :group="group"
               @click="handleTeamGroupSelect(group.id)"
-            >
-              <div class="grid h-28 w-full place-items-center rounded-lg bg-muted/60 dark:bg-white/5">
-                <FolderIcon class="size-10 text-muted-foreground" />
-              </div>
-              <p class="mt-2 line-clamp-2 min-h-9 text-sm text-foreground" :title="group.name">
-                {{ group.name }}
-              </p>
-              <div class="mt-1 text-xs text-muted-foreground">
-                {{ t('knowledge.team.groupFileCount', { count: Math.max(0, Number(group.total || 0)) }) }}
-              </div>
-            </button>
-            <div
+            />
+            <TeamFileCard
               v-for="file in teamUngroupedFiles"
               :key="`root-ungrouped-${file.id}`"
-              class="group rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-accent/20 dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-            >
-              <div class="relative mb-2">
-                <div
-                  v-if="canShowTeamFileThumb(file)"
-                  class="grid h-28 w-full place-items-center overflow-hidden rounded-lg bg-muted/40 dark:bg-white/5"
-                >
-                  <img
-                    :src="getTeamFileThumbUrl(file)"
-                    alt=""
-                    class="h-full w-full object-contain"
-                    @error="handleTeamFileThumbError(file)"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="grid h-28 w-full place-items-center rounded-lg bg-muted/60 dark:bg-white/5"
-                >
-                  <component :is="getTeamFileIcon(file)" class="size-6 text-muted-foreground" />
-                </div>
-                <span
-                  v-if="getTeamFileStatusLabel(file.status)"
-                  class="absolute right-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[10px] text-muted-foreground backdrop-blur"
-                >
-                  {{ getTeamFileStatusLabel(file.status) }}
-                </span>
-              </div>
-              <p class="line-clamp-2 min-h-9 text-sm text-foreground" :title="file.name">
-                {{ file.name }}
-              </p>
-              <div class="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{{ getTeamFileExtension(file) || '-' }}</span>
-                <span>{{ formatTeamFileDate(file.updated_at) }}</span>
-              </div>
-            </div>
+              :file="file"
+            />
             <div
               v-for="idx in (teamUngroupedFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
               :key="`root-ungrouped-skeleton-${idx}`"
@@ -1712,44 +1670,11 @@ const handleRemoveImage = (id: string) => {
             class="grid auto-rows-max gap-4"
             style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
           >
-            <div
+            <TeamFileCard
               v-for="file in teamLibraryFiles"
               :key="file.id"
-              class="group rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-accent/20 dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-            >
-              <div class="relative mb-2">
-                <div
-                  v-if="canShowTeamFileThumb(file)"
-                  class="grid h-28 w-full place-items-center overflow-hidden rounded-lg bg-muted/40 dark:bg-white/5"
-                >
-                  <img
-                    :src="getTeamFileThumbUrl(file)"
-                    alt=""
-                    class="h-full w-full object-contain"
-                    @error="handleTeamFileThumbError(file)"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="grid h-28 w-full place-items-center rounded-lg bg-muted/60 dark:bg-white/5"
-                >
-                  <component :is="getTeamFileIcon(file)" class="size-6 text-muted-foreground" />
-                </div>
-                <span
-                  v-if="getTeamFileStatusLabel(file.status)"
-                  class="absolute right-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[10px] text-muted-foreground backdrop-blur"
-                >
-                  {{ getTeamFileStatusLabel(file.status) }}
-                </span>
-              </div>
-              <p class="line-clamp-2 min-h-9 text-sm text-foreground" :title="file.name">
-                {{ file.name }}
-              </p>
-              <div class="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{{ getTeamFileExtension(file) || '-' }}</span>
-                <span>{{ formatTeamFileDate(file.updated_at) }}</span>
-              </div>
-            </div>
+              :file="file"
+            />
             <div
               v-for="idx in (teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
               :key="`team-files-skeleton-${idx}`"
@@ -1802,44 +1727,11 @@ const handleRemoveImage = (id: string) => {
             class="grid auto-rows-max gap-4"
             style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
           >
-            <div
+            <TeamFileCard
               v-for="file in teamLibraryFiles"
               :key="file.id"
-              class="group rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:bg-accent/20 dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-            >
-              <div class="relative mb-2">
-                <div
-                  v-if="canShowTeamFileThumb(file)"
-                  class="grid h-28 w-full place-items-center overflow-hidden rounded-lg bg-muted/40 dark:bg-white/5"
-                >
-                  <img
-                    :src="getTeamFileThumbUrl(file)"
-                    alt=""
-                    class="h-full w-full object-contain"
-                    @error="handleTeamFileThumbError(file)"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="grid h-28 w-full place-items-center rounded-lg bg-muted/60 dark:bg-white/5"
-                >
-                  <component :is="getTeamFileIcon(file)" class="size-6 text-muted-foreground" />
-                </div>
-                <span
-                  v-if="getTeamFileStatusLabel(file.status)"
-                  class="absolute right-1.5 top-1.5 rounded bg-background/90 px-1.5 py-0.5 text-[10px] text-muted-foreground backdrop-blur"
-                >
-                  {{ getTeamFileStatusLabel(file.status) }}
-                </span>
-              </div>
-              <p class="line-clamp-2 min-h-9 text-sm text-foreground" :title="file.name">
-                {{ file.name }}
-              </p>
-              <div class="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>{{ getTeamFileExtension(file) || '-' }}</span>
-                <span>{{ formatTeamFileDate(file.updated_at) }}</span>
-              </div>
-            </div>
+              :file="file"
+            />
             <div
               v-for="idx in (teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
               :key="`wechat-files-skeleton-${idx}`"
