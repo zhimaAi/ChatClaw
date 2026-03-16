@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   UserRound,
   Video,
 } from 'lucide-vue-next'
+import ModelIcon from '@/assets/icons/model.svg'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -56,6 +57,7 @@ const settingsStore = useSettingsStore()
 const localEnabled = ref(false)
 const loadingBinding = ref(false)
 const loadingCatalog = ref(false)
+const hasLoadedCatalogOnce = ref(false)
 const savingToggle = ref(false)
 const openingBilling = ref(false)
 const currentBinding = ref<Binding | null>(null)
@@ -64,6 +66,7 @@ const cloudURL = ref('')
 const catalogError = ref('')
 const llmRegionFilter = ref<'all' | 'CN' | 'Global'>('all')
 const collapsedGroups = ref<Record<string, boolean>>({})
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 const isBound = computed(() => !!currentBinding.value && modelCatalog.value?.bound !== false)
 const todayUse = computed(() => extractStatValue(modelCatalog.value, 'today_use'))
@@ -212,25 +215,45 @@ async function loadBinding() {
   }
 }
 
-async function loadCatalog(forceRefresh = false) {
-  loadingCatalog.value = true
+async function loadCatalog(forceRefresh = false, silent = false) {
+  const shouldShowLoading = !silent && (!hasLoadedCatalogOnce.value || !modelCatalog.value)
+  if (shouldShowLoading) {
+    loadingCatalog.value = true
+  }
   catalogError.value = ''
 
   try {
     modelCatalog.value = forceRefresh
       ? ((await ChatWikiService.RefreshModelCatalog()) ?? null)
       : ((await ChatWikiService.GetModelCatalog(false)) ?? null)
+    hasLoadedCatalogOnce.value = true
   } catch (error) {
     console.error('Failed to load ChatWiki model catalog:', error)
     catalogError.value = getErrorMessage(error) || t('settings.chatwiki.modelLoadFailed')
     modelCatalog.value = null
   } finally {
-    loadingCatalog.value = false
+    if (shouldShowLoading) {
+      loadingCatalog.value = false
+    }
   }
 }
 
 async function loadPageData(forceRefresh = false) {
   await Promise.all([loadBinding(), loadCatalog(forceRefresh)])
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh()
+  autoRefreshTimer = setInterval(() => {
+    void loadCatalog(true, true)
+  }, 10_000)
 }
 
 async function handleToggle(checked: boolean | 'indeterminate') {
@@ -280,13 +303,18 @@ watch(
   () => props.providerWithModels.provider,
   (provider) => {
     localEnabled.value = provider.enabled
-    void loadPageData()
+    void loadPageData(true)
     void ChatWikiService.GetCloudURL().then((url) => {
       cloudURL.value = url ?? ''
     })
+    startAutoRefresh()
   },
   { immediate: true }
 )
+
+onBeforeUnmount(() => {
+  stopAutoRefresh()
+})
 </script>
 
 <template>
@@ -460,9 +488,9 @@ watch(
                 :key="`${group.type}-${model.model_id}`"
                 class="flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-accent/40"
               >
-                <div class="size-3.5 shrink-0 rounded-full border-2 border-border" />
+                <ModelIcon class="size-5 shrink-0 text-muted-foreground" />
                 <div class="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
-                  <p class="truncate whitespace-nowrap text-sm text-foreground">
+                  <p class="truncate whitespace-nowrap text-sm font-normal text-foreground no-underline">
                     {{ getModelPrimaryName(model) }}
                   </p>
                   <div
@@ -483,7 +511,10 @@ watch(
                     </span>
                   </div>
                 </div>
-                <div class="flex shrink-0 items-center gap-2 text-muted-foreground">
+                <div
+                  v-if="group.type !== 'embedding'"
+                  class="flex shrink-0 items-center gap-2 text-muted-foreground"
+                >
                   <component
                     :is="capabilityIcons[cap]"
                     v-for="cap in model.capabilities"
