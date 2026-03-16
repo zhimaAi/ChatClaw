@@ -102,6 +102,7 @@ cd bin && mv ChatClaw-universal.dmg ./ChatClaw_MacOS_universal.dmg
 
 ```bash
 docker login registry.cn-hangzhou.aliyuncs.com
+wails3 generate bindings -clean -ts && cd frontend && npm run build && cd ..
 wails3 task build:docker PLATFORM=multi
 mv ./bin/linux_amd64/server ./bin/ChatClaw_server_linux_amd64
 mv ./bin/linux_arm64/server ./bin/ChatClaw_server_linux_arm64
