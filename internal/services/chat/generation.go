@@ -134,6 +134,39 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	agentConfig := gc.agentConfig
 	providerConfig := gc.providerConfig
 	agentExtras := gc.agentExtras
+	s.app.Logger.Info("[chat] task_mode generation start",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"provider_type", providerConfig.Type,
+		"model_id", agentConfig.ModelID,
+		"api_endpoint", providerConfig.APIEndpoint,
+		"api_key_len", len(strings.TrimSpace(providerConfig.APIKey)),
+		"is_chatwiki", providerConfig.ProviderID == "chatwiki",
+		"team_library_id", strings.TrimSpace(agentExtras.TeamLibraryID),
+		"enable_thinking", agentConfig.EnableThinking,
+		"enable_temperature", agentConfig.EnableTemp,
+		"temperature", func() float64 {
+			if agentConfig.Temperature == nil {
+				return 0
+			}
+			return *agentConfig.Temperature
+		}(),
+		"enable_top_p", agentConfig.EnableTopP,
+		"top_p", func() float64 {
+			if agentConfig.TopP == nil {
+				return 0
+			}
+			return *agentConfig.TopP
+		}(),
+		"enable_max_tokens", agentConfig.EnableMaxTokens,
+		"max_tokens", func() int {
+			if agentConfig.MaxTokens == nil {
+				return 0
+			}
+			return *agentConfig.MaxTokens
+		}(),
+	)
 
 	assistantMsg := &messageModel{
 		ConversationID: conversationID,
@@ -187,13 +220,13 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 				for _, r := range teamResults {
 					teamRetrievalItems = append(teamRetrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
 				}
-			var sb strings.Builder
-			sb.WriteString(teamRecallContextHeader)
-			for i, r := range teamResults {
-				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
-			}
-			sb.WriteString(teamRecallContextFooter)
-			gc.agentConfig.Instruction += sb.String()
+				var sb strings.Builder
+				sb.WriteString(teamRecallContextHeader)
+				for i, r := range teamResults {
+					sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+				}
+				sb.WriteString(teamRecallContextFooter)
+				gc.agentConfig.Instruction += sb.String()
 				s.app.Logger.Info("[chat] task mode team recall injected", "conv", conversationID, "results", len(teamResults))
 			}
 		}
@@ -204,13 +237,52 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 
 	agentConfig = gc.agentConfig
 	agentConfig.Provider = providerConfig
+	s.app.Logger.Info("[chat] task_mode create agent",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"provider_type", providerConfig.Type,
+		"model_id", agentConfig.ModelID,
+		"message_count", len(messages),
+		"extra_tools", len(extraTools),
+	)
 	agentResult, err := einoagent.NewChatModelAgent(ctx, agentConfig, s.toolRegistry, s.bgProcessManager, extraTools, extraHandlers, s.app.Logger, len(messages))
 	if err != nil {
 		extrasCleanup()
+		s.app.Logger.Error("[chat] task_mode create agent failed",
+			"conv", conversationID,
+			"req", gc.requestID,
+			"provider_id", providerConfig.ProviderID,
+			"model_id", agentConfig.ModelID,
+			"error", err,
+		)
 		gc.emitError("error.chat_agent_create_failed", map[string]any{"Error": err.Error()})
 		s.updateMessageStatus(db, assistantMsg.ID, StatusError, err.Error(), "")
 		return
 	}
+	lastUserPreview := ""
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == schema.User {
+			lastUserPreview = previewChatLogContent(messages[i].Content)
+			break
+		}
+	}
+	s.app.Logger.Info("[chat] task_mode call model",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+		"api_endpoint", providerConfig.APIEndpoint,
+		"message_count", len(messages),
+		"last_user_preview", lastUserPreview,
+		"system_prompt_len", len(strings.TrimSpace(gc.agentConfig.Instruction)),
+	)
+	s.app.Logger.Info("[chat] task_mode agent created",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+	)
 
 	// Combine agent cleanup with extras cleanup (MCP connections, etc.)
 	originalAgentCleanup := agentResult.Cleanup
@@ -226,9 +298,23 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	})
 
 	checkpointID := fmt.Sprintf("conv_%d_%s", conversationID, gc.requestID)
+	s.app.Logger.Info("[chat] task_mode runner start",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+		"checkpoint_id", checkpointID,
+	)
 	result := s.processStream(ctx, gc, runner, assistantMsg, messages, checkpointID, teamRetrievalItems)
 
 	if result.interrupted {
+		s.app.Logger.Warn("[chat] task_mode interrupted",
+			"conv", conversationID,
+			"req", gc.requestID,
+			"provider_id", providerConfig.ProviderID,
+			"model_id", agentConfig.ModelID,
+			"checkpoint_id", checkpointID,
+		)
 		if existing, ok := s.activeGenerations.Load(conversationID); ok {
 			ag := existing.(*activeGeneration)
 			ag.mu.Lock()
@@ -242,6 +328,12 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	}
 
 	combinedCleanup()
+	s.app.Logger.Info("[chat] task_mode generation completed",
+		"conv", conversationID,
+		"req", gc.requestID,
+		"provider_id", providerConfig.ProviderID,
+		"model_id", agentConfig.ModelID,
+	)
 
 	if agentExtras.MemoryEnabled {
 		go func() {

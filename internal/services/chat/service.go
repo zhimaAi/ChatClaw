@@ -66,6 +66,19 @@ type ChatService struct {
 	gateway            *channels.Gateway
 }
 
+func previewChatLogContent(content string) string {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	const limit = 200
+	runes := []rune(content)
+	if len(runes) > limit {
+		return string(runes[:limit]) + "...(truncated)"
+	}
+	return content
+}
+
 // NewChatService creates a new ChatService
 func NewChatService(app *application.App) *ChatService {
 	return &ChatService{
@@ -335,6 +348,12 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	}
 
 	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content), "images_count", len(input.Images))
+	s.app.Logger.Info("[chat] SendMessage request payload",
+		"conv", input.ConversationID,
+		"tab", input.TabID,
+		"content_preview", previewChatLogContent(content),
+		"images_count", len(input.Images),
+	)
 
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
@@ -361,6 +380,16 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	if err != nil {
 		return nil, err
 	}
+	s.app.Logger.Info("[chat] SendMessage resolved model",
+		"conv", input.ConversationID,
+		"tab", input.TabID,
+		"provider_id", providerConfig.ProviderID,
+		"provider_type", providerConfig.Type,
+		"model_id", agentConfig.ModelID,
+		"chat_mode", agentExtras.ChatMode,
+		"team_library_id", strings.TrimSpace(agentExtras.TeamLibraryID),
+		"is_chatwiki", providerConfig.ProviderID == "chatwiki",
+	)
 
 	// Save images to work directory and update image payloads
 	if hasImages && len(input.Images) > 0 {
@@ -576,9 +605,19 @@ func (s *ChatService) WaitForGeneration(conversationID int64, requestID string) 
 }
 
 // startGeneration creates a new generation context and launches the goroutine.
-func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, _ einoagent.Config, _ einoagent.ProviderConfig, _ AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
+func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
 	requestID := uuid.New().String()
 	genCtx, cancel := context.WithCancel(context.Background())
+	s.app.Logger.Info("[chat] startGeneration",
+		"conv", conversationID,
+		"tab", tabID,
+		"req", requestID,
+		"provider_id", providerConfig.ProviderID,
+		"provider_type", providerConfig.Type,
+		"model_id", agentConfig.ModelID,
+		"chat_mode", agentExtras.ChatMode,
+		"is_chatwiki", providerConfig.ProviderID == "chatwiki",
+	)
 
 	gen := &activeGeneration{
 		cancel:    cancel,

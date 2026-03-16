@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
+	"chatclaw/internal/eino/openaiutil"
+	"chatclaw/internal/services/chatwiki"
+
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/ollama"
@@ -16,6 +19,8 @@ import (
 
 // ProviderConfig 创建 ChatModel 所需的配置
 type ProviderConfig struct {
+	// ProviderID 供应商 ID（如 chatwiki/openai）
+	ProviderID string
 	// ProviderType 供应商类型（openai, azure, ollama, gemini, anthropic）
 	ProviderType string
 	// APIKey 供应商的 API 密钥
@@ -66,10 +71,28 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
 	}
-	if cfg.DisableThinking {
-		config.ExtraFields = map[string]any{"enable_thinking": false}
+	if cfg.DisableThinking || cfg.ProviderID == "chatwiki" {
+		config.ExtraFields = map[string]any{}
+		if cfg.DisableThinking {
+			config.ExtraFields["enable_thinking"] = false
+		}
 	}
-	return openai.NewChatModel(ctx, config)
+	if cfg.ProviderID == "chatwiki" {
+		configID, err := chatwiki.ResolveSelfOwnedModelConfigID(cfg.APIKey, cfg.APIEndpoint, cfg.ModelID, "llm")
+		if err != nil {
+			return nil, err
+		}
+		config.ExtraFields["self_owned_model_config_id"] = configID
+		config.Model = ""
+	}
+	chatModel, err := openai.NewChatModel(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ProviderID == "chatwiki" {
+		return openaiutil.WrapChatModelWithToken(chatModel, cfg.APIKey), nil
+	}
+	return chatModel, nil
 }
 
 // newAzureChatModel 创建 Azure OpenAI ChatModel

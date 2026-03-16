@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
 import ChatModeSelector from './ChatModeSelector.vue'
 
-import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
+import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
 
@@ -115,6 +115,26 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+
+type ChatwikiDisplayModel = Model & {
+  model_supplier?: string
+  uni_model_name?: string
+}
+
+function normalizeText(value?: string | null): string {
+  return value?.trim() || ''
+}
+
+function getDisplayModelName(providerId: string, model: Model): string {
+  if (providerId === 'chatwiki') {
+    const chatwikiModel = model as ChatwikiDisplayModel
+    const supplier = normalizeText(chatwikiModel.model_supplier)
+    const uniModelName = normalizeText(chatwikiModel.uni_model_name)
+    if (supplier && uniModelName) return `${supplier}/${uniModelName}`
+    if (uniModelName) return uniModelName
+  }
+  return normalizeText(model.name) || normalizeText(model.model_id) || '-'
+}
 
 const handleChatEnter = (event: KeyboardEvent) => {
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
@@ -636,7 +656,7 @@ onUnmounted(() => {
                                   :value="pw.provider.provider_id + '::' + m.model_id"
                                 >
                                   <div class="flex items-center gap-2">
-                                    <span>{{ m.name }}</span>
+                                    <span>{{ getDisplayModelName(pw.provider.provider_id, m) }}</span>
                                     <template v-if="m.capabilities && m.capabilities.length > 0">
                                       <span
                                         v-for="cap in m.capabilities.slice(0, 3)"

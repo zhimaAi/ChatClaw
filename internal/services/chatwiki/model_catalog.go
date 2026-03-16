@@ -14,16 +14,17 @@ import (
 )
 
 type ModelCatalogItem struct {
-	ModelID       string   `json:"model_id"`
-	Name          string   `json:"name"`
-	Type          string   `json:"type"`
-	Enabled       bool     `json:"enabled"`
-	SortOrder     int      `json:"sort_order"`
-	Capabilities  []string `json:"capabilities"`
-	ModelSupplier string   `json:"model_supplier"`
-	UniModelName  string   `json:"uni_model_name"`
-	Price         string   `json:"price"`
-	RegionScope   string   `json:"region_scope"`
+	ModelID                string   `json:"model_id"`
+	Name                   string   `json:"name"`
+	Type                   string   `json:"type"`
+	Enabled                bool     `json:"enabled"`
+	SortOrder              int      `json:"sort_order"`
+	Capabilities           []string `json:"capabilities"`
+	ModelSupplier          string   `json:"model_supplier"`
+	UniModelName           string   `json:"uni_model_name"`
+	Price                  string   `json:"price"`
+	RegionScope            string   `json:"region_scope"`
+	SelfOwnedModelConfigID int      `json:"self_owned_model_config_id"`
 }
 
 type IntegralStats struct {
@@ -45,6 +46,18 @@ var (
 	modelCatalogCache *ModelCatalog
 )
 
+func previewChatWikiLogBody(raw []byte) string {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return ""
+	}
+	const limit = 400
+	if len(trimmed) > limit {
+		return trimmed[:limit] + "...(truncated)"
+	}
+	return trimmed
+}
+
 func chatWikiOpenAIBaseURL(serverURL string) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(serverURL), "/")
 	if baseURL == "" {
@@ -54,11 +67,27 @@ func chatWikiOpenAIBaseURL(serverURL string) string {
 }
 
 func (s *ChatWikiService) SyncProviderState() error {
+	s.app.Logger.Info("[chatwiki] SyncProviderState start")
 	binding, err := s.GetBinding()
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] SyncProviderState get binding failed", "error", err)
 		return err
 	}
-	return syncChatWikiProviderCredentials(binding)
+	err = syncChatWikiProviderCredentials(binding)
+	if err != nil {
+		s.app.Logger.Error("[chatwiki] SyncProviderState sync credentials failed", "has_binding", binding != nil, "error", err)
+		return err
+	}
+	s.app.Logger.Info("[chatwiki] SyncProviderState done",
+		"has_binding", binding != nil,
+		"server_url", func() string {
+			if binding == nil {
+				return ""
+			}
+			return strings.TrimSpace(binding.ServerURL)
+		}(),
+	)
+	return nil
 }
 
 func syncChatWikiProviderCredentials(binding *Binding) error {
@@ -88,11 +117,14 @@ func syncChatWikiProviderCredentials(binding *Binding) error {
 }
 
 func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
+	s.app.Logger.Info("[chatwiki] RefreshModelCatalog start")
 	binding, err := s.GetBinding()
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] RefreshModelCatalog get binding failed", "error", err)
 		return nil, err
 	}
 	if err := syncChatWikiProviderCredentials(binding); err != nil {
+		s.app.Logger.Error("[chatwiki] RefreshModelCatalog sync credentials failed", "has_binding", binding != nil, "error", err)
 		return nil, err
 	}
 	if binding == nil {
@@ -100,15 +132,25 @@ func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
 		modelCatalogMu.Lock()
 		modelCatalogCache = empty
 		modelCatalogMu.Unlock()
+		s.app.Logger.Warn("[chatwiki] RefreshModelCatalog no binding, returning empty catalog")
 		return cloneModelCatalog(empty), nil
 	}
 
 	catalog, err := s.fetchModelCatalog(binding)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] RefreshModelCatalog fetch failed",
+			"server_url", strings.TrimSpace(binding.ServerURL),
+			"user_id", binding.UserID,
+			"error", err,
+		)
 		modelCatalogMu.RLock()
 		cached := cloneModelCatalog(modelCatalogCache)
 		modelCatalogMu.RUnlock()
 		if cached != nil {
+			s.app.Logger.Warn("[chatwiki] RefreshModelCatalog using cached catalog after fetch failure",
+				"llm_count", len(cached.LLMModels),
+				"embedding_count", len(cached.EmbeddingModels),
+			)
 			return cached, nil
 		}
 		return nil, err
@@ -117,10 +159,18 @@ func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
 	modelCatalogMu.Lock()
 	modelCatalogCache = cloneModelCatalog(catalog)
 	modelCatalogMu.Unlock()
+	s.app.Logger.Info("[chatwiki] RefreshModelCatalog done",
+		"user_id", binding.UserID,
+		"server_url", strings.TrimSpace(binding.ServerURL),
+		"llm_count", len(catalog.LLMModels),
+		"embedding_count", len(catalog.EmbeddingModels),
+		"rerank_count", len(catalog.RerankModels),
+	)
 	return cloneModelCatalog(catalog), nil
 }
 
 func (s *ChatWikiService) GetModelCatalog(forceRefresh bool) (*ModelCatalog, error) {
+	s.app.Logger.Info("[chatwiki] GetModelCatalog start", "force_refresh", forceRefresh)
 	if forceRefresh {
 		return s.RefreshModelCatalog()
 	}
@@ -129,8 +179,14 @@ func (s *ChatWikiService) GetModelCatalog(forceRefresh bool) (*ModelCatalog, err
 	cached := cloneModelCatalog(modelCatalogCache)
 	modelCatalogMu.RUnlock()
 	if cached != nil {
+		s.app.Logger.Info("[chatwiki] GetModelCatalog hit cache",
+			"llm_count", len(cached.LLMModels),
+			"embedding_count", len(cached.EmbeddingModels),
+			"loaded_at_unix", cached.LoadedAtUnix,
+		)
 		return cached, nil
 	}
+	s.app.Logger.Info("[chatwiki] GetModelCatalog cache miss, refreshing")
 	return s.RefreshModelCatalog()
 }
 
@@ -153,19 +209,45 @@ func (s *ChatWikiService) fetchModelCatalog(binding *Binding) (*ModelCatalog, er
 	baseURL := strings.TrimRight(strings.TrimSpace(binding.ServerURL), "/")
 	modelURL := baseURL + "/manage/chatclaw/showModelConfigList"
 	statsURL := baseURL + "/manage/chatclaw/getIntegralStats"
+	s.app.Logger.Info("[chatwiki] fetchModelCatalog request start",
+		"server_url", baseURL,
+		"model_url", modelURL,
+		"stats_url", statsURL,
+		"token_len", len(strings.TrimSpace(binding.Token)),
+		"user_id", binding.UserID,
+	)
 
 	modelBody, err := s.chatWikiGETLoose(binding.Token, modelURL)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] fetchModelCatalog model request failed", "url", modelURL, "error", err)
 		return nil, err
 	}
+	s.app.Logger.Info("[chatwiki] fetchModelCatalog model response",
+		"url", modelURL,
+		"body_len", len(modelBody),
+		"body_preview", previewChatWikiLogBody(modelBody),
+	)
 	catalog, err := decodeModelCatalogResponse(modelBody)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] fetchModelCatalog decode failed", "url", modelURL, "error", err)
 		return nil, err
 	}
+	s.app.Logger.Info("[chatwiki] fetchModelCatalog decoded",
+		"llm_count", len(catalog.LLMModels),
+		"embedding_count", len(catalog.EmbeddingModels),
+		"rerank_count", len(catalog.RerankModels),
+	)
 
 	statsBody, statsErr := s.chatWikiGETLoose(binding.Token, statsURL)
 	if statsErr == nil {
 		catalog.IntegralStats = &IntegralStats{Raw: append(json.RawMessage(nil), statsBody...)}
+		s.app.Logger.Info("[chatwiki] fetchModelCatalog stats response",
+			"url", statsURL,
+			"body_len", len(statsBody),
+			"body_preview", previewChatWikiLogBody(statsBody),
+		)
+	} else {
+		s.app.Logger.Warn("[chatwiki] fetchModelCatalog stats request failed", "url", statsURL, "error", statsErr)
 	}
 
 	catalog.Bound = true
@@ -191,6 +273,9 @@ func decodeModelCatalogResponse(raw json.RawMessage) (*ModelCatalog, error) {
 	sortModelCatalogItems(catalog.LLMModels)
 	sortModelCatalogItems(catalog.EmbeddingModels)
 	sortModelCatalogItems(catalog.RerankModels)
+	if len(catalog.LLMModels) == 0 && len(catalog.EmbeddingModels) == 0 {
+		return catalog, nil
+	}
 	return catalog, nil
 }
 
@@ -284,16 +369,17 @@ func parseModelCatalogItem(item map[string]any, keyHint string) (ModelCatalogIte
 	}
 
 	return ModelCatalogItem{
-		ModelID:      modelID,
-		Name:         name,
-		Type:         modelType,
-		Enabled:      parseFlexibleBool(item, true, "enabled", "status", "switch_status", "chat_claw_switch_status"),
-		SortOrder:    firstInt(item, "sort_order", "sortOrder", "order", "idx", "index"),
-		Capabilities: capabilities,
-		ModelSupplier: modelSupplier,
-		UniModelName:  uniModelName,
-		Price:         price,
-		RegionScope:   regionScope,
+		ModelID:                modelID,
+		Name:                   name,
+		Type:                   modelType,
+		Enabled:                parseFlexibleBool(item, true, "enabled", "status", "switch_status", "chat_claw_switch_status"),
+		SortOrder:              firstInt(item, "sort_order", "sortOrder", "order", "idx", "index"),
+		Capabilities:           capabilities,
+		ModelSupplier:          modelSupplier,
+		UniModelName:           uniModelName,
+		Price:                  price,
+		RegionScope:            regionScope,
+		SelfOwnedModelConfigID: firstInt(item, "id", "config_id", "configId", "self_owned_model_config_id", "selfOwnedModelConfigId"),
 	}, true
 }
 

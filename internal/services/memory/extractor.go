@@ -155,6 +155,7 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 
 	// 8. Call extraction LLM
 	chatModel, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
+		ProviderID:      extractProviderID,
 		ProviderType:    extractProvider.Type,
 		APIKey:          extractProvider.APIKey,
 		APIEndpoint:     extractProvider.APIEndpoint,
@@ -218,6 +219,7 @@ func runMemoryExtraction(ctx context.Context, app *application.App, conversation
 				dim = d
 			}
 			embedder, _ = embedding.NewEmbedder(ctx, &embedding.ProviderConfig{
+				ProviderID:   embedProviderID,
 				ProviderType: embedProvider.Type,
 				APIKey:       embedProvider.APIKey,
 				APIEndpoint:  embedProvider.APIEndpoint,

@@ -5,6 +5,7 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import {
   ProvidersService,
   type ProviderWithModels,
+  type Model,
 } from '@bindings/chatclaw/internal/services/providers'
 import {
   ConversationsService,
@@ -15,6 +16,24 @@ import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 
 export function useModelSelection() {
   const { t } = useI18n()
+
+  type ChatwikiDisplayModel = Model & {
+    model_supplier?: string
+    uni_model_name?: string
+  }
+
+  const normalizeText = (value?: string | null) => value?.trim() || ''
+
+  const getDisplayModelName = (providerId: string, model: Model) => {
+    if (providerId === 'chatwiki') {
+      const chatwikiModel = model as ChatwikiDisplayModel
+      const supplier = normalizeText(chatwikiModel.model_supplier)
+      const uniModelName = normalizeText(chatwikiModel.uni_model_name)
+      if (supplier && uniModelName) return `${supplier}/${uniModelName}`
+      if (uniModelName) return uniModelName
+    }
+    return normalizeText(model.name) || normalizeText(model.model_id) || '-'
+  }
 
   const providersWithModels = ref<ProviderWithModels[]>([])
   const selectedModelKey = ref('')
@@ -38,7 +57,7 @@ export function useModelSelection() {
           return {
             providerId,
             modelId,
-            modelName: model.name,
+            modelName: getDisplayModelName(providerId, model),
             capabilities: model.capabilities,
           }
         }
@@ -49,22 +68,47 @@ export function useModelSelection() {
 
   const loadModels = async () => {
     try {
+      console.info('[assistant][models] loadModels:start')
       const providers = await ProvidersService.ListProviders()
+      console.info('[assistant][models] providers:list', {
+        count: providers.length,
+        providerIds: providers.map((p) => p.provider_id),
+      })
       const enabled = providers.filter((p) => p.enabled)
+      console.info('[assistant][models] providers:enabled', {
+        count: enabled.length,
+        providerIds: enabled.map((p) => p.provider_id),
+      })
       // Load provider models in parallel; allow partial failures.
       const settled = await Promise.allSettled(
         enabled.map((p) => ProvidersService.GetProviderWithModels(p.provider_id))
       )
       const ok: ProviderWithModels[] = []
       let failedCount = 0
-      for (const s of settled) {
+      settled.forEach((s, index) => {
+        const providerId = enabled[index]?.provider_id || '(unknown)'
         if (s.status === 'fulfilled') {
-          if (s.value) ok.push(s.value)
+          if (s.value) {
+            const llmCount = s.value.model_groups
+              .filter((g) => g.type === 'llm')
+              .reduce((sum, g) => sum + g.models.length, 0)
+            console.info('[assistant][models] provider:loaded', {
+              providerId,
+              groupCount: s.value.model_groups.length,
+              llmCount,
+            })
+            ok.push(s.value)
+          } else {
+            console.warn('[assistant][models] provider:fulfilled-empty', { providerId })
+          }
         } else {
           failedCount += 1
-          console.warn('Failed to load provider models:', s.reason)
+          console.warn('[assistant][models] provider:failed', {
+            providerId,
+            reason: s.reason,
+          })
         }
-      }
+      })
       // Sort free providers to the end so user-configured (stronger) models come first.
       ok.sort((a, b) => {
         const aFree = Boolean((a.provider as { is_free?: boolean }).is_free)
@@ -73,6 +117,11 @@ export function useModelSelection() {
         return aFree ? 1 : -1
       })
       providersWithModels.value = ok
+      console.info('[assistant][models] loadModels:done', {
+        successCount: ok.length,
+        failedCount,
+        providerIds: ok.map((item) => item.provider.provider_id),
+      })
 
       // If some providers failed but we still have models, keep UI usable and show a gentle hint.
       if (failedCount > 0 && ok.length > 0) {
@@ -81,6 +130,7 @@ export function useModelSelection() {
         toast.error(t('assistant.errors.loadModelsFailed'))
       }
     } catch (error: unknown) {
+      console.error('[assistant][models] loadModels:error', error)
       toast.error(getErrorMessage(error) || t('assistant.errors.loadModelsFailed'))
     }
   }

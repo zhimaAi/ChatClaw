@@ -179,9 +179,9 @@ func fetchPublicIP() (string, error) {
 		"https://ifconfig.me/ip",
 		"https://ident.me/",
 		// CN-friendly providers (often reachable inside CN)
-		"https://myip.ipip.net",                  // contains IP in text
-		"http://pv.sohu.com/cityjson?ie=utf-8",   // contains "cip": "x.x.x.x"
-		"https://ip.3322.net",                    // plain text
+		"https://myip.ipip.net",                // contains IP in text
+		"http://pv.sohu.com/cityjson?ie=utf-8", // contains "cip": "x.x.x.x"
+		"https://ip.3322.net",                  // plain text
 	}
 
 	var lastErr error
@@ -253,8 +253,15 @@ func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 	if providerID == "" {
 		return nil, errs.New("error.provider_id_required")
 	}
+	if s.app != nil {
+		s.app.Logger.Info("[providers] GetProvider start", "provider_id", providerID)
+	}
 	if providerID == "chatwiki" && s.app != nil {
-		_ = chatwiki.NewChatWikiService(s.app).SyncProviderState()
+		if err := chatwiki.NewChatWikiService(s.app).SyncProviderState(); err != nil {
+			s.app.Logger.Warn("[providers] GetProvider chatwiki sync state failed", "provider_id", providerID, "error", err)
+		} else {
+			s.app.Logger.Info("[providers] GetProvider chatwiki sync state ok", "provider_id", providerID)
+		}
 	}
 
 	db, err := s.db()
@@ -278,13 +285,28 @@ func (s *ProvidersService) GetProvider(providerID string) (*Provider, error) {
 		return nil, errs.Wrap("error.provider_read_failed", err)
 	}
 	dto := m.toDTO()
+	if s.app != nil {
+		s.app.Logger.Info("[providers] GetProvider done",
+			"provider_id", providerID,
+			"type", dto.Type,
+			"enabled", dto.Enabled,
+			"api_endpoint", dto.APIEndpoint,
+			"api_key_len", len(strings.TrimSpace(dto.APIKey)),
+		)
+	}
 	return &dto, nil
 }
 
 // GetProviderWithModels 获取供应商及其模型列表（含 ChatClaw 在内，一律从本地 DB 读取；ChatClaw 免费模型在应用启动时由 SyncChatClawModels 同步一次）
 func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWithModels, error) {
+	if s.app != nil {
+		s.app.Logger.Info("[providers] GetProviderWithModels start", "provider_id", providerID)
+	}
 	provider, err := s.GetProvider(providerID)
 	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Error("[providers] GetProviderWithModels get provider failed", "provider_id", providerID, "error", err)
+		}
 		return nil, err
 	}
 	if providerID == "chatwiki" {
@@ -293,9 +315,29 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		}
 		catalog, err := chatwiki.NewChatWikiService(s.app).GetModelCatalog(true)
 		if err != nil {
+			s.app.Logger.Error("[providers] GetProviderWithModels chatwiki get catalog failed", "provider_id", providerID, "error", err)
 			return nil, err
 		}
-		return s.buildChatWikiProviderWithModels(provider, catalog), nil
+		result := s.buildChatWikiProviderWithModels(provider, catalog)
+		llmCount := 0
+		embeddingCount := 0
+		if result != nil {
+			for _, group := range result.ModelGroups {
+				switch group.Type {
+				case "llm":
+					llmCount += len(group.Models)
+				case "embedding":
+					embeddingCount += len(group.Models)
+				}
+			}
+		}
+		s.app.Logger.Info("[providers] GetProviderWithModels chatwiki done",
+			"provider_id", providerID,
+			"llm_count", llmCount,
+			"embedding_count", embeddingCount,
+			"bound", catalog != nil && catalog.Bound,
+		)
+		return result, nil
 	}
 
 	db, err := s.db()
@@ -314,6 +356,9 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		OrderExpr("type ASC, sort_order ASC, id ASC").
 		Scan(ctx)
 	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Error("[providers] GetProviderWithModels list models failed", "provider_id", providerID, "error", err)
+		}
 		return nil, errs.Wrap("error.model_list_failed", err)
 	}
 
@@ -336,10 +381,24 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		}
 	}
 
-	return &ProviderWithModels{
+	result := &ProviderWithModels{
 		Provider:    *provider,
 		ModelGroups: groups,
-	}, nil
+	}
+	if s.app != nil {
+		llmCount := 0
+		for _, group := range groups {
+			if group.Type == "llm" {
+				llmCount += len(group.Models)
+			}
+		}
+		s.app.Logger.Info("[providers] GetProviderWithModels done",
+			"provider_id", providerID,
+			"group_count", len(groups),
+			"llm_count", llmCount,
+		)
+	}
+	return result, nil
 }
 
 // SyncChatClawModels fetches ChatClaw model list and syncs it to local `models` table.
@@ -555,7 +614,7 @@ func (s *ProvidersService) syncChatClawModelsToDB(providerID string, groups []Mo
 // chatClawModelItem /custom-model/list API response item
 type chatClawModelItem struct {
 	ModelID   string `json:"model_id"`
-	ID        string `json:"id"` // alternative field
+	ID        string `json:"id"`        // alternative field
 	ModelName string `json:"modelName"` // display name
 	Name      string `json:"name"`      // fallback
 	ModelType string `json:"modelType"` // for grouping: llm, embedding, rerank
@@ -790,19 +849,19 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 			return nil, errs.New("error.cannot_disable_memory_provider")
 		}
 
-	// 禁止关闭其语义分段模型正被知识库使用的供应商
-	var libraryName string
-	if err := db.NewSelect().
-		Table("library").
-		Column("name").
-		Where("raptor_llm_provider_id = ?", providerID).
-		Limit(1).
-		Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, errs.Wrap("error.library_read_failed", err)
-	}
-	if libraryName != "" {
-		return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
-	}
+		// 禁止关闭其语义分段模型正被知识库使用的供应商
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("raptor_llm_provider_id = ?", providerID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
+		}
 	}
 
 	// 构建更新语句
@@ -895,7 +954,7 @@ func (s *ProvidersService) CheckAPIKey(providerID string, input CheckAPIKeyInput
 	// 根据供应商类型调用不同的 SDK
 	switch provider.Type {
 	case "openai":
-		return s.checkOpenAI(ctx, input, testModelID)
+		return s.checkOpenAI(ctx, providerID, input, testModelID)
 	case "azure":
 		return s.checkAzure(ctx, input, testModelID)
 	case "anthropic":
@@ -965,13 +1024,25 @@ func testChatModel(ctx context.Context, chatModel ChatModelGenerator) *CheckAPIK
 }
 
 // checkOpenAI 使用 OpenAI SDK 检测
-func (s *ProvidersService) checkOpenAI(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
-	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+func (s *ProvidersService) checkOpenAI(ctx context.Context, providerID string, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
+	cfg := &openai.ChatModelConfig{
 		APIKey:      input.APIKey,
 		Model:       modelID,
 		BaseURL:     input.APIEndpoint,
 		ExtraFields: map[string]any{"enable_thinking": false},
-	})
+	}
+	if providerID == "chatwiki" {
+		configID, err := chatwiki.ResolveSelfOwnedModelConfigID(input.APIKey, input.APIEndpoint, modelID, "llm")
+		if err != nil {
+			return &CheckAPIKeyResult{
+				Success: false,
+				Message: err.Error(),
+			}, nil
+		}
+		cfg.ExtraFields["self_owned_model_config_id"] = configID
+		cfg.Model = ""
+	}
+	chatModel, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {
 		return &CheckAPIKeyResult{
 			Success: false,
