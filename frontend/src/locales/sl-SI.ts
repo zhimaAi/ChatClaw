@@ -636,6 +636,8 @@ export default {
       hint: "Kliknite za zamenjavo. Priporočeno 100×100px, max 100KB",
       pickTitle: "Izberite datoteko ikone",
       filterImages: "Datoteke slik",
+      defaultAvatars: "Privzeti avatarji",
+      uploadCustom: "Naloži poljuben avatar",
     },
     modes: {
       personal: "Osebno",

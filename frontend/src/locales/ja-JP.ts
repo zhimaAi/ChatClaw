@@ -634,6 +634,8 @@ export default {
       hint: "クリックして置換。推奨 100×100px、<= 100KB",
       pickTitle: "アイコンファイルを選択",
       filterImages: "画像",
+      defaultAvatars: "デフォルトアバター",
+      uploadCustom: "カスタムアバターをアップロード",
     },
     modes: {
       personal: "パーソナル",

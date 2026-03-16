@@ -634,6 +634,8 @@ export default {
       hint: "点击替换，建议尺寸为100*100px，大小不超过100kb",
       pickTitle: "选择图标文件",
       filterImages: "图片文件",
+      defaultAvatars: "默认头像",
+      uploadCustom: "上传自定义头像",
     },
     modes: {
       personal: "个人",

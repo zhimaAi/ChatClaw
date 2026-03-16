@@ -634,8 +634,10 @@ export default {
     imageMessage: "Message image",
     icon: {
       hint: "Cliquez pour remplacer. Recommandé 100×100px, max 100KB",
-      pickTitle: "Sélectionner le fichier d",
+      pickTitle: "Sélectionner le fichier d'icône",
       filterImages: "Fichiers image",
+      defaultAvatars: "Avatars par défaut",
+      uploadCustom: "Télécharger un avatar personnalisé",
     },
     modes: {
       personal: "Personnel",

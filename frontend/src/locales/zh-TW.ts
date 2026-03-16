@@ -636,6 +636,8 @@ export default {
       hint: "點擊更換。建議 100×100px，最大 100KB",
       pickTitle: "選擇圖示檔案",
       filterImages: "圖片檔案",
+      defaultAvatars: "預設頭像",
+      uploadCustom: "上傳自訂頭像",
     },
     modes: {
       personal: "個人",

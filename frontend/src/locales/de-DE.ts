@@ -636,6 +636,8 @@ export default {
       hint: "Klicken zum Ersetzen. Empfohlen 100×100px, max 100KB",
       pickTitle: "Symboldatei auswählen",
       filterImages: "Bilddateien",
+      defaultAvatars: "Standard-Avatare",
+      uploadCustom: "Benutzerdefinierten Avatar hochladen",
     },
     modes: {
       personal: "Persönlich",

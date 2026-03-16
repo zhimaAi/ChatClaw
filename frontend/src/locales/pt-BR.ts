@@ -636,6 +636,8 @@ export default {
       hint: "Clique para substituir. Recomendado 100×100px, máx 100KB",
       pickTitle: "Selecionar arquivo de ícone",
       filterImages: "Arquivos de imagem",
+      defaultAvatars: "Avatares padrão",
+      uploadCustom: "Carregar avatar personalizado",
     },
     modes: {
       personal: "Pessoal",

@@ -654,6 +654,8 @@ export default {
       hint: "बदलने के लिए क्लिक करें। अनुशंसित 100×100px, <= 100KB",
       pickTitle: "आइकन फाइल चुनें",
       filterImages: "इमेजेस",
+      defaultAvatars: "डिफ़ॉल्ट अवतार",
+      uploadCustom: "कस्टम अवतार अपलोड करें",
     },
     modes: {
       personal: "व्यक्तिगत",

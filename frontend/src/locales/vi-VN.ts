@@ -636,6 +636,8 @@ export default {
       hint: "Nhấp để thay thế. Khuyến nghị 100×100px, tối đa 100KB",
       pickTitle: "Chọn tệp biểu tượng",
       filterImages: "Tệp hình ảnh",
+      defaultAvatars: "Ảnh đại diện mặc định",
+      uploadCustom: "Tải lên ảnh đại diện tùy chỉnh",
     },
     modes: {
       personal: "Cá nhân",

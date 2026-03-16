@@ -634,6 +634,8 @@ export default {
       hint: "Click to replace. Recommended 100×100px, <= 100KB",
       pickTitle: "Select Icon File",
       filterImages: "Images",
+      defaultAvatars: "Default Avatars",
+      uploadCustom: "Upload custom avatar",
     },
     modes: {
       personal: "Personal",

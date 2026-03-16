@@ -953,9 +953,11 @@ export default {
       promptPlaceholder: "在此输入您的提示词",
     },
     icon: {
-      filterImages: "图片文件",
-      hint: "点击替换，建议尺寸为100*100px，大小不超过100kb",
-      pickTitle: "选择图标文件",
+      filterImages: "이미지 파일",
+      hint: "클릭하여 변경. 권장 크기 100×100px, 최대 100KB",
+      pickTitle: "아이콘 파일 선택",
+      defaultAvatars: "기본 아바타",
+      uploadCustom: "사용자 정의 아바타 업로드",
     },
     modes: {
       personal: "个人",

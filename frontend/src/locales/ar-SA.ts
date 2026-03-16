@@ -636,6 +636,8 @@ export default {
       hint: "انقر للاستبدال. يوصى بـ 100×100 بكسل، <= 100KB",
       pickTitle: "اختر ملف أيقونة",
       filterImages: "الصور",
+      defaultAvatars: "الصور الافتراضية",
+      uploadCustom: "تحميل صورة مخصصة",
     },
     modes: {
       personal: "شخصي",

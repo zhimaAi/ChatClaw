@@ -636,6 +636,8 @@ export default {
       hint: "Değiştirmek için tıklayın. Önerilen 100×100px, maks 100KB",
       pickTitle: "Simge dosyası seç",
       filterImages: "Resim dosyaları",
+      defaultAvatars: "Varsayılan avatarlar",
+      uploadCustom: "Özel avatar yükle",
     },
     modes: {
       personal: "Kişisel",

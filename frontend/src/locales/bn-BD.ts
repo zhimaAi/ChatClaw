@@ -636,6 +636,8 @@ export default {
       hint: "ক্লিক করে পরিবর্তন করুন। প্রস্তাবিত 100×100px, সর্বোচ্চ 100KB",
       pickTitle: "আইকন ফাইল সিলেক্ট",
       filterImages: "ইমেজ ফাইল",
+      defaultAvatars: "ডিফল্ট অ্যাভাটার",
+      uploadCustom: "কাস্টম অ্যাভাটার আপলোড",
     },
     modes: {
       personal: "ব্যক্তিগত",
