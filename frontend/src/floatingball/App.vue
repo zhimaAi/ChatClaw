@@ -418,19 +418,15 @@ watch(
             class="block"
             alt="ChatClaw floating icon"
             draggable="false"
-            @dragstart.prevent
             style="transform: translateZ(0); backface-visibility: hidden"
+            @dragstart.prevent
           />
         </div>
       </div>
     </div>
 
     <!-- Context menu -->
-    <div
-      v-if="menuVisible"
-      class="w-full flex-1 pt-1"
-      style="--wails-draggable: no-drag"
-    >
+    <div v-if="menuVisible" class="w-full flex-1 pt-1" style="--wails-draggable: no-drag">
       <div
         class="mx-0.5 rounded-lg border border-border bg-popover text-popover-foreground shadow-sm overflow-hidden"
       >

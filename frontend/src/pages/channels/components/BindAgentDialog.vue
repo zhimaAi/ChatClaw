@@ -37,9 +37,8 @@ const localSelected = ref<number | 'auto' | null>(null)
 watch(open, async (val) => {
   if (val) {
     await loadAgents()
-    localSelected.value = props.currentAgentId && props.currentAgentId > 0
-      ? props.currentAgentId
-      : null
+    localSelected.value =
+      props.currentAgentId && props.currentAgentId > 0 ? props.currentAgentId : null
   }
 })
 
@@ -79,21 +78,29 @@ function getAgentIcon(agent: Agent) {
         </DialogTitle>
         <DialogDescription class="hidden">{{ t('channels.bindAgent.desc') }}</DialogDescription>
       </DialogHeader>
-      
+
       <div class="px-6 pb-6 pt-2 max-h-[400px] overflow-y-auto">
         <div v-if="loading" class="flex justify-center py-8">
-          <span class="text-sm text-[#8c8c8c] dark:text-muted-foreground">{{ t('common.loading') }}</span>
+          <span class="text-sm text-[#8c8c8c] dark:text-muted-foreground">{{
+            t('common.loading')
+          }}</span>
         </div>
         <template v-else>
           <!-- Auto-generate option when opened from channel creation -->
           <div
             v-if="fromCreate"
             class="flex w-full items-center justify-between rounded-2xl border p-4 cursor-pointer transition-all shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:bg-card mb-3"
-            :class="localSelected === 'auto' ? 'border-[#171717] bg-white dark:border-primary' : 'border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'"
+            :class="
+              localSelected === 'auto'
+                ? 'border-[#171717] bg-white dark:border-primary'
+                : 'border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
+            "
             @click="handleSelectAuto"
           >
             <div class="flex flex-1 items-center gap-[11px] overflow-hidden">
-              <div class="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-[14px] border border-[#d9d9d9] bg-[#f5f5f5] dark:border-border dark:bg-muted">
+              <div
+                class="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-[14px] border border-[#d9d9d9] bg-[#f5f5f5] dark:border-border dark:bg-muted"
+              >
                 <Sparkles class="h-7 w-7 text-[#595959] dark:text-muted-foreground" />
               </div>
               <div class="flex flex-col gap-[2px] overflow-hidden">
@@ -108,65 +115,91 @@ function getAgentIcon(agent: Agent) {
             <div class="flex shrink-0 ml-4">
               <div
                 class="flex h-4 w-4 items-center justify-center rounded-full border transition-colors"
-                :class="localSelected === 'auto' ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary' : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'"
+                :class="
+                  localSelected === 'auto'
+                    ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary'
+                    : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'
+                "
               >
-                <div v-if="localSelected === 'auto'" class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"></div>
+                <div
+                  v-if="localSelected === 'auto'"
+                  class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"
+                ></div>
               </div>
             </div>
           </div>
           <div v-if="agents.length === 0 && !fromCreate" class="flex justify-center py-8">
-            <span class="text-sm text-[#8c8c8c] dark:text-muted-foreground">{{ t('channels.bindAgent.empty') }}</span>
+            <span class="text-sm text-[#8c8c8c] dark:text-muted-foreground">{{
+              t('channels.bindAgent.empty')
+            }}</span>
           </div>
           <div v-else class="flex flex-col gap-3">
             <div
               v-for="agent in agents"
               :key="agent.id"
               class="flex w-full items-center justify-between rounded-2xl border p-4 cursor-pointer transition-all shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:bg-card"
-              :class="localSelected === agent.id ? 'border-[#171717] bg-white dark:border-primary' : 'border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'"
+              :class="
+                localSelected === agent.id
+                  ? 'border-[#171717] bg-white dark:border-primary'
+                  : 'border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
+              "
               @click="handleSelectAgent(agent)"
             >
-            <div class="flex flex-1 items-center gap-[11px] overflow-hidden">
-              <div class="relative flex h-[62px] w-[62px] shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted">
-                <img
-                  :src="getAgentIcon(agent)"
-                  :alt="agent.name"
-                  class="block h-full w-full object-cover"
-                />
+              <div class="flex flex-1 items-center gap-[11px] overflow-hidden">
+                <div
+                  class="relative flex h-[62px] w-[62px] shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted"
+                >
+                  <img
+                    :src="getAgentIcon(agent)"
+                    :alt="agent.name"
+                    class="block h-full w-full object-cover"
+                  />
+                </div>
+                <div class="flex flex-col gap-[2px] overflow-hidden">
+                  <p class="truncate text-sm leading-[22px] text-[#171717] dark:text-foreground">
+                    {{ agent.name }}
+                  </p>
+                  <p
+                    class="truncate text-xs leading-[20px] text-[#8c8c8c] dark:text-muted-foreground"
+                  >
+                    {{ agent.prompt || t('channels.bindAgent.noDesc') }}
+                  </p>
+                </div>
               </div>
-              <div class="flex flex-col gap-[2px] overflow-hidden">
-                <p class="truncate text-sm leading-[22px] text-[#171717] dark:text-foreground">
-                  {{ agent.name }}
-                </p>
-                <p class="truncate text-xs leading-[20px] text-[#8c8c8c] dark:text-muted-foreground">
-                  {{ agent.prompt || t('channels.bindAgent.noDesc') }}
-                </p>
-              </div>
-            </div>
-            
-            <div class="flex items-center shrink-0 ml-4">
-              <div
-                class="flex h-4 w-4 items-center justify-center rounded-full border transition-colors"
-                :class="localSelected === agent.id ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary' : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'"
-              >
-                <div v-if="localSelected === agent.id" class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"></div>
+
+              <div class="flex items-center shrink-0 ml-4">
+                <div
+                  class="flex h-4 w-4 items-center justify-center rounded-full border transition-colors"
+                  :class="
+                    localSelected === agent.id
+                      ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary'
+                      : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'
+                  "
+                >
+                  <div
+                    v-if="localSelected === agent.id"
+                    class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"
+                  ></div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </template>
       </div>
 
-      <DialogFooter class="px-6 py-4 border-t border-[#f0f0f0] bg-white dark:border-border/50 dark:bg-muted/20">
-        <Button 
-          class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
+      <DialogFooter
+        class="px-6 py-4 border-t border-[#f0f0f0] bg-white dark:border-border/50 dark:bg-muted/20"
+      >
+        <Button
+          class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
           @click="open = false"
         >
           {{ t('common.cancel') }}
         </Button>
-        <Button 
-          class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" 
-          @click="handleConfirm" 
+        <Button
+          class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="!canConfirm"
+          @click="handleConfirm"
         >
           {{ t('channels.bindAgent.confirm') }}
         </Button>

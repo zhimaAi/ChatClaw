@@ -40,7 +40,11 @@ const modes = [
           <button
             type="button"
             class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
-            :class="modelValue === 'task' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
+            :class="
+              modelValue === 'task'
+                ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground'
+                : 'text-muted-foreground'
+            "
             @click="emit('update:modelValue', 'task')"
           >
             <!-- Task icon: target / crosshair -->
@@ -63,9 +67,7 @@ const modes = [
           </button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>
-            {{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}
-          </p>
+          <p>{{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -77,7 +79,11 @@ const modes = [
           <button
             type="button"
             class="ml-0.5 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
-            :class="modelValue === 'chat' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
+            :class="
+              modelValue === 'chat'
+                ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground'
+                : 'text-muted-foreground'
+            "
             @click="emit('update:modelValue', 'chat')"
           >
             <!-- Chat icon: speech bubble -->
@@ -95,9 +101,7 @@ const modes = [
           </button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>
-            {{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}
-          </p>
+          <p>{{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

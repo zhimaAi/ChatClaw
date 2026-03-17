@@ -63,7 +63,10 @@ import {
   type LibraryGroup as ChatWikiLibraryGroup,
   type LibraryParagraph as ChatWikiLibraryParagraph,
 } from '@bindings/chatclaw/internal/services/chatwiki'
-import { getBinding as getBindingCached, getLibraryListOnlyOpen as getLibraryListOnlyOpenCached } from '@/lib/chatwikiCache'
+import {
+  getBinding as getBindingCached,
+  getLibraryListOnlyOpen as getLibraryListOnlyOpenCached,
+} from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { Book, BookOpen, FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
@@ -104,11 +107,7 @@ const chatMode = ref('task')
 const pendingImages = ref<PendingImage[]>([])
 
 // Use composables for agent and model selection
-const {
-  agents,
-  activeAgentId,
-  loadAgents,
-} = useAgents()
+const { agents, activeAgentId, loadAgents } = useAgents()
 
 const {
   providersWithModels,
@@ -138,11 +137,7 @@ const activeAgent = computed(() => {
 // Can send: must have input or images, agent, and model
 const canSend = computed(() => {
   const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0
-  return (
-    !!activeAgentId.value &&
-    hasContent &&
-    !!selectedModelInfo.value
-  )
+  return !!activeAgentId.value && hasContent && !!selectedModelInfo.value
 })
 
 // Reason why send is disabled
@@ -220,7 +215,9 @@ const loadTeamGroupsForSidebar = async (libraryID: string) => {
   if (!libraryID) return
   if (teamLibraryGroupsByLibraryId.value.has(libraryID)) return
   if (teamLibraryGroupsLoadingByLibraryId.value.has(libraryID)) return
-  teamLibraryGroupsLoadingByLibraryId.value = new Set(teamLibraryGroupsLoadingByLibraryId.value).add(libraryID)
+  teamLibraryGroupsLoadingByLibraryId.value = new Set(
+    teamLibraryGroupsLoadingByLibraryId.value
+  ).add(libraryID)
   try {
     const groups = await ChatWikiService.GetLibraryGroup(libraryID, 1)
     teamLibraryGroupsByLibraryId.value.set(libraryID, groups || [])
@@ -234,14 +231,18 @@ const loadTeamGroupsForSidebar = async (libraryID: string) => {
   }
 }
 
-
 const getTeamFileExtension = (file: ChatWikiLibraryFile) => {
-  const ext = String(file.extension || '').trim().toLowerCase()
+  const ext = String(file.extension || '')
+    .trim()
+    .toLowerCase()
   if (ext) return ext
   const name = String(file.name || '')
   const idx = name.lastIndexOf('.')
   if (idx < 0 || idx === name.length - 1) return ''
-  return name.slice(idx + 1).trim().toLowerCase()
+  return name
+    .slice(idx + 1)
+    .trim()
+    .toLowerCase()
 }
 
 const getTeamFileIcon = (file: ChatWikiLibraryFile) => {
@@ -402,7 +403,10 @@ const loadFoldersForLibrary = async (libraryId: number, force = false) => {
 
 const toggleFolderExpanded = (folderId: number) => {
   // 防抖：10ms 内不重复处理同一个 folderId
-  if (toggleFolderExpanded.lastFolderId === folderId && Date.now() - toggleFolderExpanded.lastTime < 10) {
+  if (
+    toggleFolderExpanded.lastFolderId === folderId &&
+    Date.now() - toggleFolderExpanded.lastTime < 10
+  ) {
     return
   }
   toggleFolderExpanded.lastFolderId = folderId
@@ -639,7 +643,11 @@ const loadTeamLibraryFiles = async (
   groupID = ''
 ) => {
   if (append) {
-    if (!teamLibraryFilesHasMore.value || teamLibraryFilesLoading.value || teamLibraryFilesLoadingMore.value) {
+    if (
+      !teamLibraryFilesHasMore.value ||
+      teamLibraryFilesLoading.value ||
+      teamLibraryFilesLoadingMore.value
+    ) {
       return
     }
     teamLibraryFilesLoadingMore.value = true
@@ -764,9 +772,17 @@ const reloadTeamNormalContent = async () => {
   await loadTeamLibraryFiles(selectedTeamLibraryId.value, requestID, false, '')
 }
 
-const loadTeamQALibraryParagraphs = async (libraryID: string, requestID: number, append = false) => {
+const loadTeamQALibraryParagraphs = async (
+  libraryID: string,
+  requestID: number,
+  append = false
+) => {
   if (append) {
-    if (!teamQAParagraphsHasMore.value || teamQAParagraphsLoading.value || teamQAParagraphsLoadingMore.value) {
+    if (
+      !teamQAParagraphsHasMore.value ||
+      teamQAParagraphsLoading.value ||
+      teamQAParagraphsLoadingMore.value
+    ) {
       return
     }
     teamQAParagraphsLoadingMore.value = true
@@ -859,7 +875,11 @@ const checkAndLoadMoreTeamFiles = () => {
   if (remain > TEAM_LOAD_MORE_THRESHOLD) return
 
   if (teamLibraryTab.value === 2) {
-    if (teamQAParagraphsHasMore.value && !teamQAParagraphsLoading.value && !teamQAParagraphsLoadingMore.value) {
+    if (
+      teamQAParagraphsHasMore.value &&
+      !teamQAParagraphsLoading.value &&
+      !teamQAParagraphsLoadingMore.value
+    ) {
       void loadTeamQALibraryParagraphs(selectedTeamLibraryId.value, teamNormalRequestID, true)
     }
     return
@@ -876,7 +896,11 @@ const checkAndLoadMoreTeamFiles = () => {
     return
   }
 
-  if (teamLibraryFilesHasMore.value && !teamLibraryFilesLoading.value && !teamLibraryFilesLoadingMore.value) {
+  if (
+    teamLibraryFilesHasMore.value &&
+    !teamLibraryFilesLoading.value &&
+    !teamLibraryFilesLoadingMore.value
+  ) {
     const groupID = teamLibraryTab.value === 0 ? selectedTeamGroupId.value : ''
     void loadTeamLibraryFiles(selectedTeamLibraryId.value, teamNormalRequestID, true, groupID)
   }
@@ -1041,7 +1065,9 @@ const handleSendMessage = () => {
   const libraryIds =
     activeTab.value === 'personal' && selectedLibraryId.value ? [selectedLibraryId.value] : []
   const teamLibraryId =
-    activeTab.value === 'team' && selectedTeamLibraryId.value ? selectedTeamLibraryId.value : undefined
+    activeTab.value === 'team' && selectedTeamLibraryId.value
+      ? selectedTeamLibraryId.value
+      : undefined
 
   // Set pending chat data and open a new assistant tab
   navigationStore.setPendingChatAndOpenAssistant({
@@ -1176,7 +1202,9 @@ const handleRemoveImage = (id: string) => {
       <button
         type="button"
         class="group/handle absolute -right-3 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
-        :aria-label="sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse')"
+        :aria-label="
+          sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse')
+        "
         @click="sidebarCollapsed = !sidebarCollapsed"
       >
         <div
@@ -1218,8 +1246,8 @@ const handleRemoveImage = (id: string) => {
 
         <div v-else-if="sidebarCollapsed" class="flex flex-col items-center gap-1">
           <button
-            v-if="activeTab === 'personal'"
             v-for="lib in libraries"
+            v-if="activeTab === 'personal'"
             :key="`personal-${lib.id}`"
             type="button"
             :class="
@@ -1236,8 +1264,8 @@ const handleRemoveImage = (id: string) => {
             <IconKnowledge class="size-4 shrink-0" />
           </button>
           <button
-            v-else
             v-for="lib in teamLibraries"
+            v-else
             :key="`team-${lib.id}`"
             type="button"
             :class="
@@ -1394,12 +1422,17 @@ const handleRemoveImage = (id: string) => {
                     </span>
                   </div>
 
-                  <div v-if="teamLibraryGroupsLoadingByLibraryId.has(lib.id)" class="px-1 py-2 text-xs text-muted-foreground">
+                  <div
+                    v-if="teamLibraryGroupsLoadingByLibraryId.has(lib.id)"
+                    class="px-1 py-2 text-xs text-muted-foreground"
+                  >
                     {{ t('knowledge.loading') }}
                   </div>
                   <template v-else>
                     <div
-                      v-for="group in (teamLibraryGroupsByLibraryId.get(lib.id) || []).filter((g) => g.id !== TEAM_ALL_GROUP_ID)"
+                      v-for="group in (teamLibraryGroupsByLibraryId.get(lib.id) || []).filter(
+                        (g) => g.id !== TEAM_ALL_GROUP_ID
+                      )"
                       :key="`team-sidebar-group-${lib.id}-${group.id}`"
                       class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                       :class="
@@ -1448,10 +1481,7 @@ const handleRemoveImage = (id: string) => {
                   v-if="expandedLibraries.has(lib.id)"
                   class="size-4 shrink-0 text-primary"
                 />
-                <Book
-                  v-else
-                  class="size-4 shrink-0 text-muted-foreground"
-                />
+                <Book v-else class="size-4 shrink-0 text-muted-foreground" />
                 <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                   {{ lib.name }}
                 </span>
@@ -1585,12 +1615,17 @@ const handleRemoveImage = (id: string) => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'team' && teamLibraryTab === 0" class="flex min-h-0 flex-1 flex-col">
+      <div
+        v-else-if="activeTab === 'team' && teamLibraryTab === 0"
+        class="flex min-h-0 flex-1 flex-col"
+      >
         <div class="border-b border-border px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+                <h3 class="text-base font-medium text-foreground">
+                  {{ selectedTeamLibrary?.name ?? '' }}
+                </h3>
                 <span v-if="teamNormalTotal >= 0" class="text-xs text-muted-foreground">
                   {{ t('knowledge.team.fileTotal', { count: teamNormalTotal }) }}
                 </span>
@@ -1609,15 +1644,25 @@ const handleRemoveImage = (id: string) => {
             </div>
           </div>
         </div>
-        <div ref="teamScrollContainerRef" class="flex-1 overflow-auto p-4" @scroll.passive="handleTeamFilesScroll">
+        <div
+          ref="teamScrollContainerRef"
+          class="flex-1 overflow-auto p-4"
+          @scroll.passive="handleTeamFilesScroll"
+        >
           <div
-            v-if="teamNormalPage === 'groups' && (teamLibraryGroupsLoading || teamUngroupedFilesLoading)"
+            v-if="
+              teamNormalPage === 'groups' && (teamLibraryGroupsLoading || teamUngroupedFilesLoading)
+            "
             class="flex h-full items-center justify-center"
           >
             <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
           </div>
           <div
-            v-else-if="teamNormalPage === 'groups' && teamGroupCards.length === 0 && teamUngroupedFiles.length === 0"
+            v-else-if="
+              teamNormalPage === 'groups' &&
+              teamGroupCards.length === 0 &&
+              teamUngroupedFiles.length === 0
+            "
             class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
             {{ t('knowledge.team.noFiles') }}
@@ -1639,7 +1684,7 @@ const handleRemoveImage = (id: string) => {
               :file="file"
             />
             <div
-              v-for="idx in (teamUngroupedFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
+              v-for="idx in teamUngroupedFilesLoadingMore ? TEAM_SKELETON_COUNT : 0"
               :key="`root-ungrouped-skeleton-${idx}`"
               class="rounded-xl border border-border bg-card p-3 dark:border-white/15 dark:ring-1 dark:ring-white/5"
             >
@@ -1656,7 +1701,10 @@ const handleRemoveImage = (id: string) => {
               {{ selectedTeamGroupName || t('knowledge.team.allGroups') }}
             </p>
           </div>
-          <div v-if="teamNormalPage === 'files' && teamLibraryFilesLoading" class="flex h-full items-center justify-center">
+          <div
+            v-if="teamNormalPage === 'files' && teamLibraryFilesLoading"
+            class="flex h-full items-center justify-center"
+          >
             <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
           </div>
           <div
@@ -1670,13 +1718,9 @@ const handleRemoveImage = (id: string) => {
             class="grid auto-rows-max gap-4"
             style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
           >
-            <TeamFileCard
-              v-for="file in teamLibraryFiles"
-              :key="file.id"
-              :file="file"
-            />
+            <TeamFileCard v-for="file in teamLibraryFiles" :key="file.id" :file="file" />
             <div
-              v-for="idx in (teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
+              v-for="idx in teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0"
               :key="`team-files-skeleton-${idx}`"
               class="rounded-xl border border-border bg-card p-3 dark:border-white/15 dark:ring-1 dark:ring-white/5"
             >
@@ -1688,12 +1732,17 @@ const handleRemoveImage = (id: string) => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'team' && teamLibraryTab === 3" class="flex min-h-0 flex-1 flex-col">
+      <div
+        v-else-if="activeTab === 'team' && teamLibraryTab === 3"
+        class="flex min-h-0 flex-1 flex-col"
+      >
         <div class="border-b border-border px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+                <h3 class="text-base font-medium text-foreground">
+                  {{ selectedTeamLibrary?.name ?? '' }}
+                </h3>
                 <span v-if="teamWechatTotal >= 0" class="text-xs text-muted-foreground">
                   {{ t('knowledge.team.fileTotal', { count: teamWechatTotal }) }}
                 </span>
@@ -1712,7 +1761,11 @@ const handleRemoveImage = (id: string) => {
             </div>
           </div>
         </div>
-        <div ref="teamScrollContainerRef" class="flex-1 overflow-auto p-4" @scroll.passive="handleTeamFilesScroll">
+        <div
+          ref="teamScrollContainerRef"
+          class="flex-1 overflow-auto p-4"
+          @scroll.passive="handleTeamFilesScroll"
+        >
           <div v-if="teamLibraryFilesLoading" class="flex h-full items-center justify-center">
             <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
           </div>
@@ -1727,13 +1780,9 @@ const handleRemoveImage = (id: string) => {
             class="grid auto-rows-max gap-4"
             style="grid-template-columns: repeat(auto-fill, minmax(166px, 1fr))"
           >
-            <TeamFileCard
-              v-for="file in teamLibraryFiles"
-              :key="file.id"
-              :file="file"
-            />
+            <TeamFileCard v-for="file in teamLibraryFiles" :key="file.id" :file="file" />
             <div
-              v-for="idx in (teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0)"
+              v-for="idx in teamLibraryFilesLoadingMore ? TEAM_SKELETON_COUNT : 0"
               :key="`wechat-files-skeleton-${idx}`"
               class="rounded-xl border border-border bg-card p-3 dark:border-white/15 dark:ring-1 dark:ring-white/5"
             >
@@ -1745,12 +1794,17 @@ const handleRemoveImage = (id: string) => {
         </div>
       </div>
 
-      <div v-else-if="activeTab === 'team' && teamLibraryTab === 2" class="flex min-h-0 flex-1 flex-col">
+      <div
+        v-else-if="activeTab === 'team' && teamLibraryTab === 2"
+        class="flex min-h-0 flex-1 flex-col"
+      >
         <div class="border-b border-border px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+                <h3 class="text-base font-medium text-foreground">
+                  {{ selectedTeamLibrary?.name ?? '' }}
+                </h3>
                 <span v-if="teamQAParagraphTotal >= 0" class="text-xs text-muted-foreground">
                   {{ t('knowledge.team.qa.total', { count: teamQAParagraphTotal }) }}
                 </span>
@@ -1769,7 +1823,11 @@ const handleRemoveImage = (id: string) => {
             </div>
           </div>
         </div>
-        <div ref="teamScrollContainerRef" class="flex-1 overflow-auto p-4" @scroll.passive="handleTeamFilesScroll">
+        <div
+          ref="teamScrollContainerRef"
+          class="flex-1 overflow-auto p-4"
+          @scroll.passive="handleTeamFilesScroll"
+        >
           <div v-if="teamQAParagraphsLoading" class="flex h-full items-center justify-center">
             <div class="text-sm text-muted-foreground">{{ t('knowledge.loading') }}</div>
           </div>
@@ -1802,7 +1860,7 @@ const handleRemoveImage = (id: string) => {
               </div>
             </div>
             <div
-              v-for="idx in (teamQAParagraphsLoadingMore ? TEAM_SKELETON_COUNT : 0)"
+              v-for="idx in teamQAParagraphsLoadingMore ? TEAM_SKELETON_COUNT : 0"
               :key="`qa-skeleton-${idx}`"
               class="rounded-xl border border-border bg-card p-3 dark:border-white/15 dark:ring-1 dark:ring-white/5"
             >
@@ -1819,7 +1877,9 @@ const handleRemoveImage = (id: string) => {
           class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           <div class="space-y-1 border-b border-border pb-4">
-            <h3 class="text-base font-medium text-foreground">{{ selectedTeamLibrary?.name ?? '' }}</h3>
+            <h3 class="text-base font-medium text-foreground">
+              {{ selectedTeamLibrary?.name ?? '' }}
+            </h3>
             <p class="text-sm text-muted-foreground">
               {{ selectedTeamLibrary?.intro || t('knowledge.team.noIntro') }}
             </p>
@@ -1898,21 +1958,22 @@ const handleRemoveImage = (id: string) => {
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->
       <div v-if="showChatInputArea" class="bg-background pt-3">
         <ChatInputArea
-          mode="knowledge"
           v-model:chat-input="chatInput"
           v-model:chat-mode="chatMode"
           v-model:selected-model-key="selectedModelKey"
           v-model:enable-thinking="enableThinking"
           v-model:active-agent-id="activeAgentId"
+          mode="knowledge"
           :providers-with-models="providersWithModels"
           :has-models="hasModels"
           :selected-model-info="selectedModelInfo"
-          :selected-library-ids="isPersonalTab ? (selectedLibraryId ? [selectedLibraryId] : []) : []"
+          :selected-library-ids="
+            isPersonalTab ? (selectedLibraryId ? [selectedLibraryId] : []) : []
+          "
           :libraries="isPersonalTab ? libraries : []"
           :selected-team-library="activeTab === 'team' ? selectedTeamLibrary : null"
           :team-libraries="activeTab === 'team' ? teamLibraries : []"
           :selected-team-library-id="activeTab === 'team' ? selectedTeamLibraryId : null"
-          @update:selected-team-library-id="selectedTeamLibraryId = $event"
           :is-generating="false"
           :can-send="canSend"
           :send-disabled-reason="sendDisabledReason"
@@ -1920,6 +1981,7 @@ const handleRemoveImage = (id: string) => {
           :active-agent="activeAgent"
           :agents="agents"
           :pending-images="pendingImages"
+          @update:selected-team-library-id="selectedTeamLibraryId = $event"
           @send="handleSendMessage"
           @add-images="handleAddImages"
           @remove-image="handleRemoveImage"

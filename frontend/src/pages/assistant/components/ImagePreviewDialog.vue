@@ -38,7 +38,9 @@ const translate = ref({ x: 0, y: 0 })
 const currentImage = computed(() => props.images[currentIndex.value])
 const hasMultipleImages = computed(() => props.images.length > 1)
 const canGoPrev = computed(() => hasMultipleImages.value && currentIndex.value > 0)
-const canGoNext = computed(() => hasMultipleImages.value && currentIndex.value < props.images.length - 1)
+const canGoNext = computed(
+  () => hasMultipleImages.value && currentIndex.value < props.images.length - 1
+)
 
 const close = () => {
   emit('update:open', false)
@@ -231,7 +233,10 @@ const imageStyle = computed(() => {
           <img
             v-if="currentImage"
             ref="imageRef"
-            :src="currentImage.data_url || `data:${currentImage.mime_type};base64,${currentImage.base64}`"
+            :src="
+              currentImage.data_url ||
+              `data:${currentImage.mime_type};base64,${currentImage.base64}`
+            "
             :alt="currentImage.file_name || 'Image'"
             :style="imageStyle"
             class="max-h-full max-w-full select-none object-contain"

@@ -10,11 +10,15 @@ import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 
 const SettingsPage = defineAsyncComponent(() => import('@/pages/settings/SettingsPage.vue'))
 const KnowledgePage = defineAsyncComponent(() => import('@/pages/knowledge/KnowledgePage.vue'))
-const ScheduledTasksPage = defineAsyncComponent(() => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue'))
+const ScheduledTasksPage = defineAsyncComponent(
+  () => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue')
+)
 const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
 const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
 const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
-const DocumentViewerPage = defineAsyncComponent(() => import('@/pages/document/DocumentViewerPage.vue'))
+const DocumentViewerPage = defineAsyncComponent(
+  () => import('@/pages/document/DocumentViewerPage.vue')
+)
 const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
@@ -288,26 +292,32 @@ onMounted(async () => {
     // Default to disabled
   }
   // Listen for setting changes so toggling the switch takes effect immediately
-  unsubscribeSelectionSettingChanged = Events.On('settings:selection-search-changed', (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
-    selectionSearchEnabled.value = !!payload?.enabled
-    if (!selectionSearchEnabled.value) {
-      hideInAppPopup()
+  unsubscribeSelectionSettingChanged = Events.On(
+    'settings:selection-search-changed',
+    (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+      selectionSearchEnabled.value = !!payload?.enabled
+      if (!selectionSearchEnabled.value) {
+        hideInAppPopup()
+      }
     }
-  })
+  )
 
   // Listen for disable-setting requests from the external popup window.
   // The popup cannot call SettingsService bindings reliably (WS_EX_NOACTIVATE
   // window), so the backend emits this event and we persist the setting here.
-  unsubscribeRequestDisableSetting = Events.On('text-selection:request-disable-setting', async () => {
-    try {
-      await SettingsService.SetValue('enable_selection_search', 'false')
-      selectionSearchEnabled.value = false
-      Events.Emit('settings:selection-search-changed', { enabled: false })
-    } catch (err) {
-      console.error('[App] Failed to persist disable selection search:', err)
+  unsubscribeRequestDisableSetting = Events.On(
+    'text-selection:request-disable-setting',
+    async () => {
+      try {
+        await SettingsService.SetValue('enable_selection_search', 'false')
+        selectionSearchEnabled.value = false
+        Events.Emit('settings:selection-search-changed', { enabled: false })
+      } catch (err) {
+        console.error('[App] Failed to persist disable selection search:', err)
+      }
     }
-  })
+  )
 
   // In-app text selection: global mousedown + mouseup listeners.
   // Mouse hook skips our own windows, so we handle in-app selection here.
