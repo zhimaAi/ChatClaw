@@ -363,8 +363,10 @@ func (s *ChatWikiService) DeleteBinding() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx)
-	return err
+	if _, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
+		return err
+	}
+	return clearSyncedModelCatalogFromDB(ctx, db, "chatwiki")
 }
 
 // errChatWikiAuthExpired is returned when the server returns 401 (e.g. "账号未获取登录信息").
@@ -735,8 +737,7 @@ func (s *ChatWikiService) runTeamChatStream(
 	startPayload["status"] = "streaming"
 	s.app.Event.Emit("chat:start", startPayload)
 
-	baseURL := strings.TrimRight(binding.ServerURL, "/")
-	candidates := []string{baseURL + "/manage/chatclaw/chat/completions"}
+	candidates := []string{chatWikiChatCompletionsURL(binding.ServerURL)}
 
 	reqBody := map[string]any{
 		"robot_key": robotKey,

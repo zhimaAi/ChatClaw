@@ -116,24 +116,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
 
-type ChatwikiDisplayModel = Model & {
-  model_supplier?: string
-  uni_model_name?: string
-}
-
-function normalizeText(value?: string | null): string {
-  return value?.trim() || ''
-}
-
-function getDisplayModelName(providerId: string, model: Model): string {
-  if (providerId === 'chatwiki') {
-    const chatwikiModel = model as ChatwikiDisplayModel
-    const supplier = normalizeText(chatwikiModel.model_supplier)
-    const uniModelName = normalizeText(chatwikiModel.uni_model_name)
-    if (supplier && uniModelName) return `${supplier}/${uniModelName}`
-    if (uniModelName) return uniModelName
-  }
-  return normalizeText(model.name) || normalizeText(model.model_id) || '-'
+function getDisplayModelName(model: Model): string {
+  return model.name?.trim() || model.model_id?.trim() || '-'
 }
 
 const handleChatEnter = (event: KeyboardEvent) => {
@@ -656,7 +640,7 @@ onUnmounted(() => {
                                   :value="pw.provider.provider_id + '::' + m.model_id"
                                 >
                                   <div class="flex items-center gap-2">
-                                    <span>{{ getDisplayModelName(pw.provider.provider_id, m) }}</span>
+                                    <span>{{ getDisplayModelName(m) }}</span>
                                     <template v-if="m.capabilities && m.capabilities.length > 0">
                                       <span
                                         v-for="cap in m.capabilities.slice(0, 3)"

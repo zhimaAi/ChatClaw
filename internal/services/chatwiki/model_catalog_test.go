@@ -1,8 +1,14 @@
 package chatwiki
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"testing"
+
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/sqlitedialect"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestDecodeModelCatalogResponse_GroupsLLMAndEmbeddingOnly(t *testing.T) {
@@ -143,4 +149,116 @@ func TestDecodeModelCatalogResponse_ExtractsSelfOwnedModelConfigID(t *testing.T)
 	if catalog.LLMModels[0].SelfOwnedModelConfigID != 12 {
 		t.Fatalf("expected self owned model config id 12, got %#v", catalog.LLMModels[0])
 	}
+}
+
+func TestSyncModelCatalogToDB_PersistsChatWikiModels(t *testing.T) {
+	db := newChatWikiModelsTestDB(t)
+
+	catalog := &ModelCatalog{
+		LLMModels: []ModelCatalogItem{
+			{ModelID: "ignored-llm-id", UniModelName: "deepseek-r1", Name: "DeepSeek R1", Type: "llm", Enabled: true},
+		},
+		EmbeddingModels: []ModelCatalogItem{
+			{ModelID: "ignored-embedding-id", UniModelName: "text-embedding-3-large", Name: "Embedding", Type: "embedding", Enabled: true},
+		},
+	}
+
+	if err := syncModelCatalogToDB(context.Background(), db, "chatwiki", catalog); err != nil {
+		t.Fatalf("syncModelCatalogToDB returned error: %v", err)
+	}
+
+	type storedModel struct {
+		ProviderID string `bun:"provider_id"`
+		ModelID    string `bun:"model_id"`
+		Name       string `bun:"name"`
+		Type       string `bun:"type"`
+	}
+
+	var models []storedModel
+	if err := db.NewSelect().
+		Table("models").
+		Column("provider_id", "model_id", "name", "type").
+		OrderExpr("type ASC, model_id ASC").
+		Scan(context.Background(), &models); err != nil {
+		t.Fatalf("select synced models: %v", err)
+	}
+
+	if len(models) != 2 {
+		t.Fatalf("expected 2 synced models, got %#v", models)
+	}
+	if models[0].ProviderID != "chatwiki" || models[0].ModelID != "text-embedding-3-large" || models[0].Name != "text-embedding-3-large" || models[0].Type != "embedding" {
+		t.Fatalf("unexpected embedding row: %#v", models[0])
+	}
+	if models[1].ProviderID != "chatwiki" || models[1].ModelID != "deepseek-r1" || models[1].Name != "deepseek-r1" || models[1].Type != "llm" {
+		t.Fatalf("unexpected llm row: %#v", models[1])
+	}
+}
+
+func TestSyncModelCatalogToDB_RemovesStaleChatWikiModels(t *testing.T) {
+	db := newChatWikiModelsTestDB(t)
+
+	initial := &ModelCatalog{
+		LLMModels: []ModelCatalogItem{
+			{UniModelName: "deepseek-r1", Type: "llm", Enabled: true},
+			{UniModelName: "qwen-plus", Type: "llm", Enabled: true},
+		},
+	}
+	if err := syncModelCatalogToDB(context.Background(), db, "chatwiki", initial); err != nil {
+		t.Fatalf("initial sync failed: %v", err)
+	}
+
+	next := &ModelCatalog{
+		LLMModels: []ModelCatalogItem{
+			{UniModelName: "deepseek-r1", Type: "llm", Enabled: true},
+		},
+	}
+	if err := syncModelCatalogToDB(context.Background(), db, "chatwiki", next); err != nil {
+		t.Fatalf("second sync failed: %v", err)
+	}
+
+	count, err := db.NewSelect().
+		Table("models").
+		Where("provider_id = ?", "chatwiki").
+		Where("model_id = ?", "qwen-plus").
+		Count(context.Background())
+	if err != nil {
+		t.Fatalf("count stale model: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected stale model to be removed, count=%d", count)
+	}
+}
+
+func newChatWikiModelsTestDB(t *testing.T) *bun.DB {
+	t.Helper()
+
+	sqlDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("open sqlite memory db: %v", err)
+	}
+
+	db := bun.NewDB(sqlDB, sqlitedialect.New())
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	if _, err := db.Exec(`
+create table models (
+    id integer primary key autoincrement,
+    created_at datetime not null default current_timestamp,
+    updated_at datetime not null default current_timestamp,
+    provider_id varchar(64) not null,
+    model_id varchar(128) not null,
+    name varchar(128) not null,
+    type varchar(16) not null default 'llm',
+    capabilities text not null default '[]',
+    is_builtin boolean not null default false,
+    enabled boolean not null default true,
+    sort_order integer not null default 0,
+    unique(provider_id, model_id)
+)`); err != nil {
+		t.Fatalf("create models table: %v", err)
+	}
+
+	return db
 }

@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"chatclaw/internal/services/chatwiki"
 	einoembedding "github.com/cloudwego/eino/components/embedding"
 )
 
@@ -45,14 +44,9 @@ func (e *chatWikiEmbedder) EmbedStrings(ctx context.Context, texts []string, _ .
 		return [][]float64{}, nil
 	}
 
-	configID, err := chatwiki.ResolveSelfOwnedModelConfigID(e.apiKey, e.apiEndpoint, e.modelID, "embedding")
-	if err != nil {
-		return nil, err
-	}
-
 	payload := map[string]any{
-		"self_owned_model_config_id": configID,
-		"input":                      texts,
+		"model": e.modelID,
+		"input": texts,
 	}
 	if e.dimension != nil && *e.dimension > 0 {
 		payload["dimensions"] = *e.dimension
@@ -69,7 +63,6 @@ func (e *chatWikiEmbedder) EmbedStrings(ctx context.Context, texts []string, _ .
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(e.apiKey))
-	req.Header.Set("Token", strings.TrimSpace(e.apiKey))
 
 	resp, err := e.client.Do(req)
 	if err != nil {
