@@ -57,10 +57,12 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if cfg.ExtraFields == nil {
-		cfg.ExtraFields = make(map[string]any)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
 	}
-	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }
@@ -84,10 +86,12 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if cfg.ExtraFields == nil {
-		cfg.ExtraFields = make(map[string]any)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
 	}
-	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }

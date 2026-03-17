@@ -66,9 +66,6 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
 	}
-	if cfg.DisableThinking {
-		config.ExtraFields = map[string]any{"enable_thinking": false}
-	}
 	return openai.NewChatModel(ctx, config)
 }
 
@@ -94,9 +91,6 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 		BaseURL:    cfg.APIEndpoint,
 		ByAzure:    true,
 		APIVersion: extraConfig.APIVersion,
-	}
-	if cfg.DisableThinking {
-		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
 	return openai.NewChatModel(ctx, config)
 }
