@@ -292,7 +292,9 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 
 	// Delete old bindings, keep only latest
 	if _, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
-		app.Logger.Warn("Failed to delete old chatwiki bindings", "error", err)
+		if app != nil {
+			app.Logger.Warn("Failed to delete old chatwiki bindings", "error", err)
+		}
 	}
 
 	m := &bindingModel{
@@ -308,11 +310,45 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 	}
 	_, err := db.NewInsert().Model(m).Exec(ctx)
 	if err != nil {
-		app.Logger.Error("Failed to save chatwiki binding", "error", err)
+		if app != nil {
+			app.Logger.Error("Failed to save chatwiki binding", "error", err)
+		}
 		return err
 	}
-	app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
+	if app != nil {
+		app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
+	}
 	return nil
+}
+
+func resolveChatWikiVersionFromLoginSource(loginSource string) string {
+	switch strings.TrimSpace(loginSource) {
+	case "cloud":
+		return "yun"
+	case "open-source":
+		return "dev"
+	default:
+		return "dev"
+	}
+}
+
+// SaveBindingFromCallback persists a ChatWiki auth callback using the frontend login source
+// instead of trusting any upstream version field.
+func (s *ChatWikiService) SaveBindingFromCallback(serverURL, token, ttl, exp, userID, userName, loginSource string) error {
+	var app *application.App
+	if s != nil {
+		app = s.app
+	}
+	return SaveBinding(
+		app,
+		serverURL,
+		token,
+		ttl,
+		exp,
+		userID,
+		userName,
+		resolveChatWikiVersionFromLoginSource(loginSource),
+	)
 }
 
 // TokenForceOffline calls POST /manage/chatclaw/tokenForceOffline with reason "logout"

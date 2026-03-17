@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/services/chatwiki"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // AuthCallbackData is emitted to the frontend when a chatclaw://auth/callback URL is received.
 type AuthCallbackData struct {
+	ServerURL       string `json:"server_url"`
 	Token           string `json:"token"`
 	TTL             string `json:"ttl"`
 	Exp             string `json:"exp"`
@@ -22,7 +22,8 @@ type AuthCallbackData struct {
 
 // HandleURL processes a single chatclaw:// URL (e.g. from macOS Apple Event or
 // Windows/Linux command-line argument). If the URL matches the auth callback
-// pattern, it saves the binding to DB and emits "chatwiki:auth-callback" to the frontend.
+// pattern, it emits "chatwiki:auth-callback" to the frontend, which then saves
+// the binding using the locally selected login source.
 func HandleURL(app *application.App, rawURL string) {
 	if !strings.HasPrefix(rawURL, "chatclaw://") {
 		return
@@ -49,11 +50,8 @@ func HandleURL(app *application.App, rawURL string) {
 	userName := q.Get("user_name")
 	chatWikiVersion := q.Get("chatwiki_version")
 
-	if err := chatwiki.SaveBinding(app, serverURL, token, ttl, exp, userID, userName, chatWikiVersion); err != nil {
-		app.Logger.Error("Failed to save chatwiki binding from deeplink", "error", err)
-	}
-
 	payload := AuthCallbackData{
+		ServerURL:       serverURL,
 		Token:           token,
 		TTL:             ttl,
 		Exp:             exp,
