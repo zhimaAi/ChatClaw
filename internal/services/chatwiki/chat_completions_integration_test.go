@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -27,20 +26,11 @@ func TestChatCompletions_RealEndpoint(t *testing.T) {
 	}
 
 	payload := map[string]any{
-		"max_tokens":                 512,
-		"messages":                   []map[string]string{{"content": "hello", "role": "user"}},
-		"self_owned_model_config_id": 1,
-		"stream":                     true,
-		"temperature":                0.7,
-		"use_model":                  useModel,
-	}
-
-	if rawID := strings.TrimSpace(os.Getenv("CHATWIKI_TEST_CONFIG_ID")); rawID != "" {
-		var configID int
-		if _, err := fmt.Sscanf(rawID, "%d", &configID); err != nil {
-			t.Fatalf("invalid CHATWIKI_TEST_CONFIG_ID: %v", err)
-		}
-		payload["self_owned_model_config_id"] = configID
+		"max_tokens":  512,
+		"messages":    []map[string]string{{"content": "hello", "role": "user"}},
+		"stream":      true,
+		"temperature": 0.7,
+		"use_model":   useModel,
 	}
 
 	body, err := json.Marshal(payload)
@@ -60,7 +50,6 @@ func TestChatCompletions_RealEndpoint(t *testing.T) {
 		t.Fatalf("create request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Token", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 

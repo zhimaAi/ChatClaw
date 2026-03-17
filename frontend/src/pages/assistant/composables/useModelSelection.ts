@@ -17,23 +17,7 @@ import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 export function useModelSelection() {
   const { t } = useI18n()
 
-  type ChatwikiDisplayModel = Model & {
-    model_supplier?: string
-    uni_model_name?: string
-  }
-
-  const normalizeText = (value?: string | null) => value?.trim() || ''
-
-  const getDisplayModelName = (providerId: string, model: Model) => {
-    if (providerId === 'chatwiki') {
-      const chatwikiModel = model as ChatwikiDisplayModel
-      const supplier = normalizeText(chatwikiModel.model_supplier)
-      const uniModelName = normalizeText(chatwikiModel.uni_model_name)
-      if (supplier && uniModelName) return `${supplier}/${uniModelName}`
-      if (uniModelName) return uniModelName
-    }
-    return normalizeText(model.name) || normalizeText(model.model_id) || '-'
-  }
+  const getDisplayModelName = (model: Model) => model.name?.trim() || model.model_id?.trim() || '-'
 
   const providersWithModels = ref<ProviderWithModels[]>([])
   const selectedModelKey = ref('')
@@ -57,7 +41,7 @@ export function useModelSelection() {
           return {
             providerId,
             modelId,
-            modelName: getDisplayModelName(providerId, model),
+            modelName: getDisplayModelName(model),
             capabilities: model.capabilities,
           }
         }

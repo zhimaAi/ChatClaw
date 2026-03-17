@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"chatclaw/internal/sqlite"
+
+	"github.com/uptrace/bun"
 )
 
 type ModelCatalogItem struct {
@@ -44,6 +46,7 @@ type ModelCatalog struct {
 var (
 	modelCatalogMu    sync.RWMutex
 	modelCatalogCache *ModelCatalog
+	getChatWikiSyncDB = sqlite.DB
 )
 
 func previewChatWikiLogBody(raw []byte) string {
@@ -66,6 +69,14 @@ func chatWikiOpenAIBaseURL(serverURL string) string {
 	return baseURL + "/chatclaw/v1"
 }
 
+func chatWikiChatCompletionsURL(serverURL string) string {
+	baseURL := chatWikiOpenAIBaseURL(serverURL)
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/chat/completions"
+}
+
 func (s *ChatWikiService) SyncProviderState() error {
 	s.app.Logger.Info("[chatwiki] SyncProviderState start")
 	binding, err := s.GetBinding()
@@ -77,6 +88,11 @@ func (s *ChatWikiService) SyncProviderState() error {
 	if err != nil {
 		s.app.Logger.Error("[chatwiki] SyncProviderState sync credentials failed", "has_binding", binding != nil, "error", err)
 		return err
+	}
+	if binding == nil {
+		if err := clearSyncedModelCatalogFromDB(context.Background(), sqlite.DB(), "chatwiki"); err != nil {
+			s.app.Logger.Warn("[chatwiki] SyncProviderState clear synced models failed", "error", err)
+		}
 	}
 	s.app.Logger.Info("[chatwiki] SyncProviderState done",
 		"has_binding", binding != nil,
@@ -129,6 +145,9 @@ func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
 	}
 	if binding == nil {
 		empty := &ModelCatalog{Bound: false, LoadedAtUnix: time.Now().Unix()}
+		if err := clearSyncedModelCatalogFromDB(context.Background(), sqlite.DB(), "chatwiki"); err != nil {
+			s.app.Logger.Warn("[chatwiki] RefreshModelCatalog clear synced models failed", "error", err)
+		}
 		modelCatalogMu.Lock()
 		modelCatalogCache = empty
 		modelCatalogMu.Unlock()
@@ -230,6 +249,10 @@ func (s *ChatWikiService) fetchModelCatalog(binding *Binding) (*ModelCatalog, er
 	catalog, err := decodeModelCatalogResponse(modelBody)
 	if err != nil {
 		s.app.Logger.Error("[chatwiki] fetchModelCatalog decode failed", "url", modelURL, "error", err)
+		return nil, err
+	}
+	if err := syncModelCatalogToLocalDB(catalog); err != nil {
+		s.app.Logger.Error("[chatwiki] fetchModelCatalog sync db failed", "url", modelURL, "error", err)
 		return nil, err
 	}
 	s.app.Logger.Info("[chatwiki] fetchModelCatalog decoded",
@@ -454,6 +477,250 @@ func modelSupportsImage(item map[string]any) bool {
 		}
 	}
 	return false
+}
+
+type syncedModelRow struct {
+	bun.BaseModel `bun:"table:models"`
+
+	ID           int64     `bun:"id,pk,autoincrement"`
+	ProviderID   string    `bun:"provider_id,notnull"`
+	ModelID      string    `bun:"model_id,notnull"`
+	Name         string    `bun:"name,notnull"`
+	Type         string    `bun:"type,notnull"`
+	Capabilities string    `bun:"capabilities,notnull"`
+	IsBuiltin    bool      `bun:"is_builtin,notnull"`
+	Enabled      bool      `bun:"enabled,notnull"`
+	SortOrder    int       `bun:"sort_order,notnull"`
+	CreatedAt    time.Time `bun:"created_at,notnull"`
+	UpdatedAt    time.Time `bun:"updated_at,notnull"`
+}
+
+type syncedCatalogModel struct {
+	ModelID      string
+	Name         string
+	Type         string
+	Capabilities string
+	SortOrder    int
+}
+
+func syncModelCatalogToLocalDB(catalog *ModelCatalog) error {
+	return syncModelCatalogToDB(context.Background(), getChatWikiSyncDB(), "chatwiki", catalog)
+}
+
+func syncModelCatalogToDB(ctx context.Context, db *bun.DB, providerID string, catalog *ModelCatalog) error {
+	if db == nil || strings.TrimSpace(providerID) == "" || catalog == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	remote := flattenCatalogModelsForSync(catalog)
+	remoteMap := make(map[string]syncedCatalogModel, len(remote))
+	for _, item := range remote {
+		remoteMap[item.ModelID] = item
+	}
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		existing := make([]syncedModelRow, 0)
+		if err := tx.NewSelect().
+			Model(&existing).
+			Where("provider_id = ?", providerID).
+			Scan(ctx); err != nil {
+			return err
+		}
+
+		existingMap := make(map[string]syncedModelRow, len(existing))
+		for _, row := range existing {
+			existingMap[row.ModelID] = row
+		}
+
+		toDelete := make([]string, 0)
+		for modelID := range existingMap {
+			if _, ok := remoteMap[modelID]; !ok {
+				toDelete = append(toDelete, modelID)
+			}
+		}
+		for _, chunk := range chunkStrings(toDelete, 200) {
+			if _, err := tx.NewDelete().
+				Table("models").
+				Where("provider_id = ?", providerID).
+				Where("model_id IN (?)", bun.In(chunk)).
+				Exec(ctx); err != nil {
+				return err
+			}
+		}
+
+		toInsert := make([]syncedModelRow, 0)
+		for _, item := range remote {
+			if existingRow, ok := existingMap[item.ModelID]; ok {
+				needsUpdate := strings.TrimSpace(existingRow.Name) != item.Name ||
+					strings.TrimSpace(strings.ToLower(existingRow.Type)) != item.Type ||
+					existingRow.Capabilities != item.Capabilities ||
+					existingRow.SortOrder != item.SortOrder ||
+					!existingRow.Enabled ||
+					!existingRow.IsBuiltin
+				if !needsUpdate {
+					continue
+				}
+				if _, err := tx.NewUpdate().
+					Model((*syncedModelRow)(nil)).
+					Where("provider_id = ?", providerID).
+					Where("model_id = ?", item.ModelID).
+					Set("name = ?", item.Name).
+					Set("type = ?", item.Type).
+					Set("capabilities = ?", item.Capabilities).
+					Set("sort_order = ?", item.SortOrder).
+					Set("enabled = ?", true).
+					Set("is_builtin = ?", true).
+					Set("updated_at = ?", sqlite.NowUTC()).
+					Exec(ctx); err != nil {
+					return err
+				}
+				continue
+			}
+
+			toInsert = append(toInsert, syncedModelRow{
+				ProviderID:   providerID,
+				ModelID:      item.ModelID,
+				Name:         item.Name,
+				Type:         item.Type,
+				Capabilities: item.Capabilities,
+				IsBuiltin:    true,
+				Enabled:      true,
+				SortOrder:    item.SortOrder,
+			})
+		}
+
+		for _, chunk := range chunkSyncedModels(toInsert, 200) {
+			if _, err := tx.NewInsert().Model(&chunk).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func clearSyncedModelCatalogFromDB(ctx context.Context, db *bun.DB, providerID string) error {
+	if db == nil || strings.TrimSpace(providerID) == "" {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	_, err := db.NewDelete().
+		Table("models").
+		Where("provider_id = ?", providerID).
+		Exec(ctx)
+	return err
+}
+
+func flattenCatalogModelsForSync(catalog *ModelCatalog) []syncedCatalogModel {
+	if catalog == nil {
+		return nil
+	}
+
+	collections := []struct {
+		typ   string
+		items []ModelCatalogItem
+	}{
+		{typ: "llm", items: catalog.LLMModels},
+		{typ: "embedding", items: catalog.EmbeddingModels},
+		{typ: "rerank", items: catalog.RerankModels},
+	}
+
+	out := make([]syncedCatalogModel, 0, len(catalog.LLMModels)+len(catalog.EmbeddingModels)+len(catalog.RerankModels))
+	perTypeOrder := map[string]int{
+		"llm":       0,
+		"embedding": 0,
+		"rerank":    0,
+	}
+	for _, collection := range collections {
+		for _, item := range collection.items {
+			if !item.Enabled {
+				continue
+			}
+			modelID := strings.TrimSpace(item.UniModelName)
+			if modelID == "" {
+				modelID = strings.TrimSpace(item.ModelID)
+			}
+			if modelID == "" || strings.Contains(modelID, "::") {
+				continue
+			}
+
+			modelType := normalizeCatalogModelType(item.Type)
+			if modelType == "" {
+				modelType = collection.typ
+			}
+			sortOrder := item.SortOrder
+			if sortOrder <= 0 {
+				sortOrder = perTypeOrder[modelType]
+			}
+			perTypeOrder[modelType] = sortOrder + 1
+
+			out = append(out, syncedCatalogModel{
+				ModelID:      modelID,
+				Name:         modelID,
+				Type:         modelType,
+				Capabilities: marshalCapabilities(item.Capabilities),
+				SortOrder:    sortOrder,
+			})
+		}
+	}
+
+	return out
+}
+
+func normalizeCatalogModelType(modelType string) string {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "embedding":
+		return "embedding"
+	case "rerank":
+		return "rerank"
+	default:
+		return "llm"
+	}
+}
+
+func marshalCapabilities(capabilities []string) string {
+	if len(capabilities) == 0 {
+		capabilities = []string{"text"}
+	}
+	raw, err := json.Marshal(capabilities)
+	if err != nil {
+		return `["text"]`
+	}
+	return string(raw)
+}
+
+func chunkStrings(in []string, size int) [][]string {
+	if size <= 0 || len(in) == 0 {
+		return nil
+	}
+	out := make([][]string, 0, (len(in)+size-1)/size)
+	for i := 0; i < len(in); i += size {
+		j := i + size
+		if j > len(in) {
+			j = len(in)
+		}
+		out = append(out, in[i:j])
+	}
+	return out
+}
+
+func chunkSyncedModels(in []syncedModelRow, size int) [][]syncedModelRow {
+	if size <= 0 || len(in) == 0 {
+		return nil
+	}
+	out := make([][]syncedModelRow, 0, (len(in)+size-1)/size)
+	for i := 0; i < len(in); i += size {
+		j := i + size
+		if j > len(in) {
+			j = len(in)
+		}
+		out = append(out, in[i:j])
+	}
+	return out
 }
 
 func firstNonEmptyString(item map[string]any, keys ...string) string {

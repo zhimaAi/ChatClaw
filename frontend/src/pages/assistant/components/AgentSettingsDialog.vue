@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
@@ -56,6 +56,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+
+function getDisplayModelName(model: { name?: string; model_id?: string }): string {
+  return model.name?.trim() || model.model_id?.trim() || '-'
+}
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -204,7 +208,7 @@ const loadModels = async () => {
         for (const group of pw.model_groups) {
           if (group.type !== 'llm') continue
           const m = group.models.find((x) => x.model_id === modelId.value)
-          if (m) modelName.value = m.name
+          if (m) modelName.value = getDisplayModelName(m)
         }
       }
     }
@@ -230,7 +234,7 @@ const onModelKeyChange = (val: any) => {
     for (const group of pw.model_groups) {
       if (group.type !== 'llm') continue
       const found = group.models.find((x) => x.model_id === modelId.value)
-      if (found) modelName.value = found.name
+      if (found) modelName.value = getDisplayModelName(found)
     }
   }
   modelChanged.value = true
@@ -506,7 +510,7 @@ const handleDelete = async () => {
                                   :key="pw.provider.provider_id + '::' + m.model_id"
                                   :value="pw.provider.provider_id + '::' + m.model_id"
                                 >
-                                  {{ m.name }}
+                                  {{ getDisplayModelName(m) }}
                                 </SelectItem>
                               </template>
                             </template>
@@ -877,3 +881,5 @@ const handleDelete = async () => {
     </DialogContent>
   </Dialog>
 </template>
+
+

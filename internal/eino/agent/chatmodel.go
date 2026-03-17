@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"chatclaw/internal/eino/openaiutil"
 	"chatclaw/internal/errs"
-	"chatclaw/internal/services/chatwiki"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -83,21 +81,10 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		cfg.ExtraFields = make(map[string]any)
 	}
 	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
-	if config.Provider.ProviderID == "chatwiki" {
-		configID, err := chatwiki.ResolveSelfOwnedModelConfigID(config.Provider.APIKey, config.Provider.APIEndpoint, config.ModelID, "llm")
-		if err != nil {
-			return nil, err
-		}
-		cfg.ExtraFields["self_owned_model_config_id"] = configID
-		cfg.Model = ""
-	}
 
 	chatModel, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {
 		return nil, err
-	}
-	if config.Provider.ProviderID == "chatwiki" {
-		return openaiutil.WrapToolCallingChatModelWithToken(chatModel, config.Provider.APIKey), nil
 	}
 	return chatModel, nil
 }

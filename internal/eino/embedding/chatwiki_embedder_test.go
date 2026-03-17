@@ -11,7 +11,7 @@ import (
 	"chatclaw/internal/services/chatwiki"
 )
 
-func TestChatWikiEmbedder_UsesSelfOwnedModelConfigID(t *testing.T) {
+func TestChatWikiEmbedder_UsesStandardOpenAIEmbeddingRequestBody(t *testing.T) {
 	chatwikiTestResetCatalogCache()
 
 	var requests []map[string]any
@@ -36,8 +36,8 @@ func TestChatWikiEmbedder_UsesSelfOwnedModelConfigID(t *testing.T) {
 			if got := r.Header.Get("Authorization"); got != "Bearer test-token" {
 				t.Fatalf("unexpected authorization header: %q", got)
 			}
-			if got := r.Header.Get("Token"); got != "test-token" {
-				t.Fatalf("unexpected token header: %q", got)
+			if got := r.Header.Get("Token"); got != "" {
+				t.Fatalf("expected empty token header, got %q", got)
 			}
 			mu.Lock()
 			requests = append(requests, payload)
@@ -74,11 +74,14 @@ func TestChatWikiEmbedder_UsesSelfOwnedModelConfigID(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatalf("expected 1 embeddings request, got %d", len(requests))
 	}
-	if got := int(requests[0]["self_owned_model_config_id"].(float64)); got != 34 {
-		t.Fatalf("expected self_owned_model_config_id=34, got %#v", requests[0])
+	if got := requests[0]["model"]; got != "text-embedding" {
+		t.Fatalf("expected model=text-embedding, got %#v", requests[0])
 	}
-	if _, exists := requests[0]["model_id"]; exists {
-		t.Fatalf("did not expect model_id in request: %#v", requests[0])
+	if _, exists := requests[0]["use_model"]; exists {
+		t.Fatalf("did not expect use_model in request: %#v", requests[0])
+	}
+	if _, exists := requests[0]["self_owned_model_config_id"]; exists {
+		t.Fatalf("did not expect self_owned_model_config_id in request: %#v", requests[0])
 	}
 }
 
