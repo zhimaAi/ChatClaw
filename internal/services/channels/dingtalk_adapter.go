@@ -755,6 +755,23 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 			},
 		}, nil
 
+	case "markdown":
+		title := payload.Title
+		if title == "" {
+			title = "AI Reply"
+		}
+		text := payload.Markdown
+		if text == "" {
+			text = raw
+		}
+		return "markdown", map[string]any{
+			"msgtype": "markdown",
+			"markdown": map[string]any{
+				"title": title,
+				"text":  text,
+			},
+		}, nil
+
 	case "sampleImageMsg":
 		return "sampleImageMsg", map[string]any{
 			"msg_key": "image",

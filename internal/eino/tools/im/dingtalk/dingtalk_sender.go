@@ -1,17 +1,24 @@
 package dingtalk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/i18n"
+	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -71,6 +78,53 @@ func isImageFilePath(path string) bool {
 	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(path)))
 	_, ok := dingtalkImageExts[ext]
 	return ok
+}
+
+// isNetworkURL returns true if the path looks like an http/https URL.
+func isNetworkURL(path string) bool {
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
+}
+
+// isImagePath checks whether a path (local or URL) points to an image file.
+// For URLs, query strings and fragments are stripped before checking the extension.
+func isImagePath(path string) bool {
+	p := strings.TrimSpace(path)
+	if isNetworkURL(p) {
+		if idx := strings.IndexAny(p, "?#"); idx != -1 {
+			p = p[:idx]
+		}
+	}
+	return isImageFilePath(p)
+}
+
+// chatClawProviderInfo holds the minimal chatclaw provider fields needed for OSS upload.
+type chatClawProviderInfo struct {
+	APIKey      string
+	APIEndpoint string
+}
+
+// getChatClawProvider reads the chatclaw provider config directly from the sqlite DB.
+func getChatClawProvider(ctx context.Context) (*chatClawProviderInfo, error) {
+	db := sqlite.DB()
+	if db == nil {
+		return nil, fmt.Errorf("sqlite not initialized")
+	}
+	var row struct {
+		APIKey      string `bun:"api_key"`
+		APIEndpoint string `bun:"api_endpoint"`
+	}
+	if err := db.NewSelect().
+		TableExpr("providers").
+		ColumnExpr("api_key, api_endpoint").
+		Where("provider_id = ?", "chatclaw").
+		Limit(1).
+		Scan(ctx, &row); err != nil {
+		return nil, fmt.Errorf("query chatclaw provider: %w", err)
+	}
+	return &chatClawProviderInfo{
+		APIKey:      row.APIKey,
+		APIEndpoint: row.APIEndpoint,
+	}, nil
 }
 
 func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
@@ -168,10 +222,14 @@ func (t *dingTalkSenderTool) InvokableRun(ctx context.Context, argsJSON string, 
 	}
 
 	// Priority order:
-	// 1) When pic_url/file_path exists, always use normal mode (images/files can't go into cards).
-	// 2) When send_mode is "typewriter" and content is text-only, use streaming card.
-	// 3) Otherwise send content as text/markdown via webhook.
-	if in.PicURL != "" || in.FilePath != "" {
+	// 1) When file_path is set, handle via sendByFilePath (image upload / non-image notice).
+	// 2) When pic_url is set (public URL), send the image message directly.
+	// 3) When send_mode is "typewriter" and content is text-only, use streaming card.
+	// 4) Otherwise send content as text/markdown via webhook.
+	if in.FilePath != "" {
+		return t.sendByFilePath(ctx, adapter, in)
+	}
+	if in.PicURL != "" {
 		return t.sendMarkdownWithAttachments(ctx, adapter, in)
 	}
 	if in.SendMode == "typewriter" {
@@ -355,72 +413,178 @@ func (t *dingTalkSenderTool) sendMarkdownWithAttachments(ctx context.Context, ad
 	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
 }
 
-func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
-	dingAdapter, ok := adapter.(*channels.DingTalkAdapter)
-	if !ok {
-		slog.Error("[dingtalk_sender] file flow adapter type assertion failed",
-			"channel_id", in.ChannelID,
-		)
-		return "Error: file upload is only supported on DingTalk channels", nil
-	}
-
-	isImageFile := isImageFilePath(in.FilePath)
-	if _, err := os.Stat(in.FilePath); err != nil {
-		slog.Error("[dingtalk_sender] file not accessible",
-			"file_path", in.FilePath,
-			"error", err,
-		)
-		return fmt.Sprintf("Error: file not accessible: %s", err.Error()), nil
-	}
-
-	mediaID, _, err := dingAdapter.UploadMessageFile(ctx, in.FilePath)
+// uploadImageToOSS uploads a local image file to the ChatClaw OSS endpoint and returns the public URL.
+func (t *dingTalkSenderTool) uploadImageToOSS(ctx context.Context, filePath string) (string, error) {
+	provider, err := getChatClawProvider(ctx)
 	if err != nil {
-		slog.Error("[dingtalk_sender] failed to upload file",
-			"file_path", in.FilePath,
-			"error", err,
-		)
-		return fmt.Sprintf("Error: failed to upload file: %s", err.Error()), nil
+		return "", fmt.Errorf("get chatclaw provider: %w", err)
 	}
 
-	if isImageFile {
-		// For local image files, send image message by media_id as compatibility path.
-		imageJSON, err := json.Marshal(map[string]string{
-			"msg_type": "image",
-			"media_id": mediaID,
+	apiKey := strings.TrimSpace(provider.APIKey)
+	if apiKey == "" {
+		return "", fmt.Errorf("chatclaw api_key not configured")
+	}
+
+	apiEndpoint := strings.TrimSuffix(strings.TrimSpace(provider.APIEndpoint), "/")
+	if apiEndpoint == "" {
+		apiEndpoint = strings.TrimSuffix(define.ServerURL, "/")
+	}
+	uploadURL := apiEndpoint + "/upload/image"
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		return "", fmt.Errorf("create form file: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return "", fmt.Errorf("copy file content: %w", err)
+	}
+	writer.Close()
+
+	uploadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(uploadCtx, http.MethodPost, uploadURL, &body)
+	if err != nil {
+		return "", fmt.Errorf("create upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("upload request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode upload response: %w", err)
+	}
+	if result.Code != 0 {
+		return "", fmt.Errorf("upload API error (code=%d): %s", result.Code, result.Message)
+	}
+	if result.Data.URL == "" {
+		return "", fmt.Errorf("upload API returned empty URL")
+	}
+	// DingTalk Markdown renderer requires HTTPS; upgrade plain HTTP OSS URLs.
+	ossURL := strings.Replace(result.Data.URL, "http://", "https://", 1)
+
+	return ossURL, nil
+}
+
+// sendByFilePath handles the file_path field:
+//   - Non-image files: DingTalk does not support them; send an explanatory notice message.
+//   - Image files that are already a network URL: send directly as a Markdown message.
+//   - Local image files: upload to ChatClaw OSS first, then send as a Markdown message.
+func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
+	filePath := in.FilePath
+
+	// DingTalk channels only support image attachments.
+	// Send an explanatory notice for any other file type.
+	if !isImagePath(filePath) {
+		fileName := filepath.Base(filePath)
+		ext := strings.ToLower(filepath.Ext(fileName))
+		if ext == "" {
+			ext = "unknown"
+		}
+		notice := fmt.Sprintf(
+			"**[文件通知]** 文件「%s」（格式：%s）无法通过钉钉直接发送，钉钉频道仅支持图片类型附件（jpg / png / gif 等）。",
+			fileName, ext,
+		)
+		noticePayload, err := json.Marshal(map[string]string{
+			"msg_type": "markdown",
+			"title":    "文件通知",
+			"markdown": notice,
 		})
 		if err != nil {
-			slog.Error("[dingtalk_sender] failed to marshal image-by-file payload",
+			slog.Error("[dingtalk_sender] failed to marshal non-image file notice",
+				"file_path", filePath,
 				"error", err,
-				"media_id", mediaID,
-				"target_id", in.TargetID,
 			)
-			return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
+			return fmt.Sprintf("Error: failed to build file notice payload: %s", err.Error()), nil
 		}
-		payload := string(imageJSON)
-		if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
-			return fmt.Sprintf("Error: image uploaded but failed to send: %s", err.Error()), nil
+		if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, string(noticePayload)); err != nil {
+			return fmt.Sprintf("Error: failed to send file notice: %s", err.Error()), nil
 		}
-		return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
+		slog.Info("[dingtalk_sender] non-image file notice sent",
+			"channel_id", in.ChannelID,
+			"target_id", in.TargetID,
+			"file_path", filePath,
+		)
+		return fmt.Sprintf("File type notice sent to %s: DingTalk only supports image attachments, file type %s is not supported.", in.TargetID, ext), nil
 	}
 
-	fileJSON, err := json.Marshal(map[string]string{
-		"msg_type":  "file",
-		"media_id":  mediaID,
-		"file_name": filepath.Base(in.FilePath),
+	// Resolve the public image URL: upload local files to OSS, pass through network URLs.
+	imageURL := filePath
+	if !isNetworkURL(filePath) {
+		slog.Info("[dingtalk_sender] uploading local image to OSS",
+			"channel_id", in.ChannelID,
+			"file_path", filePath,
+		)
+		uploaded, err := t.uploadImageToOSS(ctx, filePath)
+		if err != nil {
+			slog.Error("[dingtalk_sender] failed to upload image to OSS",
+				"file_path", filePath,
+				"error", err,
+			)
+			return fmt.Sprintf("Error: failed to upload image to OSS: %s", err.Error()), nil
+		}
+		imageURL = uploaded
+		slog.Info("[dingtalk_sender] image uploaded to OSS",
+			"channel_id", in.ChannelID,
+			"image_url", imageURL,
+		)
+	}
+
+	// Build Markdown content: optional text followed by the embedded image.
+	markdownContent := fmt.Sprintf("![image](%s)", imageURL)
+	title := "图片"
+	if strings.TrimSpace(in.Content) != "" {
+		markdownContent = in.Content + "\n\n" + markdownContent
+		firstLine := strings.SplitN(strings.TrimSpace(in.Content), "\n", 2)[0]
+		if len([]rune(firstLine)) > 20 {
+			firstLine = string([]rune(firstLine)[:20]) + "…"
+		}
+		title = firstLine
+	}
+
+	payloadBytes, err := json.Marshal(map[string]string{
+		"msg_type": "markdown",
+		"title":    title,
+		"markdown": markdownContent,
 	})
 	if err != nil {
-		slog.Error("[dingtalk_sender] failed to marshal file payload",
+		slog.Error("[dingtalk_sender] failed to marshal image markdown payload",
 			"error", err,
-			"media_id", mediaID,
+			"image_url", imageURL,
 			"target_id", in.TargetID,
 		)
-		return fmt.Sprintf("Error: failed to build file message payload: %s", err.Error()), nil
+		return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
 	}
-	payload := string(fileJSON)
-	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
-		return fmt.Sprintf("Error: file uploaded but failed to send: %s", err.Error()), nil
+	slog.Info("[dingtalk_sender] sending image markdown message",
+		"channel_id", in.ChannelID,
+		"target_id", in.TargetID,
+		"payload", string(payloadBytes),
+	)
+	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, string(payloadBytes)); err != nil {
+		return fmt.Sprintf("Error: failed to send image message: %s", err.Error()), nil
 	}
-	return fmt.Sprintf("File sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
+
+	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
 }
 
 func (t *dingTalkSenderTool) sendTextOrMarkdown(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
