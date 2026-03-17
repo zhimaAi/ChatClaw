@@ -8,3 +8,4 @@ frontend/bindings/**/*
 *.exe
 .idea/
 .DS_Store
+think_docs/

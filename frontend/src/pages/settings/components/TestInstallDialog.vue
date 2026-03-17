@@ -20,7 +20,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
-import { DownloadMethod, TestInstallConfig } from '@bindings/chatclaw/internal/services/toolchain/models'
+import {
+  DownloadMethod,
+  TestInstallConfig,
+} from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, X, Loader2, Play, Square } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -327,7 +330,13 @@ onUnmounted(() => {
         <div v-if="isRunning" class="rounded-lg border border-border bg-muted/50 p-4">
           <div class="mb-2 flex items-center justify-between">
             <span class="text-sm font-medium">
-              {{ progress.status === 'completed' ? t('settings.general.toolchain.testInstall.completed') : progress.status === 'failed' ? t('settings.general.toolchain.testInstall.failed') : t('settings.general.toolchain.testInstall.downloading') }}
+              {{
+                progress.status === 'completed'
+                  ? t('settings.general.toolchain.testInstall.completed')
+                  : progress.status === 'failed'
+                    ? t('settings.general.toolchain.testInstall.failed')
+                    : t('settings.general.toolchain.testInstall.downloading')
+              }}
             </span>
             <span v-if="isRunning" class="text-sm text-muted-foreground">
               {{ progress.percent.toFixed(1) }}%
@@ -343,7 +352,10 @@ onUnmounted(() => {
           </div>
 
           <!-- 进度详情 -->
-          <div v-if="isRunning" class="flex items-center justify-between text-xs text-muted-foreground">
+          <div
+            v-if="isRunning"
+            class="flex items-center justify-between text-xs text-muted-foreground"
+          >
             <span>
               {{ formatFileSize(progress.downloaded) }} / {{ formatFileSize(progress.totalSize) }}
             </span>
@@ -360,10 +372,24 @@ onUnmounted(() => {
         </div>
 
         <!-- 结果显示 -->
-        <div v-if="result && isFinished" class="rounded-lg border p-4" :class="result.success ? 'border-green-500/50 bg-green-500/10' : 'border-destructive/50 bg-destructive/10'">
+        <div
+          v-if="result && isFinished"
+          class="rounded-lg border p-4"
+          :class="
+            result.success
+              ? 'border-green-500/50 bg-green-500/10'
+              : 'border-destructive/50 bg-destructive/10'
+          "
+        >
           <div class="text-sm">
-            <span :class="result.success ? 'text-green-600 dark:text-green-400' : 'text-destructive'">
-              {{ result.success ? t('settings.general.toolchain.testInstall.success') : t('settings.general.toolchain.testInstall.failed') }}
+            <span
+              :class="result.success ? 'text-green-600 dark:text-green-400' : 'text-destructive'"
+            >
+              {{
+                result.success
+                  ? t('settings.general.toolchain.testInstall.success')
+                  : t('settings.general.toolchain.testInstall.failed')
+              }}
             </span>
           </div>
           <div v-if="result.version" class="mt-1 text-xs text-muted-foreground">

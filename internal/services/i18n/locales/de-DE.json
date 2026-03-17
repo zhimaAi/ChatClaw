@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "Auto-Assistent-Erstellung nicht verfügbar",
   "error.channel_ai_reply_failed": "KI-Antwort fehlgeschlagen: {{.Error}}",
   "error.channel_ai_reply_empty": "KI-Antwort fehlgeschlagen: Leere Antwort generiert",
+  "channel.feishu_streaming_generating": "Streaming-Antwort wird erstellt, bitte warten...",
+  "channel.feishu_stream_output_enabled": "Streaming-Ausgabe ist aktiviert. Zukünftige Antworten werden während der Generierung gesendet.",
+  "channel.feishu_stream_output_disabled": "Streaming-Ausgabe ist deaktiviert. Zukünftige Antworten werden gesendet, sobald das vollständige Ergebnis bereit ist.",
   "error.assistant_mcp_create_failed": "Erstellen des Assistant MCP ist fehlgeschlagen",
   "error.assistant_mcp_delete_failed": "Löschen des Assistant MCP ist fehlgeschlagen",
   "error.assistant_mcp_id_required": "Assistant-MCP-ID ist erforderlich",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "Werkzeugname darf nur Buchstaben, Ziffern und Unterstriche enthalten und muss mit einem Buchstaben beginnen",
   "error.assistant_mcp_tool_name_required": "Werkzeugname ist erforderlich",
   "error.assistant_mcp_tool_not_found": "Werkzeug wurde nicht gefunden",
-  "error.assistant_mcp_update_failed": "Aktualisieren des Assistant MCP ist fehlgeschlagen"
+  "error.assistant_mcp_update_failed": "Aktualisieren des Assistant MCP ist fehlgeschlagen",
+  "error.chat_too_many_files": "Dateianzahl überschreitet das Limit",
+  "error.chat_file_too_large": "Dateigröße überschreitet das Limit",
+  "error.chat_invalid_file_type": "Ungültiger Dateityp",
+  "error.file_not_found": "Datei nicht gefunden"
 }

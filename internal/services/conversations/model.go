@@ -69,7 +69,7 @@ type Conversation struct {
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
 	TeamType       string  `json:"team_type"`
-	DialogueID     int64   `json:"dialogue_id"`    // team mode only
+	DialogueID     int64   `json:"dialogue_id"`     // team mode only
 	TeamLibraryID  string  `json:"team_library_id"` // optional: ChatWiki team library id for recall
 
 	CreatedAt time.Time `json:"created_at"`
@@ -88,7 +88,7 @@ type CreateConversationInput struct {
 	EnableThinking bool    `json:"enable_thinking"`
 	ChatMode       string  `json:"chat_mode"`
 	TeamType       string  `json:"team_type"`
-	DialogueID     int64   `json:"dialogue_id"`    // team mode only, default 0
+	DialogueID     int64   `json:"dialogue_id"`     // team mode only, default 0
 	TeamLibraryID  string  `json:"team_library_id"` // optional: ChatWiki team library id for recall
 }
 
@@ -103,7 +103,7 @@ type UpdateConversationInput struct {
 	EnableThinking *bool    `json:"enable_thinking"`
 	ChatMode       *string  `json:"chat_mode"`
 	TeamType       *string  `json:"team_type"`
-	DialogueID     *int64   `json:"dialogue_id"`   // team mode only
+	DialogueID     *int64   `json:"dialogue_id"`     // team mode only
 	TeamLibraryID  *string  `json:"team_library_id"` // optional
 }
 
@@ -126,7 +126,7 @@ type conversationModel struct {
 	EnableThinking bool   `bun:"enable_thinking,notnull"`
 	ChatMode       string `bun:"chat_mode,notnull"`
 	TeamType       string `bun:"team_type,notnull"`
-	DialogueID     int64  `bun:"dialogue_id,notnull"`    // team mode only, default 0
+	DialogueID     int64  `bun:"dialogue_id,notnull"`     // team mode only, default 0
 	TeamLibraryID  string `bun:"team_library_id,notnull"` // optional, default ''
 }
 

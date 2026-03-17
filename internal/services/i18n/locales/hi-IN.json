@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "स्वतः सहायक निर्माण उपलब्ध नहीं है",
   "error.channel_ai_reply_failed": "AI उत्तर विफल: {{.Error}}",
   "error.channel_ai_reply_empty": "AI उत्तर विफल: खाली प्रतिक्रिया उत्पन्न हुई",
+  "channel.feishu_streaming_generating": "स्ट्रीमिंग उत्तर तैयार किया जा रहा है, कृपया प्रतीक्षा करें...",
+  "channel.feishu_stream_output_enabled": "स्ट्रीमिंग आउटपुट चालू कर दिया गया है। आगे के उत्तर बनते समय क्रमशः भेजे जाएंगे।",
+  "channel.feishu_stream_output_disabled": "स्ट्रीमिंग आउटपुट बंद कर दिया गया है। आगे के उत्तर पूरा परिणाम तैयार होने के बाद भेजे जाएंगे।",
   "error.assistant_mcp_create_failed": "Assistant MCP बनाना विफल रहा",
   "error.assistant_mcp_delete_failed": "Assistant MCP हटाना विफल रहा",
   "error.assistant_mcp_id_required": "Assistant MCP ID आवश्यक है",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "टूल नाम में केवल अक्षर, अंक और अंडरस्कोर हो सकते हैं, और इसे किसी अक्षर से शुरू होना चाहिए",
   "error.assistant_mcp_tool_name_required": "टूल नाम आवश्यक है",
   "error.assistant_mcp_tool_not_found": "टूल नहीं मिला",
-  "error.assistant_mcp_update_failed": "Assistant MCP अपडेट करना विफल रहा"
+  "error.assistant_mcp_update_failed": "Assistant MCP अपडेट करना विफल रहा",
+  "error.chat_too_many_files": "फ़ाइलों की संख्या सीमा से अधिक है",
+  "error.chat_file_too_large": "फ़ाइल का आकार सीमा से अधिक है",
+  "error.chat_invalid_file_type": "अमान्य फ़ाइल प्रकार",
+  "error.file_not_found": "फ़ाइल नहीं मिली"
 }

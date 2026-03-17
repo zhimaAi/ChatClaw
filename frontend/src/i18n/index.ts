@@ -1,18 +1,24 @@
 import { createI18n, type I18n } from 'vue-i18n'
-import { messages, type Locale } from '../locales'
+import { loadLocaleMessages, type Locale } from '../locales'
 
-// i18n 实例（由 initI18n 初始化）
 export let i18n: I18n
 
-/**
- * 初始化 i18n 实例（由后端指定语言）
- */
-export function initI18n(locale: Locale) {
+const FALLBACK_LOCALE: Locale = 'en-US'
+
+export async function initI18n(locale: Locale) {
+  const msgs: Record<string, any> = {}
+
+  const targets = locale === FALLBACK_LOCALE ? [locale] : [locale, FALLBACK_LOCALE]
+  const loaded = await Promise.all(targets.map((l) => loadLocaleMessages(l)))
+  targets.forEach((l, idx) => {
+    msgs[l] = loaded[idx]
+  })
+
   i18n = createI18n({
     legacy: false,
     locale,
-    fallbackLocale: 'en-US',
-    messages,
+    fallbackLocale: FALLBACK_LOCALE,
+    messages: msgs,
   })
   return i18n
 }

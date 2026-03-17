@@ -58,7 +58,7 @@ const setEnabled = (id: string, checked: boolean) => {
       localEnabledIds.value.push(id)
     }
   } else {
-    localEnabledIds.value = localEnabledIds.value.filter(i => i !== id)
+    localEnabledIds.value = localEnabledIds.value.filter((i) => i !== id)
   }
 }
 
@@ -132,7 +132,7 @@ const onPointerMove = (event: PointerEvent) => {
     const r = item.getBoundingClientRect()
     if (event.clientY >= r.top && event.clientY <= r.bottom) {
       dragOverIndex.value = idx
-      dragDirection.value = (event.clientY - r.top) < r.height / 2 ? 'up' : 'down'
+      dragDirection.value = event.clientY - r.top < r.height / 2 ? 'up' : 'down'
       found = true
     }
   })
@@ -180,7 +180,9 @@ onUnmounted(cleanupDrag)
       <DialogHeader class="text-left">
         <div class="flex items-center gap-2">
           <DialogTitle>{{ t('multiask.modelSettings') }}</DialogTitle>
-          <span class="text-xs text-muted-foreground font-normal">{{ t('multiask.dragToReorder') }}</span>
+          <span class="text-xs text-muted-foreground font-normal">{{
+            t('multiask.dragToReorder')
+          }}</span>
         </div>
       </DialogHeader>
 
@@ -196,7 +198,7 @@ onUnmounted(cleanupDrag)
             data-drag-item
             :class="[
               'group relative flex items-center justify-between p-2 transition-colors rounded-md cursor-grab active:cursor-grabbing touch-none',
-              draggedIndex === index ? 'opacity-30 bg-muted/60' : 'hover:bg-muted/50'
+              draggedIndex === index ? 'opacity-30 bg-muted/60' : 'hover:bg-muted/50',
             ]"
             @pointerdown="onRowPointerDown(index, $event)"
           >
@@ -205,14 +207,18 @@ onUnmounted(cleanupDrag)
               v-if="dragOverIndex === index"
               :class="[
                 'absolute left-0 right-0 h-0.5 bg-primary z-10 pointer-events-none rounded-full',
-                dragDirection === 'up' ? '-top-[1px]' : '-bottom-[1px]'
+                dragDirection === 'up' ? '-top-[1px]' : '-bottom-[1px]',
               ]"
             ></div>
             <div class="flex items-center gap-2 pointer-events-none">
-              <div class="text-muted-foreground/30 transition-colors group-hover:text-muted-foreground">
+              <div
+                class="text-muted-foreground/30 transition-colors group-hover:text-muted-foreground"
+              >
                 <GripVertical class="h-4 w-4" />
               </div>
-              <div class="flex size-8 items-center justify-center rounded-md border border-border bg-background">
+              <div
+                class="flex size-8 items-center justify-center rounded-md border border-border bg-background"
+              >
                 <ProviderIcon :icon="model.icon" :size="24" />
               </div>
               <span class="text-sm font-medium">{{ model.displayName || model.name }}</span>
@@ -228,7 +234,9 @@ onUnmounted(cleanupDrag)
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="emit('update:open', false)">{{ t('common.cancel') }}</Button>
+        <Button variant="outline" @click="emit('update:open', false)">{{
+          t('common.cancel')
+        }}</Button>
         <Button @click="handleSave">{{ t('common.save') }}</Button>
       </DialogFooter>
     </DialogContent>
