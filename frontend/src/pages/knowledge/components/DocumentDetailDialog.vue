@@ -3,12 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileText, RefreshCw, Trash2, FolderPlus, Pencil } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { DocumentService } from '@bindings/chatclaw/internal/services/document'
@@ -24,10 +19,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  'relearn': [doc: Document]
+  relearn: [doc: Document]
   'move-to-folder': [doc: Document]
-  'rename': [doc: Document]
-  'delete': [doc: Document]
+  rename: [doc: Document]
+  delete: [doc: Document]
 }>()
 
 const { t } = useI18n()
@@ -150,7 +145,11 @@ const handleRename = () => {
             <div class="flex flex-col gap-1">
               <span class="text-muted-foreground">{{ t('knowledge.detail.field.source') }}</span>
               <span class="text-foreground">
-                {{ detailDoc.source_type === 'local' ? t('knowledge.detail.local') : t('knowledge.detail.web') }}
+                {{
+                  detailDoc.source_type === 'local'
+                    ? t('knowledge.detail.local')
+                    : t('knowledge.detail.web')
+                }}
               </span>
             </div>
             <div class="flex flex-col gap-1">
@@ -162,17 +161,24 @@ const handleRename = () => {
 
         <!-- 处理状态 -->
         <div class="flex flex-col gap-3">
-          <h3 class="text-sm font-medium text-foreground">{{ t('knowledge.detail.processingInfo') }}</h3>
+          <h3 class="text-sm font-medium text-foreground">
+            {{ t('knowledge.detail.processingInfo') }}
+          </h3>
           <div class="flex flex-col gap-2 text-sm">
             <div class="flex items-center justify-between">
               <span class="text-muted-foreground">{{ t('knowledge.detail.status.parsing') }}</span>
               <span class="text-foreground">{{ statusText }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-muted-foreground">{{ t('knowledge.detail.status.embedding') }}</span>
+              <span class="text-muted-foreground">{{
+                t('knowledge.detail.status.embedding')
+              }}</span>
               <span class="text-foreground">{{ statusText }}</span>
             </div>
-            <div v-if="detailDoc.parsing_error || detailDoc.embedding_error" class="mt-2 rounded-md border border-border bg-muted/50 p-2 text-xs text-muted-foreground">
+            <div
+              v-if="detailDoc.parsing_error || detailDoc.embedding_error"
+              class="mt-2 rounded-md border border-border bg-muted/50 p-2 text-xs text-muted-foreground"
+            >
               {{ detailDoc.parsing_error || detailDoc.embedding_error }}
             </div>
           </div>
@@ -187,7 +193,9 @@ const handleRename = () => {
               <span class="text-foreground">{{ detailDoc.word_total.toLocaleString() }}</span>
             </div>
             <div class="flex flex-col gap-1">
-              <span class="text-muted-foreground">{{ t('knowledge.detail.field.splitTotal') }}</span>
+              <span class="text-muted-foreground">{{
+                t('knowledge.detail.field.splitTotal')
+              }}</span>
               <span class="text-foreground">{{ detailDoc.split_total.toLocaleString() }}</span>
             </div>
           </div>
@@ -207,7 +215,12 @@ const handleRename = () => {
             <Pencil class="size-4" />
             {{ t('knowledge.detail.actions.rename') }}
           </Button>
-          <Button variant="outline" size="sm" class="gap-2 text-destructive" @click="emit('delete', document!)">
+          <Button
+            variant="outline"
+            size="sm"
+            class="gap-2 text-destructive"
+            @click="emit('delete', document!)"
+          >
             <Trash2 class="size-4" />
             {{ t('knowledge.detail.actions.delete') }}
           </Button>

@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "অটো-ক্রিয়েট অ্যাসিস্ট্যান্ট উপলব্ধ নয়",
   "error.channel_ai_reply_failed": "AI রিপ্লাই ব্যর্থ: {{.Error}}",
   "error.channel_ai_reply_empty": "AI রিপ্লাই ব্যর্থ: খালি রেসপন্স তৈরি হয়েছে",
+  "channel.feishu_streaming_generating": "স্ট্রিমিং রিপ্লাই তৈরি হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...",
+  "channel.feishu_stream_output_enabled": "স্ট্রিমিং আউটপুট চালু করা হয়েছে। পরবর্তী উত্তরগুলো তৈরি হওয়ার সঙ্গে সঙ্গে পাঠানো হবে।",
+  "channel.feishu_stream_output_disabled": "স্ট্রিমিং আউটপুট বন্ধ করা হয়েছে। পরবর্তী উত্তরগুলো পূর্ণ ফলাফল প্রস্তুত হলে পাঠানো হবে।",
   "error.assistant_mcp_create_failed": "Assistant MCP তৈরি করতে ব্যর্থ হয়েছে",
   "error.assistant_mcp_delete_failed": "Assistant MCP মুছে ফেলতে ব্যর্থ হয়েছে",
   "error.assistant_mcp_id_required": "Assistant MCP আইডি প্রয়োজন",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "টুলের নাম শুধুমাত্র অক্ষর, সংখ্যা এবং আন্ডারস্কোর থাকতে পারবে এবং অবশ্যই একটি অক্ষর দিয়ে শুরু হতে হবে",
   "error.assistant_mcp_tool_name_required": "টুলের নাম প্রয়োজন",
   "error.assistant_mcp_tool_not_found": "টুল পাওয়া যায়নি",
-  "error.assistant_mcp_update_failed": "Assistant MCP হালনাগাদ করতে ব্যর্থ হয়েছে"
+  "error.assistant_mcp_update_failed": "Assistant MCP হালনাগাদ করতে ব্যর্থ হয়েছে",
+  "error.chat_too_many_files": "ফাইলের সংখ্যা সীমা অতিক্রম করেছে",
+  "error.chat_file_too_large": "ফাইলের আকার সীমা অতিক্রম করেছে",
+  "error.chat_invalid_file_type": "অবৈধ ফাইলের ধরন",
+  "error.file_not_found": "ফাইল পাওয়া যায়নি"
 }

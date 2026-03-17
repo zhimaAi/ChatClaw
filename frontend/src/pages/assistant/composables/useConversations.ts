@@ -131,7 +131,9 @@ export function useConversations(tabId: string) {
     return conversationsByAgent.value[agentId] ?? []
   }
 
-  const createConversation = async (input: CreateConversationInput): Promise<Conversation | null> => {
+  const createConversation = async (
+    input: CreateConversationInput
+  ): Promise<Conversation | null> => {
     try {
       const newConversation = await ConversationsService.CreateConversation(input)
       if (newConversation) {

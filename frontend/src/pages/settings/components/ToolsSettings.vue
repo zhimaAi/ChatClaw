@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Switch } from '@/components/ui/switch'
 import SettingsCard from './SettingsCard.vue'
@@ -311,6 +311,16 @@ const handleSelectionSearchChange = async (val: boolean) => {
 // 页面加载时获取设置
 onMounted(() => {
   void loadSettings()
+})
+
+// Sync switch state when setting is changed externally (e.g. popup context menu)
+const unsubSelectionChanged = Events.On('settings:selection-search-changed', (event: any) => {
+  const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+  enableSelectionSearch.value = !!payload?.enabled
+})
+
+onUnmounted(() => {
+  unsubSelectionChanged()
 })
 </script>
 

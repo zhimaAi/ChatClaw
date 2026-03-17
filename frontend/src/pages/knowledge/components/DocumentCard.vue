@@ -84,7 +84,8 @@ const statusConfig = computed(() => {
       return {
         label: '',
         icon: Check,
-        class: 'size-5 rounded-full bg-black/70 text-white shadow-sm dark:bg-white/15 dark:text-white',
+        class:
+          'size-5 rounded-full bg-black/70 text-white shadow-sm dark:bg-white/15 dark:text-white',
         iconClass: 'text-white',
         iconOnly: true,
         show: true,
@@ -378,7 +379,10 @@ const handleCardClick = () => {
           <RefreshCw class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.menu.relearn') }}
         </DropdownMenuItem>
-        <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('move-to-folder', document)">
+        <DropdownMenuItem
+          class="gap-2 whitespace-nowrap"
+          @select="emit('move-to-folder', document)"
+        >
           <FolderPlus class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.moveToFolder.title') }}
         </DropdownMenuItem>
@@ -390,7 +394,9 @@ const handleCardClick = () => {
           <FolderPlus class="size-4 text-muted-foreground" />
           {{ t('knowledge.content.navigateToFolder') }}
         </DropdownMenuItem>
-        <DropdownMenuSeparator v-if="isSearching && document.folderId !== null && document.folderId !== undefined" />
+        <DropdownMenuSeparator
+          v-if="isSearching && document.folderId !== null && document.folderId !== undefined"
+        />
         <DropdownMenuItem
           class="gap-2 whitespace-nowrap text-muted-foreground focus:text-foreground"
           @select="emit('delete', document)"

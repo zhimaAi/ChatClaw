@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "auto-create agent is not available",
   "error.channel_ai_reply_failed": "AI reply failed: {{.Error}}",
   "error.channel_ai_reply_empty": "AI reply failed: generated empty response",
+  "channel.feishu_streaming_generating": "Generating a streaming reply, please wait...",
+  "channel.feishu_stream_output_enabled": "Streaming output is enabled. Future replies will be sent progressively.",
+  "channel.feishu_stream_output_disabled": "Streaming output is disabled. Future replies will be sent after the full result is ready.",
   "error.assistant_mcp_list_failed": "failed to list assistant MCPs",
   "error.assistant_mcp_name_required": "MCP plugin name is required",
   "error.assistant_mcp_id_required": "assistant MCP ID is required",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_required": "tool name is required",
   "error.assistant_mcp_tool_name_invalid": "tool name must contain only letters, digits, and underscores, and start with a letter",
   "error.assistant_mcp_tool_name_duplicate": "tool name already exists",
-  "error.assistant_mcp_tool_not_found": "tool not found"
+  "error.assistant_mcp_tool_not_found": "tool not found",
+  "error.chat_too_many_files": "files count exceeds limit",
+  "error.chat_file_too_large": "file size exceeds limit",
+  "error.chat_invalid_file_type": "invalid file type",
+  "error.file_not_found": "file not found"
 }

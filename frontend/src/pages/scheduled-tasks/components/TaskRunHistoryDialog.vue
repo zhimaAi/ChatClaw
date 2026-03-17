@@ -67,13 +67,17 @@ async function selectRun(run: ScheduledTaskRun) {
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]">
+    <DialogContent
+      class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]"
+    >
       <DialogHeader>
         <DialogTitle>{{ task?.name }} / 运行记录</DialogTitle>
       </DialogHeader>
 
       <div class="flex h-[70vh] min-h-0 gap-4">
-        <div class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]">
+        <div
+          class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]"
+        >
           <div v-if="loading" class="p-4 text-sm text-muted-foreground">加载中...</div>
           <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
             暂无运行记录
@@ -86,7 +90,11 @@ async function selectRun(run: ScheduledTaskRun) {
             @click="selectRun(run)"
           >
             <div class="flex items-start gap-2 overflow-hidden">
-              <TaskRunStatusBadge class="mt-0.5 shrink-0" :status="run.status" :label="displayRunStatusLabel(run.status)" />
+              <TaskRunStatusBadge
+                class="mt-0.5 shrink-0"
+                :status="run.status"
+                :label="displayRunStatusLabel(run.status)"
+              />
               <div class="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
                 <div class="w-full text-[11px] leading-4 text-foreground">
                   {{ formatTaskTime(run.started_at) }}
@@ -98,7 +106,7 @@ async function selectRun(run: ScheduledTaskRun) {
                 </div>
               </div>
             </div>
-    
+
             <TooltipProvider>
               <Tooltip v-if="run.error_message">
                 <TooltipTrigger as-child>

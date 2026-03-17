@@ -175,6 +175,14 @@ func (w *ClickOutsideWatcher) ClearPopupRect() {
 	C.clearClickOutsidePopupRect()
 }
 
+// SetInsideCallback sets a callback for clicks inside the popup (no-op on macOS).
+func (w *ClickOutsideWatcher) SetInsideCallback(cb func(x, y int32)) {
+}
+
+// ClearInsideCallback removes the inside-click callback (no-op on macOS).
+func (w *ClickOutsideWatcher) ClearInsideCallback() {
+}
+
 func (w *ClickOutsideWatcher) run() {
 	if !C.startClickOutsideEventTap() {
 		close(w.ready)

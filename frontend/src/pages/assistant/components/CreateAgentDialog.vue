@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import { defaultAvatars } from '@/assets/avatars'
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,11 @@ watch(
 )
 
 const handleClose = () => emit('update:open', false)
+
+const handleSelectDefaultAvatar = (src: string) => {
+  icon.value = src
+}
+
 const handlePickIcon = async () => {
   if (props.loading) return
   try {
@@ -72,6 +78,7 @@ const handlePickIcon = async () => {
     console.error('Failed to pick icon:', error)
   }
 }
+
 const handleCreate = () => {
   if (!isValid.value || props.loading) return
   emit('create', { name: name.value.trim(), prompt: prompt.value.trim(), icon: icon.value })
@@ -97,6 +104,38 @@ const handleCreate = () => {
           </button>
           <div class="text-xs text-muted-foreground">
             {{ t('assistant.icon.hint') }}
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <div class="text-xs text-muted-foreground">
+            {{ t('assistant.icon.defaultAvatars') }}
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <button
+              v-for="avatar in defaultAvatars"
+              :key="avatar.id"
+              type="button"
+              class="relative flex size-12 items-center justify-center rounded-xl border transition-colors"
+              :class="
+                icon === avatar.src
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-background hover:border-foreground/40 hover:bg-muted/60 dark:border-white/10'
+              "
+              @click="handleSelectDefaultAvatar(avatar.src)"
+            >
+              <img :src="avatar.src" class="size-10 rounded-lg object-cover" />
+              <div
+                v-if="icon === avatar.src"
+                class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"
+              >
+                <span
+                  class="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+                >
+                  ✓
+                </span>
+              </div>
+            </button>
           </div>
         </div>
 

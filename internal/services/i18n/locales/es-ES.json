@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "Creación automática de asistente no disponible",
   "error.channel_ai_reply_failed": "Respuesta de IA fallida: {{.Error}}",
   "error.channel_ai_reply_empty": "Respuesta de IA fallida: Se generó una respuesta vacía",
+  "channel.feishu_streaming_generating": "Generando una respuesta en streaming, por favor espera...",
+  "channel.feishu_stream_output_enabled": "La salida en streaming está activada. Las próximas respuestas se enviarán progresivamente.",
+  "channel.feishu_stream_output_disabled": "La salida en streaming está desactivada. Las próximas respuestas se enviarán cuando el resultado completo esté listo.",
   "error.assistant_mcp_create_failed": "Error al crear el Assistant MCP",
   "error.assistant_mcp_delete_failed": "Error al eliminar el Assistant MCP",
   "error.assistant_mcp_id_required": "Se requiere el ID del Assistant MCP",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "El nombre de la herramienta solo puede contener letras, dígitos y guiones bajos, y debe empezar por una letra",
   "error.assistant_mcp_tool_name_required": "Se requiere el nombre de la herramienta",
   "error.assistant_mcp_tool_not_found": "No se encontró la herramienta",
-  "error.assistant_mcp_update_failed": "Error al actualizar el Assistant MCP"
+  "error.assistant_mcp_update_failed": "Error al actualizar el Assistant MCP",
+  "error.chat_too_many_files": "La cantidad de archivos excede el límite",
+  "error.chat_file_too_large": "El tamaño del archivo excede el límite",
+  "error.chat_invalid_file_type": "Tipo de archivo no válido",
+  "error.file_not_found": "Archivo no encontrado"
 }

@@ -1,8 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type, ShieldCheck, Monitor } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
+import {
+  Pencil,
+  Copy,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  SendHorizontal,
+  Type,
+  ShieldCheck,
+  Monitor,
+  File as FileIcon,
+  ExternalLink,
+} from 'lucide-vue-next'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
@@ -15,6 +28,7 @@ import RetrievalBlock from './RetrievalBlock.vue'
 import MessageEditor from './MessageEditor.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import ImagePreviewDialog from './ImagePreviewDialog.vue'
+import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 
 const props = defineProps<{
   message: Message
@@ -138,22 +152,29 @@ const isAssistant = computed(() => props.message.role === MessageRole.ASSISTANT)
 const isTool = computed(() => props.message.role === MessageRole.TOOL)
 const isSnapMode = computed(() => props.mode === 'snap')
 
-// Parse images from images_json
-const images = computed<ImagePayload[]>(() => {
+// Parse attachments from images_json (images + files)
+const allAttachments = computed<ImagePayload[]>(() => {
   if (!props.message.images_json) return []
   try {
     const parsed = JSON.parse(props.message.images_json)
-    if (Array.isArray(parsed)) {
-      return parsed.map((img: ImagePayload) => ({
-        ...img,
-        data_url: img.data_url || `data:${img.mime_type};base64,${img.base64}`,
-      }))
-    }
-    return []
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
 })
+
+const images = computed<ImagePayload[]>(() =>
+  allAttachments.value
+    .filter((a) => a.kind !== 'file')
+    .map((img) => ({
+      ...img,
+      data_url: img.data_url || `data:${img.mime_type};base64,${img.base64}`,
+    }))
+)
+
+const fileAttachments = computed<ImagePayload[]>(() =>
+  allAttachments.value.filter((a) => a.kind === 'file')
+)
 
 // Token usage display: only show when not streaming and has token data
 const hasTokenUsage = computed(() => {
@@ -179,7 +200,7 @@ const displaySegments = computed((): MessageSegment[] => {
   if (props.segments && props.segments.length > 0) {
     return props.segments
   }
-  
+
   // Priority 2: For streaming without segments, build from individual streaming props
   // (This fixes the first message tool call issue)
   if (props.isStreaming) {
@@ -195,25 +216,25 @@ const displaySegments = computed((): MessageSegment[] => {
     }
     if (segs.length > 0) return segs
   }
-  
+
   // Priority 3: Fallback for historical messages - construct from message data
   if (!isAssistant.value) return []
   const segs: MessageSegment[] = []
-  
+
   const thinking = thinkingContent.value
   if (thinking) {
     segs.push({ type: 'thinking', content: thinking })
   }
-  
+
   const content = displayContent.value
   if (content) {
     segs.push({ type: 'content', content })
   }
-  
+
   if (toolCalls.value.length > 0) {
     segs.push({ type: 'tools', toolCalls: toolCalls.value })
   }
-  
+
   return segs
 })
 
@@ -248,7 +269,7 @@ const errorMessageKey = computed(() => {
 
 const handleCopy = async () => {
   try {
-    await navigator.clipboard.writeText(displayContent.value)
+    await copyToClipboard(displayContent.value)
     copied.value = true
     window.setTimeout(() => {
       copied.value = false
@@ -274,6 +295,23 @@ const handleCancelEdit = () => {
 const openImagePreview = (index: number) => {
   imagePreviewIndex.value = index
   imagePreviewOpen.value = true
+}
+
+const formatFileSize = (bytes: number | undefined): string => {
+  if (!bytes) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+const handleOpenFile = async (filePath: string) => {
+  if (!filePath) return
+  try {
+    await BrowserService.OpenFile(filePath)
+  } catch (err) {
+    console.error('Failed to open file:', err)
+    toast.error(t('assistant.errors.fileOpenFailed'))
+  }
 }
 
 // Lazy loading setup with Intersection Observer
@@ -357,7 +395,9 @@ onUnmounted(() => {
             <img v-if="agentIcon" :src="agentIcon" class="size-4 object-contain" />
             <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
           </div>
-          <span class="text-xs font-medium text-muted-foreground">{{ agentName || 'Assistant' }}</span>
+          <span class="text-xs font-medium text-muted-foreground">{{
+            agentName || 'Assistant'
+          }}</span>
           <TooltipProvider v-if="sandboxMode" :delay-duration="300">
             <Tooltip>
               <TooltipTrigger as-child>
@@ -367,7 +407,11 @@ onUnmounted(() => {
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {{ sandboxMode === 'codex' ? t('assistant.workspaceDrawer.sandboxTooltip') : t('assistant.workspaceDrawer.nativeTooltip') }}
+                {{
+                  sandboxMode === 'codex'
+                    ? t('assistant.workspaceDrawer.sandboxTooltip')
+                    : t('assistant.workspaceDrawer.nativeTooltip')
+                }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -393,10 +437,7 @@ onUnmounted(() => {
             :is-streaming="isStreaming"
           />
           <!-- Retrieval segment -->
-          <RetrievalBlock
-            v-if="segment.type === 'retrieval'"
-            :items="segment.items"
-          />
+          <RetrievalBlock v-if="segment.type === 'retrieval'" :items="segment.items" />
         </template>
 
         <!-- Streaming cursor when no content segments yet (e.g. agent starts with tool calls) -->
@@ -417,7 +458,7 @@ onUnmounted(() => {
               <span>{{ t(errorMessageKey) }}</span>
               <button
                 v-if="errorDetail"
-                class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground active:text-foreground transition-colors"
                 @click="showErrorDetail = !showErrorDetail"
               >
                 <span class="text-[10px]">{{
@@ -455,22 +496,21 @@ onUnmounted(() => {
           v-if="isEditing"
           :initial-content="message.content"
           :initial-images="images"
+          :initial-files="fileAttachments"
           @save="handleSaveEdit"
           @cancel="handleCancelEdit"
         />
         <!-- Normal display mode -->
         <div v-else class="flex flex-col gap-2">
-          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">
+            {{ displayContent }}
+          </p>
           <!-- Image previews -->
-          <div
-            v-if="images.length > 0"
-            ref="imageContainerRef"
-            class="mt-2 flex flex-wrap gap-2"
-          >
+          <div v-if="images.length > 0" ref="imageContainerRef" class="mt-2 flex flex-wrap gap-2">
             <div
               v-for="(img, idx) in images"
               :key="img.id || img.file_name || img.base64.slice(0, 20)"
-              class="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-md border border-border bg-muted/40 transition-opacity hover:opacity-90"
+              class="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-md border border-border bg-muted/40 transition-opacity hover:opacity-90 active:opacity-80"
               @click="openImagePreview(idx)"
             >
               <!-- Load first 3 images immediately, rest lazy load -->
@@ -488,6 +528,29 @@ onUnmounted(() => {
                 loading="lazy"
               />
             </div>
+          </div>
+          <!-- File attachment cards -->
+          <div v-if="fileAttachments.length > 0" class="mt-2 flex flex-wrap gap-2">
+            <button
+              v-for="f in fileAttachments"
+              :key="f.id || f.file_name || f.file_path"
+              class="flex items-center gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/80"
+              @click="handleOpenFile(f.file_path || '')"
+            >
+              <FileIcon class="size-5 shrink-0 text-muted-foreground" />
+              <div class="flex min-w-0 flex-col">
+                <span
+                  class="truncate text-xs font-medium text-foreground"
+                  :title="f.original_name || f.file_name"
+                >
+                  {{ f.original_name || f.file_name || 'File' }}
+                </span>
+                <span v-if="f.size" class="text-[10px] text-muted-foreground">{{
+                  formatFileSize(f.size)
+                }}</span>
+              </div>
+              <ExternalLink class="size-3.5 shrink-0 text-muted-foreground/60" />
+            </button>
           </div>
         </div>
       </div>

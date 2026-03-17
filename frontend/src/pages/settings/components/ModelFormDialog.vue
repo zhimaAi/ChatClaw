@@ -71,7 +71,8 @@ watch(
       formModelId.value = model.model_id
       formName.value = model.name
       formType.value = model.type
-      formCapabilities.value = model.capabilities && model.capabilities.length > 0 ? model.capabilities : ['text']
+      formCapabilities.value =
+        model.capabilities && model.capabilities.length > 0 ? model.capabilities : ['text']
     } else {
       formModelId.value = ''
       formName.value = ''
@@ -207,7 +208,7 @@ defineExpose({ resetSaving })
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm transition-colors border',
                 formCapabilities.includes(cap.value)
                   ? 'bg-primary/10 border-primary text-primary'
-                  : 'bg-transparent border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'bg-transparent border-border text-muted-foreground hover:bg-muted hover:text-foreground',
               ]"
               @click="toggleCapability(cap.value)"
             >

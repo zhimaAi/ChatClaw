@@ -3,7 +3,11 @@ import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage, isChatWikiAuthExpiredError } from '@/composables/useErrorMessage'
 import { type Binding, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
-import { getBinding as getBindingCached, getRobotList as getRobotListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
+import {
+  getBinding as getBindingCached,
+  getRobotList as getRobotListCached,
+  clearAll as clearChatwikiCache,
+} from '@/lib/chatwikiCache'
 
 /**
  * Team mode: loads ChatWiki binding (chatwiki_bindings table) and robot list
@@ -69,8 +73,7 @@ export function useTeamRobots() {
       })
       const list = await getRobotListCached()
       teamRobots.value = list ?? []
-      activeTeamRobotId.value =
-        teamRobots.value.length > 0 ? teamRobots.value[0].id : null
+      activeTeamRobotId.value = teamRobots.value.length > 0 ? teamRobots.value[0].id : null
       console.info('[assistant][team] load robots: success', {
         count: teamRobots.value.length,
         active_robot_id: activeTeamRobotId.value,
@@ -94,9 +97,7 @@ export function useTeamRobots() {
     }
   }
 
-  const isTeamEmpty = computed(
-    () => !teamLoading.value && teamRobots.value.length === 0
-  )
+  const isTeamEmpty = computed(() => !teamLoading.value && teamRobots.value.length === 0)
   const activeRobot = computed(
     () => teamRobots.value.find((robot) => robot.id === activeTeamRobotId.value) ?? null
   )

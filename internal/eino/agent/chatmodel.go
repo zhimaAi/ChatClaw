@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"chatclaw/internal/errs"
 
@@ -57,10 +58,12 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if cfg.ExtraFields == nil {
-		cfg.ExtraFields = make(map[string]any)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
 	}
-	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }
@@ -74,6 +77,12 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 			return nil, errs.Wrap("error.chat_invalid_extra_config", err)
 		}
 	}
+	if config.Provider.APIEndpoint == "" {
+		return nil, fmt.Errorf("azure api endpoint is required")
+	}
+	if extraConfig.APIVersion == "" {
+		extraConfig.APIVersion = "2023-05-15"
+	}
 
 	cfg := &openai.ChatModelConfig{
 		APIKey:     config.Provider.APIKey,
@@ -84,10 +93,12 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 	}
 	applyOpenAIModelParams(cfg, config)
 
-	if cfg.ExtraFields == nil {
-		cfg.ExtraFields = make(map[string]any)
+	if config.EnableThinking {
+		if cfg.ExtraFields == nil {
+			cfg.ExtraFields = make(map[string]any)
+		}
+		cfg.ExtraFields["enable_thinking"] = true
 	}
-	cfg.ExtraFields["enable_thinking"] = config.EnableThinking
 
 	return openai.NewChatModel(ctx, cfg)
 }

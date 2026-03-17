@@ -953,10 +953,9 @@ func testChatModel(ctx context.Context, chatModel ChatModelGenerator) *CheckAPIK
 // checkOpenAI 使用 OpenAI SDK 检测
 func (s *ProvidersService) checkOpenAI(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:      input.APIKey,
-		Model:       modelID,
-		BaseURL:     input.APIEndpoint,
-		ExtraFields: map[string]any{"enable_thinking": false},
+		APIKey:  input.APIKey,
+		Model:   modelID,
+		BaseURL: input.APIEndpoint,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{
@@ -983,12 +982,11 @@ func (s *ProvidersService) checkAzure(ctx context.Context, input CheckAPIKeyInpu
 	}
 
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:      input.APIKey,
-		Model:       modelID,
-		BaseURL:     input.APIEndpoint,
-		ByAzure:     true,
-		APIVersion:  extraConfig.APIVersion,
-		ExtraFields: map[string]any{"enable_thinking": false},
+		APIKey:     input.APIKey,
+		Model:      modelID,
+		BaseURL:    input.APIEndpoint,
+		ByAzure:    true,
+		APIVersion: extraConfig.APIVersion,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{

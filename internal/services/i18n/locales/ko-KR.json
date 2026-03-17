@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "자동 어시스턴트 생성 사용 불가",
   "error.channel_ai_reply_failed": "AI 응답 실패: {{.Error}}",
   "error.channel_ai_reply_empty": "AI 응답 실패: 빈 응답이 생성되었습니다",
+  "channel.feishu_streaming_generating": "응답을 스트리밍 생성하는 중입니다. 잠시만 기다려 주세요...",
+  "channel.feishu_stream_output_enabled": "스트리밍 출력을 켰습니다. 이후 답변은 생성되면서 전송됩니다.",
+  "channel.feishu_stream_output_disabled": "스트리밍 출력을 껐습니다. 이후 답변은 전체 결과가 준비된 뒤 전송됩니다.",
   "error.assistant_mcp_create_failed": "Assistant MCP 생성에 실패했습니다",
   "error.assistant_mcp_delete_failed": "Assistant MCP 삭제에 실패했습니다",
   "error.assistant_mcp_id_required": "Assistant MCP ID가 필요합니다",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "도구 이름은 문자로 시작해야 하며, 문자·숫자·밑줄만 포함할 수 있습니다",
   "error.assistant_mcp_tool_name_required": "도구 이름이 필요합니다",
   "error.assistant_mcp_tool_not_found": "도구를 찾을 수 없습니다",
-  "error.assistant_mcp_update_failed": "Assistant MCP 업데이트에 실패했습니다"
+  "error.assistant_mcp_update_failed": "Assistant MCP 업데이트에 실패했습니다",
+  "error.chat_too_many_files": "파일 수가 제한을 초과합니다",
+  "error.chat_file_too_large": "파일 크기가 제한을 초과합니다",
+  "error.chat_invalid_file_type": "유효하지 않은 파일 유형",
+  "error.file_not_found": "파일을 찾을 수 없습니다"
 }

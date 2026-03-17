@@ -30,9 +30,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const moving = ref(false)
 
-type Location =
-  | { kind: 'root' }
-  | { kind: 'folder'; id: number }
+type Location = { kind: 'root' } | { kind: 'folder'; id: number }
 
 const location = ref<Location>({ kind: 'root' })
 
@@ -119,14 +117,14 @@ const breadcrumbs = computed<Crumb[]>(() => {
 
 const listFolders = computed<Folder[]>(() => {
   if (!props.folder) return []
-  
+
   let folders: Folder[] = []
   if (location.value.kind === 'folder') {
     folders = currentFolder.value?.children ?? []
   } else if (location.value.kind === 'root') {
     folders = props.folders
   }
-  
+
   // 过滤掉要移动的文件夹本身及其子文件夹
   return folders.filter((f) => {
     if (!props.folder) return true
@@ -137,12 +135,12 @@ const listFolders = computed<Folder[]>(() => {
 const canMoveHere = computed(() => {
   if (!props.folder || moving.value) return false
   if (location.value.kind === 'root') return true
-  
+
   // 检查目标文件夹不是要移动的文件夹本身或其子文件夹
   if (location.value.kind === 'folder') {
     return !isDescendantOf(location.value.id, props.folder.id)
   }
-  
+
   return false
 })
 
@@ -160,7 +158,7 @@ watch(
 const handleMove = async () => {
   if (!props.folder || moving.value) return
   if (!canMoveHere.value) return
-  
+
   moving.value = true
   try {
     let parentID: number | null = null

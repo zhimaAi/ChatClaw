@@ -14,9 +14,14 @@ export function formatDuration(ms: number) {
   return `${(ms / 60000).toFixed(1)}m`
 }
 
-export function describeSchedule(task: Pick<ScheduledTask, 'schedule_type' | 'schedule_value' | 'cron_expr'>) {
+export function describeSchedule(
+  task: Pick<ScheduledTask, 'schedule_type' | 'schedule_value' | 'cron_expr'>
+) {
   if (task.schedule_type === 'preset') {
-    return SCHEDULE_PRESET_LABELS[task.schedule_value as keyof typeof SCHEDULE_PRESET_LABELS] || task.schedule_value
+    return (
+      SCHEDULE_PRESET_LABELS[task.schedule_value as keyof typeof SCHEDULE_PRESET_LABELS] ||
+      task.schedule_value
+    )
   }
   if (task.schedule_type === 'custom') {
     try {
@@ -37,7 +42,10 @@ export function describeSchedule(task: Pick<ScheduledTask, 'schedule_type' | 'sc
       }
       if (parsed.weekdays?.length) {
         const labels = parsed.weekdays
-          .map((value) => WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabel || String(value))
+          .map(
+            (value) =>
+              WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabel || String(value)
+          )
           .join(' ')
         return `每周 ${labels} ${hh}:${mm}`
       }
@@ -79,7 +87,8 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   form.cronExpr = task.cron_expr
 
   if (task.schedule_type === 'preset') {
-    form.schedulePreset = (task.schedule_value || 'every_day_0900') as ScheduledTaskFormState['schedulePreset']
+    form.schedulePreset = (task.schedule_value ||
+      'every_day_0900') as ScheduledTaskFormState['schedulePreset']
   }
 
   if (task.schedule_type === 'custom') {
