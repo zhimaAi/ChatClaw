@@ -1066,10 +1066,7 @@ watch(activeTab, (tab) => {
           <button
             v-if="searchMode"
             class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            @click="
-              searchMode = false
-              searchQuery = ''
-            "
+            @click="searchMode = false; searchQuery = ''"
           >
             <X class="size-4" />
           </button>
