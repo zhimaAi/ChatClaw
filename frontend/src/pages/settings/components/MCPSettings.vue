@@ -520,6 +520,9 @@ async function handleDeleteAssistantMcp() {
   try {
     await AssistantMCPService.Delete(item.id)
     assistantMcps.value = assistantMcps.value.filter((a) => a.id !== item.id)
+    if (amcpDetail.value?.id === item.id) {
+      goBackFromAmcpDetail()
+    }
     toast.success(t('settings.mcp.assistantMcpDeleteSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpDeleteFailed'))
@@ -601,6 +604,7 @@ const amcpDetail = ref<AssistantMCP | null>(null)
 const editingTool = ref<ToolEntry | null>(null)
 const editToolForm = ref({ toolName: '', toolDescription: '' })
 const editToolSaving = ref(false)
+const removingToolAgentId = ref<number | null>(null)
 const connectionInfo = ref<{ url: string; authorization: string } | null>(null)
 const agentMap = ref<Map<number, Agent>>(new Map())
 
@@ -619,6 +623,7 @@ async function showAmcpDetail(item: AssistantMCP) {
 function goBackFromAmcpDetail() {
   amcpDetail.value = null
   editingTool.value = null
+  removingToolAgentId.value = null
   connectionInfo.value = null
   activeSubTab.value = 'assistantMcp'
 }
@@ -657,7 +662,8 @@ async function handleSaveEditTool() {
 }
 
 async function handleRemoveTool(tool: ToolEntry) {
-  if (!amcpDetail.value) return
+  if (!amcpDetail.value || removingToolAgentId.value !== null) return
+  removingToolAgentId.value = tool.agentId
   try {
     const updated = await AssistantMCPService.RemoveTool({
       id: amcpDetail.value.id,
@@ -668,9 +674,14 @@ async function handleRemoveTool(tool: ToolEntry) {
       const idx = assistantMcps.value.findIndex((a) => a.id === updated.id)
       if (idx >= 0) assistantMcps.value[idx] = updated
     }
+    if (editingTool.value?.agentId === tool.agentId) {
+      editingTool.value = null
+    }
     toast.success(t('settings.mcp.assistantMcpDeleteSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('settings.mcp.assistantMcpUpdateFailed'))
+  } finally {
+    removingToolAgentId.value = null
   }
 }
 
@@ -1002,10 +1013,12 @@ onUnmounted(() => {
                         <Pencil class="size-3" />
                       </button>
                       <button
+                        :disabled="removingToolAgentId === tool.agentId"
                         class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         @click="handleRemoveTool(tool)"
                       >
-                        <Trash2 class="size-3" />
+                        <Loader2 v-if="removingToolAgentId === tool.agentId" class="size-3 animate-spin" />
+                        <Trash2 v-else class="size-3" />
                       </button>
                     </div>
                   </div>
