@@ -37,6 +37,7 @@ require (
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/tencent-connect/botgo v0.2.1
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/wailsapp/go-webview2 v1.0.23
@@ -109,6 +110,7 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/go-resty/resty/v2 v2.6.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect

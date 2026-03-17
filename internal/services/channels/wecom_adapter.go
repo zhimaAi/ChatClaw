@@ -609,6 +609,7 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 		SenderName: senderID,
 		ChatID:     chatID,
 		ChatName:   "",
+		IsGroup:    body.ChatType == "group",
 		Content:    content,
 		MsgType:    msgType,
 		RawData:    string(rawData),
