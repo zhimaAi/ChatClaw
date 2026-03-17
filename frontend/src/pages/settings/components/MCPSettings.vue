@@ -313,7 +313,7 @@ async function handleDelete() {
 }
 
 // ==================== Settings tab ====================
-const mcpEnabled = ref(false)
+const mcpEnabled = ref(true)
 
 async function loadSettings() {
   try {
