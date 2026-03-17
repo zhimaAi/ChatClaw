@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AI klepet",
+    aiChat: "Vprašaj ChatClaw AI",
+    disableSelectionSearch: "Zapri",
   },
   nav: {
     assistant: "AI pomočnik",

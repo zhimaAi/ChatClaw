@@ -16,6 +16,7 @@ import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
 import DocumentViewerPage from '@/pages/document/DocumentViewerPage.vue'
 import ChannelsPage from '@/pages/channels/ChannelsPage.vue'
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
+import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
@@ -73,6 +74,7 @@ function showInAppPopup(text: string, clientX: number, clientY: number) {
 
 function hideInAppPopup() {
   inAppPopup.value.visible = false
+  inAppPopupContextMenu.value.visible = false
   if (inAppPopupHideTimer) {
     clearTimeout(inAppPopupHideTimer)
     inAppPopupHideTimer = null
@@ -84,6 +86,30 @@ function handleInAppPopupClick() {
   hideInAppPopup()
   if (text) {
     dispatchSelectedText(text)
+  }
+}
+
+const inAppPopupContextMenu = ref({ visible: false, x: 0, y: 0 })
+
+function handleInAppPopupContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  inAppPopupContextMenu.value = { visible: true, x: e.clientX, y: e.clientY }
+}
+
+function hideInAppPopupContextMenu() {
+  inAppPopupContextMenu.value.visible = false
+}
+
+async function handleDisableSelectionSearchFromPopup() {
+  hideInAppPopupContextMenu()
+  hideInAppPopup()
+  try {
+    await SettingsService.SetValue('enable_selection_search', 'false')
+    selectionSearchEnabled.value = false
+    Events.Emit('settings:selection-search-changed', { enabled: false })
+    await TextSelectionService.SyncFromSettings()
+  } catch (err) {
+    console.error('[InAppPopup] Disable selection search error:', err)
   }
 }
 
@@ -137,6 +163,7 @@ let unsubscribeShowDialog: (() => void) | null = null
 let unsubscribeFloatingBallSettings: (() => void) | null = null
 
 let unsubscribeTextSelection: (() => void) | null = null
+let unsubscribeRequestDisableSetting: (() => void) | null = null
 let onMouseDown: ((e: MouseEvent) => void) | null = null
 let onMouseUp: ((e: MouseEvent) => void) | null = null
 let onKeyDownCapture: ((e: KeyboardEvent) => void) | null = null
@@ -268,6 +295,19 @@ onMounted(async () => {
     }
   })
 
+  // Listen for disable-setting requests from the external popup window.
+  // The popup cannot call SettingsService bindings reliably (WS_EX_NOACTIVATE
+  // window), so the backend emits this event and we persist the setting here.
+  unsubscribeRequestDisableSetting = Events.On('text-selection:request-disable-setting', async () => {
+    try {
+      await SettingsService.SetValue('enable_selection_search', 'false')
+      selectionSearchEnabled.value = false
+      Events.Emit('settings:selection-search-changed', { enabled: false })
+    } catch (err) {
+      console.error('[App] Failed to persist disable selection search:', err)
+    }
+  })
+
   // In-app text selection: global mousedown + mouseup listeners.
   // Mouse hook skips our own windows, so we handle in-app selection here.
   // We track mousedown position and only show the popup when the user actually
@@ -276,6 +316,11 @@ onMounted(async () => {
     if (e.button !== 0) return
     mouseDownX = e.screenX
     mouseDownY = e.screenY
+
+    // Hide context menu on any left click
+    if (inAppPopupContextMenu.value.visible) {
+      hideInAppPopupContextMenu()
+    }
 
     // Hide in-app popup when clicking outside of it
     const popupEl = document.getElementById('in-app-selection-popup')
@@ -389,6 +434,8 @@ onUnmounted(() => {
   }
   unsubscribeSelectionSettingChanged?.()
   unsubscribeSelectionSettingChanged = null
+  unsubscribeRequestDisableSetting?.()
+  unsubscribeRequestDisableSetting = null
   themeObserver?.disconnect()
 })
 </script>
@@ -405,10 +452,26 @@ onUnmounted(() => {
       :style="{ left: inAppPopup.x + 'px', top: inAppPopup.y + 'px' }"
     >
       <div
-        class="flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 shadow-sm transition-colors hover:bg-accent dark:shadow-none dark:ring-1 dark:ring-white/10"
-        @mousedown.prevent="handleInAppPopupClick"
+        class="flex cursor-pointer items-center rounded-full border border-border bg-background px-4 py-2 shadow-sm transition-all hover:bg-accent active:scale-95 dark:shadow-none dark:ring-1 dark:ring-white/10"
+        @mousedown.left.prevent="handleInAppPopupClick"
+        @contextmenu.prevent="handleInAppPopupContextMenu"
       >
         <span class="text-sm font-medium text-foreground">{{ t('selection.aiChat') }}</span>
+      </div>
+    </div>
+
+    <!-- In-app popup right-click context menu -->
+    <div
+      v-if="inAppPopupContextMenu.visible"
+      class="fixed z-[10000] min-w-[160px] select-none rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      :style="{ left: inAppPopupContextMenu.x + 'px', top: inAppPopupContextMenu.y + 'px' }"
+      @mouseleave="hideInAppPopupContextMenu"
+    >
+      <div
+        class="flex cursor-pointer items-center rounded-sm px-3 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground active:bg-accent/80"
+        @mousedown.left.prevent="handleDisableSelectionSearchFromPopup"
+      >
+        {{ t('selection.disableSelectionSearch') }}
       </div>
     </div>
   </Teleport>

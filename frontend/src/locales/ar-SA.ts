@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "محادثة الذكاء الاصطناعي",
+    aiChat: "اسأل ChatClaw AI",
+    disableSelectionSearch: "إغلاق",
   },
   nav: {
     assistant: "مساعد الذكاء الاصطناعي",

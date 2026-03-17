@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "Chat AI",
+    aiChat: "Hỏi ChatClaw AI",
+    disableSelectionSearch: "Đóng",
   },
   nav: {
     assistant: "Trợ lý AI",

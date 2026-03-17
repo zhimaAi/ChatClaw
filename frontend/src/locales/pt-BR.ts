@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "Chat de IA",
+    aiChat: "Perguntar ao ChatClaw AI",
+    disableSelectionSearch: "Fechar",
   },
   nav: {
     assistant: "Assistente de IA",

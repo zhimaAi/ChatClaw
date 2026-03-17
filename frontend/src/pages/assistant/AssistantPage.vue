@@ -1807,15 +1807,16 @@ onUnmounted(() => {
 
     <!-- Right side: Chat area -->
     <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode) -->
+      <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode).
+           Always render to avoid layout shift when switching chat mode; hide button via invisible. -->
       <div
-        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team' && chatMode === 'task'"
+        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team'"
         class="flex shrink-0 items-center justify-end px-2 pt-1"
       >
         <Button
           size="icon"
           variant="ghost"
-          class="size-7"
+          :class="cn('size-7', chatMode !== 'task' && 'invisible')"
           :title="t('assistant.workspaceDrawer.title')"
           @click="workspaceDrawerOpen = !workspaceDrawerOpen"
         >
@@ -1955,10 +1956,11 @@ onUnmounted(() => {
       />
     </section>
 
-    <!-- Workspace drawer panel (task mode only; hidden in team mode) -->
+    <!-- Workspace drawer panel (task mode only; hidden in team mode).
+         Always rendered to avoid layout shift; auto-closed when not in task mode. -->
     <WorkspaceDrawer
-      v-if="!isSnapMode && listMode !== 'team' && chatMode === 'task'"
-      :open="workspaceDrawerOpen"
+      v-if="!isSnapMode && listMode !== 'team'"
+      :open="workspaceDrawerOpen && chatMode === 'task'"
       :agent="activeAgent"
       :conversation-id="activeConversationId"
       @update:open="workspaceDrawerOpen = $event"

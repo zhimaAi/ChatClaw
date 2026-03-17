@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AIチャット",
+    aiChat: "ChatClaw AI に聞く",
+    disableSelectionSearch: "閉じる",
   },
   nav: {
     assistant: "AIアシスタント",

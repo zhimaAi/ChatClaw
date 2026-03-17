@@ -159,7 +159,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AI 채팅",
+    aiChat: "ChatClaw AI에게 물어보기",
+    disableSelectionSearch: "닫기",
   },
   nav: {
     assistant: "AI 어시스턴트",

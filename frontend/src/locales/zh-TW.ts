@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AI 聊天",
+    aiChat: "問 ChatClaw AI",
+    disableSelectionSearch: "關閉",
   },
   nav: {
     assistant: "AI 助理",

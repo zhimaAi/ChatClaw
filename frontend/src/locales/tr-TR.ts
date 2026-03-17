@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AI sohbeti",
+    aiChat: "ChatClaw AI'ya sor",
+    disableSelectionSearch: "Kapat",
   },
   nav: {
     assistant: "AI asistanı",

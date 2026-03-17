@@ -39,7 +39,7 @@ const modes = [
         <TooltipTrigger as-child>
           <button
             type="button"
-            class="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
             :class="modelValue === 'task' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
             @click="emit('update:modelValue', 'task')"
           >
@@ -76,7 +76,7 @@ const modes = [
         <TooltipTrigger as-child>
           <button
             type="button"
-            class="ml-0.5 flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            class="ml-0.5 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
             :class="modelValue === 'chat' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
             @click="emit('update:modelValue', 'chat')"
           >
@@ -112,7 +112,7 @@ const modes = [
     <SelectTriggerRaw as-child>
       <!-- Full mode (assistant / knowledge pages): icon + label -->
       <button
-        class="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
+        class="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:bg-muted/40 active:bg-muted active:scale-95 focus:outline-none"
       >
         <!-- Chat mode icon: speech bubble -->
         <svg

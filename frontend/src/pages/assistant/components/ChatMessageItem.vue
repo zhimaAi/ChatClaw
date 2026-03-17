@@ -442,7 +442,7 @@ onUnmounted(() => {
               <span>{{ t(errorMessageKey) }}</span>
               <button
                 v-if="errorDetail"
-                class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                class="ml-1 flex items-center gap-0.5 text-muted-foreground/70 hover:text-muted-foreground active:text-foreground transition-colors"
                 @click="showErrorDetail = !showErrorDetail"
               >
                 <span class="text-[10px]">{{
@@ -496,7 +496,7 @@ onUnmounted(() => {
             <div
               v-for="(img, idx) in images"
               :key="img.id || img.file_name || img.base64.slice(0, 20)"
-              class="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-md border border-border bg-muted/40 transition-opacity hover:opacity-90"
+              class="group relative h-24 w-24 cursor-pointer overflow-hidden rounded-md border border-border bg-muted/40 transition-opacity hover:opacity-90 active:opacity-80"
               @click="openImagePreview(idx)"
             >
               <!-- Load first 3 images immediately, rest lazy load -->
@@ -520,7 +520,7 @@ onUnmounted(() => {
             <button
               v-for="f in fileAttachments"
               :key="f.id || f.file_name || f.file_path"
-              class="flex items-center gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left transition-colors hover:bg-muted/60"
+              class="flex items-center gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/80"
               @click="handleOpenFile(f.file_path || '')"
             >
               <FileIcon class="size-5 shrink-0 text-muted-foreground" />

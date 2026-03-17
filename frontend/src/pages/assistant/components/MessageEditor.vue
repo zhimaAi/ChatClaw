@@ -348,7 +348,7 @@ onMounted(() => {
       >
         <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
         <button
-          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
           @click="handleRemoveImage(img.id)"
           type="button"
         >
@@ -370,7 +370,7 @@ onMounted(() => {
         </div>
         <button
           type="button"
-          class="ml-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          class="ml-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
           @click="handleRemoveFile(f.id)"
         >
           <X class="size-3" />

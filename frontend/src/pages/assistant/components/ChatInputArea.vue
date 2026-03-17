@@ -539,7 +539,7 @@ onUnmounted(() => {
           >
             <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
             <button
-              class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+              class="absolute right-0 top-0 flex size-4 cursor-pointer items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
               @click="handleRemoveImage(img.id)"
             >
               <X class="size-3" />
@@ -560,7 +560,7 @@ onUnmounted(() => {
               <span class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
             </div>
             <button
-              class="ml-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+              class="ml-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
               @click="emit('removeFile', f.id)"
             >
               <X class="size-3" />
@@ -585,7 +585,7 @@ onUnmounted(() => {
           >
             <span class="max-w-[120px] truncate">{{ lib.name }}</span>
             <button
-              class="rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 group-hover:opacity-100"
+              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
               @click="handleRemoveLibrary(lib.id)"
             >
               <X class="size-3" />
@@ -606,7 +606,7 @@ onUnmounted(() => {
           >
             <span class="max-w-[120px] truncate">{{ lib.name }}</span>
             <button
-              class="rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 group-hover:opacity-100"
+              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
               @click="handleRemoveTeamLibrary(lib.id)"
             >
               <X class="size-3" />
@@ -657,7 +657,7 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
                     @click="emit('new-conversation')"
                   >
                     <Plus class="size-4 text-muted-foreground" />
@@ -688,7 +688,7 @@ onUnmounted(() => {
                       @update:model-value="(v: any) => v && emit('update:activeAgentId', Number(v))"
                     >
                       <SelectTrigger
-                        class="h-8 w-auto min-w-[100px] max-w-[160px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40"
+                        class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95"
                       >
                         <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
                           <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
@@ -732,7 +732,7 @@ onUnmounted(() => {
                     >
                       <SelectTrigger
                         :class="cn(
-                          'h-8 w-full min-w-0 max-w-[220px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
+                          'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95',
                           useCompactToolbar && 'max-w-[140px]'
                         )"
                       >
@@ -806,8 +806,8 @@ onUnmounted(() => {
                     class="size-8 rounded-full border border-border bg-background"
                     :class="
                       enableThinking
-                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
-                        : 'hover:bg-muted/40'
+                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
+                        : 'hover:bg-muted/40 active:bg-muted active:scale-95'
                     "
                     @click="emit('update:enableThinking', !enableThinking)"
                   >
@@ -868,8 +868,8 @@ onUnmounted(() => {
                     cn(
                       'size-8 rounded-full border border-border bg-background',
                       (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
-                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
-                        : 'hover:bg-muted/40',
+                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
+                        : 'hover:bg-muted/40 active:bg-muted active:scale-95',
                       useCompactToolbar && 'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
                     )
                   "
@@ -961,7 +961,7 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10 hover:bg-primary/10"
+                    class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95"
                   >
                     <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
                   </Button>
@@ -1011,7 +1011,7 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
                       @click="handleSelectFilesClick"
                     >
                       <File class="size-4 text-muted-foreground" />
@@ -1033,7 +1033,7 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
                       @click="handleSelectImagesClick"
                     >
                       <ImageIcon class="size-4 text-muted-foreground" />
@@ -1052,7 +1052,7 @@ onUnmounted(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
                 >
                   <MoreHorizontal class="size-4 text-muted-foreground" />
                 </Button>
@@ -1081,7 +1081,7 @@ onUnmounted(() => {
           <template v-if="isGenerating">
             <Button
               size="icon"
-              class="size-6 rounded-full bg-muted-foreground/20 text-foreground hover:bg-muted-foreground/30"
+              class="size-6 rounded-full bg-muted-foreground/20 text-foreground hover:bg-muted-foreground/30 active:bg-muted-foreground/50 active:scale-95"
               :title="t('assistant.chat.stop')"
               @click="emit('stop')"
             >
@@ -1111,7 +1111,7 @@ onUnmounted(() => {
             <Button
               v-else
               size="icon"
-              class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+              class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/75 active:scale-95"
               :title="t('assistant.chat.send')"
               @click="handleSendClick"
             >

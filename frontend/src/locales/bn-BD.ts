@@ -148,7 +148,8 @@ export default {
     },
   },
   selection: {
-    aiChat: "AI চ্যাট",
+    aiChat: "ChatClaw AI কে জিজ্ঞাসা করুন",
+    disableSelectionSearch: "বন্ধ করুন",
   },
   nav: {
     assistant: "AI অ্যাসিস্ট্যান্ট",
