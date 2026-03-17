@@ -14,6 +14,7 @@ type IncomingMessage struct {
 	SenderName string `json:"sender_name"`
 	ChatID     string `json:"chat_id"`
 	ChatName   string `json:"chat_name"` // group chat name (if applicable)
+	IsGroup    bool   `json:"is_group"`
 	Content    string `json:"content"`
 	MsgType    string `json:"msg_type"` // text, image, etc.
 	RawData    string `json:"raw_data"`
