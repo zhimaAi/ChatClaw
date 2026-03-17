@@ -11,7 +11,10 @@ defineProps<{
 
 <template>
   <div class="flex h-full min-h-0 flex-col">
-    <div v-if="!detail?.conversation" class="flex h-full items-center justify-center text-sm text-muted-foreground">
+    <div
+      v-if="!detail?.conversation"
+      class="flex h-full items-center justify-center text-sm text-muted-foreground"
+    >
       {{ emptyText }}
     </div>
     <template v-else>
@@ -22,8 +25,14 @@ defineProps<{
         </div>
       </div>
       <div class="min-h-0 flex-1 overflow-auto px-4 py-3">
-        <div v-for="message in detail.messages" :key="message.id" class="mb-3 rounded-lg border border-border bg-card p-3">
-          <div class="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{{ message.role }}</div>
+        <div
+          v-for="message in detail.messages"
+          :key="message.id"
+          class="mb-3 rounded-lg border border-border bg-card p-3"
+        >
+          <div class="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+            {{ message.role }}
+          </div>
           <MarkdownRenderer :content="message.content || ''" />
         </div>
       </div>

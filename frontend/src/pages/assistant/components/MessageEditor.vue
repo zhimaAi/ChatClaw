@@ -14,8 +14,21 @@ const MAX_FILES = 4
 const MAX_FILE_SIZE = 20 * 1024 * 1024
 
 const ALLOWED_FILE_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-  '.txt', '.csv', '.md', '.json', '.xml', '.html', '.rtf', '.log',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.txt',
+  '.csv',
+  '.md',
+  '.json',
+  '.xml',
+  '.html',
+  '.rtf',
+  '.log',
 ]
 
 type PendingImage = {
@@ -337,10 +350,7 @@ onMounted(() => {
       rows="3"
       @keydown="handleKeydown"
     />
-    <div
-      v-if="pendingImages.length > 0"
-      class="flex flex-wrap gap-2"
-    >
+    <div v-if="pendingImages.length > 0" class="flex flex-wrap gap-2">
       <div
         v-for="img in pendingImages"
         :key="img.id"
@@ -349,8 +359,8 @@ onMounted(() => {
         <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
         <button
           class="absolute right-0 top-0 flex size-4 items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
-          @click="handleRemoveImage(img.id)"
           type="button"
+          @click="handleRemoveImage(img.id)"
         >
           <X class="size-3" />
         </button>
@@ -365,8 +375,12 @@ onMounted(() => {
       >
         <FileIcon class="size-4 shrink-0 text-muted-foreground" />
         <div class="flex min-w-0 flex-col">
-          <span class="truncate text-xs font-medium text-foreground" :title="f.originalName">{{ f.originalName }}</span>
-          <span v-if="f.size" class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
+          <span class="truncate text-xs font-medium text-foreground" :title="f.originalName">{{
+            f.originalName
+          }}</span>
+          <span v-if="f.size" class="text-[10px] text-muted-foreground">{{
+            formatFileSize(f.size)
+          }}</span>
         </div>
         <button
           type="button"
@@ -413,8 +427,8 @@ onMounted(() => {
         <FileIcon class="size-4 text-muted-foreground" />
       </Button>
       <span class="text-xs text-muted-foreground">
-        {{ totalImages }}/{{ MAX_IMAGES }} {{ t('assistant.chat.selectImages') }}
-        · {{ totalFiles }}/{{ MAX_FILES }} {{ t('assistant.chat.uploadFile') }}
+        {{ totalImages }}/{{ MAX_IMAGES }} {{ t('assistant.chat.selectImages') }} ·
+        {{ totalFiles }}/{{ MAX_FILES }} {{ t('assistant.chat.uploadFile') }}
       </span>
     </div>
     <div class="flex items-center justify-end gap-2">

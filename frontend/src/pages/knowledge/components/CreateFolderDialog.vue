@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ChevronRight, LoaderCircle, Folder as FolderIcon, CheckCircle2, ChevronDown } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ChevronRight,
+  LoaderCircle,
+  Folder as FolderIcon,
+  CheckCircle2,
+  ChevronDown,
+} from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -34,9 +41,7 @@ const name = ref('')
 const saving = ref(false)
 const NAME_MAX_LEN = 50
 
-type Location =
-  | { kind: 'root' }
-  | { kind: 'folder'; id: number }
+type Location = { kind: 'root' } | { kind: 'folder'; id: number }
 
 const location = ref<Location>({ kind: 'root' })
 const selectedParent = ref<Location>({ kind: 'root' })
@@ -136,7 +141,11 @@ watch(
     }
     name.value = ''
     // 如果传入了默认父文件夹ID，则使用它；否则使用根目录
-    if (props.defaultParentId !== null && props.defaultParentId !== undefined && props.defaultParentId > 0) {
+    if (
+      props.defaultParentId !== null &&
+      props.defaultParentId !== undefined &&
+      props.defaultParentId > 0
+    ) {
       const defaultLocation = { kind: 'folder' as const, id: props.defaultParentId }
       location.value = defaultLocation
       selectedParent.value = defaultLocation
@@ -193,14 +202,16 @@ const selectedParentName = computed(() => {
   if (selectedParent.value.kind === 'root') {
     return t('knowledge.folder.rootFolder')
   }
-  return folderIndex.value.get(selectedParent.value.id)?.folder?.name ?? String(selectedParent.value.id)
+  return (
+    folderIndex.value.get(selectedParent.value.id)?.folder?.name ?? String(selectedParent.value.id)
+  )
 })
 
 // Handle double click to enter folder
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 const handleFolderClick = (folder: Folder) => {
   if (saving.value) return
-  
+
   // Single click: select as parent
   if (clickTimer === null) {
     clickTimer = setTimeout(() => {
@@ -238,7 +249,10 @@ const handleFolderClick = (folder: Folder) => {
             type="button"
             :disabled="saving"
             class="flex h-10 w-full items-center justify-between rounded-md border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="location = selectedParent; showFolderBrowser = true"
+            @click="
+              location = selectedParent
+              showFolderBrowser = true
+            "
           >
             <div class="flex min-w-0 flex-1 items-center gap-2">
               <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
@@ -290,7 +304,10 @@ const handleFolderClick = (folder: Folder) => {
                   :disabled="saving"
                   class="flex h-10 items-center gap-3 px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
                   :class="isSelectedParent({ kind: 'root' }) && 'bg-accent/30'"
-                  @click="selectedParent = { kind: 'root' }; showFolderBrowser = false"
+                  @click="
+                    selectedParent = { kind: 'root' }
+                    showFolderBrowser = false
+                  "
                 >
                   <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
                   <span class="min-w-0 flex-1 truncate" :title="t('knowledge.folder.rootFolder')">
@@ -309,7 +326,10 @@ const handleFolderClick = (folder: Folder) => {
                   :disabled="saving"
                   class="flex h-10 items-center gap-3 px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50 border-b border-border"
                   :class="isSelectedParent({ kind: 'folder', id: location.id }) && 'bg-accent/30'"
-                  @click="selectedParent = { kind: 'folder', id: location.id }; showFolderBrowser = false"
+                  @click="
+                    selectedParent = { kind: 'folder', id: location.id }
+                    showFolderBrowser = false
+                  "
                 >
                   <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
                   <span class="min-w-0 flex-1 truncate" :title="currentFolder.name">

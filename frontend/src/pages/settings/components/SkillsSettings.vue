@@ -66,20 +66,19 @@ onMounted(() => {
       <SettingsItem>
         <template #label>
           <div class="flex flex-col gap-1">
-            <span class="text-sm font-medium text-foreground">{{ t('settings.skills.enable') }}</span>
+            <span class="text-sm font-medium text-foreground">{{
+              t('settings.skills.enable')
+            }}</span>
             <span class="text-xs text-muted-foreground">{{ t('settings.skills.enableHint') }}</span>
           </div>
         </template>
-        <Switch
-          :model-value="skillsEnabled"
-          @update:model-value="handleSkillsEnabledChange"
-        />
+        <Switch :model-value="skillsEnabled" @update:model-value="handleSkillsEnabledChange" />
       </SettingsItem>
 
-      <div
-        class="flex flex-col gap-1 p-4"
-      >
-        <span class="text-sm font-medium text-foreground">{{ t('settings.skills.directory') }}</span>
+      <div class="flex flex-col gap-1 p-4">
+        <span class="text-sm font-medium text-foreground">{{
+          t('settings.skills.directory')
+        }}</span>
         <span class="text-xs text-muted-foreground">{{ t('settings.skills.directoryHint') }}</span>
         <div class="flex w-full items-center gap-2 pt-0.5">
           <Input

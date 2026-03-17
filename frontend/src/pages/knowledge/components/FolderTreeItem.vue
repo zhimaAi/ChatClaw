@@ -21,7 +21,9 @@ const hasChildren = computed(() => !!props.folder.children && props.folder.child
 const isExpanded = computed(() => props.expandedFolders.has(props.folder.id))
 
 const isSelected = computed(() => {
-  return props.selectedFolderId === props.folder.id && props.rootLibraryId === props.selectedLibraryId
+  return (
+    props.selectedFolderId === props.folder.id && props.rootLibraryId === props.selectedLibraryId
+  )
 })
 
 const handleToggleExpanded = (folderId: number) => {

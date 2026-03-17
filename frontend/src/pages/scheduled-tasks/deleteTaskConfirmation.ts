@@ -3,7 +3,7 @@ import type { ScheduledTask } from './types'
 type DeleteTaskConfirmationItem = Pick<ScheduledTask, 'id' | 'name'>
 
 export function createDeleteTaskConfirmation(
-  onConfirmDelete: (task: DeleteTaskConfirmationItem) => Promise<void>,
+  onConfirmDelete: (task: DeleteTaskConfirmationItem) => Promise<void>
 ) {
   let pending: DeleteTaskConfirmationItem | null = null
 
