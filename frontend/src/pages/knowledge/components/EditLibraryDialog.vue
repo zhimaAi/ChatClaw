@@ -39,6 +39,8 @@ import { LibraryService, UpdateLibraryInput } from '@bindings/chatclaw/internal/
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
   clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
 
@@ -82,7 +84,13 @@ const currentRaptorLLMLabel = computed(() => {
   if (!pid || !mid) return t('knowledge.create.noRaptorLLM')
   const group = raptorLLMGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || t('knowledge.create.noRaptorLLM')
+  return model
+    ? formatModelDisplayLabel(
+      pid,
+      model.name?.trim() || model.model_id?.trim() || '-',
+      isChatwikiBound.value
+    )
+    : t('knowledge.create.noRaptorLLM')
 })
 
 const loadProviders = async () => {
@@ -264,14 +272,26 @@ const handleSave = async () => {
                 {{ t('knowledge.create.noRaptorLLM') }}
               </SelectItem>
               <SelectGroup v-for="g in raptorLLMGroups" :key="g.provider.provider_id">
-                <SelectLabel>{{ g.provider.name }}</SelectLabel>
+                <SelectLabel>{{
+                  formatProviderDisplayLabel(
+                    g.provider.provider_id,
+                    g.provider.name,
+                    isChatwikiBound
+                  )
+                }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
                   :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)"
                 >
-                  {{ m.name }}
+                  {{
+                    formatModelDisplayLabel(
+                      g.provider.provider_id,
+                      m.name?.trim() || m.model_id?.trim() || '-',
+                      isChatwikiBound
+                    )
+                  }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

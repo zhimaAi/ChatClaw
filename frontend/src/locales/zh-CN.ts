@@ -530,7 +530,7 @@ export default {
       startUsingHint: "点击下方「开始」继续使用 ChatClaw 桌面端",
       startUsing: "开始使用",
       modelServiceDesc: "绑定 ChatWiki 后可直接在模型服务中查看可用模型与积分情况",
-      notLoggedInTitle: "未登录 ChatWiki",
+      notLoggedInTitle: "未登录",
       notLoggedInDesc: "登录后即可同步 ChatWiki Cloud 的模型列表与积分信息。",
       accountIdPrefix: "账号 ID：",
       buyCredits: "购买积分",

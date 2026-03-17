@@ -46,6 +46,8 @@ import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchai
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
   clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
   isModelSelectionDisabled,
   isSelectionAvailable,
 } from '@/lib/chatwikiModelAvailability'
@@ -67,8 +69,15 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
 
-function getDisplayModelName(model: { name?: string; model_id?: string }): string {
-  return model.name?.trim() || model.model_id?.trim() || '-'
+function getDisplayModelName(
+  providerId: string,
+  model: { name?: string; model_id?: string }
+): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    isChatwikiBound.value
+  )
 }
 
 const tab = ref<TabKey>('model')
@@ -246,7 +255,7 @@ const loadModels = async () => {
       for (const group of pw.model_groups) {
         if (group.type !== 'llm') continue
         const m = group.models.find((x) => x.model_id === modelId.value)
-        if (m) modelName.value = getDisplayModelName(m)
+        if (m) modelName.value = getDisplayModelName(modelProviderId.value, m)
       }
     }
   } catch (error: unknown) {
@@ -271,7 +280,7 @@ const onModelKeyChange = (val: any) => {
     for (const group of pw.model_groups) {
       if (group.type !== 'llm') continue
       const found = group.models.find((x) => x.model_id === modelId.value)
-      if (found) modelName.value = getDisplayModelName(found)
+      if (found) modelName.value = getDisplayModelName(modelProviderId.value, found)
     }
   }
   modelChanged.value = true
@@ -532,7 +541,13 @@ const handleDelete = async () => {
                             :key="pw.provider.provider_id"
                           >
                             <SelectLabel class="mt-2 flex items-center gap-1.5">
-                              <span>{{ pw.provider.name }}</span>
+                              <span>{{
+                                formatProviderDisplayLabel(
+                                  pw.provider.provider_id,
+                                  pw.provider.name,
+                                  isChatwikiBound
+                                )
+                              }}</span>
                               <span
                                 v-if="isProviderFree(pw)"
                                 class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
@@ -553,7 +568,7 @@ const handleDelete = async () => {
                                     )
                                   "
                                 >
-                                  {{ getDisplayModelName(m) }}
+                                  {{ getDisplayModelName(pw.provider.provider_id, m) }}
                                 </SelectItem>
                               </template>
                             </template>

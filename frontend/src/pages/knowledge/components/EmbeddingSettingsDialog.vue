@@ -29,6 +29,8 @@ import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
   clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
   getFirstSelectableModelKey,
   isModelSelectionDisabled,
   isSelectionAvailable,
@@ -54,14 +56,15 @@ type ChatwikiDisplayModel = Model & {
 const normalizeText = (value?: string | null) => value?.trim() || ''
 
 const getEmbeddingModelLabel = (providerId: string, model: Model) => {
+  let label = normalizeText(model.name) || normalizeText(model.model_id) || '-'
   if (providerId === 'chatwiki') {
     const chatwikiModel = model as ChatwikiDisplayModel
     const supplier = normalizeText(chatwikiModel.model_supplier)
     const uniModelName = normalizeText(chatwikiModel.uni_model_name)
-    if (supplier && uniModelName) return `${supplier}/${uniModelName}`
-    if (uniModelName) return uniModelName
+    if (supplier && uniModelName) label = `${supplier}/${uniModelName}`
+    else if (uniModelName) label = uniModelName
   }
-  return normalizeText(model.name) || normalizeText(model.model_id) || '-'
+  return formatModelDisplayLabel(providerId, label, isChatwikiBound.value)
 }
 
 const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
@@ -260,7 +263,13 @@ const handleSave = async () => {
             <SelectContent>
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      isChatwikiBound
+                    )
+                  }}</span>
                   <span
                     v-if="isProviderFree(g)"
                     class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"

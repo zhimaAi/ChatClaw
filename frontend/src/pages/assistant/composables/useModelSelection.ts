@@ -15,6 +15,7 @@ import {
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
+  formatModelDisplayLabel,
   getFirstSelectableModelKey,
   isSelectionAvailable,
 } from '@/lib/chatwikiModelAvailability'
@@ -22,7 +23,12 @@ import {
 export function useModelSelection() {
   const { t } = useI18n()
 
-  const getDisplayModelName = (model: Model) => model.name?.trim() || model.model_id?.trim() || '-'
+  const getDisplayModelName = (providerId: string, model: Model) =>
+    formatModelDisplayLabel(
+      providerId,
+      model.name?.trim() || model.model_id?.trim() || '-',
+      isChatwikiBound.value
+    )
 
   const providersWithModels = ref<ProviderWithModels[]>([])
   const selectedModelKey = ref('')
@@ -47,7 +53,7 @@ export function useModelSelection() {
           return {
             providerId,
             modelId,
-            modelName: getDisplayModelName(model),
+            modelName: getDisplayModelName(providerId, model),
             capabilities: model.capabilities,
           }
         }
