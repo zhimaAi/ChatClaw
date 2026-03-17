@@ -36,6 +36,7 @@ import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
 
@@ -44,7 +45,7 @@ const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const showRebuildConfirm = ref(false)
-const isChatwikiBound = ref(true)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 const memoryEnabled = ref(false)
@@ -67,7 +68,7 @@ const loadData = async () => {
       ProvidersService.ListProviders(),
       getChatwikiBinding().catch(() => null),
     ])
-    isChatwikiBound.value = Boolean(binding)
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     
     const details = await Promise.all(
@@ -117,13 +118,13 @@ const loadData = async () => {
     
     const nextExtractKey = clearUnavailableChatwikiSelection(
       extProv?.value && extMod?.value ? `${extProv.value}::${extMod.value}` : '',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
     extractSelectedKey.value = nextExtractKey
 
     const nextEmbeddingKey = clearUnavailableChatwikiSelection(
       embProv?.value && embMod?.value ? `${embProv.value}::${embMod.value}` : '',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
     if (nextEmbeddingKey) {
       const key = nextEmbeddingKey
@@ -240,7 +241,7 @@ function getModelLabel(providerId: string, model: Model): string {
   return formatModelDisplayLabel(
     providerId,
     model.name?.trim() || model.model_id?.trim() || '-',
-    isChatwikiBound.value
+    chatwikiAvailability.value
   )
 }
 </script>
@@ -284,14 +285,14 @@ function getModelLabel(providerId: string, model: Model): string {
                     formatProviderDisplayLabel(
                       g.provider.provider_id,
                       g.provider.name,
-                      isChatwikiBound
+                      chatwikiAvailability
                     )
                   }}</span>
                   <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)">
                   {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
@@ -316,14 +317,14 @@ function getModelLabel(providerId: string, model: Model): string {
                     formatProviderDisplayLabel(
                       g.provider.provider_id,
                       g.provider.name,
-                      isChatwikiBound
+                      chatwikiAvailability
                     )
                   }}</span>
                   <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)">
                   {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>

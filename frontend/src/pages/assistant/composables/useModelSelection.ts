@@ -16,6 +16,7 @@ import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
   formatModelDisplayLabel,
+  getChatwikiAvailabilityStatus,
   getFirstSelectableModelKey,
   isSelectionAvailable,
 } from '@/lib/chatwikiModelAvailability'
@@ -27,12 +28,12 @@ export function useModelSelection() {
     formatModelDisplayLabel(
       providerId,
       model.name?.trim() || model.model_id?.trim() || '-',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
 
   const providersWithModels = ref<ProviderWithModels[]>([])
   const selectedModelKey = ref('')
-  const isChatwikiBound = ref(true)
+  const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 
   const hasModels = computed(() => {
     return providersWithModels.value.some((pw) =>
@@ -69,7 +70,7 @@ export function useModelSelection() {
         ProvidersService.ListProviders(),
         getChatwikiBinding().catch(() => null),
       ])
-      isChatwikiBound.value = Boolean(binding)
+      chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
       console.info('[assistant][models] providers:list', {
         count: providers.length,
         providerIds: providers.map((p) => p.provider_id),
@@ -149,7 +150,9 @@ export function useModelSelection() {
       const conv = activeConversation
       if (conv?.llm_provider_id && conv?.llm_model_id) {
         const key = `${conv.llm_provider_id}::${conv.llm_model_id}`
-        if (isSelectionAvailable(providersWithModels.value, key, 'llm', isChatwikiBound.value)) {
+        if (
+          isSelectionAvailable(providersWithModels.value, key, 'llm', chatwikiAvailability.value)
+        ) {
           selectedModelKey.value = key
           return
         }
@@ -162,7 +165,7 @@ export function useModelSelection() {
 
     if (agentProviderId && agentModelId) {
       const key = `${agentProviderId}::${agentModelId}`
-      if (isSelectionAvailable(providersWithModels.value, key, 'llm', isChatwikiBound.value)) {
+      if (isSelectionAvailable(providersWithModels.value, key, 'llm', chatwikiAvailability.value)) {
         selectedModelKey.value = key
         return
       }
@@ -172,7 +175,7 @@ export function useModelSelection() {
     selectedModelKey.value = getFirstSelectableModelKey(
       providersWithModels.value,
       'llm',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
   }
 

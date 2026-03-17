@@ -13,12 +13,40 @@ type ProviderWithModelsLike<TModel extends ModelLike = ModelLike> = {
   model_groups: Array<ModelGroupLike<TModel>>
 }
 
+type ChatwikiBindingLike = {
+  chatwiki_version?: string | null
+} | null
+
+export type ChatwikiAvailabilityStatus = 'available' | 'unbound' | 'non_cloud'
+
 export const CHATWIKI_PROVIDER_ID = 'chatwiki'
+
+export function getChatwikiAvailabilityStatus(
+  binding: ChatwikiBindingLike
+): ChatwikiAvailabilityStatus {
+  if (!binding) return 'unbound'
+  return binding.chatwiki_version === 'dev' ? 'non_cloud' : 'available'
+}
+
+function normalizeAvailabilityStatus(
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
+): ChatwikiAvailabilityStatus {
+  if (statusOrBinding === true) return 'available'
+  if (statusOrBinding === false) return 'unbound'
+  if (
+    statusOrBinding === 'available' ||
+    statusOrBinding === 'unbound' ||
+    statusOrBinding === 'non_cloud'
+  ) {
+    return statusOrBinding
+  }
+  return getChatwikiAvailabilityStatus(statusOrBinding)
+}
 
 export function formatModelDisplayLabel(
   providerId: string,
   label: string,
-  isChatwikiBound: boolean
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): string {
   return label
 }
@@ -26,16 +54,22 @@ export function formatModelDisplayLabel(
 export function formatProviderDisplayLabel(
   providerId: string,
   label: string,
-  isChatwikiBound: boolean
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): string {
-  if (providerId === CHATWIKI_PROVIDER_ID && !isChatwikiBound) {
-    return `${label}（未登录）`
-  }
+  const status = normalizeAvailabilityStatus(statusOrBinding)
+  if (providerId !== CHATWIKI_PROVIDER_ID) return label
+  if (status === 'unbound') return `${label}（未登录）`
+  if (status === 'non_cloud') return `${label}（非ChatWiki Cloud）`
   return label
 }
 
-export function isModelSelectionDisabled(providerId: string, isChatwikiBound: boolean): boolean {
-  return providerId === CHATWIKI_PROVIDER_ID && !isChatwikiBound
+export function isModelSelectionDisabled(
+  providerId: string,
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
+): boolean {
+  return (
+    providerId === CHATWIKI_PROVIDER_ID && normalizeAvailabilityStatus(statusOrBinding) !== 'available'
+  )
 }
 
 export function parseModelSelectionKey(
@@ -49,22 +83,22 @@ export function parseModelSelectionKey(
 
 export function clearUnavailableChatwikiSelection(
   key: string,
-  isChatwikiBound: boolean
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): string {
   const parsed = parseModelSelectionKey(key)
   if (!parsed) return ''
-  return isModelSelectionDisabled(parsed.providerId, isChatwikiBound) ? '' : key
+  return isModelSelectionDisabled(parsed.providerId, statusOrBinding) ? '' : key
 }
 
 export function isSelectionAvailable<TModel extends ModelLike>(
   providersWithModels: Array<ProviderWithModelsLike<TModel>>,
   key: string,
   groupType: string,
-  isChatwikiBound: boolean
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): boolean {
   const parsed = parseModelSelectionKey(key)
   if (!parsed) return false
-  if (isModelSelectionDisabled(parsed.providerId, isChatwikiBound)) return false
+  if (isModelSelectionDisabled(parsed.providerId, statusOrBinding)) return false
 
   for (const providerWithModels of providersWithModels) {
     if (providerWithModels.provider.provider_id !== parsed.providerId) continue
@@ -83,11 +117,11 @@ export function isSelectionAvailable<TModel extends ModelLike>(
 export function getFirstSelectableModelKey<TModel extends ModelLike>(
   providersWithModels: Array<ProviderWithModelsLike<TModel>>,
   groupType: string,
-  isChatwikiBound: boolean
+  statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): string {
   for (const providerWithModels of providersWithModels) {
     const providerId = providerWithModels.provider.provider_id
-    if (isModelSelectionDisabled(providerId, isChatwikiBound)) continue
+    if (isModelSelectionDisabled(providerId, statusOrBinding)) continue
     for (const group of providerWithModels.model_groups) {
       if (group.type !== groupType) continue
       const firstModel = group.models.find((model) => model.enabled !== false)

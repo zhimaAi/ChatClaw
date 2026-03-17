@@ -457,7 +457,7 @@ async function finishSuccess() {
     await ProvidersService.GetProviderWithModels('chatwiki')
     // Reload binding so list view shows latest auth status (bound/expired, user info)
     await loadBinding()
-    notifyChatwikiBindingChanged(true)
+    notifyChatwikiBindingChanged(currentBinding.value)
     Events.Emit('models:changed')
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
@@ -486,7 +486,7 @@ async function confirmUnbind() {
     authUser.value = null
     robots.value = []
     libraries.value = []
-    notifyChatwikiBindingChanged(false)
+    notifyChatwikiBindingChanged(null)
     Events.Emit('models:changed')
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)

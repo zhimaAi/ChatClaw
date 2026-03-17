@@ -38,6 +38,7 @@ import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
 
@@ -122,13 +123,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
-const isChatwikiBound = ref(true)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 
 function getDisplayModelName(providerId: string, model: Model): string {
   return formatModelDisplayLabel(
     providerId,
     model.name?.trim() || model.model_id?.trim() || '-',
-    isChatwikiBound.value
+    chatwikiAvailability.value
   )
 }
 
@@ -396,13 +397,18 @@ const handleRemoveImage = (id: string) => {
 onMounted(() => {
   void getChatwikiBinding()
     .then((binding) => {
-      isChatwikiBound.value = Boolean(binding)
+      chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     })
     .catch(() => {
-      isChatwikiBound.value = false
+      chatwikiAvailability.value = 'unbound'
     })
   unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged((bound) => {
-    isChatwikiBound.value = bound
+    chatwikiAvailability.value =
+      typeof bound === 'boolean'
+        ? bound
+          ? 'available'
+          : 'unbound'
+        : getChatwikiAvailabilityStatus(bound)
   })
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
@@ -653,7 +659,7 @@ onUnmounted(() => {
                                 formatProviderDisplayLabel(
                                   pw.provider.provider_id,
                                   pw.provider.name,
-                                  isChatwikiBound
+                                  chatwikiAvailability
                                 )
                               }}</span>
                               <span
@@ -672,7 +678,7 @@ onUnmounted(() => {
                                   :disabled="
                                     isModelSelectionDisabled(
                                       pw.provider.provider_id,
-                                      isChatwikiBound
+                                      chatwikiAvailability
                                     )
                                   "
                                 >

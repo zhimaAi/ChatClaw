@@ -42,6 +42,7 @@ import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
 
@@ -59,7 +60,7 @@ const { t } = useI18n()
 
 const saving = ref(false)
 const loadingProviders = ref(false)
-const isChatwikiBound = ref(true)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 // 语义分段开关
@@ -90,7 +91,7 @@ const currentRaptorLLMLabel = computed(() => {
     ? formatModelDisplayLabel(
       pid,
       model.name?.trim() || model.model_id?.trim() || '-',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
     : t('knowledge.create.noRaptorLLM')
 })
@@ -102,7 +103,7 @@ const loadProviders = async () => {
       ProvidersService.ListProviders(),
       getChatwikiBinding().catch(() => null),
     ])
-    isChatwikiBound.value = Boolean(binding)
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
@@ -151,7 +152,7 @@ watch(
       props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id
         ? `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
         : '',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
     if (nextKey) {
       raptorLLMKey.value = nextKey
@@ -178,7 +179,7 @@ onMounted(() => {
       void loadProviders().then(() => {
         const nextKey = clearUnavailableChatwikiSelection(
           raptorLLMKey.value === RAPTOR_LLM_NONE ? '' : raptorLLMKey.value,
-          isChatwikiBound.value
+          chatwikiAvailability.value
         )
         raptorLLMKey.value = nextKey || RAPTOR_LLM_NONE
       })
@@ -297,20 +298,20 @@ const handleSave = async () => {
                   formatProviderDisplayLabel(
                     g.provider.provider_id,
                     g.provider.name,
-                    isChatwikiBound
+                    chatwikiAvailability
                   )
                 }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
-                  :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)"
+                  :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)"
                 >
                   {{
                     formatModelDisplayLabel(
                       g.provider.provider_id,
                       m.name?.trim() || m.model_id?.trim() || '-',
-                      isChatwikiBound
+                      chatwikiAvailability
                     )
                   }}
                 </SelectItem>

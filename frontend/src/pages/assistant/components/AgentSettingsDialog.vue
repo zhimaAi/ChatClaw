@@ -49,6 +49,7 @@ import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
   isSelectionAvailable,
 } from '@/lib/chatwikiModelAvailability'
@@ -77,7 +78,7 @@ function getDisplayModelName(
   return formatModelDisplayLabel(
     providerId,
     model.name?.trim() || model.model_id?.trim() || '-',
-    isChatwikiBound.value
+    chatwikiAvailability.value
   )
 }
 
@@ -111,7 +112,7 @@ const defaultWorkDir = ref('')
 const codexInstalled = ref(false)
 
 const providersWithModels = ref<ProviderWithModels[]>([])
-const isChatwikiBound = ref(true)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 const modelProviderId = ref('')
 const modelId = ref('')
 const modelName = ref('')
@@ -220,7 +221,7 @@ const loadModels = async () => {
       ProvidersService.ListProviders(),
       getChatwikiBinding().catch(() => null),
     ])
-    isChatwikiBound.value = Boolean(binding)
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabled = providers.filter((p) => p.enabled)
     const results: ProviderWithModels[] = []
     for (const p of enabled) {
@@ -236,7 +237,7 @@ const loadModels = async () => {
 
     const currentKey = clearUnavailableChatwikiSelection(
       modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : '',
-      isChatwikiBound.value
+      chatwikiAvailability.value
     )
     if (!currentKey) {
       clearDefaultModel()
@@ -254,7 +255,7 @@ const loadModels = async () => {
       return
     }
 
-    if (!isSelectionAvailable(results, currentKey, 'llm', isChatwikiBound.value)) {
+    if (!isSelectionAvailable(results, currentKey, 'llm', chatwikiAvailability.value)) {
       clearDefaultModel()
       return
     }
@@ -554,7 +555,7 @@ const handleDelete = async () => {
                                 formatProviderDisplayLabel(
                                   pw.provider.provider_id,
                                   pw.provider.name,
-                                  isChatwikiBound
+                                  chatwikiAvailability
                                 )
                               }}</span>
                               <span
@@ -573,7 +574,7 @@ const handleDelete = async () => {
                                   :disabled="
                                     isModelSelectionDisabled(
                                       pw.provider.provider_id,
-                                      isChatwikiBound
+                                      chatwikiAvailability
                                     )
                                   "
                                 >

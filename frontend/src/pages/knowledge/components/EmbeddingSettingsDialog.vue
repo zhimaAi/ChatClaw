@@ -32,6 +32,7 @@ import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
   getFirstSelectableModelKey,
   isModelSelectionDisabled,
   isSelectionAvailable,
@@ -44,7 +45,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
-const isChatwikiBound = ref(true)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 type Group = { provider: Provider; models: Model[] }
@@ -66,7 +67,7 @@ const getEmbeddingModelLabel = (providerId: string, model: Model) => {
     if (supplier && uniModelName) label = `${supplier}/${uniModelName}`
     else if (uniModelName) label = uniModelName
   }
-  return formatModelDisplayLabel(providerId, label, isChatwikiBound.value)
+  return formatModelDisplayLabel(providerId, label, chatwikiAvailability.value)
 }
 
 const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
@@ -102,7 +103,7 @@ const isEmbeddingSelectionAvailable = computed(() => {
     })),
     embeddingSelectedKey.value,
     'embedding',
-    isChatwikiBound.value
+    chatwikiAvailability.value
   )
 })
 
@@ -113,7 +114,7 @@ const loadGroups = async () => {
       ProvidersService.ListProviders(),
       getChatwikiBinding().catch(() => null),
     ])
-    isChatwikiBound.value = Boolean(binding)
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     // 只使用"已启用"的供应商（已启动）
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
@@ -162,7 +163,7 @@ const loadCurrentSettings = async () => {
     if (providerId && modelId) {
       embeddingSelectedKey.value = clearUnavailableChatwikiSelection(
         `${providerId}::${modelId}`,
-        isChatwikiBound.value
+        chatwikiAvailability.value
       )
       if (!embeddingSelectedKey.value) {
         await Promise.all([
@@ -185,7 +186,7 @@ const ensureDefaultSelection = () => {
       model_groups: [{ type: 'embedding', models: group.models }],
     })),
     'embedding',
-    isChatwikiBound.value
+    chatwikiAvailability.value
   )
 }
 
@@ -284,7 +285,7 @@ const handleSave = async () => {
                     formatProviderDisplayLabel(
                       g.provider.provider_id,
                       g.provider.name,
-                      isChatwikiBound
+                      chatwikiAvailability
                     )
                   }}</span>
                   <span
@@ -299,7 +300,7 @@ const handleSave = async () => {
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
                   :disabled="
-                    isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)
+                    isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)
                   "
                 >
                   {{ getEmbeddingModelLabel(g.provider.provider_id, m) }}

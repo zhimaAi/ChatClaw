@@ -585,7 +585,7 @@ const handleSelectConversation = async (conversation: Conversation) => {
     const binding = await getChatwikiBinding().catch(() => null)
     const nextKey = clearUnavailableChatwikiSelection(
       `${conversation.llm_provider_id}::${conversation.llm_model_id}`,
-      Boolean(binding)
+      binding
     )
     if (nextKey) {
       selectedModelKey.value = nextKey

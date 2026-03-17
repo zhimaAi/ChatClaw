@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+type BindingLike = {
+  chatwiki_version?: string
+} | null
+
 type Model = {
   model_id: string
   enabled?: boolean
@@ -37,50 +41,92 @@ async function loadModule() {
   return import('./chatwikiModelAvailability.ts')
 }
 
+const unboundBinding: BindingLike = null
+const cloudBinding: BindingLike = { chatwiki_version: 'release' }
+const devBinding: BindingLike = { chatwiki_version: 'dev' }
+
 test('chatwiki models are disabled when account is not bound', async () => {
   const { isModelSelectionDisabled } = await loadModule()
-  assert.equal(isModelSelectionDisabled('chatwiki', false), true)
-  assert.equal(isModelSelectionDisabled('chatwiki', true), false)
-  assert.equal(isModelSelectionDisabled('openai', false), false)
+  assert.equal(isModelSelectionDisabled('chatwiki', unboundBinding), true)
+  assert.equal(isModelSelectionDisabled('chatwiki', cloudBinding), false)
+  assert.equal(isModelSelectionDisabled('openai', unboundBinding), false)
 })
 
-test('unbound chatwiki selections are treated as unavailable', async () => {
+test('chatwiki dev binding also disables model selection', async () => {
+  const { isModelSelectionDisabled } = await loadModule()
+  assert.equal(isModelSelectionDisabled('chatwiki', devBinding), true)
+  assert.equal(isModelSelectionDisabled('openai', devBinding), false)
+})
+
+test('unavailable chatwiki selections are treated as unavailable', async () => {
   const { isSelectionAvailable } = await loadModule()
   assert.equal(
-    isSelectionAvailable(providersWithModels, 'chatwiki::cw-llm-1', 'llm', false),
+    isSelectionAvailable(providersWithModels, 'chatwiki::cw-llm-1', 'llm', unboundBinding),
     false
   )
-  assert.equal(isSelectionAvailable(providersWithModels, 'openai::gpt-5', 'llm', false), true)
-})
-
-test('saved chatwiki selection is cleared when account is not bound', async () => {
-  const { clearUnavailableChatwikiSelection } = await loadModule()
   assert.equal(
-    clearUnavailableChatwikiSelection('chatwiki::cw-llm-1', false),
-    ''
+    isSelectionAvailable(providersWithModels, 'chatwiki::cw-llm-1', 'llm', devBinding),
+    false
   )
   assert.equal(
-    clearUnavailableChatwikiSelection('chatwiki::cw-llm-1', true),
+    isSelectionAvailable(providersWithModels, 'openai::gpt-5', 'llm', unboundBinding),
+    true
+  )
+})
+
+test('saved chatwiki selection is cleared when binding is unavailable', async () => {
+  const { clearUnavailableChatwikiSelection } = await loadModule()
+  assert.equal(clearUnavailableChatwikiSelection('chatwiki::cw-llm-1', unboundBinding), '')
+  assert.equal(clearUnavailableChatwikiSelection('chatwiki::cw-llm-1', devBinding), '')
+  assert.equal(
+    clearUnavailableChatwikiSelection('chatwiki::cw-llm-1', cloudBinding),
     'chatwiki::cw-llm-1'
   )
-  assert.equal(clearUnavailableChatwikiSelection('openai::gpt-5', false), 'openai::gpt-5')
+  assert.equal(
+    clearUnavailableChatwikiSelection('openai::gpt-5', unboundBinding),
+    'openai::gpt-5'
+  )
 })
 
-test('fallback selection skips unbound chatwiki models', async () => {
+test('fallback selection skips unavailable chatwiki models', async () => {
   const { getFirstSelectableModelKey } = await loadModule()
-  assert.equal(getFirstSelectableModelKey(providersWithModels, 'llm', false), 'openai::gpt-5')
   assert.equal(
-    getFirstSelectableModelKey(providersWithModels, 'embedding', false),
+    getFirstSelectableModelKey(providersWithModels, 'llm', unboundBinding),
+    'openai::gpt-5'
+  )
+  assert.equal(
+    getFirstSelectableModelKey(providersWithModels, 'embedding', unboundBinding),
     'openai::text-embedding-3-large'
   )
-  assert.equal(getFirstSelectableModelKey(providersWithModels, 'llm', true), 'chatwiki::cw-llm-1')
+  assert.equal(
+    getFirstSelectableModelKey(providersWithModels, 'llm', devBinding),
+    'openai::gpt-5'
+  )
+  assert.equal(
+    getFirstSelectableModelKey(providersWithModels, 'llm', cloudBinding),
+    'chatwiki::cw-llm-1'
+  )
 })
 
-test('only provider labels show unbound suffix for chatwiki', async () => {
+test('only provider labels show chatwiki binding suffixes', async () => {
   const { formatModelDisplayLabel, formatProviderDisplayLabel } = await loadModule()
-  assert.equal(formatModelDisplayLabel('chatwiki', 'ChatWiki Model', false), 'ChatWiki Model')
-  assert.equal(formatModelDisplayLabel('chatwiki', 'ChatWiki Model', true), 'ChatWiki Model')
-  assert.equal(formatProviderDisplayLabel('chatwiki', 'ChatWiki', false), 'ChatWiki（未登录）')
-  assert.equal(formatProviderDisplayLabel('chatwiki', 'ChatWiki', true), 'ChatWiki')
-  assert.equal(formatProviderDisplayLabel('openai', 'OpenAI', false), 'OpenAI')
+  assert.equal(
+    formatModelDisplayLabel('chatwiki', 'ChatWiki Model', unboundBinding),
+    'ChatWiki Model'
+  )
+  assert.equal(formatModelDisplayLabel('chatwiki', 'ChatWiki Model', devBinding), 'ChatWiki Model')
+  assert.equal(
+    formatModelDisplayLabel('chatwiki', 'ChatWiki Model', cloudBinding),
+    'ChatWiki Model'
+  )
+  assert.equal(
+    formatProviderDisplayLabel('chatwiki', 'ChatWiki', unboundBinding),
+    'ChatWiki（未登录）'
+  )
+  assert.equal(
+    formatProviderDisplayLabel('chatwiki', 'ChatWiki', devBinding),
+    'ChatWiki（非ChatWiki Cloud）'
+  )
+  assert.equal(formatProviderDisplayLabel('chatwiki', 'ChatWiki', cloudBinding), 'ChatWiki')
+  assert.equal(formatProviderDisplayLabel('openai', 'OpenAI', unboundBinding), 'OpenAI')
 })

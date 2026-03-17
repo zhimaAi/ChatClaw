@@ -1,10 +1,12 @@
-type BindingStateListener = (bound: boolean) => void
+type BindingStatePayload = boolean | { chatwiki_version?: string | null } | null
+
+type BindingStateListener = (payload: BindingStatePayload) => void
 
 const listeners = new Set<BindingStateListener>()
 
-export function notifyChatwikiBindingChanged(bound: boolean): void {
+export function notifyChatwikiBindingChanged(payload: BindingStatePayload): void {
   for (const listener of listeners) {
-    listener(bound)
+    listener(payload)
   }
 }
 
