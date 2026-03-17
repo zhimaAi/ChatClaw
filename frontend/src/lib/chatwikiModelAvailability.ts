@@ -15,6 +15,25 @@ type ProviderWithModelsLike<TModel extends ModelLike = ModelLike> = {
 
 export const CHATWIKI_PROVIDER_ID = 'chatwiki'
 
+export function formatModelDisplayLabel(
+  providerId: string,
+  label: string,
+  isChatwikiBound: boolean
+): string {
+  return label
+}
+
+export function formatProviderDisplayLabel(
+  providerId: string,
+  label: string,
+  isChatwikiBound: boolean
+): string {
+  if (providerId === CHATWIKI_PROVIDER_ID && !isChatwikiBound) {
+    return `${label}（未登录）`
+  }
+  return label
+}
+
 export function isModelSelectionDisabled(providerId: string, isChatwikiBound: boolean): boolean {
   return providerId === CHATWIKI_PROVIDER_ID && !isChatwikiBound
 }

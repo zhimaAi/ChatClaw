@@ -34,7 +34,11 @@ import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/serv
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
-import { isModelSelectionDisabled } from '@/lib/chatwikiModelAvailability'
+import {
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 interface PendingImage {
   id: string
@@ -119,8 +123,12 @@ const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
 const isChatwikiBound = ref(true)
 
-function getDisplayModelName(model: Model): string {
-  return model.name?.trim() || model.model_id?.trim() || '-'
+function getDisplayModelName(providerId: string, model: Model): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    isChatwikiBound.value
+  )
 }
 
 const handleChatEnter = (event: KeyboardEvent) => {
@@ -634,7 +642,13 @@ onUnmounted(() => {
                           <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
                           <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
                             <SelectLabel class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span>{{ pw.provider.name }}</span>
+                              <span>{{
+                                formatProviderDisplayLabel(
+                                  pw.provider.provider_id,
+                                  pw.provider.name,
+                                  isChatwikiBound
+                                )
+                              }}</span>
                               <span
                                 v-if="isProviderFree(pw)"
                                 class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
@@ -656,7 +670,7 @@ onUnmounted(() => {
                                   "
                                 >
                                   <div class="flex items-center gap-2">
-                                    <span>{{ getDisplayModelName(m) }}</span>
+                                    <span>{{ getDisplayModelName(pw.provider.provider_id, m) }}</span>
                                     <template v-if="m.capabilities && m.capabilities.length > 0">
                                       <span
                                         v-for="cap in m.capabilities.slice(0, 3)"

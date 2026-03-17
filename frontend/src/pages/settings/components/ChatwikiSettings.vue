@@ -11,6 +11,7 @@ import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
+import { buildChatWikiLoginUrl, openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +45,7 @@ interface AuthCallbackData {
   exp: string
   user_id: string
   user_name: string
+  chatwiki_version: string
 }
 
 interface RobotItem {
@@ -275,21 +277,6 @@ function goToChoose() {
   showOpenSourceInput.value = false
 }
 
-/** Build login URL with os_type, os_version query params for account management redirect */
-async function buildLoginUrl(base: string): Promise<string> {
-  const path = `${base.replace(/\/+$/, '')}/#/chatclaw/login`
-  try {
-    const params = await BrowserService.GetLoginParams()
-    const q = new URLSearchParams()
-    if (params.os_type) q.set('os_type', params.os_type)
-    if (params.os_version) q.set('os_version', params.os_version)
-    const query = q.toString()
-    return query ? `${path}?${query}` : path
-  } catch {
-    return path
-  }
-}
-
 /** Re-auth: open current binding server_url login page directly (no choose step) */
 async function startReauthBinding() {
   const b = currentBinding.value
@@ -299,7 +286,7 @@ async function startReauthBinding() {
     return
   }
   isReauthFlow.value = true
-  const authUrl = await buildLoginUrl(base)
+  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
   await startBinding(authUrl)
 }
 
@@ -366,8 +353,21 @@ function listenAuthCallback() {
 async function handleLoginCloud() {
   isReauthFlow.value = false
   const base = cloudAuthUrl.value.replace(/\/+$/, '')
-  const authUrl = await buildLoginUrl(base)
-  await startBinding(authUrl)
+  if (!base) {
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+  try {
+    await openChatWikiCloudLogin(base)
+  } catch (error) {
+    console.error('Failed to open auth URL:', error)
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+  view.value = 'binding'
+  remainingSeconds.value = BINDING_TIMEOUT_SEC
+  startCountdown()
+  listenAuthCallback()
 }
 
 async function handleGoToAuth() {
@@ -377,7 +377,7 @@ async function handleGoToAuth() {
   }
   isReauthFlow.value = false
   const base = openSourceUrl.value.trim().replace(/\/+$/, '')
-  const authUrl = await buildLoginUrl(base)
+  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
   await startBinding(authUrl)
 }
 

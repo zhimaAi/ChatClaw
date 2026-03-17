@@ -33,6 +33,8 @@ import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import {
   clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
 
@@ -223,6 +225,14 @@ function isProviderFree(g: Group): boolean {
   const p = g.provider as { is_free?: boolean }
   return Boolean(p?.is_free)
 }
+
+function getModelLabel(providerId: string, model: Model): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    isChatwikiBound.value
+  )
+}
 </script>
 
 <template>
@@ -260,13 +270,19 @@ function isProviderFree(g: Group): boolean {
             <SelectContent>
               <SelectGroup v-for="g in extractGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      isChatwikiBound
+                    )
+                  }}</span>
                   <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
                 <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
-                  {{ m.name }}
+                  {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>
@@ -286,13 +302,19 @@ function isProviderFree(g: Group): boolean {
             <SelectContent>
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      isChatwikiBound
+                    )
+                  }}</span>
                   <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
                 <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
-                  {{ m.name }}
+                  {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

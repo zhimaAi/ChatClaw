@@ -75,3 +75,12 @@ test('fallback selection skips unbound chatwiki models', async () => {
   )
   assert.equal(getFirstSelectableModelKey(providersWithModels, 'llm', true), 'chatwiki::cw-llm-1')
 })
+
+test('only provider labels show unbound suffix for chatwiki', async () => {
+  const { formatModelDisplayLabel, formatProviderDisplayLabel } = await loadModule()
+  assert.equal(formatModelDisplayLabel('chatwiki', 'ChatWiki Model', false), 'ChatWiki Model')
+  assert.equal(formatModelDisplayLabel('chatwiki', 'ChatWiki Model', true), 'ChatWiki Model')
+  assert.equal(formatProviderDisplayLabel('chatwiki', 'ChatWiki', false), 'ChatWiki（未登录）')
+  assert.equal(formatProviderDisplayLabel('chatwiki', 'ChatWiki', true), 'ChatWiki')
+  assert.equal(formatProviderDisplayLabel('openai', 'OpenAI', false), 'OpenAI')
+})

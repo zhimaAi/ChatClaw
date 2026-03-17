@@ -12,11 +12,12 @@ import (
 
 // AuthCallbackData is emitted to the frontend when a chatclaw://auth/callback URL is received.
 type AuthCallbackData struct {
-	Token    string `json:"token"`
-	TTL      string `json:"ttl"`
-	Exp      string `json:"exp"`
-	UserID   string `json:"user_id"`
-	UserName string `json:"user_name"`
+	Token           string `json:"token"`
+	TTL             string `json:"ttl"`
+	Exp             string `json:"exp"`
+	UserID          string `json:"user_id"`
+	UserName        string `json:"user_name"`
+	ChatWikiVersion string `json:"chatwiki_version"`
 }
 
 // HandleURL processes a single chatclaw:// URL (e.g. from macOS Apple Event or
@@ -46,17 +47,19 @@ func HandleURL(app *application.App, rawURL string) {
 	exp := q.Get("exp")
 	userID := q.Get("user_id")
 	userName := q.Get("user_name")
+	chatWikiVersion := q.Get("chatwiki_version")
 
-	if err := chatwiki.SaveBinding(app, serverURL, token, ttl, exp, userID, userName); err != nil {
+	if err := chatwiki.SaveBinding(app, serverURL, token, ttl, exp, userID, userName, chatWikiVersion); err != nil {
 		app.Logger.Error("Failed to save chatwiki binding from deeplink", "error", err)
 	}
 
 	payload := AuthCallbackData{
-		Token:    token,
-		TTL:      ttl,
-		Exp:      exp,
-		UserID:   userID,
-		UserName: userName,
+		Token:           token,
+		TTL:             ttl,
+		Exp:             exp,
+		UserID:          userID,
+		UserName:        userName,
+		ChatWikiVersion: chatWikiVersion,
 	}
 	app.Logger.Info("Deep link auth callback received", "user_id", userID, "user_name", userName)
 	app.Event.Emit("chatwiki:auth-callback", payload)
