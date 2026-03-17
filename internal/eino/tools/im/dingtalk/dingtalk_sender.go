@@ -142,12 +142,6 @@ func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 }
 
 func (t *dingTalkSenderTool) InvokableRun(ctx context.Context, argsJSON string, _ ...tool.Option) (string, error) {
-	slog.Info("[dingtalk_sender] InvokableRun start",
-		"args_json", argsJSON,
-		"default_channel_id", t.defaultChannelID,
-		"default_target_id", t.defaultTargetID,
-	)
-
 	in, err := t.parseAndResolveInput(argsJSON)
 	if err != nil {
 		return "", err
@@ -162,14 +156,10 @@ func (t *dingTalkSenderTool) InvokableRun(ctx context.Context, argsJSON string, 
 	}
 
 	// Priority order:
-	// 1) pic_url (DingTalk single-chat image message per doc)
-	// 2) file_path (upload + send image/file)
-	// 3) content (text/markdown)
-	if in.PicURL != "" {
-		return t.sendImageByURL(ctx, adapter, in)
-	}
-	if in.FilePath != "" {
-		return t.sendByFilePath(ctx, adapter, in)
+	// 1) When pic_url/file_path exists, compose one markdown message with attachments.
+	// 2) Otherwise send content as text/markdown.
+	if in.PicURL != "" || in.FilePath != "" {
+		return t.sendMarkdownWithAttachments(ctx, adapter, in)
 	}
 	return t.sendTextOrMarkdown(ctx, adapter, in)
 }
@@ -184,9 +174,6 @@ func (t *dingTalkSenderTool) parseAndResolveInput(argsJSON string) (dingTalkSend
 		return dingTalkSenderInput{}, fmt.Errorf("parse arguments: %w", err)
 	}
 
-	beforeChannelID := in.ChannelID
-	beforeTargetID := strings.TrimSpace(in.TargetID)
-
 	if in.ChannelID <= 0 && t.defaultChannelID > 0 {
 		in.ChannelID = t.defaultChannelID
 	}
@@ -197,20 +184,6 @@ func (t *dingTalkSenderTool) parseAndResolveInput(argsJSON string) (dingTalkSend
 	in.TargetID = strings.TrimSpace(in.TargetID)
 	in.PicURL = strings.TrimSpace(in.PicURL)
 	in.FilePath = strings.TrimSpace(in.FilePath)
-
-	if inJSON, err := json.Marshal(in); err == nil {
-		slog.Info("[dingtalk_sender] input resolved",
-			"input", string(inJSON),
-			"channel_id_before_default", beforeChannelID,
-			"target_id_before_default", beforeTargetID,
-			"channel_id_after_default", in.ChannelID,
-			"target_id_after_default", in.TargetID,
-		)
-	} else {
-		slog.Error("[dingtalk_sender] failed to marshal input for logging",
-			"error", err,
-		)
-	}
 
 	return in, nil
 }
@@ -232,16 +205,6 @@ func validateDingTalkSenderInput(in dingTalkSenderInput) (string, bool) {
 	hasPicURL := in.PicURL != ""
 	hasFilePath := in.FilePath != ""
 	hasContent := strings.TrimSpace(in.Content) != ""
-	slog.Info("[dingtalk_sender] input mode detected",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-		"has_pic_url", hasPicURL,
-		"has_file_path", hasFilePath,
-		"has_content", hasContent,
-		"content_len", len(in.Content),
-		"pic_url", in.PicURL,
-		"file_path", in.FilePath,
-	)
 	if !hasPicURL && !hasFilePath && !hasContent {
 		slog.Warn("[dingtalk_sender] validation failed",
 			"reason", "either content, pic_url or file_path is required",
@@ -261,10 +224,6 @@ func (t *dingTalkSenderTool) resolveDingTalkAdapter(channelID int64) (channels.P
 		)
 		return nil, fmt.Sprintf("Error: channel %d is not connected", channelID)
 	}
-	slog.Info("[dingtalk_sender] channel adapter resolved",
-		"channel_id", channelID,
-		"platform", adapter.Platform(),
-	)
 	if adapter.Platform() != channels.PlatformDingTalk {
 		slog.Error("[dingtalk_sender] channel platform mismatch",
 			"channel_id", channelID,
@@ -292,29 +251,91 @@ func (t *dingTalkSenderTool) sendImageByURL(ctx context.Context, adapter channel
 		return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
 	}
 	payload := string(payloadJSON)
-	slog.Info("[dingtalk_sender] entering image-url flow",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-		"pic_url", in.PicURL,
-		"payload", payload,
-	)
 	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
 		return fmt.Sprintf("Error: failed to send image message: %s", err.Error()), nil
 	}
-	slog.Info("[dingtalk_sender] image message sent",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-		"pic_url", in.PicURL,
-	)
+	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
+}
+
+func (t *dingTalkSenderTool) sendMarkdownWithAttachments(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
+	// Unified behavior:
+	// - Only image-type attachments are supported.
+	// - Whether PicURL or FilePath is provided, we treat it as an image file path.
+	// - Image must be uploaded first via UploadMessageFile to get mediaID.
+
+	sourcePath := strings.TrimSpace(in.FilePath)
+	if sourcePath == "" {
+		sourcePath = strings.TrimSpace(in.PicURL)
+	}
+
+	if sourcePath == "" {
+		slog.Warn("[dingtalk_sender] sendMarkdownWithAttachments called without PicURL or FilePath",
+			"channel_id", in.ChannelID,
+			"target_id", in.TargetID,
+		)
+		return "Error: PicURL or FilePath is required for image sending", nil
+	}
+
+	// Only support image-type files.
+	if !isImageFilePath(sourcePath) {
+		slog.Warn("[dingtalk_sender] non-image attachment not supported",
+			"channel_id", in.ChannelID,
+			"target_id", in.TargetID,
+			"source_path", sourcePath,
+		)
+		return "Error: only image-type attachments are supported for DingTalk", nil
+	}
+
+	dingAdapter, ok := adapter.(*channels.DingTalkAdapter)
+	if !ok {
+		slog.Error("[dingtalk_sender] attachment adapter type assertion failed",
+			"channel_id", in.ChannelID,
+		)
+		return "Error: image upload is only supported on DingTalk channels", nil
+	}
+
+	if _, err := os.Stat(sourcePath); err != nil {
+		slog.Error("[dingtalk_sender] image file not accessible",
+			"file_path", sourcePath,
+			"error", err,
+		)
+		return fmt.Sprintf("Error: image file not accessible: %s", err.Error()), nil
+	}
+
+	mediaID, _, err := dingAdapter.UploadMessageFile(ctx, sourcePath)
+	if err != nil {
+		slog.Error("[dingtalk_sender] failed to upload image file",
+			"file_path", sourcePath,
+			"error", err,
+		)
+		return fmt.Sprintf("Error: failed to upload image file: %s", err.Error()), nil
+	}
+
+	// Build sampleImageMsg payload using mediaID as photoURL.
+	payloadBody := map[string]any{
+		"msg_type": "sampleImageMsg",
+		"msg_key":  "sampleImageMsg",
+		"media_id": mediaID,
+	}
+
+	payloadBytes, err := json.Marshal(payloadBody)
+	if err != nil {
+		slog.Error("[dingtalk_sender] failed to marshal sampleImageMsg payload",
+			"error", err,
+			"target_id", in.TargetID,
+		)
+		return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
+	}
+
+	payload := string(payloadBytes)
+	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
+		return fmt.Sprintf("Error: failed to send image message: %s", err.Error()), nil
+	}
+
 	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
 }
 
 func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
-	slog.Info("[dingtalk_sender] entering file flow",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-		"file_path", in.FilePath,
-	)
 	dingAdapter, ok := adapter.(*channels.DingTalkAdapter)
 	if !ok {
 		slog.Error("[dingtalk_sender] file flow adapter type assertion failed",
@@ -323,13 +344,7 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 		return "Error: file upload is only supported on DingTalk channels", nil
 	}
 
-	fileExt := strings.ToLower(filepath.Ext(in.FilePath))
 	isImageFile := isImageFilePath(in.FilePath)
-	slog.Info("[dingtalk_sender] file extension inspected",
-		"file_path", in.FilePath,
-		"file_ext", fileExt,
-		"is_image_file", isImageFile,
-	)
 	if _, err := os.Stat(in.FilePath); err != nil {
 		slog.Error("[dingtalk_sender] file not accessible",
 			"file_path", in.FilePath,
@@ -338,7 +353,7 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 		return fmt.Sprintf("Error: file not accessible: %s", err.Error()), nil
 	}
 
-	mediaID, mediaType, err := dingAdapter.UploadMessageFile(ctx, in.FilePath)
+	mediaID, _, err := dingAdapter.UploadMessageFile(ctx, in.FilePath)
 	if err != nil {
 		slog.Error("[dingtalk_sender] failed to upload file",
 			"file_path", in.FilePath,
@@ -346,11 +361,6 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 		)
 		return fmt.Sprintf("Error: failed to upload file: %s", err.Error()), nil
 	}
-	slog.Info("[dingtalk_sender] file upload success",
-		"file_path", in.FilePath,
-		"media_id", mediaID,
-		"media_type", mediaType,
-	)
 
 	if isImageFile {
 		// For local image files, send image message by media_id as compatibility path.
@@ -367,13 +377,6 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 			return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
 		}
 		payload := string(imageJSON)
-		slog.Info("[dingtalk_sender] sending image message from file",
-			"target_id", in.TargetID,
-			"file_path", in.FilePath,
-			"file_ext", fileExt,
-			"media_type", mediaType,
-			"payload", payload,
-		)
 		if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
 			return fmt.Sprintf("Error: image uploaded but failed to send: %s", err.Error()), nil
 		}
@@ -394,10 +397,6 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 		return fmt.Sprintf("Error: failed to build file message payload: %s", err.Error()), nil
 	}
 	payload := string(fileJSON)
-	slog.Info("[dingtalk_sender] sending file message",
-		"target_id", in.TargetID,
-		"payload", payload,
-	)
 	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
 		return fmt.Sprintf("Error: file uploaded but failed to send: %s", err.Error()), nil
 	}
@@ -405,29 +404,13 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 }
 
 func (t *dingTalkSenderTool) sendTextOrMarkdown(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
-	slog.Info("[dingtalk_sender] entering content flow",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-		"content_len", len(in.Content),
-		"content", in.Content,
-	)
 	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, in.Content); err != nil {
 		return fmt.Sprintf("Error: failed to send message: %s", err.Error()), nil
 	}
-	slog.Info("[dingtalk_sender] text/markdown message sent",
-		"channel_id", in.ChannelID,
-		"target_id", in.TargetID,
-	)
 	return fmt.Sprintf("Message sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
 }
 
 func sendDingTalkPayload(ctx context.Context, adapter channels.PlatformAdapter, channelID int64, targetID string, payload string) error {
-	slog.Info("[dingtalk_sender] sending message",
-		"channel_id", channelID,
-		"target_id", targetID,
-		"payload_len", len(payload),
-		"payload", payload,
-	)
 	if err := adapter.SendMessage(ctx, targetID, payload); err != nil {
 		slog.Error("[dingtalk_sender] failed to send message",
 			"channel_id", channelID,
