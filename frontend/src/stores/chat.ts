@@ -159,7 +159,8 @@ export const useChatStore = defineStore('chat', () => {
         for (const msg of current) {
           if (msg.id >= 0) continue
           const existsOnServer = fetched.some(
-            (fm) => fm.role === msg.role && normalizeContent(fm.content) === normalizeContent(msg.content)
+            (fm) =>
+              fm.role === msg.role && normalizeContent(fm.content) === normalizeContent(msg.content)
           )
           if (!existsOnServer) {
             merged.push(msg)
@@ -350,7 +351,8 @@ export const useChatStore = defineStore('chat', () => {
       size: number
     }>
   ) => {
-    const hasContent = content.trim() !== '' || (images && images.length > 0) || (files && files.length > 0)
+    const hasContent =
+      content.trim() !== '' || (images && images.length > 0) || (files && files.length > 0)
     if (conversationId <= 0 || !hasContent) return null
 
     // Map images to ImagePayload format
@@ -431,7 +433,7 @@ export const useChatStore = defineStore('chat', () => {
     // Get existing images from the message being edited
     const current = messagesByConversation.value[conversationId]
     const msgToEdit = current?.find((m) => m.id === messageId)
-    let existingImagesJson = msgToEdit?.images_json
+    const existingImagesJson = msgToEdit?.images_json
 
     // Parse existing images if any
     let existingImages: ImagePayload[] = []
@@ -459,14 +461,19 @@ export const useChatStore = defineStore('chat', () => {
       })) || []
 
     // Combine existing images with new images (if new images are provided, they replace existing)
-    const imagePayloads: ImagePayload[] = newImagePayloads.length > 0 ? newImagePayloads : existingImages
+    const imagePayloads: ImagePayload[] =
+      newImagePayloads.length > 0 ? newImagePayloads : existingImages
 
     // Optimistic UX: immediately update the edited message and truncate following messages
     ensureConversationMessages(conversationId)
     const idx = current?.findIndex((m) => m.id === messageId) ?? -1
     if (idx >= 0 && current) {
       const next = [...current]
-      next[idx] = { ...next[idx], content: newContent.trim(), images_json: JSON.stringify(imagePayloads) } as Message
+      next[idx] = {
+        ...next[idx],
+        content: newContent.trim(),
+        images_json: JSON.stringify(imagePayloads),
+      } as Message
       messagesByConversation.value[conversationId] = next.slice(0, idx + 1)
     }
 
@@ -566,7 +573,11 @@ export const useChatStore = defineStore('chat', () => {
     return SUB_AGENT_NAMES.has(agentName) ? agentName : undefined
   }
 
-  const findSubAgentToolCall = (streaming: StreamingMessageState, agentName: string, parentToolCallId?: string): ToolCallInfo | undefined => {
+  const findSubAgentToolCall = (
+    streaming: StreamingMessageState,
+    agentName: string,
+    parentToolCallId?: string
+  ): ToolCallInfo | undefined => {
     if (parentToolCallId) {
       return streaming.toolCalls.find((tc) => tc.toolCallId === parentToolCallId)
     }
@@ -672,8 +683,17 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, type, tool_call_id, tool_name, args_json, result_json, run_path, parent_tool_call_id } =
-      data
+    const {
+      conversation_id,
+      request_id,
+      type,
+      tool_call_id,
+      tool_name,
+      args_json,
+      result_json,
+      run_path,
+      parent_tool_call_id,
+    } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     // Guard: ignore empty tool_call_id events (some providers stream partial tool deltas)

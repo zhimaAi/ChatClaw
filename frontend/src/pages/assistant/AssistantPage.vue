@@ -32,7 +32,11 @@ import {
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import { LibraryService, type Library } from '@bindings/chatclaw/internal/services/library'
-import { ChatWikiService, TeamChatInput, type Robot } from '@bindings/chatclaw/internal/services/chatwiki'
+import {
+  ChatWikiService,
+  TeamChatInput,
+  type Robot,
+} from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
   AlertDialog,
@@ -87,15 +91,8 @@ const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
 
 // Use composables
-const {
-  agents,
-  activeAgentId,
-  loading,
-  loadAgents,
-  createAgent,
-  updateAgent,
-  deleteAgent,
-} = useAgents()
+const { agents, activeAgentId, loading, loadAgents, createAgent, updateAgent, deleteAgent } =
+  useAgents()
 
 const {
   conversationsByAgent,
@@ -264,7 +261,10 @@ const logTeam = (stage: string, payload?: Record<string, any>) => {
   console.warn(`[assistant][team] ${stage}`)
 }
 
-const logTeamConversationSnapshot = (stage: string, robotId: string | null = activeTeamRobotId.value) => {
+const logTeamConversationSnapshot = (
+  stage: string,
+  robotId: string | null = activeTeamRobotId.value
+) => {
   if (!robotId) {
     logTeam(stage, {
       robot_id: robotId,
@@ -340,16 +340,12 @@ const chatMessages = computed(() => {
 })
 
 const canSend = computed(() => {
-  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0 || pendingFiles.value.length > 0
+  const hasContent =
+    chatInput.value.trim() !== '' || pendingImages.value.length > 0 || pendingFiles.value.length > 0
   if (isTeamMode.value) {
     return !!activeTeamRobotId.value && chatInput.value.trim() !== '' && !isGenerating.value
   }
-  return (
-    !!activeAgentId.value &&
-    hasContent &&
-    !!selectedModelInfo.value &&
-    !isGenerating.value
-  )
+  return !!activeAgentId.value && hasContent && !!selectedModelInfo.value && !isGenerating.value
 })
 
 // Reason why send is disabled (for tooltip)
@@ -363,7 +359,8 @@ const sendDisabledReason = computed(() => {
   }
   if (!activeAgentId.value) return t('assistant.placeholders.createAgentFirst')
   if (!selectedModelKey.value) return t('assistant.placeholders.selectModelFirst')
-  const hasContent = chatInput.value.trim() !== '' || pendingImages.value.length > 0 || pendingFiles.value.length > 0
+  const hasContent =
+    chatInput.value.trim() !== '' || pendingImages.value.length > 0 || pendingFiles.value.length > 0
   if (!hasContent) return t('assistant.placeholders.enterToSend')
   return ''
 })
@@ -380,10 +377,12 @@ const loadLibrariesFn = async () => {
     if (teamBound.value) {
       try {
         const teamList = await ChatWikiService.GetLibraryListOnlyOpenAll()
-        assistantTeamLibraries.value = (teamList || []).map((lib: { id?: string; name?: string }) => ({
-          id: String(lib?.id ?? ''),
-          name: String(lib?.name ?? ''),
-        })).filter((x) => x.id)
+        assistantTeamLibraries.value = (teamList || [])
+          .map((lib: { id?: string; name?: string }) => ({
+            id: String(lib?.id ?? ''),
+            name: String(lib?.name ?? ''),
+          }))
+          .filter((x) => x.id)
       } catch {
         // binding expired or network
       }
@@ -400,7 +399,7 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
     if (!isEmbeddedMode.value) {
       updateCurrentTab()
     }
-    
+
     // Notify other windows/tabs to refresh agents list
     Events.Emit('agents:changed', {
       sourceTabId: props.tabId,
@@ -457,7 +456,7 @@ const handleUpdated = (updated: Agent) => {
 const handleDeleted = (id: number) => {
   deleteAgent(id)
   clearAgentCache(id)
-  
+
   // Notify other windows/tabs to refresh agents list
   Events.Emit('agents:changed', {
     sourceTabId: props.tabId,
@@ -502,8 +501,13 @@ const handleListModeChange = (mode: ListMode) => {
 // Snap mode: persist list mode and assistant selection to cache
 function persistSnapCache() {
   void SettingsService.SetValue(SNAP_CACHE_LIST_MODE, listMode.value).catch(() => {})
-  void SettingsService.SetValue(SNAP_CACHE_AGENT_ID, activeAgentId.value != null ? String(activeAgentId.value) : '').catch(() => {})
-  void SettingsService.SetValue(SNAP_CACHE_TEAM_ROBOT_ID, activeTeamRobotId.value ?? '').catch(() => {})
+  void SettingsService.SetValue(
+    SNAP_CACHE_AGENT_ID,
+    activeAgentId.value != null ? String(activeAgentId.value) : ''
+  ).catch(() => {})
+  void SettingsService.SetValue(SNAP_CACHE_TEAM_ROBOT_ID, activeTeamRobotId.value ?? '').catch(
+    () => {}
+  )
 }
 
 // Snap mode: restore list mode and assistant selection from cache (default: personal)
@@ -707,7 +711,9 @@ const sendTeamMessage = async (messageContent: string) => {
     token_length: String(currentBinding.token).length,
   })
   const conversationDialogueId =
-    activeTeamConversation.value?.id === conversationId ? activeTeamConversation.value.dialogue_id : 0
+    activeTeamConversation.value?.id === conversationId
+      ? activeTeamConversation.value.dialogue_id
+      : 0
   const dialogueId =
     conversationDialogueId > 0
       ? String(conversationDialogueId)
@@ -796,8 +802,20 @@ const handleSend = async () => {
       await createConversation(
         new CreateConversationInput({
           agent_id: activeAgentId.value,
-          name: messageContent.slice(0, 50) || (imagesToSend.length > 0 ? t('assistant.imageMessage') : filesToSend.length > 0 ? t('assistant.chat.fileMessage') : ''),
-          last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : filesToSend.length > 0 ? t('assistant.chat.fileMessage') : ''),
+          name:
+            messageContent.slice(0, 50) ||
+            (imagesToSend.length > 0
+              ? t('assistant.imageMessage')
+              : filesToSend.length > 0
+                ? t('assistant.chat.fileMessage')
+                : ''),
+          last_message:
+            messageContent ||
+            (imagesToSend.length > 0
+              ? t('assistant.imageMessage')
+              : filesToSend.length > 0
+                ? t('assistant.chat.fileMessage')
+                : ''),
           llm_provider_id: providerId || '',
           llm_model_id: modelId || '',
           library_ids: selectedLibraryIds.value,
@@ -812,7 +830,7 @@ const handleSend = async () => {
     } catch {
       // Error already handled in composable
       return
-}
+    }
   }
 
   // Now send the message via ChatService
@@ -829,14 +847,26 @@ const handleSend = async () => {
         handleConversationUpdated(updated)
       }
 
-      await chatStore.sendMessage(activeConversationId.value, messageContent, props.tabId, imagesToSend, filesToSend)
+      await chatStore.sendMessage(
+        activeConversationId.value,
+        messageContent,
+        props.tabId,
+        imagesToSend,
+        filesToSend
+      )
 
       // Update conversation's last_message
       try {
         const updated2 = await ConversationsService.UpdateConversation(
           activeConversationId.value,
           new UpdateConversationInput({
-            last_message: messageContent || (imagesToSend.length > 0 ? t('assistant.imageMessage') : filesToSend.length > 0 ? t('assistant.chat.fileMessage') : ''),
+            last_message:
+              messageContent ||
+              (imagesToSend.length > 0
+                ? t('assistant.imageMessage')
+                : filesToSend.length > 0
+                  ? t('assistant.chat.fileMessage')
+                  : ''),
           })
         )
         if (updated2) {
@@ -955,8 +985,21 @@ const handleRemoveImage = (id: string) => {
 }
 
 const ALLOWED_FILE_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-  '.txt', '.csv', '.md', '.json', '.xml', '.html', '.rtf', '.log',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.txt',
+  '.csv',
+  '.md',
+  '.json',
+  '.xml',
+  '.html',
+  '.rtf',
+  '.log',
 ]
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 const MAX_FILES = 4
@@ -1087,7 +1130,9 @@ const saveLibraryIdsToConversation = async () => {
 
 // Team knowledge multi-select: persists team_library_id as comma-separated ids; keeps library_ids
 const saveTeamLibraryIdsToConversation = async (ids: string[]) => {
-  assistantSelectedTeamLibraryIds.value = [...new Set(ids.map((x) => String(x).trim()).filter(Boolean))]
+  assistantSelectedTeamLibraryIds.value = [
+    ...new Set(ids.map((x) => String(x).trim()).filter(Boolean)),
+  ]
   const teamStr = teamLibraryIdsToString(assistantSelectedTeamLibraryIds.value)
   if (!activeConversationId.value) return
   try {
@@ -1126,13 +1171,18 @@ const syncLibraryIdsFromConversation = async () => {
   }
 }
 
-
 // Handle message editing (resend from that point)
 const handleEditMessage = async (messageId: number, newContent: string, images: ImagePayload[]) => {
   if (!activeConversationId.value) return
 
   try {
-    await chatStore.editAndResend(activeConversationId.value, messageId, newContent, props.tabId, images)
+    await chatStore.editAndResend(
+      activeConversationId.value,
+      messageId,
+      newContent,
+      props.tabId,
+      images
+    )
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.resendFailed'))
   }
@@ -1285,8 +1335,8 @@ watch(activeTeamRobotId, (newId, oldId) => {
 
 // 当前标签页是否激活
 // For snap/embedded mode, always consider it active since it does not follow main tab visibility.
-const isTabActive = computed(() =>
-  isSnapMode.value || isEmbeddedMode.value || navigationStore.activeTabId === props.tabId
+const isTabActive = computed(
+  () => isSnapMode.value || isEmbeddedMode.value || navigationStore.activeTabId === props.tabId
 )
 
 async function initializeEmbeddedConversation() {
@@ -1311,7 +1361,6 @@ async function initializeEmbeddedConversation() {
     activeConversationId.value = null
   }
 }
-
 
 // 监听标签页激活状态，激活时刷新模型/助手列表
 // - 模型：用户可能在设置页启用/禁用 provider/model
@@ -1403,7 +1452,7 @@ onMounted(() => {
       }
 
       if (pendingData) {
-      // Apply pre-selected agent
+        // Apply pre-selected agent
         if (pendingData.agentId && agents.value.some((a) => a.id === pendingData.agentId)) {
           activeAgentId.value = pendingData.agentId
           // Load conversations for the selected agent
@@ -1463,7 +1512,9 @@ onMounted(() => {
         activeConversationId.value = null
 
         // Auto-send after a short delay to let Vue reactivity settle (text or images)
-        const hasContent = (pendingData.chatInput?.trim() ?? '') !== '' || (pendingData.pendingImages?.length ?? 0) > 0
+        const hasContent =
+          (pendingData.chatInput?.trim() ?? '') !== '' ||
+          (pendingData.pendingImages?.length ?? 0) > 0
         if (hasContent) {
           window.setTimeout(() => {
             if (canSend.value) {
@@ -1518,7 +1569,7 @@ onMounted(() => {
 
     // Listen for snap state changes
     unsubscribeSnapStateChanged = Events.On('snap:state-changed', (event: any) => {
-      const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
       const state = payload?.state
       const targetProcess = payload?.targetProcess
       hasAttachedTarget.value = state === 'attached' && !!targetProcess
@@ -1526,7 +1577,7 @@ onMounted(() => {
 
     // Listen for text selection to send to snap
     unsubscribeTextSelectionSnap = Events.On('text-selection:send-to-snap', (event: any) => {
-      const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
       const text = payload?.text ?? ''
       if (text) {
         chatInput.value = text
@@ -1578,7 +1629,8 @@ onMounted(() => {
     // If this tab is active and currently viewing the same agent/team robot, refresh immediately.
     if (
       isTabActive.value &&
-      (activeAgentId.value === agentId || (listMode.value === 'team' && activeTeamAgentId === agentId))
+      (activeAgentId.value === agentId ||
+        (listMode.value === 'team' && activeTeamAgentId === agentId))
     ) {
       logTeam('received conversations:changed for active team scope', {
         agent_id: agentId,
@@ -1621,7 +1673,7 @@ onMounted(() => {
 
   // Store dialogue_id from team chat SSE for next request
   unsubscribeChatCompleteTeamDialogue = Events.On('chat:complete', (event: any) => {
-    const data = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const data = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     const convId = data?.conversation_id
     const dId = data?.dialogue_id
     const isKnownTeamConversation =
@@ -1631,11 +1683,7 @@ onMounted(() => {
           const teamAgentId = getTeamConversationAgentId(r.id)
           return (conversationsByAgent.value[teamAgentId] || []).some((c) => c.id === convId)
         }))
-    if (
-      isKnownTeamConversation &&
-      dId != null &&
-      String(dId).trim() !== ''
-    ) {
+    if (isKnownTeamConversation && dId != null && String(dId).trim() !== '') {
       teamDialogueIdByConversation.value[convId] = String(dId).trim()
       logTeam('stored dialogue_id from SSE', { conversation_id: convId, dialogue_id: dId })
     }
@@ -1694,221 +1742,302 @@ onUnmounted(() => {
 
     <!-- Main content wrapper (snap mode: vertical layout so input spans full width) -->
     <div :class="cn('relative flex min-h-0 flex-1 overflow-hidden', isSnapMode && 'flex-col')">
-
-    <!-- Overlay backdrop for snap mode sidebar (covers entire area including input) -->
-    <div
-      v-if="isSnapMode && !sidebarCollapsed"
-      class="absolute inset-0 z-10 bg-black/20"
-      @click="sidebarCollapsed = true"
-    />
-
-    <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded; always show so personal/team tab can switch when empty) -->
-    <AgentSidebar
-      v-if="!isEmbeddedMode && !sidebarCollapsed"
-      :agents="agents"
-      :active-agent-id="activeAgentId"
-      :active-conversation-id="activeDisplayConversationId"
-      :loading="loading"
-      :list-mode="listMode"
-      :is-snap-mode="isSnapMode"
-      :get-agent-conversations="getAgentConversations"
-      :get-all-agent-conversations="getAllAgentConversations"
-      :ensure-conversations-loaded="ensureConversationsLoaded"
-      :get-team-conversation-agent-id="getTeamConversationAgentId"
-      :team-robots="teamRobots"
-      :active-team-robot-id="activeTeamRobotId"
-      :team-loading="teamLoading"
-      :team-binding-checked="teamBindingChecked"
-      :team-bound="teamBound"
-      :on-wake-attached="handleWakeAttachedPointerDown"
-      @go-bind="goToChatwikiBindingSettings"
-      @update:active-agent-id="activeAgentId = $event"
-      @update:active-team-robot-id="activeTeamRobotId = $event"
-      @update:list-mode="handleListModeChange"
-      @create="createOpen = true"
-      @open-settings="openSettings"
-      @open-channels="openChannels"
-      @new-conversation="handleNewConversation"
-      @new-conversation-for-agent="handleNewConversationForAgent"
-      @new-conversation-for-team-robot="handleNewConversationForTeamRobot"
-      @select-conversation="handleSelectConversation"
-      @select-conversation-for-agent="handleSelectConversationForAgent"
-      @select-conversation-for-team-robot="handleSelectConversationForTeamRobot"
-      @toggle-pin="handleTogglePin"
-      @open-rename="handleOpenRenameConversation"
-      @open-delete="handleOpenDeleteConversation"
-      @close-sidebar="sidebarCollapsed = true"
-    />
-
-    <!-- Upper row: expand button + messages -->
-    <div class="relative flex min-h-0 flex-1 overflow-hidden">
-
-    <!-- Collapse/Expand handle (snap mode: floating, draggable) -->
-    <div
-      v-if="!isEmbeddedMode && isSnapMode"
-      class="absolute left-0.5 z-10 cursor-grab active:cursor-grabbing"
-      :style="{ top: snapBtnTop + 'px' }"
-      @pointerdown="onSnapBtnPointerDown"
-      @pointermove="onSnapBtnPointerMove"
-      @pointerup="onSnapBtnPointerUp"
-    >
-      <div class="group/handle relative flex h-7 w-6 items-center justify-center pointer-events-none">
-        <div
-          class="relative flex h-7 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur dark:shadow-none dark:ring-1 dark:ring-white/10"
-        >
-          <span
-            class="h-5 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
-          />
-          <span
-            class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
-          >
-            <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
-            <ChevronRight v-else class="size-4" />
-          </span>
-        </div>
-        <span
-          class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
-        >
-          {{ sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse') }}
-        </span>
-      </div>
-    </div>
-    <!-- Collapse/Expand handle (non-snap mode: in-flow) -->
-    <div
-      v-if="!isEmbeddedMode && !isSnapMode"
-      class="relative z-10 flex w-8 shrink-0 items-center justify-center"
-    >
-      <button
-        type="button"
-        class="group/handle relative flex h-16 w-6 items-center justify-center"
-        :aria-label="sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')"
-        @click="sidebarCollapsed = !sidebarCollapsed"
-      >
-        <div
-          class="relative flex h-12 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur transition-colors dark:shadow-none dark:ring-1 dark:ring-white/10"
-        >
-          <span
-            class="h-6 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
-          />
-          <span
-            class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
-          >
-            <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
-            <ChevronRight v-else class="size-4" />
-          </span>
-        </div>
-        <span
-          class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
-        >
-          {{ sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse') }}
-        </span>
-      </button>
-    </div>
-
-    <!-- Right side: Chat area -->
-    <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode).
-           Always render to avoid layout shift when switching chat mode; hide button via invisible. -->
+      <!-- Overlay backdrop for snap mode sidebar (covers entire area including input) -->
       <div
-        v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team'"
-        class="flex shrink-0 items-center justify-end px-2 pt-1"
-      >
-        <Button
-          size="icon"
-          variant="ghost"
-          :class="cn('size-7', chatMode !== 'task' && 'invisible')"
-          :title="t('assistant.workspaceDrawer.title')"
-          @click="workspaceDrawerOpen = !workspaceDrawerOpen"
-        >
-          <PanelRight :class="cn('size-4', workspaceDrawerOpen ? 'text-foreground' : 'text-muted-foreground')" />
-        </Button>
-      </div>
-
-      <!-- Agent list empty state (personal tab, no agents) -->
-      <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
-        <div class="flex flex-col items-center gap-4">
-          <div class="grid size-10 place-items-center rounded-lg bg-muted">
-            <IconAssistant class="size-4 text-muted-foreground" />
-          </div>
-          <div class="flex flex-col items-center gap-1.5">
-            <h3 class="text-base font-medium text-foreground">
-              {{ t('assistant.emptyState.title') }}
-            </h3>
-            <p class="text-sm text-muted-foreground">
-              {{ t('assistant.emptyState.desc') }}
-            </p>
-          </div>
-          <Button class="mt-1" @click="createOpen = true">
-            {{ t('assistant.emptyState.createBtn') }}
-          </Button>
-        </div>
-      </div>
-
-      <!-- Team tab: not bound - same structure as personal empty (icon + title + desc + bind button) -->
-      <div
-        v-else-if="listMode === 'team' && !teamBound"
-        class="flex h-full items-center justify-center px-8"
-      >
-        <div class="flex flex-col items-center gap-4">
-          <div class="grid size-10 place-items-center rounded-lg bg-muted">
-            <IconAssistant class="size-4 text-muted-foreground" />
-          </div>
-          <div class="flex flex-col items-center gap-1.5">
-            <h3 class="text-base font-medium text-foreground">
-              {{ t('knowledge.team.notBoundTitle') }}
-            </h3>
-            <p class="text-sm text-muted-foreground">
-              {{ t('assistant.teamNeedsBindingDesc') }}
-            </p>
-          </div>
-          <Button class="mt-1" @click="goToChatwikiBindingSettings">
-            {{ t('knowledge.team.goBind') }}
-          </Button>
-        </div>
-      </div>
-
-      <!-- Team tab: bound but no robots - empty data hint only (sync with personal empty style) -->
-      <div
-        v-else-if="listMode === 'team' && teamBound && teamRobots.length === 0"
-        class="flex h-full items-center justify-center px-8"
-      >
-        <div class="flex flex-col items-center gap-4">
-          <div class="grid size-10 place-items-center rounded-lg bg-muted">
-            <IconAssistant class="size-4 text-muted-foreground" />
-          </div>
-          <p class="text-sm text-muted-foreground">
-            {{ t('assistant.teamEmpty') }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Chat messages area - show when we have an active conversation -->
-      <ChatMessageList
-        v-else-if="activeDisplayConversationId"
-        data-snap-wake="true"
-        :conversation-id="activeDisplayConversationId"
-        :tab-id="tabId"
-        :mode="props.mode"
-        :agent-name="isTeamMode ? activeTeamRobot?.name : activeAgent?.name"
-        :agent-icon="isTeamMode ? activeTeamRobot?.icon : activeAgent?.icon"
-        :sandbox-mode="activeAgent?.sandbox_mode"
-        :has-attached-target="hasAttachedTarget"
-        :show-ai-send-button="showAiSendButton"
-        :show-ai-edit-button="showAiEditButton"
-        class="min-w-0 flex-1 overflow-hidden"
-        @pointerdown.capture="handleWakeAttachedPointerDown"
-        @edit-message="handleEditMessage"
-        @snap-send-and-trigger="handleSendAndTrigger"
-        @snap-send-to-edit="handleSendToEdit"
-        @snap-copy="handleCopyToClipboard"
+        v-if="isSnapMode && !sidebarCollapsed"
+        class="absolute inset-0 z-10 bg-black/20"
+        @click="sidebarCollapsed = true"
       />
 
-      <!-- Input area: hide when personal empty or team empty/unbound -->
+      <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded; always show so personal/team tab can switch when empty) -->
+      <AgentSidebar
+        v-if="!isEmbeddedMode && !sidebarCollapsed"
+        :agents="agents"
+        :active-agent-id="activeAgentId"
+        :active-conversation-id="activeDisplayConversationId"
+        :loading="loading"
+        :list-mode="listMode"
+        :is-snap-mode="isSnapMode"
+        :get-agent-conversations="getAgentConversations"
+        :get-all-agent-conversations="getAllAgentConversations"
+        :ensure-conversations-loaded="ensureConversationsLoaded"
+        :get-team-conversation-agent-id="getTeamConversationAgentId"
+        :team-robots="teamRobots"
+        :active-team-robot-id="activeTeamRobotId"
+        :team-loading="teamLoading"
+        :team-binding-checked="teamBindingChecked"
+        :team-bound="teamBound"
+        :on-wake-attached="handleWakeAttachedPointerDown"
+        @go-bind="goToChatwikiBindingSettings"
+        @update:active-agent-id="activeAgentId = $event"
+        @update:active-team-robot-id="activeTeamRobotId = $event"
+        @update:list-mode="handleListModeChange"
+        @create="createOpen = true"
+        @open-settings="openSettings"
+        @open-channels="openChannels"
+        @new-conversation="handleNewConversation"
+        @new-conversation-for-agent="handleNewConversationForAgent"
+        @new-conversation-for-team-robot="handleNewConversationForTeamRobot"
+        @select-conversation="handleSelectConversation"
+        @select-conversation-for-agent="handleSelectConversationForAgent"
+        @select-conversation-for-team-robot="handleSelectConversationForTeamRobot"
+        @toggle-pin="handleTogglePin"
+        @open-rename="handleOpenRenameConversation"
+        @open-delete="handleOpenDeleteConversation"
+        @close-sidebar="sidebarCollapsed = true"
+      />
+
+      <!-- Upper row: expand button + messages -->
+      <div class="relative flex min-h-0 flex-1 overflow-hidden">
+        <!-- Collapse/Expand handle (snap mode: floating, draggable) -->
+        <div
+          v-if="!isEmbeddedMode && isSnapMode"
+          class="absolute left-0.5 z-10 cursor-grab active:cursor-grabbing"
+          :style="{ top: snapBtnTop + 'px' }"
+          @pointerdown="onSnapBtnPointerDown"
+          @pointermove="onSnapBtnPointerMove"
+          @pointerup="onSnapBtnPointerUp"
+        >
+          <div
+            class="group/handle relative flex h-7 w-6 items-center justify-center pointer-events-none"
+          >
+            <div
+              class="relative flex h-7 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur dark:shadow-none dark:ring-1 dark:ring-white/10"
+            >
+              <span
+                class="h-5 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
+              />
+              <span
+                class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
+              >
+                <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
+                <ChevronRight v-else class="size-4" />
+              </span>
+            </div>
+            <span
+              class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
+            >
+              {{
+                sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')
+              }}
+            </span>
+          </div>
+        </div>
+        <!-- Collapse/Expand handle (non-snap mode: in-flow) -->
+        <div
+          v-if="!isEmbeddedMode && !isSnapMode"
+          class="relative z-10 flex w-8 shrink-0 items-center justify-center"
+        >
+          <button
+            type="button"
+            class="group/handle relative flex h-16 w-6 items-center justify-center"
+            :aria-label="
+              sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')
+            "
+            @click="sidebarCollapsed = !sidebarCollapsed"
+          >
+            <div
+              class="relative flex h-12 w-5 items-center justify-center rounded-md border border-border bg-background/90 shadow-sm backdrop-blur transition-colors dark:shadow-none dark:ring-1 dark:ring-white/10"
+            >
+              <span
+                class="h-6 w-px bg-muted-foreground/60 transition-all duration-200 group-hover/handle:opacity-0 group-hover/handle:scale-y-75"
+              />
+              <span
+                class="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-all duration-200 group-hover/handle:opacity-100"
+              >
+                <ChevronLeft v-if="!sidebarCollapsed" class="size-4" />
+                <ChevronRight v-else class="size-4" />
+              </span>
+            </div>
+            <span
+              class="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground opacity-0 shadow-sm transition-all duration-200 group-hover/handle:opacity-100 dark:shadow-none dark:ring-1 dark:ring-white/10"
+            >
+              {{
+                sidebarCollapsed ? t('assistant.sidebar.expand') : t('assistant.sidebar.collapse')
+              }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Right side: Chat area -->
+        <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode).
+           Always render to avoid layout shift when switching chat mode; hide button via invisible. -->
+          <div
+            v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team'"
+            class="flex shrink-0 items-center justify-end px-2 pt-1"
+          >
+            <Button
+              size="icon"
+              variant="ghost"
+              :class="cn('size-7', chatMode !== 'task' && 'invisible')"
+              :title="t('assistant.workspaceDrawer.title')"
+              @click="workspaceDrawerOpen = !workspaceDrawerOpen"
+            >
+              <PanelRight
+                :class="
+                  cn('size-4', workspaceDrawerOpen ? 'text-foreground' : 'text-muted-foreground')
+                "
+              />
+            </Button>
+          </div>
+
+          <!-- Agent list empty state (personal tab, no agents) -->
+          <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
+            <div class="flex flex-col items-center gap-4">
+              <div class="grid size-10 place-items-center rounded-lg bg-muted">
+                <IconAssistant class="size-4 text-muted-foreground" />
+              </div>
+              <div class="flex flex-col items-center gap-1.5">
+                <h3 class="text-base font-medium text-foreground">
+                  {{ t('assistant.emptyState.title') }}
+                </h3>
+                <p class="text-sm text-muted-foreground">
+                  {{ t('assistant.emptyState.desc') }}
+                </p>
+              </div>
+              <Button class="mt-1" @click="createOpen = true">
+                {{ t('assistant.emptyState.createBtn') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- Team tab: not bound - same structure as personal empty (icon + title + desc + bind button) -->
+          <div
+            v-else-if="listMode === 'team' && !teamBound"
+            class="flex h-full items-center justify-center px-8"
+          >
+            <div class="flex flex-col items-center gap-4">
+              <div class="grid size-10 place-items-center rounded-lg bg-muted">
+                <IconAssistant class="size-4 text-muted-foreground" />
+              </div>
+              <div class="flex flex-col items-center gap-1.5">
+                <h3 class="text-base font-medium text-foreground">
+                  {{ t('knowledge.team.notBoundTitle') }}
+                </h3>
+                <p class="text-sm text-muted-foreground">
+                  {{ t('assistant.teamNeedsBindingDesc') }}
+                </p>
+              </div>
+              <Button class="mt-1" @click="goToChatwikiBindingSettings">
+                {{ t('knowledge.team.goBind') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- Team tab: bound but no robots - empty data hint only (sync with personal empty style) -->
+          <div
+            v-else-if="listMode === 'team' && teamBound && teamRobots.length === 0"
+            class="flex h-full items-center justify-center px-8"
+          >
+            <div class="flex flex-col items-center gap-4">
+              <div class="grid size-10 place-items-center rounded-lg bg-muted">
+                <IconAssistant class="size-4 text-muted-foreground" />
+              </div>
+              <p class="text-sm text-muted-foreground">
+                {{ t('assistant.teamEmpty') }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Chat messages area - show when we have an active conversation -->
+          <ChatMessageList
+            v-else-if="activeDisplayConversationId"
+            data-snap-wake="true"
+            :conversation-id="activeDisplayConversationId"
+            :tab-id="tabId"
+            :mode="props.mode"
+            :agent-name="isTeamMode ? activeTeamRobot?.name : activeAgent?.name"
+            :agent-icon="isTeamMode ? activeTeamRobot?.icon : activeAgent?.icon"
+            :sandbox-mode="activeAgent?.sandbox_mode"
+            :has-attached-target="hasAttachedTarget"
+            :show-ai-send-button="showAiSendButton"
+            :show-ai-edit-button="showAiEditButton"
+            class="min-w-0 flex-1 overflow-hidden"
+            @pointerdown.capture="handleWakeAttachedPointerDown"
+            @edit-message="handleEditMessage"
+            @snap-send-and-trigger="handleSendAndTrigger"
+            @snap-send-to-edit="handleSendToEdit"
+            @snap-copy="handleCopyToClipboard"
+          />
+
+          <!-- Input area: hide when personal empty or team empty/unbound -->
+          <ChatInputArea
+            v-if="
+              !isAgentEmpty &&
+              !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+              (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
+            "
+            data-snap-wake="true"
+            :chat-input="chatInput"
+            :chat-mode="chatMode"
+            :selected-model-key="selectedModelKey"
+            :selected-model-info="selectedModelInfo"
+            :providers-with-models="providersWithModels"
+            :has-models="hasModels"
+            :enable-thinking="enableThinking"
+            :selected-library-ids="selectedLibraryIds"
+            :libraries="libraries"
+            :assistant-team-libraries="
+              listMode !== 'team' && teamBound ? assistantTeamLibraries : []
+            "
+            :assistant-selected-team-library-ids="
+              listMode !== 'team' ? assistantSelectedTeamLibraryIds : []
+            "
+            :is-generating="isGenerating"
+            :can-send="canSend"
+            :send-disabled-reason="sendDisabledReason"
+            :chat-messages="chatMessages"
+            :active-agent-id="isTeamMode ? -1 : activeAgentId"
+            :active-agent="activeAgent"
+            :agents="agents"
+            :is-snap-mode="isSnapMode"
+            :is-team-mode="listMode === 'team'"
+            :pending-images="pendingImages"
+            :pending-files="pendingFiles"
+            @pointerdown.capture="handleWakeAttachedPointerDown"
+            @update:chat-input="chatInput = $event"
+            @update:chat-mode="chatMode = $event"
+            @update:selected-model-key="selectedModelKey = $event"
+            @update:enable-thinking="enableThinking = $event"
+            @update:selected-library-ids="selectedLibraryIds = $event"
+            @send="handleSend"
+            @stop="handleStop"
+            @library-selection-change="handleLibrarySelectionChange"
+            @clear-library-selection="clearLibrarySelection"
+            @load-libraries="loadLibrariesFn"
+            @toggle-assistant-team-library="toggleAssistantTeamLibraryId"
+            @remove-library="handleRemoveLibrary"
+            @add-images="handleAddImages"
+            @remove-image="handleRemoveImage"
+            @clear-images="pendingImages = []"
+            @add-files="handleAddFiles"
+            @remove-file="handleRemoveFile"
+            @clear-files="pendingFiles = []"
+            @new-conversation="handleNewConversation"
+          />
+        </section>
+
+        <!-- Workspace drawer panel (task mode only; hidden in team mode).
+         Always rendered to avoid layout shift; auto-closed when not in task mode. -->
+        <WorkspaceDrawer
+          v-if="!isSnapMode && listMode !== 'team'"
+          :open="workspaceDrawerOpen && chatMode === 'task'"
+          :agent="activeAgent"
+          :conversation-id="activeConversationId"
+          @update:open="workspaceDrawerOpen = $event"
+          @open-workspace-settings="handleOpenWorkspaceSettings"
+        />
+      </div>
+      <!-- End upper row -->
+
+      <!-- Input area (snap mode with messages: full-width at bottom) -->
       <ChatInputArea
         v-if="
-          !isAgentEmpty
-          && !(listMode === 'team' && (!teamBound || teamRobots.length === 0))
-          && (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
+          !isAgentEmpty &&
+          !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+          isSnapMode &&
+          (chatMessages.length > 0 || isGenerating)
         "
         data-snap-wake="true"
         :chat-input="chatInput"
@@ -1921,7 +2050,9 @@ onUnmounted(() => {
         :selected-library-ids="selectedLibraryIds"
         :libraries="libraries"
         :assistant-team-libraries="listMode !== 'team' && teamBound ? assistantTeamLibraries : []"
-        :assistant-selected-team-library-ids="listMode !== 'team' ? assistantSelectedTeamLibraryIds : []"
+        :assistant-selected-team-library-ids="
+          listMode !== 'team' ? assistantSelectedTeamLibraryIds : []
+        "
         :is-generating="isGenerating"
         :can-send="canSend"
         :send-disabled-reason="sendDisabledReason"
@@ -1952,75 +2083,10 @@ onUnmounted(() => {
         @add-files="handleAddFiles"
         @remove-file="handleRemoveFile"
         @clear-files="pendingFiles = []"
-        @new-conversation="handleNewConversation"
+        @new-conversation="handleSnapNewConversation"
       />
-    </section>
-
-    <!-- Workspace drawer panel (task mode only; hidden in team mode).
-         Always rendered to avoid layout shift; auto-closed when not in task mode. -->
-    <WorkspaceDrawer
-      v-if="!isSnapMode && listMode !== 'team'"
-      :open="workspaceDrawerOpen && chatMode === 'task'"
-      :agent="activeAgent"
-      :conversation-id="activeConversationId"
-      @update:open="workspaceDrawerOpen = $event"
-      @open-workspace-settings="handleOpenWorkspaceSettings"
-    />
-    </div><!-- End upper row -->
-
-    <!-- Input area (snap mode with messages: full-width at bottom) -->
-    <ChatInputArea
-      v-if="
-        !isAgentEmpty
-        && !(listMode === 'team' && (!teamBound || teamRobots.length === 0))
-        && isSnapMode
-        && (chatMessages.length > 0 || isGenerating)
-      "
-      data-snap-wake="true"
-      :chat-input="chatInput"
-      :chat-mode="chatMode"
-      :selected-model-key="selectedModelKey"
-      :selected-model-info="selectedModelInfo"
-      :providers-with-models="providersWithModels"
-      :has-models="hasModels"
-      :enable-thinking="enableThinking"
-      :selected-library-ids="selectedLibraryIds"
-      :libraries="libraries"
-      :assistant-team-libraries="listMode !== 'team' && teamBound ? assistantTeamLibraries : []"
-      :assistant-selected-team-library-ids="listMode !== 'team' ? assistantSelectedTeamLibraryIds : []"
-      :is-generating="isGenerating"
-      :can-send="canSend"
-      :send-disabled-reason="sendDisabledReason"
-      :chat-messages="chatMessages"
-      :active-agent-id="isTeamMode ? -1 : activeAgentId"
-      :active-agent="activeAgent"
-      :agents="agents"
-      :is-snap-mode="isSnapMode"
-      :is-team-mode="listMode === 'team'"
-      :pending-images="pendingImages"
-      :pending-files="pendingFiles"
-      @pointerdown.capture="handleWakeAttachedPointerDown"
-      @update:chat-input="chatInput = $event"
-      @update:chat-mode="chatMode = $event"
-      @update:selected-model-key="selectedModelKey = $event"
-      @update:enable-thinking="enableThinking = $event"
-      @update:selected-library-ids="selectedLibraryIds = $event"
-      @send="handleSend"
-      @stop="handleStop"
-      @library-selection-change="handleLibrarySelectionChange"
-      @clear-library-selection="clearLibrarySelection"
-      @load-libraries="loadLibrariesFn"
-      @toggle-assistant-team-library="toggleAssistantTeamLibraryId"
-      @remove-library="handleRemoveLibrary"
-      @add-images="handleAddImages"
-      @remove-image="handleRemoveImage"
-      @clear-images="pendingImages = []"
-      @add-files="handleAddFiles"
-      @remove-file="handleRemoveFile"
-      @clear-files="pendingFiles = []"
-      @new-conversation="handleSnapNewConversation"
-    />
-    </div><!-- End main content wrapper -->
+    </div>
+    <!-- End main content wrapper -->
 
     <!-- Dialogs (rendered outside main content wrapper for proper z-index) -->
     <CreateAgentDialog v-model:open="createOpen" :loading="loading" @create="handleCreate" />

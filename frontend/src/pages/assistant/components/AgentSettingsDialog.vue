@@ -2,7 +2,15 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
-import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import {
+  Trash2,
+  ShieldCheck,
+  Monitor,
+  Globe,
+  FolderOpen,
+  RotateCcw,
+  AlertTriangle,
+} from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useThemeLogo } from '@/composables/useLogo'
@@ -99,9 +107,10 @@ watch(
   (open) => {
     if (!open) return
     const validTabs: TabKey[] = ['model', 'prompt', 'workspace', 'retrieval', 'delete']
-    tab.value = (props.initialTab && validTabs.includes(props.initialTab as TabKey))
-      ? (props.initialTab as TabKey)
-      : 'model'
+    tab.value =
+      props.initialTab && validTabs.includes(props.initialTab as TabKey)
+        ? (props.initialTab as TabKey)
+        : 'model'
     void loadModels()
     void AgentsService.GetDefaultWorkDir().then((dir) => {
       defaultWorkDir.value = dir
@@ -166,7 +175,9 @@ const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.v
 
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
-  const pw = providersWithModels.value.find((p) => p.provider?.provider_id === modelProviderId.value)
+  const pw = providersWithModels.value.find(
+    (p) => p.provider?.provider_id === modelProviderId.value
+  )
   return isProviderFree(pw)
 })
 
@@ -786,7 +797,12 @@ const handleDelete = async () => {
                     >
                       {{ workDir || defaultWorkDir }}
                     </span>
-                    <Button variant="outline" size="sm" class="shrink-0 gap-1.5" @click="handleSelectWorkDir">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="shrink-0 gap-1.5"
+                      @click="handleSelectWorkDir"
+                    >
                       <FolderOpen class="size-3.5 shrink-0" />
                       {{ t('assistant.settings.workspace.changeDir') }}
                     </Button>
@@ -860,7 +876,12 @@ const handleDelete = async () => {
                   {{ t('assistant.settings.delete.hint') }}
                 </div>
 
-                <Button variant="outline" class="border-border text-foreground hover:bg-accent" :disabled="saving" @click="deleteConfirmOpen = true">
+                <Button
+                  variant="outline"
+                  class="border-border text-foreground hover:bg-accent"
+                  :disabled="saving"
+                  @click="deleteConfirmOpen = true"
+                >
                   {{ t('assistant.settings.delete.action') }}
                 </Button>
 

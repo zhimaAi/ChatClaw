@@ -57,16 +57,28 @@ const formatDate = (dateStr: string) => {
 
 const getDate = () => {
   // 支持多种可能的字段名
-  return props.file.updatedAt || props.file.updated_at || props.file.updated_at_unix || props.file.updateTime || props.file.updatedTime || ''
+  return (
+    props.file.updatedAt ||
+    props.file.updated_at ||
+    props.file.updated_at_unix ||
+    props.file.updateTime ||
+    props.file.updatedTime ||
+    ''
+  )
 }
 
 const getFileExtension = (file: TeamFile) => {
-  const ext = String(file.extension || '').trim().toLowerCase()
+  const ext = String(file.extension || '')
+    .trim()
+    .toLowerCase()
   if (ext) return ext
   const name = String(file.name || '')
   const idx = name.lastIndexOf('.')
   if (idx < 0 || idx === name.length - 1) return ''
-  return name.slice(idx + 1).trim().toLowerCase()
+  return name
+    .slice(idx + 1)
+    .trim()
+    .toLowerCase()
 }
 
 const getFileIcon = (file: TeamFile) => {
@@ -111,7 +123,8 @@ const statusConfig = computed(() => {
       return {
         label: '',
         icon: Check,
-        class: 'size-5 rounded-full bg-black/70 text-white shadow-sm dark:bg-white/15 dark:text-white',
+        class:
+          'size-5 rounded-full bg-black/70 text-white shadow-sm dark:bg-white/15 dark:text-white',
         iconClass: 'text-white',
         iconOnly: true,
         show: true,
@@ -149,7 +162,9 @@ const statusConfig = computed(() => {
 
 const fileThumbUrl = computed(() => {
   // 支持多种可能的字段名
-  return props.file.thumbPath || props.file.thumb_path || props.file.thumb || props.file.thumbnail || ''
+  return (
+    props.file.thumbPath || props.file.thumb_path || props.file.thumb || props.file.thumbnail || ''
+  )
 })
 
 const canShowThumb = computed(() => {
@@ -170,12 +185,7 @@ const handleCardClick = () => {
     <div
       class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted"
     >
-      <img
-        v-if="canShowThumb"
-        :src="fileThumbUrl"
-        class="size-full object-contain"
-        alt=""
-      />
+      <img v-if="canShowThumb" :src="fileThumbUrl" class="size-full object-contain" alt="" />
       <div v-else class="absolute inset-0 flex items-center justify-center">
         <component :is="getFileIcon(file)" class="size-10 text-muted-foreground/40" />
       </div>

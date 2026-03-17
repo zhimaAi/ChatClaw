@@ -4,7 +4,20 @@ import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon, FileText, Mic, Video, File, Plus, MoreHorizontal } from 'lucide-vue-next'
+import {
+  ArrowUp,
+  Square,
+  Check,
+  Lightbulb,
+  X,
+  Image as ImageIcon,
+  FileText,
+  Mic,
+  Video,
+  File,
+  Plus,
+  MoreHorizontal,
+} from 'lucide-vue-next'
 import { onMounted, onUnmounted, nextTick } from 'vue'
 import {
   Select,
@@ -29,7 +42,12 @@ import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
 import ChatModeSelector from './ChatModeSelector.vue'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
@@ -60,7 +78,12 @@ const props = withDefaults(
     chatInput: string
     chatMode: string
     selectedModelKey: string
-    selectedModelInfo: { providerId: string; modelId: string; modelName: string; capabilities?: string[] } | null
+    selectedModelInfo: {
+      providerId: string
+      modelId: string
+      modelName: string
+      capabilities?: string[]
+    } | null
     providersWithModels: ProviderWithModels[]
     hasModels: boolean
     enableThinking: boolean
@@ -180,9 +203,7 @@ const selectedLibraries = computed(() =>
   props.libraries.filter((lib) => props.selectedLibraryIds.includes(lib.id))
 )
 
-const visibleLibraries = computed(() =>
-  selectedLibraries.value.slice(0, MAX_VISIBLE_LIBRARIES)
-)
+const visibleLibraries = computed(() => selectedLibraries.value.slice(0, MAX_VISIBLE_LIBRARIES))
 
 const overflowCount = computed(() =>
   Math.max(0, selectedLibraries.value.length - MAX_VISIBLE_LIBRARIES)
@@ -198,9 +219,7 @@ const selectedTeamLibraries = computed(() => {
 })
 
 const MAX_VISIBLE_TEAM = 3
-const visibleTeamLibraries = computed(() =>
-  selectedTeamLibraries.value.slice(0, MAX_VISIBLE_TEAM)
-)
+const visibleTeamLibraries = computed(() => selectedTeamLibraries.value.slice(0, MAX_VISIBLE_TEAM))
 const teamOverflowCount = computed(() =>
   Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
 )
@@ -227,7 +246,9 @@ const handleClearLibrarySelection = () => {
 // Whether the currently selected model's provider is free (e.g. ChatClaw)
 const selectedProviderIsFree = computed(() => {
   if (!props.selectedModelInfo?.providerId || !props.providersWithModels?.length) return false
-  const pw = props.providersWithModels.find((p) => p.provider?.provider_id === props.selectedModelInfo?.providerId)
+  const pw = props.providersWithModels.find(
+    (p) => p.provider?.provider_id === props.selectedModelInfo?.providerId
+  )
   return isProviderFree(pw)
 })
 
@@ -278,10 +299,10 @@ const processImageFiles = (files: FileList | File[]): File[] | null => {
     return null
   }
   const fileArray = Array.from(files)
-  
+
   // Filter only image files
-  const imageFiles = fileArray.filter(file => file.type.startsWith('image/'))
-  
+  const imageFiles = fileArray.filter((file) => file.type.startsWith('image/'))
+
   if (imageFiles.length === 0) {
     toast.error(t('assistant.errors.invalidImageType'))
     return null
@@ -296,7 +317,7 @@ const processImageFiles = (files: FileList | File[]): File[] | null => {
 
   // Validate each file
   let totalSize = props.pendingImages.reduce((sum, img) => sum + img.size, 0)
-  
+
   for (const file of imageFiles) {
     if (file.size > MAX_IMAGE_SIZE) {
       toast.error(t('assistant.errors.imageTooLarge', { max: '2MB' }))
@@ -350,7 +371,7 @@ const handleFilesSelected = async (event: Event) => {
   if (validFiles) {
     emit('addImages', validFiles)
   }
-  
+
   // Reset input so same file can be selected again
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
@@ -358,8 +379,21 @@ const handleFilesSelected = async (event: Event) => {
 }
 
 const ALLOWED_DOC_EXTENSIONS = new Set([
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'txt', 'csv', 'md', 'json', 'xml', 'html', 'rtf', 'log',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'csv',
+  'md',
+  'json',
+  'xml',
+  'html',
+  'rtf',
+  'log',
 ])
 
 // Handle paste event on textarea
@@ -431,8 +465,8 @@ const handleDrop = async (event: DragEvent) => {
   if (!files || files.length === 0) return
 
   const fileArray = Array.from(files)
-  const imageFiles = fileArray.filter(f => f.type.startsWith('image/'))
-  const docFiles = fileArray.filter(f => {
+  const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'))
+  const docFiles = fileArray.filter((f) => {
     if (f.type.startsWith('image/')) return false
     const ext = f.name.split('.').pop()?.toLowerCase() || ''
     return ALLOWED_DOC_EXTENSIONS.has(ext)
@@ -521,11 +555,13 @@ onUnmounted(() => {
 
       <div
         ref="inputContainerRef"
-        :class="cn(
-          'w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
-          isDragging && 'ring-2 ring-primary/50 border-primary/50',
-          currentMode === 'knowledge' && 'border-t'
-        )"
+        :class="
+          cn(
+            'w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
+            isDragging && 'ring-2 ring-primary/50 border-primary/50',
+            currentMode === 'knowledge' && 'border-t'
+          )
+        "
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
         @drop="handleDrop"
@@ -556,7 +592,9 @@ onUnmounted(() => {
           >
             <File class="size-4 shrink-0 text-muted-foreground" />
             <div class="flex min-w-0 flex-col">
-              <span class="truncate text-xs font-medium text-foreground" :title="f.fileName">{{ f.fileName }}</span>
+              <span class="truncate text-xs font-medium text-foreground" :title="f.fileName">{{
+                f.fileName
+              }}</span>
               <span class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
             </div>
             <button
@@ -619,10 +657,7 @@ onUnmounted(() => {
             +{{ teamOverflowCount }}
           </span>
         </div>
-        <div
-          v-else-if="selectedTeamLibrary"
-          class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
-        >
+        <div v-else-if="selectedTeamLibrary" class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5">
           <div
             class="flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-2 py-0.5 text-xs text-muted-foreground"
             :title="selectedTeamLibrary.name"
@@ -701,11 +736,7 @@ onUnmounted(() => {
                       <SelectContent class="max-h-[260px] min-w-[260px]">
                         <SelectGroup>
                           <SelectLabel>{{ t('knowledge.chat.selectAgent') }}</SelectLabel>
-                          <SelectItem
-                            v-for="a in agents"
-                            :key="a.id"
-                            :value="String(a.id)"
-                          >
+                          <SelectItem v-for="a in agents" :key="a.id" :value="String(a.id)">
                             {{ a.name }}
                           </SelectItem>
                         </SelectGroup>
@@ -721,79 +752,88 @@ onUnmounted(() => {
 
             <!-- Model selector: hidden in team mode，展示完整模型名的胶囊按钮 -->
             <div class="min-w-0 shrink">
-            <TooltipProvider v-if="!isTeamMode">
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <div class="min-w-0">
-                    <Select
-                      :model-value="selectedModelKey"
-                      :disabled="!hasModels"
-                      @update:model-value="(v: any) => v && emit('update:selectedModelKey', String(v))"
-                    >
-                      <SelectTrigger
-                        :class="cn(
-                          'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95',
-                          useCompactToolbar && 'max-w-[140px]'
-                        )"
+              <TooltipProvider v-if="!isTeamMode">
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <div class="min-w-0">
+                      <Select
+                        :model-value="selectedModelKey"
+                        :disabled="!hasModels"
+                        @update:model-value="
+                          (v: any) => v && emit('update:selectedModelKey', String(v))
+                        "
                       >
-                        <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
-                          <ProviderIcon
-                            :icon="selectedModelInfo.providerId"
-                            :size="14"
-                            class="shrink-0 text-foreground"
-                          />
-                          <span class="truncate">{{ selectedModelInfo.modelName }}</span>
-                        </div>
-                        <span v-else class="text-muted-foreground">
-                          {{ t('assistant.chat.noModel') }}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent class="max-h-[260px] min-w-[260px]">
-                        <SelectGroup>
-                          <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
-                          <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
-                            <SelectLabel class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <span>{{ pw.provider.name }}</span>
-                              <span
-                                v-if="isProviderFree(pw)"
-                                class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                        <SelectTrigger
+                          :class="
+                            cn(
+                              'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95',
+                              useCompactToolbar && 'max-w-[140px]'
+                            )
+                          "
+                        >
+                          <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
+                            <ProviderIcon
+                              :icon="selectedModelInfo.providerId"
+                              :size="14"
+                              class="shrink-0 text-foreground"
+                            />
+                            <span class="truncate">{{ selectedModelInfo.modelName }}</span>
+                          </div>
+                          <span v-else class="text-muted-foreground">
+                            {{ t('assistant.chat.noModel') }}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent class="max-h-[260px] min-w-[260px]">
+                          <SelectGroup>
+                            <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
+                            <template
+                              v-for="pw in providersWithModels"
+                              :key="pw.provider.provider_id"
+                            >
+                              <SelectLabel
+                                class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
                               >
-                                {{ t('assistant.chat.freeBadge') }}
-                              </span>
-                            </SelectLabel>
-                            <template v-for="g in pw.model_groups" :key="g.type">
-                              <template v-if="g.type === 'llm'">
-                                <SelectItem
-                                  v-for="m in g.models"
-                                  :key="pw.provider.provider_id + '::' + m.model_id"
-                                  :value="pw.provider.provider_id + '::' + m.model_id"
+                                <span>{{ pw.provider.name }}</span>
+                                <span
+                                  v-if="isProviderFree(pw)"
+                                  class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
                                 >
-                                  <div class="flex items-center gap-2">
-                                    <span>{{ m.name }}</span>
-                                    <template v-if="m.capabilities && m.capabilities.length > 0">
-                                      <span
-                                        v-for="cap in m.capabilities.slice(0, 3)"
-                                        :key="cap"
-                                        class="rounded px-1 py-0.5 text-[10px] text-muted-foreground"
-                                      >
-                                        <component :is="capabilityIcons[cap]" class="size-2.5" />
-                                      </span>
-                                    </template>
-                                  </div>
-                                </SelectItem>
+                                  {{ t('assistant.chat.freeBadge') }}
+                                </span>
+                              </SelectLabel>
+                              <template v-for="g in pw.model_groups" :key="g.type">
+                                <template v-if="g.type === 'llm'">
+                                  <SelectItem
+                                    v-for="m in g.models"
+                                    :key="pw.provider.provider_id + '::' + m.model_id"
+                                    :value="pw.provider.provider_id + '::' + m.model_id"
+                                  >
+                                    <div class="flex items-center gap-2">
+                                      <span>{{ m.name }}</span>
+                                      <template v-if="m.capabilities && m.capabilities.length > 0">
+                                        <span
+                                          v-for="cap in m.capabilities.slice(0, 3)"
+                                          :key="cap"
+                                          class="rounded px-1 py-0.5 text-[10px] text-muted-foreground"
+                                        >
+                                          <component :is="capabilityIcons[cap]" class="size-2.5" />
+                                        </span>
+                                      </template>
+                                    </div>
+                                  </SelectItem>
+                                </template>
                               </template>
                             </template>
-                          </template>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent v-if="selectedModelInfo">
-                  <p>{{ selectedModelInfo.modelName }}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent v-if="selectedModelInfo">
+                    <p>{{ selectedModelInfo.modelName }}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             <!-- Thinking mode toggle: hidden in team mode -->
@@ -818,7 +858,13 @@ onUnmounted(() => {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ enableThinking ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff') }}</p>
+                  <p>
+                    {{
+                      enableThinking
+                        ? t('assistant.chat.thinkingOn')
+                        : t('assistant.chat.thinkingOff')
+                    }}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -846,16 +892,30 @@ onUnmounted(() => {
               :model-value="selectedLibraryIds"
               :open="knowledgeSelectOpen"
               multiple
-              @update:model-value="(v: any) => { emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v]); handleLibrarySelectionChange() }"
-              @update:open="(open: boolean) => { knowledgeSelectOpen = open; open && emit('loadLibraries') }"
+              @update:model-value="
+                (v: any) => {
+                  emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v])
+                  handleLibrarySelectionChange()
+                }
+              "
+              @update:open="
+                (open: boolean) => {
+                  knowledgeSelectOpen = open
+                  open && emit('loadLibraries')
+                }
+              "
             >
               <SelectTriggerRaw
                 as-child
                 :title="
                   assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0
                     ? assistantSelectedTeamLibraryIds.length === 1
-                      ? (assistantTeamLibraries.find((l) => l.id === assistantSelectedTeamLibraryIds[0])?.name ?? '')
-                      : t('assistant.chat.selectedCount', { count: assistantSelectedTeamLibraryIds.length })
+                      ? (assistantTeamLibraries.find(
+                          (l) => l.id === assistantSelectedTeamLibraryIds[0]
+                        )?.name ?? '')
+                      : t('assistant.chat.selectedCount', {
+                          count: assistantSelectedTeamLibraryIds.length,
+                        })
                     : selectedLibraryIds.length > 0
                       ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
                       : t('assistant.chat.selectKnowledge')
@@ -867,16 +927,25 @@ onUnmounted(() => {
                   :class="
                     cn(
                       'size-8 rounded-full border border-border bg-background',
-                      (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
+                      (assistantSelectedTeamLibraryIds &&
+                        assistantSelectedTeamLibraryIds.length > 0) ||
+                        selectedLibraryIds.length > 0
                         ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
                         : 'hover:bg-muted/40 active:bg-muted active:scale-95',
-                      useCompactToolbar && 'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
+                      useCompactToolbar &&
+                        'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
                     )
                   "
                 >
                   <IconSelectKnowledge
                     class="size-4 pointer-events-none"
-                    :class="(assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0 ? 'text-primary' : 'text-muted-foreground'"
+                    :class="
+                      (assistantSelectedTeamLibraryIds &&
+                        assistantSelectedTeamLibraryIds.length > 0) ||
+                      selectedLibraryIds.length > 0
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    "
                   />
                 </Button>
               </SelectTriggerRaw>
@@ -894,10 +963,18 @@ onUnmounted(() => {
                     >
                       {{ t('assistant.chat.clearSelected') }}
                     </div>
-                    <SelectSeparator v-if="libraries.length > 0 || (assistantTeamLibraries && assistantTeamLibraries.length > 0)" class="mx-1 my-1 h-px bg-muted" />
+                    <SelectSeparator
+                      v-if="
+                        libraries.length > 0 ||
+                        (assistantTeamLibraries && assistantTeamLibraries.length > 0)
+                      "
+                      class="mx-1 my-1 h-px bg-muted"
+                    />
                     <!-- Personal libraries (multi-select) -->
                     <template v-if="libraries.length > 0">
-                      <div class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                      <div
+                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
+                      >
                         {{ t('assistant.chat.personalKnowledgeSection') }}
                       </div>
                       <SelectItemRaw
@@ -914,15 +991,22 @@ onUnmounted(() => {
                         <SelectItemText>{{ lib.name }}</SelectItemText>
                       </SelectItemRaw>
                     </template>
-                    <template v-else-if="!(assistantTeamLibraries && assistantTeamLibraries.length > 0)">
+                    <template
+                      v-else-if="!(assistantTeamLibraries && assistantTeamLibraries.length > 0)"
+                    >
                       <div class="px-2 py-1.5 text-sm text-muted-foreground">
                         {{ t('assistant.chat.noKnowledge') }}
                       </div>
                     </template>
                     <!-- ChatWiki team libraries: multi-select like personal; recall id = comma-separated -->
                     <template v-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
-                      <SelectSeparator v-if="libraries.length > 0" class="mx-1 my-1 h-px bg-muted" />
-                      <div class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground">
+                      <SelectSeparator
+                        v-if="libraries.length > 0"
+                        class="mx-1 my-1 h-px bg-muted"
+                      />
+                      <div
+                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
+                      >
                         {{ t('assistant.chat.chatwikiSection') }}
                       </div>
                       <div
@@ -932,7 +1016,10 @@ onUnmounted(() => {
                         @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
                       >
                         <span
-                          v-if="assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.includes(lib.id)"
+                          v-if="
+                            assistantSelectedTeamLibraryIds &&
+                            assistantSelectedTeamLibraryIds.includes(lib.id)
+                          "
                           class="absolute left-2 flex size-4 items-center justify-center"
                         >
                           <Check class="size-4 text-primary" />
@@ -952,12 +1039,11 @@ onUnmounted(() => {
               <SelectRoot
                 v-if="teamLibraries && teamLibraries.length > 0"
                 :model-value="selectedTeamLibraryId ?? undefined"
-                @update:model-value="(v: string | undefined) => emit('update:selectedTeamLibraryId', v ?? null)"
+                @update:model-value="
+                  (v: string | undefined) => emit('update:selectedTeamLibraryId', v ?? null)
+                "
               >
-                <SelectTriggerRaw
-                  as-child
-                  :title="selectedTeamLibrary.name"
-                >
+                <SelectTriggerRaw as-child :title="selectedTeamLibrary.name">
                   <Button
                     size="icon"
                     variant="ghost"
@@ -1057,25 +1143,36 @@ onUnmounted(() => {
                   <MoreHorizontal class="size-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" class="w-40 rounded-[6px] shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)]">
+              <DropdownMenuContent
+                align="start"
+                class="w-40 rounded-[6px] shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)]"
+              >
                 <DropdownMenuItem class="gap-2" @select="handleSelectFilesClick">
                   <File class="size-4 text-muted-foreground" />
                   <span class="text-xs text-foreground">{{ t('assistant.chat.uploadFile') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem class="gap-2" @select="handleSelectImagesClick">
                   <ImageIcon class="size-4 text-muted-foreground" />
-                  <span class="text-xs text-foreground">{{ t('assistant.chat.selectImages') }}</span>
+                  <span class="text-xs text-foreground">{{
+                    t('assistant.chat.selectImages')
+                  }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   class="gap-2"
-                  @select="() => { knowledgeSelectOpen = true; emit('loadLibraries') }"
+                  @select="
+                    () => {
+                      knowledgeSelectOpen = true
+                      emit('loadLibraries')
+                    }
+                  "
                 >
                   <IconSelectKnowledge class="size-4 text-muted-foreground" />
-                  <span class="text-xs text-foreground">{{ t('assistant.chat.selectKnowledge') }}</span>
+                  <span class="text-xs text-foreground">{{
+                    t('assistant.chat.selectKnowledge')
+                  }}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
           </div>
 
           <template v-if="isGenerating">

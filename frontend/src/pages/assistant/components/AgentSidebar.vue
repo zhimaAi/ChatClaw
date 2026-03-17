@@ -61,20 +61,20 @@ const emit = defineEmits<{
   'update:activeAgentId': [value: number]
   'update:activeTeamRobotId': [value: string | null]
   'update:listMode': [value: ListMode]
-  'create': []
-  'openSettings': [agent: Agent]
-  'openChannels': [agent: Agent]
-  'newConversation': []
-  'newConversationForAgent': [agentId: number]
-  'newConversationForTeamRobot': [robotId: string]
-  'selectConversationForTeamRobot': [robotId: string, conversation: Conversation]
-  'selectConversation': [conversation: Conversation]
-  'selectConversationForAgent': [agentId: number, conversation: Conversation]
-  'togglePin': [conversation: Conversation]
-  'openRename': [conversation: Conversation]
-  'openDelete': [conversation: Conversation]
-  'closeSidebar': []
-  'goBind': []
+  create: []
+  openSettings: [agent: Agent]
+  openChannels: [agent: Agent]
+  newConversation: []
+  newConversationForAgent: [agentId: number]
+  newConversationForTeamRobot: [robotId: string]
+  selectConversationForTeamRobot: [robotId: string, conversation: Conversation]
+  selectConversation: [conversation: Conversation]
+  selectConversationForAgent: [agentId: number, conversation: Conversation]
+  togglePin: [conversation: Conversation]
+  openRename: [conversation: Conversation]
+  openDelete: [conversation: Conversation]
+  closeSidebar: []
+  goBind: []
 }>()
 
 const { t } = useI18n()
@@ -111,10 +111,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
     "
   >
     <!-- Snap mode: close button at top -->
-    <div
-      v-if="isSnapMode"
-      class="flex items-center justify-end border-b border-border px-2 py-1.5"
-    >
+    <div v-if="isSnapMode" class="flex items-center justify-end border-b border-border px-2 py-1.5">
       <Button
         size="icon"
         variant="ghost"
@@ -362,7 +359,10 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </div>
 
       <!-- Team mode: robot list from ChatWiki getRobotList (only when has robots) -->
-      <div v-if="listMode === 'team' && teamBound && teamRobots.length > 0" class="flex flex-col gap-1.5">
+      <div
+        v-if="listMode === 'team' && teamBound && teamRobots.length > 0"
+        class="flex flex-col gap-1.5"
+      >
         <div v-for="r in teamRobots" :key="r.id" class="flex flex-col">
           <div
             :class="
@@ -421,7 +421,9 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                       {{ t('assistant.menu.history') }}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent class="max-h-[300px] w-56 overflow-y-auto">
-                      <template v-if="getAllAgentConversations(getTeamConversationAgentId(r.id)).length > 0">
+                      <template
+                        v-if="getAllAgentConversations(getTeamConversationAgentId(r.id)).length > 0"
+                      >
                         <DropdownMenuItem
                           v-for="conv in getAllAgentConversations(getTeamConversationAgentId(r.id))"
                           :key="conv.id"
