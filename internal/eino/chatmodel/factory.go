@@ -3,7 +3,10 @@ package chatmodel
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
+
+	"chatclaw/internal/errs"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
 	einogemini "github.com/cloudwego/eino-ext/components/model/gemini"
@@ -77,9 +80,11 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 	}
 	if cfg.ExtraConfig != "" {
 		if err := json.Unmarshal([]byte(cfg.ExtraConfig), &extraConfig); err != nil {
-			// 解析失败时使用默认 API 版本
-			extraConfig.APIVersion = "2023-05-15"
+			return nil, errs.Wrap("error.chat_invalid_extra_config", err)
 		}
+	}
+	if cfg.APIEndpoint == "" {
+		return nil, fmt.Errorf("azure api endpoint is required")
 	}
 	if extraConfig.APIVersion == "" {
 		extraConfig.APIVersion = "2023-05-15"
@@ -91,6 +96,7 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 		BaseURL:    cfg.APIEndpoint,
 		ByAzure:    true,
 		APIVersion: extraConfig.APIVersion,
+		Timeout:    cfg.Timeout,
 	}
 	return openai.NewChatModel(ctx, config)
 }

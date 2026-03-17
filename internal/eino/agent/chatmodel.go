@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"chatclaw/internal/errs"
 
@@ -75,6 +76,12 @@ func createAzureChatModel(ctx context.Context, config Config) (model.ToolCalling
 		if err := json.Unmarshal([]byte(config.Provider.ExtraConfig), &extraConfig); err != nil {
 			return nil, errs.Wrap("error.chat_invalid_extra_config", err)
 		}
+	}
+	if config.Provider.APIEndpoint == "" {
+		return nil, fmt.Errorf("azure api endpoint is required")
+	}
+	if extraConfig.APIVersion == "" {
+		extraConfig.APIVersion = "2023-05-15"
 	}
 
 	cfg := &openai.ChatModelConfig{
