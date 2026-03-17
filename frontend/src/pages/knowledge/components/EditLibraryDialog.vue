@@ -36,6 +36,11 @@ import { ProvidersService } from '@bindings/chatclaw/internal/services/providers
 
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, UpdateLibraryInput } from '@bindings/chatclaw/internal/services/library'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  clearUnavailableChatwikiSelection,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 const props = defineProps<{
   open: boolean
@@ -51,6 +56,7 @@ const { t } = useI18n()
 
 const saving = ref(false)
 const loadingProviders = ref(false)
+const isChatwikiBound = ref(true)
 
 // 语义分段开关
 const semanticSegmentationEnabled = ref(false)
@@ -82,7 +88,11 @@ const currentRaptorLLMLabel = computed(() => {
 const loadProviders = async () => {
   loadingProviders.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    isChatwikiBound.value = Boolean(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
@@ -127,10 +137,27 @@ watch(
     semanticSegmentationEnabled.value = props.library?.semantic_segmentation_enabled ?? false
 
     // 初始化 RAPTOR LLM 模型
-    if (props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id) {
-      raptorLLMKey.value = `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
+    const nextKey = clearUnavailableChatwikiSelection(
+      props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id
+        ? `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
+        : '',
+      isChatwikiBound.value
+    )
+    if (nextKey) {
+      raptorLLMKey.value = nextKey
     } else {
       raptorLLMKey.value = RAPTOR_LLM_NONE
+      if (props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id) {
+        void LibraryService.UpdateLibrary(
+          props.library.id,
+          new UpdateLibraryInput({
+            raptor_llm_provider_id: '',
+            raptor_llm_model_id: '',
+          })
+        ).catch((error) => {
+          console.error('Failed to clear unavailable Chatwiki RAPTOR model:', error)
+        })
+      }
     }
   }
 )
@@ -242,6 +269,7 @@ const handleSave = async () => {
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
+                  :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)"
                 >
                   {{ m.name }}
                 </SelectItem>

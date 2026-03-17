@@ -23,7 +23,7 @@ type BuiltinModelConfig struct {
 // BuiltinProviders 内置供应商列表（chatclaw 默认置顶，将通过接口查询信息）
 var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "chatclaw", Name: "ChatClaw", Type: "openai", Icon: "chatclaw", SortOrder: 0, APIEndpoint: ServerURL},
-	{ProviderID: "chatwiki", Name: "Chatwiki", Type: "openai", Icon: "chatwiki", SortOrder: 1, APIEndpoint: ""},
+	{ProviderID: "chatwiki", Name: "Chatwiki", Type: "openai", Icon: "chatclaw", SortOrder: 1, APIEndpoint: ""},
 	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 2, APIEndpoint: "https://api.openai.com/v1"},
 	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 3, APIEndpoint: ""},
 	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 4, APIEndpoint: "https://api.anthropic.com/v1"},

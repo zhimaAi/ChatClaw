@@ -32,13 +32,23 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
+import {
+  AgentsService,
+  UpdateAgentInput,
+  type Agent,
+} from '@bindings/chatclaw/internal/services/agents'
 import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  clearUnavailableChatwikiSelection,
+  isModelSelectionDisabled,
+  isSelectionAvailable,
+} from '@/lib/chatwikiModelAvailability'
 
 type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 
@@ -91,6 +101,7 @@ const defaultWorkDir = ref('')
 const codexInstalled = ref(false)
 
 const providersWithModels = ref<ProviderWithModels[]>([])
+const isChatwikiBound = ref(true)
 const modelProviderId = ref('')
 const modelId = ref('')
 const modelName = ref('')
@@ -187,7 +198,11 @@ const displayContextCount = computed(() => {
 
 const loadModels = async () => {
   try {
-    const providers = await ProvidersService.ListProviders()
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    isChatwikiBound.value = Boolean(binding)
     const enabled = providers.filter((p) => p.enabled)
     const results: ProviderWithModels[] = []
     for (const p of enabled) {
@@ -201,15 +216,37 @@ const loadModels = async () => {
     }
     providersWithModels.value = results
 
-    // resolve current model name
-    if (modelProviderId.value && modelId.value) {
-      for (const pw of results) {
-        if (pw.provider.provider_id !== modelProviderId.value) continue
-        for (const group of pw.model_groups) {
-          if (group.type !== 'llm') continue
-          const m = group.models.find((x) => x.model_id === modelId.value)
-          if (m) modelName.value = getDisplayModelName(m)
-        }
+    const currentKey = clearUnavailableChatwikiSelection(
+      modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : '',
+      isChatwikiBound.value
+    )
+    if (!currentKey) {
+      clearDefaultModel()
+      if (props.agent?.default_llm_provider_id && props.agent?.default_llm_model_id) {
+        void AgentsService.UpdateAgent(
+          props.agent.id,
+          new UpdateAgentInput({
+            default_llm_provider_id: '',
+            default_llm_model_id: '',
+          })
+        ).catch((error) => {
+          console.warn('Failed to clear unavailable Chatwiki agent model:', error)
+        })
+      }
+      return
+    }
+
+    if (!isSelectionAvailable(results, currentKey, 'llm', isChatwikiBound.value)) {
+      clearDefaultModel()
+      return
+    }
+
+    for (const pw of results) {
+      if (pw.provider.provider_id !== modelProviderId.value) continue
+      for (const group of pw.model_groups) {
+        if (group.type !== 'llm') continue
+        const m = group.models.find((x) => x.model_id === modelId.value)
+        if (m) modelName.value = getDisplayModelName(m)
       }
     }
   } catch (error: unknown) {
@@ -509,6 +546,12 @@ const handleDelete = async () => {
                                   v-for="m in g.models"
                                   :key="pw.provider.provider_id + '::' + m.model_id"
                                   :value="pw.provider.provider_id + '::' + m.model_id"
+                                  :disabled="
+                                    isModelSelectionDisabled(
+                                      pw.provider.provider_id,
+                                      isChatwikiBound
+                                    )
+                                  "
                                 >
                                   {{ getDisplayModelName(m) }}
                                 </SelectItem>
