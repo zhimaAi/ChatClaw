@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import {
   ChevronDown,
   ChevronUp,
+  File,
   FileText,
   Image as ImageIcon,
   LoaderCircle,
@@ -101,6 +102,7 @@ const capabilityIcons: Record<string, any> = {
   image: ImageIcon,
   audio: Mic,
   video: Video,
+  file: File,
 }
 
 function toStatText(value: string): string {
