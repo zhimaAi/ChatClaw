@@ -171,6 +171,8 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n",
 		senderName, senderID, chatName, chatID, msgType, content)
 
+	chatType := deref(msg.ChatType)
+
 	a.handler(IncomingMessage{
 		ChannelID:  a.channelID,
 		Platform:   PlatformFeishu,
@@ -179,6 +181,7 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		SenderName: senderName,
 		ChatID:     chatID,
 		ChatName:   chatName,
+		IsGroup:    chatType == "group" || chatType == "topic_group",
 		Content:    content,
 		MsgType:    msgType,
 		RawData:    content,

@@ -144,7 +144,8 @@ func (a *QQAdapter) groupATMessageHandler() event.GroupATMessageEventHandler {
 			SenderID:   senderID,
 			SenderName: senderName,
 			ChatID:     "group:" + msg.GroupID,
-			ChatName:   msg.GroupID,
+			ChatName:   "",
+			IsGroup:    true,
 			Content:    content,
 			MsgType:    "text",
 			RawData:    string(payload.RawMessage),
@@ -224,15 +225,16 @@ func (a *QQAdapter) nextMsgSeq(targetID string) uint32 {
 }
 
 // qqOutgoingPayload is the JSON shape for rich/markdown messages (same convention as Feishu).
-// For image/file: use "url" for direct send (srv_send_msg=true) or upload-then-send (srv_send_msg=false);
+// For image/file: default is upload-then-send (srv_send_msg=false, recommended by QQ API);
+// set srv_send_msg=true to use direct send (consumes active message quota, non-reusable media);
 // or use "file_info" when you already have file_info from a previous upload.
 type qqOutgoingPayload struct {
 	MsgType    string `json:"msg_type"`
 	Content    string `json:"content"`
 	Text       string `json:"text"`
 	URL        string `json:"url"`
-	FileInfo   string `json:"file_info"`    // pre-obtained from upload API (srv_send_msg=false)
-	SrvSendMsg *bool  `json:"srv_send_msg"` // if false, upload first then send (recommended); default true
+	FileInfo   string `json:"file_info"`    // pre-obtained from upload API
+	SrvSendMsg *bool  `json:"srv_send_msg"` // default false (upload-then-send); true = direct send (consumes quota)
 	MsgID      string `json:"msg_id"`       // id of message to reply to; empty = active message, non-empty = passive reply
 }
 
@@ -360,74 +362,56 @@ func buildQQOutgoingMessage(content string, nextSeq uint32) (*qqSendInput, error
 			},
 		}, nil
 	case "image":
-		fileInfo := strings.TrimSpace(payload.FileInfo)
-		url := strings.TrimSpace(payload.URL)
-		if fileInfo != "" {
-			return &qqSendInput{
-				MsgID: msgID,
-				Msg: &dto.MessageToCreate{
-					MsgType: dto.RichMediaMsg,
-					MsgSeq:  nextSeq,
-					MsgID:   msgID,
-					Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
-				},
-			}, nil
-		}
-		if url == "" {
-			return nil, fmt.Errorf("qq image message requires url or file_info")
-		}
-		srvSend := true
-		if payload.SrvSendMsg != nil {
-			srvSend = *payload.SrvSendMsg
-		}
-		if !srvSend {
-			return &qqSendInput{NeedUpload: true, UploadURL: url, FileType: 1, MsgSeq: nextSeq, MsgID: msgID}, nil
-		}
-		return &qqSendInput{
-			MsgID: msgID,
-			Msg: &dto.RichMediaMessage{
-				FileType:   1,
-				URL:        url,
-				SrvSendMsg: true,
-				MsgSeq:     int64(nextSeq),
-			},
-		}, nil
+		return buildQQRichMediaInput(payload, msgID, nextSeq, 1, "image")
 	case "file":
-		fileInfo := strings.TrimSpace(payload.FileInfo)
-		url := strings.TrimSpace(payload.URL)
-		if fileInfo != "" {
-			return &qqSendInput{
-				MsgID: msgID,
-				Msg: &dto.MessageToCreate{
-					MsgType: dto.RichMediaMsg,
-					MsgSeq:  nextSeq,
-					MsgID:   msgID,
-					Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
-				},
-			}, nil
-		}
-		if url == "" {
-			return nil, fmt.Errorf("qq file message requires url or file_info")
-		}
-		srvSend := true
-		if payload.SrvSendMsg != nil {
-			srvSend = *payload.SrvSendMsg
-		}
-		if !srvSend {
-			return &qqSendInput{NeedUpload: true, UploadURL: url, FileType: 4, MsgSeq: nextSeq, MsgID: msgID}, nil
-		}
-		return &qqSendInput{
-			MsgID: msgID,
-			Msg: &dto.RichMediaMessage{
-				FileType:   4,
-				URL:        url,
-				SrvSendMsg: true,
-				MsgSeq:     int64(nextSeq),
-			},
-		}, nil
+		return buildQQRichMediaInput(payload, msgID, nextSeq, 4, "file")
 	default:
 		return nil, fmt.Errorf("qq unsupported msg_type: %s", msgType)
 	}
+}
+
+// buildQQRichMediaInput builds qqSendInput for image (fileType=1) or file (fileType=4).
+// Default is upload-then-send (srv_send_msg=false) as recommended by the QQ API:
+// media is uploaded first to get file_info, then sent via the message API (msg_type=7).
+// This avoids consuming active message quota and allows file_info reuse across targets.
+// Set srv_send_msg=true explicitly only when direct send is desired.
+func buildQQRichMediaInput(payload qqOutgoingPayload, msgID string, nextSeq uint32, fileType uint64, label string) (*qqSendInput, error) {
+	fileInfo := strings.TrimSpace(payload.FileInfo)
+	url := strings.TrimSpace(payload.URL)
+
+	if fileInfo != "" {
+		return &qqSendInput{
+			MsgID: msgID,
+			Msg: &dto.MessageToCreate{
+				MsgType: dto.RichMediaMsg,
+				MsgSeq:  nextSeq,
+				MsgID:   msgID,
+				Media:   &dto.MediaInfo{FileInfo: []byte(fileInfo)},
+			},
+		}, nil
+	}
+	if url == "" {
+		return nil, fmt.Errorf("qq %s message requires url or file_info", label)
+	}
+
+	srvSend := false // default: upload-then-send (recommended)
+	if payload.SrvSendMsg != nil {
+		srvSend = *payload.SrvSendMsg
+	}
+
+	if srvSend {
+		return &qqSendInput{
+			MsgID: msgID,
+			Msg: &dto.RichMediaMessage{
+				FileType:   fileType,
+				URL:        url,
+				SrvSendMsg: true,
+				MsgSeq:     int64(nextSeq),
+			},
+		}, nil
+	}
+
+	return &qqSendInput{NeedUpload: true, UploadURL: url, FileType: fileType, MsgSeq: nextSeq, MsgID: msgID}, nil
 }
 
 // SendMessage sends a message to a QQ group or C2C user.
@@ -507,24 +491,38 @@ func (a *QQAdapter) uploadC2CFile(ctx context.Context, api qqTransportAPI, userI
 func (a *QQAdapter) sendGroupMessage(ctx context.Context, api openapi.OpenAPI, groupID, content string) error {
 	seq := a.nextMsgSeq("group:" + groupID)
 	input, err := buildQQOutgoingMessage(content, seq)
-	fmt.Println("qq send group message input", input)
 	if err != nil {
 		return err
 	}
 	if input.NeedUpload {
-		fileInfo, err := a.uploadGroupFile(ctx, api, groupID, input.FileType, input.UploadURL)
-		if err != nil {
-			return err
+		fileInfo, uploadErr := a.uploadGroupFile(ctx, api, groupID, input.FileType, input.UploadURL)
+		if uploadErr == nil {
+			msg := &dto.MessageToCreate{
+				MsgType: dto.RichMediaMsg,
+				MsgSeq:  input.MsgSeq,
+				MsgID:   input.MsgID,
+				Media:   &dto.MediaInfo{FileInfo: fileInfo},
+			}
+			_, sendErr := api.PostGroupMessage(ctx, groupID, msg)
+			if sendErr == nil {
+				return nil
+			}
+			slog.Warn("[qq] upload-then-send failed for group, falling back to direct send",
+				"group_id", groupID, "error", sendErr)
+		} else {
+			slog.Warn("[qq] file upload failed for group, falling back to direct send",
+				"group_id", groupID, "error", uploadErr)
 		}
-		msg := &dto.MessageToCreate{
-			MsgType: dto.RichMediaMsg,
-			MsgSeq:  input.MsgSeq,
-			MsgID:   input.MsgID,
-			Media:   &dto.MediaInfo{FileInfo: fileInfo},
+		fallbackSeq := a.nextMsgSeq("group:" + groupID)
+		directMsg := &dto.RichMediaMessage{
+			FileType:   input.FileType,
+			URL:        input.UploadURL,
+			SrvSendMsg: true,
+			MsgSeq:     int64(fallbackSeq),
 		}
-		_, err = api.PostGroupMessage(ctx, groupID, msg)
-		if err != nil {
-			return fmt.Errorf("send qq group message: %w", err)
+		_, fallbackErr := api.PostGroupMessage(ctx, groupID, directMsg)
+		if fallbackErr != nil {
+			return fmt.Errorf("send qq group message: direct send fallback also failed: %w", fallbackErr)
 		}
 		return nil
 	}
@@ -538,24 +536,38 @@ func (a *QQAdapter) sendGroupMessage(ctx context.Context, api openapi.OpenAPI, g
 func (a *QQAdapter) sendC2CMessage(ctx context.Context, api openapi.OpenAPI, userID, content string) error {
 	seq := a.nextMsgSeq("user:" + userID)
 	input, err := buildQQOutgoingMessage(content, seq)
-	fmt.Println("qq send c2c message input", input)
 	if err != nil {
 		return err
 	}
 	if input.NeedUpload {
-		fileInfo, err := a.uploadC2CFile(ctx, api, userID, input.FileType, input.UploadURL)
-		if err != nil {
-			return err
+		fileInfo, uploadErr := a.uploadC2CFile(ctx, api, userID, input.FileType, input.UploadURL)
+		if uploadErr == nil {
+			msg := &dto.MessageToCreate{
+				MsgType: dto.RichMediaMsg,
+				MsgSeq:  input.MsgSeq,
+				MsgID:   input.MsgID,
+				Media:   &dto.MediaInfo{FileInfo: fileInfo},
+			}
+			_, sendErr := api.PostC2CMessage(ctx, userID, msg)
+			if sendErr == nil {
+				return nil
+			}
+			slog.Warn("[qq] upload-then-send failed for C2C, falling back to direct send",
+				"user_id", userID, "error", sendErr)
+		} else {
+			slog.Warn("[qq] file upload failed for C2C, falling back to direct send",
+				"user_id", userID, "error", uploadErr)
 		}
-		msg := &dto.MessageToCreate{
-			MsgType: dto.RichMediaMsg,
-			MsgSeq:  input.MsgSeq,
-			MsgID:   input.MsgID,
-			Media:   &dto.MediaInfo{FileInfo: fileInfo},
+		fallbackSeq := a.nextMsgSeq("user:" + userID)
+		directMsg := &dto.RichMediaMessage{
+			FileType:   input.FileType,
+			URL:        input.UploadURL,
+			SrvSendMsg: true,
+			MsgSeq:     int64(fallbackSeq),
 		}
-		_, err = api.PostC2CMessage(ctx, userID, msg)
-		if err != nil {
-			return fmt.Errorf("send qq c2c message: %w", err)
+		_, fallbackErr := api.PostC2CMessage(ctx, userID, directMsg)
+		if fallbackErr != nil {
+			return fmt.Errorf("send qq c2c message: direct send fallback also failed: %w", fallbackErr)
 		}
 		return nil
 	}

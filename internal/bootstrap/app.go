@@ -748,13 +748,17 @@ func handleChannelMessage(
 	}
 	externalID := fmt.Sprintf("ch:%d:%s", msg.ChannelID, convKey)
 
-	// Use ChatName (group name) or SenderName (user name) as display name
+	// Build display name: prefer resolved ChatName/SenderName;
+	// fall back to "「<platform><type>」<excerpt>" when unavailable.
 	displayName := msg.ChatName
+	if displayName == "" && msg.IsGroup {
+		displayName = channelDisplayName(msg.Platform, true, textContent)
+	}
 	if displayName == "" {
 		displayName = msg.SenderName
 	}
 	if displayName == "" {
-		displayName = externalID
+		displayName = channelDisplayName(msg.Platform, false, textContent)
 	}
 
 	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName)
@@ -949,4 +953,26 @@ func findOrCreateConversation(
 	}
 
 	return conv, nil
+}
+
+var platformLabel = map[string]string{
+	channels.PlatformFeishu: "飞书",
+	channels.PlatformWeCom:  "企微",
+	channels.PlatformQQ:     "QQ",
+}
+
+func channelDisplayName(platform string, isGroup bool, content string) string {
+	label, ok := platformLabel[platform]
+	if !ok {
+		label = platform
+	}
+	suffix := "群"
+	if !isGroup {
+		suffix = ""
+	}
+	excerpt := content
+	if rs := []rune(excerpt); len(rs) > 20 {
+		excerpt = string(rs[:20]) + "…"
+	}
+	return "「" + label + suffix + "」" + excerpt
 }

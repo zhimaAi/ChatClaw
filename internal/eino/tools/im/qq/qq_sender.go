@@ -55,10 +55,26 @@ type qqSenderInput struct {
 func (t *qqSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	descEN := "Send a message to QQ via a connected channel. " +
 		"Supports sending to groups (prefix target_id with 'group:') or individual users via C2C (prefix with 'user:'). " +
-		"Content: plain text; or JSON: markdown {\"msg_type\":\"markdown\",\"content\":\"...\"}; image/file with url (direct send) or {\"msg_type\":\"image\",\"url\":\"...\",\"srv_send_msg\":false} to upload-then-send; or use {\"msg_type\":\"image\",\"file_info\":\"...\"} with pre-obtained file_info."
+		"Content formats: " +
+		"1) Plain text; " +
+		"2) Markdown: {\"msg_type\":\"markdown\",\"content\":\"...\"}; " +
+		"3) Image/file with a PUBLICLY ACCESSIBLE url: {\"msg_type\":\"image\",\"url\":\"https://...\"} or {\"msg_type\":\"file\",\"url\":\"https://...\"}. " +
+		"IMPORTANT: The url MUST be a publicly accessible HTTP/HTTPS URL (e.g. from a CDN, image hosting service, or public web server). " +
+		"Local file paths or localhost URLs CANNOT be used — uploading local files to a public URL is NOT yet supported. " +
+		"If the image/file only exists locally, inform the user that sending local files via QQ is not yet available. " +
+		"Optional: set {\"srv_send_msg\":true} to force direct send (consumes active message quota); " +
+		"or use {\"msg_type\":\"image\",\"file_info\":\"...\"} with pre-obtained file_info."
 	descZH := "通过已连接的 QQ 渠道发送消息。" +
 		"支持发送到群聊（target_id 添加 'group:' 前缀）或通过 C2C 发送给个人用户（添加 'user:' 前缀）。" +
-		"内容：纯文本；或 JSON：markdown {\"msg_type\":\"markdown\",\"content\":\"...\"}；图片/文件可传 url 直接发送，或 {\"msg_type\":\"image\",\"url\":\"...\",\"srv_send_msg\":false} 先上传再发；也可用 {\"msg_type\":\"image\",\"file_info\":\"...\"} 传入已有 file_info。"
+		"内容格式：" +
+		"1) 纯文本；" +
+		"2) Markdown：{\"msg_type\":\"markdown\",\"content\":\"...\"}；" +
+		"3) 图片/文件需提供公网可访问的 URL：{\"msg_type\":\"image\",\"url\":\"https://...\"} 或 {\"msg_type\":\"file\",\"url\":\"https://...\"}。" +
+		"重要：url 必须是公网可访问的 HTTP/HTTPS 地址（如 CDN、图床或公网服务器上的链接）。" +
+		"本地文件路径或 localhost 地址无法使用——将本地文件上传到公网 URL 的功能暂未实现。" +
+		"如果图片/文件仅存在于本地，请告知用户：通过 QQ 发送本地文件的功能暂不可用。" +
+		"可选：设置 {\"srv_send_msg\":true} 强制直接发送（消耗主动消息频次）；" +
+		"也可用 {\"msg_type\":\"image\",\"file_info\":\"...\"} 传入已有 file_info。"
 
 	channelIDDescEN := "The channel ID of the connected QQ channel to use for sending."
 	channelIDDescZH := "用于发送的已连接 QQ 渠道 ID。"
@@ -96,8 +112,8 @@ func (t *qqSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			"content": {
 				Type: schema.String,
 				Desc: selectDesc(
-					"Message content: plain text; or JSON with msg_type (markdown/content, image/file with url or file_info). Use srv_send_msg:false for upload-then-send.",
-					"消息内容：纯文本；或 JSON，msg_type 为 markdown/content、image/file 可带 url 或 file_info；srv_send_msg:false 表示先上传再发。",
+					"Message content: plain text; or JSON with msg_type. For image/file, url must be a publicly accessible HTTP/HTTPS address (local file paths and localhost URLs are NOT supported; local-file-upload is not yet implemented). Use file_info if already obtained. Set srv_send_msg:true to force direct send (consumes quota).",
+					"消息内容：纯文本；或 JSON 含 msg_type。发送图片/文件时，url 必须为公网可访问的 HTTP/HTTPS 地址（不支持本地文件路径和 localhost 地址；本地文件上传功能暂未实现）。如已有 file_info 可直接使用。设 srv_send_msg:true 强制直接发送（消耗频次）。",
 				),
 				Required: true,
 			},
