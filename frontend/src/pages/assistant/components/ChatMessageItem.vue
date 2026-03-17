@@ -1,8 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type, ShieldCheck, Monitor, File as FileIcon, ExternalLink } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
+import {
+  Pencil,
+  Copy,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  SendHorizontal,
+  Type,
+  ShieldCheck,
+  Monitor,
+  File as FileIcon,
+  ExternalLink,
+} from 'lucide-vue-next'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
@@ -187,7 +200,7 @@ const displaySegments = computed((): MessageSegment[] => {
   if (props.segments && props.segments.length > 0) {
     return props.segments
   }
-  
+
   // Priority 2: For streaming without segments, build from individual streaming props
   // (This fixes the first message tool call issue)
   if (props.isStreaming) {
@@ -203,25 +216,25 @@ const displaySegments = computed((): MessageSegment[] => {
     }
     if (segs.length > 0) return segs
   }
-  
+
   // Priority 3: Fallback for historical messages - construct from message data
   if (!isAssistant.value) return []
   const segs: MessageSegment[] = []
-  
+
   const thinking = thinkingContent.value
   if (thinking) {
     segs.push({ type: 'thinking', content: thinking })
   }
-  
+
   const content = displayContent.value
   if (content) {
     segs.push({ type: 'content', content })
   }
-  
+
   if (toolCalls.value.length > 0) {
     segs.push({ type: 'tools', toolCalls: toolCalls.value })
   }
-  
+
   return segs
 })
 
@@ -256,7 +269,7 @@ const errorMessageKey = computed(() => {
 
 const handleCopy = async () => {
   try {
-    await navigator.clipboard.writeText(displayContent.value)
+    await copyToClipboard(displayContent.value)
     copied.value = true
     window.setTimeout(() => {
       copied.value = false
@@ -382,7 +395,9 @@ onUnmounted(() => {
             <img v-if="agentIcon" :src="agentIcon" class="size-4 object-contain" />
             <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
           </div>
-          <span class="text-xs font-medium text-muted-foreground">{{ agentName || 'Assistant' }}</span>
+          <span class="text-xs font-medium text-muted-foreground">{{
+            agentName || 'Assistant'
+          }}</span>
           <TooltipProvider v-if="sandboxMode" :delay-duration="300">
             <Tooltip>
               <TooltipTrigger as-child>
@@ -392,7 +407,11 @@ onUnmounted(() => {
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {{ sandboxMode === 'codex' ? t('assistant.workspaceDrawer.sandboxTooltip') : t('assistant.workspaceDrawer.nativeTooltip') }}
+                {{
+                  sandboxMode === 'codex'
+                    ? t('assistant.workspaceDrawer.sandboxTooltip')
+                    : t('assistant.workspaceDrawer.nativeTooltip')
+                }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -418,10 +437,7 @@ onUnmounted(() => {
             :is-streaming="isStreaming"
           />
           <!-- Retrieval segment -->
-          <RetrievalBlock
-            v-if="segment.type === 'retrieval'"
-            :items="segment.items"
-          />
+          <RetrievalBlock v-if="segment.type === 'retrieval'" :items="segment.items" />
         </template>
 
         <!-- Streaming cursor when no content segments yet (e.g. agent starts with tool calls) -->
@@ -486,13 +502,11 @@ onUnmounted(() => {
         />
         <!-- Normal display mode -->
         <div v-else class="flex flex-col gap-2">
-          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">{{ displayContent }}</p>
+          <p v-if="displayContent" class="whitespace-pre-wrap wrap-break-word">
+            {{ displayContent }}
+          </p>
           <!-- Image previews -->
-          <div
-            v-if="images.length > 0"
-            ref="imageContainerRef"
-            class="mt-2 flex flex-wrap gap-2"
-          >
+          <div v-if="images.length > 0" ref="imageContainerRef" class="mt-2 flex flex-wrap gap-2">
             <div
               v-for="(img, idx) in images"
               :key="img.id || img.file_name || img.base64.slice(0, 20)"
@@ -525,10 +539,15 @@ onUnmounted(() => {
             >
               <FileIcon class="size-5 shrink-0 text-muted-foreground" />
               <div class="flex min-w-0 flex-col">
-                <span class="truncate text-xs font-medium text-foreground" :title="f.original_name || f.file_name">
+                <span
+                  class="truncate text-xs font-medium text-foreground"
+                  :title="f.original_name || f.file_name"
+                >
                   {{ f.original_name || f.file_name || 'File' }}
                 </span>
-                <span v-if="f.size" class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
+                <span v-if="f.size" class="text-[10px] text-muted-foreground">{{
+                  formatFileSize(f.size)
+                }}</span>
               </div>
               <ExternalLink class="size-3.5 shrink-0 text-muted-foreground/60" />
             </button>
