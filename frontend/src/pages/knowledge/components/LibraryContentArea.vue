@@ -50,6 +50,7 @@ import {
   DocumentService,
   type Document as BackendDocument,
 } from '@bindings/chatclaw/internal/services/document'
+import { useAppStore } from '@/stores'
 
 // 进度事件数据（从后端接收）
 interface ProgressEvent {
@@ -70,6 +71,11 @@ interface ThumbnailEvent {
   thumb_icon: string
 }
 
+interface BrowserUploadFile {
+  file_name: string
+  base64_data: string
+}
+
 const props = defineProps<{
   library: Library
   selectedFolderId?: number | null
@@ -85,6 +91,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
+const appStore = useAppStore()
 
 const searchQuery = ref('')
 const sortBy = ref<'created_desc' | 'created_asc'>('created_desc')
@@ -144,7 +151,22 @@ let unsubscribeUploaded: (() => void) | null = null
 let unsubscribeFileDrop: (() => void) | null = null
 
 const dropTargetRef = ref<HTMLElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 let dragDepth = 0
+
+const supportedUploadExtensions = ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'html', 'htm', 'ofd']
+const desktopUploadPattern = supportedUploadExtensions.map((ext) => `*.${ext}`).join(';')
+const browserUploadAccept = supportedUploadExtensions.map((ext) => `.${ext}`).join(',')
+
+type BrowserUploadService = {
+  UploadBrowserDocuments: (input: {
+    library_id: number
+    files: BrowserUploadFile[]
+    folder_id: number | null
+  }) => Promise<BackendDocument[]>
+}
+
+const browserUploadService = DocumentService as typeof DocumentService & BrowserUploadService
 
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
@@ -574,6 +596,14 @@ const toggleSort = () => {
 }
 
 const handleAddDocument = async () => {
+  if (appStore.isServerMode) {
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+      fileInputRef.value.click()
+    }
+    return
+  }
+
   try {
     const result = await Dialogs.OpenFile({
       Title: t('knowledge.content.selectFile'),
@@ -583,7 +613,7 @@ const handleAddDocument = async () => {
       Filters: [
         {
           DisplayName: t('knowledge.content.fileTypes.documents'),
-          Pattern: '*.pdf;*.doc;*.docx;*.txt;*.md;*.csv;*.xlsx;*.html;*.htm;*.ofd',
+          Pattern: desktopUploadPattern,
         },
         {
           DisplayName: t('knowledge.content.fileTypes.all'),
@@ -618,6 +648,72 @@ const handleAddDocument = async () => {
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {
     isUploading.value = false
+  }
+}
+
+const readFileAsBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result
+      if (typeof result !== 'string') {
+        reject(new Error('invalid file data'))
+        return
+      }
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('failed to read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
+const uploadBrowserFiles = async (files: FileList | File[]) => {
+  if (!props.library?.id) return
+  if (isUploading.value) return
+
+  const fileArray = Array.from(files)
+  if (fileArray.length === 0) return
+
+  try {
+    isUploading.value = true
+    uploadTotal.value = fileArray.length
+    uploadDone.value = 0
+    await nextTick()
+
+    const uploadFiles: BrowserUploadFile[] = []
+    for (const file of fileArray) {
+      uploadFiles.push({
+        file_name: file.name,
+        base64_data: await readFileAsBase64(file),
+      })
+    }
+
+    const folderId = activeFolderId.value && activeFolderId.value > 0 ? activeFolderId.value : null
+    const uploaded = await browserUploadService.UploadBrowserDocuments({
+      library_id: props.library.id,
+      files: uploadFiles,
+      folder_id: folderId,
+    })
+
+    await resetAndLoad()
+    toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
+  } catch (error) {
+    console.error('Failed to upload browser documents:', error)
+    toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
+  } finally {
+    isUploading.value = false
+  }
+}
+
+const handleBrowserFileInputChange = (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const files = input?.files
+  if (files && files.length > 0) {
+    void uploadBrowserFiles(files)
+  }
+  if (input) {
+    input.value = ''
   }
 }
 
@@ -794,6 +890,12 @@ const handleDragLeave = (event: DragEvent) => {
 const handleDropEvent = (event: DragEvent) => {
   if (!isFileDragEvent(event)) return
   event.preventDefault()
+  if (appStore.isServerMode) {
+    const files = event.dataTransfer?.files
+    if (files && files.length > 0) {
+      void uploadBrowserFiles(files)
+    }
+  }
   resetDragState()
 }
 
@@ -937,15 +1039,17 @@ onMounted(() => {
   )
 
   // 监听 Wails 原生文件拖拽事件
-  unsubscribeFileDrop = Events.On(
-    'filedrop:files',
-    (event: { data: { files: string[] } }) => {
-      const files = event.data?.files
-      if (files && files.length > 0) {
-        handleFileDrop(files)
+  if (appStore.isGUIMode) {
+    unsubscribeFileDrop = Events.On(
+      'filedrop:files',
+      (event: { data: { files: string[] } }) => {
+        const files = event.data?.files
+        if (files && files.length > 0) {
+          handleFileDrop(files)
+        }
       }
-    }
-  )
+    )
+  }
 
   // 单个文档已入库事件（可用于小批量即时显示；大批量仍以 resetAndLoad 为主）
   unsubscribeUploaded = Events.On('document:uploaded', (event: { data: BackendDocument }) => {
@@ -1008,6 +1112,14 @@ onUnmounted(() => {
     class="relative flex min-h-0 flex-1 flex-col"
     data-file-drop-target
   >
+    <input
+      ref="fileInputRef"
+      type="file"
+      multiple
+      class="hidden"
+      :accept="browserUploadAccept"
+      @change="handleBrowserFileInputChange"
+    >
     <!-- 头部区域 -->
     <div class="flex h-12 items-center justify-between gap-4 px-4">
       <div class="flex min-w-0 flex-1 items-center gap-3">
@@ -1017,7 +1129,7 @@ onUnmounted(() => {
           :title="currentBreadcrumbTitle"
         >
           <template v-for="(item, idx) in visibleBreadcrumbs" :key="`${item.id ?? 'root'}-${idx}`">
-            <span v-if="idx > 0 && !item.isEllipsis" class="shrink-0 px-1 text-muted-foreground/60">/</span>
+            <span v-if="Number(idx) > 0 && !item.isEllipsis" class="shrink-0 px-1 text-muted-foreground/60">/</span>
             <button
               v-if="!item.isEllipsis"
               type="button"

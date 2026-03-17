@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { marked, type Tokens } from 'marked'
 import hljs from 'highlight.js/lib/core'
 import DOMPurify from 'dompurify'
+import { copyToClipboard } from '@/lib/utils'
 
 // Import only commonly used languages to reduce bundle size
 import javascript from 'highlight.js/lib/languages/javascript'
@@ -242,7 +243,7 @@ const handleClick = (event: MouseEvent) => {
     const code = decodeURIComponent(copyBtn.dataset.code || '')
     const index = parseInt(copyBtn.dataset.index || '0', 10)
 
-    navigator.clipboard.writeText(code).then(() => {
+    copyToClipboard(code).then(() => {
       copiedBlocks.value.add(index)
       const textEl = copyBtn.querySelector('.copy-text')
       const iconEl = copyBtn.querySelector('.copy-icon')

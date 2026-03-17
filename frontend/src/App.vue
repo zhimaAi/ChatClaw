@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
-import SettingsPage from '@/pages/settings/SettingsPage.vue'
 import AssistantPage from '@/pages/assistant/AssistantPage.vue'
-import KnowledgePage from '@/pages/knowledge/KnowledgePage.vue'
-import ScheduledTasksPage from '@/pages/scheduled-tasks/ScheduledTasksPage.vue'
-import SkillsPage from '@/pages/skills/SkillsPage.vue'
 import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import MemoryPage from '@/pages/memory/MemoryPage.vue'
-import MultiaskPage from '@/pages/multiask/MultiaskPage.vue'
-import DocumentViewerPage from '@/pages/document/DocumentViewerPage.vue'
-import ChannelsPage from '@/pages/channels/ChannelsPage.vue'
+
+const SettingsPage = defineAsyncComponent(() => import('@/pages/settings/SettingsPage.vue'))
+const KnowledgePage = defineAsyncComponent(() => import('@/pages/knowledge/KnowledgePage.vue'))
+const ScheduledTasksPage = defineAsyncComponent(() => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue'))
+const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
+const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
+const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
+const DocumentViewerPage = defineAsyncComponent(() => import('@/pages/document/DocumentViewerPage.vue'))
+const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'

@@ -22,6 +22,20 @@ export default defineConfig({
         floatingball: "floatingball.html",
         selection: "selection.html",
       },
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("highlight.js")) return "vendor-hljs";
+            if (id.includes("@vue-office") || id.includes("bestofdview")) return "vendor-office";
+            if (id.includes("reka-ui")) return "vendor-reka";
+            if (id.includes("lucide-vue-next")) return "vendor-icons";
+            if (id.includes("marked") || id.includes("dompurify")) return "vendor-markdown";
+            if (id.includes("vue-i18n")) return "vendor-i18n";
+            if (id.includes("@vueuse")) return "vendor-vueuse";
+            return "vendor";
+          }
+        },
+      },
     },
   },
 });
