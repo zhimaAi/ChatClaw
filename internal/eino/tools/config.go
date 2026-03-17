@@ -72,4 +72,5 @@ const (
 	ToolIDFeishuSender   = "feishu_sender"
 	ToolIDWeComSender    = "wecom_sender"
 	ToolIDDingTalkSender = "dingtalk_sender"
+	ToolIDQQSender     = "qq_sender"
 )

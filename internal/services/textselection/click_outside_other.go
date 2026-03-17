@@ -42,3 +42,11 @@ func (w *ClickOutsideWatcher) SetPopupRect(x, y, width, height int32) {
 // ClearPopupRect clears the popup area (no-op on non-Windows/macOS platforms).
 func (w *ClickOutsideWatcher) ClearPopupRect() {
 }
+
+// SetInsideCallback sets a callback for clicks inside the popup (no-op).
+func (w *ClickOutsideWatcher) SetInsideCallback(cb func(x, y int32)) {
+}
+
+// ClearInsideCallback removes the inside-click callback (no-op).
+func (w *ClickOutsideWatcher) ClearInsideCallback() {
+}

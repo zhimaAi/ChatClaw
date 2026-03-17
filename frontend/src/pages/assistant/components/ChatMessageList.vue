@@ -141,7 +141,8 @@ watch(
         let key = `${tc.toolCallId}:${tc.status}:${tc.resultJson ? 1 : 0}:${tc.argsJson?.length ?? 0}`
         if (tc.childContent) key += `:c${tc.childContent.length}`
         if (tc.childThinkingContent) key += `:t${tc.childThinkingContent.length}`
-        if (tc.childToolCalls?.length) key += `:s${tc.childToolCalls.map((c) => `${c.toolCallId}:${c.status}:${c.argsJson?.length ?? 0}`).join(',')}`
+        if (tc.childToolCalls?.length)
+          key += `:s${tc.childToolCalls.map((c) => `${c.toolCallId}:${c.status}:${c.argsJson?.length ?? 0}`).join(',')}`
         return key
       })
       .join('|'),
@@ -226,18 +227,20 @@ watch(
         <!-- Streaming message fallback (should not happen, but keep UI resilient) -->
         <ChatMessageItem
           v-if="streaming && !messages.some((m) => m.id === streaming.messageId)"
-          :message="({
-            id: streaming.messageId,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content: streaming.content,
-            status: streaming.status,
-            thinking_content: streaming.thinkingContent,
-            input_tokens: 0,
-            output_tokens: 0,
-            created_at: null,
-            updated_at: null,
-          } as Message)"
+          :message="
+            {
+              id: streaming.messageId,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: streaming.content,
+              status: streaming.status,
+              thinking_content: streaming.thinkingContent,
+              input_tokens: 0,
+              output_tokens: 0,
+              created_at: null,
+              updated_at: null,
+            } as Message
+          "
           :is-streaming="true"
           :streaming-content="streaming.content"
           :streaming-thinking="streaming.thinkingContent"

@@ -232,10 +232,7 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
                   class="size-3.5 overflow-visible text-current"
                 />
               </div>
-              <div
-                v-else-if="tab.icon"
-                class="flex size-5 shrink-0 items-center justify-center"
-              >
+              <div v-else-if="tab.icon" class="flex size-5 shrink-0 items-center justify-center">
                 <img :src="tab.icon" alt="" class="size-full object-contain" />
               </div>
               <div

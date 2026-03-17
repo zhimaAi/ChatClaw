@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "Samodejno ustvarjanje pomočnika ni na voljo",
   "error.channel_ai_reply_failed": "AI odgovor ni uspel: {{.Error}}",
   "error.channel_ai_reply_empty": "AI odgovor ni uspel: ustvarjen je prazen odgovor",
+  "channel.feishu_streaming_generating": "Ustvarjanje pretočnega odgovora, prosimo počakajte...",
+  "channel.feishu_stream_output_enabled": "Pretočni izhod je omogočen. Naslednji odgovori bodo poslani postopoma med generiranjem.",
+  "channel.feishu_stream_output_disabled": "Pretočni izhod je onemogočen. Naslednji odgovori bodo poslani, ko bo celoten rezultat pripravljen.",
   "error.assistant_mcp_create_failed": "Ustvarjanje Assistant MCP ni uspelo",
   "error.assistant_mcp_delete_failed": "Brisanje Assistant MCP ni uspelo",
   "error.assistant_mcp_id_required": "ID Assistant MCP je obvezen",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "Ime orodja lahko vsebuje le črke, številke in podčrtaje ter se mora začeti s črko",
   "error.assistant_mcp_tool_name_required": "Ime orodja je obvezno",
   "error.assistant_mcp_tool_not_found": "Orodje ni bilo najdeno",
-  "error.assistant_mcp_update_failed": "Posodobitev Assistant MCP ni uspela"
+  "error.assistant_mcp_update_failed": "Posodobitev Assistant MCP ni uspela",
+  "error.chat_too_many_files": "Število datotek presega omejitev",
+  "error.chat_file_too_large": "Velikost datoteke presega omejitev",
+  "error.chat_invalid_file_type": "Neveljavna vrsta datoteke",
+  "error.file_not_found": "Datoteka ni bila najdena"
 }

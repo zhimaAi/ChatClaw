@@ -1,37 +1,51 @@
-import zhCN from './zh-CN'
-import enUS from './en-US'
-import arSA from './ar-SA'
-import bnBD from './bn-BD'
-import deDE from './de-DE'
-import esES from './es-ES'
-import frFR from './fr-FR'
-import hiIN from './hi-IN'
-import itIT from './it-IT'
-import jaJP from './ja-JP'
-import koKR from './ko-KR'
-import ptBR from './pt-BR'
-import slSI from './sl-SI'
-import trTR from './tr-TR'
-import viVN from './vi-VN'
-import zhTW from './zh-TW'
+export const LOCALE_KEYS = [
+  'zh-CN',
+  'en-US',
+  'ar-SA',
+  'bn-BD',
+  'de-DE',
+  'es-ES',
+  'fr-FR',
+  'hi-IN',
+  'it-IT',
+  'ja-JP',
+  'ko-KR',
+  'pt-BR',
+  'sl-SI',
+  'tr-TR',
+  'vi-VN',
+  'zh-TW',
+] as const
 
-export const messages = {
-  'zh-CN': zhCN,
-  'en-US': enUS,
-  'ar-SA': arSA,
-  'bn-BD': bnBD,
-  'de-DE': deDE,
-  'es-ES': esES,
-  'fr-FR': frFR,
-  'hi-IN': hiIN,
-  'it-IT': itIT,
-  'ja-JP': jaJP,
-  'ko-KR': koKR,
-  'pt-BR': ptBR,
-  'sl-SI': slSI,
-  'tr-TR': trTR,
-  'vi-VN': viVN,
-  'zh-TW': zhTW,
+export type Locale = (typeof LOCALE_KEYS)[number]
+
+const loaders: Record<Locale, () => Promise<{ default: Record<string, unknown> }>> = {
+  'zh-CN': () => import('./zh-CN'),
+  'en-US': () => import('./en-US'),
+  'ar-SA': () => import('./ar-SA'),
+  'bn-BD': () => import('./bn-BD'),
+  'de-DE': () => import('./de-DE'),
+  'es-ES': () => import('./es-ES'),
+  'fr-FR': () => import('./fr-FR'),
+  'hi-IN': () => import('./hi-IN'),
+  'it-IT': () => import('./it-IT'),
+  'ja-JP': () => import('./ja-JP'),
+  'ko-KR': () => import('./ko-KR'),
+  'pt-BR': () => import('./pt-BR'),
+  'sl-SI': () => import('./sl-SI'),
+  'tr-TR': () => import('./tr-TR'),
+  'vi-VN': () => import('./vi-VN'),
+  'zh-TW': () => import('./zh-TW'),
 }
 
-export type Locale = keyof typeof messages
+const cache = new Map<Locale, Record<string, unknown>>()
+
+export async function loadLocaleMessages(locale: Locale): Promise<Record<string, unknown>> {
+  const cached = cache.get(locale)
+  if (cached) return cached
+
+  const mod = await loaders[locale]()
+  const messages = mod.default
+  cache.set(locale, messages)
+  return messages
+}

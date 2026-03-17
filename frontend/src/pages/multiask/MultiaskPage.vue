@@ -180,7 +180,6 @@ const englishFirstModelOrder: AIModel['id'][] = [
   'yuanbao',
 ]
 
-
 /**
  * 根据模型顺序和可选覆盖生成最终的模型数组
  */
@@ -263,7 +262,7 @@ const loadDisabledModels = (allModelsList: AIModel[]): string[] => {
     if (enabledSaved) {
       const enabledIds = JSON.parse(enabledSaved) as string[]
       if (Array.isArray(enabledIds)) {
-        const disabledIds = allModelsList.map(m => m.id).filter(id => !enabledIds.includes(id))
+        const disabledIds = allModelsList.map((m) => m.id).filter((id) => !enabledIds.includes(id))
         localStorage.setItem(STORAGE_KEY_DISABLED_MODELS, JSON.stringify(disabledIds))
         localStorage.removeItem(STORAGE_KEY_ENABLED_MODELS)
         return disabledIds
@@ -378,15 +377,13 @@ const availableModels = ref<AIModel[]>(getInitialModels())
 /**
  * 隐藏的模型 ID 列表
  */
-const disabledModelIds = ref<string[]>(
-  loadDisabledModels(availableModels.value)
-)
+const disabledModelIds = ref<string[]>(loadDisabledModels(availableModels.value))
 
 /**
  * 开启的模型 ID 列表（通过剔除隐藏模型计算得出）
  */
 const enabledModelIds = computed(() => {
-  return availableModels.value.map(m => m.id).filter(id => !disabledModelIds.value.includes(id))
+  return availableModels.value.map((m) => m.id).filter((id) => !disabledModelIds.value.includes(id))
 })
 
 /**
@@ -418,10 +415,7 @@ const isModelSelectorCollapsed = ref(
  */
 const toggleModelSelector = async () => {
   isModelSelectorCollapsed.value = !isModelSelectorCollapsed.value
-  localStorage.setItem(
-    STORAGE_KEY_SELECTOR_COLLAPSED,
-    String(isModelSelectorCollapsed.value)
-  )
+  localStorage.setItem(STORAGE_KEY_SELECTOR_COLLAPSED, String(isModelSelectorCollapsed.value))
   await nextTick()
   // Wait for CSS transition (200ms) to complete before recalculating bounds
   await new Promise((resolve) => setTimeout(resolve, 220))
@@ -441,7 +435,7 @@ const handleSaveSettings = async (models: AIModel[], enabledIds: string[]) => {
   saveCustomOrder(models)
 
   // 通过开启的模型列表，计算出被隐藏的模型
-  const disabledIds = models.map(m => m.id).filter(id => !enabledIds.includes(id))
+  const disabledIds = models.map((m) => m.id).filter((id) => !enabledIds.includes(id))
   disabledModelIds.value = disabledIds
   saveDisabledModels(disabledIds)
 
@@ -825,35 +819,39 @@ watch(
  * Native WebViews are rendered outside the DOM tree, so they block dialogs.
  * We need to call backend methods to explicitly hide/show them.
  */
-watch(shouldShowPanels, async (shouldShow, wasShowing) => {
-  if (shouldShow === wasShowing) return
-  
-  if (shouldShow) {
-    // Should show - show all visible panels
-    console.log('[MultiaskPage] Panels should show, showing all panels')
-    for (const model of visibleModels.value) {
-      await showPanel(model.id)
-      // Update bounds in case layout changed while hidden
-      const panelRef = chatPanelRefs.value[model.id]
-      if (panelRef?.getBounds) {
-        const bounds = panelRef.getBounds()
-        if (bounds && bounds.width > 0 && bounds.height > 0) {
-          await updatePanelBounds(model.id, bounds)
+watch(
+  shouldShowPanels,
+  async (shouldShow, wasShowing) => {
+    if (shouldShow === wasShowing) return
+
+    if (shouldShow) {
+      // Should show - show all visible panels
+      console.log('[MultiaskPage] Panels should show, showing all panels')
+      for (const model of visibleModels.value) {
+        await showPanel(model.id)
+        // Update bounds in case layout changed while hidden
+        const panelRef = chatPanelRefs.value[model.id]
+        if (panelRef?.getBounds) {
+          const bounds = panelRef.getBounds()
+          if (bounds && bounds.width > 0 && bounds.height > 0) {
+            await updatePanelBounds(model.id, bounds)
+          }
+        }
+      }
+    } else {
+      // Should hide - hide all panels
+      console.log('[MultiaskPage] Panels should hide, hiding all panels')
+      for (const panelId of createdPanelIds.value) {
+        try {
+          await MultiaskService.HidePanel(panelId)
+        } catch (err) {
+          console.error(`[MultiaskPage] Failed to hide panel ${panelId}:`, err)
         }
       }
     }
-  } else {
-    // Should hide - hide all panels
-    console.log('[MultiaskPage] Panels should hide, hiding all panels')
-    for (const panelId of createdPanelIds.value) {
-      try {
-        await MultiaskService.HidePanel(panelId)
-      } catch (err) {
-        console.error(`[MultiaskPage] Failed to hide panel ${panelId}:`, err)
-      }
-    }
-  }
-}, { immediate: false })
+  },
+  { immediate: false }
+)
 
 /**
  * 组件卸载时销毁所有面板

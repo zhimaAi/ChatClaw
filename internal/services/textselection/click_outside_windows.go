@@ -29,6 +29,9 @@ type ClickOutsideWatcher struct {
 
 	// Popup area
 	popupRect clickRect
+
+	// Optional callback for clicks inside the popup (used for context menu)
+	insideCallback func(x, y int32)
 }
 
 // clickMsg message structure.
@@ -124,6 +127,20 @@ func (w *ClickOutsideWatcher) ClearPopupRect() {
 	w.mu.Unlock()
 }
 
+// SetInsideCallback sets a callback for left-clicks inside the popup area.
+func (w *ClickOutsideWatcher) SetInsideCallback(cb func(x, y int32)) {
+	w.mu.Lock()
+	w.insideCallback = cb
+	w.mu.Unlock()
+}
+
+// ClearInsideCallback removes the inside-click callback.
+func (w *ClickOutsideWatcher) ClearInsideCallback() {
+	w.mu.Lock()
+	w.insideCallback = nil
+	w.mu.Unlock()
+}
+
 func (w *ClickOutsideWatcher) run() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -167,21 +184,24 @@ func clickOutsideMouseProc(nCode int32, wParam uintptr, lParam uintptr) uintptr 
 		clickOutsideInstanceMu.Unlock()
 
 		if w != nil {
-			// Use GetPhysicalCursorPos to always get physical screen coordinates,
-			// matching the physical pixel coordinates stored in popupRect.
 			x, y := GetPhysicalCursorPos()
 
 			w.mu.Lock()
 			popupRect := w.popupRect
-			callback := w.callback
+			outsideCB := w.callback
+			insideCB := w.insideCallback
 			w.mu.Unlock()
 
-			// Check if click is outside popup
 			if popupRect.Right > popupRect.Left && popupRect.Bottom > popupRect.Top {
-				if x < popupRect.Left || x > popupRect.Right ||
-					y < popupRect.Top || y > popupRect.Bottom {
-					if callback != nil {
-						go callback(x, y)
+				inside := x >= popupRect.Left && x <= popupRect.Right &&
+					y >= popupRect.Top && y <= popupRect.Bottom
+				if inside {
+					if insideCB != nil {
+						go insideCB(x, y)
+					}
+				} else {
+					if outsideCB != nil {
+						go outsideCB(x, y)
 					}
 				}
 			}

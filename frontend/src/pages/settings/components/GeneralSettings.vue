@@ -104,9 +104,21 @@ interface DownloadProgress {
 }
 
 const toolDefs: ToolDef[] = [
-  { id: 'uv', nameKey: 'settings.general.toolchain.uv.name', descKey: 'settings.general.toolchain.uv.description' },
-  { id: 'bun', nameKey: 'settings.general.toolchain.bun.name', descKey: 'settings.general.toolchain.bun.description' },
-  { id: 'codex', nameKey: 'settings.general.toolchain.codex.name', descKey: 'settings.general.toolchain.codex.description' },
+  {
+    id: 'uv',
+    nameKey: 'settings.general.toolchain.uv.name',
+    descKey: 'settings.general.toolchain.uv.description',
+  },
+  {
+    id: 'bun',
+    nameKey: 'settings.general.toolchain.bun.name',
+    descKey: 'settings.general.toolchain.bun.description',
+  },
+  {
+    id: 'codex',
+    nameKey: 'settings.general.toolchain.codex.name',
+    descKey: 'settings.general.toolchain.codex.description',
+  },
 ]
 
 const toolStatuses = reactive<Record<string, ToolStatus>>({})
@@ -308,7 +320,8 @@ onUnmounted(() => {
               </div>
               <div class="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {{ formatFileSize(downloadProgress[tool.id].downloaded) }} / {{ formatFileSize(downloadProgress[tool.id].totalSize) }}
+                  {{ formatFileSize(downloadProgress[tool.id].downloaded) }} /
+                  {{ formatFileSize(downloadProgress[tool.id].totalSize) }}
                 </span>
                 <span v-if="downloadProgress[tool.id].remaining > 0">
                   {{ formatRemaining(downloadProgress[tool.id].remaining) }}
@@ -348,17 +361,10 @@ onUnmounted(() => {
 
           <!-- Install button -->
           <template v-else>
-            <span
-              v-if="installErrors[tool.id]"
-              class="text-xs text-destructive"
-            >
+            <span v-if="installErrors[tool.id]" class="text-xs text-destructive">
               {{ t('settings.general.toolchain.installFailed') }}
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              @click="handleInstall(tool.id)"
-            >
+            <Button size="sm" variant="outline" @click="handleInstall(tool.id)">
               <Download class="size-3.5" />
               {{ t('settings.general.toolchain.install') }}
             </Button>

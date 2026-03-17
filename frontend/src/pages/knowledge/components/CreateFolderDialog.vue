@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ChevronRight, LoaderCircle, Folder as FolderIcon, CheckCircle2, ChevronDown } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ChevronRight,
+  LoaderCircle,
+  Folder as FolderIcon,
+  CheckCircle2,
+  ChevronDown,
+} from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -34,9 +41,7 @@ const name = ref('')
 const saving = ref(false)
 const NAME_MAX_LEN = 50
 
-type Location =
-  | { kind: 'root' }
-  | { kind: 'folder'; id: number }
+type Location = { kind: 'root' } | { kind: 'folder'; id: number }
 
 const location = ref<Location>({ kind: 'root' })
 const selectedParent = ref<Location>({ kind: 'root' })
@@ -136,7 +141,11 @@ watch(
     }
     name.value = ''
     // 如果传入了默认父文件夹ID，则使用它；否则使用根目录
-    if (props.defaultParentId !== null && props.defaultParentId !== undefined && props.defaultParentId > 0) {
+    if (
+      props.defaultParentId !== null &&
+      props.defaultParentId !== undefined &&
+      props.defaultParentId > 0
+    ) {
       const defaultLocation = { kind: 'folder' as const, id: props.defaultParentId }
       location.value = defaultLocation
       selectedParent.value = defaultLocation
@@ -193,14 +202,16 @@ const selectedParentName = computed(() => {
   if (selectedParent.value.kind === 'root') {
     return t('knowledge.folder.rootFolder')
   }
-  return folderIndex.value.get(selectedParent.value.id)?.folder?.name ?? String(selectedParent.value.id)
+  return (
+    folderIndex.value.get(selectedParent.value.id)?.folder?.name ?? String(selectedParent.value.id)
+  )
 })
 
 // Handle double click to enter folder
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 const handleFolderClick = (folder: Folder) => {
   if (saving.value) return
-  
+
   // Single click: select as parent
   if (clickTimer === null) {
     clickTimer = setTimeout(() => {

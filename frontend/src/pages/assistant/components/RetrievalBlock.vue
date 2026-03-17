@@ -49,7 +49,9 @@ const memoryItems = computed(() => props.items.filter((i) => i.source === 'memor
           :key="'kb-' + idx"
           class="rounded-md border border-border/50 bg-background/30 p-2"
         >
-          <p class="whitespace-pre-wrap text-muted-foreground leading-relaxed">{{ item.content }}</p>
+          <p class="whitespace-pre-wrap text-muted-foreground leading-relaxed">
+            {{ item.content }}
+          </p>
         </div>
       </div>
     </div>
@@ -70,9 +72,7 @@ const memoryItems = computed(() => props.items.filter((i) => i.source === 'memor
         <span class="text-xs opacity-70">
           {{ t('assistant.chat.retrievalItems', { count: memoryItems.length }) }}
         </span>
-        <ChevronDown
-          :class="cn('size-4 transition-transform', memoryExpanded && 'rotate-180')"
-        />
+        <ChevronDown :class="cn('size-4 transition-transform', memoryExpanded && 'rotate-180')" />
       </button>
 
       <div v-if="memoryExpanded" class="mt-1 space-y-2 text-xs">
@@ -81,7 +81,9 @@ const memoryItems = computed(() => props.items.filter((i) => i.source === 'memor
           :key="'mem-' + idx"
           class="rounded-md border border-border/50 bg-background/30 p-2"
         >
-          <p class="whitespace-pre-wrap text-muted-foreground leading-relaxed">{{ item.content }}</p>
+          <p class="whitespace-pre-wrap text-muted-foreground leading-relaxed">
+            {{ item.content }}
+          </p>
         </div>
       </div>
     </div>
