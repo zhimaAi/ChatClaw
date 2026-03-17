@@ -480,6 +480,7 @@ onUnmounted(() => {
           v-if="isEditing"
           :initial-content="message.content"
           :initial-images="images"
+          :initial-files="fileAttachments"
           @save="handleSaveEdit"
           @cancel="handleCancelEdit"
         />

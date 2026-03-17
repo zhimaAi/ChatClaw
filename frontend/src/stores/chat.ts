@@ -443,14 +443,18 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    // Map new images to ImagePayload format (if they have different structure)
+    // Map new images to ImagePayload format (preserve all fields including file attachments)
     const newImagePayloads: ImagePayload[] =
       images?.map((img) => ({
+        id: img.id,
         kind: img.kind || 'image',
         source: img.source || 'inline_base64',
         mime_type: img.mime_type,
         base64: img.base64,
+        data_url: img.data_url,
         file_name: img.file_name,
+        file_path: img.file_path,
+        original_name: img.original_name,
         size: img.size,
       })) || []
 
