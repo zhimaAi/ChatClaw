@@ -33,6 +33,8 @@ import ChatModeSelector from './ChatModeSelector.vue'
 import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { isModelSelectionDisabled } from '@/lib/chatwikiModelAvailability'
 
 interface PendingImage {
   id: string
@@ -115,6 +117,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const isChatwikiBound = ref(true)
 
 function getDisplayModelName(model: Model): string {
   return model.name?.trim() || model.model_id?.trim() || '-'
@@ -381,6 +384,13 @@ const handleRemoveImage = (id: string) => {
 
 // Setup event listeners
 onMounted(() => {
+  void getChatwikiBinding()
+    .then((binding) => {
+      isChatwikiBound.value = Boolean(binding)
+    })
+    .catch(() => {
+      isChatwikiBound.value = false
+    })
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
   }
@@ -638,6 +648,12 @@ onUnmounted(() => {
                                   v-for="m in g.models"
                                   :key="pw.provider.provider_id + '::' + m.model_id"
                                   :value="pw.provider.provider_id + '::' + m.model_id"
+                                  :disabled="
+                                    isModelSelectionDisabled(
+                                      pw.provider.provider_id,
+                                      isChatwikiBound
+                                    )
+                                  "
                                 >
                                   <div class="flex items-center gap-2">
                                     <span>{{ getDisplayModelName(m) }}</span>

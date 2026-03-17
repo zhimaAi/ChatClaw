@@ -26,6 +26,13 @@ import type {
 } from '@bindings/chatclaw/internal/services/providers'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  clearUnavailableChatwikiSelection,
+  getFirstSelectableModelKey,
+  isModelSelectionDisabled,
+  isSelectionAvailable,
+} from '@/lib/chatwikiModelAvailability'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
@@ -34,6 +41,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
+const isChatwikiBound = ref(true)
 
 type Group = { provider: Provider; models: Model[] }
 const embeddingGroups = ref<Group[]>([])
@@ -82,16 +90,25 @@ const selectedProviderIsFree = computed(() => {
 const close = () => emit('update:open', false)
 
 const isEmbeddingSelectionAvailable = computed(() => {
-  const [pid, mid] = embeddingSelectedKey.value.split('::')
-  if (!pid || !mid) return false
-  const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
-  return !!provider?.models.some((m) => m.model_id === mid)
+  return isSelectionAvailable(
+    embeddingGroups.value.map((group) => ({
+      provider: group.provider,
+      model_groups: [{ type: 'embedding', models: group.models }],
+    })),
+    embeddingSelectedKey.value,
+    'embedding',
+    isChatwikiBound.value
+  )
 })
 
 const loadGroups = async () => {
   loading.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    isChatwikiBound.value = Boolean(binding)
     // 只使用"已启用"的供应商（已启动）
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
@@ -138,7 +155,16 @@ const loadCurrentSettings = async () => {
     const dim = d?.value || '1536'
     embeddingDimension.value = dim
     if (providerId && modelId) {
-      embeddingSelectedKey.value = `${providerId}::${modelId}`
+      embeddingSelectedKey.value = clearUnavailableChatwikiSelection(
+        `${providerId}::${modelId}`,
+        isChatwikiBound.value
+      )
+      if (!embeddingSelectedKey.value) {
+        await Promise.all([
+          SettingsService.SetValue('embedding_provider_id', ''),
+          SettingsService.SetValue('embedding_model_id', ''),
+        ])
+      }
     }
   } catch (error) {
     console.error('Failed to load embedding settings:', error)
@@ -148,11 +174,14 @@ const loadCurrentSettings = async () => {
 const ensureDefaultSelection = () => {
   // 已有选择且仍可用 -> 保持
   if (embeddingSelectedKey.value && isEmbeddingSelectionAvailable.value) return
-  const first = embeddingGroups.value[0]?.models[0]
-  const pid = embeddingGroups.value[0]?.provider.provider_id
-  if (first && pid) {
-    embeddingSelectedKey.value = `${pid}::${first.model_id}`
-  }
+  embeddingSelectedKey.value = getFirstSelectableModelKey(
+    embeddingGroups.value.map((group) => ({
+      provider: group.provider,
+      model_groups: [{ type: 'embedding', models: group.models }],
+    })),
+    'embedding',
+    isChatwikiBound.value
+  )
 }
 
 watch(
@@ -243,6 +272,9 @@ const handleSave = async () => {
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
+                  :disabled="
+                    isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)
+                  "
                 >
                   {{ getEmbeddingModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>

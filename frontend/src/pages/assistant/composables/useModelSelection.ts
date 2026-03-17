@@ -13,6 +13,11 @@ import {
   UpdateConversationInput,
 } from '@bindings/chatclaw/internal/services/conversations'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  getFirstSelectableModelKey,
+  isSelectionAvailable,
+} from '@/lib/chatwikiModelAvailability'
 
 export function useModelSelection() {
   const { t } = useI18n()
@@ -21,6 +26,7 @@ export function useModelSelection() {
 
   const providersWithModels = ref<ProviderWithModels[]>([])
   const selectedModelKey = ref('')
+  const isChatwikiBound = ref(true)
 
   const hasModels = computed(() => {
     return providersWithModels.value.some((pw) =>
@@ -53,7 +59,11 @@ export function useModelSelection() {
   const loadModels = async () => {
     try {
       console.info('[assistant][models] loadModels:start')
-      const providers = await ProvidersService.ListProviders()
+      const [providers, binding] = await Promise.all([
+        ProvidersService.ListProviders(),
+        getChatwikiBinding().catch(() => null),
+      ])
+      isChatwikiBound.value = Boolean(binding)
       console.info('[assistant][models] providers:list', {
         count: providers.length,
         providerIds: providers.map((p) => p.provider_id),
@@ -133,17 +143,9 @@ export function useModelSelection() {
       const conv = activeConversation
       if (conv?.llm_provider_id && conv?.llm_model_id) {
         const key = `${conv.llm_provider_id}::${conv.llm_model_id}`
-        // Verify the model still exists
-        for (const pw of providersWithModels.value) {
-          if (pw.provider.provider_id !== conv.llm_provider_id) continue
-          for (const group of pw.model_groups) {
-            if (group.type !== 'llm') continue
-            const found = group.models.find((m) => m.model_id === conv.llm_model_id)
-            if (found) {
-              selectedModelKey.value = key
-              return
-            }
-          }
+        if (isSelectionAvailable(providersWithModels.value, key, 'llm', isChatwikiBound.value)) {
+          selectedModelKey.value = key
+          return
         }
       }
     }
@@ -153,31 +155,19 @@ export function useModelSelection() {
     const agentModelId = activeAgent.default_llm_model_id
 
     if (agentProviderId && agentModelId) {
-      // Verify the model still exists
-      for (const pw of providersWithModels.value) {
-        if (pw.provider.provider_id !== agentProviderId) continue
-        for (const group of pw.model_groups) {
-          if (group.type !== 'llm') continue
-          const found = group.models.find((m) => m.model_id === agentModelId)
-          if (found) {
-            selectedModelKey.value = `${agentProviderId}::${agentModelId}`
-            return
-          }
-        }
-      }
-    }
-
-    // Fall back to first available LLM model
-    for (const pw of providersWithModels.value) {
-      for (const group of pw.model_groups) {
-        if (group.type !== 'llm' || group.models.length === 0) continue
-        const firstModel = group.models[0]
-        selectedModelKey.value = `${pw.provider.provider_id}::${firstModel.model_id}`
+      const key = `${agentProviderId}::${agentModelId}`
+      if (isSelectionAvailable(providersWithModels.value, key, 'llm', isChatwikiBound.value)) {
+        selectedModelKey.value = key
         return
       }
     }
 
-    selectedModelKey.value = ''
+    // Fall back to first available LLM model
+    selectedModelKey.value = getFirstSelectableModelKey(
+      providersWithModels.value,
+      'llm',
+      isChatwikiBound.value
+    )
   }
 
   const parseSelectedModelKey = (

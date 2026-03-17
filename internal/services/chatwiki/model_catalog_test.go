@@ -11,6 +11,48 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+func TestGetModelCatalogSource_UsesDefaultServerURLWithoutBinding(t *testing.T) {
+	source := getModelCatalogSource(nil)
+
+	if source.Bound {
+		t.Fatalf("expected unbound source, got %#v", source)
+	}
+	if source.ServerURL == "" {
+		t.Fatalf("expected default server url, got %#v", source)
+	}
+	if source.ServerURL != "https://cloud.chatwiki.com" && source.ServerURL != "http://dev13.zhima_chat_ai.applnk.cn" {
+		t.Fatalf("expected ChatWiki cloud url, got %#v", source)
+	}
+	if source.Token != "" {
+		t.Fatalf("expected empty token for unbound source, got %#v", source)
+	}
+}
+
+func TestGetModelCatalogSource_UsesBindingValuesWhenBound(t *testing.T) {
+	source := getModelCatalogSource(&Binding{
+		ServerURL: "https://example.com/openapi",
+		Token:     "token-123",
+		UserID:    "u1",
+	})
+
+	if !source.Bound {
+		t.Fatalf("expected bound source, got %#v", source)
+	}
+	if source.ServerURL != "https://example.com/openapi" {
+		t.Fatalf("unexpected source server url: %#v", source)
+	}
+	if source.Token != "token-123" {
+		t.Fatalf("unexpected source token: %#v", source)
+	}
+}
+
+func TestNormalizeManagementBaseURL_StripsOpenAPIPath(t *testing.T) {
+	got := normalizeManagementBaseURL("https://chatclaw.chatwiki.com/openapi")
+	if got != "https://chatclaw.chatwiki.com" {
+		t.Fatalf("expected normalized management base url, got %q", got)
+	}
+}
+
 func TestDecodeModelCatalogResponse_GroupsLLMAndEmbeddingOnly(t *testing.T) {
 	raw := json.RawMessage(`{
 		"res": 0,
@@ -125,6 +167,37 @@ func TestDecodeModelCatalogResponse_DetectsImageCapabilityFromInputImage(t *test
 	}
 }
 
+func TestDecodeModelCatalogResponse_DetectsFileCapabilityFromInputDocument(t *testing.T) {
+	raw := json.RawMessage(`{
+		"data": {
+			"language_models": [
+				{
+					"model_name": "qwen-long",
+					"type": "llm",
+					"enabled": 1,
+					"input_document": "1"
+				}
+			]
+		}
+	}`)
+
+	catalog, err := decodeModelCatalogResponse(raw)
+	if err != nil {
+		t.Fatalf("decodeModelCatalogResponse returned error: %v", err)
+	}
+
+	if len(catalog.LLMModels) != 1 {
+		t.Fatalf("expected one llm model, got %#v", catalog.LLMModels)
+	}
+
+	if len(catalog.LLMModels[0].Capabilities) != 2 {
+		t.Fatalf("expected text and file capabilities, got %#v", catalog.LLMModels[0].Capabilities)
+	}
+	if catalog.LLMModels[0].Capabilities[0] != "text" || catalog.LLMModels[0].Capabilities[1] != "file" {
+		t.Fatalf("expected file capability from input_document, got %#v", catalog.LLMModels[0].Capabilities)
+	}
+}
+
 func TestDecodeModelCatalogResponse_ExtractsSelfOwnedModelConfigID(t *testing.T) {
 	raw := json.RawMessage(`{
 		"data": {
@@ -226,6 +299,50 @@ func TestSyncModelCatalogToDB_RemovesStaleChatWikiModels(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected stale model to be removed, count=%d", count)
+	}
+}
+
+func TestSyncModelCatalogToDB_PersistsFileCapabilityFromInputDocument(t *testing.T) {
+	db := newChatWikiModelsTestDB(t)
+
+	catalog := &ModelCatalog{
+		LLMModels: []ModelCatalogItem{
+			{
+				ModelID:      "ignored-llm-id",
+				UniModelName: "qwen-long",
+				Name:         "Qwen Long",
+				Type:         "llm",
+				Enabled:      true,
+				Capabilities: []string{"text", "file"},
+			},
+		},
+	}
+
+	if err := syncModelCatalogToDB(context.Background(), db, "chatwiki", catalog); err != nil {
+		t.Fatalf("syncModelCatalogToDB returned error: %v", err)
+	}
+
+	type storedModel struct {
+		ModelID      string `bun:"model_id"`
+		Capabilities string `bun:"capabilities"`
+	}
+
+	var model storedModel
+	if err := db.NewSelect().
+		Table("models").
+		Column("model_id", "capabilities").
+		Where("provider_id = ?", "chatwiki").
+		Where("model_id = ?", "qwen-long").
+		Limit(1).
+		Scan(context.Background(), &model); err != nil {
+		t.Fatalf("select synced model: %v", err)
+	}
+
+	if model.ModelID != "qwen-long" {
+		t.Fatalf("unexpected synced model id: %#v", model)
+	}
+	if model.Capabilities != `["text","file"]` {
+		t.Fatalf("expected file capability to persist, got %#v", model)
 	}
 }
 

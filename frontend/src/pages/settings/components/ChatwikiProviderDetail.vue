@@ -224,7 +224,7 @@ async function loadCatalog(forceRefresh = false, silent = false) {
 
   try {
     modelCatalog.value = forceRefresh
-      ? ((await ChatWikiService.RefreshModelCatalog()) ?? null)
+      ? ((await ChatWikiService.GetModelCatalog(true)) ?? null)
       : ((await ChatWikiService.GetModelCatalog(false)) ?? null)
     hasLoadedCatalogOnce.value = true
   } catch (error) {
@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
       >
         <div>
           <p class="text-base font-semibold text-foreground">
-            {{ providerWithModels.provider.name }}
+            {{ providerWithModels.provider.name }}{{ isBound ? '' : '（未登录）' }}
           </p>
         </div>
         <Switch
@@ -436,20 +436,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else-if="!isBound"
-          class="px-5 py-10 text-center text-sm text-muted-foreground"
-        >
-          {{ t('settings.chatwiki.modelLoginHint') }}
-        </div>
-
-        <div
-          v-else-if="modelGroups.length === 0"
+          v-if="!loadingBinding && !loadingCatalog && modelGroups.length === 0"
           class="px-5 py-10 text-center text-sm text-muted-foreground"
         >
           {{ t('settings.modelService.noModels') }}
         </div>
 
-        <div v-else class="flex flex-col gap-4">
+        <div v-else-if="!loadingBinding && !loadingCatalog" class="flex flex-col gap-4">
           <div
             v-for="group in modelGroups"
             :key="group.type"

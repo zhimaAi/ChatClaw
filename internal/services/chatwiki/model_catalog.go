@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
@@ -41,6 +42,13 @@ type ModelCatalog struct {
 	EmbeddingModels []ModelCatalogItem `json:"embedding_models"`
 	RerankModels    []ModelCatalogItem `json:"rerank_models"`
 	IntegralStats   *IntegralStats     `json:"integral_stats,omitempty"`
+}
+
+type modelCatalogSource struct {
+	ServerURL string
+	Token     string
+	UserID    string
+	Bound     bool
 }
 
 var (
@@ -77,6 +85,23 @@ func chatWikiChatCompletionsURL(serverURL string) string {
 	return baseURL + "/chat/completions"
 }
 
+func getModelCatalogSource(binding *Binding) modelCatalogSource {
+	if binding == nil {
+		return modelCatalogSource{
+			ServerURL: strings.TrimSpace(define.GetChatWikiCloudURL()),
+			Token:     "",
+			UserID:    "",
+			Bound:     false,
+		}
+	}
+	return modelCatalogSource{
+		ServerURL: strings.TrimSpace(binding.ServerURL),
+		Token:     strings.TrimSpace(binding.Token),
+		UserID:    binding.UserID,
+		Bound:     true,
+	}
+}
+
 func (s *ChatWikiService) SyncProviderState() error {
 	s.app.Logger.Info("[chatwiki] SyncProviderState start")
 	binding, err := s.GetBinding()
@@ -88,11 +113,6 @@ func (s *ChatWikiService) SyncProviderState() error {
 	if err != nil {
 		s.app.Logger.Error("[chatwiki] SyncProviderState sync credentials failed", "has_binding", binding != nil, "error", err)
 		return err
-	}
-	if binding == nil {
-		if err := clearSyncedModelCatalogFromDB(context.Background(), sqlite.DB(), "chatwiki"); err != nil {
-			s.app.Logger.Warn("[chatwiki] SyncProviderState clear synced models failed", "error", err)
-		}
 	}
 	s.app.Logger.Info("[chatwiki] SyncProviderState done",
 		"has_binding", binding != nil,
@@ -120,6 +140,8 @@ func syncChatWikiProviderCredentials(binding *Binding) error {
 	if binding != nil {
 		apiKey = strings.TrimSpace(binding.Token)
 		apiEndpoint = chatWikiOpenAIBaseURL(binding.ServerURL)
+	} else {
+		apiEndpoint = chatWikiOpenAIBaseURL(define.ServerURL)
 	}
 
 	_, err := db.NewUpdate().
@@ -143,23 +165,13 @@ func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
 		s.app.Logger.Error("[chatwiki] RefreshModelCatalog sync credentials failed", "has_binding", binding != nil, "error", err)
 		return nil, err
 	}
-	if binding == nil {
-		empty := &ModelCatalog{Bound: false, LoadedAtUnix: time.Now().Unix()}
-		if err := clearSyncedModelCatalogFromDB(context.Background(), sqlite.DB(), "chatwiki"); err != nil {
-			s.app.Logger.Warn("[chatwiki] RefreshModelCatalog clear synced models failed", "error", err)
-		}
-		modelCatalogMu.Lock()
-		modelCatalogCache = empty
-		modelCatalogMu.Unlock()
-		s.app.Logger.Warn("[chatwiki] RefreshModelCatalog no binding, returning empty catalog")
-		return cloneModelCatalog(empty), nil
-	}
-
-	catalog, err := s.fetchModelCatalog(binding)
+	source := getModelCatalogSource(binding)
+	catalog, err := s.fetchModelCatalog(source)
 	if err != nil {
 		s.app.Logger.Error("[chatwiki] RefreshModelCatalog fetch failed",
-			"server_url", strings.TrimSpace(binding.ServerURL),
-			"user_id", binding.UserID,
+			"server_url", source.ServerURL,
+			"user_id", source.UserID,
+			"bound", source.Bound,
 			"error", err,
 		)
 		modelCatalogMu.RLock()
@@ -179,8 +191,9 @@ func (s *ChatWikiService) RefreshModelCatalog() (*ModelCatalog, error) {
 	modelCatalogCache = cloneModelCatalog(catalog)
 	modelCatalogMu.Unlock()
 	s.app.Logger.Info("[chatwiki] RefreshModelCatalog done",
-		"user_id", binding.UserID,
-		"server_url", strings.TrimSpace(binding.ServerURL),
+		"user_id", source.UserID,
+		"server_url", source.ServerURL,
+		"bound", source.Bound,
 		"llm_count", len(catalog.LLMModels),
 		"embedding_count", len(catalog.EmbeddingModels),
 		"rerank_count", len(catalog.RerankModels),
@@ -224,19 +237,20 @@ func cloneModelCatalog(in *ModelCatalog) *ModelCatalog {
 	return &out
 }
 
-func (s *ChatWikiService) fetchModelCatalog(binding *Binding) (*ModelCatalog, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(binding.ServerURL), "/")
+func (s *ChatWikiService) fetchModelCatalog(source modelCatalogSource) (*ModelCatalog, error) {
+	baseURL := normalizeManagementBaseURL(source.ServerURL)
 	modelURL := baseURL + "/manage/chatclaw/showModelConfigList"
 	statsURL := baseURL + "/manage/chatclaw/getIntegralStats"
 	s.app.Logger.Info("[chatwiki] fetchModelCatalog request start",
 		"server_url", baseURL,
 		"model_url", modelURL,
 		"stats_url", statsURL,
-		"token_len", len(strings.TrimSpace(binding.Token)),
-		"user_id", binding.UserID,
+		"token_len", len(strings.TrimSpace(source.Token)),
+		"user_id", source.UserID,
+		"bound", source.Bound,
 	)
 
-	modelBody, err := s.chatWikiGETLoose(binding.Token, modelURL)
+	modelBody, err := s.chatWikiGETLoose(source.Token, modelURL)
 	if err != nil {
 		s.app.Logger.Error("[chatwiki] fetchModelCatalog model request failed", "url", modelURL, "error", err)
 		return nil, err
@@ -261,20 +275,22 @@ func (s *ChatWikiService) fetchModelCatalog(binding *Binding) (*ModelCatalog, er
 		"rerank_count", len(catalog.RerankModels),
 	)
 
-	statsBody, statsErr := s.chatWikiGETLoose(binding.Token, statsURL)
-	if statsErr == nil {
-		catalog.IntegralStats = &IntegralStats{Raw: append(json.RawMessage(nil), statsBody...)}
-		s.app.Logger.Info("[chatwiki] fetchModelCatalog stats response",
-			"url", statsURL,
-			"body_len", len(statsBody),
-			"body_preview", previewChatWikiLogBody(statsBody),
-		)
-	} else {
-		s.app.Logger.Warn("[chatwiki] fetchModelCatalog stats request failed", "url", statsURL, "error", statsErr)
+	if source.Bound {
+		statsBody, statsErr := s.chatWikiGETLoose(source.Token, statsURL)
+		if statsErr == nil {
+			catalog.IntegralStats = &IntegralStats{Raw: append(json.RawMessage(nil), statsBody...)}
+			s.app.Logger.Info("[chatwiki] fetchModelCatalog stats response",
+				"url", statsURL,
+				"body_len", len(statsBody),
+				"body_preview", previewChatWikiLogBody(statsBody),
+			)
+		} else {
+			s.app.Logger.Warn("[chatwiki] fetchModelCatalog stats request failed", "url", statsURL, "error", statsErr)
+		}
 	}
 
-	catalog.Bound = true
-	catalog.BindingUserID = binding.UserID
+	catalog.Bound = source.Bound
+	catalog.BindingUserID = source.UserID
 	catalog.LoadedAtUnix = time.Now().Unix()
 	return catalog, nil
 }
@@ -387,8 +403,13 @@ func parseModelCatalogItem(item map[string]any, keyHint string) (ModelCatalogIte
 	}
 
 	capabilities := []string{"text"}
-	if modelType == "llm" && modelSupportsImage(item) {
-		capabilities = []string{"text", "image"}
+	if modelType == "llm" {
+		if modelSupportsImage(item) {
+			capabilities = appendCapability(capabilities, "image")
+		}
+		if modelSupportsFile(item) {
+			capabilities = appendCapability(capabilities, "file")
+		}
 	}
 
 	return ModelCatalogItem{
@@ -477,6 +498,42 @@ func modelSupportsImage(item map[string]any) bool {
 		}
 	}
 	return false
+}
+
+func modelSupportsFile(item map[string]any) bool {
+	if parseFlexibleBool(item, false, "input_document", "inputDocument", "support_document", "supportDocument", "document", "file") {
+		return true
+	}
+	for _, key := range []string{"capabilities", "ability", "input_type", "input_types", "support_type"} {
+		raw, ok := item[key]
+		if !ok || raw == nil {
+			continue
+		}
+		switch v := raw.(type) {
+		case string:
+			lower := strings.ToLower(v)
+			if strings.Contains(lower, "document") || strings.Contains(lower, "file") {
+				return true
+			}
+		case []any:
+			for _, entry := range v {
+				lower := strings.ToLower(fmt.Sprintf("%v", entry))
+				if strings.Contains(lower, "document") || strings.Contains(lower, "file") {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func appendCapability(capabilities []string, capability string) []string {
+	for _, existing := range capabilities {
+		if existing == capability {
+			return capabilities
+		}
+	}
+	return append(capabilities, capability)
 }
 
 type syncedModelRow struct {

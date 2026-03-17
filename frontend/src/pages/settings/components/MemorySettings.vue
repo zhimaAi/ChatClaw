@@ -30,12 +30,18 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { Provider, Model } from '@bindings/chatclaw/internal/services/providers'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  clearUnavailableChatwikiSelection,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
 const showRebuildConfirm = ref(false)
+const isChatwikiBound = ref(true)
 
 const memoryEnabled = ref(false)
 const extractSelectedKey = ref('')
@@ -53,7 +59,11 @@ const embeddingGroups = ref<Group[]>([])
 const loadData = async () => {
   loading.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    isChatwikiBound.value = Boolean(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     
     const details = await Promise.all(
@@ -101,19 +111,42 @@ const loadData = async () => {
 
     memoryEnabled.value = enabled?.value === 'true'
     
-    if (extProv?.value && extMod?.value) {
-      extractSelectedKey.value = `${extProv.value}::${extMod.value}`
-    }
-    
-    if (embProv?.value && embMod?.value) {
-      const key = `${embProv.value}::${embMod.value}`
+    const nextExtractKey = clearUnavailableChatwikiSelection(
+      extProv?.value && extMod?.value ? `${extProv.value}::${extMod.value}` : '',
+      isChatwikiBound.value
+    )
+    extractSelectedKey.value = nextExtractKey
+
+    const nextEmbeddingKey = clearUnavailableChatwikiSelection(
+      embProv?.value && embMod?.value ? `${embProv.value}::${embMod.value}` : '',
+      isChatwikiBound.value
+    )
+    if (nextEmbeddingKey) {
+      const key = nextEmbeddingKey
       embeddingSelectedKey.value = key
       savedEmbeddingKey.value = key
+    } else {
+      embeddingSelectedKey.value = ''
+      savedEmbeddingKey.value = ''
     }
     
     if (embDim?.value) {
       embeddingDimension.value = embDim.value
       savedEmbeddingDimension.value = embDim.value
+    }
+
+    if (
+      (extProv?.value && extMod?.value && !nextExtractKey) ||
+      (embProv?.value && embMod?.value && !nextEmbeddingKey)
+    ) {
+      await SettingsService.UpdateMemorySettings({
+        enabled: enabled?.value === 'true',
+        extract_provider_id: nextExtractKey ? nextExtractKey.split('::')[0] : '',
+        extract_model_id: nextExtractKey ? nextExtractKey.split('::')[1] : '',
+        embedding_provider_id: nextEmbeddingKey ? nextEmbeddingKey.split('::')[0] : '',
+        embedding_model_id: nextEmbeddingKey ? nextEmbeddingKey.split('::')[1] : '',
+        embedding_dimension: Number.parseInt(embDim?.value || '1536', 10),
+      })
     }
 
   } catch (error) {
@@ -232,7 +265,7 @@ function isProviderFree(g: Group): boolean {
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`">
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
                   {{ m.name }}
                 </SelectItem>
               </SelectGroup>
@@ -258,7 +291,7 @@ function isProviderFree(g: Group): boolean {
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`">
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)">
                   {{ m.name }}
                 </SelectItem>
               </SelectGroup>

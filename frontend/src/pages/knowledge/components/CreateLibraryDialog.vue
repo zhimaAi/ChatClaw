@@ -30,6 +30,10 @@ import { ProvidersService } from '@bindings/chatclaw/internal/services/providers
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, CreateLibraryInput } from '@bindings/chatclaw/internal/services/library'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import {
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 const props = defineProps<{
   open: boolean
@@ -47,6 +51,7 @@ const isSubmitting = ref(false)
 const loadingEmbedding = ref(false)
 const loadingProviders = ref(false)
 const embeddingReady = ref(false)
+const isChatwikiBound = ref(true)
 
 const name = ref('')
 const NAME_MAX_LEN = 30
@@ -125,7 +130,11 @@ const loadEmbeddingReady = async () => {
 const loadProviders = async () => {
   loadingProviders.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    isChatwikiBound.value = Boolean(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
@@ -303,6 +312,7 @@ const handleSubmit = async () => {
                     v-for="m in g.models"
                     :key="`${g.provider.provider_id}::${m.model_id}`"
                     :value="`${g.provider.provider_id}::${m.model_id}`"
+                    :disabled="isModelSelectionDisabled(g.provider.provider_id, isChatwikiBound)"
                   >
                     {{ m.name }}
                   </SelectItem>
