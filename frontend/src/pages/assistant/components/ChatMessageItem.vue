@@ -2,7 +2,7 @@
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil, Copy, Check, AlertCircle, ChevronDown, ChevronUp, SendHorizontal, Type, ShieldCheck, Monitor } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { MessageStatus, MessageRole, type ToolCallInfo, type MessageSegment } from '@/stores'
@@ -248,7 +248,7 @@ const errorMessageKey = computed(() => {
 
 const handleCopy = async () => {
   try {
-    await navigator.clipboard.writeText(displayContent.value)
+    await copyToClipboard(displayContent.value)
     copied.value = true
     window.setTimeout(() => {
       copied.value = false

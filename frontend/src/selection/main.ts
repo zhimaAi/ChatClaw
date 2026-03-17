@@ -9,7 +9,7 @@ import '../assets/index.css'
 async function bootstrap() {
   // Init i18n with backend locale (same as main window)
   const locale = await fetchLocale()
-  const i18n = initI18n(locale)
+  const i18n = await initI18n(locale)
 
   const app = createApp(App)
   const pinia = createPinia()
