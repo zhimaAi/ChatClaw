@@ -54,6 +54,10 @@ type activeGeneration struct {
 	agentCleanup func() // deferred agent cleanup, held during interrupt
 }
 
+// ChunkCallback is called each time a new content chunk is appended during streaming.
+// accumulated is the full assistant content generated so far (not just the delta).
+type ChunkCallback func(accumulated string)
+
 // ChatService handles chat operations
 type ChatService struct {
 	app                *application.App
@@ -64,6 +68,7 @@ type ChatService struct {
 	extraToolFactories []func() ([]tool.BaseTool, error)
 	activeGenerations  sync.Map // map[int64]*activeGeneration
 	gateway            *channels.Gateway
+	chunkCallbacks     sync.Map // map[int64]ChunkCallback — per-conversation streaming sinks
 }
 
 // NewChatService creates a new ChatService
@@ -229,6 +234,19 @@ func (s *inMemoryCheckPointStore) Set(_ context.Context, id string, data []byte)
 // the Gateway is created after the ChatService.
 func (s *ChatService) SetGateway(gw *channels.Gateway) {
 	s.gateway = gw
+}
+
+// RegisterChunkCallback registers a callback that is invoked on every content
+// chunk emitted during streaming for the given conversation.
+// The callback receives the full accumulated content (not just the delta).
+// Only one callback per conversation is supported; registering again overwrites.
+func (s *ChatService) RegisterChunkCallback(conversationID int64, cb ChunkCallback) {
+	s.chunkCallbacks.Store(conversationID, cb)
+}
+
+// UnregisterChunkCallback removes the streaming chunk callback for a conversation.
+func (s *ChatService) UnregisterChunkCallback(conversationID int64) {
+	s.chunkCallbacks.Delete(conversationID)
 }
 
 // Shutdown cleans up all resources held by the ChatService, including

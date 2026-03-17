@@ -30,15 +30,15 @@ const (
 // ImagePayload describes a single image attached to a message.
 type ImagePayload struct {
 	ID       string `json:"id,omitempty"`
-	Kind     string `json:"kind"`                 // "image"
-	Source   string `json:"source"`               // "inline_base64" or "local_file"
+	Kind     string `json:"kind"`   // "image"
+	Source   string `json:"source"` // "inline_base64" or "local_file"
 	MimeType string `json:"mime_type"`
-	Base64   string `json:"base64"`               // without "data:" prefix
-	DataURL  string `json:"data_url,omitempty"`   // optional convenience field for frontend
+	Base64   string `json:"base64"`             // without "data:" prefix
+	DataURL  string `json:"data_url,omitempty"` // optional convenience field for frontend
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
 	FileName string `json:"file_name,omitempty"`
-	FilePath string `json:"file_path,omitempty"`   // local file path when saved to work dir
+	FilePath string `json:"file_path,omitempty"` // local file path when saved to work dir
 	Size     int64  `json:"size,omitempty"`
 }
 
@@ -59,7 +59,7 @@ type Message struct {
 	ToolCallID      string    `json:"tool_call_id,omitempty"`
 	ToolCallName    string    `json:"tool_call_name,omitempty"`
 	ThinkingContent string    `json:"thinking_content,omitempty"`
-	Segments        string    `json:"segments,omitempty"` // JSON array for interleaved content/tool-call order
+	Segments        string    `json:"segments,omitempty"`    // JSON array for interleaved content/tool-call order
 	ImagesJSON      string    `json:"images_json,omitempty"` // raw JSON string of []ImagePayload
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`

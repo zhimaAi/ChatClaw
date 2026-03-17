@@ -55,6 +55,7 @@ type dingTalkSenderInput struct {
 	Content   string `json:"content"`
 	PicURL    string `json:"pic_url"`   // public HTTPS URL for image messages
 	FilePath  string `json:"file_path"` // local file path for upload + file reply
+	SendMode  string `json:"send_mode"` // "typewriter" (default) or "normal"
 }
 
 var dingtalkImageExts = map[string]struct{}{
@@ -77,11 +78,15 @@ func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		"Supports sending to group conversations or individual users by conversationId. " +
 		"For text: provide content as plain text (sent as Markdown) or JSON with msg_type (text/markdown). " +
 		"For images: provide pic_url with a public HTTPS image URL (sent as sampleImageMsg). " +
-		"For files: provide file_path; the tool uploads media to DingTalk then sends a file message."
+		"For files: provide file_path; the tool uploads media to DingTalk then sends a file message. " +
+		"By default text messages use typewriter mode (animated streaming card). " +
+		"Use send_mode=normal for short acknowledgments, simple replies, or when animation is not appropriate."
 	descZH := "通过已连接的钉钉渠道发送消息、图片或文件。支持发送到群聊或个人会话（通过 conversationId）。" +
 		"发送文本：content 可以是纯文本（自动以 Markdown 格式发送）或包含 msg_type（text/markdown）的 JSON。" +
 		"发送图片：提供 pic_url（公开 HTTPS 图片地址），以 sampleImageMsg 类型发送。" +
-		"发送文件：提供 file_path，本工具会先上传到钉钉再发送文件消息。"
+		"发送文件：提供 file_path，本工具会先上传到钉钉再发送文件消息。" +
+		"文本消息默认使用打字机模式（动画流式卡片）。" +
+		"对于简短回复、确认消息或不适合动画的场景，使用 send_mode=normal 发送普通消息。"
 
 	channelIDDescEN := "The channel ID of the connected DingTalk channel to use for sending."
 	channelIDDescZH := "用于发送的已连接钉钉渠道 ID。"
@@ -137,6 +142,13 @@ func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 					"本地文件路径。工具会先调用钉钉媒体上传接口，再以文件消息发送到目标会话。",
 				),
 			},
+			"send_mode": {
+				Type: schema.String,
+				Desc: selectDesc(
+					"Message send mode. 'typewriter' (default): animated streaming card that reveals text progressively — ideal for AI-generated long replies. 'normal': instant webhook message — use for short acknowledgments, one-word answers, images, or files.",
+					"消息发送模式。'typewriter'（默认）：打字机动画流式卡片，逐步展示文字，适合 AI 生成的长篇回复。'normal'：即时 webhook 消息，适用于简短确认、单字回复、图片或文件。",
+				),
+			},
 		}),
 	}, nil
 }
@@ -156,10 +168,14 @@ func (t *dingTalkSenderTool) InvokableRun(ctx context.Context, argsJSON string, 
 	}
 
 	// Priority order:
-	// 1) When pic_url/file_path exists, compose one markdown message with attachments.
-	// 2) Otherwise send content as text/markdown.
+	// 1) When pic_url/file_path exists, always use normal mode (images/files can't go into cards).
+	// 2) When send_mode is "typewriter" and content is text-only, use streaming card.
+	// 3) Otherwise send content as text/markdown via webhook.
 	if in.PicURL != "" || in.FilePath != "" {
 		return t.sendMarkdownWithAttachments(ctx, adapter, in)
+	}
+	if in.SendMode == "typewriter" {
+		return t.sendTypewriter(ctx, adapter, in)
 	}
 	return t.sendTextOrMarkdown(ctx, adapter, in)
 }
@@ -184,6 +200,10 @@ func (t *dingTalkSenderTool) parseAndResolveInput(argsJSON string) (dingTalkSend
 	in.TargetID = strings.TrimSpace(in.TargetID)
 	in.PicURL = strings.TrimSpace(in.PicURL)
 	in.FilePath = strings.TrimSpace(in.FilePath)
+	in.SendMode = strings.ToLower(strings.TrimSpace(in.SendMode))
+	if in.SendMode == "" {
+		in.SendMode = "typewriter"
+	}
 
 	return in, nil
 }
@@ -408,6 +428,30 @@ func (t *dingTalkSenderTool) sendTextOrMarkdown(ctx context.Context, adapter cha
 		return fmt.Sprintf("Error: failed to send message: %s", err.Error()), nil
 	}
 	return fmt.Sprintf("Message sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
+}
+
+// sendTypewriter sends a text message using the streaming interactive card (typewriter mode).
+// It falls back to normal webhook delivery if the adapter is not a DingTalkAdapter or if
+// the conversation metadata (type/staffId) is not yet cached.
+func (t *dingTalkSenderTool) sendTypewriter(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
+	dingAdapter, ok := adapter.(*channels.DingTalkAdapter)
+	if !ok {
+		slog.Warn("[dingtalk_sender] typewriter mode requires DingTalkAdapter, falling back to normal",
+			"channel_id", in.ChannelID,
+		)
+		return t.sendTextOrMarkdown(ctx, adapter, in)
+	}
+
+	if err := dingAdapter.SendStreamingCard(ctx, in.TargetID, in.Content); err != nil {
+		slog.Error("[dingtalk_sender] typewriter send failed, falling back to normal",
+			"channel_id", in.ChannelID,
+			"target_id", in.TargetID,
+			"error", err,
+		)
+		// Graceful fallback: deliver via webhook so the message is never lost.
+		return t.sendTextOrMarkdown(ctx, adapter, in)
+	}
+	return fmt.Sprintf("Message sent successfully (typewriter mode) to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
 }
 
 func sendDingTalkPayload(ctx context.Context, adapter channels.PlatformAdapter, channelID int64, targetID string, payload string) error {

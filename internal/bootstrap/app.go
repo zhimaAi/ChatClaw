@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"chatclaw/internal/deeplink"
@@ -47,8 +48,8 @@ import (
 	"chatclaw/pkg/winutil"
 
 	"github.com/cloudwego/eino/adk"
-	"github.com/uptrace/bun"
 	"github.com/cloudwego/eino/components/tool"
+	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -766,12 +767,46 @@ func handleChannelMessage(
 		"agent_id": agentID,
 	})
 
+	// Check for quick-mode prefix: "/q " or "/quick " forces non-streaming reply for this message.
+	// Useful when the user wants an instant, one-shot response without the typewriter animation.
+	useQuickMode := false
+	for _, prefix := range []string{"/q ", "/quick "} {
+		if strings.HasPrefix(strings.ToLower(textContent), prefix) {
+			textContent = strings.TrimSpace(textContent[len(prefix):])
+			useQuickMode = true
+			break
+		}
+	}
+
 	// Prepend sender name so the AI can distinguish who sent the message in a group chat.
 	aiContent := textContent
 	if msg.SenderName != "" {
 		aiContent = fmt.Sprintf("%s：%s", msg.SenderName, textContent)
 	}
 
+	// DingTalk: use real-time streaming interactive card by default.
+	// Tokens are pushed to the card as the AI generates them instead of waiting for the full response.
+	// Pass useQuickMode=true (via /q or /quick prefix) to bypass streaming and send a plain reply.
+	if msg.Platform == channels.PlatformDingTalk {
+		replyTarget := msg.ChatID
+		if replyTarget == "" {
+			replyTarget = msg.SenderID
+		}
+		if replyTarget != "" {
+			if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
+				if dingAdapter, ok := adapter.(*channels.DingTalkAdapter); ok {
+					if useQuickMode {
+						runNormalDingTalkReply(app, chatService, convService, db, dingAdapter, msg, agentID, conv.ID, replyTarget, aiContent)
+					} else {
+						runDingTalkStreamingReply(app, chatService, convService, db, dingAdapter, msg, agentID, conv.ID, replyTarget, aiContent)
+					}
+					return
+				}
+			}
+		}
+	}
+
+	// ---- Generic (non-DingTalk streaming) path ----
 	// Wait for the full response to be generated so we can send it back to the channel.
 	// We want the frontend to show the streaming process, so we use SendMessage
 	// which creates a normal streaming context. We wait for it to complete.
@@ -857,6 +892,239 @@ func handleChannelMessage(
 	}
 
 	sendReply(finalResponse)
+}
+
+// runDingTalkStreamingReply handles the DingTalk-specific real-time streaming reply path.
+// It creates an interactive card immediately, then updates it in real-time as the AI generates
+// tokens, delivering a typewriter effect without waiting for the full response.
+func runDingTalkStreamingReply(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	db *bun.DB,
+	dingAdapter *channels.DingTalkAdapter,
+	msg channels.IncomingMessage,
+	agentID int64,
+	convID int64,
+	replyTarget string,
+	aiContent string,
+) {
+	// Generate a unique card instance ID.
+	cardBizID := generateCardBizID()
+
+	// Send the initial card placeholder with a cursor.
+	cardCtx, cardCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err := dingAdapter.SendInteractiveCard(cardCtx, replyTarget, cardBizID, channels.BuildStreamingCardData("▌"))
+	cardCancel()
+	if err != nil {
+		app.Logger.Warn("[channel] DingTalk streaming card create failed, falling back to normal webhook",
+			"channel_id", msg.ChannelID,
+			"target", replyTarget,
+			"error", err,
+		)
+		// Graceful fallback: run normal blocking generation + webhook reply.
+		runNormalDingTalkReply(app, chatService, convService, db, dingAdapter, msg, agentID, convID, replyTarget, aiContent)
+		return
+	}
+
+	// Debounced card updater: flush latest accumulated text to DingTalk at most every 300ms.
+	// This avoids spamming the interactive card update API while still providing a real-time feel.
+	var (
+		mu         sync.Mutex
+		latestText string
+	)
+	flushCh := make(chan struct{})
+
+	chatService.RegisterChunkCallback(convID, func(accumulated string) {
+		mu.Lock()
+		latestText = accumulated
+		mu.Unlock()
+	})
+
+	go func() {
+		ticker := time.NewTicker(300 * time.Millisecond)
+		defer ticker.Stop()
+		var lastSent string
+		for {
+			select {
+			case <-ticker.C:
+				mu.Lock()
+				text := latestText
+				mu.Unlock()
+				if text != lastSent && text != "" {
+					lastSent = text
+					updateCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+					_ = dingAdapter.UpdateInteractiveCard(updateCtx, cardBizID,
+						channels.BuildStreamingCardData(text+"▌"))
+					cancel()
+				}
+			case <-flushCh:
+				return
+			}
+		}
+	}()
+
+	// Start AI generation.
+	res, genErr := chatService.SendMessage(chat.SendMessageInput{
+		ConversationID: convID,
+		Content:        aiContent,
+		TabID:          "channel_backend",
+	})
+	if genErr != nil {
+		close(flushCh)
+		chatService.UnregisterChunkCallback(convID)
+		app.Logger.Error("[channel] DingTalk AI generation failed to start",
+			"channel_id", msg.ChannelID, "conv", convID, "error", genErr)
+		failCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		_ = dingAdapter.UpdateInteractiveCard(failCtx, cardBizID,
+			channels.BuildStreamingCardData(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": genErr})))
+		cancel()
+		return
+	}
+
+	// Notify frontend of the new user message.
+	app.Event.Emit("chat:messages-changed", map[string]any{"conversation_id": convID})
+
+	// Wait for the AI generation to finish.
+	_ = chatService.WaitForGeneration(convID, res.RequestID)
+
+	// Stop the debounced updater goroutine.
+	close(flushCh)
+	chatService.UnregisterChunkCallback(convID)
+
+	// Fetch the final assistant message.
+	var assistantMsg struct {
+		Content string `bun:"content"`
+	}
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer fetchCancel()
+	dbErr := db.NewSelect().
+		Table("messages").
+		Column("content").
+		Where("conversation_id = ?", convID).
+		Where("role = ?", "assistant").
+		Where("status = ?", "success").
+		Where("TRIM(content) <> ''").
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(fetchCtx, &assistantMsg)
+	if errors.Is(dbErr, sql.ErrNoRows) {
+		_ = db.NewSelect().
+			Table("messages").
+			Column("content").
+			Where("conversation_id = ?", convID).
+			Where("role = ?", "assistant").
+			OrderExpr("id DESC").
+			Limit(1).
+			Scan(fetchCtx, &assistantMsg)
+	}
+	finalResponse := strings.TrimSpace(assistantMsg.Content)
+
+	// Final card update: complete content, no cursor.
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer updateCancel()
+	if finalResponse != "" {
+		if updateErr := dingAdapter.UpdateInteractiveCard(updateCtx, cardBizID,
+			channels.BuildStreamingCardData(finalResponse)); updateErr != nil {
+			app.Logger.Error("[channel] DingTalk final card update failed, trying webhook fallback",
+				"channel_id", msg.ChannelID, "error", updateErr)
+			// Best-effort webhook fallback so the message is never lost.
+			fallbackCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_ = dingAdapter.SendMessage(fallbackCtx, replyTarget, finalResponse)
+			cancel()
+		}
+	} else {
+		app.Logger.Warn("[channel] DingTalk: empty AI response", "conv", convID)
+		_ = dingAdapter.UpdateInteractiveCard(updateCtx, cardBizID,
+			channels.BuildStreamingCardData(i18n.T("error.channel_ai_reply_empty")))
+	}
+
+	// Update conversation metadata and notify the frontend.
+	_, _ = convService.UpdateConversation(convID, conversations.UpdateConversationInput{
+		LastMessage: &finalResponse,
+	})
+	app.Event.Emit("conversations:changed", map[string]any{"agent_id": agentID})
+	app.Event.Emit("chat:messages-changed", map[string]any{"conversation_id": convID})
+
+	app.Logger.Info("[channel] DingTalk streaming reply completed",
+		"channel_id", msg.ChannelID,
+		"conv", convID,
+		"response_len", len(finalResponse),
+	)
+}
+
+// runNormalDingTalkReply is the fallback path when the streaming card cannot be created.
+// It runs the same blocking generation + webhook reply used by other platforms.
+func runNormalDingTalkReply(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	db *bun.DB,
+	dingAdapter *channels.DingTalkAdapter,
+	msg channels.IncomingMessage,
+	agentID int64,
+	convID int64,
+	replyTarget string,
+	aiContent string,
+) {
+	res, genErr := chatService.SendMessage(chat.SendMessageInput{
+		ConversationID: convID,
+		Content:        aiContent,
+		TabID:          "channel_backend",
+	})
+	if genErr != nil {
+		app.Logger.Error("[channel] DingTalk normal reply: AI generation failed to start",
+			"conv", convID, "error", genErr)
+		replyCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = dingAdapter.SendMessage(replyCtx, replyTarget,
+			i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": genErr}))
+		cancel()
+		return
+	}
+
+	app.Event.Emit("chat:messages-changed", map[string]any{"conversation_id": convID})
+	_ = chatService.WaitForGeneration(convID, res.RequestID)
+
+	var assistantMsg struct {
+		Content string `bun:"content"`
+	}
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer fetchCancel()
+	dbErr := db.NewSelect().
+		Table("messages").Column("content").
+		Where("conversation_id = ?", convID).
+		Where("role = ?", "assistant").
+		Where("status = ?", "success").
+		Where("TRIM(content) <> ''").
+		OrderExpr("id DESC").Limit(1).
+		Scan(fetchCtx, &assistantMsg)
+	if errors.Is(dbErr, sql.ErrNoRows) {
+		_ = db.NewSelect().Table("messages").Column("content").
+			Where("conversation_id = ?", convID).Where("role = ?", "assistant").
+			OrderExpr("id DESC").Limit(1).Scan(fetchCtx, &assistantMsg)
+	}
+	finalResponse := strings.TrimSpace(assistantMsg.Content)
+
+	_, _ = convService.UpdateConversation(convID, conversations.UpdateConversationInput{LastMessage: &finalResponse})
+	app.Event.Emit("conversations:changed", map[string]any{"agent_id": agentID})
+	app.Event.Emit("chat:messages-changed", map[string]any{"conversation_id": convID})
+
+	replyCtx, replyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer replyCancel()
+	if finalResponse == "" {
+		_ = dingAdapter.SendMessage(replyCtx, replyTarget, i18n.T("error.channel_ai_reply_empty"))
+	} else {
+		_ = dingAdapter.SendMessage(replyCtx, replyTarget, finalResponse)
+	}
+}
+
+// generateCardBizID returns a unique string identifying a DingTalk interactive card instance.
+// Combines unix nanoseconds with a monotonic atomic counter to avoid collisions.
+var cardBizIDCounter int64
+
+func generateCardBizID() string {
+	seq := atomic.AddInt64(&cardBizIDCounter, 1)
+	return fmt.Sprintf("card-%d-%d", time.Now().UnixNano(), seq)
 }
 
 // extractTextContent extracts plain text from platform-specific message formats.
