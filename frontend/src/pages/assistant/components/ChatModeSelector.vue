@@ -11,6 +11,7 @@ import {
   SelectItemText,
 } from 'reka-ui'
 import { Check } from 'lucide-vue-next'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const props = defineProps<{
   modelValue: string
@@ -30,52 +31,87 @@ const modes = [
 </script>
 
 <template>
+  <!-- 极简模式：两个图标的开关式切换，每个按钮有独立的悬浮提示 -->
+  <div v-if="compact" class="flex shrink-0 items-center rounded-full bg-muted p-0.5">
+    <!-- 任务模式按钮 -->
+    <TooltipProvider :delay-duration="300">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            :class="modelValue === 'task' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
+            @click="emit('update:modelValue', 'task')"
+          >
+            <!-- Task icon: target / crosshair -->
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 2v4" />
+              <path d="M12 18v4" />
+              <path d="M2 12h4" />
+              <path d="M18 12h4" />
+              <circle cx="12" cy="12" r="4" />
+              <circle cx="12" cy="12" r="8" />
+            </svg>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+
+    <!-- 聊天模式按钮 -->
+    <TooltipProvider :delay-duration="300">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            class="ml-0.5 flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            :class="modelValue === 'chat' ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground' : 'text-muted-foreground'"
+            @click="emit('update:modelValue', 'chat')"
+          >
+            <!-- Chat icon: speech bubble -->
+            <svg
+              class="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
+            </svg>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  </div>
+
+  <!-- 非极简模式：保持原来的下拉选择 -->
   <SelectRoot
+    v-else
     :model-value="modelValue"
     @update:model-value="(v: any) => v && emit('update:modelValue', String(v))"
   >
     <SelectTriggerRaw as-child>
-      <!-- Compact mode (snap window): icon only -->
-      <button
-        v-if="compact"
-        class="flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
-        :title="t(modes.find((m) => m.id === modelValue)?.labelKey ?? 'assistant.chatMode.chat')"
-      >
-        <!-- Chat mode icon: speech bubble -->
-        <svg
-          v-if="modelValue === 'chat'"
-          class="size-4 text-muted-foreground"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
-        </svg>
-        <!-- Task mode icon: crosshair/target -->
-        <svg
-          v-else
-          class="size-4 text-muted-foreground"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 2v4" />
-          <path d="M12 18v4" />
-          <path d="M2 12h4" />
-          <path d="M18 12h4" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="12" cy="12" r="8" />
-        </svg>
-      </button>
       <!-- Full mode (assistant / knowledge pages): icon + label -->
       <button
-        v-else
         class="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 focus:outline-none"
       >
         <!-- Chat mode icon: speech bubble -->
