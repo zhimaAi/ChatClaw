@@ -679,11 +679,12 @@ func handleChannelMessage(
 		return
 	}
 
+	replyTarget := msg.ChatID
+	if replyTarget == "" {
+		replyTarget = msg.SenderID
+	}
+
 	sendReply := func(text string) {
-		replyTarget := msg.ChatID
-		if replyTarget == "" {
-			replyTarget = msg.SenderID
-		}
 		if replyTarget == "" {
 			app.Logger.Warn("channel message: no reply target available", "channel_id", msg.ChannelID)
 			return
@@ -695,16 +696,10 @@ func handleChannelMessage(
 			return
 		}
 
-		// QQ passive replies require the original user message ID to be attached.
-		content := text
-		if msg.Platform == channels.PlatformQQ && msg.MessageID != "" {
-			content = channels.InjectQQMsgID(text, msg.MessageID)
-		}
-
 		replyCtx, replyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer replyCancel()
 
-		if err := adapter.SendMessage(replyCtx, replyTarget, content); err != nil {
+		if err := sendChannelReply(replyCtx, adapter, msg, replyTarget, text); err != nil {
 			app.Logger.Error("channel message: send reply failed", "channel_id", msg.ChannelID, "target", replyTarget, "error", err)
 			return
 		}
@@ -729,13 +724,39 @@ func handleChannelMessage(
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	var agentID int64
+	var channelRow struct {
+		AgentID     int64  `bun:"agent_id"`
+		ExtraConfig string `bun:"extra_config"`
+	}
 	err := db.NewSelect().
 		Table("channels").
-		Column("agent_id").
+		Column("agent_id", "extra_config").
 		Where("id = ?", msg.ChannelID).
-		Scan(ctx, &agentID)
-	if err != nil || agentID == 0 {
+		Scan(ctx, &channelRow)
+	if err != nil {
+		app.Logger.Warn("channel message: failed to load channel config", "channel_id", msg.ChannelID, "error", err)
+		return
+	}
+
+	if msg.Platform == channels.PlatformFeishu {
+		if enabled, matched := parseFeishuStreamToggleCommand(textContent); matched {
+			if err := updateFeishuStreamOutputSetting(ctx, db, msg.ChannelID, channelRow.ExtraConfig, enabled); err != nil {
+				app.Logger.Error("channel message: failed to update feishu stream setting", "channel_id", msg.ChannelID, "enabled", enabled, "error", err)
+				sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
+				return
+			}
+
+			if enabled {
+				sendReply(i18n.T("channel.feishu_stream_output_enabled"))
+			} else {
+				sendReply(i18n.T("channel.feishu_stream_output_disabled"))
+			}
+			return
+		}
+	}
+
+	agentID := channelRow.AgentID
+	if agentID == 0 {
 		app.Logger.Warn("channel has no linked agent, dropping message", "channel_id", msg.ChannelID, "error", err)
 		return
 	}
@@ -778,10 +799,6 @@ func handleChannelMessage(
 		aiContent = fmt.Sprintf("%s：%s", msg.SenderName, textContent)
 	}
 
-	// Wait for the full response to be generated so we can send it back to the channel.
-	// We want the frontend to show the streaming process, so we use SendMessage
-	// which creates a normal streaming context. We wait for it to complete.
-	var finalResponse string
 	res, err := chatService.SendMessage(chat.SendMessageInput{
 		ConversationID: conv.ID,
 		Content:        aiContent,
@@ -798,28 +815,48 @@ func handleChannelMessage(
 		"conversation_id": conv.ID,
 	})
 
-	// Wait for the background generation to complete
-	if err := chatService.WaitForGeneration(conv.ID, res.RequestID); err != nil {
-		app.Logger.Error("channel message: AI generation wait failed", "conv", conv.ID, "error", err)
-		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
-		// Not returning here in case some partial response was generated
+	streamOutputEnabled := false
+	if msg.Platform == channels.PlatformFeishu {
+		cfg, cfgErr := channels.ParseFeishuConfig(channelRow.ExtraConfig)
+		if cfgErr != nil {
+			app.Logger.Warn("channel message: failed to parse feishu config, fallback to non-stream", "channel_id", msg.ChannelID, "error", cfgErr)
+		} else {
+			streamOutputEnabled = cfg.StreamOutputEnabledOrDefault()
+		}
 	}
 
-	// Fetch the final assistant message from the DB
-	var assistantMsg struct {
-		Content string `bun:"content"`
+	var (
+		finalResponse      string
+		streamReplyHandled bool
+		shouldFetchFinal   = true
+	)
+	if streamOutputEnabled {
+		if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
+			if feishuAdapter, ok := adapter.(feishuStreamingReplyAdapter); ok {
+				streamedResponse, handled, streamErr := streamFeishuReply(app, db, chatService, conv.ID, res.RequestID, feishuAdapter, msg, replyTarget)
+				if streamErr != nil {
+					app.Logger.Error("channel message: feishu stream reply failed", "conv", conv.ID, "error", streamErr)
+				}
+				if handled {
+					streamReplyHandled = true
+					finalResponse = streamedResponse
+					shouldFetchFinal = false
+				}
+			}
+		}
 	}
-	err = db.NewSelect().
-		Table("messages").
-		Column("content").
-		Where("conversation_id = ?", conv.ID).
-		Where("role = ?", "assistant").
-		OrderExpr("id DESC").
-		Limit(1).
-		Scan(ctx, &assistantMsg)
 
-	if err == nil {
-		finalResponse = assistantMsg.Content
+	if shouldFetchFinal {
+		if err := chatService.WaitForGeneration(conv.ID, res.RequestID); err != nil {
+			app.Logger.Error("channel message: AI generation wait failed", "conv", conv.ID, "error", err)
+			sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
+			// Not returning here in case some partial response was generated
+		}
+
+		assistantMsg, fetchErr := fetchLatestAssistantMessage(ctx, db, conv.ID)
+		if fetchErr == nil {
+			finalResponse = assistantMsg.Content
+		}
 	}
 
 	// Notify frontend again after AI reply is generated
@@ -835,11 +872,194 @@ func handleChannelMessage(
 
 	if finalResponse == "" {
 		app.Logger.Warn("channel message: empty AI response", "conv", conv.ID)
-		sendReply(i18n.T("error.channel_ai_reply_empty"))
+		if !streamReplyHandled {
+			sendReply(i18n.T("error.channel_ai_reply_empty"))
+		}
 		return
 	}
 
-	sendReply(finalResponse)
+	if !streamReplyHandled {
+		sendReply(finalResponse)
+	}
+}
+
+type feishuStreamingReplyAdapter interface {
+	SendTextMessage(ctx context.Context, targetID string, text string) (string, error)
+	ReplyMessage(ctx context.Context, replyToMessageID string, content string) (string, error)
+	UpdateTextMessage(ctx context.Context, messageID string, text string) error
+}
+
+type assistantMessageSnapshot struct {
+	Content string `bun:"content"`
+	Status  string `bun:"status"`
+}
+
+func sendChannelReply(ctx context.Context, adapter channels.PlatformAdapter, msg channels.IncomingMessage, targetID string, text string) error {
+	if msg.Platform == channels.PlatformFeishu && msg.MessageID != "" {
+		if feishuAdapter, ok := adapter.(interface {
+			ReplyMessage(context.Context, string, string) (string, error)
+		}); ok {
+			_, err := feishuAdapter.ReplyMessage(ctx, msg.MessageID, text)
+			return err
+		}
+	}
+
+	content := text
+	if msg.Platform == channels.PlatformQQ && msg.MessageID != "" {
+		content = channels.InjectQQMsgID(text, msg.MessageID)
+	}
+	return adapter.SendMessage(ctx, targetID, content)
+}
+
+func parseFeishuStreamToggleCommand(text string) (bool, bool) {
+	switch strings.TrimSpace(text) {
+	case "关闭流式输出", "关闭流式回复", "关闭流式":
+		return false, true
+	case "开启流式输出", "打开流式输出", "启用流式输出", "开启流式回复", "开启流式":
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+func updateFeishuStreamOutputSetting(ctx context.Context, db *bun.DB, channelID int64, extraConfig string, enabled bool) error {
+	cfg, err := channels.ParseFeishuConfig(extraConfig)
+	if err != nil {
+		return err
+	}
+
+	cfg.StreamOutputEnabled = boolPtr(enabled)
+
+	configBytes, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal feishu config: %w", err)
+	}
+
+	_, err = db.NewUpdate().
+		Table("channels").
+		Set("extra_config = ?", string(configBytes)).
+		Set("updated_at = ?", sqlite.NowUTC()).
+		Where("id = ?", channelID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("update channel extra_config: %w", err)
+	}
+	return nil
+}
+
+func streamFeishuReply(
+	app *application.App,
+	db *bun.DB,
+	chatService *chat.ChatService,
+	conversationID int64,
+	requestID string,
+	adapter feishuStreamingReplyAdapter,
+	msg channels.IncomingMessage,
+	replyTarget string,
+) (string, bool, error) {
+	if replyTarget == "" {
+		return "", false, fmt.Errorf("no reply target available")
+	}
+
+	replyCtx, replyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer replyCancel()
+
+	placeholder := i18n.T("channel.feishu_streaming_generating")
+
+	var (
+		streamMessageID string
+		err             error
+	)
+	if msg.MessageID != "" {
+		streamMessageID, err = adapter.ReplyMessage(replyCtx, msg.MessageID, placeholder)
+	} else {
+		streamMessageID, err = adapter.SendTextMessage(replyCtx, replyTarget, placeholder)
+	}
+	if err != nil {
+		return "", false, err
+	}
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- chatService.WaitForGeneration(conversationID, requestID)
+	}()
+
+	ticker := time.NewTicker(1200 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastSent := placeholder
+
+	for {
+		select {
+		case waitErr := <-waitCh:
+			finalCtx, finalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			snapshot, fetchErr := fetchLatestAssistantMessage(finalCtx, db, conversationID)
+			finalCancel()
+
+			finalResponse := ""
+			if fetchErr == nil {
+				finalResponse = snapshot.Content
+			}
+
+			if strings.TrimSpace(finalResponse) == "" {
+				finalResponse = i18n.T("error.channel_ai_reply_empty")
+			}
+
+			if finalResponse != lastSent {
+				updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				updateErr := adapter.UpdateTextMessage(updateCtx, streamMessageID, finalResponse)
+				updateCancel()
+				if updateErr != nil {
+					app.Logger.Error("channel message: final feishu stream update failed", "conv", conversationID, "message_id", streamMessageID, "error", updateErr)
+				}
+			}
+
+			return finalResponse, true, waitErr
+		case <-ticker.C:
+			pollCtx, pollCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			snapshot, pollErr := fetchLatestAssistantMessage(pollCtx, db, conversationID)
+			pollCancel()
+			if pollErr != nil {
+				if !errors.Is(pollErr, sql.ErrNoRows) {
+					app.Logger.Warn("channel message: poll assistant message failed", "conv", conversationID, "error", pollErr)
+				}
+				continue
+			}
+			if strings.TrimSpace(snapshot.Content) == "" || snapshot.Content == lastSent {
+				continue
+			}
+
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			updateErr := adapter.UpdateTextMessage(updateCtx, streamMessageID, snapshot.Content)
+			updateCancel()
+			if updateErr != nil {
+				app.Logger.Warn("channel message: feishu stream update failed", "conv", conversationID, "message_id", streamMessageID, "error", updateErr)
+				continue
+			}
+
+			lastSent = snapshot.Content
+		}
+	}
+}
+
+func fetchLatestAssistantMessage(ctx context.Context, db *bun.DB, conversationID int64) (assistantMessageSnapshot, error) {
+	var assistantMsg assistantMessageSnapshot
+	err := db.NewSelect().
+		Table("messages").
+		Column("content", "status").
+		Where("conversation_id = ?", conversationID).
+		Where("role = ?", chat.RoleAssistant).
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(ctx, &assistantMsg)
+	if err != nil {
+		return assistantMsg, err
+	}
+	return assistantMsg, nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 // extractTextContent extracts plain text from platform-specific message formats.
