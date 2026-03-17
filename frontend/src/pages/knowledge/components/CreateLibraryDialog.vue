@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, ChevronUp, LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,9 @@ import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, CreateLibraryInput } from '@bindings/chatclaw/internal/services/library'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
+  clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
   isModelSelectionDisabled,
@@ -54,6 +56,7 @@ const loadingEmbedding = ref(false)
 const loadingProviders = ref(false)
 const embeddingReady = ref(false)
 const isChatwikiBound = ref(true)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 const name = ref('')
 const NAME_MAX_LEN = 30
@@ -184,6 +187,26 @@ watch(
     }
   }
 )
+
+onMounted(() => {
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void loadProviders().then(() => {
+        if (
+          clearUnavailableChatwikiSelection(raptorLLMKey.value, isChatwikiBound.value) !==
+          raptorLLMKey.value
+        ) {
+          raptorLLMKey.value = RAPTOR_LLM_NONE
+        }
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
+})
 
 const handleSubmit = async () => {
   if (!isFormValid.value || isSubmitting.value) return

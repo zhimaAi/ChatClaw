@@ -34,6 +34,7 @@ import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/serv
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
@@ -259,6 +260,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const inputContainerRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 const MAX_IMAGES = 4
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -399,12 +401,17 @@ onMounted(() => {
     .catch(() => {
       isChatwikiBound.value = false
     })
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged((bound) => {
+    isChatwikiBound.value = bound
+  })
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
   }
 })
 
 onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
   if (textareaRef.value) {
     textareaRef.value.removeEventListener('paste', handlePaste)
   }
