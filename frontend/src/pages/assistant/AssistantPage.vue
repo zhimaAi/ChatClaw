@@ -1864,6 +1864,7 @@ onUnmounted(() => {
         @add-images="handleAddImages"
         @remove-image="handleRemoveImage"
         @clear-images="pendingImages = []"
+        @new-conversation="handleNewConversation"
       />
     </section>
 
@@ -1924,6 +1925,7 @@ onUnmounted(() => {
       @add-images="handleAddImages"
       @remove-image="handleRemoveImage"
       @clear-images="pendingImages = []"
+      @new-conversation="handleSnapNewConversation"
     />
     </div><!-- End main content wrapper -->
 

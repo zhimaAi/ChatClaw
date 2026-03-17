@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
-import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon, FileText, Mic, Video, File } from 'lucide-vue-next'
+import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon, FileText, Mic, Video, File, Plus, MoreHorizontal } from 'lucide-vue-next'
 import { onMounted, onUnmounted } from 'vue'
 import {
   Select,
@@ -29,6 +29,7 @@ import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
 import ChatModeSelector from './ChatModeSelector.vue'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
@@ -111,6 +112,8 @@ const emit = defineEmits<{
   'update:selectedTeamLibraryId': [value: string | null]
   /** Assistant page: toggle one team library id in multi-select (personal + team can coexist) */
   toggleAssistantTeamLibrary: [id: string]
+  /** Same as sidebar / header: start a brand new conversation */
+  'new-conversation': []
 }>()
 
 const { t } = useI18n()
@@ -187,6 +190,9 @@ const visibleTeamLibraries = computed(() =>
 const teamOverflowCount = computed(() =>
   Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
 )
+
+// Control knowledge select dropdown open state (so "更多" 菜单可以复用同一套选择逻辑)
+const knowledgeSelectOpen = ref(false)
 
 function handleRemoveTeamLibrary(id: string) {
   emit('toggleAssistantTeamLibrary', id)
@@ -520,12 +526,38 @@ onUnmounted(() => {
         />
 
         <div class="mt-3 flex items-center justify-between gap-2">
-          <div :class="cn('flex min-w-0 flex-1 flex-wrap items-center', isSnapMode ? 'gap-1' : 'gap-x-2 gap-y-1')">
-            <!-- ChatModeSelector: show in both modes -->
+          <div
+            :class="
+              cn(
+                'flex min-w-0 flex-1 items-center',
+                isSnapMode ? 'flex-nowrap gap-1' : 'flex-wrap gap-x-2 gap-y-1'
+              )
+            "
+          >
+            <!-- New conversation icon：行为与侧边栏 / 吸附头部一致 -->
+            <TooltipProvider v-if="!isTeamMode">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                    @click="emit('new-conversation')"
+                  >
+                    <Plus class="size-4 text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ t('assistant.sidebar.newConversation') }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <!-- ChatModeSelector: show in both modes，内部自己处理悬浮提示 -->
             <ChatModeSelector
               v-if="!isTeamMode"
               :model-value="chatMode"
-              :compact="isSnapMode"
+              :compact="true"
               @update:model-value="(v) => emit('update:chatMode', v)"
             />
 
@@ -550,7 +582,7 @@ onUnmounted(() => {
                           {{ t('knowledge.chat.selectAgent') }}
                         </span>
                       </SelectTrigger>
-                      <SelectContent class="max-h-[260px]">
+                      <SelectContent class="max-h-[260px] min-w-[260px]">
                         <SelectGroup>
                           <SelectLabel>{{ t('knowledge.chat.selectAgent') }}</SelectLabel>
                           <SelectItem
@@ -571,8 +603,8 @@ onUnmounted(() => {
               </Tooltip>
             </TooltipProvider>
 
-            <!-- Model selector: hidden in team mode -->
-            <div class="min-w-0 shrink">
+            <!-- Model selector: hidden in team mode，展示完整模型名的胶囊按钮 -->
+            <div :class="cn('min-w-0', isSnapMode ? 'flex-1' : 'shrink')">
             <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -584,8 +616,8 @@ onUnmounted(() => {
                     >
                       <SelectTrigger
                         :class="cn(
-                          'h-8 w-auto min-w-0 rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode ? 'max-w-[120px]' : 'max-w-[200px]'
+                          'h-8 w-full min-w-0 max-w-[220px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
+                          isSnapMode && 'max-w-[140px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -595,27 +627,12 @@ onUnmounted(() => {
                             class="shrink-0 text-foreground"
                           />
                           <span class="truncate">{{ selectedModelInfo.modelName }}</span>
-                          <span
-                            v-if="selectedProviderIsFree && !isSnapMode"
-                            class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                          >
-                            {{ t('assistant.chat.freeBadge') }}
-                          </span>
-                          <template v-if="!isSnapMode && selectedModelCapabilities.length > 0">
-                            <span
-                              v-for="cap in selectedModelCapabilities.slice(0, 2)"
-                              :key="cap"
-                              class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                            >
-                              <component :is="capabilityIcons[cap]" class="size-2.5" />
-                            </span>
-                          </template>
                         </div>
                         <span v-else class="text-muted-foreground">
                           {{ t('assistant.chat.noModel') }}
                         </span>
                       </SelectTrigger>
-                      <SelectContent class="max-h-[260px]">
+                      <SelectContent class="max-h-[260px] min-w-[260px]">
                         <SelectGroup>
                           <SelectLabel>{{ t('assistant.chat.selectModel') }}</SelectLabel>
                           <template v-for="pw in providersWithModels" :key="pw.provider.provider_id">
@@ -703,9 +720,10 @@ onUnmounted(() => {
             <SelectRoot
               v-if="!isTeamMode && !selectedTeamLibrary"
               :model-value="selectedLibraryIds"
+              :open="knowledgeSelectOpen"
               multiple
               @update:model-value="(v: any) => { emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v]); handleLibrarySelectionChange() }"
-              @update:open="(open: boolean) => open && emit('loadLibraries')"
+              @update:open="(open: boolean) => { knowledgeSelectOpen = open; open && emit('loadLibraries') }"
             >
               <SelectTriggerRaw
                 as-child
@@ -722,11 +740,15 @@ onUnmounted(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background"
                   :class="
-                    (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
-                      ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
-                      : 'hover:bg-muted/40'
+                    cn(
+                      'size-8 rounded-full border border-border bg-background',
+                      (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
+                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
+                        : 'hover:bg-muted/40',
+                      // 吸附模式下隐藏按钮本身，仅保留 0 宽度占位用作弹层锚点
+                      isSnapMode && 'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
+                    )
                   "
                 >
                   <IconSelectKnowledge
@@ -858,8 +880,9 @@ onUnmounted(() => {
               </Button>
             </template>
 
-            <!-- Image selection button (not supported in team mode) -->
-            <TooltipProvider v-if="!isTeamMode">
+            <!-- Image selection button (not supported in team mode).
+                 在窗口较宽时直接展示图标；在 snap 模式下收纳到“更多”菜单中。 -->
+            <TooltipProvider v-if="!isTeamMode && !isSnapMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <!-- Wrap in span so tooltip hover still works when button is disabled -->
@@ -880,6 +903,35 @@ onUnmounted(() => {
               </Tooltip>
             </TooltipProvider>
 
+            <!-- 更多：在空间较小时，将“上传文件 / 上传图片 / 选择知识库”放进菜单 -->
+            <DropdownMenu v-if="!isTeamMode && isSnapMode">
+              <DropdownMenuTrigger as-child>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40"
+                >
+                  <MoreHorizontal class="size-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" class="w-40 rounded-[6px] shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)]">
+                <DropdownMenuItem class="gap-2" @select="() => toast.default('Upload file coming soon')">
+                  <File class="size-4 text-muted-foreground" />
+                  <span class="text-xs text-foreground">{{ t('assistant.chat.uploadFile') }}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem class="gap-2" @select="handleSelectImagesClick">
+                  <ImageIcon class="size-4 text-muted-foreground" />
+                  <span class="text-xs text-foreground">{{ t('assistant.chat.selectImages') }}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  class="gap-2"
+                  @select="() => { knowledgeSelectOpen = true; emit('loadLibraries') }"
+                >
+                  <IconSelectKnowledge class="size-4 text-muted-foreground" />
+                  <span class="text-xs text-foreground">{{ t('assistant.chat.selectKnowledge') }}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
           </div>
 
