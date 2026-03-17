@@ -310,34 +310,12 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		return nil, err
 	}
 	if providerID == "chatwiki" {
-		if s.app == nil {
-			return s.buildChatWikiProviderWithModels(provider, &chatwiki.ModelCatalog{}), nil
-		}
-		catalog, err := chatwiki.NewChatWikiService(s.app).GetModelCatalog(true)
-		if err != nil {
-			s.app.Logger.Error("[providers] GetProviderWithModels chatwiki get catalog failed", "provider_id", providerID, "error", err)
-			return nil, err
-		}
-		result := s.buildChatWikiProviderWithModels(provider, catalog)
-		llmCount := 0
-		embeddingCount := 0
-		if result != nil {
-			for _, group := range result.ModelGroups {
-				switch group.Type {
-				case "llm":
-					llmCount += len(group.Models)
-				case "embedding":
-					embeddingCount += len(group.Models)
-				}
+		if s.app != nil {
+			if _, err := chatwiki.NewChatWikiService(s.app).GetModelCatalog(true); err != nil {
+				s.app.Logger.Error("[providers] GetProviderWithModels chatwiki refresh catalog failed", "provider_id", providerID, "error", err)
+				return nil, err
 			}
 		}
-		s.app.Logger.Info("[providers] GetProviderWithModels chatwiki done",
-			"provider_id", providerID,
-			"llm_count", llmCount,
-			"embedding_count", embeddingCount,
-			"bound", catalog != nil && catalog.Bound,
-		)
-		return result, nil
 	}
 
 	db, err := s.db()
@@ -1030,17 +1008,6 @@ func (s *ProvidersService) checkOpenAI(ctx context.Context, providerID string, i
 		Model:       modelID,
 		BaseURL:     input.APIEndpoint,
 		ExtraFields: map[string]any{"enable_thinking": false},
-	}
-	if providerID == "chatwiki" {
-		configID, err := chatwiki.ResolveSelfOwnedModelConfigID(input.APIKey, input.APIEndpoint, modelID, "llm")
-		if err != nil {
-			return &CheckAPIKeyResult{
-				Success: false,
-				Message: err.Error(),
-			}, nil
-		}
-		cfg.ExtraFields["self_owned_model_config_id"] = configID
-		cfg.Model = ""
 	}
 	chatModel, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {

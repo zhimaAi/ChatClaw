@@ -42,7 +42,6 @@ func ResolveSelfOwnedModelConfigID(apiKey, apiEndpoint, modelID, modelType strin
 		if item.SelfOwnedModelConfigID <= 0 {
 			return 0, fmt.Errorf("chatwiki model %q missing self_owned_model_config_id", modelID)
 		}
-		fmt.Println(`获取到自由模型id %v`, item.SelfOwnedModelConfigID)
 		return item.SelfOwnedModelConfigID, nil
 	}
 
@@ -89,6 +88,9 @@ func loadModelCatalogForOpenAI(apiKey, apiEndpoint string) (*ModelCatalog, error
 	catalog, err := decodeModelCatalogResponse(json.RawMessage(body))
 	if err != nil {
 		return nil, fmt.Errorf("decode chatwiki model catalog: %w", err)
+	}
+	if err := syncModelCatalogToLocalDB(catalog); err != nil {
+		return nil, fmt.Errorf("sync chatwiki model catalog to db: %w", err)
 	}
 
 	openAIModelCatalogCache.Store(cacheKey, cachedOpenAIModelCatalog{
