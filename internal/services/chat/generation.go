@@ -190,13 +190,13 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 				for _, r := range teamResults {
 					teamRetrievalItems = append(teamRetrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
 				}
-			var sb strings.Builder
-			sb.WriteString(teamRecallContextHeader)
-			for i, r := range teamResults {
-				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
-			}
-			sb.WriteString(teamRecallContextFooter)
-			gc.agentConfig.Instruction += sb.String()
+				var sb strings.Builder
+				sb.WriteString(teamRecallContextHeader)
+				for i, r := range teamResults {
+					sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+				}
+				sb.WriteString(teamRecallContextFooter)
+				gc.agentConfig.Instruction += sb.String()
 				s.app.Logger.Info("[chat] task mode team recall injected", "conv", conversationID, "results", len(teamResults))
 			}
 		}
@@ -888,6 +888,10 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 				RunPath:          ss.currentRunPath,
 				ParentToolCallID: ss.parentToolCallID(),
 			})
+			// Notify registered streaming sinks (e.g. DingTalk real-time card updates).
+			if cb, ok := s.chunkCallbacks.Load(gc.conversationID); ok {
+				cb.(ChunkCallback)(ss.contentBuilder.String())
+			}
 		}
 
 		if len(msg.ToolCalls) > 0 {
@@ -975,6 +979,10 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 			RunPath:          ss.currentRunPath,
 			ParentToolCallID: ss.parentToolCallID(),
 		})
+		// Notify registered streaming sinks.
+		if cb, ok := s.chunkCallbacks.Load(gc.conversationID); ok {
+			cb.(ChunkCallback)(ss.contentBuilder.String())
+		}
 	}
 
 	if msg.ResponseMeta != nil {

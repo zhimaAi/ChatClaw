@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	dingchatbot "github.com/open-dingtalk/dingtalk-stream-sdk-go/chatbot"
 	dingclient "github.com/open-dingtalk/dingtalk-stream-sdk-go/client"
 )
@@ -86,21 +87,23 @@ type webhookEntry struct {
 
 // DingTalkAdapter implements PlatformAdapter for DingTalk using Stream (长连接).
 type DingTalkAdapter struct {
-	mu             sync.Mutex
-	streamClient   *dingclient.StreamClient
-	replier        *dingchatbot.ChatbotReplier
-	connected      atomic.Bool
-	cancel         context.CancelFunc
-	channelID      int64
-	handler        MessageHandler
-	config         DingTalkConfig
-	webhookCache   sync.Map // conversationId -> *webhookEntry
-	nameCache      sync.Map // senderID -> displayName
-	seenMsgs       sync.Map // msgId -> struct{}, dedup within TTL
-	tokenMu        sync.Mutex
-	tokenEntry     *dingTalkTokenEntry // cached api.dingtalk.com OAuth2 token
-	oapiTokenMu    sync.Mutex
-	oapiTokenEntry *dingTalkOApiTokenEntry // cached oapi.dingtalk.com legacy token
+	mu               sync.Mutex
+	streamClient     *dingclient.StreamClient
+	replier          *dingchatbot.ChatbotReplier
+	connected        atomic.Bool
+	cancel           context.CancelFunc
+	channelID        int64
+	handler          MessageHandler
+	config           DingTalkConfig
+	webhookCache     sync.Map // conversationId -> *webhookEntry
+	nameCache        sync.Map // senderID -> displayName
+	seenMsgs         sync.Map // msgId -> struct{}, dedup within TTL
+	tokenMu          sync.Mutex
+	tokenEntry       *dingTalkTokenEntry // cached api.dingtalk.com OAuth2 token
+	oapiTokenMu      sync.Mutex
+	oapiTokenEntry   *dingTalkOApiTokenEntry // cached oapi.dingtalk.com legacy token
+	convTypeCache    sync.Map                // conversationId -> conversationType ("1"=private, "2"=group)
+	convStaffIDCache sync.Map                // conversationId -> senderStaffId (for private chat card send)
 }
 
 func (a *DingTalkAdapter) Platform() string { return PlatformDingTalk }
@@ -217,6 +220,19 @@ func (a *DingTalkAdapter) onMessageReceive(ctx context.Context, data *dingchatbo
 			time.Sleep(5 * time.Minute)
 			a.seenMsgs.Delete(msgID)
 		}()
+	}
+
+	// Cache conversation metadata for interactive card sends.
+	if data.ConversationId != "" {
+		convType := data.ConversationType
+		if convType == "" {
+			convType = "2" // default: group chat
+		}
+		a.convTypeCache.Store(data.ConversationId, convType)
+		if convType == "1" && data.SenderStaffId != "" {
+			// Private chat: remember staffId to address the card recipient.
+			a.convStaffIDCache.Store(data.ConversationId, data.SenderStaffId)
+		}
 	}
 
 	// Cache the session webhook for this conversation (used for replies)
@@ -759,4 +775,216 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 			},
 		}, nil
 	}
+}
+
+// ---- Interactive card (typewriter mode) ------------------------------------
+
+// streamingCardTemplate is the card JSON for the typewriter/streaming mode.
+// %s is replaced with a properly JSON-encoded markdown string.
+// The header logo is intentionally omitted to avoid dependency on any mediaId asset.
+const streamingCardTemplate = `{"config":{"autoLayout":true,"enableForward":true},"header":{"title":{"type":"text","text":"AI 助手"}},"contents":[{"type":"markdown","text":%s,"id":"markdown_content"}]}`
+
+// BuildStreamingCardData returns a card JSON string containing the given text content.
+// It is exported so callers outside the package (e.g. bootstrap) can build card payloads
+// when updating the card directly via UpdateInteractiveCard.
+func BuildStreamingCardData(text string) string {
+	textJSON, _ := json.Marshal(text)
+	return fmt.Sprintf(streamingCardTemplate, string(textJSON))
+}
+
+// SendInteractiveCard sends a new robot interactive card to a DingTalk conversation.
+// cardBizId is a caller-supplied UUID that uniquely identifies this card instance.
+func (a *DingTalkAdapter) SendInteractiveCard(ctx context.Context, conversationID, cardBizID, cardData string) error {
+	token, err := a.getAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("send interactive card: %w", err)
+	}
+
+	convType := "2" // default: group chat
+	if v, ok := a.convTypeCache.Load(conversationID); ok {
+		convType = v.(string)
+	}
+
+	reqBody := map[string]any{
+		"cardTemplateId": "StandardCard",
+		"cardBizId":      cardBizID,
+		"cardData":       cardData,
+		"robotCode":      a.config.AppID,
+		"pullStrategy":   false,
+	}
+	if convType == "2" {
+		reqBody["openConversationId"] = conversationID
+	} else {
+		staffID := ""
+		if v, ok := a.convStaffIDCache.Load(conversationID); ok {
+			staffID = v.(string)
+		}
+		receiverBytes, _ := json.Marshal(map[string]string{"userId": staffID})
+		reqBody["singleChatReceiver"] = string(receiverBytes)
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("send interactive card: marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://api.dingtalk.com/v1.0/im/v1.0/robot/interactiveCards/send",
+		bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("send interactive card: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send interactive card: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("send interactive card: http %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// DingTalk returns {"processQueryKey":"..."} on success.
+	// On failure it uses HTTP 4xx/5xx with {"code":"...","message":"..."}.
+	// Guard against any unexpected 2xx body that contains a non-empty "code".
+	var apiErr struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Code != "" && apiErr.Code != "0" {
+		return fmt.Errorf("send interactive card: api error (code: %s, msg: %s)", apiErr.Code, apiErr.Message)
+	}
+
+	slog.Debug("[dingtalk] interactive card sent",
+		"conversation_id", conversationID,
+		"card_biz_id", cardBizID,
+		"conv_type", convType,
+	)
+	return nil
+}
+
+// UpdateInteractiveCard updates the content of an existing robot interactive card.
+// SDK reference: PUT https://api.dingtalk.com/v1.0/im/robots/interactiveCards
+// cardBizId goes in the request BODY (no path variable); robotCode is NOT required.
+func (a *DingTalkAdapter) UpdateInteractiveCard(ctx context.Context, cardBizID, cardData string) error {
+	token, err := a.getAccessToken(ctx)
+	if err != nil {
+		return fmt.Errorf("update interactive card: %w", err)
+	}
+
+	// Per DingTalk SDK (alibabacloud-go/dingtalk im_1_0):
+	//   Pathname: "/v1.0/im/robots/interactiveCards"  (PUT, no path variable)
+	//   Body:     cardBizId + cardData  (no robotCode)
+	reqBody := map[string]any{
+		"cardBizId": cardBizID,
+		"cardData":  cardData,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("update interactive card: marshal body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		"https://api.dingtalk.com/v1.0/im/robots/interactiveCards",
+		bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("update interactive card: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("update interactive card: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("update interactive card: http %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var apiErr struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Code != "" && apiErr.Code != "0" {
+		return fmt.Errorf("update interactive card: api error (code: %s, msg: %s)", apiErr.Code, apiErr.Message)
+	}
+
+	return nil
+}
+
+// SendStreamingCard sends a message using typewriter (streaming card) mode.
+// The full content is progressively revealed to simulate a typing animation.
+// It first creates a card, then performs incremental updates.
+func (a *DingTalkAdapter) SendStreamingCard(ctx context.Context, conversationID, content string) error {
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("streaming card: content is empty")
+	}
+
+	cardBizID := uuid.New().String()
+
+	// Send initial card with a cursor to indicate the message is being composed.
+	initialCard := BuildStreamingCardData("▌")
+	if err := a.SendInteractiveCard(ctx, conversationID, cardBizID, initialCard); err != nil {
+		return fmt.Errorf("streaming card: send initial card: %w", err)
+	}
+
+	runes := []rune(content)
+	total := len(runes)
+
+	// Target at most 25 intermediate updates to limit API calls.
+	// Minimum chunk size is 30 runes so very short messages still animate.
+	const maxUpdates = 25
+	const minChunkSize = 30
+	const updateIntervalMs = 150
+
+	chunkSize := total / maxUpdates
+	if chunkSize < minChunkSize {
+		chunkSize = minChunkSize
+	}
+
+	for i := chunkSize; i < total; i += chunkSize {
+		select {
+		case <-ctx.Done():
+			// Context cancelled: send final content and exit.
+			_ = a.UpdateInteractiveCard(ctx, cardBizID, BuildStreamingCardData(content))
+			return ctx.Err()
+		default:
+		}
+
+		time.Sleep(updateIntervalMs * time.Millisecond)
+
+		partial := string(runes[:i]) + "▌"
+		if err := a.UpdateInteractiveCard(ctx, cardBizID, BuildStreamingCardData(partial)); err != nil {
+			slog.Warn("[dingtalk] streaming card intermediate update failed",
+				"card_biz_id", cardBizID,
+				"error", err,
+			)
+			// Non-fatal: continue to next chunk.
+		}
+	}
+
+	// Final update: full content without cursor.
+	time.Sleep(updateIntervalMs * time.Millisecond)
+	if err := a.UpdateInteractiveCard(ctx, cardBizID, BuildStreamingCardData(content)); err != nil {
+		slog.Error("[dingtalk] streaming card final update failed",
+			"card_biz_id", cardBizID,
+			"error", err,
+		)
+		return fmt.Errorf("streaming card: final update: %w", err)
+	}
+
+	slog.Debug("[dingtalk] streaming card completed",
+		"conversation_id", conversationID,
+		"card_biz_id", cardBizID,
+		"total_runes", total,
+	)
+	return nil
 }
