@@ -315,6 +315,11 @@ func (s *AssistantMCPService) AddTools(input AddToolsInput) (*AssistantMCP, erro
 	}
 
 	existing := item.ParseTools()
+	selectedMap := make(map[int64]bool, len(input.AgentIDs))
+	for _, id := range input.AgentIDs {
+		selectedMap[id] = true
+	}
+
 	existingMap := make(map[int64]bool)
 	for _, t := range existing {
 		existingMap[t.AgentID] = true
@@ -337,9 +342,21 @@ func (s *AssistantMCPService) AddTools(input AddToolsInput) (*AssistantMCP, erro
 		}
 	}
 
+	// Sync the selected agents set instead of only appending new tools.
+	filtered := make([]ToolEntry, 0, len(existing))
 	usedNames := make(map[string]bool)
 	for _, t := range existing {
+		if !selectedMap[t.AgentID] {
+			continue
+		}
+		filtered = append(filtered, t)
 		usedNames[t.ToolName] = true
+	}
+	existing = filtered
+
+	existingMap = make(map[int64]bool, len(existing))
+	for _, t := range existing {
+		existingMap[t.AgentID] = true
 	}
 
 	for _, agent := range agents {
@@ -458,6 +475,9 @@ func (s *AssistantMCPService) RemoveTool(input RemoveToolInput) (*AssistantMCP, 
 	if input.ID == "" {
 		return nil, errs.New("error.assistant_mcp_id_required")
 	}
+	if input.AgentID == 0 {
+		return nil, errs.New("error.assistant_mcp_tool_not_found")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -469,10 +489,16 @@ func (s *AssistantMCPService) RemoveTool(input RemoveToolInput) (*AssistantMCP, 
 
 	tools := item.ParseTools()
 	filtered := make([]ToolEntry, 0, len(tools))
+	found := false
 	for _, t := range tools {
-		if t.AgentID != input.AgentID {
-			filtered = append(filtered, t)
+		if t.AgentID == input.AgentID {
+			found = true
+			continue
 		}
+		filtered = append(filtered, t)
+	}
+	if !found {
+		return nil, errs.New("error.assistant_mcp_tool_not_found")
 	}
 
 	toolsJSON, _ := json.Marshal(filtered)
