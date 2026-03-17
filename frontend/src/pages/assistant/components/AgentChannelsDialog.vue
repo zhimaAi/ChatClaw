@@ -827,10 +827,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
         <Button
           class="mb-4 h-10 w-full shrink-0 gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="addBotLoading"
-          @click="
-            showConfigChannelDialog = true
-            showAddBotDialog = false
-          "
+          @click="showConfigChannelDialog = true; showAddBotDialog = false"
         >
           <Plus class="size-4 shrink-0" />
           {{ t('assistant.channels.addBot') }}
