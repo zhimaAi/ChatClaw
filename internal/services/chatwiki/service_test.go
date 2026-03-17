@@ -79,6 +79,48 @@ func TestSaveBinding_AddsMissingChatWikiVersionColumnForLegacyDB(t *testing.T) {
 	}
 }
 
+func TestSaveBindingFromCallback_MapsCloudLoginSourceToYun(t *testing.T) {
+	setChatWikiBindingTestDB(t)
+
+	app := &application.App{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	svc := &ChatWikiService{app: app}
+	if err := svc.SaveBindingFromCallback("https://example.com", "token-cloud", "7200", "4102444800", "user-cloud", "frog", "cloud"); err != nil {
+		t.Fatalf("SaveBindingFromCallback returned error: %v", err)
+	}
+
+	binding, err := svc.GetBinding()
+	if err != nil {
+		t.Fatalf("GetBinding returned error: %v", err)
+	}
+	if binding == nil {
+		t.Fatal("expected binding, got nil")
+	}
+	if binding.ChatWikiVersion != "yun" {
+		t.Fatalf("expected chatwiki version yun, got %#v", binding)
+	}
+}
+
+func TestSaveBindingFromCallback_DefaultsToDevWhenLoginSourceMissing(t *testing.T) {
+	setChatWikiBindingTestDB(t)
+
+	app := &application.App{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	svc := &ChatWikiService{app: app}
+	if err := svc.SaveBindingFromCallback("https://example.com", "token-dev", "7200", "4102444800", "user-dev", "frog", ""); err != nil {
+		t.Fatalf("SaveBindingFromCallback returned error: %v", err)
+	}
+
+	binding, err := svc.GetBinding()
+	if err != nil {
+		t.Fatalf("GetBinding returned error: %v", err)
+	}
+	if binding == nil {
+		t.Fatal("expected binding, got nil")
+	}
+	if binding.ChatWikiVersion != "dev" {
+		t.Fatalf("expected chatwiki version dev, got %#v", binding)
+	}
+}
+
 func setChatWikiBindingTestDB(t *testing.T) {
 	t.Helper()
 

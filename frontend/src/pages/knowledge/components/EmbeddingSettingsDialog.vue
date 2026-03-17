@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ import type {
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
@@ -44,6 +45,7 @@ const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const isChatwikiBound = ref(true)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 type Group = { provider: Provider; models: Model[] }
 const embeddingGroups = ref<Group[]>([])
@@ -197,6 +199,21 @@ watch(
     ensureDefaultSelection()
   }
 )
+
+onMounted(() => {
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void Promise.all([loadGroups(), loadCurrentSettings()]).then(() => {
+        ensureDefaultSelection()
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
+})
 
 const isValid = computed(() => {
   if (!isEmbeddingSelectionAvailable.value) return false

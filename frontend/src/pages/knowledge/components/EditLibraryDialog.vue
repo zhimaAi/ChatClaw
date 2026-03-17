@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,7 @@ import { ProvidersService } from '@bindings/chatclaw/internal/services/providers
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, UpdateLibraryInput } from '@bindings/chatclaw/internal/services/library'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
@@ -59,6 +60,7 @@ const { t } = useI18n()
 const saving = ref(false)
 const loadingProviders = ref(false)
 const isChatwikiBound = ref(true)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 // 语义分段开关
 const semanticSegmentationEnabled = ref(false)
@@ -169,6 +171,25 @@ watch(
     }
   }
 )
+
+onMounted(() => {
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void loadProviders().then(() => {
+        const nextKey = clearUnavailableChatwikiSelection(
+          raptorLLMKey.value === RAPTOR_LLM_NONE ? '' : raptorLLMKey.value,
+          isChatwikiBound.value
+        )
+        raptorLLMKey.value = nextKey || RAPTOR_LLM_NONE
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
+})
 
 const isValid = computed(() => {
   if (!props.library) return false

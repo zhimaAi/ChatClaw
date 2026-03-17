@@ -12,6 +12,7 @@ import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/servi
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
 import { buildChatWikiLoginUrl, openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
+import { notifyChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import { useSettingsStore } from '@/stores/settings'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
@@ -406,6 +407,8 @@ async function finishSuccess() {
     await ProvidersService.GetProviderWithModels('chatwiki')
     // Reload binding so list view shows latest auth status (bound/expired, user info)
     await loadBinding()
+    notifyChatwikiBindingChanged(true)
+    Events.Emit('models:changed')
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
   } catch (error) {
@@ -433,6 +436,8 @@ async function confirmUnbind() {
     authUser.value = null
     robots.value = []
     libraries.value = []
+    notifyChatwikiBindingChanged(false)
+    Events.Emit('models:changed')
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)
   }

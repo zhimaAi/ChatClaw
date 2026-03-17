@@ -44,6 +44,7 @@ import {
 } from '@bindings/chatclaw/internal/services/providers'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
@@ -136,6 +137,7 @@ watch(
 )
 
 let unsubscribeToolchain: (() => void) | null = null
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 onMounted(() => {
   unsubscribeToolchain = Events.On('toolchain:status', (event: any) => {
@@ -144,11 +146,18 @@ onMounted(() => {
       codexInstalled.value = !!data.installed
     }
   })
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void loadModels()
+    }
+  })
 })
 
 onUnmounted(() => {
   unsubscribeToolchain?.()
   unsubscribeToolchain = null
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
 })
 
 watch(

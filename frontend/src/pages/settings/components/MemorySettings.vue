@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
@@ -31,6 +31,7 @@ import type { Provider, Model } from '@bindings/chatclaw/internal/services/provi
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
   clearUnavailableChatwikiSelection,
   formatModelDisplayLabel,
@@ -44,6 +45,7 @@ const loading = ref(false)
 const saving = ref(false)
 const showRebuildConfirm = ref(false)
 const isChatwikiBound = ref(true)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 const memoryEnabled = ref(false)
 const extractSelectedKey = ref('')
@@ -161,6 +163,14 @@ const loadData = async () => {
 
 onMounted(() => {
   loadData()
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    void loadData()
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
 })
 
 const isValid = computed(() => {
