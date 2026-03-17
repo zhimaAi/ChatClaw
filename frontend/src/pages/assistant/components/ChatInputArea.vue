@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { ArrowUp, Square, Check, Lightbulb, X, Image as ImageIcon, FileText, Mic, Video, File, Plus, MoreHorizontal } from 'lucide-vue-next'
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, nextTick } from 'vue'
 import {
   Select,
   SelectContent,
@@ -263,7 +263,9 @@ const capabilityIcons: Record<string, any> = {
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const inputContainerRef = ref<HTMLDivElement | null>(null)
+const toolbarRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
+const isToolbarNarrow = ref(false)
 
 const MAX_IMAGES = 4
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024 // 2MB
@@ -355,29 +357,48 @@ const handleFilesSelected = async (event: Event) => {
   }
 }
 
+const ALLOWED_DOC_EXTENSIONS = new Set([
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  'txt', 'csv', 'md', 'json', 'xml', 'html', 'rtf', 'log',
+])
+
 // Handle paste event on textarea
 const handlePaste = async (event: ClipboardEvent) => {
   const items = event.clipboardData?.items
   if (!items) return
 
   const imageFiles: File[] = []
-  
+  const docFiles: File[] = []
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
+    const file = item.getAsFile()
+    if (!file) continue
+
     if (item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
+      imageFiles.push(file)
+    } else {
+      const ext = file.name?.split('.').pop()?.toLowerCase() || ''
+      if (ALLOWED_DOC_EXTENSIONS.has(ext)) {
+        docFiles.push(file)
       }
     }
   }
 
+  const hasAttachments = imageFiles.length > 0 || docFiles.length > 0
+  if (!hasAttachments) return
+
+  event.preventDefault()
+
   if (imageFiles.length > 0) {
-    event.preventDefault() // Prevent pasting image data into textarea
     const validFiles = processImageFiles(imageFiles)
     if (validFiles) {
       emit('addImages', validFiles)
     }
+  }
+
+  if (docFiles.length > 0) {
+    emit('addFiles', docFiles)
   }
 }
 
@@ -400,11 +421,6 @@ const handleDragLeave = (event: DragEvent) => {
     isDragging.value = false
   }
 }
-
-const ALLOWED_DOC_EXTENSIONS = new Set([
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-  'txt', 'csv', 'md', 'json', 'xml', 'html', 'rtf', 'log',
-])
 
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault()
@@ -438,16 +454,38 @@ const handleRemoveImage = (id: string) => {
   emit('removeImage', id)
 }
 
+// Whether to collapse file/image/knowledge buttons into a "More" dropdown
+const useCompactToolbar = computed(() => props.isSnapMode || isToolbarNarrow.value)
+
+// ResizeObserver to detect narrow toolbar
+let toolbarObserver: ResizeObserver | null = null
+
 // Setup event listeners
 onMounted(() => {
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
   }
+
+  nextTick(() => {
+    if (toolbarRef.value) {
+      toolbarObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          // Threshold: when toolbar width is below ~480px, collapse extra buttons
+          isToolbarNarrow.value = entry.contentRect.width < 480
+        }
+      })
+      toolbarObserver.observe(toolbarRef.value)
+    }
+  })
 })
 
 onUnmounted(() => {
   if (textareaRef.value) {
     textareaRef.value.removeEventListener('paste', handlePaste)
+  }
+  if (toolbarObserver) {
+    toolbarObserver.disconnect()
+    toolbarObserver = null
   }
 })
 </script>
@@ -603,12 +641,12 @@ onUnmounted(() => {
           @keydown.enter.exact="handleChatEnter"
         />
 
-        <div class="mt-3 flex items-center justify-between gap-2">
+        <div ref="toolbarRef" class="mt-3 flex items-center justify-between gap-2">
           <div
             :class="
               cn(
                 'flex min-w-0 flex-1 items-center',
-                isSnapMode ? 'flex-nowrap gap-1' : 'flex-wrap gap-x-2 gap-y-1'
+                useCompactToolbar ? 'flex-nowrap gap-1' : 'flex-wrap gap-x-2 gap-y-1'
               )
             "
           >
@@ -682,7 +720,7 @@ onUnmounted(() => {
             </TooltipProvider>
 
             <!-- Model selector: hidden in team mode，展示完整模型名的胶囊按钮 -->
-            <div :class="cn('min-w-0', isSnapMode ? 'flex-1' : 'shrink')">
+            <div class="min-w-0 shrink">
             <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -695,7 +733,7 @@ onUnmounted(() => {
                       <SelectTrigger
                         :class="cn(
                           'h-8 w-full min-w-0 max-w-[220px] rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40',
-                          isSnapMode && 'max-w-[140px]'
+                          useCompactToolbar && 'max-w-[140px]'
                         )"
                       >
                         <div v-if="selectedModelInfo" class="flex min-w-0 items-center gap-1.5">
@@ -832,8 +870,7 @@ onUnmounted(() => {
                       (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0) || selectedLibraryIds.length > 0
                         ? 'border-primary/50 bg-primary/10 hover:bg-primary/10'
                         : 'hover:bg-muted/40',
-                      // 吸附模式下隐藏按钮本身，仅保留 0 宽度占位用作弹层锚点
-                      isSnapMode && 'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
+                      useCompactToolbar && 'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
                     )
                   "
                 >
@@ -966,8 +1003,8 @@ onUnmounted(() => {
               </Button>
             </template>
 
-            <!-- File upload button (non-snap mode) -->
-            <TooltipProvider v-if="!isTeamMode && !isSnapMode">
+            <!-- File upload button (wide toolbar only) -->
+            <TooltipProvider v-if="!isTeamMode && !useCompactToolbar">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <span class="inline-flex">
@@ -989,10 +1026,9 @@ onUnmounted(() => {
 
             <!-- Image selection button (non-snap mode).
                  在窗口较宽时直接展示图标；在 snap 模式下收纳到“更多”菜单中。 -->
-            <TooltipProvider v-if="!isTeamMode && !isSnapMode">
+            <TooltipProvider v-if="!isTeamMode && !useCompactToolbar">
               <Tooltip>
                 <TooltipTrigger as-child>
-                  <!-- Wrap in span so tooltip hover still works when button is disabled -->
                   <span class="inline-flex">
                     <Button
                       size="icon"
@@ -1011,7 +1047,7 @@ onUnmounted(() => {
             </TooltipProvider>
 
             <!-- 更多：在空间较小时，将“上传文件 / 上传图片 / 选择知识库”放进菜单 -->
-            <DropdownMenu v-if="!isTeamMode && isSnapMode">
+            <DropdownMenu v-if="!isTeamMode && useCompactToolbar">
               <DropdownMenuTrigger as-child>
                 <Button
                   size="icon"
