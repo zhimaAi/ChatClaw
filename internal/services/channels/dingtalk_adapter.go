@@ -211,7 +211,6 @@ func (a *DingTalkAdapter) onMessageReceive(ctx context.Context, data *dingchatbo
 	// Deduplicate by msgId
 	if msgID != "" {
 		if _, loaded := a.seenMsgs.LoadOrStore(msgID, struct{}{}); loaded {
-			slog.Info("[dingtalk] duplicate msg_id, skipping", "msg_id", msgID)
 			return []byte(""), nil
 		}
 		go func() {
@@ -226,14 +225,6 @@ func (a *DingTalkAdapter) onMessageReceive(ctx context.Context, data *dingchatbo
 			url:       data.SessionWebhook,
 			expiresAt: data.SessionWebhookExpiredTime,
 		})
-		nowMs := time.Now().UnixMilli()
-		slog.Info("[dingtalk] session webhook cached",
-			"conversation_id", data.ConversationId,
-			"webhook_len", len(data.SessionWebhook),
-			"expires_at", data.SessionWebhookExpiredTime,
-			"now", nowMs,
-			"remaining_ms", data.SessionWebhookExpiredTime-nowMs,
-		)
 	} else {
 		slog.Warn("[dingtalk] session webhook missing in callback",
 			"conversation_id", data.ConversationId,
@@ -259,15 +250,6 @@ func (a *DingTalkAdapter) onMessageReceive(ctx context.Context, data *dingchatbo
 
 	// Extract content based on message type
 	content, rawData := a.extractIncomingContent(data)
-
-	slog.Info("[dingtalk] message received",
-		"sender", senderName,
-		"sender_id", senderID,
-		"chat_id", chatID,
-		"chat_name", chatName,
-		"msg_type", msgType,
-		"content_len", len(content),
-	)
 
 	a.handler(IncomingMessage{
 		ChannelID:  a.channelID,
@@ -504,10 +486,6 @@ func (a *DingTalkAdapter) IsConnected() bool {
 // SendMessage sends a text reply to a DingTalk conversation.
 // targetID should be the conversationId (as stored in chatID from IncomingMessage).
 func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, content string) error {
-	slog.Info("[dingtalk] send message start",
-		"target_id", targetID,
-		"content_len", len(content),
-	)
 	webhook, err := a.resolveWebhook(targetID)
 	if err != nil {
 		slog.Error("[dingtalk] resolve webhook failed",
@@ -516,13 +494,8 @@ func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, cont
 		)
 		return err
 	}
-	slog.Info("[dingtalk] resolve webhook ok",
-		"target_id", targetID,
-		"content", content,
-		"webhook_len", len(webhook),
-	)
 
-	msgType, requestBody, err := buildDingTalkOutgoingMessage(content)
+	_, requestBody, err := buildDingTalkOutgoingMessage(content)
 	if err != nil {
 		slog.Error("[dingtalk] build outgoing message failed",
 			"target_id", targetID,
@@ -532,41 +505,17 @@ func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, cont
 		return err
 	}
 
-	reqJSON, _ := json.Marshal(requestBody)
-	const maxLogLen = 1024
-	reqLog := string(reqJSON)
-	if len(reqLog) > maxLogLen {
-		reqLog = reqLog[:maxLogLen] + "...(truncated)"
-	}
-	slog.Error("[dingtalk] send message request",
-		"target_id", targetID,
-		"msg_type", msgType,
-		"body", reqLog,
-	)
-
 	replyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if deadline, ok := replyCtx.Deadline(); ok {
-		slog.Info("[dingtalk] reply context prepared",
-			"target_id", targetID,
-			"msg_type", msgType,
-			"deadline", deadline.UnixMilli(),
-		)
-	}
 
 	err = a.replier.ReplyMessage(replyCtx, webhook, requestBody)
 	if err != nil {
 		slog.Error("[dingtalk] send message response error",
 			"target_id", targetID,
-			"msg_type", msgType,
 			"error", err,
 		)
 		return err
 	}
-	slog.Info("[dingtalk] send message response ok",
-		"target_id", targetID,
-		"msg_type", msgType,
-	)
 	return nil
 }
 
@@ -688,12 +637,6 @@ func (a *DingTalkAdapter) resolveWebhook(conversationID string) (string, error) 
 	nowMs := time.Now().UnixMilli()
 	if v, ok := a.webhookCache.Load(conversationID); ok {
 		entry := v.(*webhookEntry)
-		slog.Info("[dingtalk] webhook cache hit",
-			"conversation_id", conversationID,
-			"expires_at", entry.expiresAt,
-			"now", nowMs,
-			"remaining_ms", entry.expiresAt-nowMs,
-		)
 		// Allow 30s grace period before expiry
 		if entry.expiresAt == 0 || nowMs < entry.expiresAt-30000 {
 			return entry.url, nil
@@ -727,11 +670,6 @@ func (a *DingTalkAdapter) resolveWebhook(conversationID string) (string, error) 
 //	{"msg_type":"image","media_id":"@lALPDfJ6..."}
 func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 	trimmed := strings.TrimSpace(raw)
-	slog.Info("[dingtalk] build outgoing message start",
-		"raw_len", len(raw),
-		"trimmed_len", len(trimmed),
-		"looks_like_json", strings.HasPrefix(trimmed, "{"),
-	)
 	if trimmed == "" {
 		slog.Warn("[dingtalk] build outgoing message failed: empty content")
 		return "", nil, fmt.Errorf("dingtalk message content is empty")
@@ -739,7 +677,6 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 
 	// If content is plain text (not JSON), send as markdown for richer rendering
 	if !strings.HasPrefix(trimmed, "{") {
-		slog.Info("[dingtalk] build outgoing message fallback plain text -> markdown")
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]any{
@@ -788,16 +725,6 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 			}
 		}
 	}
-	slog.Info("[dingtalk] build outgoing message parsed",
-		"msg_type", payload.MsgType,
-		"text_len", len(payload.Text),
-		"title", payload.Title,
-		"markdown_len", len(payload.Markdown),
-		"pic_url", strings.TrimSpace(payload.PicURL),
-		"photo_url", strings.TrimSpace(payload.PhotoURL),
-		"media_id", strings.TrimSpace(payload.MediaID),
-		"download_code", strings.TrimSpace(payload.DownloadCode),
-	)
 
 	switch payload.MsgType {
 	case "text":
@@ -805,7 +732,6 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 		if text == "" {
 			text = raw
 		}
-		slog.Info("[dingtalk] build outgoing message -> text")
 		return "text", map[string]any{
 			"msgtype": "text",
 			"text": map[string]any{
@@ -813,92 +739,18 @@ func buildDingTalkOutgoingMessage(raw string) (string, map[string]any, error) {
 			},
 		}, nil
 
-	case "markdown":
-		title := payload.Title
-		if title == "" {
-			title = "AI Reply"
-		}
-		md := payload.Markdown
-		if md == "" {
-			md = raw
-		}
-		slog.Info("[dingtalk] build outgoing message -> markdown",
-			"title", title,
-			"markdown_len", len(md),
-		)
-		return "markdown", map[string]any{
-			"msgtype": "markdown",
-			"markdown": map[string]any{
-				"title": title,
-				"text":  md,
-			},
-		}, nil
-
-	case "image":
-		// Per DingTalk robot single-chat message spec, image template key is
-		// sampleImageMsg and parameter key is photoURL.
-		picURL := strings.TrimSpace(payload.PicURL)
-		if picURL == "" {
-			picURL = strings.TrimSpace(payload.PhotoURL)
-		}
-		if picURL != "" {
-			slog.Info("[dingtalk] build outgoing message -> sampleImageMsg",
-				"pic_url", picURL,
-			)
-			return "sampleImageMsg", map[string]any{
-				"msgtype": "sampleImageMsg",
-				"sampleImageMsg": map[string]any{
-					"photoURL": picURL,
-					// Keep backward compatibility for old clients that used picURL.
-					"picURL": picURL,
-				},
-			}, nil
-		}
-		// Fallback: support image by media_id (for uploaded local image files).
-		mediaID := strings.TrimSpace(payload.MediaID)
-		if mediaID == "" {
-			mediaID = strings.TrimSpace(payload.DownloadCode)
-		}
-		if mediaID == "" {
-			slog.Warn("[dingtalk] build outgoing image failed: empty pic_url and media_id")
-			return "", nil, fmt.Errorf("dingtalk image message requires pic_url or media_id")
-		}
-		slog.Info("[dingtalk] build outgoing message -> image(media_id)",
-			"media_id", mediaID,
-		)
-		return "image", map[string]any{
+	case "sampleImageMsg":
+		return "sampleImageMsg", map[string]any{
+			"msg_key": "image",
 			"msgtype": "image",
 			"image": map[string]any{
-				"media_id": mediaID,
+				"title":    "AI Reply",
+				"photoURL": payload.MediaID,
 			},
-		}, nil
-
-	case "file":
-		mediaID := strings.TrimSpace(payload.MediaID)
-		if mediaID == "" {
-			// Backward compatibility with old internal payload key.
-			mediaID = strings.TrimSpace(payload.DownloadCode)
-		}
-		if mediaID == "" {
-			slog.Warn("[dingtalk] build outgoing file failed: empty media_id")
-			return "", nil, fmt.Errorf("dingtalk file message requires media_id")
-		}
-		fileBody := map[string]any{
-			"media_id": mediaID,
-		}
-		slog.Info("[dingtalk] build outgoing message -> file",
-			"media_id", mediaID,
-		)
-		return "file", map[string]any{
-			"msgtype": "file",
-			"file":    fileBody,
 		}, nil
 
 	default:
 		// Default to markdown
-		slog.Info("[dingtalk] build outgoing message unknown msg_type, fallback markdown",
-			"msg_type", payload.MsgType,
-		)
 		return "markdown", map[string]any{
 			"msgtype": "markdown",
 			"markdown": map[string]any{
