@@ -7,11 +7,9 @@ import {
   FileText,
   Image as ImageIcon,
   LoaderCircle,
-  LogIn,
   Mic,
   RefreshCw,
   UserCheck,
-  UserRound,
   Video,
 } from 'lucide-vue-next'
 import ModelIcon from '@/assets/icons/model.svg'
@@ -20,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
 import { useSettingsStore } from '@/stores/settings'
 import type { Provider, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import { ProvidersService, UpdateProviderInput } from '@bindings/chatclaw/internal/services/providers'
@@ -281,6 +280,24 @@ function goToBindingSettings() {
   settingsStore.setActiveMenu('chatwiki')
 }
 
+async function handleLoginNow() {
+  const base = cloudURL.value.trim().replace(/\/+$/, '')
+  if (!base) {
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+
+  try {
+    await openChatWikiCloudLogin(base)
+  } catch (error) {
+    console.error('Failed to open ChatWiki auth URL:', error)
+    toast.error(getErrorMessage(error) || t('settings.chatwiki.invalidUrl'))
+    return
+  }
+
+  goToBindingSettings()
+}
+
 async function openBillingPage() {
   const base = cloudURL.value.trim().replace(/\/+$/, '')
   if (!base) {
@@ -325,7 +342,7 @@ onBeforeUnmount(() => {
       >
         <div>
           <p class="text-base font-semibold text-foreground">
-            {{ providerWithModels.provider.name }}{{ isBound ? '' : '（未登录）' }}
+            {{ providerWithModels.provider.name }}
           </p>
         </div>
         <Switch
@@ -401,28 +418,44 @@ onBeforeUnmount(() => {
 
         <div
           v-else
-          class="rounded-2xl border border-border bg-muted/10 p-6 dark:border-white/10"
+          class="rounded-[28px] border border-border/60 bg-card p-8 shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-white/10 dark:shadow-none"
         >
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex items-center gap-3">
+          <div class="flex items-center justify-between gap-6">
+            <div class="flex min-w-0 items-center gap-5">
               <div
-                class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50"
               >
-                <UserRound class="size-5" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  id="account-icon"
+                  class="h-5 w-5 text-blue-500"
+                >
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
               </div>
-              <div>
-                <p class="text-base font-semibold text-foreground">
+              <div class="min-w-0">
+                <p class="text-xl font-semibold leading-tight text-foreground">
                   {{ t('settings.chatwiki.notLoggedInTitle') }}
-                </p>
-                <p class="mt-1 text-sm text-muted-foreground">
-                  {{ t('settings.chatwiki.notLoggedInDesc') }}
                 </p>
               </div>
             </div>
 
-            <Button size="sm" class="gap-1.5" @click="goToBindingSettings">
-              <LogIn class="size-4" />
-              {{ t('settings.chatwiki.loginCloud') }}
+            <Button
+              size="sm"
+              class="h-9 rounded-lg bg-[#2f67f6] px-3.5 text-sm font-medium text-white shadow-[0_4px_10px_rgba(47,103,246,0.2)] hover:bg-[#2558db]"
+              @click="handleLoginNow"
+            >
+              立即登录
             </Button>
           </div>
         </div>
