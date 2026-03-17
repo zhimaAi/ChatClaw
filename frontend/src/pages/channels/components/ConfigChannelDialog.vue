@@ -272,6 +272,7 @@ async function handleOpenExternalLink(url: string) {
             id="channel-name"
             v-model="name"
             :placeholder="t('channels.config.namePlaceholder')"
+            maxlength="60"
           />
         </div>
 
@@ -283,7 +284,7 @@ async function handleOpenExternalLink(url: string) {
             <span class="text-[#0a0a0a] dark:text-foreground">*</span>
             {{ appIdLabel }}
           </Label>
-          <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" />
+          <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" maxlength="60" />
         </div>
         <div class="mt-4 space-y-1">
           <Label
@@ -298,6 +299,7 @@ async function handleOpenExternalLink(url: string) {
             v-model="appSecret"
             type="password"
             :placeholder="appSecretPlaceholder"
+            maxlength="60"
           />
         </div>
 

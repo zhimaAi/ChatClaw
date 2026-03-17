@@ -57,9 +57,9 @@ defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** Platforms that support add/filter in UI (feishu + wecom). */
+/** Platforms that support add/filter in UI (feishu + wecom + qq). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
 }
 
 const channels = ref<Channel[]>([])
@@ -686,10 +686,10 @@ onMounted(loadData)
                 {{ channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound') }}
               </span>
             </div>
-            <!-- Agent name: grows into remaining space; when wrapped, fills row so truncate works -->
+            <!-- Agent name: background wraps text only; long names truncate with max-width -->
             <div
               v-if="channel.agent_id !== 0"
-              class="inline-flex min-w-0 max-w-full flex-1 basis-0 items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+              class="inline-flex min-w-0 max-w-[12rem] w-fit items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
             >
               <span
                 class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
@@ -761,6 +761,7 @@ onMounted(loadData)
                 v-model="inlineFormName"
                 class="h-10 min-w-0 flex-1 rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
                 :placeholder="t('channels.inline.namePlaceholder')"
+                maxlength="60"
               />
             </div>
           </div>
@@ -777,6 +778,7 @@ onMounted(loadData)
               v-model="inlineFormAppId"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
               :placeholder="inlineAppIdPlaceholder"
+              maxlength="60"
             />
           </div>
 
@@ -793,6 +795,7 @@ onMounted(loadData)
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
               :placeholder="inlineAppSecretPlaceholder"
+              maxlength="60"
             />
           </div>
         </div>

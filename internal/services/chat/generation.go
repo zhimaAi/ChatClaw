@@ -187,13 +187,13 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 				for _, r := range teamResults {
 					teamRetrievalItems = append(teamRetrievalItems, RetrievalItem{Source: "knowledge", Content: r.Content, Score: r.Score})
 				}
-			var sb strings.Builder
-			sb.WriteString(teamRecallContextHeader)
-			for i, r := range teamResults {
-				sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
-			}
-			sb.WriteString(teamRecallContextFooter)
-			gc.agentConfig.Instruction += sb.String()
+				var sb strings.Builder
+				sb.WriteString(teamRecallContextHeader)
+				for i, r := range teamResults {
+					sb.WriteString(fmt.Sprintf("---\n[Source %d] (score: %.2f)\n%s\n", i+1, r.Score, r.Content))
+				}
+				sb.WriteString(teamRecallContextFooter)
+				gc.agentConfig.Instruction += sb.String()
 				s.app.Logger.Info("[chat] task mode team recall injected", "conv", conversationID, "results", len(teamResults))
 			}
 		}
