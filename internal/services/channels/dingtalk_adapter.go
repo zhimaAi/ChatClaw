@@ -7,10 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -543,116 +540,6 @@ func (a *DingTalkAdapter) SendMessage(ctx context.Context, targetID string, cont
 		return err
 	}
 	return nil
-}
-
-// detectDingTalkMediaType infers the DingTalk media type from a file name.
-// DingTalk supports: image (jpg/jpeg/gif/png/bmp ≤1 MB), voice (amr/mp3/wav ≤2 MB),
-// video (mp4 ≤10 MB), and file (doc/docx/xls/xlsx/ppt/pptx/zip/pdf/rar ≤20 MB).
-func detectDingTalkMediaType(fileName string) string {
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
-	switch ext {
-	case "jpg", "jpeg", "gif", "png", "bmp":
-		return "image"
-	case "amr", "mp3", "wav":
-		return "voice"
-	case "mp4":
-		return "video"
-	default:
-		return "file"
-	}
-}
-
-// UploadMessageFile uploads a local file to DingTalk and returns (mediaId, mediaType, error).
-// mediaId is the DingTalk media resource identifier used when sending file/audio/video messages.
-// mediaType is one of: image, voice, video, file (derived from the file extension).
-//
-// Uses the legacy oapi endpoint which accepts a single multipart form with:
-//   - media: the file binary
-//   - type:  one of image / voice / video / file
-//
-// Reference: https://open.dingtalk.com/document/development/upload-media-files
-// Equivalent curl:
-//
-//	curl -X POST 'https://oapi.dingtalk.com/media/upload?access_token=TOKEN' \
-//	  --form 'media=@"/path/to/file"' \
-//	  --form 'type="file"'
-func (a *DingTalkAdapter) UploadMessageFile(ctx context.Context, filePath string) (mediaID string, mediaType string, err error) {
-	stat, err := os.Stat(filePath)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: file not accessible: %w", err)
-	}
-	if stat.IsDir() {
-		return "", "", fmt.Errorf("dingtalk upload: path is a directory")
-	}
-
-	token, err := a.getOApiAccessToken(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: %w", err)
-	}
-
-	fileName := filepath.Base(filePath)
-	mediaType = detectDingTalkMediaType(fileName)
-
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: open file: %w", err)
-	}
-	defer file.Close()
-
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-
-	part, err := writer.CreateFormFile("media", fileName)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: create multipart field: %w", err)
-	}
-	if _, err := io.Copy(part, file); err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: copy file data: %w", err)
-	}
-	if err := writer.WriteField("type", mediaType); err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: write type field: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: finalize multipart body: %w", err)
-	}
-
-	uploadURL := fmt.Sprintf("https://oapi.dingtalk.com/media/upload?access_token=%s", token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &body)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: build request: %w", err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("dingtalk upload failed (http %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var result struct {
-		ErrCode   int    `json:"errcode"`
-		ErrMsg    string `json:"errmsg"`
-		Type      string `json:"type"`
-		MediaID   string `json:"media_id"`
-		CreatedAt int64  `json:"created_at"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", "", fmt.Errorf("dingtalk upload: parse response: %w", err)
-	}
-	if result.ErrCode != 0 {
-		return "", "", fmt.Errorf("dingtalk upload failed (code: %d, msg: %s)", result.ErrCode, result.ErrMsg)
-	}
-
-	mediaID = strings.TrimSpace(result.MediaID)
-	if mediaID == "" {
-		return "", "", fmt.Errorf("dingtalk upload failed: empty media_id in response")
-	}
-	return mediaID, mediaType, nil
 }
 
 // resolveWebhook retrieves a cached session webhook for the given conversationId.

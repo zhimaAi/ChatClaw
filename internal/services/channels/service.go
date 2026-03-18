@@ -118,11 +118,11 @@ func parseAppCredentials(extraConfig string) (appID, appSecret string) {
 }
 
 // ensureNoDuplicateCredentials rejects create/update when another channel of the same
-// platform already uses the same app_id or app_secret (Feishu / WeCom).
+// platform already uses the same app_id or app_secret (Feishu / WeCom / QQ).
 // excludeID > 0 skips that channel (for update).
 func (s *ChannelService) ensureNoDuplicateCredentials(ctx context.Context, db *bun.DB, platform, extraConfig string, excludeID int64) error {
 	platform = strings.TrimSpace(platform)
-	if platform != PlatformFeishu && platform != PlatformWeCom && platform != PlatformDingTalk {
+	if platform != PlatformFeishu && platform != PlatformWeCom && platform != PlatformDingTalk && platform != PlatformQQ {
 		return nil
 	}
 	appID, appSecret := parseAppCredentials(extraConfig)
@@ -490,6 +490,10 @@ func (s *ChannelService) VerifyChannelConfig(platform string, extraConfig string
 
 	noopHandler := func(msg IncomingMessage) {}
 	if err := adapter.Connect(ctx, 0, extraConfig, noopHandler); err != nil {
+		errStr := err.Error()
+		if platform == PlatformDingTalk && (strings.Contains(errStr, "no such host") || strings.Contains(errStr, "lookup ")) {
+			return errs.Wrapf("error.dingtalk_network_dns_failed", err, map[string]any{"Platform": platform})
+		}
 		return errs.Wrapf("error.channel_verify_failed", err, map[string]any{"Platform": platform})
 	}
 	// Disconnect to avoid leaving a live connection; ignore disconnect error for verify flow

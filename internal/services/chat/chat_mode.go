@@ -200,6 +200,7 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 		if msg.Content != "" {
 			ss.contentBuilder.WriteString(msg.Content)
 			ss.addContentToSegments(msg.Content)
+			s.appendGenerationContent(conversationID, gc.requestID, msg.Content)
 			gc.emit(EventChatChunk, ChatChunkEvent{
 				ChatEvent: gc.chatEvent(assistantMsg.ID),
 				Delta:     msg.Content,

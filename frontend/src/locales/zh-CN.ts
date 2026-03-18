@@ -1327,6 +1327,11 @@ export default {
         botName: '企微',
         description: '企业微信机器人',
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ 开放平台机器人，通过 WebSocket 接入",
+      },
     },
     authType: {
       token: '令牌',
@@ -1334,6 +1339,8 @@ export default {
     },
     comingSoon: '即将上线',
     agentFallback: 'AI助手',
+    unbindConfirmTitle: "确认解除绑定",
+    unbindConfirmDesc: "确定要解除频道「{name}」与助手的绑定吗？解除后需重新绑定才能由助手处理消息。",
     unbindSuccess: '已解绑助手',
     bindSuccess: '绑定助手成功',
     card: {
