@@ -1829,6 +1829,13 @@ func normalizeChatWikiVersion(version string) string {
 	return version
 }
 
+func isChatWikiCloudBinding(binding *Binding) bool {
+	if binding == nil {
+		return false
+	}
+	return normalizeChatWikiVersion(binding.ChatWikiVersion) == "yun"
+}
+
 func ensureChatWikiBindingVersionColumn(db *bun.DB) error {
 	if db == nil {
 		return nil

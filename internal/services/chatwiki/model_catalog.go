@@ -49,6 +49,7 @@ type modelCatalogSource struct {
 	Token     string
 	UserID    string
 	Bound     bool
+	Cloud     bool
 }
 
 var (
@@ -92,6 +93,7 @@ func getModelCatalogSource(binding *Binding) modelCatalogSource {
 			Token:     "",
 			UserID:    "",
 			Bound:     false,
+			Cloud:     false,
 		}
 	}
 	return modelCatalogSource{
@@ -99,6 +101,7 @@ func getModelCatalogSource(binding *Binding) modelCatalogSource {
 		Token:     strings.TrimSpace(binding.Token),
 		UserID:    binding.UserID,
 		Bound:     true,
+		Cloud:     isChatWikiCloudBinding(binding),
 	}
 }
 
@@ -137,11 +140,9 @@ func syncChatWikiProviderCredentials(binding *Binding) error {
 
 	apiKey := ""
 	apiEndpoint := ""
-	if binding != nil {
+	if isChatWikiCloudBinding(binding) {
 		apiKey = strings.TrimSpace(binding.Token)
 		apiEndpoint = chatWikiOpenAIBaseURL(binding.ServerURL)
-	} else {
-		apiEndpoint = chatWikiOpenAIBaseURL(define.ServerURL)
 	}
 
 	_, err := db.NewUpdate().
@@ -275,7 +276,7 @@ func (s *ChatWikiService) fetchModelCatalog(source modelCatalogSource) (*ModelCa
 		"rerank_count", len(catalog.RerankModels),
 	)
 
-	if source.Bound {
+	if source.Bound && source.Cloud {
 		statsBody, statsErr := s.chatWikiGETLoose(source.Token, statsURL)
 		if statsErr == nil {
 			catalog.IntegralStats = &IntegralStats{Raw: append(json.RawMessage(nil), statsBody...)}
