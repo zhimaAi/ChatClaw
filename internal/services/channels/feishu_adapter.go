@@ -15,6 +15,7 @@ import (
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher"
 	larkauth "github.com/larksuite/oapi-sdk-go/v3/service/auth/v3"
+	larkcardkit "github.com/larksuite/oapi-sdk-go/v3/service/cardkit/v1"
 	larkcontact "github.com/larksuite/oapi-sdk-go/v3/service/contact/v3"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
@@ -31,6 +32,24 @@ type FeishuConfig struct {
 	AppID               string `json:"app_id"`
 	AppSecret           string `json:"app_secret"`
 	StreamOutputEnabled *bool  `json:"stream_output_enabled,omitempty"`
+}
+
+const (
+	feishuStreamCardType          = "card_json"
+	feishuStreamCardElementID     = "agent_reply_md"
+	feishuStreamCardSummaryMaxLen = 120
+)
+
+// FeishuStreamCardHandle tracks the card entity used for streaming replies.
+type FeishuStreamCardHandle struct {
+	MessageID string
+	CardID    string
+	sequence  int
+}
+
+func (h *FeishuStreamCardHandle) nextSequence() int {
+	h.sequence++
+	return h.sequence
 }
 
 func ParseFeishuConfig(configJSON string) (FeishuConfig, error) {
@@ -228,7 +247,6 @@ func (a *FeishuAdapter) resolveSenderName(ctx context.Context, openID string) st
 		Build()
 
 	resp, err := client.Contact.User.Get(ctx, req)
-	fmt.Print("resp: ", resp, "err: ", err)
 	if err != nil || !resp.Success() || resp.Data == nil || resp.Data.User == nil {
 		return ""
 	}
@@ -279,6 +297,50 @@ func (a *FeishuAdapter) resolveChatName(ctx context.Context, chatID string) stri
 	return name
 }
 
+// isTokenExpiredCode returns true for Feishu error codes that indicate a stale/missing access token.
+func isTokenExpiredCode(code int) bool {
+	switch code {
+	case 99991661, // access_token expired
+		99991663, // invalid access token / not attached
+		99991664: // token not found
+		return true
+	}
+	return false
+}
+
+// rebuildClient creates a fresh lark.Client, forcing the SDK to obtain a new tenant access token.
+func (a *FeishuAdapter) rebuildClient() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.client = lark.NewClient(a.config.AppID, a.config.AppSecret)
+	slog.Info("[feishu] rebuilt lark client to refresh access token", "channel_id", a.channelID)
+}
+
+// withTokenRetry executes fn with the current lark.Client. If the Feishu API returns
+// a token-expired error code, it rebuilds the client and retries once.
+func (a *FeishuAdapter) withTokenRetry(ctx context.Context, fn func(client *lark.Client) (apiCode int, err error)) error {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+
+	if client == nil {
+		return fmt.Errorf("feishu client not initialized")
+	}
+
+	code, err := fn(client)
+	if err != nil && isTokenExpiredCode(code) {
+		slog.Warn("[feishu] token expired, rebuilding client and retrying", "code", code, "channel_id", a.channelID)
+		a.rebuildClient()
+
+		a.mu.Lock()
+		client = a.client
+		a.mu.Unlock()
+
+		_, err = fn(client)
+	}
+	return err
+}
+
 func (a *FeishuAdapter) Disconnect(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -306,113 +368,282 @@ func (a *FeishuAdapter) SendTextMessage(ctx context.Context, targetID string, te
 }
 
 func (a *FeishuAdapter) ReplyMessage(ctx context.Context, replyToMessageID string, content string) (string, error) {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
-
-	if client == nil {
-		return "", fmt.Errorf("feishu client not initialized")
-	}
-
 	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
 	if err != nil {
 		return "", err
 	}
 
-	req := larkim.NewReplyMessageReqBuilder().
-		MessageId(replyToMessageID).
-		Body(larkim.NewReplyMessageReqBodyBuilder().
-			MsgType(msgType).
-			Content(contentJSON).
-			Uuid(fmt.Sprintf("feishu_reply_%d", time.Now().UnixNano())).
-			Build()).
-		Build()
+	var messageID string
+	err = a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkim.NewReplyMessageReqBuilder().
+			MessageId(replyToMessageID).
+			Body(larkim.NewReplyMessageReqBodyBuilder().
+				MsgType(msgType).
+				Content(contentJSON).
+				Uuid(fmt.Sprintf("feishu_reply_%d", time.Now().UnixNano())).
+				Build()).
+			Build()
 
-	resp, err := client.Im.Message.Reply(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("reply feishu message: %w", err)
-	}
-	if !resp.Success() {
-		return "", fmt.Errorf("reply feishu message: code=%d msg=%s", resp.Code, resp.Msg)
-	}
-	if resp.Data == nil || resp.Data.MessageId == nil {
-		return "", fmt.Errorf("reply feishu message: empty message_id in response")
-	}
-	return *resp.Data.MessageId, nil
+		resp, err := client.Im.Message.Reply(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("reply feishu message: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("reply feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.MessageId == nil {
+			return 0, fmt.Errorf("reply feishu message: empty message_id in response")
+		}
+		messageID = *resp.Data.MessageId
+		return 0, nil
+	})
+	return messageID, err
 }
 
 func (a *FeishuAdapter) UpdateTextMessage(ctx context.Context, messageID string, text string) error {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
-
-	if client == nil {
-		return fmt.Errorf("feishu client not initialized")
-	}
-
 	contentJSON, err := marshalFeishuTextContent(text)
 	if err != nil {
 		return err
 	}
 
-	req := larkim.NewUpdateMessageReqBuilder().
-		MessageId(messageID).
-		Body(larkim.NewUpdateMessageReqBodyBuilder().
-			MsgType(larkim.MsgTypeText).
-			Content(contentJSON).
-			Build()).
-		Build()
+	return a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkim.NewUpdateMessageReqBuilder().
+			MessageId(messageID).
+			Body(larkim.NewUpdateMessageReqBodyBuilder().
+				MsgType(larkim.MsgTypeText).
+				Content(contentJSON).
+				Build()).
+			Build()
 
-	resp, err := client.Im.Message.Update(ctx, req)
-	if err != nil {
-		return fmt.Errorf("update feishu message: %w", err)
-	}
-	if !resp.Success() {
-		return fmt.Errorf("update feishu message: code=%d msg=%s", resp.Code, resp.Msg)
-	}
-	return nil
+		resp, err := client.Im.Message.Update(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("update feishu message: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("update feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		return 0, nil
+	})
 }
 
-func (a *FeishuAdapter) sendMessage(ctx context.Context, targetID string, content string) (string, error) {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
-
-	if client == nil {
-		return "", fmt.Errorf("feishu client not initialized")
+func (a *FeishuAdapter) CreateStreamCardMessage(ctx context.Context, targetID string, replyToMessageID string, placeholder string) (*FeishuStreamCardHandle, error) {
+	cardID, err := a.createStreamCard(ctx, placeholder)
+	if err != nil {
+		return nil, err
 	}
 
-	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
+	contentJSON, err := marshalFeishuCardContent(cardID)
+	if err != nil {
+		return nil, err
+	}
+
+	var messageID string
+	if replyToMessageID != "" {
+		err = a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+			req := larkim.NewReplyMessageReqBuilder().
+				MessageId(replyToMessageID).
+				Body(larkim.NewReplyMessageReqBodyBuilder().
+					MsgType(larkim.MsgTypeInteractive).
+					Content(contentJSON).
+					Uuid(fmt.Sprintf("feishu_stream_reply_%d", time.Now().UnixNano())).
+					Build()).
+				Build()
+
+			resp, err := client.Im.Message.Reply(ctx, req)
+			if err != nil {
+				return 0, fmt.Errorf("reply feishu stream card message: %w", err)
+			}
+			if !resp.Success() {
+				return resp.Code, fmt.Errorf("reply feishu stream card message: code=%d msg=%s", resp.Code, resp.Msg)
+			}
+			if resp.Data == nil || resp.Data.MessageId == nil {
+				return 0, fmt.Errorf("reply feishu stream card message: empty message_id in response")
+			}
+			messageID = *resp.Data.MessageId
+			return 0, nil
+		})
+	} else {
+		messageID, err = a.sendInteractiveMessage(ctx, targetID, contentJSON)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &FeishuStreamCardHandle{
+		MessageID: messageID,
+		CardID:    cardID,
+	}, nil
+}
+
+func (a *FeishuAdapter) UpdateStreamCardMessage(ctx context.Context, handle *FeishuStreamCardHandle, text string, finish bool) error {
+	if handle == nil || strings.TrimSpace(handle.CardID) == "" {
+		return fmt.Errorf("feishu stream card handle is invalid")
+	}
+	if strings.TrimSpace(text) == "" {
+		return fmt.Errorf("feishu stream card content is empty")
+	}
+
+	if err := a.updateStreamCardContent(ctx, handle, text); err != nil {
+		return err
+	}
+	if !finish {
+		return nil
+	}
+	return a.finishStreamCard(ctx, handle, text)
+}
+
+func (a *FeishuAdapter) createStreamCard(ctx context.Context, text string) (string, error) {
+	cardJSON, err := marshalFeishuStreamCardJSON(text)
 	if err != nil {
 		return "", err
 	}
 
-	// Detect ID type: chat IDs start with "oc_", open IDs start with "ou_"
+	var cardID string
+	err = a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkcardkit.NewCreateCardReqBuilder().
+			Body(larkcardkit.NewCreateCardReqBodyBuilder().
+				Type(feishuStreamCardType).
+				Data(cardJSON).
+				Build()).
+			Build()
+
+		resp, err := client.Cardkit.V1.Card.Create(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("create feishu stream card: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("create feishu stream card: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.CardId == nil {
+			return 0, fmt.Errorf("create feishu stream card: empty card_id in response")
+		}
+		cardID = *resp.Data.CardId
+		return 0, nil
+	})
+	return cardID, err
+}
+
+func (a *FeishuAdapter) updateStreamCardContent(ctx context.Context, handle *FeishuStreamCardHandle, text string) error {
+	sequence := handle.nextSequence()
+	return a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkcardkit.NewContentCardElementReqBuilder().
+			CardId(handle.CardID).
+			ElementId(feishuStreamCardElementID).
+			Body(larkcardkit.NewContentCardElementReqBodyBuilder().
+				Uuid(fmt.Sprintf("feishu_stream_content_%d", time.Now().UnixNano())).
+				Content(text).
+				Sequence(sequence).
+				Build()).
+			Build()
+
+		resp, err := client.Cardkit.V1.CardElement.Content(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("update feishu stream card content: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("update feishu stream card content: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		return 0, nil
+	})
+}
+
+func (a *FeishuAdapter) finishStreamCard(ctx context.Context, handle *FeishuStreamCardHandle, finalText string) error {
+	settingsJSON, err := marshalFeishuStreamCardSettings(finalText)
+	if err != nil {
+		return err
+	}
+
+	sequence := handle.nextSequence()
+	return a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkcardkit.NewSettingsCardReqBuilder().
+			CardId(handle.CardID).
+			Body(larkcardkit.NewSettingsCardReqBodyBuilder().
+				Settings(settingsJSON).
+				Uuid(fmt.Sprintf("feishu_stream_finish_%d", time.Now().UnixNano())).
+				Sequence(sequence).
+				Build()).
+			Build()
+
+		resp, err := client.Cardkit.V1.Card.Settings(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("finish feishu stream card: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("finish feishu stream card: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		return 0, nil
+	})
+}
+
+func (a *FeishuAdapter) sendInteractiveMessage(ctx context.Context, targetID string, contentJSON string) (string, error) {
 	receiveIDType := larkim.ReceiveIdTypeOpenId
 	if len(targetID) > 3 && targetID[:3] == "oc_" {
 		receiveIDType = larkim.ReceiveIdTypeChatId
 	}
 
-	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType(receiveIDType).
-		Body(larkim.NewCreateMessageReqBodyBuilder().
-			ReceiveId(targetID).
-			MsgType(msgType).
-			Content(contentJSON).
-			Build()).
-		Build()
+	var messageID string
+	err := a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkim.NewCreateMessageReqBuilder().
+			ReceiveIdType(receiveIDType).
+			Body(larkim.NewCreateMessageReqBodyBuilder().
+				ReceiveId(targetID).
+				MsgType(larkim.MsgTypeInteractive).
+				Content(contentJSON).
+				Build()).
+			Build()
 
-	resp, err := client.Im.Message.Create(ctx, req)
+		resp, err := client.Im.Message.Create(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("send feishu interactive message: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("send feishu interactive message: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.MessageId == nil {
+			return 0, fmt.Errorf("send feishu interactive message: empty message_id in response")
+		}
+		messageID = *resp.Data.MessageId
+		return 0, nil
+	})
+	return messageID, err
+}
+
+func (a *FeishuAdapter) sendMessage(ctx context.Context, targetID string, content string) (string, error) {
+	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
 	if err != nil {
-		return "", fmt.Errorf("send feishu message: %w", err)
+		return "", err
 	}
-	if !resp.Success() {
-		return "", fmt.Errorf("send feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+
+	receiveIDType := larkim.ReceiveIdTypeOpenId
+	if len(targetID) > 3 && targetID[:3] == "oc_" {
+		receiveIDType = larkim.ReceiveIdTypeChatId
 	}
-	if resp.Data == nil || resp.Data.MessageId == nil {
-		return "", fmt.Errorf("send feishu message: empty message_id in response")
-	}
-	return *resp.Data.MessageId, nil
+
+	var messageID string
+	err = a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		req := larkim.NewCreateMessageReqBuilder().
+			ReceiveIdType(receiveIDType).
+			Body(larkim.NewCreateMessageReqBodyBuilder().
+				ReceiveId(targetID).
+				MsgType(msgType).
+				Content(contentJSON).
+				Build()).
+			Build()
+
+		resp, err := client.Im.Message.Create(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("send feishu message: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("send feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.MessageId == nil {
+			return 0, fmt.Errorf("send feishu message: empty message_id in response")
+		}
+		messageID = *resp.Data.MessageId
+		return 0, nil
+	})
+	return messageID, err
 }
 
 type feishuOutgoingMessage struct {
@@ -558,76 +789,140 @@ func marshalFeishuTextContent(text string) (string, error) {
 	return string(contentBytes), nil
 }
 
+func marshalFeishuCardContent(cardID string) (string, error) {
+	contentBytes, err := json.Marshal(map[string]any{
+		"type": "card",
+		"data": map[string]string{
+			"card_id": cardID,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal feishu card content: %w", err)
+	}
+	return string(contentBytes), nil
+}
+
+func marshalFeishuStreamCardJSON(text string) (string, error) {
+	cardBytes, err := json.Marshal(map[string]any{
+		"schema": "2.0",
+		"config": map[string]any{
+			"streaming_mode": true,
+			"summary": map[string]string{
+				"content": "",
+			},
+			"streaming_config": map[string]any{
+				"print_frequency_ms": map[string]int{"default": 70},
+				"print_step":         map[string]int{"default": 1},
+				"print_strategy":     "fast",
+			},
+		},
+		"body": map[string]any{
+			"elements": []map[string]string{
+				{
+					"tag":        "markdown",
+					"content":    text,
+					"element_id": feishuStreamCardElementID,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal feishu stream card json: %w", err)
+	}
+	return string(cardBytes), nil
+}
+
+func marshalFeishuStreamCardSettings(finalText string) (string, error) {
+	settingsBytes, err := json.Marshal(map[string]any{
+		"config": map[string]any{
+			"streaming_mode": false,
+			"summary": map[string]string{
+				"content": buildFeishuStreamCardSummary(finalText),
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal feishu stream card settings: %w", err)
+	}
+	return string(settingsBytes), nil
+}
+
+func buildFeishuStreamCardSummary(text string) string {
+	cleaned := strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if cleaned == "" {
+		return ""
+	}
+	runes := []rune(cleaned)
+	if len(runes) <= feishuStreamCardSummaryMaxLen {
+		return cleaned
+	}
+	return string(runes[:feishuStreamCardSummaryMaxLen]) + "..."
+}
+
 // UploadFile uploads a local file to Feishu and returns the file_key.
 // fileType: opus, mp4, pdf, doc, xls, ppt, stream (default "stream").
 func (a *FeishuAdapter) UploadFile(ctx context.Context, filePath string, fileType string) (string, error) {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
-
-	if client == nil {
-		return "", fmt.Errorf("feishu client not initialized")
-	}
-
 	if fileType == "" {
 		fileType = "stream"
 	}
 
 	fileName := filepath.Base(filePath)
 
-	body, err := larkim.NewCreateFilePathReqBodyBuilder().
-		FileType(fileType).
-		FileName(fileName).
-		FilePath(filePath).
-		Build()
-	if err != nil {
-		return "", fmt.Errorf("build file upload body: %w", err)
-	}
+	var fileKey string
+	err := a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		body, err := larkim.NewCreateFilePathReqBodyBuilder().
+			FileType(fileType).
+			FileName(fileName).
+			FilePath(filePath).
+			Build()
+		if err != nil {
+			return 0, fmt.Errorf("build file upload body: %w", err)
+		}
 
-	req := larkim.NewCreateFileReqBuilder().Body(body).Build()
-	resp, err := client.Im.File.Create(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("upload file to feishu: %w", err)
-	}
-	if !resp.Success() {
-		return "", fmt.Errorf("upload file to feishu: code=%d msg=%s", resp.Code, resp.Msg)
-	}
-	if resp.Data == nil || resp.Data.FileKey == nil {
-		return "", fmt.Errorf("upload file to feishu: empty file_key in response")
-	}
-	return *resp.Data.FileKey, nil
+		req := larkim.NewCreateFileReqBuilder().Body(body).Build()
+		resp, err := client.Im.File.Create(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("upload file to feishu: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("upload file to feishu: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.FileKey == nil {
+			return 0, fmt.Errorf("upload file to feishu: empty file_key in response")
+		}
+		fileKey = *resp.Data.FileKey
+		return 0, nil
+	})
+	return fileKey, err
 }
 
 // UploadImage uploads a local image to Feishu and returns the image_key.
 func (a *FeishuAdapter) UploadImage(ctx context.Context, imagePath string) (string, error) {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
+	var imageKey string
+	err := a.withTokenRetry(ctx, func(client *lark.Client) (int, error) {
+		body, err := larkim.NewCreateImagePathReqBodyBuilder().
+			ImageType("message").
+			ImagePath(imagePath).
+			Build()
+		if err != nil {
+			return 0, fmt.Errorf("build image upload body: %w", err)
+		}
 
-	if client == nil {
-		return "", fmt.Errorf("feishu client not initialized")
-	}
-
-	body, err := larkim.NewCreateImagePathReqBodyBuilder().
-		ImageType("message").
-		ImagePath(imagePath).
-		Build()
-	if err != nil {
-		return "", fmt.Errorf("build image upload body: %w", err)
-	}
-
-	req := larkim.NewCreateImageReqBuilder().Body(body).Build()
-	resp, err := client.Im.Image.Create(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("upload image to feishu: %w", err)
-	}
-	if !resp.Success() {
-		return "", fmt.Errorf("upload image to feishu: code=%d msg=%s", resp.Code, resp.Msg)
-	}
-	if resp.Data == nil || resp.Data.ImageKey == nil {
-		return "", fmt.Errorf("upload image to feishu: empty image_key in response")
-	}
-	return *resp.Data.ImageKey, nil
+		req := larkim.NewCreateImageReqBuilder().Body(body).Build()
+		resp, err := client.Im.Image.Create(ctx, req)
+		if err != nil {
+			return 0, fmt.Errorf("upload image to feishu: %w", err)
+		}
+		if !resp.Success() {
+			return resp.Code, fmt.Errorf("upload image to feishu: code=%d msg=%s", resp.Code, resp.Msg)
+		}
+		if resp.Data == nil || resp.Data.ImageKey == nil {
+			return 0, fmt.Errorf("upload image to feishu: empty image_key in response")
+		}
+		imageKey = *resp.Data.ImageKey
+		return 0, nil
+	})
+	return imageKey, err
 }
 
 func deref(s *string) string {

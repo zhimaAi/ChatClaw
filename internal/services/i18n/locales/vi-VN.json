@@ -207,6 +207,8 @@
   "channel.feishu_streaming_generating": "Đang tạo phản hồi theo luồng, vui lòng chờ...",
   "channel.feishu_stream_output_enabled": "Đã bật đầu ra theo luồng. Các phản hồi tiếp theo sẽ được gửi dần trong khi tạo.",
   "channel.feishu_stream_output_disabled": "Đã tắt đầu ra theo luồng. Các phản hồi tiếp theo sẽ được gửi sau khi có kết quả đầy đủ.",
+  "channel.wecom_stream_output_enabled": "Đã bật đầu ra theo luồng cho WeCom. Các phản hồi tiếp theo sẽ được gửi dần trong khi tạo.",
+  "channel.wecom_stream_output_disabled": "Đã tắt đầu ra theo luồng cho WeCom. Các phản hồi tiếp theo sẽ được gửi sau khi có kết quả đầy đủ.",
   "error.assistant_mcp_create_failed": "Tạo Assistant MCP không thành công",
   "error.assistant_mcp_delete_failed": "Xóa Assistant MCP không thành công",
   "error.assistant_mcp_id_required": "Cần có ID Assistant MCP",

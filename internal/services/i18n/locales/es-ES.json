@@ -207,6 +207,8 @@
   "channel.feishu_streaming_generating": "Generando una respuesta en streaming, por favor espera...",
   "channel.feishu_stream_output_enabled": "La salida en streaming está activada. Las próximas respuestas se enviarán progresivamente.",
   "channel.feishu_stream_output_disabled": "La salida en streaming está desactivada. Las próximas respuestas se enviarán cuando el resultado completo esté listo.",
+  "channel.wecom_stream_output_enabled": "La salida en streaming de WeCom está activada. Las próximas respuestas se enviarán progresivamente.",
+  "channel.wecom_stream_output_disabled": "La salida en streaming de WeCom está desactivada. Las próximas respuestas se enviarán cuando el resultado completo esté listo.",
   "error.assistant_mcp_create_failed": "Error al crear el Assistant MCP",
   "error.assistant_mcp_delete_failed": "Error al eliminar el Assistant MCP",
   "error.assistant_mcp_id_required": "Se requiere el ID del Assistant MCP",

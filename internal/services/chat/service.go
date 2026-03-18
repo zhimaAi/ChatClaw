@@ -52,6 +52,7 @@ type activeGeneration struct {
 	checkpointID string
 	interrupted  bool
 	agentCleanup func() // deferred agent cleanup, held during interrupt
+	streamText   string
 }
 
 // ChunkCallback is called each time a new content chunk is appended during streaming.
@@ -668,6 +669,43 @@ func (s *ChatService) WaitForGeneration(conversationID int64, requestID string) 
 
 	<-gen.done
 	return nil
+}
+
+// GetGenerationContent returns the currently accumulated assistant content for an active generation.
+func (s *ChatService) GetGenerationContent(conversationID int64, requestID string) (string, bool) {
+	existing, ok := s.activeGenerations.Load(conversationID)
+	if !ok {
+		return "", false
+	}
+
+	gen := existing.(*activeGeneration)
+	if gen.requestID != requestID {
+		return "", false
+	}
+
+	gen.mu.Lock()
+	defer gen.mu.Unlock()
+	return gen.streamText, true
+}
+
+func (s *ChatService) appendGenerationContent(conversationID int64, requestID string, delta string) {
+	if delta == "" {
+		return
+	}
+
+	existing, ok := s.activeGenerations.Load(conversationID)
+	if !ok {
+		return
+	}
+
+	gen := existing.(*activeGeneration)
+	if gen.requestID != requestID {
+		return
+	}
+
+	gen.mu.Lock()
+	gen.streamText += delta
+	gen.mu.Unlock()
 }
 
 // startGeneration creates a new generation context and launches the goroutine.

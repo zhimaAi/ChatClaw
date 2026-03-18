@@ -1359,6 +1359,11 @@ export default {
         botName: 'WeCom',
         description: 'Bot WeChat Doanh nghiệp',
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "Bot QQ Open Platform qua WebSocket",
+      },
     },
     authType: {
       token: 'Token',
@@ -1366,6 +1371,8 @@ export default {
     },
     comingSoon: 'Sắp ra mắt',
     agentFallback: 'Trợ lý AI',
+    unbindConfirmTitle: "Xác nhận hủy liên kết",
+    unbindConfirmDesc: "Hủy liên kết trợ lý khỏi kênh \"{name}\"? Kênh sẽ không xử lý tin nhắn cho đến khi liên kết lại.",
     unbindSuccess: 'Đã hủy liên kết trợ lý',
     bindSuccess: 'Liên kết trợ lý thành công',
     card: {

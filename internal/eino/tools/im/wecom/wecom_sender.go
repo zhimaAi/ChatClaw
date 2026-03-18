@@ -62,16 +62,24 @@ var imageExtensions = map[string]bool{
 	".gif": true, ".bmp": true, ".webp": true,
 }
 
+var videoExtensions = map[string]bool{
+	".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true,
+}
+
+var voiceExtensions = map[string]bool{
+	".mp3": true, ".wav": true, ".ogg": true, ".opus": true, ".m4a": true, ".amr": true,
+}
+
 func (t *wecomSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	descEN := "Send a message or file to WeCom (企业微信) via a connected channel. " +
 		"Supports sending to group chats or individual users. " +
 		"For text: provide content as plain text or Markdown (WeCom supports Markdown formatting). " +
 		"For images: provide image_url with a publicly accessible image URL. " +
-		"For files: provide file_url with a publicly accessible file URL, or file_path for local files (will need to be served)."
+		"For files: provide file_url with a publicly accessible file URL, or file_path for local media files (the adapter uploads them to WeCom automatically)."
 	descZH := "通过已连接的企业微信渠道发送消息或文件。支持发送到群聊或个人用户。" +
 		"发送文本：content 可以是纯文本或 Markdown 格式（企业微信支持 Markdown）。" +
 		"发送图片：提供 image_url（可公开访问的图片 URL）。" +
-		"发送文件：提供 file_url（可公开访问的文件 URL）或 file_path（本地文件路径，需要能被访问）。"
+		"发送文件：提供 file_url（可公开访问的文件 URL）或 file_path（本地媒体文件路径，适配器会自动上传到企业微信）。"
 
 	channelIDDescEN := "The channel ID of the connected WeCom channel to use for sending."
 	channelIDDescZH := "用于发送的已连接企业微信渠道 ID。"
@@ -130,8 +138,8 @@ func (t *wecomSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			"file_path": {
 				Type: schema.String,
 				Desc: selectDesc(
-					"Local file path. Note: WeCom AI Bot requires files to be accessible via URL, so this may need additional setup.",
-					"本地文件路径。注意：企业微信 AI Bot 需要文件可通过 URL 访问，可能需要额外配置。",
+					"Local file path. The adapter uploads it as temporary WeCom media automatically; common image/video/voice types are detected from the extension.",
+					"本地文件路径。适配器会自动上传为企业微信临时素材；图片会按 image 发送，其它常见文件按 file/video/voice 自动识别。",
 				),
 			},
 		}),
@@ -200,11 +208,38 @@ func (t *wecomSenderTool) InvokableRun(ctx context.Context, argsJSON string, _ .
 		if _, err := os.Stat(filePath); err != nil {
 			return fmt.Sprintf("Error: file not accessible: %s", err.Error()), nil
 		}
-		return "Error: local file upload is not directly supported by WeCom AI Bot. Please provide a publicly accessible file_url instead.", nil
+
+		msgType := detectWeComMediaType(filePath)
+		payloadBytes, err := json.Marshal(map[string]string{
+			"msg_type":  msgType,
+			"file_path": filePath,
+		})
+		if err != nil {
+			return fmt.Sprintf("Error: failed to build media payload: %s", err.Error()), nil
+		}
+
+		if err := adapter.SendMessage(ctx, in.TargetID, string(payloadBytes)); err != nil {
+			return fmt.Sprintf("Error: failed to send local media file: %s", err.Error()), nil
+		}
+		return fmt.Sprintf("Local %s sent successfully to %s via channel %d.", msgType, in.TargetID, in.ChannelID), nil
 	}
 
 	if err := adapter.SendMessage(ctx, in.TargetID, in.Content); err != nil {
 		return fmt.Sprintf("Error: failed to send message: %s", err.Error()), nil
 	}
 	return fmt.Sprintf("Message sent successfully to %s via channel %d.", in.TargetID, in.ChannelID), nil
+}
+
+func detectWeComMediaType(filePath string) string {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch {
+	case imageExtensions[ext]:
+		return "image"
+	case videoExtensions[ext]:
+		return "video"
+	case voiceExtensions[ext]:
+		return "voice"
+	default:
+		return "file"
+	}
 }
