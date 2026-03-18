@@ -19,3 +19,15 @@ test('chatwiki cloud login intent is consumed once', async () => {
   assert.equal(store.consumePendingChatwikiAction(), 'cloudLogin')
   assert.equal(store.consumePendingChatwikiAction(), null)
 })
+
+test('chatwiki provider selection intent is consumed once', async () => {
+  const { useSettingsStore } = await loadModule()
+  setActivePinia(createPinia())
+  const store = useSettingsStore()
+
+  assert.equal(store.consumePendingModelServiceProviderId(), null)
+
+  store.requestModelServiceProviderSelection('chatwiki')
+  assert.equal(store.consumePendingModelServiceProviderId(), 'chatwiki')
+  assert.equal(store.consumePendingModelServiceProviderId(), null)
+})
