@@ -74,4 +74,3 @@ const handleClick = (modelId: string) => {
     </button>
   </div>
 </template>
-

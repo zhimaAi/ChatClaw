@@ -28,8 +28,21 @@ func init() {
 
 // FeishuConfig contains credentials for a Feishu/Lark bot.
 type FeishuConfig struct {
-	AppID     string `json:"app_id"`
-	AppSecret string `json:"app_secret"`
+	AppID               string `json:"app_id"`
+	AppSecret           string `json:"app_secret"`
+	StreamOutputEnabled *bool  `json:"stream_output_enabled,omitempty"`
+}
+
+func ParseFeishuConfig(configJSON string) (FeishuConfig, error) {
+	var cfg FeishuConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return FeishuConfig{}, fmt.Errorf("parse feishu config: %w", err)
+	}
+	return cfg, nil
+}
+
+func (c FeishuConfig) StreamOutputEnabledOrDefault() bool {
+	return c.StreamOutputEnabled == nil || *c.StreamOutputEnabled
 }
 
 // FeishuAdapter implements PlatformAdapter for Feishu/Lark using WebSocket (长连接).
@@ -53,9 +66,9 @@ func (a *FeishuAdapter) Connect(ctx context.Context, channelID int64, configJSON
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	var cfg FeishuConfig
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
-		return fmt.Errorf("parse feishu config: %w", err)
+	cfg, err := ParseFeishuConfig(configJSON)
+	if err != nil {
+		return err
 	}
 	if cfg.AppID == "" || cfg.AppSecret == "" {
 		return fmt.Errorf("feishu config: app_id and app_secret are required")
@@ -171,6 +184,8 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n",
 		senderName, senderID, chatName, chatID, msgType, content)
 
+	chatType := deref(msg.ChatType)
+
 	a.handler(IncomingMessage{
 		ChannelID:  a.channelID,
 		Platform:   PlatformFeishu,
@@ -179,6 +194,7 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		SenderName: senderName,
 		ChatID:     chatID,
 		ChatName:   chatName,
+		IsGroup:    chatType == "group" || chatType == "topic_group",
 		Content:    content,
 		MsgType:    msgType,
 		RawData:    content,
@@ -281,6 +297,51 @@ func (a *FeishuAdapter) IsConnected() bool {
 }
 
 func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, content string) error {
+	_, err := a.sendMessage(ctx, targetID, content)
+	return err
+}
+
+func (a *FeishuAdapter) SendTextMessage(ctx context.Context, targetID string, text string) (string, error) {
+	return a.sendMessage(ctx, targetID, text)
+}
+
+func (a *FeishuAdapter) ReplyMessage(ctx context.Context, replyToMessageID string, content string) (string, error) {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+
+	if client == nil {
+		return "", fmt.Errorf("feishu client not initialized")
+	}
+
+	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
+	if err != nil {
+		return "", err
+	}
+
+	req := larkim.NewReplyMessageReqBuilder().
+		MessageId(replyToMessageID).
+		Body(larkim.NewReplyMessageReqBodyBuilder().
+			MsgType(msgType).
+			Content(contentJSON).
+			Uuid(fmt.Sprintf("feishu_reply_%d", time.Now().UnixNano())).
+			Build()).
+		Build()
+
+	resp, err := client.Im.Message.Reply(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("reply feishu message: %w", err)
+	}
+	if !resp.Success() {
+		return "", fmt.Errorf("reply feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	if resp.Data == nil || resp.Data.MessageId == nil {
+		return "", fmt.Errorf("reply feishu message: empty message_id in response")
+	}
+	return *resp.Data.MessageId, nil
+}
+
+func (a *FeishuAdapter) UpdateTextMessage(ctx context.Context, messageID string, text string) error {
 	a.mu.Lock()
 	client := a.client
 	a.mu.Unlock()
@@ -289,9 +350,41 @@ func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, conten
 		return fmt.Errorf("feishu client not initialized")
 	}
 
-	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
+	contentJSON, err := marshalFeishuTextContent(text)
 	if err != nil {
 		return err
+	}
+
+	req := larkim.NewUpdateMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewUpdateMessageReqBodyBuilder().
+			MsgType(larkim.MsgTypeText).
+			Content(contentJSON).
+			Build()).
+		Build()
+
+	resp, err := client.Im.Message.Update(ctx, req)
+	if err != nil {
+		return fmt.Errorf("update feishu message: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("update feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return nil
+}
+
+func (a *FeishuAdapter) sendMessage(ctx context.Context, targetID string, content string) (string, error) {
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+
+	if client == nil {
+		return "", fmt.Errorf("feishu client not initialized")
+	}
+
+	msgType, contentJSON, err := buildFeishuOutgoingMessage(content)
+	if err != nil {
+		return "", err
 	}
 
 	// Detect ID type: chat IDs start with "oc_", open IDs start with "ou_"
@@ -311,12 +404,15 @@ func (a *FeishuAdapter) SendMessage(ctx context.Context, targetID string, conten
 
 	resp, err := client.Im.Message.Create(ctx, req)
 	if err != nil {
-		return fmt.Errorf("send feishu message: %w", err)
+		return "", fmt.Errorf("send feishu message: %w", err)
 	}
 	if !resp.Success() {
-		return fmt.Errorf("send feishu message: code=%d msg=%s", resp.Code, resp.Msg)
+		return "", fmt.Errorf("send feishu message: code=%d msg=%s", resp.Code, resp.Msg)
 	}
-	return nil
+	if resp.Data == nil || resp.Data.MessageId == nil {
+		return "", fmt.Errorf("send feishu message: empty message_id in response")
+	}
+	return *resp.Data.MessageId, nil
 }
 
 type feishuOutgoingMessage struct {
@@ -337,29 +433,29 @@ func buildFeishuOutgoingMessage(raw string) (string, string, error) {
 	}
 
 	if !strings.HasPrefix(trimmed, "{") {
-		contentBytes, err := json.Marshal(map[string]string{"text": raw})
+		contentJSON, err := marshalFeishuTextContent(raw)
 		if err != nil {
-			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+			return "", "", err
 		}
-		return larkim.MsgTypeText, string(contentBytes), nil
+		return larkim.MsgTypeText, contentJSON, nil
 	}
 
 	var payload feishuOutgoingMessage
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
-		contentBytes, marshalErr := json.Marshal(map[string]string{"text": raw})
+		contentJSON, marshalErr := marshalFeishuTextContent(raw)
 		if marshalErr != nil {
-			return "", "", fmt.Errorf("marshal feishu text content: %w", marshalErr)
+			return "", "", marshalErr
 		}
-		return larkim.MsgTypeText, string(contentBytes), nil
+		return larkim.MsgTypeText, contentJSON, nil
 	}
 
 	msgType := strings.TrimSpace(payload.MsgType)
 	if msgType == "" {
-		contentBytes, err := json.Marshal(map[string]string{"text": raw})
+		contentJSON, err := marshalFeishuTextContent(raw)
 		if err != nil {
-			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+			return "", "", err
 		}
-		return larkim.MsgTypeText, string(contentBytes), nil
+		return larkim.MsgTypeText, contentJSON, nil
 	}
 
 	if len(payload.Content) > 0 && string(payload.Content) != "null" {
@@ -387,11 +483,11 @@ func buildFeishuOutgoingMessage(raw string) (string, string, error) {
 		if text == "" {
 			text = raw
 		}
-		contentBytes, err := json.Marshal(map[string]string{"text": text})
+		contentJSON, err := marshalFeishuTextContent(text)
 		if err != nil {
-			return "", "", fmt.Errorf("marshal feishu text content: %w", err)
+			return "", "", err
 		}
-		return larkim.MsgTypeText, string(contentBytes), nil
+		return larkim.MsgTypeText, contentJSON, nil
 	case "image":
 		if strings.TrimSpace(payload.ImageKey) == "" {
 			return "", "", fmt.Errorf("feishu image message requires image_key")
@@ -452,6 +548,14 @@ func buildFeishuOutgoingMessage(raw string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unsupported feishu msg_type: %s", msgType)
 	}
+}
+
+func marshalFeishuTextContent(text string) (string, error) {
+	contentBytes, err := json.Marshal(map[string]string{"text": text})
+	if err != nil {
+		return "", fmt.Errorf("marshal feishu text content: %w", err)
+	}
+	return string(contentBytes), nil
 }
 
 // UploadFile uploads a local file to Feishu and returns the file_key.

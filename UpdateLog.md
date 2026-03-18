@@ -1,5 +1,24 @@
 ## Changelog
 
+### 2026/03/13
+1. **Internationalization Overhaul & i18n Skill**: Added `i18n-check` skill, AI-powered translation scripts, and formatting/comparison utilities to auto-fill missing keys across frontend and backend locales, with improved key detection for CJK and multi-script strings.<br/>
+2. **Locale Management Improvements**: Changed default UI language to English, added system locale detection, reworked language options and labels in settings, and cleaned up legacy languages while fixing escape and spacing issues in multiple translations.<br/>
+3. **Assistant MCP & Server UX**: Refined MCP server management in `WorkspaceDrawer`, improved server selection and removal logic, and optimized how MCP servers are attached to agents and governed by global settings, along with list performance and debouncing fixes.<br/>
+4. **Brand & Version Update**: Refreshed application icons and images with a new logo set and bumped application version to `0.5.0`, aligning related configuration and dependency versions.<br/>
+
+### 2026/03/12
+1. **Assistant MCP Integration**: Added Assistant MCP functionality with UI and backend support, including server control based on a global MCP setting and updated indicators to reflect MCP availability in the workspace.<br/>
+2. **Rich Message Editing with Images**: Enhanced chat message editing to support attaching images and saving image payloads into the work directory, reusing the multimodal image upload pipeline for edited messages.<br/>
+3. **Team Library Recall Chat**: Introduced team library recall chat support, enabling conversations that can recall and use team libraries within shared team sessions.<br/>
+4. **MCP Command UX on Windows**: Implemented console window hiding for MCP command execution on Windows and registered the Windows URL scheme to improve deep-link and protocol handling.<br/>
+5. **Model & Auth Tweaks**: Updated model detection to support additional Qwen types, refined ChatWiki bind/logout flows, and adjusted tool status reporting for MCP-related tools.<br/>
+
+### 2026/03/11
+1. **MCP Toolchain for Agents**: Enabled MCP tools to be directly exposed to the lead agent via `mcp__`-prefixed tools, and added per-agent MCP server enable/disable controls with quick navigation from the workspace drawer to MCP settings.<br/>
+2. **Task & Cron Management**: Extended scheduled task features with execution history, improved failure statistics and success criteria, and new tools for querying runs, alongside a new task-creation dialog workflow.<br/>
+3. **Toolchain Installation UX**: Added test installation features and download progress tracking for the toolchain, increased download/read timeouts for long-running installs, and improved GitHub proxy and mirror handling for version fetching.<br/>
+4. **ChatWiki & Token Handling**: Improved ChatWiki token management with better reload behavior and local caching, and refined related editing tools and prompts with updated Chinese/English copy.<br/>
+
 ### 2026/03/10
 1. **ChatWiki Account Binding**: Added ChatWiki account binding flow in settings (cloud/open-source selection, browser auth, deep-link callback, countdown + re-auth/unbind).<br/>
 2. **ChatWiki Backend Service**: Introduced `ChatWikiService` with binding persistence, robot/library management APIs, and auth-expired handling.<br/>

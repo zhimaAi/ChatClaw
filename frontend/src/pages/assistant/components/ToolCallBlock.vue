@@ -241,12 +241,14 @@ const getTaskResult = (resultJson?: string): string => {
     <div
       v-for="toolCall in toolCalls"
       :key="toolCall.toolCallId"
-      :class="cn(
-        'w-full min-w-0 flex flex-col gap-1 rounded-lg border text-sm',
-        isSubAgentTool(toolCall.toolName)
-          ? 'border-border/60 bg-muted/15 dark:bg-zinc-900/30'
-          : 'border-border/50 bg-muted/30 px-3 py-2 dark:bg-zinc-900/50'
-      )"
+      :class="
+        cn(
+          'w-full min-w-0 flex flex-col gap-1 rounded-lg border text-sm',
+          isSubAgentTool(toolCall.toolName)
+            ? 'border-border/60 bg-muted/15 dark:bg-zinc-900/30'
+            : 'border-border/50 bg-muted/30 px-3 py-2 dark:bg-zinc-900/50'
+        )
+      "
     >
       <!-- Sub-agent tool -->
       <template v-if="isSubAgentTool(toolCall.toolName)">
@@ -261,7 +263,9 @@ const getTaskResult = (resultJson?: string): string => {
           <span class="flex items-center gap-1.5 text-xs tabular-nums">
             <template v-if="toolCall.status === 'calling'">
               <Loader2 class="size-3 animate-spin" />
-              <span v-if="childCount(toolCall) > 0" class="opacity-70">{{ childCompleted(toolCall) }}/{{ childCount(toolCall) }}</span>
+              <span v-if="childCount(toolCall) > 0" class="opacity-70"
+                >{{ childCompleted(toolCall) }}/{{ childCount(toolCall) }}</span
+              >
               <span v-else class="opacity-70">{{ t('assistant.chat.toolCalling') }}</span>
             </template>
             <template v-else>
@@ -270,7 +274,12 @@ const getTaskResult = (resultJson?: string): string => {
             </template>
           </span>
           <ChevronDown
-            :class="cn('size-4 shrink-0 transition-transform', isAgentExpanded(toolCall.toolCallId) && 'rotate-180')"
+            :class="
+              cn(
+                'size-4 shrink-0 transition-transform',
+                isAgentExpanded(toolCall.toolCallId) && 'rotate-180'
+              )
+            "
           />
         </button>
         <div v-if="isAgentExpanded(toolCall.toolCallId)" class="flex flex-col gap-1.5 px-2 pb-2">
@@ -280,7 +289,9 @@ const getTaskResult = (resultJson?: string): string => {
               class="flex items-start gap-1.5 rounded-md bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground/80 dark:bg-zinc-800/30"
             >
               <Brain class="size-3 mt-0.5 shrink-0 opacity-60" />
-              <p class="min-w-0 whitespace-pre-wrap wrap-break-word line-clamp-4">{{ seg.content }}</p>
+              <p class="min-w-0 whitespace-pre-wrap wrap-break-word line-clamp-4">
+                {{ seg.content }}
+              </p>
             </div>
             <ToolCallBlock
               v-if="seg.type === 'tools' && seg.toolCalls.length"
@@ -291,7 +302,16 @@ const getTaskResult = (resultJson?: string): string => {
             <div
               v-if="seg.type === 'content' && seg.content"
               class="rounded-md border border-border/30 bg-background/40 px-2.5 py-2 text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap wrap-break-word dark:bg-zinc-950/30"
-            >{{ seg.content }}<span v-if="toolCall.status === 'calling' && segIdx === toolCall.childSegments!.length - 1" class="streaming-cursor" aria-hidden="true"></span></div>
+            >
+              {{ seg.content
+              }}<span
+                v-if="
+                  toolCall.status === 'calling' && segIdx === toolCall.childSegments!.length - 1
+                "
+                class="streaming-cursor"
+                aria-hidden="true"
+              ></span>
+            </div>
           </template>
         </div>
       </template>

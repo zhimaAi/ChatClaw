@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ShieldCheck, Monitor, FolderOpen, X, Terminal, Globe, Plus, Search, Check } from 'lucide-vue-next'
+import {
+  ShieldCheck,
+  Monitor,
+  FolderOpen,
+  X,
+  Terminal,
+  Globe,
+  Plus,
+  Search,
+  Check,
+} from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -14,7 +24,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { AgentsService, type FileEntry, UpdateAgentInput } from '@bindings/chatclaw/internal/services/agents'
+import {
+  AgentsService,
+  type FileEntry,
+  UpdateAgentInput,
+} from '@bindings/chatclaw/internal/services/agents'
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
@@ -26,7 +40,11 @@ import { useSettingsStore } from '@/stores/settings'
 import FileTreeNode from './FileTreeNode.vue'
 
 const FS_MUTATING_TOOLS = new Set([
-  'write_file', 'edit_file', 'patch_file', 'execute', 'execute_background',
+  'write_file',
+  'edit_file',
+  'patch_file',
+  'execute',
+  'execute_background',
 ])
 
 const props = defineProps<{
@@ -145,12 +163,20 @@ const mcpEnabled = computed(() => props.agent?.mcp_enabled ?? false)
 const agentMCPServerIDs = computed<string[]>(() => {
   const raw = props.agent?.mcp_server_ids
   if (!raw || raw === '[]') return []
-  try { return JSON.parse(raw) } catch { return [] }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
 })
 const agentMCPServerEnabledIDs = computed<string[]>(() => {
   const raw = props.agent?.mcp_server_enabled_ids
   if (!raw || raw === '[]') return []
-  try { return JSON.parse(raw) } catch { return [] }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
 })
 
 // Agent's selected MCP servers (for display in workspace list)
@@ -165,9 +191,7 @@ const mcpModalFiltered = computed(() => {
   const q = mcpModalSearch.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(
-    (s) =>
-      s.name.toLowerCase().includes(q) ||
-      (s.description || '').toLowerCase().includes(q)
+    (s) => s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q)
   )
 })
 
@@ -228,7 +252,10 @@ async function handleModalConfirm() {
   const json = JSON.stringify(newIds)
   const enabledJson = JSON.stringify(newEnabledIds)
   try {
-    await AgentsService.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_server_ids: json, mcp_server_enabled_ids: enabledJson }))
+    await AgentsService.UpdateAgent(
+      props.agent.id,
+      new UpdateAgentInput({ mcp_server_ids: json, mcp_server_enabled_ids: enabledJson })
+    )
     props.agent.mcp_server_ids = json
     props.agent.mcp_server_enabled_ids = enabledJson
     addDialogOpen.value = false
@@ -248,7 +275,10 @@ async function handleRemoveServer(serverId: string) {
   const idsJson = JSON.stringify(newIds)
   const enabledJson = JSON.stringify(newEnabledIds)
   try {
-    await AgentsService.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_server_ids: idsJson, mcp_server_enabled_ids: enabledJson }))
+    await AgentsService.UpdateAgent(
+      props.agent.id,
+      new UpdateAgentInput({ mcp_server_ids: idsJson, mcp_server_enabled_ids: enabledJson })
+    )
     props.agent.mcp_server_ids = idsJson
     props.agent.mcp_server_enabled_ids = enabledJson
   } catch (error) {
@@ -257,9 +287,10 @@ async function handleRemoveServer(serverId: string) {
 }
 
 // Whether all global MCPs are draft-selected
-const allDraftSelected = computed(() =>
-  globalMCPServers.value.length > 0 &&
-  globalMCPServers.value.every((s) => draftSelectedIDs.value.has(s.id))
+const allDraftSelected = computed(
+  () =>
+    globalMCPServers.value.length > 0 &&
+    globalMCPServers.value.every((s) => draftSelectedIDs.value.has(s.id))
 )
 
 function handleToggleAll() {
@@ -327,22 +358,19 @@ onUnmounted(() => {
 
 <template>
   <div
-    :class="cn(
-      'flex h-full shrink-0 flex-col border-l border-border bg-background transition-[width,opacity] duration-200 overflow-hidden',
-      open ? 'w-[280px] opacity-100' : 'w-0 opacity-0 border-l-0'
-    )"
+    :class="
+      cn(
+        'flex h-full shrink-0 flex-col border-l border-border bg-background transition-[width,opacity] duration-200 overflow-hidden',
+        open ? 'w-[280px] opacity-100' : 'w-0 opacity-0 border-l-0'
+      )
+    "
   >
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-border px-3 py-2">
       <span class="text-sm font-medium text-foreground">
         {{ t('assistant.workspaceDrawer.title') }}
       </span>
-      <Button
-        size="icon"
-        variant="ghost"
-        class="size-6"
-        @click="handleClose"
-      >
+      <Button size="icon" variant="ghost" class="size-6" @click="handleClose">
         <X class="size-3.5 text-muted-foreground" />
       </Button>
     </div>
@@ -357,9 +385,11 @@ onUnmounted(() => {
         <div class="flex gap-2">
           <button
             class="flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
-            :class="isSandbox
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'"
+            :class="
+              isSandbox
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+            "
             @click="handleEnvironmentClick"
           >
             <ShieldCheck class="size-4" />
@@ -367,9 +397,11 @@ onUnmounted(() => {
           </button>
           <button
             class="flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
-            :class="!isSandbox
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'"
+            :class="
+              !isSandbox
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+            "
             @click="handleEnvironmentClick"
           >
             <Monitor class="size-4" />
@@ -387,17 +419,16 @@ onUnmounted(() => {
           <TooltipProvider :delay-duration="300">
             <Tooltip>
               <TooltipTrigger as-child>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  class="size-5"
-                  @click="handleOpenFolder"
-                >
+                <Button size="icon" variant="ghost" class="size-5" @click="handleOpenFolder">
                   <FolderOpen class="size-3 text-muted-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                {{ hasConversation ? t('assistant.workspaceDrawer.openFolder') : t('assistant.workspaceDrawer.configureWorkspace') }}
+                {{
+                  hasConversation
+                    ? t('assistant.workspaceDrawer.openFolder')
+                    : t('assistant.workspaceDrawer.configureWorkspace')
+                }}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -449,10 +480,7 @@ onUnmounted(() => {
           <div class="mb-1 text-[11px] text-muted-foreground">
             {{ t('assistant.workspaceDrawer.noConversationDir') }}
           </div>
-          <div
-            class="truncate font-mono text-[11px] text-muted-foreground"
-            :title="displayWorkDir"
-          >
+          <div class="truncate font-mono text-[11px] text-muted-foreground" :title="displayWorkDir">
             {{ displayWorkDir }}
           </div>
           <div class="mt-1.5 text-[11px] text-primary/70 group-hover:text-primary">
@@ -496,14 +524,19 @@ onUnmounted(() => {
         </div>
 
         <template v-if="!globalMCPEnabled">
-          <div class="flex items-center justify-center rounded-lg border border-dashed border-border py-4">
+          <div
+            class="flex items-center justify-center rounded-lg border border-dashed border-border py-4"
+          >
             <span class="text-[11px] text-muted-foreground">
               {{ t('assistant.workspaceDrawer.mcpGlobalDisabled') }}
             </span>
           </div>
         </template>
         <template v-else-if="mcpEnabled">
-          <div v-if="agentMCPServers.length === 0" class="flex items-center justify-center rounded-lg border border-dashed border-border py-4">
+          <div
+            v-if="agentMCPServers.length === 0"
+            class="flex items-center justify-center rounded-lg border border-dashed border-border py-4"
+          >
             <span class="text-[11px] text-muted-foreground">
               {{ t('assistant.workspaceDrawer.mcpEmptyHint') }}
             </span>
@@ -515,7 +548,10 @@ onUnmounted(() => {
               class="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50"
             >
               <div class="flex min-w-0 items-center gap-1.5">
-                <Terminal v-if="server.transport === 'stdio'" class="size-3 shrink-0 text-muted-foreground" />
+                <Terminal
+                  v-if="server.transport === 'stdio'"
+                  class="size-3 shrink-0 text-muted-foreground"
+                />
                 <Globe v-else class="size-3 shrink-0 text-muted-foreground" />
                 <span class="truncate text-xs text-foreground">{{ server.name }}</span>
               </div>
@@ -542,12 +578,16 @@ onUnmounted(() => {
               {{ t('assistant.workspaceDrawer.mcpGoToSettings') }}
             </Button>
           </div>
-          <DialogDescription class="sr-only">{{ t('assistant.workspaceDrawer.mcpAddFromGlobal') }}</DialogDescription>
+          <DialogDescription class="sr-only">{{
+            t('assistant.workspaceDrawer.mcpAddFromGlobal')
+          }}</DialogDescription>
         </DialogHeader>
 
         <div class="flex flex-col gap-3 py-2">
           <div class="relative">
-            <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
               v-model="mcpModalSearch"
               :placeholder="t('assistant.workspaceDrawer.mcpSearchPlaceholder')"
@@ -564,12 +604,23 @@ onUnmounted(() => {
               class="shrink-0 cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground"
               @click="handleToggleAll"
             >
-              {{ allDraftSelected ? t('assistant.workspaceDrawer.mcpDeselectAll') : t('assistant.workspaceDrawer.mcpSelectAll') }}
+              {{
+                allDraftSelected
+                  ? t('assistant.workspaceDrawer.mcpDeselectAll')
+                  : t('assistant.workspaceDrawer.mcpSelectAll')
+              }}
             </button>
           </div>
-          <div v-if="mcpModalFiltered.length === 0" class="flex items-center justify-center rounded-lg border border-dashed border-border py-8">
+          <div
+            v-if="mcpModalFiltered.length === 0"
+            class="flex items-center justify-center rounded-lg border border-dashed border-border py-8"
+          >
             <span class="text-xs text-muted-foreground">
-              {{ mcpModalSearch.trim() ? t('assistant.workspaceDrawer.mcpNoSearchResults') : t('assistant.workspaceDrawer.mcpNoAvailableToAdd') }}
+              {{
+                mcpModalSearch.trim()
+                  ? t('assistant.workspaceDrawer.mcpNoSearchResults')
+                  : t('assistant.workspaceDrawer.mcpNoAvailableToAdd')
+              }}
             </span>
           </div>
           <div v-else class="max-h-[400px] overflow-y-auto">
@@ -577,12 +628,12 @@ onUnmounted(() => {
               <div
                 v-for="server in mcpModalFiltered"
                 :key="server.id"
-                :class="cn(
-                  'relative flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors dark:border-white/10',
-                  isDraftSelected(server.id)
-                    ? 'bg-primary/5'
-                    : 'hover:bg-accent/30'
-                )"
+                :class="
+                  cn(
+                    'relative flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors dark:border-white/10',
+                    isDraftSelected(server.id) ? 'bg-primary/5' : 'hover:bg-accent/30'
+                  )
+                "
                 @click="handleDraftToggle(server.id, !isDraftSelected(server.id))"
               >
                 <div
@@ -592,14 +643,21 @@ onUnmounted(() => {
                   <Check class="size-3 text-primary-foreground" />
                 </div>
                 <div class="flex items-center gap-2 pr-6">
-                  <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
-                  <span class="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                  <span class="truncate text-sm font-medium text-foreground">{{
+                    server.name
+                  }}</span>
+                  <span
+                    class="inline-flex shrink-0 items-center rounded bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                  >
                     <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
                     <Globe v-else class="mr-0.5 size-2.5" />
                     {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
                   </span>
                 </div>
-                <p v-if="server.description" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                <p
+                  v-if="server.description"
+                  class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+                >
                   {{ server.description }}
                 </p>
               </div>

@@ -154,7 +154,7 @@ func defaultWorkDir() string {
 	return filepath.Join(home, ".chatclaw")
 }
 
-// saveImagesToWorkDir saves images to the conversation's work directory and returns updated image payloads
+// saveImagesToWorkDir saves images and files to the conversation's work directory and returns updated payloads.
 func (s *ChatService) saveImagesToWorkDir(ctx context.Context, db *bun.DB, agentID, conversationID int64, images []ImagePayload) ([]ImagePayload, error) {
 	if len(images) == 0 {
 		return images, nil
@@ -166,62 +166,106 @@ func (s *ChatService) saveImagesToWorkDir(ctx context.Context, db *bun.DB, agent
 	}
 
 	imagesDir := filepath.Join(workDir, "images")
+	filesDir := filepath.Join(workDir, "files")
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return nil, errs.Wrap("error.chat_create_images_dir_failed", err)
+	}
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		return nil, errs.Wrap("error.chat_create_files_dir_failed", err)
 	}
 
 	updatedImages := make([]ImagePayload, len(images))
 	for i, img := range images {
-		// Generate unique filename
-		ext := ".png"
-		if idx := strings.LastIndex(img.MimeType, "/"); idx >= 0 {
-			switch img.MimeType[idx+1:] {
-			case "jpeg", "jpg":
-				ext = ".jpg"
-			case "gif":
-				ext = ".gif"
-			case "webp":
-				ext = ".webp"
-			case "svg+xml":
-				ext = ".svg"
-			case "bmp":
-				ext = ".bmp"
-			}
-		}
-		filename := fmt.Sprintf("image_%d_%d%s", conversationID, time.Now().UnixNano(), ext)
-		filepath := filepath.Join(imagesDir, filename)
-
-		// Decode base64 and write to file
 		data, err := base64.StdEncoding.DecodeString(img.Base64)
 		if err != nil {
-			s.app.Logger.Warn("[chat] failed to decode image base64", "error", err)
-			// Keep original if decode fails
+			s.app.Logger.Warn("[chat] failed to decode attachment base64", "kind", img.Kind, "error", err)
 			updatedImages[i] = img
 			continue
 		}
 
-		if err := os.WriteFile(filepath, data, 0644); err != nil {
-			s.app.Logger.Warn("[chat] failed to write image file", "error", err)
-			// Keep original if write fails
-			updatedImages[i] = img
-			continue
-		}
+		if img.Kind == "file" {
+			// Save file attachment to files/ subdirectory, preserving original name
+			originalName := img.OriginalName
+			if originalName == "" {
+				originalName = img.FileName
+			}
+			if originalName == "" {
+				originalName = "unnamed"
+			}
+			filename := fmt.Sprintf("file_%d_%d_%s", conversationID, time.Now().UnixNano(), sanitizeFileName(originalName))
+			savePath := filepath.Join(filesDir, filename)
 
-		// Update payload: keep Base64 for frontend display when loading history; add FilePath for skills
-		updatedImages[i] = ImagePayload{
-			ID:       img.ID,
-			Kind:     "image",
-			Source:   "local_file",
-			MimeType: img.MimeType,
-			Base64:   img.Base64, // Keep for frontend to display in chat history
-			FilePath: filepath,
-			FileName: filename,
-			Size:     int64(len(data)),
+			if err := os.WriteFile(savePath, data, 0644); err != nil {
+				s.app.Logger.Warn("[chat] failed to write file", "error", err)
+				updatedImages[i] = img
+				continue
+			}
+
+			updatedImages[i] = ImagePayload{
+				ID:           img.ID,
+				Kind:         "file",
+				Source:       "local_file",
+				MimeType:     img.MimeType,
+				FilePath:     savePath,
+				FileName:     filename,
+				OriginalName: originalName,
+				Size:         int64(len(data)),
+			}
+			s.app.Logger.Info("[chat] file saved to workdir", "path", savePath, "original", originalName)
+		} else {
+			// Save image to images/ subdirectory
+			ext := ".png"
+			if idx := strings.LastIndex(img.MimeType, "/"); idx >= 0 {
+				switch img.MimeType[idx+1:] {
+				case "jpeg", "jpg":
+					ext = ".jpg"
+				case "gif":
+					ext = ".gif"
+				case "webp":
+					ext = ".webp"
+				case "svg+xml":
+					ext = ".svg"
+				case "bmp":
+					ext = ".bmp"
+				}
+			}
+			filename := fmt.Sprintf("image_%d_%d%s", conversationID, time.Now().UnixNano(), ext)
+			savePath := filepath.Join(imagesDir, filename)
+
+			if err := os.WriteFile(savePath, data, 0644); err != nil {
+				s.app.Logger.Warn("[chat] failed to write image file", "error", err)
+				updatedImages[i] = img
+				continue
+			}
+
+			updatedImages[i] = ImagePayload{
+				ID:       img.ID,
+				Kind:     "image",
+				Source:   "local_file",
+				MimeType: img.MimeType,
+				Base64:   img.Base64,
+				FilePath: savePath,
+				FileName: filename,
+				Size:     int64(len(data)),
+			}
+			s.app.Logger.Info("[chat] image saved to workdir", "path", savePath)
 		}
-		s.app.Logger.Info("[chat] image saved to workdir", "path", filepath)
 	}
 
 	return updatedImages, nil
+}
+
+// sanitizeFileName removes or replaces characters that are unsafe in file paths.
+func sanitizeFileName(name string) string {
+	replacer := strings.NewReplacer(
+		"/", "_", "\\", "_", ":", "_", "*", "_",
+		"?", "_", "\"", "_", "<", "_", ">", "_", "|", "_",
+	)
+	result := replacer.Replace(name)
+	if len(result) > 200 {
+		result = result[:200]
+	}
+	return result
 }
 
 func (s *inMemoryCheckPointStore) Get(_ context.Context, id string) ([]byte, bool, error) {
@@ -296,50 +340,83 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		return nil, errs.New("error.chat_conversation_id_required")
 	}
 	content := strings.TrimSpace(input.Content)
-	hasImages := len(input.Images) > 0
+	hasAttachments := len(input.Images) > 0
 
-	// Validate: content or images must be non-empty
-	if content == "" && !hasImages {
+	// Validate: content or attachments must be non-empty
+	if content == "" && !hasAttachments {
 		return nil, errs.New("error.chat_content_required")
 	}
 
-	// Validate images
-	if hasImages {
+	// Validate attachments (images + files)
+	if hasAttachments {
 		const maxImages = 4
-		const maxImageSize = 2 * 1024 * 1024 // 2MB per image
-		const maxTotalSize = 8 * 1024 * 1024 // 8MB total
+		const maxImageSize int64 = 2 * 1024 * 1024  // 2MB per image
+		const maxImageTotal int64 = 8 * 1024 * 1024  // 8MB total images
+		const maxFiles = 4
+		const maxFileSize int64 = 20 * 1024 * 1024   // 20MB per file
 
-		if len(input.Images) > maxImages {
-			return nil, errs.New("error.chat_too_many_images")
+		var imageCount, fileCount int
+		var imageTotalSize int64
+
+		allowedFileMIME := map[string]bool{
+			"application/pdf":    true,
+			"application/msword": true,
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true,
+			"application/vnd.ms-excel": true,
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         true,
+			"application/vnd.ms-powerpoint": true,
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
+			"text/plain":           true,
+			"text/csv":             true,
+			"text/markdown":        true,
+			"text/html":            true,
+			"text/xml":             true,
+			"application/json":     true,
+			"application/xml":      true,
+			"application/rtf":      true,
+			"application/octet-stream": true, // fallback for .log etc.
 		}
 
-		var totalSize int64
-		for _, img := range input.Images {
-			// Validate mime type
-			if !strings.HasPrefix(img.MimeType, "image/") {
-				return nil, errs.New("error.chat_invalid_image_type")
-			}
-
-			// Validate base64
-			if img.Base64 == "" {
+		for _, att := range input.Images {
+			if att.Base64 == "" {
 				return nil, errs.New("error.chat_image_base64_required")
 			}
 
-			// Validate size
-			if img.Size > maxImageSize {
-				return nil, errs.New("error.chat_image_too_large")
+			if att.Kind == "file" {
+				fileCount++
+				if fileCount > maxFiles {
+					return nil, errs.New("error.chat_too_many_files")
+				}
+				if att.Size > maxFileSize {
+					return nil, errs.New("error.chat_file_too_large")
+				}
+				if !allowedFileMIME[att.MimeType] && !strings.HasPrefix(att.MimeType, "text/") {
+					return nil, errs.New("error.chat_invalid_file_type")
+				}
+			} else {
+				// Default: treat as image
+				imageCount++
+				if imageCount > maxImages {
+					return nil, errs.New("error.chat_too_many_images")
+				}
+				if !strings.HasPrefix(att.MimeType, "image/") {
+					return nil, errs.New("error.chat_invalid_image_type")
+				}
+				if att.Size > maxImageSize {
+					return nil, errs.New("error.chat_image_too_large")
+				}
+				imageTotalSize += att.Size
 			}
-			totalSize += img.Size
 		}
 
-		if totalSize > maxTotalSize {
+		if imageTotalSize > maxImageTotal {
 			return nil, errs.New("error.chat_images_total_too_large")
 		}
 	}
 
-	// Serialize images to JSON
+	// Serialize attachments to JSON
 	imagesJSON := "[]"
-	if hasImages {
+	if hasAttachments {
 		b, err := json.Marshal(input.Images)
 		if err != nil {
 			return nil, errs.Wrap("error.chat_images_serialize_failed", err)
@@ -347,13 +424,7 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		imagesJSON = string(b)
 	}
 
-	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content), "images_count", len(input.Images))
-	s.app.Logger.Info("[chat] SendMessage request payload",
-		"conv", input.ConversationID,
-		"tab", input.TabID,
-		"content_preview", previewChatLogContent(content),
-		"images_count", len(input.Images),
-	)
+	s.app.Logger.Info("[chat] SendMessage", "conv", input.ConversationID, "tab", input.TabID, "content_len", len(content), "attachments_count", len(input.Images))
 
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
@@ -391,8 +462,8 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		"is_chatwiki", providerConfig.ProviderID == "chatwiki",
 	)
 
-	// Save images to work directory and update image payloads
-	if hasImages && len(input.Images) > 0 {
+	// Save attachments (images + files) to work directory and update payloads
+	if hasAttachments && len(input.Images) > 0 {
 		updatedImages, saveErr := s.saveImagesToWorkDir(ctx, db, agentConfig.AgentID, input.ConversationID, input.Images)
 		if saveErr != nil {
 			s.app.Logger.Warn("[chat] failed to save images to workdir, using original", "error", saveErr)

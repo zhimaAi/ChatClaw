@@ -55,6 +55,10 @@ func NewUpdaterService(app *application.App) *UpdaterService {
 
 // ServiceStartup is called by Wails after the application starts.
 func (s *UpdaterService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	if define.RunMode == "server" {
+		return nil
+	}
+
 	s.cleanupOldBinary()
 
 	go func() {

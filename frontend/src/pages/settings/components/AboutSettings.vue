@@ -131,13 +131,10 @@ async function handleAutoUpdateChange(value: boolean) {
 
       <!-- Check update button (hidden in server mode — use docker pull or manual binary replacement) -->
       <div v-if="appStore.isGUIMode" class="relative inline-flex">
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="isCheckingUpdate"
-          @click="handleCheckUpdate"
-        >
-          {{ isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate') }}
+        <Button variant="outline" size="sm" :disabled="isCheckingUpdate" @click="handleCheckUpdate">
+          {{
+            isCheckingUpdate ? t('settings.about.checkingUpdate') : t('settings.about.checkUpdate')
+          }}
         </Button>
         <!-- Badge indicating a new version is available -->
         <span
@@ -159,7 +156,11 @@ async function handleAutoUpdateChange(value: boolean) {
     </SettingsItem>
 
     <!-- Auto update toggle (hidden in server mode) -->
-    <SettingsItem v-if="appStore.isGUIMode" :label="t('settings.about.autoUpdate')" :bordered="false">
+    <SettingsItem
+      v-if="appStore.isGUIMode"
+      :label="t('settings.about.autoUpdate')"
+      :bordered="false"
+    >
       <Switch :model-value="autoUpdate" @update:model-value="handleAutoUpdateChange" />
     </SettingsItem>
   </SettingsCard>

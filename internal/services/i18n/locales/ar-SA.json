@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "إنشاء المساعد تلقائياً غير متاح",
   "error.channel_ai_reply_failed": "فشل رد AI: {{.Error}}",
   "error.channel_ai_reply_empty": "فشل رد AI: الاستجابة فارغة",
+  "channel.feishu_streaming_generating": "جارٍ إنشاء رد متدفق، يرجى الانتظار...",
+  "channel.feishu_stream_output_enabled": "تم تفعيل الإخراج المتدفق. سيتم إرسال الردود القادمة بشكل تدريجي.",
+  "channel.feishu_stream_output_disabled": "تم تعطيل الإخراج المتدفق. سيتم إرسال الردود القادمة بعد اكتمال النتيجة كاملة.",
   "error.assistant_mcp_create_failed": "فشل في إنشاء Assistant MCP",
   "error.assistant_mcp_delete_failed": "فشل في حذف Assistant MCP",
   "error.assistant_mcp_id_required": "معرف Assistant MCP مطلوب",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "يجب أن يحتوي اسم الأداة على أحرف وأرقام وشرطات سفلية فقط، وأن يبدأ بحرف",
   "error.assistant_mcp_tool_name_required": "اسم الأداة مطلوب",
   "error.assistant_mcp_tool_not_found": "لم يتم العثور على الأداة",
-  "error.assistant_mcp_update_failed": "فشل في تحديث Assistant MCP"
+  "error.assistant_mcp_update_failed": "فشل في تحديث Assistant MCP",
+  "error.chat_too_many_files": "عدد الملفات يتجاوز الحد",
+  "error.chat_file_too_large": "حجم الملف يتجاوز الحد",
+  "error.chat_invalid_file_type": "نوع ملف غير صالح",
+  "error.file_not_found": "لم يتم العثور على الملف"
 }

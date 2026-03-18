@@ -11,7 +11,12 @@ import { Call } from '@wailsio/runtime'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
-import { getBinding as getBindingCached, getRobotListAll as getRobotListAllCached, getLibraryList as getLibraryListCached, clearAll as clearChatwikiCache } from '@/lib/chatwikiCache'
+import {
+  getBinding as getBindingCached,
+  getRobotListAll as getRobotListAllCached,
+  getLibraryList as getLibraryListCached,
+  clearAll as clearChatwikiCache,
+} from '@/lib/chatwikiCache'
 import { buildChatWikiLoginUrl, openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
 import { notifyChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import { useSettingsStore } from '@/stores/settings'
@@ -530,207 +535,206 @@ onUnmounted(() => {
   <template v-if="view === 'list'">
     <div class="flex flex-col gap-6">
       <!-- Main ChatWiki card: binding info only -->
-    <div
-      class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-    >
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold tracking-tight text-foreground">
-            {{ t('settings.chatwiki.title') }}
-          </h2>
-          <div class="flex items-center gap-2">
-            <Button v-if="isBound" variant="outline" size="sm" @click="requestUnbind">
-              {{ t('settings.chatwiki.unbind') }}
-            </Button>
-            <Button v-if="!isBound" variant="outline" size="sm" @click="goToChoose">
-              {{ t('settings.chatwiki.addBinding') }}
-            </Button>
-          </div>
-        </div>
-        <p class="text-sm text-muted-foreground">
-          {{ t('settings.chatwiki.description') }}
-        </p>
-      </div>
-
-      <!-- Bound: user info only -->
-      <div v-if="isBound && currentBinding" class="flex flex-col gap-4">
-        <div
-          class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
-        >
-          <div class="flex items-center gap-3">
-            <div
-              class="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground"
-            >
-              {{ currentBinding.user_name?.charAt(0)?.toUpperCase() || '?' }}
-            </div>
-            <div class="min-w-0">
-              <p class="truncate text-sm font-medium text-foreground">{{ currentBinding.user_name }}</p>
-              <p class="truncate text-xs text-muted-foreground">ID: {{ currentBinding.user_id }}</p>
+      <div
+        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+      >
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold tracking-tight text-foreground">
+              {{ t('settings.chatwiki.title') }}
+            </h2>
+            <div class="flex items-center gap-2">
+              <Button v-if="isBound" variant="outline" size="sm" @click="requestUnbind">
+                {{ t('settings.chatwiki.unbind') }}
+              </Button>
+              <Button v-if="!isBound" variant="outline" size="sm" @click="goToChoose">
+                {{ t('settings.chatwiki.addBinding') }}
+              </Button>
             </div>
           </div>
-          <div class="flex shrink-0 items-center gap-2">
-            <span
-              v-if="bindingExpired"
-              class="rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1 text-xs text-destructive"
-            >
-              {{ t('settings.chatwiki.bindingExpired') }}
-            </span>
-            <span
-              v-else
-              class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground"
-            >
-              {{ t('settings.chatwiki.bound') }}
-            </span>
-            <Button
-              v-if="bindingExpired"
-              size="sm"
-              @click="startReauthBinding"
-            >
-              {{ t('settings.chatwiki.reauthBind') }}
-            </Button>
-          </div>
+          <p class="text-sm text-muted-foreground">
+            {{ t('settings.chatwiki.description') }}
+          </p>
         </div>
-      </div>
 
-      <!-- Not bound -->
-      <div v-else>
-        <p class="text-sm text-muted-foreground">
-          {{ t('settings.chatwiki.notBound') }}
-        </p>
-      </div>
-    </div>
-
-    <!-- Applications card -->
-    <div
-      class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-    >
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold tracking-tight text-foreground">
-          {{ t('settings.chatwiki.applications') }}
-        </h2>
-        <Button
-          v-if="isBound"
-          variant="outline"
-          size="sm"
-          class="gap-1"
-          :disabled="syncingRobots"
-          @click="syncRobots"
-        >
-          <RefreshCw
-            class="size-3.5 shrink-0"
-            :class="{ 'animate-spin': syncingRobots }"
-          />
-          {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
-        </Button>
-      </div>
-      <div v-if="!isBound" class="text-sm text-muted-foreground">
-        {{ t('settings.chatwiki.notAuthorized') }}
-      </div>
-      <template v-else>
-        <div v-if="robotsLoading" class="flex items-center justify-center py-6">
-          <Loader2 class="size-5 animate-spin text-muted-foreground" />
-        </div>
-        <div v-else-if="robots.length === 0" class="text-sm text-muted-foreground">
-          {{ t('settings.chatwiki.emptyRobots') }}
-        </div>
-        <div v-else class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5">
+        <!-- Bound: user info only -->
+        <div v-if="isBound && currentBinding" class="flex flex-col gap-4">
           <div
-            v-for="robot in robots"
-            :key="robot.id"
-            class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+            class="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 dark:border-white/10 dark:bg-white/5"
           >
-            <div class="flex items-center gap-3 overflow-hidden">
+            <div class="flex items-center gap-3">
               <div
-                class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
+                class="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground"
               >
-                <img
-                  v-if="robot.icon"
-                  :src="robot.icon"
-                  :alt="robot.name"
-                  class="size-full object-cover"
-                  @error="onRobotAvatarError(robot, $event)"
-                />
-                <span v-else class="text-xs text-muted-foreground">{{ robot.name?.charAt(0) || '?' }}</span>
+                {{ currentBinding.user_name?.charAt(0)?.toUpperCase() || '?' }}
               </div>
               <div class="min-w-0">
-                <p class="truncate text-sm text-foreground">{{ robot.name }}</p>
+                <p class="truncate text-sm font-medium text-foreground">
+                  {{ currentBinding.user_name }}
+                </p>
+                <p class="truncate text-xs text-muted-foreground">
+                  ID: {{ currentBinding.user_id }}
+                </p>
               </div>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
               <span
-                class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
+                v-if="bindingExpired"
+                class="rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1 text-xs text-destructive"
               >
-                {{ getRobotTypeLabel(robot.type) }}
+                {{ t('settings.chatwiki.bindingExpired') }}
               </span>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <Switch
-                :model-value="robot.enabled"
-                @update:model-value="(checked) => onRobotSwitchChange(robot, checked)"
-              />
+              <span v-else class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                {{ t('settings.chatwiki.bound') }}
+              </span>
+              <Button v-if="bindingExpired" size="sm" @click="startReauthBinding">
+                {{ t('settings.chatwiki.reauthBind') }}
+              </Button>
             </div>
           </div>
         </div>
-      </template>
-    </div>
 
-    <!-- Knowledge bases card -->
-    <div
-      class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
-    >
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold tracking-tight text-foreground">
-          {{ t('settings.chatwiki.knowledgeBases') }}
-        </h2>
-        <Button
-          v-if="isBound"
-          variant="outline"
-          size="sm"
-          class="gap-1"
-          :disabled="syncingLibraries"
-          @click="syncLibraries"
-        >
-          <RefreshCw
-            class="size-3.5 shrink-0"
-            :class="{ 'animate-spin': syncingLibraries }"
-          />
-          {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
-        </Button>
-      </div>
-      <div v-if="!isBound" class="text-sm text-muted-foreground">
-        {{ t('settings.chatwiki.notAuthorized') }}
-      </div>
-      <template v-else>
-        <Tabs v-model="libraryTab" class="w-full">
-          <TabsList class="w-auto">
-            <TabsTrigger value="0">{{ t('settings.chatwiki.libraryType.normal') }}</TabsTrigger>
-            <TabsTrigger value="2">{{ t('settings.chatwiki.libraryType.qa') }}</TabsTrigger>
-            <TabsTrigger value="3">{{ t('settings.chatwiki.libraryType.wechat') }}</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div v-if="librariesLoading" class="flex items-center justify-center py-6">
-          <Loader2 class="size-5 animate-spin text-muted-foreground" />
+        <!-- Not bound -->
+        <div v-else>
+          <p class="text-sm text-muted-foreground">
+            {{ t('settings.chatwiki.notBound') }}
+          </p>
         </div>
-        <div v-else-if="libraries.length === 0" class="text-sm text-muted-foreground">
-          {{ t('settings.chatwiki.emptyLibraries') }}
-        </div>
-        <div v-else class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5">
-          <div
-            v-for="lib in libraries"
-            :key="lib.id"
-            class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+      </div>
+
+      <!-- Applications card -->
+      <div
+        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold tracking-tight text-foreground">
+            {{ t('settings.chatwiki.applications') }}
+          </h2>
+          <Button
+            v-if="isBound"
+            variant="outline"
+            size="sm"
+            class="gap-1"
+            :disabled="syncingRobots"
+            @click="syncRobots"
           >
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm text-foreground">{{ lib.name }}</p>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <Switch
-                :model-value="lib.enabled"
-                @update:model-value="(checked) => onLibrarySwitchChange(lib, checked)"
-              />
+            <RefreshCw class="size-3.5 shrink-0" :class="{ 'animate-spin': syncingRobots }" />
+            {{ syncingRobots ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+          </Button>
+        </div>
+        <div v-if="!isBound" class="text-sm text-muted-foreground">
+          {{ t('settings.chatwiki.notAuthorized') }}
+        </div>
+        <template v-else>
+          <div v-if="robotsLoading" class="flex items-center justify-center py-6">
+            <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="robots.length === 0" class="text-sm text-muted-foreground">
+            {{ t('settings.chatwiki.emptyRobots') }}
+          </div>
+          <div
+            v-else
+            class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
+          >
+            <div
+              v-for="robot in robots"
+              :key="robot.id"
+              class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+            >
+              <div class="flex items-center gap-3 overflow-hidden">
+                <div
+                  class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded bg-muted"
+                >
+                  <img
+                    v-if="robot.icon"
+                    :src="robot.icon"
+                    :alt="robot.name"
+                    class="size-full object-cover"
+                    @error="onRobotAvatarError(robot, $event)"
+                  />
+                  <span v-else class="text-xs text-muted-foreground">{{
+                    robot.name?.charAt(0) || '?'
+                  }}</span>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-sm text-foreground">{{ robot.name }}</p>
+                </div>
+                <span
+                  class="shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground"
+                >
+                  {{ getRobotTypeLabel(robot.type) }}
+                </span>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <Switch
+                  :model-value="robot.enabled"
+                  @update:model-value="(checked) => onRobotSwitchChange(robot, checked)"
+                />
+              </div>
             </div>
           </div>
+        </template>
+      </div>
+
+      <!-- Knowledge bases card -->
+      <div
+        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold tracking-tight text-foreground">
+            {{ t('settings.chatwiki.knowledgeBases') }}
+          </h2>
+          <Button
+            v-if="isBound"
+            variant="outline"
+            size="sm"
+            class="gap-1"
+            :disabled="syncingLibraries"
+            @click="syncLibraries"
+          >
+            <RefreshCw class="size-3.5 shrink-0" :class="{ 'animate-spin': syncingLibraries }" />
+            {{ syncingLibraries ? t('settings.chatwiki.syncing') : t('settings.chatwiki.sync') }}
+          </Button>
         </div>
-      </template>
-    </div>
+        <div v-if="!isBound" class="text-sm text-muted-foreground">
+          {{ t('settings.chatwiki.notAuthorized') }}
+        </div>
+        <template v-else>
+          <Tabs v-model="libraryTab" class="w-full">
+            <TabsList class="w-auto">
+              <TabsTrigger value="0">{{ t('settings.chatwiki.libraryType.normal') }}</TabsTrigger>
+              <TabsTrigger value="2">{{ t('settings.chatwiki.libraryType.qa') }}</TabsTrigger>
+              <TabsTrigger value="3">{{ t('settings.chatwiki.libraryType.wechat') }}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div v-if="librariesLoading" class="flex items-center justify-center py-6">
+            <Loader2 class="size-5 animate-spin text-muted-foreground" />
+          </div>
+          <div v-else-if="libraries.length === 0" class="text-sm text-muted-foreground">
+            {{ t('settings.chatwiki.emptyLibraries') }}
+          </div>
+          <div
+            v-else
+            class="flex flex-col rounded-lg border border-border bg-muted/30 dark:border-white/10 dark:bg-white/5"
+          >
+            <div
+              v-for="lib in libraries"
+              :key="lib.id"
+              class="flex items-center justify-between border-t border-border px-4 py-3 first:border-t-0 dark:border-white/10"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm text-foreground">{{ lib.name }}</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <Switch
+                  :model-value="lib.enabled"
+                  @update:model-value="(checked) => onLibrarySwitchChange(lib, checked)"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
   </template>
 
@@ -773,11 +777,7 @@ onUnmounted(() => {
           autocomplete="url"
           :placeholder="t('settings.chatwiki.openSourceUrlPlaceholder')"
         />
-        <Button
-          class="w-full"
-          :disabled="!isOpenSourceUrlValid"
-          @click="handleGoToAuth"
-        >
+        <Button class="w-full" :disabled="!isOpenSourceUrlValid" @click="handleGoToAuth">
           {{ t('settings.chatwiki.goToAuth') }}
         </Button>
       </div>
@@ -864,14 +864,11 @@ onUnmounted(() => {
           {{ t('settings.chatwiki.freeVersion') }}
         </span>
       </div>
-      <Button
-        class="w-full"
-        size="lg"
-        :disabled="finishSuccessLoading"
-        @click="finishSuccess"
-      >
+      <Button class="w-full" size="lg" :disabled="finishSuccessLoading" @click="finishSuccess">
         <Loader2 v-if="finishSuccessLoading" class="size-4 shrink-0 animate-spin" />
-        {{ finishSuccessLoading ? t('settings.chatwiki.syncing') : t('settings.chatwiki.startUsing') }}
+        {{
+          finishSuccessLoading ? t('settings.chatwiki.syncing') : t('settings.chatwiki.startUsing')
+        }}
       </Button>
       <button
         type="button"
@@ -888,10 +885,14 @@ onUnmounted(() => {
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>{{ t('settings.chatwiki.unbindConfirmTitle') }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ t('settings.chatwiki.unbindConfirmDesc') }}</AlertDialogDescription>
+        <AlertDialogDescription>{{
+          t('settings.chatwiki.unbindConfirmDesc')
+        }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel @click="showUnbindConfirm = false">{{ t('common.cancel') }}</AlertDialogCancel>
+        <AlertDialogCancel @click="showUnbindConfirm = false">{{
+          t('common.cancel')
+        }}</AlertDialogCancel>
         <AlertDialogAction
           class="bg-foreground text-background hover:bg-foreground/90"
           @click="confirmUnbind"

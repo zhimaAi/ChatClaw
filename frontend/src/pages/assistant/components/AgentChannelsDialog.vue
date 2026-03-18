@@ -2,12 +2,27 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs } from '@wailsio/runtime'
-import { Check, Link2, LoaderCircle, MoreHorizontal, Plus, ShieldCheck, Unlink, Edit } from 'lucide-vue-next'
+import {
+  Check,
+  Link2,
+  LoaderCircle,
+  MoreHorizontal,
+  Plus,
+  ShieldCheck,
+  Unlink,
+  Edit,
+} from 'lucide-vue-next'
 import { type Agent, AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import ConfigChannelDialog from '@/pages/channels/components/ConfigChannelDialog.vue'
 import {
   DropdownMenu,
@@ -78,17 +93,17 @@ const selectedPlatformChannels = computed(() => {
 const isFeishu = computed(() => selectedPlatformMeta.value?.id === 'feishu')
 const isWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
 const inlineAppIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
-const inlineAppSecretLabel = computed(() => (isWeCom.value ? 'Secret' : t('channels.config.appSecret')))
-const inlineAppIdPlaceholder = computed(() => (
-  isWeCom.value
-    ? t('channels.config.wecomAppIdPlaceholder')
-    : t('channels.config.appIdPlaceholder')
-))
-const inlineAppSecretPlaceholder = computed(() => (
+const inlineAppSecretLabel = computed(() =>
+  isWeCom.value ? 'Secret' : t('channels.config.appSecret')
+)
+const inlineAppIdPlaceholder = computed(() =>
+  isWeCom.value ? t('channels.config.wecomAppIdPlaceholder') : t('channels.config.appIdPlaceholder')
+)
+const inlineAppSecretPlaceholder = computed(() =>
   isWeCom.value
     ? t('channels.config.wecomAppSecretPlaceholder')
     : t('channels.config.appSecretPlaceholder')
-))
+)
 
 const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
@@ -144,7 +159,9 @@ function getAppId(extraConfig: string): string {
 
 function getAgentName(agentId: number): string {
   if (!agentId) return t('assistant.channels.unbound')
-  return agents.value.find((agent) => agent.id === agentId)?.name || t('assistant.channels.unknownAgent')
+  return (
+    agents.value.find((agent) => agent.id === agentId)?.name || t('assistant.channels.unknownAgent')
+  )
 }
 
 function getBindStatusText(channel: Channel): string {
@@ -193,12 +210,16 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
-    const selectableIds = ['feishu', 'wecom']
-    const hasSelectedPlatform = platforms.value.some((platform) => platform.id === selectedPlatformId.value)
+    const selectableIds = ['feishu', 'wecom', 'qq']
+    const hasSelectedPlatform = platforms.value.some(
+      (platform) => platform.id === selectedPlatformId.value
+    )
     const currentIsSelectable = selectableIds.includes(selectedPlatformId.value)
     if (!hasSelectedPlatform || !currentIsSelectable) {
       selectedPlatformId.value =
-        platforms.value.find((p) => selectableIds.includes(p.id))?.id || platforms.value[0]?.id || ''
+        platforms.value.find((p) => selectableIds.includes(p.id))?.id ||
+        platforms.value[0]?.id ||
+        ''
     }
     if (selectedPlatformId.value) {
       syncCreateFormVisibility(selectedPlatformId.value)
@@ -264,8 +285,8 @@ async function handleCreateChannel() {
     const extraConfig = JSON.stringify({
       app_id: inlineFormAppId.value.trim(),
       app_secret: inlineFormAppSecret.value.trim(),
-    })  
- 
+    })
+
     const channel = await ChannelService.CreateChannel({
       platform: selectedPlatformMeta.value.id,
       name: inlineFormName.value.trim(),
@@ -337,7 +358,7 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
 }
 
 function isSelectableChannelPlatform(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
 }
 
 function openPlatformDocs() {
@@ -425,7 +446,9 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
       </DialogHeader>
 
       <div class="flex h-full flex-col bg-white dark:bg-background">
-        <div class="flex h-14 shrink-0 items-center justify-between border-b border-[#d4d4d4] px-4 dark:border-border">
+        <div
+          class="flex h-14 shrink-0 items-center justify-between border-b border-[#d4d4d4] px-4 dark:border-border"
+        >
           <h2 class="text-xl font-semibold leading-6 text-[#0a0a0a] dark:text-foreground">
             {{ t('assistant.menu.channels') }}
           </h2>
@@ -441,287 +464,331 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                 :class="
                   cn(
                     'flex h-8 items-center rounded-md px-3 text-left text-sm text-[#404040] transition-colors dark:text-muted-foreground',
-                    selectedPlatformId === platform.id && 'bg-[#f5f5f5] text-[#171717] dark:bg-muted dark:text-foreground',
-                    selectedPlatformId !== platform.id && isSelectableChannelPlatform(platform.id) && 'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
+                    selectedPlatformId === platform.id &&
+                      'bg-[#f5f5f5] text-[#171717] dark:bg-muted dark:text-foreground',
+                    selectedPlatformId !== platform.id &&
+                      isSelectableChannelPlatform(platform.id) &&
+                      'hover:bg-[#f5f5f5]/70 dark:hover:bg-muted/60',
                     !isSelectableChannelPlatform(platform.id) && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="isSelectableChannelPlatform(platform.id) ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
+                @click="
+                  isSelectableChannelPlatform(platform.id)
+                    ? handleSelectPlatform(platform.id)
+                    : toast.default(t('channels.comingSoon'))
+                "
               >
-                <span class="truncate">{{ getPlatformDisplayName(platform.id, platform.name) }}</span>
+                <span class="truncate">{{
+                  getPlatformDisplayName(platform.id, platform.name)
+                }}</span>
               </button>
             </div>
           </aside>
 
           <section class="flex min-w-0 flex-1 flex-col">
-
-          <div class="border-[#d9d9d9] px-4 pt-4 pb-0 dark:border-border">
-            <div
-              v-if="selectedPlatformMeta"
-              class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
-            >
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0 flex-1">
-                  <h3 class="text-base font-semibold leading-6 text-[#262626] dark:text-foreground">
-                    {{ getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name) }}
-                  </h3>
-                  <p class="mt-1 text-sm leading-5 text-[#737373] dark:text-muted-foreground">
-                    {{ getPlatformDescription(selectedPlatformMeta.id) }}
-                  </p>
-                </div>
-
-                <div class="flex shrink-0 items-center gap-2">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    class="h-6 w-6 rounded-sm p-0 text-[#171717] hover:bg-[#f5f5f5] dark:text-foreground dark:hover:bg-muted"
-                    :disabled="!selectedPlatformMeta"
-                    @click="handleOpenAddBotDialog"
-                  >
-                    <Plus class="size-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex-1 overflow-y-auto px-4 py-4">
-            <div v-if="loading" class="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              {{ t('common.loading', '加载中...') }}
-            </div>
-
-            <div
-              v-else-if="!selectedPlatformMeta"
-              class="flex items-center justify-center rounded-[16px] border border-dashed border-border px-6 py-12 text-sm text-muted-foreground"
-            >
-              {{ t('assistant.channels.noPlatforms') }}
-            </div>
-
-            <div v-else-if="shouldShowCreateForm">
+            <div class="border-[#d9d9d9] px-4 pt-4 pb-0 dark:border-border">
               <div
+                v-if="selectedPlatformMeta"
                 class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
               >
-                <div class="mb-6 flex flex-col items-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    class="flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[14px] border border-[#d9d9d9] bg-white shadow-sm transition-opacity hover:opacity-80 dark:border-border dark:bg-muted dark:shadow-none dark:ring-1 dark:ring-white/10"
-                    @click="handlePickAvatar"
-                  >
-                    <img
-                      v-if="inlineFormAvatar"
-                      :src="inlineFormAvatar"
-                      :alt="inlineFormName || getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)"
-                      class="h-full w-full object-cover"
-                    />
-                    <img
-                      v-else-if="getPlatformIcon(selectedPlatformMeta.id)"
-                      :src="getPlatformIcon(selectedPlatformMeta.id)!"
-                      :alt="getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)"
-                      class="h-8 w-8 object-contain"
-                    />
-                    <Plus v-else class="size-6 text-[#595959] dark:text-muted-foreground" />
-                  </button>
-                  <p class="text-center text-sm leading-[22px] text-[#8c8c8c] dark:text-muted-foreground">
-                    {{ t('assistant.icon.hint') }}
-                  </p>
-                </div>
-
-                <div class="space-y-4">
-                  <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                      * {{ t('assistant.fields.name', '名称') }}
-                    </label>
-                    <Input
-                      v-model="inlineFormName"
-                      class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                      :placeholder="t('channels.inline.namePlaceholder', '请输入')"
-                    />
-                  </div>
-
-                  <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                      * {{ inlineAppIdLabel }}
-                    </label>
-                    <Input
-                      v-model="inlineFormAppId"
-                      class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                      :placeholder="inlineAppIdPlaceholder"
-                    />
-                  </div>
-
-                  <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground">
-                      * {{ inlineAppSecretLabel }}
-                    </label>
-                    <Input
-                      v-model="inlineFormAppSecret"
-                      type="password"
-                      class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                      :placeholder="inlineAppSecretPlaceholder"
-                    />
-                  </div>
-                </div>
-
-                <div class="mt-4 flex items-center gap-2">
-                  <Button
-                    type="button"
-                    class="h-10 gap-2 rounded-lg bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
-                    :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
-                    @click="handleInlineVerify"
-                  >
-                    <LoaderCircle v-if="inlineFormVerifying" class="size-4 shrink-0 animate-spin" />
-                    <ShieldCheck v-else class="size-4 shrink-0" />
-                    {{ inlineFormVerifying ? t('channels.inline.verifying', '验证中…') : t('channels.inline.verifyConfig', '验证配置') }}
-                  </Button>
-
-                  <Button
-                    class="h-10 gap-2 rounded-lg bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                    :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
-                    @click="handleCreateChannel"
-                  >
-                    <Plus class="size-4 shrink-0" />
-                    {{ t('channels.inline.save', '保存添加') }}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    class="h-10 rounded-lg border-[#d4d4d4] bg-white px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-transparent dark:shadow-none dark:ring-1 dark:ring-white/10"
-                    @click="openPlatformDocs"
-                  >
-                    {{ t('channels.inline.configSteps', '配置步骤') }}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="space-y-4">
-              <div
-                v-for="channel in selectedPlatformChannels"
-                :key="channel.id"
-                class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
-              >
-                <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0 flex-1">
-                    <div class="flex min-w-0 items-start gap-2">
-                      <div
-                        class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted"
-                      >
-                        <img
-                          v-if="channel.avatar"
-                          :src="channel.avatar"
-                          :alt="channel.name"
-                          class="h-full w-full object-cover"
-                        />
-                        <img
-                          v-else-if="getPlatformIcon(channel.platform)"
-                          :src="getPlatformIcon(channel.platform)!"
-                          :alt="channel.platform"
-                          class="h-3.5 w-3.5 object-contain"
-                        />
-                        <span v-else class="text-[10px] text-muted-foreground">AI</span>
-                      </div>
-                      <p class="min-w-0 truncate text-sm leading-[22px] text-[#171717] dark:text-foreground">
-                        {{ channel.name }}
-                      </p>
-                    </div>
-
-                    <p class="mt-2 text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
-                      Appid: {{ getAppId(channel.extra_config) }}
+                    <h3
+                      class="text-base font-semibold leading-6 text-[#262626] dark:text-foreground"
+                    >
+                      {{
+                        getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)
+                      }}
+                    </h3>
+                    <p class="mt-1 text-sm leading-5 text-[#737373] dark:text-muted-foreground">
+                      {{ getPlatformDescription(selectedPlatformMeta.id) }}
                     </p>
                   </div>
 
                   <div class="flex shrink-0 items-center gap-2">
-                    <Switch
-                      :model-value="channel.enabled"
-                      :disabled="actionLoadingId === channel.id || channel.agent_id === 0"
-                      @update:model-value="(value: boolean) => handleToggleChannel(channel, value)"
-                    />
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger as-child>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="h-6 w-6 rounded-sm bg-transparent p-0 text-[#171717] hover:bg-[#f5f5f5] dark:text-foreground dark:hover:bg-muted"
-                          :disabled="actionLoadingId === channel.id"
-                        >
-                          <MoreHorizontal class="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-
-                      <DropdownMenuContent
-                        align="end"
-                        class="min-w-32 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover"
-                      >
-                        <DropdownMenuItem
-                          class="gap-2 rounded px-4 py-[5px]"
-                          @click="handleEditChannel(channel)"
-                        >
-                          <Edit class="size-4" />
-                          {{ t('common.edit', '编辑') }}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          class="gap-2 rounded px-4 py-[5px]"
-                          @click="channel.agent_id === currentAgentId ? handleUnbindChannel(channel) : handleBindChannel(channel)"
-                        >
-                          <Unlink v-if="channel.agent_id === currentAgentId" class="size-4" />
-                          <Link2 v-else class="size-4" />
-                          {{ getBindActionText(channel) }}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      class="h-6 w-6 rounded-sm p-0 text-[#171717] hover:bg-[#f5f5f5] dark:text-foreground dark:hover:bg-muted"
+                      :disabled="!selectedPlatformMeta"
+                      @click="handleOpenAddBotDialog"
+                    >
+                      <Plus class="size-4" />
+                    </Button>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <div class="inline-flex items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-                    <div
-                      class="h-2 w-2 rounded-full"
-                      :class="{
-                        'bg-green-500': channel.status === 'online',
-                        'bg-red-500': channel.status === 'error',
-                        'bg-gray-400': channel.status === 'offline' || !channel.status,
-                      }"
-                    />
-                    <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
-                      {{ getChannelStatusText(channel) }}
-                    </span>
-                  </div>
-
-                  <div class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted">
-                    <Check
-                      v-if="channel.agent_id !== 0"
-                      class="size-3.5 text-[#595959] dark:text-muted-foreground"
-                    />
-                    <Unlink
-                      v-else
-                      class="size-3.5 text-[#595959] dark:text-muted-foreground"
-                    />
-                    <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
-                      {{ getBindStatusText(channel) }}
-                    </span>
-                  </div>
-
-                  <div
-                    v-if="channel.agent_id !== 0"
-                    class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
-                  >
-                    <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
-                      {{ getAgentName(channel.agent_id) }}
-                    </span>
-                  </div>
-                </div>
+            <div class="flex-1 overflow-y-auto px-4 py-4">
+              <div
+                v-if="loading"
+                class="flex items-center justify-center py-16 text-sm text-muted-foreground"
+              >
+                {{ t('common.loading', '加载中...') }}
               </div>
 
               <div
-                v-if="selectedPlatformChannels.length === 0"
+                v-else-if="!selectedPlatformMeta"
                 class="flex items-center justify-center rounded-[16px] border border-dashed border-border px-6 py-12 text-sm text-muted-foreground"
               >
-                {{ t('assistant.channels.emptyPlatform') }}
+                {{ t('assistant.channels.noPlatforms') }}
+              </div>
+
+              <div v-else-if="shouldShowCreateForm">
+                <div
+                  class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
+                >
+                  <div class="mb-6 flex flex-col items-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      class="flex h-[62px] w-[62px] items-center justify-center overflow-hidden rounded-[14px] border border-[#d9d9d9] bg-white shadow-sm transition-opacity hover:opacity-80 dark:border-border dark:bg-muted dark:shadow-none dark:ring-1 dark:ring-white/10"
+                      @click="handlePickAvatar"
+                    >
+                      <img
+                        v-if="inlineFormAvatar"
+                        :src="inlineFormAvatar"
+                        :alt="
+                          inlineFormName ||
+                          getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)
+                        "
+                        class="h-full w-full object-cover"
+                      />
+                      <img
+                        v-else-if="getPlatformIcon(selectedPlatformMeta.id)"
+                        :src="getPlatformIcon(selectedPlatformMeta.id)!"
+                        :alt="
+                          getPlatformDisplayName(selectedPlatformMeta.id, selectedPlatformMeta.name)
+                        "
+                        class="h-8 w-8 object-contain"
+                      />
+                      <Plus v-else class="size-6 text-[#595959] dark:text-muted-foreground" />
+                    </button>
+                    <p
+                      class="text-center text-sm leading-[22px] text-[#8c8c8c] dark:text-muted-foreground"
+                    >
+                      {{ t('assistant.icon.hint') }}
+                    </p>
+                  </div>
+
+                  <div class="space-y-4">
+                    <div class="flex flex-col gap-1">
+                      <label
+                        class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
+                      >
+                        * {{ t('assistant.fields.name', '名称') }}
+                      </label>
+                      <Input
+                        v-model="inlineFormName"
+                        class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+                        :placeholder="t('channels.inline.namePlaceholder', '请输入')"
+                      />
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                      <label
+                        class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
+                      >
+                        * {{ inlineAppIdLabel }}
+                      </label>
+                      <Input
+                        v-model="inlineFormAppId"
+                        class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+                        :placeholder="inlineAppIdPlaceholder"
+                      />
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                      <label
+                        class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
+                      >
+                        * {{ inlineAppSecretLabel }}
+                      </label>
+                      <Input
+                        v-model="inlineFormAppSecret"
+                        type="password"
+                        class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+                        :placeholder="inlineAppSecretPlaceholder"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="mt-4 flex items-center gap-2">
+                    <Button
+                      type="button"
+                      class="h-10 gap-2 rounded-lg bg-[#f5f5f5] px-6 text-[#171717] hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+                      :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
+                      @click="handleInlineVerify"
+                    >
+                      <LoaderCircle
+                        v-if="inlineFormVerifying"
+                        class="size-4 shrink-0 animate-spin"
+                      />
+                      <ShieldCheck v-else class="size-4 shrink-0" />
+                      {{
+                        inlineFormVerifying
+                          ? t('channels.inline.verifying', '验证中…')
+                          : t('channels.inline.verifyConfig', '验证配置')
+                      }}
+                    </Button>
+
+                    <Button
+                      class="h-10 gap-2 rounded-lg bg-[#171717] px-6 text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                      :disabled="inlineFormSaving || inlineFormVerifying || !isInlineFormValid"
+                      @click="handleCreateChannel"
+                    >
+                      <Plus class="size-4 shrink-0" />
+                      {{ t('channels.inline.save', '保存添加') }}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      class="h-10 rounded-lg border-[#d4d4d4] bg-white px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-transparent dark:shadow-none dark:ring-1 dark:ring-white/10"
+                      @click="openPlatformDocs"
+                    >
+                      {{ t('channels.inline.configSteps', '配置步骤') }}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="space-y-4">
+                <div
+                  v-for="channel in selectedPlatformChannels"
+                  :key="channel.id"
+                  class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex min-w-0 items-start gap-2">
+                        <div
+                          class="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-[4px] border border-[#d9d9d9] bg-white dark:border-border dark:bg-muted"
+                        >
+                          <img
+                            v-if="channel.avatar"
+                            :src="channel.avatar"
+                            :alt="channel.name"
+                            class="h-full w-full object-cover"
+                          />
+                          <img
+                            v-else-if="getPlatformIcon(channel.platform)"
+                            :src="getPlatformIcon(channel.platform)!"
+                            :alt="channel.platform"
+                            class="h-3.5 w-3.5 object-contain"
+                          />
+                          <span v-else class="text-[10px] text-muted-foreground">AI</span>
+                        </div>
+                        <p
+                          class="min-w-0 truncate text-sm leading-[22px] text-[#171717] dark:text-foreground"
+                        >
+                          {{ channel.name }}
+                        </p>
+                      </div>
+
+                      <p class="mt-2 text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
+                        Appid: {{ getAppId(channel.extra_config) }}
+                      </p>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-2">
+                      <Switch
+                        :model-value="channel.enabled"
+                        :disabled="actionLoadingId === channel.id || channel.agent_id === 0"
+                        @update:model-value="
+                          (value: boolean) => handleToggleChannel(channel, value)
+                        "
+                      />
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-6 w-6 rounded-sm bg-transparent p-0 text-[#171717] hover:bg-[#f5f5f5] dark:text-foreground dark:hover:bg-muted"
+                            :disabled="actionLoadingId === channel.id"
+                          >
+                            <MoreHorizontal class="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent
+                          align="end"
+                          class="min-w-32 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover"
+                        >
+                          <DropdownMenuItem
+                            class="gap-2 rounded px-4 py-[5px]"
+                            @click="handleEditChannel(channel)"
+                          >
+                            <Edit class="size-4" />
+                            {{ t('common.edit', '编辑') }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            class="gap-2 rounded px-4 py-[5px]"
+                            @click="
+                              channel.agent_id === currentAgentId
+                                ? handleUnbindChannel(channel)
+                                : handleBindChannel(channel)
+                            "
+                          >
+                            <Unlink v-if="channel.agent_id === currentAgentId" class="size-4" />
+                            <Link2 v-else class="size-4" />
+                            {{ getBindActionText(channel) }}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <div
+                      class="inline-flex items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+                    >
+                      <div
+                        class="h-2 w-2 rounded-full"
+                        :class="{
+                          'bg-green-500': channel.status === 'online',
+                          'bg-red-500': channel.status === 'error',
+                          'bg-gray-400': channel.status === 'offline' || !channel.status,
+                        }"
+                      />
+                      <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
+                        {{ getChannelStatusText(channel) }}
+                      </span>
+                    </div>
+
+                    <div
+                      class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+                    >
+                      <Check
+                        v-if="channel.agent_id !== 0"
+                        class="size-3.5 text-[#595959] dark:text-muted-foreground"
+                      />
+                      <Unlink v-else class="size-3.5 text-[#595959] dark:text-muted-foreground" />
+                      <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
+                        {{ getBindStatusText(channel) }}
+                      </span>
+                    </div>
+
+                    <div
+                      v-if="channel.agent_id !== 0"
+                      class="inline-flex items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+                    >
+                      <span class="text-xs leading-4 text-[#595959] dark:text-muted-foreground">
+                        {{ getAgentName(channel.agent_id) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-if="selectedPlatformChannels.length === 0"
+                  class="flex items-center justify-center rounded-[16px] border border-dashed border-border px-6 py-12 text-sm text-muted-foreground"
+                >
+                  {{ t('assistant.channels.emptyPlatform') }}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
         </div>
       </div>
     </DialogContent>
@@ -737,7 +804,9 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
       </DialogHeader>
 
       <!-- Header -->
-      <div class="flex h-14 shrink-0 items-center justify-between border-b border-[#d4d4d4] px-6 dark:border-border">
+      <div
+        class="flex h-14 shrink-0 items-center justify-between border-b border-[#d4d4d4] px-6 dark:border-border"
+      >
         <DialogTitle class="text-xl font-semibold leading-6 text-[#0a0a0a] dark:text-foreground">
           {{ t('assistant.channels.addBot') }}
         </DialogTitle>
@@ -830,7 +899,9 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
       </div>
 
       <!-- Footer -->
-      <div class="flex shrink-0 items-center justify-end gap-3 border-t border-[#d4d4d4] bg-white px-6 py-4 dark:border-border dark:bg-background">
+      <div
+        class="flex shrink-0 items-center justify-end gap-3 border-t border-[#d4d4d4] bg-white px-6 py-4 dark:border-border dark:bg-background"
+      >
         <Button
           variant="outline"
           class="h-10 rounded-lg border-[#d4d4d4] bg-white px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-transparent dark:shadow-none dark:ring-1 dark:ring-white/10"
@@ -846,7 +917,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
           {{ t('common.confirm') }}
         </Button>
       </div>
-      </DialogContent>
+    </DialogContent>
   </Dialog>
 
   <!-- Config Channel Dialog -->
@@ -855,6 +926,10 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
     :platform="selectedPlatformMeta"
     :channel="channelToEdit"
     @saved="handleConfigChannelSaved"
-    @update:open="(val) => { if (!val) channelToEdit = null }"
+    @update:open="
+      (val) => {
+        if (!val) channelToEdit = null
+      }
+    "
   />
 </template>

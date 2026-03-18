@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "Otomatik asistan oluşturma mevcut değil",
   "error.channel_ai_reply_failed": "AI yanıtı başarısız: {{.Error}}",
   "error.channel_ai_reply_empty": "AI yanıtı başarısız: Boş yanıt oluşturuldu",
+  "channel.feishu_streaming_generating": "Akış yanıtı oluşturuluyor, lütfen bekleyin...",
+  "channel.feishu_stream_output_enabled": "Akış çıktısı etkinleştirildi. Sonraki yanıtlar oluşturuldukça gönderilecektir.",
+  "channel.feishu_stream_output_disabled": "Akış çıktısı devre dışı bırakıldı. Sonraki yanıtlar tam sonuç hazır olduğunda gönderilecektir.",
   "error.assistant_mcp_create_failed": "Assistant MCP oluşturma başarısız oldu",
   "error.assistant_mcp_delete_failed": "Assistant MCP silme başarısız oldu",
   "error.assistant_mcp_id_required": "Assistant MCP kimliği gereklidir",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "Araç adı yalnızca harf, rakam ve alt çizgi içerebilir ve bir harfle başlamalıdır",
   "error.assistant_mcp_tool_name_required": "Araç adı gereklidir",
   "error.assistant_mcp_tool_not_found": "Araç bulunamadı",
-  "error.assistant_mcp_update_failed": "Assistant MCP güncelleme başarısız oldu"
+  "error.assistant_mcp_update_failed": "Assistant MCP güncelleme başarısız oldu",
+  "error.chat_too_many_files": "Dosya sayısı sınırı aşıyor",
+  "error.chat_file_too_large": "Dosya boyutu sınırı aşıyor",
+  "error.chat_invalid_file_type": "Geçersiz dosya türü",
+  "error.file_not_found": "Dosya bulunamadı"
 }

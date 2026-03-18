@@ -27,19 +27,21 @@ const (
 	RoleTool      = "tool"
 )
 
-// ImagePayload describes a single image attached to a message.
+// ImagePayload describes a single image or file attached to a message.
+// Kind = "image" for images; Kind = "file" for document attachments.
 type ImagePayload struct {
-	ID       string `json:"id,omitempty"`
-	Kind     string `json:"kind"`                 // "image"
-	Source   string `json:"source"`               // "inline_base64" or "local_file"
-	MimeType string `json:"mime_type"`
-	Base64   string `json:"base64"`               // without "data:" prefix
-	DataURL  string `json:"data_url,omitempty"`   // optional convenience field for frontend
-	Width    int    `json:"width,omitempty"`
-	Height   int    `json:"height,omitempty"`
-	FileName string `json:"file_name,omitempty"`
-	FilePath string `json:"file_path,omitempty"`   // local file path when saved to work dir
-	Size     int64  `json:"size,omitempty"`
+	ID           string `json:"id,omitempty"`
+	Kind         string `json:"kind"`                   // "image" or "file"
+	Source       string `json:"source"`                 // "inline_base64" or "local_file"
+	MimeType     string `json:"mime_type"`
+	Base64       string `json:"base64"`                 // without "data:" prefix
+	DataURL      string `json:"data_url,omitempty"`     // optional convenience field for frontend
+	Width        int    `json:"width,omitempty"`
+	Height       int    `json:"height,omitempty"`
+	FileName     string `json:"file_name,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`     // local file path when saved to work dir
+	Size         int64  `json:"size,omitempty"`
+	OriginalName string `json:"original_name,omitempty"` // user's original filename (preserved for display)
 }
 
 // Message DTO (exposed to frontend)

@@ -198,29 +198,29 @@ const builtInProcessToAppKeyMap: Record<string, string> = {
   'lark.exe': 'snap_feishu',
   'douyin.exe': 'snap_douyin',
   // macOS
-  '微信': 'snap_wechat',
-  'weixin': 'snap_wechat',
-  'wechat': 'snap_wechat',
+  微信: 'snap_wechat',
+  weixin: 'snap_wechat',
+  wechat: 'snap_wechat',
   'com.tencent.xinwechat': 'snap_wechat',
-  '企业微信': 'snap_wecom',
-  'wecom': 'snap_wecom',
-  'wework': 'snap_wecom',
-  'wxwork': 'snap_wecom',
-  'qiyeweixin': 'snap_wecom',
+  企业微信: 'snap_wecom',
+  wecom: 'snap_wecom',
+  wework: 'snap_wecom',
+  wxwork: 'snap_wecom',
+  qiyeweixin: 'snap_wecom',
   'com.tencent.weworkmac': 'snap_wecom',
-  'qq': 'snap_qq',
+  qq: 'snap_qq',
   'com.tencent.qq': 'snap_qq',
-  '钉钉': 'snap_dingtalk',
-  'dingtalk': 'snap_dingtalk',
+  钉钉: 'snap_dingtalk',
+  dingtalk: 'snap_dingtalk',
   'com.alibaba.dingtalkmac': 'snap_dingtalk',
-  '飞书': 'snap_feishu',
-  'feishu': 'snap_feishu',
-  'lark': 'snap_feishu',
+  飞书: 'snap_feishu',
+  feishu: 'snap_feishu',
+  lark: 'snap_feishu',
   'com.bytedance.feishu': 'snap_feishu',
   'com.bytedance.lark': 'snap_feishu',
   'com.electron.lark': 'snap_feishu',
-  '抖音': 'snap_douyin',
-  'douyin': 'snap_douyin',
+  抖音: 'snap_douyin',
+  douyin: 'snap_douyin',
 }
 
 const builtInAppLabelByKey: Record<string, string> = {
@@ -302,7 +302,9 @@ const snapApps = computed(() => [
 ])
 
 const customSnapAppsForDisplay = computed(() => [...customSnapApps.value].reverse())
-const mergedSnapAppCount = computed(() => customSnapAppsForDisplay.value.length + snapApps.value.length)
+const mergedSnapAppCount = computed(
+  () => customSnapAppsForDisplay.value.length + snapApps.value.length
+)
 
 const boolSettingsMap: Record<string, { value: boolean }> = {
   show_ai_send_button: showAiSendButton,
@@ -599,7 +601,11 @@ const handleClickOffsetXBlur = async (key: string, refValue: { value: string }) 
   }
 }
 
-const handleClickOffsetYBlur = async (key: string, refValue: { value: string }, defaultValue: string) => {
+const handleClickOffsetYBlur = async (
+  key: string,
+  refValue: { value: string },
+  defaultValue: string
+) => {
   const sanitized = refValue.value.replace(/[^0-9]/g, '')
   const finalValue = sanitized && sanitized !== '0' ? sanitized : defaultValue
   refValue.value = finalValue
@@ -617,7 +623,9 @@ const loadAvailableApps = async () => {
   loadingAvailableApps.value = true
   try {
     const apps = await snapService.ListAvailableApps()
-    const selectedProcesses = new Set(customSnapApps.value.map((item) => normalizeProcess(item.processName)))
+    const selectedProcesses = new Set(
+      customSnapApps.value.map((item) => normalizeProcess(item.processName))
+    )
     availableApps.value = apps.filter((app) => {
       const processName = app.processName?.trim()
       const name = app.name?.trim()
@@ -779,13 +787,15 @@ onUnmounted(() => {
                 class="size-5 shrink-0 rounded-sm object-contain"
               />
               <component
-                v-else
                 :is="getCandidateIcon(customApp.icon)"
+                v-else
                 class="size-5 text-muted-foreground shrink-0"
               />
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="text-sm font-medium text-foreground truncate">{{ customApp.name }}</span>
+                  <span class="text-sm font-medium text-foreground truncate">{{
+                    customApp.name
+                  }}</span>
                   <button
                     type="button"
                     class="inline-flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
@@ -794,7 +804,9 @@ onUnmounted(() => {
                     <Trash2 class="size-3.5" />
                   </button>
                 </div>
-                <div class="text-xs text-muted-foreground truncate">{{ customApp.processName }}</div>
+                <div class="text-xs text-muted-foreground truncate">
+                  {{ customApp.processName }}
+                </div>
               </div>
             </div>
           </template>
@@ -811,20 +823,28 @@ onUnmounted(() => {
           >
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${customApp.id}_no_click`" value="no_click" />
-              <Label :for="`${customApp.id}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
+              <Label
+                :for="`${customApp.id}_no_click`"
+                class="text-xs text-muted-foreground cursor-pointer"
+              >
                 {{ t('settings.snap.noClickMode') }}
               </Label>
             </div>
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${customApp.id}_click`" value="click" />
-              <Label :for="`${customApp.id}_click`" class="text-xs text-muted-foreground cursor-pointer">
+              <Label
+                :for="`${customApp.id}_click`"
+                class="text-xs text-muted-foreground cursor-pointer"
+              >
                 {{ t('settings.snap.clickMode') }}
               </Label>
             </div>
           </RadioGroup>
           <div v-if="!customApp.noClick" class="flex items-center justify-between gap-4 pl-6">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
+              <span class="text-xs text-muted-foreground">{{
+                t('settings.snap.clickOffset.labelX')
+              }}</span>
               <Input
                 v-model="customApp.clickOffsetX"
                 :placeholder="t('settings.snap.clickOffset.placeholderX')"
@@ -833,7 +853,9 @@ onUnmounted(() => {
               />
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelY') }}</span>
+              <span class="text-xs text-muted-foreground">{{
+                t('settings.snap.clickOffset.labelY')
+              }}</span>
               <Input
                 v-model="customApp.clickOffsetY"
                 class="w-16 h-7 text-xs text-center"
@@ -846,7 +868,9 @@ onUnmounted(() => {
 
       <div v-for="(app, index) in snapApps" :key="app.key">
         <SettingsItem
-          :bordered="customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1 || app.value.value"
+          :bordered="
+            customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1 || app.value.value
+          "
         >
           <template #default>
             <Switch
@@ -864,17 +888,25 @@ onUnmounted(() => {
         <div
           v-if="app.value.value"
           class="flex flex-col gap-3 px-4 py-3 bg-muted/30"
-          :class="{ 'border-b border-border': customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1 }"
+          :class="{
+            'border-b border-border':
+              customSnapAppsForDisplay.length + index !== mergedSnapAppCount - 1,
+          }"
         >
           <RadioGroup
             v-if="app.hasNoClickOption"
             :model-value="app.noClick.value ? 'no_click' : 'click'"
             class="flex flex-col gap-2"
-            @update:model-value="(mode) => handleInputModeChange(app.key, app.noClick, String(mode))"
+            @update:model-value="
+              (mode) => handleInputModeChange(app.key, app.noClick, String(mode))
+            "
           >
             <div class="flex items-center gap-2">
               <RadioGroupItem :id="`${app.key}_no_click`" value="no_click" />
-              <Label :for="`${app.key}_no_click`" class="text-xs text-muted-foreground cursor-pointer">
+              <Label
+                :for="`${app.key}_no_click`"
+                class="text-xs text-muted-foreground cursor-pointer"
+              >
                 {{ t('settings.snap.noClickMode') }}
               </Label>
             </div>
@@ -885,9 +917,14 @@ onUnmounted(() => {
               </Label>
             </div>
           </RadioGroup>
-          <div v-if="!app.hasNoClickOption || !app.noClick.value" class="flex items-center justify-between gap-4 pl-6">
+          <div
+            v-if="!app.hasNoClickOption || !app.noClick.value"
+            class="flex items-center justify-between gap-4 pl-6"
+          >
             <div class="flex items-center gap-2">
-              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelX') }}</span>
+              <span class="text-xs text-muted-foreground">{{
+                t('settings.snap.clickOffset.labelX')
+              }}</span>
               <Input
                 v-model="app.clickOffsetX.value"
                 :placeholder="t('settings.snap.clickOffset.placeholderX')"
@@ -896,7 +933,9 @@ onUnmounted(() => {
               />
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-muted-foreground">{{ t('settings.snap.clickOffset.labelY') }}</span>
+              <span class="text-xs text-muted-foreground">{{
+                t('settings.snap.clickOffset.labelY')
+              }}</span>
               <Input
                 v-model="app.clickOffsetY.value"
                 class="w-16 h-7 text-xs text-center"
@@ -954,8 +993,8 @@ onUnmounted(() => {
               class="size-5 shrink-0 rounded-sm object-contain"
             />
             <component
-              v-else
               :is="getCandidateIcon(app.icon)"
+              v-else
               class="size-5 text-muted-foreground shrink-0"
             />
             <div class="min-w-0">

@@ -2,7 +2,10 @@
 import { computed, ref } from 'vue'
 import { Clock3, LoaderCircle, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { CreateScheduledTaskInput, UpdateScheduledTaskInput } from '@bindings/chatclaw/internal/services/scheduledtasks'
+import {
+  CreateScheduledTaskInput,
+  UpdateScheduledTaskInput,
+} from '@bindings/chatclaw/internal/services/scheduledtasks'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -67,28 +70,31 @@ const deleteTaskConfirmation = createDeleteTaskConfirmation(async (task) => {
 })
 
 function buildPayload(state: ScheduledTaskFormState) {
-  const normalizedIntervalMinutes = Math.min(59, Math.max(1, Number(state.customIntervalMinutes) || 1))
+  const normalizedIntervalMinutes = Math.min(
+    59,
+    Math.max(1, Number(state.customIntervalMinutes) || 1)
+  )
   const customPayload =
     state.customMode === 'interval'
       ? JSON.stringify({
           interval_minutes: normalizedIntervalMinutes,
         })
       : state.customMode === 'monthly'
-      ? JSON.stringify({
-          hour: state.customHour,
-          minute: state.customMinute,
-          day_of_month: state.customDayOfMonth,
-        })
-      : state.customMode === 'weekly'
         ? JSON.stringify({
             hour: state.customHour,
             minute: state.customMinute,
-            weekdays: state.customWeekdays,
+            day_of_month: state.customDayOfMonth,
           })
-        : JSON.stringify({
-            hour: state.customHour,
-            minute: state.customMinute,
-          })
+        : state.customMode === 'weekly'
+          ? JSON.stringify({
+              hour: state.customHour,
+              minute: state.customMinute,
+              weekdays: state.customWeekdays,
+            })
+          : JSON.stringify({
+              hour: state.customHour,
+              minute: state.customMinute,
+            })
 
   const scheduleValue =
     state.scheduleType === 'preset'
@@ -201,7 +207,9 @@ async function handleDeleteConfirm() {
       </div>
       <div v-else-if="!hasTasks" class="flex min-h-[420px] items-center justify-center px-4 py-16">
         <div class="flex w-full max-w-[356px] flex-col items-center gap-4 text-center">
-          <div class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]">
+          <div
+            class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]"
+          >
             <Clock3 class="size-5" />
           </div>
           <div class="space-y-1">
@@ -255,18 +263,16 @@ async function handleDeleteConfirm() {
         <AlertDialogHeader>
           <AlertDialogTitle>{{ t('scheduledTasks.deleteConfirmTitle') }}</AlertDialogTitle>
           <AlertDialogDescription>
-            {{ t('scheduledTasks.deleteConfirmDescription', { name: pendingDeleteTask?.name || '' }) }}
+            {{
+              t('scheduledTasks.deleteConfirmDescription', { name: pendingDeleteTask?.name || '' })
+            }}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deletingTask" @click="handleDeleteCancel">
             {{ t('common.cancel', '取消') }}
           </AlertDialogCancel>
-          <Button
-            :disabled="deletingTask"
-            variant="default"
-            @click.prevent="handleDeleteConfirm"
-          >
+          <Button :disabled="deletingTask" variant="default" @click.prevent="handleDeleteConfirm">
             <LoaderCircle v-if="deletingTask" class="size-4 shrink-0 animate-spin" />
             {{ t('scheduledTasks.confirmDelete') }}
           </Button>

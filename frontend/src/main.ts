@@ -10,7 +10,7 @@ import './assets/index.css'
 async function bootstrap() {
   // 从后端获取语言配置，初始化 i18n
   const locale = await fetchLocale()
-  const i18n = initI18n(locale)
+  const i18n = await initI18n(locale)
 
   const app = createApp(App)
   const pinia = createPinia()
