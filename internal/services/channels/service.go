@@ -118,11 +118,11 @@ func parseAppCredentials(extraConfig string) (appID, appSecret string) {
 }
 
 // ensureNoDuplicateCredentials rejects create/update when another channel of the same
-// platform already uses the same app_id or app_secret (Feishu / WeCom).
+// platform already uses the same app_id or app_secret (Feishu / WeCom / QQ).
 // excludeID > 0 skips that channel (for update).
 func (s *ChannelService) ensureNoDuplicateCredentials(ctx context.Context, db *bun.DB, platform, extraConfig string, excludeID int64) error {
 	platform = strings.TrimSpace(platform)
-	if platform != PlatformFeishu && platform != PlatformWeCom && platform != PlatformDingTalk {
+	if platform != PlatformFeishu && platform != PlatformWeCom && platform != PlatformDingTalk && platform != PlatformQQ {
 		return nil
 	}
 	appID, appSecret := parseAppCredentials(extraConfig)

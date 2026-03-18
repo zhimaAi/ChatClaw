@@ -208,6 +208,8 @@
   "channel.feishu_streaming_generating": "Akış yanıtı oluşturuluyor, lütfen bekleyin...",
   "channel.feishu_stream_output_enabled": "Akış çıktısı etkinleştirildi. Sonraki yanıtlar oluşturuldukça gönderilecektir.",
   "channel.feishu_stream_output_disabled": "Akış çıktısı devre dışı bırakıldı. Sonraki yanıtlar tam sonuç hazır olduğunda gönderilecektir.",
+  "channel.wecom_stream_output_enabled": "WeCom akış çıktısı etkinleştirildi. Sonraki yanıtlar oluşturuldukça gönderilecektir.",
+  "channel.wecom_stream_output_disabled": "WeCom akış çıktısı devre dışı bırakıldı. Sonraki yanıtlar tam sonuç hazır olduğunda gönderilecektir.",
   "error.assistant_mcp_create_failed": "Assistant MCP oluşturma başarısız oldu",
   "error.assistant_mcp_delete_failed": "Assistant MCP silme başarısız oldu",
   "error.assistant_mcp_id_required": "Assistant MCP kimliği gereklidir",
