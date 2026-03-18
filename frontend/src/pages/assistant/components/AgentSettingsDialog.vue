@@ -2,12 +2,21 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
-import { Trash2, ShieldCheck, Monitor, Globe, FolderOpen, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import {
+  Trash2,
+  ShieldCheck,
+  Monitor,
+  Globe,
+  FolderOpen,
+  RotateCcw,
+  AlertTriangle,
+} from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
 import { ProviderIcon } from '@/components/ui/provider-icon'
+import { defaultAvatars } from '@/assets/avatars'
 import SliderWithTicks from './SliderWithTicks.vue'
 import SliderWithMarks from '@/pages/knowledge/components/SliderWithMarks.vue'
 import {
@@ -124,9 +133,10 @@ watch(
   (open) => {
     if (!open) return
     const validTabs: TabKey[] = ['model', 'prompt', 'workspace', 'retrieval', 'delete']
-    tab.value = (props.initialTab && validTabs.includes(props.initialTab as TabKey))
-      ? (props.initialTab as TabKey)
-      : 'model'
+    tab.value =
+      props.initialTab && validTabs.includes(props.initialTab as TabKey)
+        ? (props.initialTab as TabKey)
+        : 'model'
     void loadModels()
     void AgentsService.GetDefaultWorkDir().then((dir) => {
       defaultWorkDir.value = dir
@@ -199,7 +209,9 @@ const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.v
 
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
-  const pw = providersWithModels.value.find((p) => p.provider?.provider_id === modelProviderId.value)
+  const pw = providersWithModels.value.find(
+    (p) => p.provider?.provider_id === modelProviderId.value
+  )
   return isProviderFree(pw)
 })
 
@@ -307,6 +319,11 @@ const clearDefaultModel = () => {
 const isValid = computed(() => name.value.trim() !== '')
 
 const handleClose = () => emit('update:open', false)
+
+const handleSelectDefaultAvatar = (src: string) => {
+  icon.value = src
+  iconChanged.value = true
+}
 
 const handlePickIcon = async () => {
   if (saving.value) return
@@ -716,6 +733,38 @@ const handleDelete = async () => {
                   </div>
                 </div>
 
+                <div class="flex flex-col gap-2">
+                  <div class="text-xs text-muted-foreground">
+                    {{ t('assistant.icon.defaultAvatars') }}
+                  </div>
+                  <div class="flex flex-wrap gap-3">
+                    <button
+                      v-for="avatar in defaultAvatars"
+                      :key="avatar.id"
+                      type="button"
+                      class="relative flex size-12 items-center justify-center rounded-xl border transition-colors"
+                      :class="
+                        icon === avatar.src
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-foreground/40 hover:bg-muted/60 dark:border-white/10'
+                      "
+                      @click="handleSelectDefaultAvatar(avatar.src)"
+                    >
+                      <img :src="avatar.src" class="size-10 rounded-lg object-cover" />
+                      <div
+                        v-if="icon === avatar.src"
+                        class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"
+                      >
+                        <span
+                          class="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+                        >
+                          ✓
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div class="flex flex-col gap-1.5">
                   <label class="text-sm font-medium text-foreground">
                     {{ t('assistant.fields.name') }}
@@ -820,7 +869,12 @@ const handleDelete = async () => {
                     >
                       {{ workDir || defaultWorkDir }}
                     </span>
-                    <Button variant="outline" size="sm" class="shrink-0 gap-1.5" @click="handleSelectWorkDir">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="shrink-0 gap-1.5"
+                      @click="handleSelectWorkDir"
+                    >
                       <FolderOpen class="size-3.5 shrink-0" />
                       {{ t('assistant.settings.workspace.changeDir') }}
                     </Button>
@@ -894,7 +948,12 @@ const handleDelete = async () => {
                   {{ t('assistant.settings.delete.hint') }}
                 </div>
 
-                <Button variant="outline" class="border-border text-foreground hover:bg-accent" :disabled="saving" @click="deleteConfirmOpen = true">
+                <Button
+                  variant="outline"
+                  class="border-border text-foreground hover:bg-accent"
+                  :disabled="saving"
+                  @click="deleteConfirmOpen = true"
+                >
                   {{ t('assistant.settings.delete.action') }}
                 </Button>
 

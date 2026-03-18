@@ -89,7 +89,7 @@ const memoryTabs: { key: MemoryTab; labelKey: string }[] = [
 ]
 
 const selectedAgent = computed(
-  () => agents.value.find((a) => a.id === selectedAgentId.value) || null,
+  () => agents.value.find((a) => a.id === selectedAgentId.value) || null
 )
 
 const eventsByDate = computed(() => {
@@ -160,12 +160,14 @@ const loadMoreEvents = async (token?: number) => {
   }
 
   try {
-    const result = await MemoryService.GetEventStreamsPage(new EventStreamPageInput({
-      agent_id: selectedAgentId.value,
-      before_date: eventBeforeDate.value,
-      before_id: eventBeforeID.value,
-      limit: EVENT_PAGE_SIZE,
-    }))
+    const result = await MemoryService.GetEventStreamsPage(
+      new EventStreamPageInput({
+        agent_id: selectedAgentId.value,
+        before_date: eventBeforeDate.value,
+        before_id: eventBeforeID.value,
+        limit: EVENT_PAGE_SIZE,
+      })
+    )
     if (currentToken !== eventLoadToken) return
 
     const incoming = result || []
@@ -230,10 +232,18 @@ const saveThematicFact = async () => {
   if (editFactId.value == null) return
   saving.value = true
   try {
-    await MemoryService.UpdateThematicFact(editFactId.value, editFactTopic.value, editFactContent.value)
+    await MemoryService.UpdateThematicFact(
+      editFactId.value,
+      editFactTopic.value,
+      editFactContent.value
+    )
     const idx = thematicFacts.value.findIndex((f) => f.id === editFactId.value)
     if (idx !== -1) {
-      thematicFacts.value[idx] = { ...thematicFacts.value[idx], topic: editFactTopic.value, content: editFactContent.value }
+      thematicFacts.value[idx] = {
+        ...thematicFacts.value[idx],
+        topic: editFactTopic.value,
+        content: editFactContent.value,
+      }
     }
     editFactDialogOpen.value = false
     toast.success(t('memory.updateSuccess'))
@@ -338,7 +348,7 @@ watch(
         }
       })
     }
-  },
+  }
 )
 
 const setupScrollObserver = async () => {
@@ -359,7 +369,7 @@ const setupScrollObserver = async () => {
       root: scrollContainerRef.value,
       rootMargin: '200px',
       threshold: 0,
-    },
+    }
   )
   loadMoreObserver.observe(loadMoreSentinelRef.value)
 }
@@ -413,17 +423,12 @@ onMounted(() => {
                 'flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-normal transition-colors',
                 selectedAgentId === agent.id
                   ? 'bg-accent text-accent-foreground'
-                  : 'text-foreground hover:bg-accent/50',
+                  : 'text-foreground hover:bg-accent/50'
               )
             "
             @click="selectedAgentId = agent.id"
           >
-            <img
-              v-if="agent.icon"
-              :src="agent.icon"
-              class="size-5 shrink-0 rounded"
-              alt=""
-            />
+            <img v-if="agent.icon" :src="agent.icon" class="size-5 shrink-0 rounded" alt="" />
             <div
               v-else
               class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5"
@@ -460,7 +465,7 @@ onMounted(() => {
                   'rounded px-3 py-1 text-sm transition-colors',
                   activeMemoryTab === tab.key
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
+                    : 'text-muted-foreground hover:text-foreground'
                 )
               "
               @click="activeMemoryTab = tab.key"
@@ -509,7 +514,10 @@ onMounted(() => {
                 </template>
                 <template v-else>
                   <div class="flex items-start justify-between gap-2">
-                    <p v-if="coreProfile" class="flex-1 whitespace-pre-wrap text-sm text-foreground">
+                    <p
+                      v-if="coreProfile"
+                      class="flex-1 whitespace-pre-wrap text-sm text-foreground"
+                    >
                       {{ coreProfile }}
                     </p>
                     <p v-else class="flex-1 text-sm text-muted-foreground">
@@ -547,10 +555,14 @@ onMounted(() => {
                 >
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0 flex-1">
-                      <div class="mb-1 text-xs font-medium text-muted-foreground">{{ fact.topic }}</div>
+                      <div class="mb-1 text-xs font-medium text-muted-foreground">
+                        {{ fact.topic }}
+                      </div>
                       <p class="whitespace-pre-wrap text-sm text-foreground">{{ fact.content }}</p>
                     </div>
-                    <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div
+                      class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
                       <button
                         type="button"
                         class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -575,7 +587,9 @@ onMounted(() => {
 
             <!-- Conversation Log -->
             <div v-else-if="activeMemoryTab === 'conversationLog'">
-              <p class="mb-4 text-xs text-muted-foreground">{{ t('memory.conversationLogDesc') }}</p>
+              <p class="mb-4 text-xs text-muted-foreground">
+                {{ t('memory.conversationLogDesc') }}
+              </p>
               <div
                 v-if="eventStreams.length === 0"
                 class="rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
@@ -594,8 +608,12 @@ onMounted(() => {
                       class="group rounded-lg border border-border bg-card p-4 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
                     >
                       <div class="flex items-start justify-between gap-2">
-                        <p class="min-w-0 flex-1 whitespace-pre-wrap text-sm text-foreground">{{ event.content }}</p>
-                        <div class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <p class="min-w-0 flex-1 whitespace-pre-wrap text-sm text-foreground">
+                          {{ event.content }}
+                        </p>
+                        <div
+                          class="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                        >
                           <button
                             type="button"
                             class="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

@@ -48,9 +48,9 @@ function getPlatformIcon(platformId: string): string | null {
   return platformIconMap[platformId] || null
 }
 
-/** Platforms that support adding a channel in UI (feishu + wecom). */
+/** Platforms that support adding a channel in UI (feishu + wecom + qq). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
 }
 
 function getPlatformDisplayName(platformId: string, fallbackName?: string): string {
@@ -69,20 +69,30 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
         </DialogTitle>
         <DialogDescription class="hidden">{{ t('channels.add.desc') }}</DialogDescription>
       </DialogHeader>
-      
+
       <div class="px-6 pb-6 pt-2">
-        <div class="flex flex-col items-start overflow-clip rounded-xl border border-[#e5e5e5] bg-white shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card">
+        <div
+          class="flex flex-col items-start overflow-clip rounded-xl border border-[#e5e5e5] bg-white shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card"
+        >
           <div
             v-for="platform in platforms"
             :key="platform.id"
             class="flex w-full items-center justify-between border-b border-[#f0f0f0] p-4 last:border-b-0 transition-colors dark:border-border"
             :class="[
-              isChannelPlatformSelectable(platform.id) ? 'cursor-pointer hover:bg-[#fcfcfc] dark:hover:bg-muted/50' : 'cursor-not-allowed opacity-50 bg-[#f9f9f9] dark:bg-muted/20'
+              isChannelPlatformSelectable(platform.id)
+                ? 'cursor-pointer hover:bg-[#fcfcfc] dark:hover:bg-muted/50'
+                : 'cursor-not-allowed opacity-50 bg-[#f9f9f9] dark:bg-muted/20',
             ]"
-            @click="isChannelPlatformSelectable(platform.id) ? handleSelect(platform) : toast.default(t('channels.comingSoon'))"
+            @click="
+              isChannelPlatformSelectable(platform.id)
+                ? handleSelect(platform)
+                : toast.default(t('channels.comingSoon'))
+            "
           >
             <div class="flex flex-1 items-center gap-2">
-              <div class="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden">
+              <div
+                class="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden"
+              >
                 <img
                   v-if="getPlatformIcon(platform.id)"
                   :src="getPlatformIcon(platform.id)!"
@@ -95,30 +105,39 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
                 {{ getPlatformDisplayName(platform.id, platform.name) }}
               </p>
             </div>
-            
+
             <div class="flex items-center shrink-0">
               <div
                 class="flex h-4 w-4 items-center justify-center rounded-full border transition-colors"
-                :class="localSelected?.id === platform.id ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary' : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'"
+                :class="
+                  localSelected?.id === platform.id
+                    ? 'border-[#171717] bg-[#171717] dark:border-primary dark:bg-primary'
+                    : 'border-[#d9d9d9] bg-white dark:border-border dark:bg-background'
+                "
               >
-                <div v-if="localSelected?.id === platform.id" class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"></div>
+                <div
+                  v-if="localSelected?.id === platform.id"
+                  class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"
+                ></div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <DialogFooter class="px-6 py-4 border-t border-[#f0f0f0] bg-white dark:border-border/50 dark:bg-muted/20">
-        <Button 
-          class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80" 
+      <DialogFooter
+        class="px-6 py-4 border-t border-[#f0f0f0] bg-white dark:border-border/50 dark:bg-muted/20"
+      >
+        <Button
+          class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
           @click="open = false"
         >
           {{ t('common.cancel') }}
         </Button>
-        <Button 
-          class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90" 
-          @click="handleConfirm" 
+        <Button
+          class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="!localSelected"
+          @click="handleConfirm"
         >
           {{ t('common.confirm') }}
         </Button>

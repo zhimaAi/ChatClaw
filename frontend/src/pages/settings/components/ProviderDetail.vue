@@ -3,7 +3,19 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { Eye, EyeOff, LoaderCircle, Plus, Pencil, Trash2, FileText, Image as ImageIcon, Mic, Video, File } from 'lucide-vue-next'
+import {
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  Plus,
+  Pencil,
+  Trash2,
+  FileText,
+  Image as ImageIcon,
+  Mic,
+  Video,
+  File,
+} from 'lucide-vue-next'
 import ModelIcon from '@/assets/icons/model.svg'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -494,7 +506,12 @@ const handleEditModel = (model: Model) => {
 }
 
 // 保存模型（添加或编辑）
-const handleSaveModel = async (data: { modelId: string; name: string; type: string; capabilities: string[] }) => {
+const handleSaveModel = async (data: {
+  modelId: string
+  name: string
+  type: string
+  capabilities: string[]
+}) => {
   if (!props.providerWithModels) return
 
   try {
@@ -767,7 +784,13 @@ const confirmDeleteModel = async () => {
                           model.name
                         }}</span>
                         <!-- Capability icons for LLM models -->
-                        <template v-if="group.type === 'llm' && model.capabilities && model.capabilities.length > 0">
+                        <template
+                          v-if="
+                            group.type === 'llm' &&
+                            model.capabilities &&
+                            model.capabilities.length > 0
+                          "
+                        >
                           <TooltipProvider v-for="cap in model.capabilities" :key="cap">
                             <Tooltip>
                               <TooltipTrigger as-child>

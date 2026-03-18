@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "自动创建助手功能不可用",
   "error.channel_ai_reply_failed": "AI回复失败: {{.Error}}",
   "error.channel_ai_reply_empty": "AI回复失败: 生成了空回复",
+  "channel.feishu_streaming_generating": "正在流式生成回复，请稍候...",
+  "channel.feishu_stream_output_enabled": "已开启流式输出，后续回复将边生成边发送。",
+  "channel.feishu_stream_output_disabled": "已关闭流式输出，后续回复将在完整生成后发送。",
   "error.assistant_mcp_list_failed": "获取助手 MCP 列表失败",
   "error.assistant_mcp_name_required": "缺少 MCP 插件名称",
   "error.assistant_mcp_id_required": "缺少助手 MCP ID",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_required": "工具名称不能为空",
   "error.assistant_mcp_tool_name_invalid": "工具名称只能包含字母、数字和下划线，且必须以字母开头",
   "error.assistant_mcp_tool_name_duplicate": "工具名称已存在",
-  "error.assistant_mcp_tool_not_found": "未找到该工具"
+  "error.assistant_mcp_tool_not_found": "未找到该工具",
+  "error.chat_too_many_files": "文件数量超过限制",
+  "error.chat_file_too_large": "文件大小超过限制",
+  "error.chat_invalid_file_type": "不支持的文件类型",
+  "error.file_not_found": "文件未找到"
 }

@@ -71,4 +71,5 @@ const (
 	// Channel tool IDs
 	ToolIDFeishuSender = "feishu_sender"
 	ToolIDWeComSender  = "wecom_sender"
+	ToolIDQQSender     = "qq_sender"
 )

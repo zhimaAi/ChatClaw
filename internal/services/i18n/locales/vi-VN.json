@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "Tự động tạo trợ lý không khả dụng",
   "error.channel_ai_reply_failed": "Phản hồi AI thất bại: {{.Error}}",
   "error.channel_ai_reply_empty": "Phản hồi AI thất bại: Phản hồi trống được tạo",
+  "channel.feishu_streaming_generating": "Đang tạo phản hồi theo luồng, vui lòng chờ...",
+  "channel.feishu_stream_output_enabled": "Đã bật đầu ra theo luồng. Các phản hồi tiếp theo sẽ được gửi dần trong khi tạo.",
+  "channel.feishu_stream_output_disabled": "Đã tắt đầu ra theo luồng. Các phản hồi tiếp theo sẽ được gửi sau khi có kết quả đầy đủ.",
   "error.assistant_mcp_create_failed": "Tạo Assistant MCP không thành công",
   "error.assistant_mcp_delete_failed": "Xóa Assistant MCP không thành công",
   "error.assistant_mcp_id_required": "Cần có ID Assistant MCP",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "Tên công cụ chỉ được chứa chữ cái, chữ số và dấu gạch dưới, và phải bắt đầu bằng một chữ cái",
   "error.assistant_mcp_tool_name_required": "Cần có tên công cụ",
   "error.assistant_mcp_tool_not_found": "Không tìm thấy công cụ",
-  "error.assistant_mcp_update_failed": "Cập nhật Assistant MCP không thành công"
+  "error.assistant_mcp_update_failed": "Cập nhật Assistant MCP không thành công",
+  "error.chat_too_many_files": "Số lượng tệp vượt quá giới hạn",
+  "error.chat_file_too_large": "Kích thước tệp vượt quá giới hạn",
+  "error.chat_invalid_file_type": "Loại tệp không hợp lệ",
+  "error.file_not_found": "Không tìm thấy tệp"
 }

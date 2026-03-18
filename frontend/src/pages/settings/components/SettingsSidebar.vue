@@ -35,15 +35,18 @@ const allMenuItems: MenuItem[] = [
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'mcp', labelKey: 'settings.menu.mcp', icon: MCPIcon },
-  { id: 'snapSettings', labelKey: 'settings.menu.snapSettings', icon: SnapSettingsIcon, guiOnly: true },
+  {
+    id: 'snapSettings',
+    labelKey: 'settings.menu.snapSettings',
+    icon: SnapSettingsIcon,
+    guiOnly: true,
+  },
   { id: 'tools', labelKey: 'settings.menu.tools', icon: ToolsIcon, guiOnly: true },
   { id: 'about', labelKey: 'settings.menu.about', icon: AboutIcon },
 ]
 
 // Filter out GUI-only items when running in server mode
-const menuItems = computed(() =>
-  allMenuItems.filter((item) => !item.guiOnly || appStore.isGUIMode)
-)
+const menuItems = computed(() => allMenuItems.filter((item) => !item.guiOnly || appStore.isGUIMode))
 
 const handleMenuClick = (menuId: SettingsMenuItem) => {
   settingsStore.setActiveMenu(menuId)

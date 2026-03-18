@@ -179,9 +179,7 @@ export function useModelSelection() {
     )
   }
 
-  const parseSelectedModelKey = (
-    key: string
-  ): { providerId: string; modelId: string } | null => {
+  const parseSelectedModelKey = (key: string): { providerId: string; modelId: string } | null => {
     if (!key) return null
     const [providerId, modelId] = key.split('::')
     if (!providerId || !modelId) return null

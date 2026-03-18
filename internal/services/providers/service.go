@@ -1035,12 +1035,11 @@ func (s *ProvidersService) checkAzure(ctx context.Context, input CheckAPIKeyInpu
 	}
 
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		APIKey:      input.APIKey,
-		Model:       modelID,
-		BaseURL:     input.APIEndpoint,
-		ByAzure:     true,
-		APIVersion:  extraConfig.APIVersion,
-		ExtraFields: map[string]any{"enable_thinking": false},
+		APIKey:     input.APIKey,
+		Model:      modelID,
+		BaseURL:    input.APIEndpoint,
+		ByAzure:    true,
+		APIVersion: extraConfig.APIVersion,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{

@@ -10,7 +10,7 @@ function hasCapability(capabilities: string[] | undefined, capability: string): 
   if (!capabilities || capabilities.length === 0) {
     return false
   }
-  return capabilities.some(c => c.toLowerCase() === capability.toLowerCase())
+  return capabilities.some((c) => c.toLowerCase() === capability.toLowerCase())
 }
 
 /**

@@ -204,6 +204,9 @@
   "error.channel_agent_create_not_available": "自動アシスタント作成は利用できません",
   "error.channel_ai_reply_failed": "AI返信に失敗しました：{{.Error}}",
   "error.channel_ai_reply_empty": "AI返信に失敗しました：空のレスポンスが生成されました",
+  "channel.feishu_streaming_generating": "返信をストリーミング生成しています。しばらくお待ちください...",
+  "channel.feishu_stream_output_enabled": "ストリーミング出力を有効にしました。今後の返信は生成しながら送信されます。",
+  "channel.feishu_stream_output_disabled": "ストリーミング出力を無効にしました。今後の返信は全文生成後に送信されます。",
   "error.assistant_mcp_create_failed": "Assistant MCP の作成に失敗しました",
   "error.assistant_mcp_delete_failed": "Assistant MCP の削除に失敗しました",
   "error.assistant_mcp_id_required": "Assistant MCP ID は必須です",
@@ -214,5 +217,9 @@
   "error.assistant_mcp_tool_name_invalid": "ツール名は英字で始まり、英数字とアンダースコアのみを含めることができます",
   "error.assistant_mcp_tool_name_required": "ツール名は必須です",
   "error.assistant_mcp_tool_not_found": "ツールが見つかりません",
-  "error.assistant_mcp_update_failed": "Assistant MCP の更新に失敗しました"
+  "error.assistant_mcp_update_failed": "Assistant MCP の更新に失敗しました",
+  "error.chat_too_many_files": "ファイル数が制限を超えています",
+  "error.chat_file_too_large": "ファイルサイズが制限を超えています",
+  "error.chat_invalid_file_type": "無効なファイルタイプ",
+  "error.file_not_found": "ファイルが見つかりません"
 }

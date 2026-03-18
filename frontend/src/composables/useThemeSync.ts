@@ -10,7 +10,7 @@ export function useThemeSync() {
   const appStore = useAppStore()
 
   const unsubscribe = Events.On('theme:changed', (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     const newTheme = (payload?.theme || '').trim() as Theme
 
     if (newTheme !== 'light' && newTheme !== 'dark' && newTheme !== 'system') return
@@ -24,4 +24,3 @@ export function useThemeSync() {
 
   return unsubscribe
 }
-

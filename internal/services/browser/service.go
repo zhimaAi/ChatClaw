@@ -79,6 +79,33 @@ func (s *BrowserService) OpenDirectory(dir string) error {
 	return nil
 }
 
+// OpenFile opens a file with the system's default application.
+func (s *BrowserService) OpenFile(filePath string) error {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return errs.New("error.browser_url_required")
+	}
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return errs.New("error.file_not_found")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", filePath)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", filePath)
+	default:
+		cmd = exec.Command("xdg-open", filePath)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return errs.Wrap("error.browser_open_failed", err)
+	}
+	return nil
+}
+
 // GetLoginParams returns os_type and os_version for appending to the login URL.
 // Used when redirecting to /chatclaw/login from account management.
 func (s *BrowserService) GetLoginParams() LoginParams {
