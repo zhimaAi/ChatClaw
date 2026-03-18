@@ -61,7 +61,7 @@ type Message struct {
 	ToolCallID      string    `json:"tool_call_id,omitempty"`
 	ToolCallName    string    `json:"tool_call_name,omitempty"`
 	ThinkingContent string    `json:"thinking_content,omitempty"`
-	Segments        string    `json:"segments,omitempty"` // JSON array for interleaved content/tool-call order
+	Segments        string    `json:"segments,omitempty"`    // JSON array for interleaved content/tool-call order
 	ImagesJSON      string    `json:"images_json,omitempty"` // raw JSON string of []ImagePayload
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`

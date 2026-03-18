@@ -57,9 +57,14 @@ defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** Platforms that support add/filter in UI (feishu + wecom + qq). */
+/** Platforms that support add/filter in UI (feishu + wecom + dingtalk + qq). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
+  return (
+    platformId === 'feishu' ||
+    platformId === 'wecom' ||
+    platformId === 'dingtalk' ||
+    platformId === 'qq'
+  )
 }
 
 const channels = ref<Channel[]>([])
@@ -795,7 +800,7 @@ onMounted(loadData)
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
               :placeholder="inlineAppSecretPlaceholder"
-              maxlength="60"
+              maxlength="200"
             />
           </div>
         </div>

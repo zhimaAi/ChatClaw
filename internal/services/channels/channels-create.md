@@ -78,7 +78,7 @@ func NewAdapter(platform string) PlatformAdapter {
 | 平台标识 | 名称 | 认证方式 | 实现状态 |
 |---------|------|---------|---------|
 | `feishu` | 飞书 | token | ✅ 已实现 |
-| `dingtalk` | 钉钉 | token | ⏳ 待实现 |
+| `dingtalk` | 钉钉 | token | ✅ 已实现 |
 | `wecom` | 企业微信 | token | ⏳ 待实现 |
 | `qq` | QQ | token | ⏳ 待实现 |
 | `twitter` | X(Twitter) | token | ⏳ 待实现 |
@@ -372,20 +372,22 @@ type Channel struct {
 }
 ```
 
-### 钉钉配置（待实现）
+### 钉钉配置（已实现，Stream 长连接）
 
 ```json
 {
-  "app_key": "xxxxxxxx",
+  "app_id": "xxxxxxxx",
   "app_secret": "xxxxxxxxxxxxxxxx"
 }
 ```
+（与飞书一致使用 app_id/app_secret 字段名，对应钉钉 ClientID/ClientSecret）
 
 ---
 
 ## 十、依赖
 
 - `github.com/larksuite/oapi-sdk-go/v3` - 飞书官方 SDK
+- `github.com/open-dingtalk/dingtalk-stream-sdk-go` - 钉钉 Stream 官方 SDK
 - `github.com/uptrace/bun` - 数据库 ORM
 - `chatclaw/internal/sqlite` - SQLite 封装
 - `chatclaw/internal/errs` - 错误处理
