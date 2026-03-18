@@ -17,8 +17,18 @@ import (
 	"chatclaw/internal/services/providers"
 )
 
-// UploadImageToChatClawOSS uploads a local image file to the ChatClaw OSS endpoint and returns the public HTTPS URL.
-func UploadImageToChatClawOSS(ctx context.Context, filePath string) (string, error) {
+// UploadImage uploads a local image file to the configured OSS provider and returns the public HTTPS URL.
+// The active provider is determined by the "mode" field in uploader.yaml (chatclaw | custom).
+func UploadImage(ctx context.Context, filePath string) (string, error) {
+	cfg := loadUploaderConfig()
+	if cfg.Mode == "custom" {
+		return uploadWithCustom(ctx, filePath, cfg.Custom)
+	}
+	return uploadWithChatClaw(ctx, filePath)
+}
+
+// uploadWithChatClaw uploads a local image file to the ChatClaw OSS endpoint and returns the public HTTPS URL.
+func uploadWithChatClaw(ctx context.Context, filePath string) (string, error) {
 	provider, err := providers.GetChatClawConfig()
 	if err != nil {
 		return "", fmt.Errorf("get chatclaw provider: %w", err)
@@ -68,6 +78,19 @@ func UploadImageToChatClawOSS(ctx context.Context, filePath string) (string, err
 	}
 	defer resp.Body.Close()
 
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read upload response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		preview := string(respBytes)
+		if len(preview) > 256 {
+			preview = preview[:256] + "..."
+		}
+		return "", fmt.Errorf("upload API returned HTTP %d: %s", resp.StatusCode, preview)
+	}
+
 	var result struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -75,8 +98,12 @@ func UploadImageToChatClawOSS(ctx context.Context, filePath string) (string, err
 			URL string `json:"url"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decode upload response: %w", err)
+	if err := json.Unmarshal(respBytes, &result); err != nil {
+		preview := string(respBytes)
+		if len(preview) > 256 {
+			preview = preview[:256] + "..."
+		}
+		return "", fmt.Errorf("decode upload response (body: %s): %w", preview, err)
 	}
 	if result.Code != 0 {
 		return "", fmt.Errorf("upload API error (code=%d): %s", result.Code, result.Message)
