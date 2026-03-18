@@ -71,16 +71,16 @@ async function selectRun(run: ScheduledTaskRun) {
       class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]"
     >
       <DialogHeader>
-        <DialogTitle>{{ task?.name }} / 运行记录</DialogTitle>
+        <DialogTitle>{{ task?.name }} / {{ t('scheduledTasks.runHistoryTitle') }}</DialogTitle>
       </DialogHeader>
 
       <div class="flex h-[70vh] min-h-0 gap-4">
         <div
           class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]"
         >
-          <div v-if="loading" class="p-4 text-sm text-muted-foreground">加载中...</div>
+          <div v-if="loading" class="p-4 text-sm text-muted-foreground">{{ t('common.loading') }}</div>
           <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
-            暂无运行记录
+            {{ t('scheduledTasks.noRuns') }}
           </div>
           <button
             v-for="run in runs"
@@ -101,7 +101,7 @@ async function selectRun(run: ScheduledTaskRun) {
                 </div>
                 <div class="flex w-full items-center gap-1 text-[11px] text-muted-foreground">
                   <span class="shrink-0">{{ displayRunTriggerLabel(run.trigger_type) }}</span>
-                  <span class="shrink-0 text-muted-foreground/50">·</span>
+                  <span class="shrink-0 text-muted-foreground/50">&middot;</span>
                   <span class="truncate">{{ formatDuration(run.duration_ms) }}</span>
                 </div>
               </div>
@@ -125,7 +125,7 @@ async function selectRun(run: ScheduledTaskRun) {
             v-if="!selectedDetail?.conversation?.id"
             class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
-            暂无会话内容
+            {{ t('scheduledTasks.conversationEmpty') }}
           </div>
           <EmbeddedAssistantPage
             v-else
