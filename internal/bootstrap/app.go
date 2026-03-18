@@ -739,19 +739,15 @@ func handleChannelMessage(
 		return
 	}
 
-	if msg.Platform == channels.PlatformFeishu {
-		if enabled, matched := parseFeishuStreamToggleCommand(textContent); matched {
-			if err := updateFeishuStreamOutputSetting(ctx, db, msg.ChannelID, channelRow.ExtraConfig, enabled); err != nil {
-				app.Logger.Error("channel message: failed to update feishu stream setting", "channel_id", msg.ChannelID, "enabled", enabled, "error", err)
+	if supportsChannelStreamOutput(msg.Platform) {
+		if enabled, matched := parseChannelStreamToggleCommand(textContent); matched {
+			if err := updateChannelStreamOutputSetting(ctx, db, msg.ChannelID, msg.Platform, channelRow.ExtraConfig, enabled); err != nil {
+				app.Logger.Error("channel message: failed to update stream setting", "channel_id", msg.ChannelID, "platform", msg.Platform, "enabled", enabled, "error", err)
 				sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
 				return
 			}
 
-			if enabled {
-				sendReply(i18n.T("channel.feishu_stream_output_enabled"))
-			} else {
-				sendReply(i18n.T("channel.feishu_stream_output_disabled"))
-			}
+			sendReply(i18n.T(streamOutputSettingMessageKey(msg.Platform, enabled)))
 			return
 		}
 	}
@@ -762,7 +758,7 @@ func handleChannelMessage(
 		return
 	}
 
-	// Use ChatID as conversation key so different Feishu chats get separate conversations.
+	// Use ChatID as conversation key so different platform chats get separate conversations.
 	// Fall back to SenderID for direct messages (where ChatID may be empty).
 	convKey := msg.ChatID
 	if convKey == "" {
@@ -816,14 +812,9 @@ func handleChannelMessage(
 		"conversation_id": conv.ID,
 	})
 
-	streamOutputEnabled := false
-	if msg.Platform == channels.PlatformFeishu {
-		cfg, cfgErr := channels.ParseFeishuConfig(channelRow.ExtraConfig)
-		if cfgErr != nil {
-			app.Logger.Warn("channel message: failed to parse feishu config, fallback to non-stream", "channel_id", msg.ChannelID, "error", cfgErr)
-		} else {
-			streamOutputEnabled = cfg.StreamOutputEnabledOrDefault()
-		}
+	streamOutputEnabled, cfgErr := getChannelStreamOutputEnabled(msg.Platform, channelRow.ExtraConfig)
+	if cfgErr != nil {
+		app.Logger.Warn("channel message: failed to parse channel config, fallback to non-stream", "channel_id", msg.ChannelID, "platform", msg.Platform, "error", cfgErr)
 	}
 
 	var (
@@ -833,15 +824,30 @@ func handleChannelMessage(
 	)
 	if streamOutputEnabled {
 		if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
-			if feishuAdapter, ok := adapter.(feishuStreamingReplyAdapter); ok {
-				streamedResponse, handled, streamErr := streamFeishuReply(app, db, chatService, conv.ID, res.RequestID, feishuAdapter, msg, replyTarget)
-				if streamErr != nil {
-					app.Logger.Error("channel message: feishu stream reply failed", "conv", conv.ID, "error", streamErr)
+			switch msg.Platform {
+			case channels.PlatformFeishu:
+				if feishuAdapter, ok := adapter.(feishuStreamingReplyAdapter); ok {
+					streamedResponse, handled, streamErr := streamFeishuReply(app, db, chatService, conv.ID, res.RequestID, feishuAdapter, msg, replyTarget)
+					if streamErr != nil {
+						app.Logger.Error("channel message: feishu stream reply failed", "conv", conv.ID, "error", streamErr)
+					}
+					if handled {
+						streamReplyHandled = true
+						finalResponse = streamedResponse
+						shouldFetchFinal = false
+					}
 				}
-				if handled {
-					streamReplyHandled = true
-					finalResponse = streamedResponse
-					shouldFetchFinal = false
+			case channels.PlatformWeCom:
+				if wecomAdapter, ok := adapter.(wecomStreamingReplyAdapter); ok {
+					streamedResponse, handled, streamErr := streamWeComReply(app, db, chatService, conv.ID, res.RequestID, wecomAdapter, msg)
+					if streamErr != nil {
+						app.Logger.Error("channel message: wecom stream reply failed", "conv", conv.ID, "error", streamErr)
+					}
+					if handled {
+						streamReplyHandled = true
+						finalResponse = streamedResponse
+						shouldFetchFinal = false
+					}
 				}
 			}
 		}
@@ -889,6 +895,10 @@ type feishuStreamingReplyAdapter interface {
 	UpdateStreamCardMessage(ctx context.Context, handle *channels.FeishuStreamCardHandle, text string, finish bool) error
 }
 
+type wecomStreamingReplyAdapter interface {
+	SendStreamMessage(ctx context.Context, reqID string, streamID string, content string, finish bool) error
+}
+
 type assistantMessageSnapshot struct {
 	Content string `bun:"content"`
 	Status  string `bun:"status"`
@@ -911,7 +921,11 @@ func sendChannelReply(ctx context.Context, adapter channels.PlatformAdapter, msg
 	return adapter.SendMessage(ctx, targetID, content)
 }
 
-func parseFeishuStreamToggleCommand(text string) (bool, bool) {
+func supportsChannelStreamOutput(platform string) bool {
+	return platform == channels.PlatformFeishu || platform == channels.PlatformWeCom
+}
+
+func parseChannelStreamToggleCommand(text string) (bool, bool) {
 	switch strings.TrimSpace(text) {
 	case "关闭流式输出", "关闭流式回复", "关闭流式":
 		return false, true
@@ -922,17 +936,69 @@ func parseFeishuStreamToggleCommand(text string) (bool, bool) {
 	}
 }
 
-func updateFeishuStreamOutputSetting(ctx context.Context, db *bun.DB, channelID int64, extraConfig string, enabled bool) error {
-	cfg, err := channels.ParseFeishuConfig(extraConfig)
-	if err != nil {
-		return err
+func streamOutputSettingMessageKey(platform string, enabled bool) string {
+	switch platform {
+	case channels.PlatformWeCom:
+		if enabled {
+			return "channel.wecom_stream_output_enabled"
+		}
+		return "channel.wecom_stream_output_disabled"
+	default:
+		if enabled {
+			return "channel.feishu_stream_output_enabled"
+		}
+		return "channel.feishu_stream_output_disabled"
 	}
+}
 
-	cfg.StreamOutputEnabled = boolPtr(enabled)
+func getChannelStreamOutputEnabled(platform string, extraConfig string) (bool, error) {
+	switch platform {
+	case channels.PlatformFeishu:
+		cfg, err := channels.ParseFeishuConfig(extraConfig)
+		if err != nil {
+			return false, err
+		}
+		return cfg.StreamOutputEnabledOrDefault(), nil
+	case channels.PlatformWeCom:
+		cfg, err := channels.ParseWeComConfig(extraConfig)
+		if err != nil {
+			return false, err
+		}
+		return cfg.StreamOutputEnabledOrDefault(), nil
+	default:
+		return false, nil
+	}
+}
 
-	configBytes, err := json.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("marshal feishu config: %w", err)
+func updateChannelStreamOutputSetting(ctx context.Context, db *bun.DB, channelID int64, platform string, extraConfig string, enabled bool) error {
+	var (
+		configBytes []byte
+		err         error
+	)
+
+	switch platform {
+	case channels.PlatformFeishu:
+		cfg, parseErr := channels.ParseFeishuConfig(extraConfig)
+		if parseErr != nil {
+			return parseErr
+		}
+		cfg.StreamOutputEnabled = boolPtr(enabled)
+		configBytes, err = json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("marshal feishu config: %w", err)
+		}
+	case channels.PlatformWeCom:
+		cfg, parseErr := channels.ParseWeComConfig(extraConfig)
+		if parseErr != nil {
+			return parseErr
+		}
+		cfg.StreamOutputEnabled = boolPtr(enabled)
+		configBytes, err = json.Marshal(cfg)
+		if err != nil {
+			return fmt.Errorf("marshal wecom config: %w", err)
+		}
+	default:
+		return fmt.Errorf("platform %s does not support stream output setting", platform)
 	}
 
 	_, err = db.NewUpdate().
@@ -1026,6 +1092,101 @@ func streamFeishuReply(
 			lastSent = currentContent
 		}
 	}
+}
+
+type wecomReplyContext struct {
+	ReqID string `json:"req_id"`
+}
+
+func streamWeComReply(
+	app *application.App,
+	db *bun.DB,
+	chatService *chat.ChatService,
+	conversationID int64,
+	requestID string,
+	adapter wecomStreamingReplyAdapter,
+	msg channels.IncomingMessage,
+) (string, bool, error) {
+	replyCtx, err := extractWeComReplyContext(msg.RawData)
+	if err != nil {
+		return "", false, err
+	}
+
+	streamID := channels.GenerateWeComReqID("stream")
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- chatService.WaitForGeneration(conversationID, requestID)
+	}()
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastSent := ""
+	sentAny := false
+
+	sendChunk := func(content string, finish bool) error {
+		sendCtx, sendCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer sendCancel()
+		return adapter.SendStreamMessage(sendCtx, replyCtx.ReqID, streamID, content, finish)
+	}
+
+	for {
+		select {
+		case waitErr := <-waitCh:
+			finalCtx, finalCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			snapshot, fetchErr := fetchLatestAssistantMessage(finalCtx, db, conversationID)
+			finalCancel()
+
+			finalResponse := ""
+			if fetchErr == nil {
+				finalResponse = snapshot.Content
+			}
+
+			if strings.TrimSpace(finalResponse) == "" {
+				finalResponse = i18n.T("error.channel_ai_reply_empty")
+			}
+
+			if err := sendChunk(finalResponse, true); err != nil {
+				if !sentAny {
+					return "", false, err
+				}
+				app.Logger.Error("channel message: final wecom stream update failed", "conv", conversationID, "error", err)
+			} else {
+				lastSent = finalResponse
+				sentAny = true
+			}
+
+			return finalResponse, sentAny, waitErr
+		case <-ticker.C:
+			currentContent, ok := chatService.GetGenerationContent(conversationID, requestID)
+			if !ok || strings.TrimSpace(currentContent) == "" || currentContent == lastSent {
+				continue
+			}
+
+			if err := sendChunk(currentContent, false); err != nil {
+				if !sentAny {
+					return "", false, err
+				}
+				app.Logger.Warn("channel message: wecom stream update failed", "conv", conversationID, "error", err)
+				continue
+			}
+
+			lastSent = currentContent
+			sentAny = true
+		}
+	}
+}
+
+func extractWeComReplyContext(rawData string) (wecomReplyContext, error) {
+	var replyCtx wecomReplyContext
+	if err := json.Unmarshal([]byte(rawData), &replyCtx); err != nil {
+		return wecomReplyContext{}, fmt.Errorf("parse wecom reply context: %w", err)
+	}
+	if strings.TrimSpace(replyCtx.ReqID) == "" {
+		return wecomReplyContext{}, fmt.Errorf("wecom reply context missing req_id")
+	}
+	return replyCtx, nil
 }
 
 func fetchLatestAssistantMessage(ctx context.Context, db *bun.DB, conversationID int64) (assistantMessageSnapshot, error) {
