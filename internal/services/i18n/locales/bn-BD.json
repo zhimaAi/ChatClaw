@@ -207,6 +207,8 @@
   "channel.feishu_streaming_generating": "স্ট্রিমিং রিপ্লাই তৈরি হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...",
   "channel.feishu_stream_output_enabled": "স্ট্রিমিং আউটপুট চালু করা হয়েছে। পরবর্তী উত্তরগুলো তৈরি হওয়ার সঙ্গে সঙ্গে পাঠানো হবে।",
   "channel.feishu_stream_output_disabled": "স্ট্রিমিং আউটপুট বন্ধ করা হয়েছে। পরবর্তী উত্তরগুলো পূর্ণ ফলাফল প্রস্তুত হলে পাঠানো হবে।",
+  "channel.wecom_stream_output_enabled": "WeCom স্ট্রিমিং আউটপুট চালু করা হয়েছে। পরবর্তী উত্তরগুলো তৈরি হওয়ার সঙ্গে সঙ্গে পাঠানো হবে।",
+  "channel.wecom_stream_output_disabled": "WeCom স্ট্রিমিং আউটপুট বন্ধ করা হয়েছে। পরবর্তী উত্তরগুলো পূর্ণ ফলাফল প্রস্তুত হলে পাঠানো হবে।",
   "error.assistant_mcp_create_failed": "Assistant MCP তৈরি করতে ব্যর্থ হয়েছে",
   "error.assistant_mcp_delete_failed": "Assistant MCP মুছে ফেলতে ব্যর্থ হয়েছে",
   "error.assistant_mcp_id_required": "Assistant MCP আইডি প্রয়োজন",

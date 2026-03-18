@@ -44,8 +44,21 @@ const (
 
 // WeComConfig contains credentials for a WeCom AI Bot.
 type WeComConfig struct {
-	AppID     string `json:"app_id"`     // Bot ID
-	AppSecret string `json:"app_secret"` // Bot Secret
+	AppID               string `json:"app_id"`                          // Bot ID
+	AppSecret           string `json:"app_secret"`                      // Bot Secret
+	StreamOutputEnabled *bool  `json:"stream_output_enabled,omitempty"` // Defaults to enabled
+}
+
+func ParseWeComConfig(configJSON string) (WeComConfig, error) {
+	var cfg WeComConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return WeComConfig{}, fmt.Errorf("parse wecom config: %w", err)
+	}
+	return cfg, nil
+}
+
+func (c WeComConfig) StreamOutputEnabledOrDefault() bool {
+	return c.StreamOutputEnabled == nil || *c.StreamOutputEnabled
 }
 
 // WeComAdapter implements PlatformAdapter for WeCom using WebSocket.
@@ -73,10 +86,10 @@ func (a *WeComAdapter) Platform() string { return PlatformWeCom }
 func (a *WeComAdapter) Connect(ctx context.Context, channelID int64, configJSON string, handler MessageHandler) error {
 	a.mu.Lock()
 
-	var cfg WeComConfig
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+	cfg, err := ParseWeComConfig(configJSON)
+	if err != nil {
 		a.mu.Unlock()
-		return fmt.Errorf("parse wecom config: %w", err)
+		return err
 	}
 	if cfg.AppID == "" || cfg.AppSecret == "" {
 		a.mu.Unlock()
@@ -1456,9 +1469,12 @@ func (a *WeComAdapter) UploadFile(ctx context.Context, filePath string) (string,
 // SendStreamMessage sends a streaming message to WeCom.
 func (a *WeComAdapter) SendStreamMessage(ctx context.Context, reqID string, streamID string, content string, finish bool) error {
 	replyBody := map[string]interface{}{
-		"stream_id":   streamID,
-		"stream_text": content,
-		"finish":      finish,
+		"msgtype": "stream",
+		"stream": map[string]interface{}{
+			"id":      streamID,
+			"content": content,
+			"finish":  finish,
+		},
 	}
 
 	bodyData, _ := json.Marshal(replyBody)
@@ -1471,7 +1487,14 @@ func (a *WeComAdapter) SendStreamMessage(ctx context.Context, reqID string, stre
 		Body: bodyData,
 	}
 
-	return a.sendFrame(frame)
+	ack, err := a.sendFrameAndWait(ctx, frame, wecomRequestTimeout)
+	if err != nil {
+		return err
+	}
+	if ack.ErrCode != 0 {
+		return fmt.Errorf("stream reply failed: errcode=%d errmsg=%s", ack.ErrCode, ack.ErrMsg)
+	}
+	return nil
 }
 
 // SendImage uploads an image URL to WeCom and sends it as image media.
@@ -1510,4 +1533,8 @@ func generateReqID(prefix ...string) string {
 		p = prefix[0]
 	}
 	return fmt.Sprintf("%s_%d_%d", p, time.Now().UnixNano(), reqIDCounter.Add(1))
+}
+
+func GenerateWeComReqID(prefix string) string {
+	return generateReqID(prefix)
 }

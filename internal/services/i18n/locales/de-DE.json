@@ -207,6 +207,8 @@
   "channel.feishu_streaming_generating": "Streaming-Antwort wird erstellt, bitte warten...",
   "channel.feishu_stream_output_enabled": "Streaming-Ausgabe ist aktiviert. Zukünftige Antworten werden während der Generierung gesendet.",
   "channel.feishu_stream_output_disabled": "Streaming-Ausgabe ist deaktiviert. Zukünftige Antworten werden gesendet, sobald das vollständige Ergebnis bereit ist.",
+  "channel.wecom_stream_output_enabled": "Die WeCom-Streaming-Ausgabe ist aktiviert. Zukünftige Antworten werden während der Generierung gesendet.",
+  "channel.wecom_stream_output_disabled": "Die WeCom-Streaming-Ausgabe ist deaktiviert. Zukünftige Antworten werden gesendet, sobald das vollständige Ergebnis bereit ist.",
   "error.assistant_mcp_create_failed": "Erstellen des Assistant MCP ist fehlgeschlagen",
   "error.assistant_mcp_delete_failed": "Löschen des Assistant MCP ist fehlgeschlagen",
   "error.assistant_mcp_id_required": "Assistant-MCP-ID ist erforderlich",
