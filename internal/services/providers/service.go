@@ -932,7 +932,7 @@ func (s *ProvidersService) CheckAPIKey(providerID string, input CheckAPIKeyInput
 	// 根据供应商类型调用不同的 SDK
 	switch provider.Type {
 	case "openai":
-		return s.checkOpenAI(ctx, providerID, input, testModelID)
+		return s.checkOpenAI(ctx, input, testModelID)
 	case "azure":
 		return s.checkAzure(ctx, input, testModelID)
 	case "anthropic":
@@ -1002,14 +1002,12 @@ func testChatModel(ctx context.Context, chatModel ChatModelGenerator) *CheckAPIK
 }
 
 // checkOpenAI 使用 OpenAI SDK 检测
-func (s *ProvidersService) checkOpenAI(ctx context.Context, providerID string, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
-	cfg := &openai.ChatModelConfig{
-		APIKey:      input.APIKey,
-		Model:       modelID,
-		BaseURL:     input.APIEndpoint,
-		ExtraFields: map[string]any{"enable_thinking": false},
-	}
-	chatModel, err := openai.NewChatModel(ctx, cfg)
+func (s *ProvidersService) checkOpenAI(ctx context.Context, input CheckAPIKeyInput, modelID string) (*CheckAPIKeyResult, error) {
+	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		APIKey:  input.APIKey,
+		Model:   modelID,
+		BaseURL: input.APIEndpoint,
+	})
 	if err != nil {
 		return &CheckAPIKeyResult{
 			Success: false,

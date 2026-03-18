@@ -71,17 +71,10 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
 	}
-	if cfg.DisableThinking || cfg.ProviderID == "chatwiki" {
-		config.ExtraFields = map[string]any{}
-		if cfg.DisableThinking {
-			config.ExtraFields["enable_thinking"] = false
-		}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
-	chatModel, err := openai.NewChatModel(ctx, config)
-	if err != nil {
-		return nil, err
-	}
-	return chatModel, nil
+	return openai.NewChatModel(ctx, config)
 }
 
 // newAzureChatModel 创建 Azure OpenAI ChatModel
