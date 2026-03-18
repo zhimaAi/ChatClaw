@@ -1336,6 +1336,11 @@ export default {
         botName: '企業微信',
         description: '企業微信機器人',
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ 開放平臺機器人，透過 WebSocket 接入",
+      },
     },
     authType: {
       token: '令牌',
@@ -1343,6 +1348,8 @@ export default {
     },
     comingSoon: '即將推出',
     agentFallback: 'AI 助理',
+    unbindConfirmTitle: "確認解除綁定",
+    unbindConfirmDesc: "確定要解除頻道「{name}」與助理的綁定嗎？解除後須重新綁定，助理才會處理訊息。",
     unbindSuccess: '已解除綁定助理',
     bindSuccess: '綁定助理成功',
     card: {

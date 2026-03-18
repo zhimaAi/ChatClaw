@@ -208,6 +208,8 @@
   "channel.feishu_streaming_generating": "응답을 스트리밍 생성하는 중입니다. 잠시만 기다려 주세요...",
   "channel.feishu_stream_output_enabled": "스트리밍 출력을 켰습니다. 이후 답변은 생성되면서 전송됩니다.",
   "channel.feishu_stream_output_disabled": "스트리밍 출력을 껐습니다. 이후 답변은 전체 결과가 준비된 뒤 전송됩니다.",
+  "channel.wecom_stream_output_enabled": "WeCom 스트리밍 출력을 켰습니다. 이후 답변은 생성되면서 전송됩니다.",
+  "channel.wecom_stream_output_disabled": "WeCom 스트리밍 출력을 껐습니다. 이후 답변은 전체 결과가 준비된 뒤 전송됩니다.",
   "error.assistant_mcp_create_failed": "Assistant MCP 생성에 실패했습니다",
   "error.assistant_mcp_delete_failed": "Assistant MCP 삭제에 실패했습니다",
   "error.assistant_mcp_id_required": "Assistant MCP ID가 필요합니다",

@@ -882,6 +882,7 @@ func (s *ChatService) processStreamingOutput(ctx context.Context, gc *generation
 		if msg.Content != "" {
 			ss.contentBuilder.WriteString(msg.Content)
 			ss.addContentToSegments(msg.Content)
+			s.appendGenerationContent(gc.conversationID, gc.requestID, msg.Content)
 			gc.emit(EventChatChunk, ChatChunkEvent{
 				ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
 				Delta:            msg.Content,
@@ -973,6 +974,7 @@ func (s *ChatService) processNonStreamingOutput(gc *generationContext, ss *strea
 	} else if msg.Content != "" {
 		ss.contentBuilder.WriteString(msg.Content)
 		ss.addContentToSegments(msg.Content)
+		s.appendGenerationContent(gc.conversationID, gc.requestID, msg.Content)
 		gc.emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent:        gc.chatEvent(ss.assistantMsg.ID),
 			Delta:            msg.Content,

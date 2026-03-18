@@ -31,55 +31,91 @@
 
 ## Predogledi
 
-### AI pomočnik za klepet
+### AI Chatbot Asistent
 
-Vprašajte svojega AI pomočnika katero koli vprašanje in pametno bo preiskal vašo bazo znanja, da ustvari ustrezen odgovor.
+Zastavite svojemu AI asistentu katerokoli vprašanje; pametno bo preiskal vašo bazo znanja in ustvaril ustrezni odgovor.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
 ### Hitro ustvarjanje PPT
 
-Pošljite ukaz z enim stavkom pametnemu pomočniku, da samodejno ustvari in generira PowerPoint predstavitev.
+Pošljite enostavni ukaz pametnemu asistentu, da samodejno ustvari in pripravi predstavitev PowerPoint.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
-### Upravljalnik spretnosti
+### Upravitelj spretnosti
 
-Uporabite ukaz, da robot pomaga poiskati nameščene funkcije na računalniku ali namestiti nove razširitvene vtičnike.
+Z ukazom naj vam asistent pomaga najti nameščene funkcije na računalniku ali namestiti nove vtičnike razširitev.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
 
-### Baza znanja | Shranjevanje vektoriziranih dokumentov
+### MCP: neomejene razširitve zmožnosti
 
-Naložite svoje dokumente (npr. TXT, PDF, Word, Excel, CSV, HTML, Markdown). Sistem jih bo samodejno analiziral, razdelil in pretvoril v vektorske vložke ter jih shranil v vašo zasebno bazo znanja za natančno pridobitev in uporabo z AI modelom.
+Dodajte zunanje MCP strežnike za varno in učinkovito povezavo z različnimi viri podatkov in orodji; asistent lahko presega vsakodnevne naloge v profesionalne delovne tokove.
 
-![](../../images/4.png)
+![](../../images/previews/en/image6.png)
 
-### Izbira besedila za takojšnje Q&A
+### Način peskovnika: dvojna zaščita
 
-Izberite katero koli besedilo na zaslonu, samodejno se bo kopiralo in napolnilo v plavajoče polje za hitro vprašanje. Z enim klikom ga pošljite AI pomočniku za takojšnji odgovor.
+Izberite med izvajanjem v peskovniku (izolacija na ravni OS, omejen obseg ukazov) in izvajanjem v domačem okolju (bolj prilagodljivo). Prosto preklapljajte med varnostjo in udobjem.
 
-![](../../images/5.png)
+![](../../images/previews/en/image8.png)
 
-![](../../images/6.png)
+### Spomin: bolj naravna in pametna interakcija
 
-### Pametno okno Snap
+Omogočite kontekstualne pogovore in personalizirano pomoč. Asistent se lahko nenehno uči in razvija kot rastoči partner.
 
-Pametni pomočnik, ki se lahko pritrdi ob druga okna aplikacij. Hitro preklapljajte med različno konfiguriranimi AI pomočniki za postavljanje vprašanj. Robot ustvari odgovore na podlagi vaše povezane baze znanja in podpira pošiljanje odgovorov z enim klikom neposredno v vaš pogovor.
+![](../../images/previews/en/image9.png)
 
-![](../../images/7.png)
+### Skupna timska baza znanja
 
-### Eno vprašanje, več odgovorov: Preprosto primerjajte
+Odobrite dostop z enim klikom do ChatWiki za sinhronizacijo robotov in baz znanja, skupno rabo nastavitev in nadzor dovoljenj članov.
 
-Vam ni treba ponavljati vprašanja. Hkrati se posvetujte z več "AI strokovnjaki" in si oglejte njihove odgovore drug poleg drugega v enem vmesniku. To omogoča enostavno primerjavo in vam pomaga priti do najboljšega sklepa.
+![](../../images/previews/en/image10.png)
 
-![](../../images/8.png)
+### Baza znanja | vektorska shramba dokumentov
 
-### Enoklikna izstreliška krogla
+Naložite dokumente (TXT, PDF, Word, Excel, CSV, HTML, Markdown). Sistem jih samodejno razčleni, razdeli in pretvori v vektorske vdelave za natančno iskanje.
 
-Kliknite plavajočo kroglo na namizju, da takoj prebudite ali odprete glavno okno aplikacije ChatClaw.
+![](../../images/previews/en/image11.png)
 
-![](../../images/9.png)
+### Bogate integracije IM kanalov
+
+Integrirajte ponudnike IM (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram itd.) prek SDK za hitro omogočanje ustvarjanja kanalov, upravljanja uporabnikov in sporočanja.
+
+![](../../images/previews/en/image12.png)
+
+### Načrtovane naloge
+
+Naj asistent samodejno izvaja dejanja ob vnaprej določenih časih ali intervalih: opomniki, ponavljajoče delo in vzdrževanje na ravni sistema.
+
+![](../../images/previews/en/image13.png)
+
+### Izbira besedila za takojšnje vprašanje in odgovor
+
+Izberite poljubno besedilo na zaslonu; samodejno se kopira v lebdeče polje za hitro vprašanje. En klik za vprašanje, takojšnji odgovori.
+
+![](../../images/previews/en/image14.png)
+
+![](../../images/previews/en/image15.png)
+
+### Pametna stranska vrstica
+
+Pripnite asistenta ob druga okna, hitro preklapljajte med različno konfiguriranimi asistenti in z enim klikom pošljite ustvarjene odgovore v pogovore.
+
+![](../../images/previews/en/image16.png)
+
+### Eno vprašanje, več odgovorov: enostavna primerjava
+
+Posvetujte se z več "AI strokovnjaki" hkrati in si oglejte njihove odgovore drug ob drugem za lažjo primerjavo.
+
+![](../../images/previews/en/image17.png)
+
+### Žoga zagnanja z enim klikom
+
+Kliknite lebdečo žogo na namizju, da takoj odprete ali aktivirate glavno okno ChatClaw.
+
+![](../../images/previews/en/image18.png)
 
 ## Namestitev v načinu strežnika
 
@@ -250,3 +286,7 @@ ChatClaw_D2/
 ├── docs:                       # Dokumentacija za razvoj
 └── images:                      # Posnetki zaslona README
 ```
+
+
+
+

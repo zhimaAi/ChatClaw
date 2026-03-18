@@ -208,6 +208,8 @@
   "channel.feishu_streaming_generating": "جارٍ إنشاء رد متدفق، يرجى الانتظار...",
   "channel.feishu_stream_output_enabled": "تم تفعيل الإخراج المتدفق. سيتم إرسال الردود القادمة بشكل تدريجي.",
   "channel.feishu_stream_output_disabled": "تم تعطيل الإخراج المتدفق. سيتم إرسال الردود القادمة بعد اكتمال النتيجة كاملة.",
+  "channel.wecom_stream_output_enabled": "تم تفعيل الإخراج المتدفق في WeCom. سيتم إرسال الردود القادمة بشكل تدريجي.",
+  "channel.wecom_stream_output_disabled": "تم تعطيل الإخراج المتدفق في WeCom. سيتم إرسال الردود القادمة بعد اكتمال النتيجة كاملة.",
   "error.assistant_mcp_create_failed": "فشل في إنشاء Assistant MCP",
   "error.assistant_mcp_delete_failed": "فشل في حذف Assistant MCP",
   "error.assistant_mcp_id_required": "معرف Assistant MCP مطلوب",

@@ -33,53 +33,89 @@
 
 ### AI Sohbet Asistanı
 
-AI asistanınıza herhangi bir soru sorun, ilgili bir yanıt oluşturmak için bilgi tabanınızı akıllıca arayacaktır.
+AI asistanınıza istediğiniz soruyu sorun; bilgi tabanınızı akıllıca tarayıp ilgili bir yanıt üretecektir.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
-### PPT Hızlı Oluşturma
+### Hızlı PPT Oluşturma
 
-Akıllı asistan'a tek cümlelik bir komut gönderin ve otomatik olarak bir PowerPoint sunumu oluşturun.
+Akıllı asistanına tek cümlelik bir komut göndererek PowerPoint sunumunu otomatik oluşturup üretin.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
-### Yetenek Yöneticisi
+### Beceri Yöneticisi
 
-Bilgisayarınızda yüklü özellikleri bulmanıza veya yeni uzantı eklentileri yüklemenize yardımcı olması için bir komut kullanın.
+Asistanın bilgisayarınızda yüklü özellikleri bulmasına veya yeni uzantı eklentileri kurmasına yardımcı olması için bir komut kullanın.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
 
-### Bilgi Tabanı | Belge Vektörleştirme Deposu
+### MCP: Sınırsız Yetenek Genişletmeleri
 
-Belgelerinizi yükleyin (örn. TXT, PDF, Word, Excel, CSV, HTML, Markdown). Sistem otomatik olarak ayrıştıracak, bölecek ve vektör gömülerine dönüştürecek ve AI modeli tarafından hassas alma ve kullanım için özel bilgi tabanınızda saklayacaktır.
+Çeşitli veri kaynakları ve araçlara güvenli ve verimli bağlanmak için harici MCP sunucuları ekleyin; asistanınız günlük görevlerin ötesinde profesyonel iş akışlarına geçebilir.
 
-![](../../images/4.png)
+![](../../images/previews/en/image6.png)
+
+### Sandbox Modu: Çift Koruma
+
+Sandbox izole yürütme (OS düzeyinde izolasyon, kısıtlı komut kapsamı) ile yerel yürütme (daha esnek) arasında seçim yapın. Güvenlik ve rahatlık dengesi için serbestçe geçiş yapın.
+
+![](../../images/previews/en/image8.png)
+
+### Bellek: Daha Doğal, Daha Akıllı Etkileşim
+
+Bağlamsal sohbetleri ve kişiselleştirilmiş yardımı etkinleştirin. Asistan sürekli öğrenip gelişebilir, büyüyen bir ortak gibi.
+
+![](../../images/previews/en/image9.png)
+
+### Paylaşılan Ekip Bilgi Tabanı
+
+Robotları ve bilgi tabanlarını senkronize etmek, yapılandırmaları paylaşmak ve üye izinlerini yönetmek için ChatWiki'ye tek tıklamayla erişim yetkisi verin.
+
+![](../../images/previews/en/image10.png)
+
+### Bilgi Tabanı | Belge Vektörleştirme Depolama
+
+Belgeleri yükleyin (TXT, PDF, Word, Excel, CSV, HTML, Markdown). Sistem bunları otomatik ayrıştırır, böler ve kesin geri getirme için vektör gömülerine dönüştürür.
+
+![](../../images/previews/en/image11.png)
+
+### Zengin IM Kanal Entegrasyonları
+
+Kanal oluşturma, kullanıcı yönetimi ve mesajlaşmayı hızla etkinleştirmek için SDK üzerinden IM sağlayıcılarını (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram vb.) entegre edin.
+
+![](../../images/previews/en/image12.png)
+
+### Zamanlanmış Görevler
+
+Asistanınızın önceden belirlenmiş zamanlarda veya aralıklarla hatırlatmalar, tekrarlayan iş ve sistem düzeyinde bakım için otomatik eylemler gerçekleştirmesine izin verin.
+
+![](../../images/previews/en/image13.png)
 
 ### Anında S&C için Metin Seçimi
 
-Ekrandaki herhangi bir metni seçin, otomatik olarak kopyalanır ve havuzlu hızlı soru kutusuna doldurulur. Tek tıklamayla, anında yanıt için AI asistanına gönderin.
+Ekranınızda herhangi bir metni seçin; otomatik olarak yüzen hızlı soru kutusuna kopyalanır. Tek tıklamayla sorun, anında yanıtlar.
 
-![](../../images/5.png)
+![](../../images/previews/en/image14.png)
 
-![](../../images/6.png)
+![](../../images/previews/en/image15.png)
 
-### Akıllı Pencere Yakalama
+### Akıllı Kenar Çubuğu
 
-Diğer uygulama pencerelerinin yanına yaklaşabilen akıllı bir asistan. Sorular sormak için içinde farklı yapılandırılmış AI asistanları arasında hızla geçiş yapın. Robot, bağlı bilgi tabanınıza göre yanıtlar oluşturur ve tek tıklamayla yanıtları doğrudan görüşmenize göndermeyi destekler.
+Asistanı diğer pencerelerin yanına sabitleyin, farklı yapılandırılmış asistanlar arasında hızla geçiş yapın ve oluşturulan yanıtları tek tıklamayla sohbetlerinize gönderin.
 
-![](../../images/7.png)
+![](../../images/previews/en/image16.png)
 
 ### Bir Soru, Birden Fazla Yanıt: Kolayca Karşılaştırın
 
-Sorunuzu tekrarlamanıza gerek yok. Aynı anda birden fazla "AI uzmanı"na danışın ve yanıtlarını tek bir arayüzde yan yana görüntüleyin. Bu kolay karşılaştırma sağlar ve en iyi sonuca ulaşmanıza yardımcı olur.
+Aynı anda birden fazla "AI uzmanına" danışın ve yanıtlarını kolay karşılaştırma için yan yana görüntüleyin.
 
-![](../../images/8.png)
+![](../../images/previews/en/image17.png)
 
-### Tek Tıklama Başlatıcı Topu
+### Tek Tıklamayla Başlatma Topu
 
-ChatClaw ana uygulama penceresini uyandırmak veya açmak için masaüstünüzdeki havuzlu topa tıklayın.
+ChatClaw ana penceresini anında açmak veya uyandırmak için masaüstündeki yüzen topa tıklayın.
 
-![](../../images/9.png)
+![](../../images/previews/en/image18.png)
 
 ## Sunucu Modu Dağıtımı
 
@@ -250,3 +286,7 @@ ChatClaw_D2/
 ├── docs:                       # Geliştirme belgeleri
 └── images:                      # README ekran görüntüleri
 ```
+
+
+
+

@@ -33,53 +33,89 @@ Ottieni un agente AI personale come OpenClaw in 5 minuti. Protetto da Sandbox, c
 
 ### Assistente Chat AI
 
-Fai qualsiasi domanda al tuo assistente AI, e cercherà intelligentemente nella tua base di conoscenza per generare una risposta pertinente.
+Poni qualsiasi domanda al tuo assistente AI; cercherà intelligentemente nella tua base di conoscenza per generare una risposta pertinente.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
-### Generazione PPT Rapida
+### Generazione Rapida PPT
 
 Invia un comando di una frase all'assistente intelligente per creare e generare automaticamente una presentazione PowerPoint.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
 ### Gestore Competenze
 
-Usa un comando per far sì che il robot ti aiuti a trovare le funzionalità installate sul tuo computer o installare nuovi plugin di estensione.
+Usa un comando per far sì che l'assistente ti aiuti a trovare le funzionalità installate sul tuo computer o installare nuovi plugin di estensione.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
+
+### MCP: Estensioni di Capacità Illimitate
+
+Aggiungi server MCP esterni per connettere in modo sicuro ed efficiente diverse fonti dati e strumenti, consentendo al tuo assistente di andare oltre le attività quotidiane verso flussi di lavoro professionali.
+
+![](../../images/previews/en/image6.png)
+
+### Modalità Sandbox: Doppia Protezione
+
+Scegli tra esecuzione isolata in sandbox (isolamento a livello OS, ambito comandi limitato) ed esecuzione nativa (più flessibile). Passa liberamente per bilanciare sicurezza e comodità.
+
+![](../../images/previews/en/image8.png)
+
+### Memoria: Interazione Più Naturale e Intelligente
+
+Abilita conversazioni contestuali e assistenza personalizzata. L'assistente può imparare ed evolversi continuamente come un partner in crescita.
+
+![](../../images/previews/en/image9.png)
+
+### Base di Conoscenza di Team Condivisa
+
+Autorizza l'accesso con un clic a ChatWiki per sincronizzare robot e basi di conoscenza, condividere configurazioni e controllare i permessi dei membri.
+
+![](../../images/previews/en/image10.png)
 
 ### Base di Conoscenza | Archiviazione Vettoriale Documenti
 
-Carica i tuoi documenti (es. TXT, PDF, Word, Excel, CSV, HTML, Markdown). Il sistema analizzerà automaticamente, dividerà e convertirà in embedding vettoriali, archiviandoli nella tua base di conoscenza privata per il recupero preciso e l'utilizzo da parte del modello AI.
+Carica documenti (TXT, PDF, Word, Excel, CSV, HTML, Markdown). Il sistema li analizza, suddivide e converte automaticamente in embedding vettoriali per un recupero preciso.
 
-![](../../images/4.png)
+![](../../images/previews/en/image11.png)
+
+### Integrazioni Canali IM
+
+Integra provider IM (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram, ecc.) tramite SDK per abilitare rapidamente creazione canali, gestione utenti e messaggistica.
+
+![](../../images/previews/en/image12.png)
+
+### Attività Programmate
+
+Lascia che il tuo assistente esegua automaticamente azioni in orari o intervalli prefissati: promemoria, lavoro ricorrente, manutenzione a livello di sistema.
+
+![](../../images/previews/en/image13.png)
 
 ### Selezione Testo per Q&A Istantaneo
 
-Seleziona qualsiasi testo sullo schermo, verrà automaticamente copiato e riempito in una casella di domanda rapida fluttuante. Con un clic, invialo all'assistente AI per una risposta immediata.
+Seleziona qualsiasi testo sullo schermo; viene copiato automaticamente in una casella di domanda rapida flottante. Un clic per chiedere, risposte istantanee.
 
-![](../../images/5.png)
+![](../../images/previews/en/image14.png)
 
-![](../../images/6.png)
+![](../../images/previews/en/image15.png)
 
-### Finestra Snap Intelligente
+### Barra Laterale Intelligente
 
-Un assistente intelligente che può agganciarsi accanto ad altre finestre di applicazioni. Passa rapidamente tra assistenti AI configurati diversamente per fare domande. Il robot genera risposte basate sulla tua base di conoscenza collegata e supporta l'invio di risposte con un clic direttamente nella tua conversazione.
+Ancora l'assistente accanto ad altre finestre, passa rapidamente tra assistenti configurati diversamente e invia con un clic le risposte generate nelle tue conversazioni.
 
-![](../../images/7.png)
+![](../../images/previews/en/image16.png)
 
-### Una Domanda, Risposte Multiple: Confronta Facilmente
+### Una Domanda, Più Risposte: Confronta con Facilità
 
-Non devi ripetere la tua domanda. Consulta più "esperti AI" contemporaneamente e visualizza le loro risposte affiancate in un'unica interfaccia. Questo consente un facile confronto e ti aiuta a raggiungere la migliore conclusione.
+Consulta più "esperti AI" contemporaneamente e visualizza le loro risposte affiancate per un confronto facile.
 
-![](../../images/8.png)
+![](../../images/previews/en/image17.png)
 
-### Pallina Launcher a Un Clic
+### Palla di Avvio con Un Clic
 
-Fai clic sulla pallina fluttuante sul tuo desktop per riattivare o aprire la finestra dell'applicazione principale ChatClaw.
+Clicca sulla palla flottante sul desktop per aprire o attivare istantaneamente la finestra principale di ChatClaw.
 
-![](../../images/9.png)
+![](../../images/previews/en/image18.png)
 
 ## Distribuzione Modalità Server
 
@@ -250,3 +286,4 @@ ChatClaw_D2/
 ├── docs:                       # Documentazione sviluppo
 └── images:                      # Screenshot README
 ```
+

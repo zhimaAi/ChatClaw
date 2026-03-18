@@ -208,6 +208,8 @@
   "channel.feishu_streaming_generating": "正在流式生成回复，请稍候...",
   "channel.feishu_stream_output_enabled": "已开启流式输出，后续回复将边生成边发送。",
   "channel.feishu_stream_output_disabled": "已关闭流式输出，后续回复将在完整生成后发送。",
+  "channel.wecom_stream_output_enabled": "已开启企业微信流式输出，后续回复将边生成边发送。",
+  "channel.wecom_stream_output_disabled": "已关闭企业微信流式输出，后续回复将在完整生成后发送。",
   "error.assistant_mcp_list_failed": "获取助手 MCP 列表失败",
   "error.assistant_mcp_name_required": "缺少 MCP 插件名称",
   "error.assistant_mcp_id_required": "缺少助手 MCP ID",

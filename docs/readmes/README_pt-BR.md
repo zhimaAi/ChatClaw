@@ -29,57 +29,93 @@
 
 Obtenha um agente AI pessoal como o OpenClaw em 5 minutos. Seguro com Sandbox, com um instalador ultra-pequeno de 30MB para macOS e Windows (instala em 1 minuto). Conecta-se ao WhatsApp, Telegram, Slack, Discord, Gmail, DingTalk, WeChat Work, QQ, Feishu e outros aplicativos de mensagens. Mercado de Habilidades integrado, Base de Conhecimento, Memória, MCP, Tarefas Agendadas. Desenvolvido em Go: rápido e baixo consumo de recursos.
 
-## Pré-visualizações
+## Visualizações
 
 ### Assistente de Chat AI
 
-Faça qualquer pergunta ao seu assistente AI, e ele pesquisará inteligentemente na sua base de conhecimento para gerar uma resposta relevante.
+Faça qualquer pergunta ao seu assistente AI; ele pesquisará de forma inteligente em sua base de conhecimento para gerar uma resposta relevante.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
 ### Geração Rápida de PPT
 
-Envie um comando de uma frase para o assistente inteligente para criar e gerar automaticamente uma apresentação PowerPoint.
+Envie um comando de uma frase ao assistente inteligente para criar e gerar automaticamente uma apresentação PowerPoint.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
 ### Gerenciador de Habilidades
 
-Use um comando para fazer o robô ajudá-lo a encontrar recursos instalados no seu computador ou instalar novos plugins de extensão.
+Use um comando para o assistente ajudá-lo a encontrar recursos instalados no seu computador ou instalar novos plugins de extensão.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
 
-### Base de Conhecimento | Armazenamento Vetorial de Documentos
+### MCP: Extensões de Capacidade Ilimitadas
 
-Carregue seus documentos (ex: TXT, PDF, Word, Excel, CSV, HTML, Markdown). O sistema analisará automaticamente, dividirá e converterá em embeddings vetoriais, armazenando-os na sua base de conhecimento privada para recuperação e uso precisos pelo modelo AI.
+Adicione servidores MCP externos para conectar de forma segura e eficiente a diversas fontes de dados e ferramentas, permitindo que seu assistente vá além das tarefas diárias para fluxos de trabalho profissionais.
 
-![](../../images/4.png)
+![](../../images/previews/en/image6.png)
 
-### Seleção de Texto para QA Instantâneo
+### Modo Sandbox: Dupla Proteção
 
-Selecione qualquer texto na sua tela, ele será automaticamente copiado e preenchido em uma caixa de pergunta rápida flutuante. Com um clique, envie para o assistente AI para uma resposta imediata.
+Escolha entre execução isolada em sandbox (isolamento em nível de OS, escopo de comando restrito) e execução nativa (mais flexível). Alterne livremente para equilibrar segurança e conveniência.
 
-![](../../images/5.png)
+![](../../images/previews/en/image8.png)
 
-![](../../images/6.png)
+### Memória: Interação Mais Natural e Inteligente
 
-### Janela Snap Inteligente
+Ative conversas contextuais e assistência personalizada. O assistente pode aprender e evoluir continuamente como um parceiro em crescimento.
 
-Um assistente inteligente que pode encaixar ao lado de outras janelas de aplicativos. Alterne rapidamente entre assistentes AI configurados diferentemente para fazer perguntas. O robô gera respostas baseadas na sua base de conhecimento conectada e suporta enviar respostas com um clique diretamente na sua conversa.
+![](../../images/previews/en/image9.png)
 
-![](../../images/7.png)
+### Base de Conhecimento Compartilhada da Equipe
+
+Autorize acesso com um clique ao ChatWiki para sincronizar robôs e bases de conhecimento, compartilhar configurações e controlar permissões de membros.
+
+![](../../images/previews/en/image10.png)
+
+### Base de Conhecimento | Armazenamento de Vetorização de Documentos
+
+Envie documentos (TXT, PDF, Word, Excel, CSV, HTML, Markdown). O sistema analisa, divide e converte automaticamente em embeddings vetoriais para recuperação precisa.
+
+![](../../images/previews/en/image11.png)
+
+### Integrações de Canais IM
+
+Integre provedores IM (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram, etc.) via SDKs para habilitar rapidamente criação de canais, gerenciamento de usuários e mensagens.
+
+![](../../images/previews/en/image12.png)
+
+### Tarefas Agendadas
+
+Deixe seu assistente executar automaticamente ações em horários ou intervalos predefinidos: lembretes, trabalho recorrente e manutenção em nível de sistema.
+
+![](../../images/previews/en/image13.png)
+
+### Seleção de Texto para Q&A Instantâneo
+
+Selecione qualquer texto na tela; ele é copiado automaticamente para uma caixa de pergunta rápida flutuante. Um clique para perguntar, respostas instantâneas.
+
+![](../../images/previews/en/image14.png)
+
+![](../../images/previews/en/image15.png)
+
+### Barra Lateral Inteligente
+
+Encaixe o assistente junto a outras janelas, alterne rapidamente entre assistentes configurados de forma diferente e envie com um clique as respostas geradas para suas conversas.
+
+![](../../images/previews/en/image16.png)
 
 ### Uma Pergunta, Múltiplas Respostas: Compare com Facilidade
 
-Você não precisa repetir sua pergunta. Consulte vários "especialistas AI" simultaneamente e veja suas respostas lado a lado em uma única interface. Isso permite comparação fácil e ajuda você a chegar à melhor conclusão.
+Consulte vários "especialistas AI" ao mesmo tempo e veja as respostas lado a lado para uma comparação fácil.
 
-![](../../images/8.png)
+![](../../images/previews/en/image17.png)
 
-### Bola Lanzador de Um Clique
+### Bola de Inicialização com Um Clique
 
-Clique na bola flutuante na sua área de trabalho para acordar ou abrir a janela do aplicativo principal ChatClaw.
+Clique na bola flutuante na área de trabalho para acordar ou abrir instantaneamente a janela principal do ChatClaw.
 
-![](../../images/9.png)
+![](../../images/previews/en/image18.png)
 
 ## Implantação em Modo Servidor
 
@@ -250,3 +286,4 @@ ChatClaw_D2/
 ├── docs:                       # Documentação de desenvolvimento
 └── images:                      # Capturas de tela do README
 ```
+

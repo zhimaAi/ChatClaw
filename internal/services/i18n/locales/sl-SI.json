@@ -208,6 +208,8 @@
   "channel.feishu_streaming_generating": "Ustvarjanje pretočnega odgovora, prosimo počakajte...",
   "channel.feishu_stream_output_enabled": "Pretočni izhod je omogočen. Naslednji odgovori bodo poslani postopoma med generiranjem.",
   "channel.feishu_stream_output_disabled": "Pretočni izhod je onemogočen. Naslednji odgovori bodo poslani, ko bo celoten rezultat pripravljen.",
+  "channel.wecom_stream_output_enabled": "Pretočni izhod WeCom je omogočen. Naslednji odgovori bodo poslani postopoma med generiranjem.",
+  "channel.wecom_stream_output_disabled": "Pretočni izhod WeCom je onemogočen. Naslednji odgovori bodo poslani, ko bo celoten rezultat pripravljen.",
   "error.assistant_mcp_create_failed": "Ustvarjanje Assistant MCP ni uspelo",
   "error.assistant_mcp_delete_failed": "Brisanje Assistant MCP ni uspelo",
   "error.assistant_mcp_id_required": "ID Assistant MCP je obvezen",
