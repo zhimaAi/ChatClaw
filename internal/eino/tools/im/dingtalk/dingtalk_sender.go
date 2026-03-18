@@ -426,7 +426,7 @@ func (t *dingTalkSenderTool) sendByFilePath(ctx context.Context, adapter channel
 			"channel_id", in.ChannelID,
 			"file_path", filePath,
 		)
-		uploaded, err := oss.UploadImageToChatClawOSS(ctx, filePath)
+		uploaded, err := oss.UploadImage(ctx, filePath)
 		if err != nil {
 			slog.Error("[dingtalk_sender] failed to upload image to OSS",
 				"file_path", filePath,

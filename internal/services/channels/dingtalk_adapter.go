@@ -140,16 +140,17 @@ func (a *DingTalkAdapter) Connect(ctx context.Context, channelID int64, configJS
 
 	a.streamClient = streamClient
 
-	connCtx, cancel := context.WithCancel(ctx)
-	a.cancel = cancel
+	// Start() is non-blocking: it dials the WebSocket, starts processLoop in a
+	// background goroutine, then returns immediately.
+	// WithAutoReconnect(true) makes the SDK call its own reconnect() on drop.
+	// We only need to call Start() once; any error means the initial dial failed.
+	if err := streamClient.Start(ctx); err != nil {
+		return fmt.Errorf("dingtalk stream start failed: %w", err)
+	}
 
-	go func() {
-		if err := streamClient.Start(connCtx); err != nil {
-			slog.Error("[dingtalk] stream connection error", "error", err)
-			a.connected.Store(false)
-			return
-		}
-	}()
+	// Store cancel so Disconnect() can stop any in-flight context-bound operations.
+	_, cancel := context.WithCancel(ctx)
+	a.cancel = cancel
 
 	a.connected.Store(true)
 	return nil
@@ -489,6 +490,15 @@ func (a *DingTalkAdapter) Disconnect(ctx context.Context) error {
 		a.cancel()
 		a.cancel = nil
 	}
+
+	if a.streamClient != nil {
+		// Disable SDK's internal auto-reconnect loop BEFORE closing.
+		// The SDK's reconnect() uses context.Background() and ignores our
+		// context, so setting AutoReconnect=false is the only way to stop it.
+		a.streamClient.AutoReconnect = false
+		a.streamClient.Close()
+	}
+
 	a.connected.Store(false)
 	a.handler = nil
 	a.streamClient = nil
