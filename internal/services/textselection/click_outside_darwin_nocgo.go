@@ -32,3 +32,5 @@ func (w *ClickOutsideWatcher) Stop() {
 
 func (w *ClickOutsideWatcher) SetPopupRect(x, y, width, height int32) {}
 func (w *ClickOutsideWatcher) ClearPopupRect()                        {}
+func (w *ClickOutsideWatcher) SetInsideCallback(cb func(x, y int32))  {}
+func (w *ClickOutsideWatcher) ClearInsideCallback()                   {}

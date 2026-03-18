@@ -137,6 +137,13 @@ func (s *TextSelectionService) Attach(app *application.App, mainWindow *applicat
 		s.handleButtonClick()
 	})
 
+	// Listen for "disable selection search" from popup's right-click menu.
+	// The popup window uses Events instead of Wails binding calls because
+	// the WS_EX_NOACTIVATE configuration can interfere with IPC responses.
+	app.Event.On("text-selection:disable-selection-search", func(_ *application.CustomEvent) {
+		s.disableSelectionSearch()
+	})
+
 	// Listen for system-level text selection events (triggered by hook thread, executed in main thread)
 	app.Event.On("text-selection:show-at-screen-pos", func(e *application.CustomEvent) {
 		data, ok := e.Data.(map[string]any)
@@ -182,6 +189,24 @@ func (s *TextSelectionService) SyncFromSettings() (bool, error) {
 	}
 
 	return enabled, nil
+}
+
+// disableSelectionSearch disables text selection search from the popup.
+// It immediately stops the watcher and hides the popup, then emits an event
+// so the main window frontend can persist the setting via SettingsService.
+func (s *TextSelectionService) disableSelectionSearch() {
+	s.mu.Lock()
+	s.enabled = false
+	app := s.app
+	s.mu.Unlock()
+
+	s.stopWatcher()
+	s.Hide()
+
+	if app != nil {
+		app.Logger.Info("TextSelectionService.disableSelectionSearch: disabled via popup context menu")
+		app.Event.Emit("text-selection:request-disable-setting", nil)
+	}
 }
 
 // IsEnabled returns whether the service is enabled.
@@ -673,9 +698,127 @@ func (s *TextSelectionService) Hide() {
 		}
 	}
 
-	// Clear click outside watcher's popup area
+	// Clear click outside watcher's popup area and inside callback
 	if s.clickOutsideWatcher != nil {
+		s.clickOutsideWatcher.ClearInsideCallback()
 		s.clickOutsideWatcher.ClearPopupRect()
+	}
+}
+
+// contextMenuExpandedWidth/Height define the expanded popup size (DIP)
+// when the right-click context menu is open.
+const (
+	contextMenuExpandedWidth  = 200
+	contextMenuExpandedHeight = 110
+)
+
+// ExpandPopupForContextMenu is called by the popup frontend (via Wails binding)
+// before showing its right-click context menu. It synchronously expands the
+// native window and the click-outside detection rect so the menu is fully visible.
+func (s *TextSelectionService) ExpandPopupForContextMenu() {
+	s.expandPopupForContextMenu()
+}
+
+// RestorePopupFromContextMenu is called by the popup frontend (via Wails binding)
+// after the right-click context menu is dismissed. It restores the native window
+// and the click-outside detection rect to normal size.
+func (s *TextSelectionService) RestorePopupFromContextMenu() {
+	s.restorePopupFromContextMenu()
+}
+
+func (s *TextSelectionService) expandPopupForContextMenu() {
+	s.mu.Lock()
+	w := s.popWindow
+	if !s.popupActive || w == nil {
+		s.mu.Unlock()
+		return
+	}
+	popH := s.popHeight
+	s.mu.Unlock()
+
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		left, top, _, _ := getPopupWindowRect(w)
+		scale := getDPIScaleForPoint(left, top)
+		physW := int(float64(contextMenuExpandedWidth) * scale)
+		physH := int(float64(contextMenuExpandedHeight) * scale)
+		setPopupPositionPhysical(w, int(left), int(top), physW, physH)
+		if s.clickOutsideWatcher != nil {
+			s.clickOutsideWatcher.SetPopupRect(left, top, int32(physW), int32(physH))
+			// The split line between the button area and context menu area.
+			// Clicks above this Y = trigger search; clicks at/below = close.
+			splitY := top + int32(float64(popH)*scale)
+			s.clickOutsideWatcher.SetInsideCallback(func(_, clickY int32) {
+				if clickY < splitY {
+					s.handleButtonClick()
+				} else {
+					s.disableSelectionSearch()
+				}
+			})
+		}
+	} else {
+		w.SetSize(contextMenuExpandedWidth, contextMenuExpandedHeight)
+		s.mu.Lock()
+		px, py := s.popX, s.popY
+		s.mu.Unlock()
+		if s.clickOutsideWatcher != nil {
+			s.clickOutsideWatcher.SetPopupRect(int32(px), int32(py), int32(contextMenuExpandedWidth), int32(contextMenuExpandedHeight))
+			splitY := int32(py + popH)
+			s.clickOutsideWatcher.SetInsideCallback(func(_, clickY int32) {
+				if clickY < splitY {
+					s.handleButtonClick()
+				} else {
+					s.disableSelectionSearch()
+				}
+			})
+		}
+	}
+}
+
+// restorePopupFromContextMenu restores the popup window to its normal size
+// after the right-click context menu is closed.
+func (s *TextSelectionService) restorePopupFromContextMenu() {
+	s.mu.Lock()
+	w := s.popWindow
+	if !s.popupActive || w == nil {
+		s.mu.Unlock()
+		return
+	}
+	popW := s.popWidth
+	popH := s.popHeight
+	s.mu.Unlock()
+
+	// Clear inside-click callback first
+	if s.clickOutsideWatcher != nil {
+		s.clickOutsideWatcher.ClearInsideCallback()
+	}
+
+	nativeHandle := w.NativeWindow()
+	if nativeHandle == nil || uintptr(nativeHandle) == 0 {
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		left, top, _, _ := getPopupWindowRect(w)
+		scale := getDPIScaleForPoint(left, top)
+		physW := int(float64(popW) * scale)
+		physH := int(float64(popH) * scale)
+		setPopupPositionPhysical(w, int(left), int(top), physW, physH)
+		if s.clickOutsideWatcher != nil {
+			s.clickOutsideWatcher.SetPopupRect(left, top, int32(physW), int32(physH))
+		}
+	} else {
+		w.SetSize(popW, popH)
+		s.mu.Lock()
+		px, py := s.popX, s.popY
+		s.mu.Unlock()
+		if s.clickOutsideWatcher != nil {
+			s.clickOutsideWatcher.SetPopupRect(int32(px), int32(py), int32(popW), int32(popH))
+		}
 	}
 }
 

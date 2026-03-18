@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_invalid": "Werkzeugname darf nur Buchstaben, Ziffern und Unterstriche enthalten und muss mit einem Buchstaben beginnen",
   "error.assistant_mcp_tool_name_required": "Werkzeugname ist erforderlich",
   "error.assistant_mcp_tool_not_found": "Werkzeug wurde nicht gefunden",
-  "error.assistant_mcp_update_failed": "Aktualisieren des Assistant MCP ist fehlgeschlagen"
+  "error.assistant_mcp_update_failed": "Aktualisieren des Assistant MCP ist fehlgeschlagen",
+  "error.chat_too_many_files": "Dateianzahl überschreitet das Limit",
+  "error.chat_file_too_large": "Dateigröße überschreitet das Limit",
+  "error.chat_invalid_file_type": "Ungültiger Dateityp",
+  "error.file_not_found": "Datei nicht gefunden"
 }

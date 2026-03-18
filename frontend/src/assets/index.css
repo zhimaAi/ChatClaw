@@ -162,6 +162,16 @@
     font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
     letter-spacing: -0.01em;
   }
+  /* Interactive elements: system pointer cursor */
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [tabindex]:not([tabindex="-1"]):not(:disabled),
+  label[for],
+  summary,
+  .cursor-pointer {
+    cursor: pointer;
+  }
   /* 标题层次 - 字重更重，对比更强 */
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;

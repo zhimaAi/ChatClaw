@@ -111,21 +111,21 @@ func generalPurposeDescription(hasIM bool) string {
 	if isZhCN() {
 		desc := "执行代理：拥有完整工具集（web_search、write_file、edit_file、execute、glob、grep 等"
 		if hasIM {
-			desc += "、feishu_sender、wecom_sender"
+			desc += "、feishu_sender、wecom_sender、dingtalk_sender"
 		}
 		desc += "）。处理调研搜索、写代码、文件操作、分析等任何需要独立上下文的任务。需要搜索或调研时必须用此代理。"
 		if hasIM {
-			desc += "需要发送飞书或企业微信消息时也必须用此代理。"
+			desc += "需要发送飞书、企业微信或钉钉消息时也必须用此代理。"
 		}
 		return desc
 	}
 	desc := "Execution agent with full toolset (web_search, write_file, edit_file, execute, glob, grep"
 	if hasIM {
-		desc += ", feishu_sender, wecom_sender"
+		desc += ", feishu_sender, wecom_sender, dingtalk_sender"
 	}
 	desc += ", etc.). Handles research/search, coding, file operations, analysis — any task requiring isolated context. MUST use this agent when search or research is needed."
 	if hasIM {
-		desc += " MUST use this agent when sending Feishu or WeCom messages."
+		desc += " MUST use this agent when sending Feishu, WeCom or DingTalk messages."
 	}
 	return desc
 }

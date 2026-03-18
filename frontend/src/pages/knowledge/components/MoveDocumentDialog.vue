@@ -12,7 +12,10 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { LibraryService, MoveDocumentToFolderInput } from '@bindings/chatclaw/internal/services/library'
+import {
+  LibraryService,
+  MoveDocumentToFolderInput,
+} from '@bindings/chatclaw/internal/services/library'
 import type { Folder } from '@bindings/chatclaw/internal/services/library'
 import type { Document } from './DocumentCard.vue'
 import { cn } from '@/lib/utils'
@@ -31,10 +34,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const moving = ref(false)
 
-type Location =
-  | { kind: 'root' }
-  | { kind: 'uncategorized' }
-  | { kind: 'folder'; id: number }
+type Location = { kind: 'root' } | { kind: 'uncategorized' } | { kind: 'folder'; id: number }
 
 const location = ref<Location>({ kind: 'root' })
 
@@ -234,7 +234,10 @@ const handleMove = async () => {
                   @click="location = { kind: 'uncategorized' }"
                 >
                   <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
-                  <span class="min-w-0 flex-1 truncate" :title="t('knowledge.content.moveToFolder.uncategorized')">
+                  <span
+                    class="min-w-0 flex-1 truncate"
+                    :title="t('knowledge.content.moveToFolder.uncategorized')"
+                  >
                     {{ t('knowledge.content.moveToFolder.uncategorized') }}
                   </span>
                   <ChevronRight class="size-4 shrink-0 text-muted-foreground/70" />

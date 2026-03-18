@@ -29,9 +29,15 @@ const isExpanded = ref(true)
     </button>
 
     <!-- Content (only show when expanded) -->
-    <div v-if="isExpanded" class="w-full border-l-2 border-border/30 pl-3 text-xs text-muted-foreground/70">
+    <div
+      v-if="isExpanded"
+      class="w-full border-l-2 border-border/30 pl-3 text-xs text-muted-foreground/70"
+    >
       <span class="whitespace-pre-wrap wrap-break-word">{{ content }}</span>
-      <span v-if="isStreaming" class="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-current align-middle"></span>
+      <span
+        v-if="isStreaming"
+        class="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-current align-middle"
+      ></span>
     </div>
   </div>
 </template>

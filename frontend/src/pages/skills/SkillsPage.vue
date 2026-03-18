@@ -76,7 +76,7 @@ const filteredSkills = computed(() => {
       (s) =>
         s.slug.toLowerCase().includes(q) ||
         (s.name && s.name.toLowerCase().includes(q)) ||
-        (s.description && s.description.toLowerCase().includes(q)),
+        (s.description && s.description.toLowerCase().includes(q))
     )
   }
   return list
@@ -87,9 +87,7 @@ const paginatedSkills = computed(() => {
   return filteredSkills.value.slice(0, end)
 })
 
-const installedHasMore = computed(
-  () => paginatedSkills.value.length < filteredSkills.value.length,
-)
+const installedHasMore = computed(() => paginatedSkills.value.length < filteredSkills.value.length)
 
 const isLocalFilter = computed(() => installedFilter.value === 'local')
 const hasLocalSkills = computed(() => isLocalFilter.value && filteredSkills.value.length > 0)
@@ -106,7 +104,7 @@ const isSearching = ref(false)
 const searchMode = ref(false)
 
 const displayedMarketSkills = computed(() =>
-  searchMode.value ? searchResults.value : marketSkills.value,
+  searchMode.value ? searchResults.value : marketSkills.value
 )
 
 // --- Installing / deleting state ---
@@ -146,12 +144,39 @@ const filterOptions = [
 ]
 
 const BINARY_EXTENSIONS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'svg',
-  'woff', 'woff2', 'ttf', 'otf', 'eot',
-  'zip', 'tar', 'gz', 'bz2', 'xz', '7z',
-  'exe', 'dll', 'so', 'dylib',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx',
-  'mp3', 'mp4', 'wav', 'avi', 'mov',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'ico',
+  'bmp',
+  'svg',
+  'woff',
+  'woff2',
+  'ttf',
+  'otf',
+  'eot',
+  'zip',
+  'tar',
+  'gz',
+  'bz2',
+  'xz',
+  '7z',
+  'exe',
+  'dll',
+  'so',
+  'dylib',
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'mp3',
+  'mp4',
+  'wav',
+  'avi',
+  'mov',
 ])
 
 function isBinaryFile(path: string): boolean {
@@ -166,14 +191,32 @@ function isMarkdownFile(path: string): boolean {
 function getCodeLanguage(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase() || ''
   const langMap: Record<string, string> = {
-    js: 'javascript', mjs: 'javascript', cjs: 'javascript',
-    ts: 'typescript', mts: 'typescript', cts: 'typescript',
-    py: 'python', rb: 'ruby', go: 'go', rs: 'rust',
-    java: 'java', kt: 'kotlin', swift: 'swift',
-    sh: 'bash', bash: 'bash', zsh: 'bash',
-    json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
-    xml: 'xml', html: 'html', css: 'css', scss: 'scss',
-    sql: 'sql', dockerfile: 'dockerfile',
+    js: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    ts: 'typescript',
+    mts: 'typescript',
+    cts: 'typescript',
+    py: 'python',
+    rb: 'ruby',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    kt: 'kotlin',
+    swift: 'swift',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    xml: 'xml',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    sql: 'sql',
+    dockerfile: 'dockerfile',
     md: 'markdown',
   }
   return langMap[ext] || ''
@@ -283,7 +326,7 @@ async function loadMarketSkills(append = false) {
     const result = await SkillsService.ExploreSkills(
       25,
       marketSort.value,
-      append ? marketCursor.value : '',
+      append ? marketCursor.value : ''
     )
     if (result) {
       if (append) {
@@ -367,7 +410,7 @@ async function selectFile(path: string) {
       content = await SkillsService.GetRemoteSkillFile(
         detailRemoteSkill.value.slug,
         detailMeta.value.version,
-        path,
+        path
       )
     }
     if (version !== fileLoadVersion) return
@@ -494,7 +537,12 @@ const detailName = computed(() => {
     return detailSkill.value.name || detailSkill.value.slug
   }
   if (detailView.value === 'market') {
-    return detailMeta.value?.displayName || detailRemoteSkill.value?.displayName || detailRemoteSkill.value?.slug || ''
+    return (
+      detailMeta.value?.displayName ||
+      detailRemoteSkill.value?.displayName ||
+      detailRemoteSkill.value?.slug ||
+      ''
+    )
   }
   return ''
 })
@@ -589,7 +637,10 @@ watch(activeTab, (tab) => {
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
     <!-- Header bar (hidden in detail view) -->
-    <div v-if="detailView === 'none'" class="flex shrink-0 items-center justify-between border-b border-border px-4 py-2">
+    <div
+      v-if="detailView === 'none'"
+      class="flex shrink-0 items-center justify-between border-b border-border px-4 py-2"
+    >
       <div class="flex items-center gap-2">
         <span class="text-sm font-medium text-foreground">{{ t('settings.skills.title') }}</span>
         <span class="text-xs text-muted-foreground">{{ t('settings.skills.pageDesc') }}</span>
@@ -628,12 +679,18 @@ watch(activeTab, (tab) => {
             @click="goBackFromDetail"
           >
             <ChevronLeft class="size-4" />
-            {{ activeTab === 'installed' ? t('settings.skills.tabInstalled') : t('settings.skills.tabMarket') }}
+            {{
+              activeTab === 'installed'
+                ? t('settings.skills.tabInstalled')
+                : t('settings.skills.tabMarket')
+            }}
           </button>
         </div>
 
         <!-- Row 2: skill info + actions -->
-        <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+        <div
+          class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3"
+        >
           <!-- Left: name, description, stats -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
@@ -650,9 +707,17 @@ watch(activeTab, (tab) => {
               {{ detailDescription }}
             </p>
             <!-- Market stats -->
-            <div v-if="detailView === 'market' && detailMeta" class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <div
+              v-if="detailView === 'market' && detailMeta"
+              class="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"
+            >
               <span v-if="detailMeta.ownerName" class="flex items-center gap-1">
-                <img v-if="detailMeta.ownerImage" :src="detailMeta.ownerImage" class="size-4 rounded-full" alt="" />
+                <img
+                  v-if="detailMeta.ownerImage"
+                  :src="detailMeta.ownerImage"
+                  class="size-4 rounded-full"
+                  alt=""
+                />
                 <User v-else class="size-3.5" />
                 {{ detailMeta.ownerName }}
               </span>
@@ -669,7 +734,9 @@ watch(activeTab, (tab) => {
 
           <!-- Right: version + action buttons -->
           <div class="flex shrink-0 flex-col items-end gap-2">
-            <span v-if="detailVersion" class="text-xs text-muted-foreground">v{{ detailVersion }}</span>
+            <span v-if="detailVersion" class="text-xs text-muted-foreground"
+              >v{{ detailVersion }}</span
+            >
 
             <div class="flex items-center gap-2">
               <!-- Installed: open dir + delete -->
@@ -701,7 +768,9 @@ watch(activeTab, (tab) => {
                     <FolderOpen class="size-3.5" />
                     {{ t('settings.skills.openDir') }}
                   </button>
-                  <span class="rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <span
+                    class="rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+                  >
                     {{ t('settings.skills.installed') }}
                   </span>
                 </template>
@@ -733,7 +802,9 @@ watch(activeTab, (tab) => {
         </div>
         <div v-else class="flex min-h-0 flex-1">
           <!-- Left: file list -->
-          <aside class="flex w-56 shrink-0 flex-col overflow-auto border-r border-border bg-muted/30">
+          <aside
+            class="flex w-56 shrink-0 flex-col overflow-auto border-r border-border bg-muted/30"
+          >
             <div
               v-for="file in detailFiles"
               :key="file.path"
@@ -742,7 +813,7 @@ watch(activeTab, (tab) => {
                 cn(
                   'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-accent/50',
                   selectedFilePath === file.path && 'bg-accent text-foreground',
-                  selectedFilePath !== file.path && 'text-muted-foreground',
+                  selectedFilePath !== file.path && 'text-muted-foreground'
                 )
               "
               @click="selectFile(file.path)"
@@ -762,10 +833,16 @@ watch(activeTab, (tab) => {
             <div v-if="fileLoading" class="flex flex-1 items-center justify-center">
               <Loader2 class="size-5 animate-spin text-muted-foreground" />
             </div>
-            <div v-else-if="!selectedFilePath" class="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            <div
+              v-else-if="!selectedFilePath"
+              class="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+            >
               {{ t('settings.skills.selectFile') }}
             </div>
-            <div v-else-if="isBinaryFile(selectedFilePath)" class="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            <div
+              v-else-if="isBinaryFile(selectedFilePath)"
+              class="flex flex-1 items-center justify-center text-sm text-muted-foreground"
+            >
               {{ t('settings.skills.binaryFile') }}
             </div>
             <div v-else-if="isSelectedFileMarkdown" class="p-4">
@@ -785,10 +862,10 @@ watch(activeTab, (tab) => {
       <div class="flex items-center border-b border-border px-4 py-2">
         <div class="inline-flex rounded-lg bg-muted p-1">
           <button
-            v-for="tab in ([
+            v-for="tab in [
               { key: 'installed' as MainTab, label: t('settings.skills.tabInstalled') },
               { key: 'market' as MainTab, label: t('settings.skills.tabMarket') },
-            ])"
+            ]"
             :key="tab.key"
             type="button"
             :class="
@@ -796,7 +873,7 @@ watch(activeTab, (tab) => {
                 'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
                 activeTab === tab.key
                   ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground',
+                  : 'text-muted-foreground hover:text-foreground'
               )
             "
             @click="activeTab = tab.key"
@@ -843,7 +920,9 @@ watch(activeTab, (tab) => {
               </Tooltip>
             </TooltipProvider>
             <div class="relative w-52">
-              <Search class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Search
+                class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              />
               <Input
                 v-model="installedSearchQuery"
                 :placeholder="t('settings.skills.searchPlaceholder')"
@@ -867,7 +946,9 @@ watch(activeTab, (tab) => {
           >
             <Package class="size-8 opacity-40" />
             <span class="text-sm font-medium">{{ t('settings.skills.noLocalSkills') }}</span>
-            <span class="text-center text-xs leading-relaxed">{{ t('settings.skills.noLocalSkillsHint') }}</span>
+            <span class="text-center text-xs leading-relaxed">{{
+              t('settings.skills.noLocalSkillsHint')
+            }}</span>
             <button
               class="mt-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               @click="handleOpenSkillsDir"
@@ -893,17 +974,27 @@ watch(activeTab, (tab) => {
                 @click="showInstalledDetail(skill)"
               >
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-sm font-medium text-foreground">{{ skill.name || skill.slug }}</span>
-                  <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                  <span class="truncate text-sm font-medium text-foreground">{{
+                    skill.name || skill.slug
+                  }}</span>
+                  <Badge
+                    variant="secondary"
+                    class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                  >
                     {{ sourceLabel(skill.source) }}
                   </Badge>
                 </div>
-                <p v-if="skill.description" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                <p
+                  v-if="skill.description"
+                  class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+                >
                   {{ skill.description }}
                 </p>
                 <div v-else class="mt-1.5 min-h-[2lh]" />
                 <div class="mt-auto flex items-center justify-between gap-2 pt-3">
-                  <span v-if="skill.version" class="text-[10px] text-muted-foreground">v{{ skill.version }}</span>
+                  <span v-if="skill.version" class="text-[10px] text-muted-foreground"
+                    >v{{ skill.version }}</span
+                  >
                   <span v-else />
                   <div class="flex items-center gap-2" @click.stop>
                     <Switch
@@ -941,8 +1032,14 @@ watch(activeTab, (tab) => {
         <!-- Search + Sort -->
         <div class="flex shrink-0 items-center gap-3 px-4 py-2">
           <div class="relative flex-1">
-            <Loader2 v-if="isSearching" class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-            <Search v-else class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Loader2
+              v-if="isSearching"
+              class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground"
+            />
+            <Search
+              v-else
+              class="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
             <Input
               v-model="searchQuery"
               :placeholder="t('settings.skills.searchPlaceholder')"
@@ -999,11 +1096,22 @@ watch(activeTab, (tab) => {
                 @click="showMarketDetail(skill)"
               >
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-sm font-medium text-foreground">{{ skill.displayName || skill.slug }}</span>
-                  <span v-if="skill.version" class="shrink-0 text-[10px] text-muted-foreground">v{{ skill.version }}</span>
+                  <span class="truncate text-sm font-medium text-foreground">{{
+                    skill.displayName || skill.slug
+                  }}</span>
+                  <span v-if="skill.version" class="shrink-0 text-[10px] text-muted-foreground"
+                    >v{{ skill.version }}</span
+                  >
                 </div>
-                <span v-if="skill.displayName && skill.displayName !== skill.slug" class="mt-0.5 truncate text-[10px] text-muted-foreground/60">{{ skill.slug }}</span>
-                <p v-if="skill.summary" class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+                <span
+                  v-if="skill.displayName && skill.displayName !== skill.slug"
+                  class="mt-0.5 truncate text-[10px] text-muted-foreground/60"
+                  >{{ skill.slug }}</span
+                >
+                <p
+                  v-if="skill.summary"
+                  class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+                >
                   {{ skill.summary }}
                 </p>
                 <div v-else class="mt-1.5 min-h-[2lh]" />
@@ -1073,7 +1181,9 @@ watch(activeTab, (tab) => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="handleDelete">{{ t('settings.skills.delete') }}</AlertDialogAction>
+          <AlertDialogAction @click="handleDelete">{{
+            t('settings.skills.delete')
+          }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

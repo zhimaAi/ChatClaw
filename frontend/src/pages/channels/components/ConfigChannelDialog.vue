@@ -65,23 +65,22 @@ watch(open, (val) => {
 const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform)
 
 const isFeishu = computed(() => currentPlatformId.value === 'feishu')
+const isDingTalk = computed(() => currentPlatformId.value === 'dingtalk')
 const isWeCom = computed(() => currentPlatformId.value === 'wecom')
 const appIdLabel = computed(() =>
-  isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId'),
+  isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId')
 )
 const appSecretLabel = computed(() =>
-  isWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret'),
+  isWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret')
 )
-const appIdPlaceholder = computed(() => (
-  isWeCom.value
-    ? t('channels.config.wecomAppIdPlaceholder')
-    : t('channels.config.appIdPlaceholder')
-))
-const appSecretPlaceholder = computed(() => (
+const appIdPlaceholder = computed(() =>
+  isWeCom.value ? t('channels.config.wecomAppIdPlaceholder') : t('channels.config.appIdPlaceholder')
+)
+const appSecretPlaceholder = computed(() =>
   isWeCom.value
     ? t('channels.config.wecomAppSecretPlaceholder')
     : t('channels.config.appSecretPlaceholder')
-))
+)
 
 const dialogTitle = computed(() => {
   const pid = currentPlatformId.value
@@ -164,11 +163,14 @@ async function handleSave() {
     let channel: Channel | null = null
     const isEdit = !!props.channel
     if (isEdit) {
-      channel = await ChannelService.UpdateChannel(props.channel!.id, new UpdateChannelInput({
-        name: name.value.trim(),
-        avatar: avatar.value,
-        extra_config: extraConfig,
-      }))
+      channel = await ChannelService.UpdateChannel(
+        props.channel!.id,
+        new UpdateChannelInput({
+          name: name.value.trim(),
+          avatar: avatar.value,
+          extra_config: extraConfig,
+        })
+      )
       toast.success(t('channels.config.editSuccess'))
     } else {
       channel = await ChannelService.CreateChannel({
@@ -210,10 +212,7 @@ async function handleOpenExternalLink(url: string) {
 
       <form class="px-6 pb-4" @submit.prevent="handleSave">
         <!-- Feishu tip card -->
-        <div
-          v-if="isFeishu"
-          class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
-        >
+        <div v-if="isFeishu" class="mt-4 rounded-lg border border-border bg-card px-4 py-3">
           <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
             {{ t('channels.config.feishuTipPrefix') }}
             <a
@@ -222,16 +221,48 @@ async function handleOpenExternalLink(url: string) {
               rel="noopener noreferrer"
               class="underline hover:text-primary"
               @click.prevent="handleOpenExternalLink('https://open.feishu.cn/')"
-            >{{ t('channels.config.feishuPlatformLink') }}</a>
+              >{{ t('channels.config.feishuPlatformLink') }}</a
+            >
             {{ t('channels.config.feishuTipMiddle') }}
             <a
               href="https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu"
               target="_blank"
               rel="noopener noreferrer"
               class="underline hover:text-primary"
-              @click.prevent="handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu')"
-            >{{ t('channels.config.feishuGuideLink') }}</a>
+              @click.prevent="
+                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu')
+              "
+              >{{ t('channels.config.feishuGuideLink') }}</a
+            >
             {{ t('channels.config.feishuTipSuffix') }}
+          </p>
+        </div>
+
+        <!-- DingTalk tip card -->
+        <div
+          v-if="isDingTalk"
+          class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
+        >
+          <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+            {{ t('channels.config.dingtalkTipPrefix') }}
+            <a
+              href="https://open.dingtalk.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline hover:text-primary"
+              @click.prevent="handleOpenExternalLink('https://open.dingtalk.com/')"
+            >{{ t('channels.config.dingtalkPlatformLink') }}</a>
+            {{ t('channels.config.dingtalkTipMiddle') }}
+            <a
+              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline hover:text-primary"
+              @click.prevent="
+                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk')
+              "
+            >{{ t('channels.config.dingtalkGuideLink') }}</a>
+            {{ t('channels.config.dingtalkTipSuffix') }}
           </p>
         </div>
 
@@ -242,20 +273,13 @@ async function handleOpenExternalLink(url: string) {
             type="button"
             @click="handlePickIcon"
           >
-            <img
-              v-if="avatar"
-              :src="avatar"
-              class="h-full w-full object-cover"
-            />
+            <img v-if="avatar" :src="avatar" class="h-full w-full object-cover" />
             <img
               v-else-if="defaultAvatarSrc"
               :src="defaultAvatarSrc"
               class="h-8 w-8 object-contain text-[#0a0a0a] dark:text-foreground"
             />
-            <div
-              v-else
-              class="flex h-full w-full items-center justify-center"
-            >
+            <div v-else class="flex h-full w-full items-center justify-center">
               <span class="text-2xl text-[#8c8c8c] dark:text-muted-foreground">+</span>
             </div>
           </button>
@@ -266,7 +290,10 @@ async function handleOpenExternalLink(url: string) {
 
         <!-- Name field -->
         <div class="space-y-1">
-          <Label for="channel-name" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+          <Label
+            for="channel-name"
+            class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+          >
             <span class="text-[#0a0a0a] dark:text-foreground">*</span>
             {{ t('channels.config.name') }}
           </Label>
@@ -279,19 +306,20 @@ async function handleOpenExternalLink(url: string) {
         </div>
 
         <div class="mt-4 space-y-1">
-          <Label for="app-id" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+          <Label
+            for="app-id"
+            class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+          >
             <span class="text-[#0a0a0a] dark:text-foreground">*</span>
             {{ appIdLabel }}
           </Label>
-          <Input
-            id="app-id"
-            v-model="appId"
-            :placeholder="appIdPlaceholder"
-            maxlength="60"
-          />
+          <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" maxlength="60" />
         </div>
         <div class="mt-4 space-y-1">
-          <Label for="app-secret" class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+          <Label
+            for="app-secret"
+            class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+          >
             <span class="text-[#0a0a0a] dark:text-foreground">*</span>
             {{ appSecretLabel }}
           </Label>
@@ -300,7 +328,7 @@ async function handleOpenExternalLink(url: string) {
             v-model="appSecret"
             type="password"
             :placeholder="appSecretPlaceholder"
-            maxlength="60"
+            maxlength="200"
           />
         </div>
 

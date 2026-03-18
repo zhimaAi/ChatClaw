@@ -63,7 +63,9 @@ function statusTextClass(task: ScheduledTask) {
         <thead class="text-left text-sm text-[#0a0a0a]">
           <tr>
             <th class="w-[34%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.title') }}</th>
-            <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.schedule') }}</th>
+            <th class="w-[24%] px-5 py-3 font-medium">
+              {{ t('scheduledTasks.columns.schedule') }}
+            </th>
             <th class="w-[24%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.agent') }}</th>
             <th class="w-[12%] px-5 py-3 font-medium">{{ t('scheduledTasks.columns.status') }}</th>
             <th class="w-[88px] min-w-[88px] whitespace-nowrap px-5 py-3 text-right font-medium">
@@ -87,40 +89,42 @@ function statusTextClass(task: ScheduledTask) {
             </td>
             <td class="px-5 py-3.5">
               <template v-if="buildTaskTableDisplay(task, agents).schedule.showLastRun">
-              <div class="space-y-1 text-sm">
-                <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
-                <div class="flex items-center gap-1.5 text-[#8c8c8c]">
-                  <TooltipProvider v-if="task.last_status === 'failed' && task.last_error">
-                    <Tooltip>
-                      <TooltipTrigger as-child>
-                        <button
-                          type="button"
-                          class="inline-flex shrink-0 items-center justify-center rounded-full"
-                          :aria-label="t('scheduledTasks.errorReason')"
-                        >
-                          <component
-                            :is="lastRunIcon(task)"
-                            class="size-4"
-                            :class="lastRunIconClass(task)"
-                          />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p class="max-w-sm whitespace-pre-wrap text-xs">{{ task.last_error }}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <component
-                    :is="lastRunIcon(task)"
-                    v-else
-                    class="size-4 shrink-0"
-                    :class="lastRunIconClass(task)"
-                  />
-                  <span class="truncate">
-                    {{ t('scheduledTasks.lastRunPrefix') }}{{ formatTaskTime(task.last_run_at) }}
-                  </span>
+                <div class="space-y-1 text-sm">
+                  <div class="font-medium leading-6 text-[#171717]">
+                    {{ describeSchedule(task) }}
+                  </div>
+                  <div class="flex items-center gap-1.5 text-[#8c8c8c]">
+                    <TooltipProvider v-if="task.last_status === 'failed' && task.last_error">
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <button
+                            type="button"
+                            class="inline-flex shrink-0 items-center justify-center rounded-full"
+                            :aria-label="t('scheduledTasks.errorReason')"
+                          >
+                            <component
+                              :is="lastRunIcon(task)"
+                              class="size-4"
+                              :class="lastRunIconClass(task)"
+                            />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p class="max-w-sm whitespace-pre-wrap text-xs">{{ task.last_error }}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <component
+                      :is="lastRunIcon(task)"
+                      v-else
+                      class="size-4 shrink-0"
+                      :class="lastRunIconClass(task)"
+                    />
+                    <span class="truncate">
+                      {{ t('scheduledTasks.lastRunPrefix') }}{{ formatTaskTime(task.last_run_at) }}
+                    </span>
+                  </div>
                 </div>
-              </div>
               </template>
               <div v-else class="space-y-1 text-sm">
                 <div class="font-medium leading-6 text-[#171717]">{{ describeSchedule(task) }}</div>
