@@ -1,0 +1,100 @@
+# =============================================================================
+# Image Upload Provider Configuration
+# =============================================================================
+#
+# This file controls which OSS (Object Storage Service) provider is used
+# when the app needs to upload images (e.g., sending images via DingTalk bot).
+#
+# PROJECT IS OPEN SOURCE — you can edit this file directly, then rebuild the app.
+# AI assistants (e.g., Cursor / ChatGPT) can also modify this file automatically.
+#
+# SUPPORTED MODES:
+#   chatclaw   Use ChatClaw's built-in OSS service (default).
+#              Requires a valid ChatClaw API Key configured in the app settings.
+#
+#   custom     Use your own OSS / image hosting endpoint.
+#              Fill in the "custom" section below, then set mode: custom.
+#
+# After editing: rebuild and restart the app for changes to take effect.
+# =============================================================================
+
+mode: chatclaw  # chatclaw | custom
+
+
+# =============================================================================
+# Custom OSS Configuration
+# Only read when mode: custom — ignored in chatclaw mode.
+# =============================================================================
+custom:
+  # (required) Full URL of your upload endpoint.
+  # Example: "https://oss.example.com/api/v1/upload"
+  endpoint: ""
+
+  # ---- Authentication -------------------------------------------------------
+  # How to pass credentials to your upload endpoint.
+  # Options:
+  #   header   Add a custom HTTP request header (most common, e.g. Bearer token)
+  #   query    Append a query parameter to the URL (e.g. ?token=xxx)
+  #   none     No authentication required
+  auth_method: "header"  # header | query | none
+
+  # For auth_method: header
+  # Set the header name and value. Common examples:
+  #   Authorization: "Bearer your-token"
+  #   X-API-Key:     "your-api-key"
+  auth_header_name: "Authorization"
+  auth_header_value: "Bearer your-token-here"
+
+  # For auth_method: query
+  # The query parameter name and its value.
+  auth_query_param: "token"
+  auth_query_value: "your-token-here"
+
+  # ---- Request Format -------------------------------------------------------
+  # Multipart form field name that carries the image file.
+  # Default: "file" — change only if your API uses a different field name.
+  file_field: "file"
+
+  # ---- Response Parsing -----------------------------------------------------
+  # Dot-notation path to the image URL in the JSON response body.
+  #
+  # Examples:
+  #   "url"           ->  { "url": "https://cdn.example.com/img/abc.png" }
+  #   "data.url"      ->  { "data": { "url": "https://..." } }
+  #   "result.0.src"  ->  { "result": [{ "src": "https://..." }] }
+  response_url_path: "data.url"
+
+  # (optional) If your API returns a numeric/string status code inside the JSON
+  # body, you can configure the field name and the value that signals success.
+  # Leave response_success_code_field empty to skip this check entirely.
+  #
+  # Example for a typical Chinese API:
+  #   response_success_code_field: "code"
+  #   response_success_code_value: "0"
+  response_success_code_field: "code"
+  response_success_code_value: "0"
+
+# =============================================================================
+# API Contract (for reference / AI tooling)
+# =============================================================================
+#
+# When mode: custom, the app sends a multipart/form-data POST request:
+#
+#   POST {custom.endpoint}
+#   Headers:
+#     Content-Type: multipart/form-data; boundary=...
+#     {auth_header_name}: {auth_header_value}          # if auth_method = header
+#   Query:
+#     {auth_query_param}={auth_query_value}             # if auth_method = query
+#   Body (multipart):
+#     {file_field}: <binary image data>
+#
+# Expected JSON response (fields configured above):
+#   {
+#     "{response_success_code_field}": {response_success_code_value},   // optional
+#     "{response_url_path}": "https://cdn.example.com/image.png"        // required
+#   }
+#
+# The returned URL must be publicly accessible over HTTPS (HTTP URLs are
+# automatically upgraded to HTTPS for compatibility with DingTalk Markdown).
+# =============================================================================
