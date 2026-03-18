@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
 <img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
 </p>
 
@@ -42,51 +42,87 @@ Get OpenClaw-like knowledge base personal AI agent in 5 mins. Sandbox-secured, w
 
 Ask your AI assistant any question, and it will intelligently search your knowledge base to generate a relevant answer.
 
-![](./images/1.png)
+![](./images/previews/en/image1.png)
 
 ### PPT Quick Generate
 
 Send a one-sentence command to the smart assistant to automatically create and generate a PowerPoint presentation.
 
-![](./images/2.png)
+![](./images/previews/en/image3.png)
 
 ### Skill Manager
 
-Use a command to have the robot help you find installed features on your computer or install new extension plugins.
+Use a command to have the assistant help you find installed features on your computer or install new extension plugins.
 
-![](./images/3.png)
+![](./images/previews/en/image5.png)
 
-### Knowledge | Document Vectorization Storage
+### MCP: Unlimited Capability Extensions
 
-Upload your documents (e.g., TXT, PDF, Word, Excel, CSV, HTML, Markdown). The system will automatically parse, split, and convert them into vector embeddings, storing them in your private knowledge base for precise retrieval and utilization by the AI model.
+Add external MCP servers to securely and efficiently connect to diverse data sources and tools, enabling your assistant to go beyond daily tasks into professional workflows.
 
-![](./images/4.png)
+![](./images/previews/en/image6.png)
+
+### Sandbox Mode: Double Protection
+
+Choose between sandbox-isolated execution (OS-level isolation, restricted command scope) and native execution (more flexible). Switch freely to balance safety and convenience.
+
+![](./images/previews/en/image8.png)
+
+### Memory: More Natural, Smarter Interactions
+
+Enable contextual conversations and personalized assistance. The assistant can continuously learn and evolve so it feels like a growing partner.
+
+![](./images/previews/en/image9.png)
+
+### Shared Team Knowledge Base
+
+Authorize one-click access to ChatWiki to sync robots and knowledge bases, share configurations, and control member permissions.
+
+![](./images/previews/en/image10.png)
+
+### Knowledge Base | Document Vectorization Storage
+
+Upload documents (TXT, PDF, Word, Excel, CSV, HTML, Markdown). The system automatically parses, splits, and converts them into vector embeddings for precise retrieval.
+
+![](./images/previews/en/image11.png)
+
+### Rich IM Channel Integrations
+
+Integrate IM providers (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram, etc.) via SDKs to quickly enable channel creation, user management, and messaging.
+
+![](./images/previews/en/image12.png)
+
+### Scheduled Tasks
+
+Let your assistant automatically execute actions at preset times or intervals: reminders, recurring work, and system-level maintenance.
+
+![](./images/previews/en/image13.png)
 
 ### Text Selection for Instant Q&A
 
-Select any text on your screen, and it will be automatically copied and filled into a floating quick-ask box. With one click, send it to the AI assistant for an immediate answer.
+Select any text on your screen. It is automatically copied into a floating quick-ask box. One click to ask, instant answers.
 
-![](./images/5.png)
+![](./images/previews/en/image14.png)
 
-![](./images/6.png)
+![](./images/previews/en/image15.png)
 
-### Smart Snap Window
+### Smart Sidebar
 
-An intelligent assistant that can snap alongside other application windows. Quickly switch between differently configured AI assistants within it to ask questions. The bot generates answers based on your connected knowledge base and supports one-click sending of responses directly into your conversation.
+Snap the assistant alongside other windows, quickly switch between differently configured assistants, and one-click send generated replies into your conversations.
 
-![](./images/7.png)
+![](./images/previews/en/image16.png)
 
 ### One Question, Multiple Answers: Compare with Ease
 
-No need to repeat your query. Consult multiple "AI experts" simultaneously and view their responses side-by-side in a single interface. This allows for easy comparison and helps you arrive at the best conclusion.
+Consult multiple "AI experts" simultaneously and view their responses side-by-side for easy comparison.
 
-![](./images/8.png)
+![](./images/previews/en/image17.png)
 
 ### One-Click Launcher Ball
 
-Click the floating ball on your desktop to instantly wake up or open the main ChatClaw application window.
+Click the floating ball on your desktop to instantly wake up or open the main ChatClaw window.
 
-![](./images/9.png)
+![](./images/previews/en/image18.png)
 
 ## Server Mode Deployment
 
@@ -284,3 +320,7 @@ To view the complete update log, please click👉️👉️[UpdateLog.md](./docs
 2. **Task & Cron Management**: Extended scheduled task features with execution history, improved failure statistics and success criteria, and new tools for querying runs, alongside a new task-creation dialog workflow.<br/>
 3. **Toolchain Installation UX**: Added test installation features and download progress tracking for the toolchain, increased download/read timeouts for long-running installs, and improved GitHub proxy and mirror handling for version fetching.<br/>
 4. **ChatWiki & Token Handling**: Improved ChatWiki token management with better reload behavior and local caching, and refined related editing tools and prompts with updated Chinese/English copy.<br/>
+
+
+
+
