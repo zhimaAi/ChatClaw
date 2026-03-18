@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Events, Window } from '@wailsio/runtime'
 import { FloatingBallService } from '@bindings/chatclaw/internal/services/floatingball'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
@@ -8,6 +9,7 @@ import logoFloatingball from '@/assets/images/logo-floatingball.png'
 
 const BALL_SIZE = 64
 const MENU_AREA_HEIGHT = 140
+const { t } = useI18n()
 
 const debugDrag = () => {
   try {
@@ -434,20 +436,20 @@ watch(
           class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
           @click.stop="onMenuSettings"
         >
-          设置
+          {{ t('floatingball.menu.settings') }}
         </button>
         <button
           class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
           @click.stop="onMenuRestart"
         >
-          重启
+          {{ t('floatingball.menu.restart') }}
         </button>
         <div class="border-t border-border" />
         <button
           class="w-full py-2 text-xs text-center transition-colors hover:bg-accent hover:text-accent-foreground"
           @click.stop="onMenuHide"
         >
-          隐藏
+          {{ t('floatingball.menu.hide') }}
         </button>
       </div>
     </div>

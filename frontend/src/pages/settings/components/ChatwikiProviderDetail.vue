@@ -109,7 +109,7 @@ function toStatText(value: string): string {
   if (!value) return '--'
   const num = Number(value)
   if (Number.isNaN(num)) return value
-  return num.toLocaleString('zh-CN', { maximumFractionDigits: 3 })
+  return num.toLocaleString(undefined, { maximumFractionDigits: 3 })
 }
 
 function extractStatValue(catalog: ModelCatalog | null, key: string): string {
@@ -167,7 +167,7 @@ function getModelPrimaryName(model: ModelCatalogItem): string {
 function getModelPrice(model: ModelCatalogItem): string {
   const price = normalizeText((model as ChatwikiModelCatalogItem).price)
   if (!price) return ''
-  return `${price}积分/千token`
+  return t('settings.chatwiki.pricePerKToken', { price })
 }
 
 function getModelMetaText(model: ModelCatalogItem): string {
@@ -177,9 +177,9 @@ function getModelMetaText(model: ModelCatalogItem): string {
 function getRegionScopeLabel(regionScope?: string): string {
   switch (normalizeText(regionScope)) {
     case 'CN':
-      return '国内'
+      return t('settings.chatwiki.region.cn')
     case 'Global':
-      return '全球'
+      return t('settings.chatwiki.region.global')
     default:
       return ''
   }
@@ -385,7 +385,9 @@ onBeforeUnmount(() => {
                 <span class="text-[2rem] font-semibold leading-none tracking-tight text-orange-600">
                   {{ toStatText(todayUse) }}
                 </span>
-                <span class="text-sm font-medium text-muted-foreground">积分</span>
+                <span class="text-sm font-medium text-muted-foreground">
+                  {{ t('settings.chatwiki.pointsUnit') }}
+                </span>
               </div>
             </div>
             <div
@@ -398,7 +400,9 @@ onBeforeUnmount(() => {
                 <span class="text-[2rem] font-semibold leading-none tracking-tight text-primary">
                   {{ toStatText(allSurplus) }}
                 </span>
-                <span class="text-sm font-medium text-muted-foreground">积分</span>
+                <span class="text-sm font-medium text-muted-foreground">
+                  {{ t('settings.chatwiki.pointsUnit') }}
+                </span>
               </div>
             </div>
           </div>
@@ -443,7 +447,7 @@ onBeforeUnmount(() => {
               class="h-9 rounded-lg bg-[#2f67f6] px-3.5 text-sm font-medium text-white shadow-[0_4px_10px_rgba(47,103,246,0.2)] hover:bg-[#2558db]"
               @click="handleLoginNow"
             >
-              立即登录
+              {{ t('settings.chatwiki.loginNow') }}
             </Button>
           </div>
         </div>
@@ -481,9 +485,9 @@ onBeforeUnmount(() => {
                   v-model="llmRegionFilter"
                   class="h-9 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors hover:border-border/80 dark:border-white/10"
                 >
-                  <option value="all">所有范围</option>
-                  <option value="CN">国内</option>
-                  <option value="Global">全球</option>
+                  <option value="all">{{ t('settings.chatwiki.region.all') }}</option>
+                  <option value="CN">{{ t('settings.chatwiki.region.cn') }}</option>
+                  <option value="Global">{{ t('settings.chatwiki.region.global') }}</option>
                 </select>
                 <button
                   type="button"
