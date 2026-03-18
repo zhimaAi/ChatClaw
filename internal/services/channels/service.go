@@ -490,6 +490,10 @@ func (s *ChannelService) VerifyChannelConfig(platform string, extraConfig string
 
 	noopHandler := func(msg IncomingMessage) {}
 	if err := adapter.Connect(ctx, 0, extraConfig, noopHandler); err != nil {
+		errStr := err.Error()
+		if platform == PlatformDingTalk && (strings.Contains(errStr, "no such host") || strings.Contains(errStr, "lookup ")) {
+			return errs.Wrapf("error.dingtalk_network_dns_failed", err, map[string]any{"Platform": platform})
+		}
 		return errs.Wrapf("error.channel_verify_failed", err, map[string]any{"Platform": platform})
 	}
 	// Disconnect to avoid leaving a live connection; ignore disconnect error for verify flow
