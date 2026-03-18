@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n'
+
 export type ChatwikiSidebarBindingLike = {
   chatwiki_version?: string | null
   user_name?: string | null
@@ -15,7 +17,7 @@ export type ChatwikiSidebarAccountCardState =
       mode: 'login'
       action: 'login'
       accountLabel: ''
-      creditsLabel: '立即登录'
+      creditsLabel: string
     }
   | {
       mode: 'bound'
@@ -26,6 +28,10 @@ export type ChatwikiSidebarAccountCardState =
 
 function normalizeText(value?: string | null): string {
   return value?.trim() || ''
+}
+
+function t(key: string, params?: Record<string, unknown>): string {
+  return (i18n.global as any).t(key, params) as string
 }
 
 function findDeepStringValue(input: unknown, key: string): string {
@@ -66,14 +72,16 @@ function extractStatValue(catalog: ChatwikiSidebarCatalogLike | null, key: strin
 
 function formatCreditsLabel(value: string): string {
   const trimmed = value.trim()
-  if (!trimmed) return '-- 积分'
+  if (!trimmed) return t('settings.chatwiki.creditsValue', { value: '--' })
 
   const num = Number(trimmed)
   if (Number.isNaN(num)) {
-    return `${trimmed} 积分`
+    return t('settings.chatwiki.creditsValue', { value: trimmed })
   }
 
-  return `${num.toLocaleString('zh-CN', { maximumFractionDigits: 3 })} 积分`
+  return t('settings.chatwiki.creditsValue', {
+    value: num.toLocaleString(undefined, { maximumFractionDigits: 3 }),
+  })
 }
 
 export function isChatwikiCloudBinding(binding: ChatwikiSidebarBindingLike | null): boolean {
@@ -101,7 +109,7 @@ export function buildChatwikiSidebarAccountCardState(
       mode: 'login',
       action: 'login',
       accountLabel: '',
-      creditsLabel: '立即登录',
+      creditsLabel: t('settings.chatwiki.loginNow'),
     }
   }
 

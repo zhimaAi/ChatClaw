@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n'
+
 type ModelLike = {
   model_id: string
   enabled?: boolean
@@ -58,8 +60,12 @@ export function formatProviderDisplayLabel(
 ): string {
   const status = normalizeAvailabilityStatus(statusOrBinding)
   if (providerId !== CHATWIKI_PROVIDER_ID) return label
-  if (status === 'unbound') return `${label}（未登录）`
-  if (status === 'non_cloud') return `${label}（非ChatWiki Cloud）`
+  if (status === 'unbound') {
+    return (i18n.global as any).t('settings.chatwiki.providerStatus.unbound', { label }) as string
+  }
+  if (status === 'non_cloud') {
+    return (i18n.global as any).t('settings.chatwiki.providerStatus.nonCloud', { label }) as string
+  }
   return label
 }
 

@@ -177,9 +177,9 @@ function getBindActionText(channel: Channel): string {
 }
 
 function getChannelStatusText(channel: Channel): string {
-  if (channel.status === 'online') return t('assistant.channels.statusOnline', '已连接')
-  if (channel.status === 'error') return t('assistant.channels.statusError', '错误')
-  return t('assistant.channels.statusOffline', '未连接')
+  if (channel.status === 'online') return t('assistant.channels.statusOnline')
+  if (channel.status === 'error') return t('assistant.channels.statusError')
+  return t('assistant.channels.statusOffline')
 }
 
 function syncCreateFormVisibility(platformId: string) {
@@ -260,10 +260,10 @@ async function handlePickAvatar() {
       CanChooseFiles: true,
       CanChooseDirectories: false,
       AllowsMultipleSelection: false,
-      Title: t('channels.config.pickAvatar', '选择头像'),
+      Title: t('channels.config.pickAvatar'),
       Filters: [
         {
-          DisplayName: t('channels.config.filterImages', '图片文件'),
+          DisplayName: t('channels.config.filterImages'),
           Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
         },
       ],
@@ -344,10 +344,10 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
     await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled }))
     if (enabled) {
       await ChannelService.ConnectChannel(channel.id)
-      toast.success(t('channels.connect.success', '连接成功'))
+      toast.success(t('channels.connect.success'))
     } else {
       await ChannelService.DisconnectChannel(channel.id)
-      toast.success(t('channels.disconnect.success', '已断开连接'))
+      toast.success(t('channels.disconnect.success'))
     }
     await loadData()
   } catch (error) {
@@ -368,7 +368,7 @@ function openPlatformDocs() {
 
 async function handleInlineVerify() {
   if (!isInlineFormValid.value) {
-    toast.error(t('channels.inline.fillRequired', '请先填写必填项'))
+    toast.error(t('channels.inline.fillRequired'))
     return
   }
   if (!selectedPlatformMeta.value) return
@@ -379,9 +379,9 @@ async function handleInlineVerify() {
   inlineFormVerifying.value = true
   try {
     await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
-    toast.success(t('channels.inline.verifySuccess', '验证通过'))
+    toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
-    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
+    toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
   } finally {
     inlineFormVerifying.value = false
   }
@@ -525,7 +525,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                 v-if="loading"
                 class="flex items-center justify-center py-16 text-sm text-muted-foreground"
               >
-                {{ t('common.loading', '加载中...') }}
+                {{ t('common.loading') }}
               </div>
 
               <div
@@ -576,12 +576,12 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                       <label
                         class="text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
                       >
-                        * {{ t('assistant.fields.name', '名称') }}
+                        * {{ t('assistant.fields.name') }}
                       </label>
                       <Input
                         v-model="inlineFormName"
                         class="h-9 rounded-lg border-[#e5e5e5] px-3 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-                        :placeholder="t('channels.inline.namePlaceholder', '请输入')"
+                        :placeholder="t('channels.inline.namePlaceholder')"
                       />
                     </div>
 
@@ -627,8 +627,8 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                       <ShieldCheck v-else class="size-4 shrink-0" />
                       {{
                         inlineFormVerifying
-                          ? t('channels.inline.verifying', '验证中…')
-                          : t('channels.inline.verifyConfig', '验证配置')
+                          ? t('channels.inline.verifying')
+                          : t('channels.inline.verifyConfig')
                       }}
                     </Button>
 
@@ -638,7 +638,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                       @click="handleCreateChannel"
                     >
                       <Plus class="size-4 shrink-0" />
-                      {{ t('channels.inline.save', '保存添加') }}
+                      {{ t('channels.inline.save') }}
                     </Button>
 
                     <Button
@@ -646,7 +646,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                       class="h-10 rounded-lg border-[#d4d4d4] bg-white px-6 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-transparent dark:shadow-none dark:ring-1 dark:ring-white/10"
                       @click="openPlatformDocs"
                     >
-                      {{ t('channels.inline.configSteps', '配置步骤') }}
+                      {{ t('channels.inline.configSteps') }}
                     </Button>
                   </div>
                 </div>
@@ -720,7 +720,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                             @click="handleEditChannel(channel)"
                           >
                             <Edit class="size-4" />
-                            {{ t('common.edit', '编辑') }}
+                            {{ t('common.edit') }}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             class="gap-2 rounded px-4 py-[5px]"
