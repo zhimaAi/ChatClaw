@@ -177,11 +177,11 @@ func (a *DingTalkAdapter) verifyCredentials(ctx context.Context, clientID, clien
 	}
 	defer resp.Body.Close()
 
+	respBody, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("invalid app_id or app_secret (http %d)", resp.StatusCode)
 	}
-
-	respBody, _ := io.ReadAll(resp.Body)
 	var result struct {
 		Endpoint string `json:"endpoint"`
 		Ticket   string `json:"ticket"`

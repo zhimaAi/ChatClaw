@@ -248,13 +248,19 @@ async function handleOpenExternalLink(url: string) {
             <a
               href="https://open.dingtalk.com/"
               target="_blank"
+              rel="noopener noreferrer"
               class="underline hover:text-primary"
+              @click.prevent="handleOpenExternalLink('https://open.dingtalk.com/')"
             >{{ t('channels.config.dingtalkPlatformLink') }}</a>
             {{ t('channels.config.dingtalkTipMiddle') }}
             <a
-              href="https://open.dingtalk.com/document/orgapp/enterprise-created-chatbot"
+              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk"
               target="_blank"
+              rel="noopener noreferrer"
               class="underline hover:text-primary"
+              @click.prevent="
+                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk')
+              "
             >{{ t('channels.config.dingtalkGuideLink') }}</a>
             {{ t('channels.config.dingtalkTipSuffix') }}
           </p>
@@ -322,7 +328,7 @@ async function handleOpenExternalLink(url: string) {
             v-model="appSecret"
             type="password"
             :placeholder="appSecretPlaceholder"
-            maxlength="60"
+            maxlength="200"
           />
         </div>
 

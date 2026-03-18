@@ -800,7 +800,7 @@ onMounted(loadData)
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
               :placeholder="inlineAppSecretPlaceholder"
-              maxlength="60"
+              maxlength="200"
             />
           </div>
         </div>
