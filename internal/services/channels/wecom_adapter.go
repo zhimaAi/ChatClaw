@@ -5,12 +5,14 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -29,10 +31,15 @@ func init() {
 const (
 	wecomWSURL             = "wss://openws.work.weixin.qq.com"
 	wecomHeartbeatInterval = 30 * time.Second
+	wecomReadTimeout       = 75 * time.Second
 	wecomReconnectMax      = 30 * time.Second
 	wecomReconnectBase     = 1 * time.Second
 	wecomMaxReconnect      = 10
 	wecomRequestTimeout    = 10 * time.Second
+	wecomUploadAckTimeout  = 120 * time.Second
+	wecomUploadChunkSize   = 512 * 1024
+	wecomUploadMaxChunks   = 100
+	wecomUploadChunkRetry  = 2
 )
 
 // WeComConfig contains credentials for a WeCom AI Bot.
@@ -44,6 +51,7 @@ type WeComConfig struct {
 // WeComAdapter implements PlatformAdapter for WeCom using WebSocket.
 type WeComAdapter struct {
 	mu        sync.Mutex
+	writeMu   sync.Mutex
 	conn      *websocket.Conn
 	connected atomic.Bool
 	cancel    context.CancelFunc
@@ -55,7 +63,7 @@ type WeComAdapter struct {
 	reconnectAttempts int
 	lastReqID         string     // for reply
 	lastResponseURL   string     // for HTTP reply fallback
-	pendingReplies    sync.Map   // reqID -> chan error
+	pendingRequests   sync.Map   // reqID -> chan wecomRequestResult
 	authResult        chan error // channel for first auth result
 	authReqID         string     // req_id of the pending auth request
 }
@@ -139,7 +147,7 @@ func (a *WeComAdapter) readMessagesUntilAuth(ctx context.Context) {
 			return
 		}
 
-		conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(wecomRequestTimeout))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			slog.Warn("[wecom] read error during auth", "error", err)
@@ -271,6 +279,40 @@ type WeComAuthBody struct {
 	Secret string `json:"secret"`
 }
 
+type wecomRequestResult struct {
+	frame WeComFrame
+	err   error
+}
+
+type wecomPreparedMessage struct {
+	MsgType      string
+	Payload      interface{}
+	MediaID      string
+	MediaPath    string
+	MediaURL     string
+	UploadName   string
+	VideoOptions *wecomVideoOptions
+}
+
+type wecomVideoOptions struct {
+	Title       string
+	Description string
+}
+
+type wecomUploadMediaOptions struct {
+	Type     string
+	Filename string
+}
+
+type wecomUploadInitResult struct {
+	UploadID string `json:"upload_id"`
+}
+
+type wecomUploadFinishResult struct {
+	Type    string `json:"type"`
+	MediaID string `json:"media_id"`
+}
+
 func (a *WeComAdapter) sendAuth() error {
 	authBody, _ := json.Marshal(WeComAuthBody{
 		BotID:  a.config.AppID,
@@ -305,6 +347,11 @@ func (a *WeComAdapter) sendFrame(frame WeComFrame) error {
 		return err
 	}
 
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		slog.Warn("[wecom] SetWriteDeadline failed", "error", err)
+	}
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
@@ -329,6 +376,9 @@ func (a *WeComAdapter) runLoop(ctx context.Context) error {
 				return
 			}
 
+			if err := conn.SetReadDeadline(time.Now().Add(wecomReadTimeout)); err != nil {
+				slog.Warn("[wecom] SetReadDeadline failed", "error", err)
+			}
 			slog.Info("[wecom] waiting for next message...")
 			_, message, err := conn.ReadMessage()
 			if err != nil {
@@ -465,9 +515,13 @@ func (a *WeComAdapter) handleMessage(data []byte) {
 		}
 	}
 
-	// Check if this is a reply ack (req_id exists in pendingReplies)
-	if _, exists := a.pendingReplies.Load(reqID); exists {
-		a.handleReplyAck(frame)
+	// Check if this is a pending request ack (reply/upload/send ack)
+	if ch, exists := a.pendingRequests.LoadAndDelete(reqID); exists {
+		resultCh := ch.(chan wecomRequestResult)
+		select {
+		case resultCh <- wecomRequestResult{frame: frame}:
+		default:
+		}
 		return
 	}
 
@@ -601,7 +655,7 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 		"body":         body,
 	})
 
-	a.handler(IncomingMessage{
+	msg := IncomingMessage{
 		ChannelID:  a.channelID,
 		Platform:   PlatformWeCom,
 		MessageID:  messageID,
@@ -613,7 +667,10 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 		Content:    content,
 		MsgType:    msgType,
 		RawData:    string(rawData),
-	})
+	}
+
+	// Keep the WebSocket reader responsive while downstream processing runs.
+	go a.handler(msg)
 }
 
 func (a *WeComAdapter) handleEvent(frame WeComFrame) {
@@ -624,25 +681,6 @@ func (a *WeComAdapter) handleEvent(frame WeComFrame) {
 
 	if body.Event != nil {
 		slog.Info("[wecom] received event", "event_type", body.Event.EventType)
-	}
-}
-
-func (a *WeComAdapter) handleReplyAck(frame WeComFrame) {
-	if frame.Headers == nil {
-		return
-	}
-	reqID, ok := frame.Headers["req_id"].(string)
-	if !ok {
-		return
-	}
-
-	if ch, loaded := a.pendingReplies.LoadAndDelete(reqID); loaded {
-		errCh := ch.(chan error)
-		if frame.ErrCode != 0 {
-			errCh <- fmt.Errorf("reply failed: errcode=%d errmsg=%s", frame.ErrCode, frame.ErrMsg)
-		} else {
-			errCh <- nil
-		}
 	}
 }
 
@@ -660,6 +698,7 @@ func (a *WeComAdapter) Disconnect(ctx context.Context) error {
 		a.conn = nil
 	}
 
+	a.clearPendingRequests(fmt.Errorf("wecom connection closed"))
 	a.connected.Store(false)
 	a.handler = nil
 	return nil
@@ -678,20 +717,41 @@ func (a *WeComAdapter) SendMessage(ctx context.Context, targetID string, content
 	reqID := a.lastReqID
 	a.mu.Unlock()
 
-	msgType, payload, err := buildWeComOutgoingMessage(content)
+	msg, err := buildWeComOutgoingMessage(content)
 	if err != nil {
 		return err
 	}
 
+	if isWeComMediaType(msg.MsgType) {
+		mediaID, err := a.resolveWeComMediaID(ctx, msg)
+		if err != nil {
+			return err
+		}
+
+		if reqID != "" {
+			return a.replyMedia(ctx, reqID, msg.MsgType, mediaID, msg.VideoOptions)
+		}
+
+		if responseURL != "" {
+			payload, err := buildWeComMediaPayload(msg.MsgType, mediaID, msg.VideoOptions)
+			if err != nil {
+				return err
+			}
+			return a.sendViaHTTP(ctx, responseURL, msg.MsgType, payload)
+		}
+
+		return a.sendMediaMessage(ctx, targetID, msg.MsgType, mediaID, msg.VideoOptions)
+	}
+
 	if responseURL != "" {
-		return a.sendViaHTTP(ctx, responseURL, msgType, payload)
+		return a.sendViaHTTP(ctx, responseURL, msg.MsgType, msg.Payload)
 	}
 
 	if reqID != "" {
-		return a.sendViaWS(ctx, reqID, targetID, msgType, payload)
+		return a.sendViaWS(ctx, reqID, targetID, msg.MsgType, msg.Payload)
 	}
 
-	return a.sendDirectMessage(ctx, targetID, msgType, payload)
+	return a.sendDirectMessage(ctx, targetID, msg.MsgType, msg.Payload)
 }
 
 func (a *WeComAdapter) sendViaHTTP(ctx context.Context, responseURL string, msgType string, payload interface{}) error {
@@ -742,24 +802,14 @@ func (a *WeComAdapter) sendViaWS(ctx context.Context, reqID string, targetID str
 		Body: bodyData,
 	}
 
-	errCh := make(chan error, 1)
-	a.pendingReplies.Store(reqID, errCh)
-
-	if err := a.sendFrame(frame); err != nil {
-		a.pendingReplies.Delete(reqID)
+	ack, err := a.sendFrameAndWait(ctx, frame, wecomRequestTimeout)
+	if err != nil {
 		return err
 	}
-
-	select {
-	case <-ctx.Done():
-		a.pendingReplies.Delete(reqID)
-		return ctx.Err()
-	case err := <-errCh:
-		return err
-	case <-time.After(wecomRequestTimeout):
-		a.pendingReplies.Delete(reqID)
-		return fmt.Errorf("reply timeout")
+	if ack.ErrCode != 0 {
+		return fmt.Errorf("reply failed: errcode=%d errmsg=%s", ack.ErrCode, ack.ErrMsg)
 	}
+	return nil
 }
 
 func (a *WeComAdapter) sendDirectMessage(ctx context.Context, targetID string, msgType string, payload interface{}) error {
@@ -783,40 +833,78 @@ func (a *WeComAdapter) sendDirectMessage(ctx context.Context, targetID string, m
 }
 
 type wecomOutgoingMessage struct {
-	MsgType  string          `json:"msg_type"`
-	Content  json.RawMessage `json:"content"`
-	Text     string          `json:"text"`
-	Markdown string          `json:"markdown"`
-	FilePath string          `json:"file_path"`
-	FileURL  string          `json:"file_url"`
+	MsgType     string          `json:"msg_type"`
+	Content     json.RawMessage `json:"content"`
+	Text        string          `json:"text"`
+	Markdown    string          `json:"markdown"`
+	FilePath    string          `json:"file_path"`
+	FileName    string          `json:"file_name"`
+	Filename    string          `json:"filename"`
+	FileURL     string          `json:"file_url"`
+	MediaID     string          `json:"media_id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
 }
 
-func buildWeComOutgoingMessage(raw string) (string, interface{}, error) {
+func buildWeComOutgoingMessage(raw string) (wecomPreparedMessage, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return "", nil, fmt.Errorf("wecom message content is empty")
+		return wecomPreparedMessage{}, fmt.Errorf("wecom message content is empty")
 	}
 
 	if !strings.HasPrefix(trimmed, "{") {
-		return "markdown", map[string]string{"content": raw}, nil
+		return wecomPreparedMessage{
+			MsgType: "markdown",
+			Payload: map[string]string{"content": raw},
+		}, nil
 	}
 
 	var payload wecomOutgoingMessage
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
-		return "markdown", map[string]string{"content": raw}, nil
+		return wecomPreparedMessage{
+			MsgType: "markdown",
+			Payload: map[string]string{"content": raw},
+		}, nil
 	}
 
-	msgType := strings.TrimSpace(payload.MsgType)
+	msgType := strings.TrimSpace(strings.ToLower(payload.MsgType))
 	if msgType == "" {
-		return "markdown", map[string]string{"content": raw}, nil
+		return wecomPreparedMessage{
+			MsgType: "markdown",
+			Payload: map[string]string{"content": raw},
+		}, nil
 	}
 
 	if len(payload.Content) > 0 && string(payload.Content) != "null" {
+		if isWeComMediaType(msgType) {
+			mediaContent, err := parseWeComMediaContent(payload.Content, msgType)
+			if err != nil {
+				return wecomPreparedMessage{}, err
+			}
+			if mediaContent.MediaID == "" && mediaContent.MediaPath == "" && mediaContent.MediaURL == "" {
+				return wecomPreparedMessage{}, fmt.Errorf("wecom %s message requires media_id, file_path, or file_url", msgType)
+			}
+			return wecomPreparedMessage{
+				MsgType:      msgType,
+				MediaID:      mediaContent.MediaID,
+				MediaPath:    mediaContent.MediaPath,
+				MediaURL:     mediaContent.MediaURL,
+				UploadName:   mediaContent.UploadName,
+				VideoOptions: mediaContent.VideoOptions,
+			}, nil
+		}
+
 		var contentMap map[string]interface{}
 		if err := json.Unmarshal(payload.Content, &contentMap); err == nil {
-			return msgType, contentMap, nil
+			return wecomPreparedMessage{
+				MsgType: msgType,
+				Payload: contentMap,
+			}, nil
 		}
-		return msgType, payload.Content, nil
+		return wecomPreparedMessage{
+			MsgType: msgType,
+			Payload: payload.Content,
+		}, nil
 	}
 
 	switch msgType {
@@ -825,7 +913,10 @@ func buildWeComOutgoingMessage(raw string) (string, interface{}, error) {
 		if text == "" {
 			text = raw
 		}
-		return "text", map[string]string{"content": text}, nil
+		return wecomPreparedMessage{
+			MsgType: "text",
+			Payload: map[string]string{"content": text},
+		}, nil
 	case "markdown":
 		md := payload.Markdown
 		if md == "" {
@@ -834,9 +925,30 @@ func buildWeComOutgoingMessage(raw string) (string, interface{}, error) {
 		if md == "" {
 			md = raw
 		}
-		return "markdown", map[string]string{"content": md}, nil
+		return wecomPreparedMessage{
+			MsgType: "markdown",
+			Payload: map[string]string{"content": md},
+		}, nil
+	case "image", "file", "voice", "video":
+		mediaID := strings.TrimSpace(payload.MediaID)
+		filePath := strings.TrimSpace(payload.FilePath)
+		fileURL := strings.TrimSpace(payload.FileURL)
+		if mediaID == "" && filePath == "" && fileURL == "" {
+			return wecomPreparedMessage{}, fmt.Errorf("wecom %s message requires media_id, file_path, or file_url", msgType)
+		}
+		return wecomPreparedMessage{
+			MsgType:      msgType,
+			MediaID:      mediaID,
+			MediaPath:    filePath,
+			MediaURL:     fileURL,
+			UploadName:   firstNonEmpty(strings.TrimSpace(payload.FileName), strings.TrimSpace(payload.Filename)),
+			VideoOptions: buildWeComVideoOptions(payload.Title, payload.Description),
+		}, nil
 	default:
-		return msgType, map[string]string{"content": raw}, nil
+		return wecomPreparedMessage{
+			MsgType: msgType,
+			Payload: map[string]string{"content": raw},
+		}, nil
 	}
 }
 
@@ -923,11 +1035,422 @@ func pkcs7Unpad(data []byte) []byte {
 	return data[:len(data)-padding]
 }
 
+func (a *WeComAdapter) sendFrameAndWait(ctx context.Context, frame WeComFrame, timeout time.Duration) (WeComFrame, error) {
+	reqID := wecomFrameReqID(frame.Headers)
+	if reqID == "" {
+		return WeComFrame{}, fmt.Errorf("wecom frame req_id is required")
+	}
+	cmd := strings.TrimSpace(frame.Cmd)
+
+	resultCh := make(chan wecomRequestResult, 1)
+	if _, loaded := a.pendingRequests.LoadOrStore(reqID, resultCh); loaded {
+		return WeComFrame{}, fmt.Errorf("wecom request already pending for req_id %s", reqID)
+	}
+
+	if err := a.sendFrame(frame); err != nil {
+		a.pendingRequests.Delete(reqID)
+		return WeComFrame{}, err
+	}
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		a.pendingRequests.Delete(reqID)
+		return WeComFrame{}, ctx.Err()
+	case result := <-resultCh:
+		if result.err != nil {
+			return WeComFrame{}, result.err
+		}
+		return result.frame, nil
+	case <-timer.C:
+		a.pendingRequests.Delete(reqID)
+		return WeComFrame{}, fmt.Errorf("wecom request timeout: cmd=%s req_id=%s timeout=%s", cmd, reqID, timeout)
+	}
+}
+
+func (a *WeComAdapter) clearPendingRequests(err error) {
+	a.pendingRequests.Range(func(key, value interface{}) bool {
+		ch, ok := value.(chan wecomRequestResult)
+		if ok {
+			select {
+			case ch <- wecomRequestResult{err: err}:
+			default:
+			}
+		}
+		a.pendingRequests.Delete(key)
+		return true
+	})
+}
+
+func (a *WeComAdapter) resolveWeComMediaID(ctx context.Context, msg wecomPreparedMessage) (string, error) {
+	if msg.MediaID != "" {
+		return msg.MediaID, nil
+	}
+
+	var (
+		fileBuffer []byte
+		filename   string
+		err        error
+	)
+
+	switch {
+	case msg.MediaPath != "":
+		fileBuffer, err = os.ReadFile(msg.MediaPath)
+		if err != nil {
+			return "", fmt.Errorf("read wecom media file: %w", err)
+		}
+		filename = filepath.Base(msg.MediaPath)
+	case msg.MediaURL != "":
+		fileBuffer, filename, err = a.downloadRemoteMedia(ctx, msg.MediaURL)
+		if err != nil {
+			return "", fmt.Errorf("download wecom media url: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("wecom %s message requires media_id, file_path, or file_url", msg.MsgType)
+	}
+
+	if msg.UploadName != "" {
+		filename = msg.UploadName
+	}
+	if filename == "" {
+		filename = "media"
+	}
+
+	return a.uploadMedia(ctx, fileBuffer, wecomUploadMediaOptions{
+		Type:     msg.MsgType,
+		Filename: filename,
+	})
+}
+
+func (a *WeComAdapter) uploadMedia(ctx context.Context, fileBuffer []byte, options wecomUploadMediaOptions) (string, error) {
+	mediaType := strings.TrimSpace(strings.ToLower(options.Type))
+	if !isWeComMediaType(mediaType) {
+		return "", fmt.Errorf("unsupported wecom media type: %s", options.Type)
+	}
+	if len(fileBuffer) == 0 {
+		return "", fmt.Errorf("wecom upload media: file is empty")
+	}
+
+	filename := strings.TrimSpace(options.Filename)
+	if filename == "" {
+		filename = "media"
+	}
+
+	totalSize := len(fileBuffer)
+	totalChunks := (totalSize + wecomUploadChunkSize - 1) / wecomUploadChunkSize
+	if totalChunks > wecomUploadMaxChunks {
+		return "", fmt.Errorf("wecom upload media: file too large (%d chunks > %d)", totalChunks, wecomUploadMaxChunks)
+	}
+
+	md5sum := md5.Sum(fileBuffer)
+	initBody, err := json.Marshal(map[string]interface{}{
+		"type":         mediaType,
+		"filename":     filename,
+		"total_size":   totalSize,
+		"total_chunks": totalChunks,
+		"md5":          fmt.Sprintf("%x", md5sum),
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal wecom upload init body: %w", err)
+	}
+
+	initFrame := WeComFrame{
+		Cmd: "aibot_upload_media_init",
+		Headers: map[string]interface{}{
+			"req_id": generateReqID("aibot_upload_media_init"),
+		},
+		Body: initBody,
+	}
+
+	initAck, err := a.sendFrameAndWait(ctx, initFrame, wecomUploadAckTimeout)
+	if err != nil {
+		return "", fmt.Errorf("wecom upload media init: %w", err)
+	}
+	if initAck.ErrCode != 0 {
+		return "", fmt.Errorf("wecom upload media init failed: errcode=%d errmsg=%s", initAck.ErrCode, initAck.ErrMsg)
+	}
+
+	var initResult wecomUploadInitResult
+	if err := json.Unmarshal(initAck.Body, &initResult); err != nil {
+		return "", fmt.Errorf("parse wecom upload init response: %w", err)
+	}
+	if initResult.UploadID == "" {
+		return "", fmt.Errorf("wecom upload media init failed: empty upload_id")
+	}
+
+	for chunkIndex := 0; chunkIndex < totalChunks; chunkIndex++ {
+		start := chunkIndex * wecomUploadChunkSize
+		end := start + wecomUploadChunkSize
+		if end > totalSize {
+			end = totalSize
+		}
+
+		base64Data := base64.StdEncoding.EncodeToString(fileBuffer[start:end])
+		var chunkErr error
+
+		for attempt := 0; attempt <= wecomUploadChunkRetry; attempt++ {
+			chunkBody, err := json.Marshal(map[string]interface{}{
+				"upload_id":   initResult.UploadID,
+				"chunk_index": chunkIndex,
+				"base64_data": base64Data,
+			})
+			if err != nil {
+				return "", fmt.Errorf("marshal wecom upload chunk body: %w", err)
+			}
+
+			chunkFrame := WeComFrame{
+				Cmd: "aibot_upload_media_chunk",
+				Headers: map[string]interface{}{
+					"req_id": generateReqID("aibot_upload_media_chunk"),
+				},
+				Body: chunkBody,
+			}
+
+			chunkAck, err := a.sendFrameAndWait(ctx, chunkFrame, wecomUploadAckTimeout)
+			if err == nil && chunkAck.ErrCode == 0 {
+				chunkErr = nil
+				break
+			}
+
+			if err != nil {
+				chunkErr = err
+			} else {
+				chunkErr = fmt.Errorf("errcode=%d errmsg=%s", chunkAck.ErrCode, chunkAck.ErrMsg)
+			}
+
+			if attempt == wecomUploadChunkRetry {
+				break
+			}
+
+			delay := time.Duration(attempt+1) * 500 * time.Millisecond
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		if chunkErr != nil {
+			return "", fmt.Errorf("wecom upload media chunk %d failed: %w", chunkIndex, chunkErr)
+		}
+	}
+
+	finishBody, err := json.Marshal(map[string]interface{}{
+		"upload_id": initResult.UploadID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal wecom upload finish body: %w", err)
+	}
+
+	finishFrame := WeComFrame{
+		Cmd: "aibot_upload_media_finish",
+		Headers: map[string]interface{}{
+			"req_id": generateReqID("aibot_upload_media_finish"),
+		},
+		Body: finishBody,
+	}
+
+	finishAck, err := a.sendFrameAndWait(ctx, finishFrame, wecomUploadAckTimeout)
+	if err != nil {
+		return "", fmt.Errorf("wecom upload media finish: %w", err)
+	}
+	if finishAck.ErrCode != 0 {
+		return "", fmt.Errorf("wecom upload media finish failed: errcode=%d errmsg=%s", finishAck.ErrCode, finishAck.ErrMsg)
+	}
+
+	var finishResult wecomUploadFinishResult
+	if err := json.Unmarshal(finishAck.Body, &finishResult); err != nil {
+		return "", fmt.Errorf("parse wecom upload finish response: %w", err)
+	}
+	if finishResult.MediaID == "" {
+		return "", fmt.Errorf("wecom upload media finish failed: empty media_id")
+	}
+
+	return finishResult.MediaID, nil
+}
+
+func (a *WeComAdapter) replyMedia(ctx context.Context, reqID string, mediaType string, mediaID string, videoOptions *wecomVideoOptions) error {
+	payload, err := buildWeComMediaPayload(mediaType, mediaID, videoOptions)
+	if err != nil {
+		return err
+	}
+	return a.sendViaWS(ctx, reqID, "", mediaType, payload)
+}
+
+func (a *WeComAdapter) sendMediaMessage(ctx context.Context, targetID string, mediaType string, mediaID string, videoOptions *wecomVideoOptions) error {
+	payload, err := buildWeComMediaPayload(mediaType, mediaID, videoOptions)
+	if err != nil {
+		return err
+	}
+	return a.sendDirectMessage(ctx, targetID, mediaType, payload)
+}
+
+func buildWeComMediaPayload(mediaType string, mediaID string, videoOptions *wecomVideoOptions) (map[string]interface{}, error) {
+	mediaType = strings.TrimSpace(strings.ToLower(mediaType))
+	if !isWeComMediaType(mediaType) {
+		return nil, fmt.Errorf("unsupported wecom media type: %s", mediaType)
+	}
+	mediaID = strings.TrimSpace(mediaID)
+	if mediaID == "" {
+		return nil, fmt.Errorf("wecom %s message requires media_id", mediaType)
+	}
+
+	payload := map[string]interface{}{
+		"media_id": mediaID,
+	}
+	if mediaType == "video" && videoOptions != nil {
+		if title := strings.TrimSpace(videoOptions.Title); title != "" {
+			payload["title"] = truncateUTF8Bytes(title, 128)
+		}
+		if description := strings.TrimSpace(videoOptions.Description); description != "" {
+			payload["description"] = truncateUTF8Bytes(description, 512)
+		}
+	}
+
+	return payload, nil
+}
+
+func parseWeComMediaContent(content json.RawMessage, mediaType string) (wecomPreparedMessage, error) {
+	var contentMap map[string]interface{}
+	if err := json.Unmarshal(content, &contentMap); err != nil {
+		return wecomPreparedMessage{}, fmt.Errorf("wecom %s content must be a JSON object: %w", mediaType, err)
+	}
+
+	return wecomPreparedMessage{
+		MediaID:      strings.TrimSpace(stringValue(contentMap["media_id"])),
+		MediaPath:    strings.TrimSpace(firstNonEmpty(stringValue(contentMap["file_path"]), stringValue(contentMap["path"]))),
+		MediaURL:     strings.TrimSpace(firstNonEmpty(stringValue(contentMap["file_url"]), stringValue(contentMap["url"]), stringValue(contentMap["image_url"]))),
+		UploadName:   strings.TrimSpace(firstNonEmpty(stringValue(contentMap["file_name"]), stringValue(contentMap["filename"]))),
+		VideoOptions: buildWeComVideoOptions(stringValue(contentMap["title"]), stringValue(contentMap["description"])),
+	}, nil
+}
+
+func (a *WeComAdapter) downloadRemoteMedia(ctx context.Context, mediaURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, "", fmt.Errorf("status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	buffer, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", fmt.Errorf("read remote media body: %w", err)
+	}
+
+	filename := filenameFromResponse(resp)
+	if filename == "" {
+		filename = filepath.Base(strings.Split(strings.TrimSpace(mediaURL), "?")[0])
+	}
+
+	return buffer, filename, nil
+}
+
+func filenameFromResponse(resp *http.Response) string {
+	if resp == nil {
+		return ""
+	}
+
+	cd := resp.Header.Get("Content-Disposition")
+	if cd != "" {
+		if idx := strings.Index(strings.ToLower(cd), "filename="); idx != -1 {
+			filename := strings.TrimSpace(cd[idx+len("filename="):])
+			filename = strings.Trim(filename, "\"'")
+			if filename != "" {
+				return filename
+			}
+		}
+	}
+
+	return ""
+}
+
+func buildWeComVideoOptions(title string, description string) *wecomVideoOptions {
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	if title == "" && description == "" {
+		return nil
+	}
+	return &wecomVideoOptions{
+		Title:       title,
+		Description: description,
+	}
+}
+
+func isWeComMediaType(msgType string) bool {
+	switch strings.TrimSpace(strings.ToLower(msgType)) {
+	case "image", "file", "voice", "video":
+		return true
+	default:
+		return false
+	}
+}
+
+func wecomFrameReqID(headers map[string]interface{}) string {
+	if headers == nil {
+		return ""
+	}
+	reqID, _ := headers["req_id"].(string)
+	return reqID
+}
+
+func stringValue(v interface{}) string {
+	s, _ := v.(string)
+	return s
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func truncateUTF8Bytes(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+
+	runes := []rune(s)
+	for len(runes) > 0 {
+		runes = runes[:len(runes)-1]
+		if len([]byte(string(runes))) <= maxBytes {
+			return string(runes)
+		}
+	}
+	return ""
+}
+
 // UploadFile uploads a local file to WeCom and returns the media_id.
-// WeCom AI Bot SDK doesn't have direct upload API; files are sent via markdown image URL or file message.
-// This is a placeholder for future media upload API if available.
 func (a *WeComAdapter) UploadFile(ctx context.Context, filePath string) (string, error) {
-	return "", fmt.Errorf("wecom aibot does not support direct file upload, use file URL instead")
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" {
+		return "", fmt.Errorf("wecom upload file path is empty")
+	}
+
+	fileBuffer, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read wecom upload file: %w", err)
+	}
+
+	return a.uploadMedia(ctx, fileBuffer, wecomUploadMediaOptions{
+		Type:     "file",
+		Filename: filepath.Base(filePath),
+	})
 }
 
 // SendStreamMessage sends a streaming message to WeCom.
@@ -951,19 +1474,32 @@ func (a *WeComAdapter) SendStreamMessage(ctx context.Context, reqID string, stre
 	return a.sendFrame(frame)
 }
 
-// SendImage sends an image URL to WeCom as markdown.
+// SendImage uploads an image URL to WeCom and sends it as image media.
 func (a *WeComAdapter) SendImage(ctx context.Context, targetID string, imageURL string) error {
-	content := fmt.Sprintf("![image](%s)", imageURL)
-	return a.SendMessage(ctx, targetID, content)
+	contentBytes, err := json.Marshal(map[string]string{
+		"msg_type": "image",
+		"file_url": strings.TrimSpace(imageURL),
+	})
+	if err != nil {
+		return fmt.Errorf("marshal wecom image payload: %w", err)
+	}
+	return a.SendMessage(ctx, targetID, string(contentBytes))
 }
 
-// SendFile sends a file URL to WeCom as markdown link.
+// SendFile uploads a file URL to WeCom and sends it as file media.
 func (a *WeComAdapter) SendFile(ctx context.Context, targetID string, fileURL string, fileName string) error {
-	if fileName == "" {
-		fileName = filepath.Base(fileURL)
+	payload := map[string]string{
+		"msg_type": "file",
+		"file_url": strings.TrimSpace(fileURL),
 	}
-	content := fmt.Sprintf("[%s](%s)", fileName, fileURL)
-	return a.SendMessage(ctx, targetID, content)
+	if strings.TrimSpace(fileName) != "" {
+		payload["file_name"] = strings.TrimSpace(fileName)
+	}
+	contentBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal wecom file payload: %w", err)
+	}
+	return a.SendMessage(ctx, targetID, string(contentBytes))
 }
 
 var reqIDCounter atomic.Int64

@@ -697,7 +697,7 @@ func handleChannelMessage(
 			return
 		}
 
-		replyCtx, replyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		replyCtx, replyCancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer replyCancel()
 
 		if err := sendChannelReply(replyCtx, adapter, msg, replyTarget, text); err != nil {
