@@ -3,7 +3,10 @@ package embedding
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
+
+	"chatclaw/internal/errs"
 
 	ollamaembed "github.com/cloudwego/eino-ext/components/embedding/ollama"
 	openaiembed "github.com/cloudwego/eino-ext/components/embedding/openai"
@@ -95,12 +98,14 @@ func newAzureEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embed
 	}
 	if cfg.ExtraConfig != "" {
 		if err := json.Unmarshal([]byte(cfg.ExtraConfig), &extraConfig); err != nil {
-			// 解析失败时使用默认 API 版本
-			extraConfig.APIVersion = "2023-05-15"
+			return nil, errs.Wrap("error.chat_invalid_extra_config", err)
 		}
 	}
+	if cfg.APIEndpoint == "" {
+		return nil, fmt.Errorf("azure api endpoint is required")
+	}
 	if extraConfig.APIVersion == "" {
-		extraConfig.APIVersion = "2023-05-15"
+		return nil, fmt.Errorf("azure api version is required")
 	}
 
 	config := &openaiembed.EmbeddingConfig{

@@ -52,6 +52,12 @@ func (s *ChatService) runChatModeGeneration(ctx context.Context, db *bun.DB, con
 	}
 	dbCancel()
 
+	gc.emit(EventChatUserMessage, ChatUserMessageEvent{
+		ChatEvent:  gc.chatEvent(userMsg.ID),
+		Content:    userContent,
+		ImagesJSON: imagesJSON,
+	})
+
 	s.runChatModeCore(ctx, gc, userContent)
 }
 

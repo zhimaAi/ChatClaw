@@ -109,6 +109,12 @@ func (s *ChatService) runGeneration(ctx context.Context, db *bun.DB, conversatio
 	}
 	dbCancel()
 
+	gc.emit(EventChatUserMessage, ChatUserMessageEvent{
+		ChatEvent:  gc.chatEvent(userMsg.ID),
+		Content:    userContent,
+		ImagesJSON: imagesJSON,
+	})
+
 	s.runGenerationCore(ctx, gc)
 }
 

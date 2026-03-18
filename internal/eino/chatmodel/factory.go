@@ -87,7 +87,7 @@ func newAzureChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMode
 		return nil, fmt.Errorf("azure api endpoint is required")
 	}
 	if extraConfig.APIVersion == "" {
-		extraConfig.APIVersion = "2023-05-15"
+		return nil, fmt.Errorf("azure api version is required")
 	}
 
 	config := &openai.ChatModelConfig{

@@ -315,6 +315,11 @@ func (s *AssistantMCPService) AddTools(input AddToolsInput) (*AssistantMCP, erro
 	}
 
 	existing := item.ParseTools()
+	selectedMap := make(map[int64]bool, len(input.AgentIDs))
+	for _, id := range input.AgentIDs {
+		selectedMap[id] = true
+	}
+
 	existingMap := make(map[int64]bool)
 	for _, t := range existing {
 		existingMap[t.AgentID] = true
@@ -337,9 +342,21 @@ func (s *AssistantMCPService) AddTools(input AddToolsInput) (*AssistantMCP, erro
 		}
 	}
 
+	// Sync the selected agents set instead of only appending new tools.
+	filtered := make([]ToolEntry, 0, len(existing))
 	usedNames := make(map[string]bool)
 	for _, t := range existing {
+		if !selectedMap[t.AgentID] {
+			continue
+		}
+		filtered = append(filtered, t)
 		usedNames[t.ToolName] = true
+	}
+	existing = filtered
+
+	existingMap = make(map[int64]bool, len(existing))
+	for _, t := range existing {
+		existingMap[t.AgentID] = true
 	}
 
 	for _, agent := range agents {
@@ -458,6 +475,9 @@ func (s *AssistantMCPService) RemoveTool(input RemoveToolInput) (*AssistantMCP, 
 	if input.ID == "" {
 		return nil, errs.New("error.assistant_mcp_id_required")
 	}
+	if input.AgentID == 0 {
+		return nil, errs.New("error.assistant_mcp_tool_not_found")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -469,10 +489,16 @@ func (s *AssistantMCPService) RemoveTool(input RemoveToolInput) (*AssistantMCP, 
 
 	tools := item.ParseTools()
 	filtered := make([]ToolEntry, 0, len(tools))
+	found := false
 	for _, t := range tools {
-		if t.AgentID != input.AgentID {
-			filtered = append(filtered, t)
+		if t.AgentID == input.AgentID {
+			found = true
+			continue
 		}
+		filtered = append(filtered, t)
+	}
+	if !found {
+		return nil, errs.New("error.assistant_mcp_tool_not_found")
 	}
 
 	toolsJSON, _ := json.Marshal(filtered)
@@ -582,13 +608,29 @@ func (s *AssistantMCPService) startServer(item AssistantMCP) error {
 
 	mcpHTTP := mcpserver.NewStreamableHTTPServer(mcpSrv)
 
-	// Wrap with Bearer token auth middleware
 	expectedToken := item.Token
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Mcp-Session-Id")
+		w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if s.app != nil {
+			s.app.Logger.Info("[assistant-mcp] request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
+		}
+
 		if expectedToken != "" {
 			auth := r.Header.Get("Authorization")
 			if auth != "Bearer "+expectedToken {
+				if s.app != nil {
+					s.app.Logger.Warn("[assistant-mcp] unauthorized request", "remote", r.RemoteAddr)
+				}
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -597,7 +639,11 @@ func (s *AssistantMCPService) startServer(item AssistantMCP) error {
 	})
 
 	_, srvCancel := context.WithCancel(context.Background())
-	addr := fmt.Sprintf(":%d", port)
+	listenHost := "127.0.0.1"
+	if define.IsServerMode() {
+		listenHost = "0.0.0.0"
+	}
+	addr := fmt.Sprintf("%s:%d", listenHost, port)
 	httpSrv := &http.Server{Addr: addr, Handler: mux}
 
 	s.servers[item.ID] = &runningServer{
@@ -760,7 +806,7 @@ func (s *AssistantMCPService) GetConnectionInfo(id string) (*ConnectionInfo, err
 		return nil, errs.New("error.assistant_mcp_not_found")
 	}
 
-	host := "localhost"
+	host := "127.0.0.1"
 	if define.IsServerMode() {
 		if ip := getPublicIP(); ip != "" {
 			host = ip
@@ -860,7 +906,7 @@ func generateToken() string {
 }
 
 func findAvailablePort() (int, error) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
@@ -870,7 +916,7 @@ func findAvailablePort() (int, error) {
 }
 
 func isPortAvailable(port int) bool {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return false
 	}

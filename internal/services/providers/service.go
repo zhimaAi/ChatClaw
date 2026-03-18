@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -985,6 +986,18 @@ func (s *ProvidersService) checkAzure(ctx context.Context, input CheckAPIKeyInpu
 				Message: "invalid extra_config: " + err.Error(),
 			}, nil
 		}
+	}
+	if input.APIEndpoint == "" {
+		return &CheckAPIKeyResult{
+			Success: false,
+			Message: fmt.Errorf("azure api endpoint is required").Error(),
+		}, nil
+	}
+	if extraConfig.APIVersion == "" {
+		return &CheckAPIKeyResult{
+			Success: false,
+			Message: fmt.Errorf("azure api version is required").Error(),
+		}, nil
 	}
 
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
