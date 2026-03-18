@@ -254,12 +254,12 @@ async function handleOpenExternalLink(url: string) {
             >{{ t('channels.config.dingtalkPlatformLink') }}</a>
             {{ t('channels.config.dingtalkTipMiddle') }}
             <a
-              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk"
+              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk-robot"
               target="_blank"
               rel="noopener noreferrer"
               class="underline hover:text-primary"
               @click.prevent="
-                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk')
+                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk-robot')
               "
             >{{ t('channels.config.dingtalkGuideLink') }}</a>
             {{ t('channels.config.dingtalkTipSuffix') }}
