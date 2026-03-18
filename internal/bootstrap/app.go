@@ -213,17 +213,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("memory db init: %w", err)
 	}
 
-	// ChatClaw: default enabled, auto-generate API key at startup
-	if err := providers.EnsureChatClawInitialized(); err != nil {
-		app.Logger.Warn("EnsureChatClawInitialized failed (non-fatal)", "error", err)
-	}
-	// ChatClaw: refresh model cache on every app start (add/update/delete). Async, silent; errors only logged.
-	go func() {
-		if err := providers.NewProvidersService(app).SyncChatClawModels(); err != nil {
-			app.Logger.Warn("SyncChatClawModels failed (non-fatal)", "error", err)
-		}
-	}()
-
 	// 初始化设置缓存
 	if err := settings.InitCache(app); err != nil {
 		sqlite.Close()
@@ -251,44 +240,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	}); err != nil {
 		sqlite.Close()
 		return nil, nil, fmt.Errorf("init task manager: %w", err)
-	}
-
-	// ========== ChatClaw embedding 全局设置对齐 ==========
-	// 约束：
-	// - embedding provider/model 来自 ChatClaw 的模型列表（已在启动时 SyncChatClawModels 刷新到本地 models 表）
-	// - embedding dimension 固定为 1024
-	// - 通过 SettingsService.UpdateEmbeddingConfig 更新 settings +（必要时）重建 doc_vec + 提交全量重嵌入任务
-	{
-		db := sqlite.DB()
-		if db != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-
-			var embeddingModelID sql.NullString
-			err := db.NewSelect().
-				Table("models").
-				Column("model_id").
-				Where("provider_id = ?", "chatclaw").
-				Where("type = ?", "embedding").
-				Where("enabled = ?", true).
-				OrderExpr("sort_order ASC").
-				Limit(1).
-				Scan(ctx, &embeddingModelID)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				app.Logger.Warn("query chatclaw embedding model failed (non-fatal)", "error", err)
-			} else if embeddingModelID.Valid && strings.TrimSpace(embeddingModelID.String) != "" {
-				if err := settings.NewSettingsService(app).UpdateEmbeddingConfig(settings.UpdateEmbeddingConfigInput{
-					ProviderID: "chatclaw",
-					ModelID:    embeddingModelID.String,
-					Dimension:  1024,
-				}); err != nil {
-					app.Logger.Warn("sync chatclaw embedding settings failed (non-fatal)", "error", err)
-				}
-			} else {
-				// No embedding models available from ChatClaw cache; keep existing settings.
-				app.Logger.Warn("no chatclaw embedding model found; keep existing embedding settings")
-			}
-		}
 	}
 
 	// ========== 注册应用服务 ==========

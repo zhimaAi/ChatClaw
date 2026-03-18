@@ -20,31 +20,24 @@ type BuiltinModelConfig struct {
 	Capabilities []string // 支持的输入类型: text, image, audio, video, file
 }
 
-// BuiltinProviders 内置供应商列表（chatclaw 默认置顶，将通过接口查询信息）
+// BuiltinProviders 内置供应商列表
 var BuiltinProviders = []BuiltinProviderConfig{
-	{ProviderID: "chatclaw", Name: "ChatClaw", Type: "openai", Icon: "chatclaw", SortOrder: 0, APIEndpoint: ServerURL},
-	{ProviderID: "chatwiki", Name: "Chatwiki", Type: "openai", Icon: "chatclaw", SortOrder: 1, APIEndpoint: ""},
-	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 2, APIEndpoint: "https://api.openai.com/v1"},
-	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 3, APIEndpoint: ""},
-	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 4, APIEndpoint: "https://api.anthropic.com/v1"},
-	{ProviderID: "google", Name: "Google Gemini", Type: "gemini", Icon: "google", SortOrder: 5, APIEndpoint: "https://generativelanguage.googleapis.com"},
-	{ProviderID: "grok", Name: "Grok", Type: "openai", Icon: "grok", SortOrder: 6, APIEndpoint: "https://api.x.ai/v1"},
-	{ProviderID: "deepseek", Name: "DeepSeek", Type: "openai", Icon: "deepseek", SortOrder: 7, APIEndpoint: "https://api.deepseek.com/v1"},
-	{ProviderID: "zhipu", Name: "智谱 GLM", Type: "openai", Icon: "zhipu", SortOrder: 8, APIEndpoint: "https://open.bigmodel.cn/api/paas/v4"},
-	{ProviderID: "qwen", Name: "通义千问", Type: "qwen", Icon: "qwen", SortOrder: 9, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
-	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 10, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
-	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 11, APIEndpoint: "https://qianfan.baidubce.com/v2"},
-	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 12, APIEndpoint: "http://localhost:11434"},
+	{ProviderID: "chatwiki", Name: "Chatwiki", Type: "openai", Icon: "chatclaw", SortOrder: 0, APIEndpoint: ""},
+	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 1, APIEndpoint: "https://api.openai.com/v1"},
+	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 2, APIEndpoint: ""},
+	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 3, APIEndpoint: "https://api.anthropic.com/v1"},
+	{ProviderID: "google", Name: "Google Gemini", Type: "gemini", Icon: "google", SortOrder: 4, APIEndpoint: "https://generativelanguage.googleapis.com"},
+	{ProviderID: "grok", Name: "Grok", Type: "openai", Icon: "grok", SortOrder: 5, APIEndpoint: "https://api.x.ai/v1"},
+	{ProviderID: "deepseek", Name: "DeepSeek", Type: "openai", Icon: "deepseek", SortOrder: 6, APIEndpoint: "https://api.deepseek.com/v1"},
+	{ProviderID: "zhipu", Name: "智谱 GLM", Type: "openai", Icon: "zhipu", SortOrder: 7, APIEndpoint: "https://open.bigmodel.cn/api/paas/v4"},
+	{ProviderID: "qwen", Name: "通义千问", Type: "qwen", Icon: "qwen", SortOrder: 8, APIEndpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 9, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
+	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 10, APIEndpoint: "https://qianfan.baidubce.com/v2"},
+	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
-// BuiltinModels 内置模型列表（初始化时写入 models 表；ChatClaw 默认几条，与本地/服务器常见免费模型一致，后续可由 SyncChatClawModels 增删改）
+// BuiltinModels 内置模型列表（初始化时写入 models 表）
 var BuiltinModels = []BuiltinModelConfig{
-	// ChatClaw（免费模型，初始化即写入；与 custom-model/list 返回的 modelName 一致时可被同步逻辑更新）
-	{ProviderID: "chatclaw", ModelID: "Qwen/Qwen3-8B", Name: "Qwen/Qwen3-8B", Type: "llm", SortOrder: 0, Capabilities: []string{"text", "image"}},
-	{ProviderID: "chatclaw", ModelID: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Type: "llm", SortOrder: 1, Capabilities: []string{"text", "image"}},
-	{ProviderID: "chatclaw", ModelID: "BAAI/bge-m3", Name: "BAAI/bge-m3", Type: "embedding", SortOrder: 0, Capabilities: []string{"text"}},
-	{ProviderID: "chatclaw", ModelID: "BAAI/bge-reranker-v2-m3", Name: "BAAI/bge-reranker-v2-m3", Type: "rerank", SortOrder: 0, Capabilities: []string{"text"}},
-
 	// OpenAI
 	{ProviderID: "openai", ModelID: "gpt-5.4", Name: "GPT-5.4", Type: "llm", SortOrder: 100, Capabilities: []string{"text", "image", "file"}},
 	{ProviderID: "openai", ModelID: "gpt-5.4-pro", Name: "GPT-5.4 Pro", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image", "file"}},
@@ -121,11 +114,7 @@ var BuiltinModels = []BuiltinModelConfig{
 }
 
 // GetBuiltinProviderDefaultEndpoint 获取内置供应商的默认 API 地址
-// ChatClaw 直接使用 ServerURL
 func GetBuiltinProviderDefaultEndpoint(providerID string) (string, bool) {
-	if providerID == "chatclaw" {
-		return ServerURL, true
-	}
 	if providerID == "chatwiki" {
 		return "", true
 	}
