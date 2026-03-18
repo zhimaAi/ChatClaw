@@ -29,6 +29,10 @@ import {
   type ModelCatalog,
   type ModelCatalogItem,
 } from '@bindings/chatclaw/internal/services/chatwiki'
+import {
+  shouldShowChatwikiAccountCard,
+  shouldShowChatwikiCreditsCard,
+} from './chatwikiProviderDetailState'
 
 const props = defineProps<{
   providerWithModels: ProviderWithModels
@@ -68,6 +72,12 @@ const collapsedGroups = ref<Record<string, boolean>>({})
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 
 const isBound = computed(() => !!currentBinding.value && modelCatalog.value?.bound !== false)
+const showAccountCard = computed(() => {
+  return isBound.value && shouldShowChatwikiAccountCard(currentBinding.value)
+})
+const showCreditsCard = computed(() => {
+  return showAccountCard.value && shouldShowChatwikiCreditsCard(currentBinding.value)
+})
 const todayUse = computed(() => extractStatValue(modelCatalog.value, 'today_use'))
 const allSurplus = computed(() => extractStatValue(modelCatalog.value, 'all_surplus'))
 const bindingDisplayName = computed(() => {
@@ -252,6 +262,7 @@ function stopAutoRefresh() {
 function startAutoRefresh() {
   stopAutoRefresh()
   autoRefreshTimer = setInterval(() => {
+    if (!shouldShowChatwikiCreditsCard(currentBinding.value)) return
     void loadCatalog(true, true)
   }, 10_000)
 }
@@ -349,7 +360,7 @@ onBeforeUnmount(() => {
 
       <div class="flex flex-col gap-6">
         <div
-          v-if="isBound"
+          v-if="showAccountCard"
           class="rounded-[28px] bg-card p-6 shadow-sm dark:shadow-none"
         >
           <div class="flex items-start justify-between gap-4">
@@ -367,6 +378,7 @@ onBeforeUnmount(() => {
             </div>
 
             <Button
+              v-if="showCreditsCard"
               size="sm"
               class="h-9 rounded-xl bg-slate-950 px-4 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-white/90"
               :disabled="openingBilling"
@@ -376,7 +388,7 @@ onBeforeUnmount(() => {
             </Button>
           </div>
 
-          <div class="mt-6 grid gap-4 md:grid-cols-2">
+          <div v-if="showCreditsCard" class="mt-6 grid gap-4 md:grid-cols-2">
             <div
               class="bg-background/80 px-6 py-5"
             >
@@ -409,7 +421,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else
+          v-else-if="!isBound"
           class="rounded-[28px] border border-border/60 bg-card p-8 shadow-[0_10px_30px_rgba(15,23,42,0.06)] dark:border-white/10 dark:shadow-none"
         >
           <div class="flex items-center justify-between gap-6">
