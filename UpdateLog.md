@@ -1,5 +1,25 @@
 ## Changelog
 
+### 2026/03/18
+1. **README Refresh (Multi-language)**: Updated README files across multiple languages with new previews, clearer capability descriptions, and consistent image paths/structure.<br/>
+2. **Channel Integrations & Messaging**: Improved messaging flows and guardrails for multiple channels (e.g., QQ config dedup & image sending, WeCom/Feishu streaming output, DingTalk checks and related config updates).<br/>
+3. **Docs/Tooling**: Added `readme-from-docx` skill documentation for syncing README content from Word documents, including image extraction and localization guidelines.<br/>
+
+### 2026/03/17
+1. **Chat File Upload (End-to-End)**: Delivered file attachment support across chat UI and backend services, including type/size validation, message state integration, and consistent handling alongside image attachments.<br/>
+2. **Chat Input UX Upgrade**: Enhanced `ChatInputArea` with a new conversation entry, dropdown integrations, a compact mode selector with icon toggles, and a bottom toolbar for better ergonomics.<br/>
+3. **In-App Selection Context Menu**: Added an in-app text selection popup with actions and an option to disable selection search, with `TextSelectionService` and settings synchronization.<br/>
+4. **MCP Defaults & Reliability**: Enabled MCP by default via SQLite migration and hardened MCP settings flows (tool add/remove state handling, validation, cleanup) to reduce edge-case failures.<br/>
+5. **Model Config Validation**: Strengthened Azure chat/embedding configuration validation (endpoint/version requirements) and refined thinking feature initialization logic for safer defaults.<br/>
+6. **Project Hygiene**: Added `think_docs/` convention + `.gitignore` entry, removed legacy Klingon locale artifacts, and applied small refactors for readability/maintainability (e.g., button handlers).<br/>
+
+### 2026/03/16
+1. **New Style / Knowledge UI Refactor**: Major refactor of `KnowledgePage` folder/library behaviors with debounced expansion, improved folder-tree synchronization, and upgraded team knowledge UI via `TeamFolderCard`/`TeamFileCard` components.<br/>
+2. **Assistant MCP Feature Expansion**: Added an Assistant MCP detail view (edit + tool management) and improved service networking behavior (host binding checks, `127.0.0.1` usage, CORS/OPTIONS handling).<br/>
+3. **i18n Loading Improvements**: Refactored i18n initialization to support async locale message loading and made message typing more flexible for dynamic locale structures.<br/>
+4. **Performance & Build Optimizations**: Improved Vite bundling via manual chunking and async component loading in `App.vue`; added reusable `copyToClipboard` utility; tuned server-mode performance and tokenizer dictionary loading for Chinese segmentation.<br/>
+5. **Build/Dev Workflow Updates**: Updated `development.md` and Dockerfiles for clearer, more reliable build steps (bindings generation, frontend deps), plus backend app init/systray refinements for stability.<br/>
+
 ### 2026/03/13
 1. **Internationalization Overhaul & i18n Skill**: Added `i18n-check` skill, AI-powered translation scripts, and formatting/comparison utilities to auto-fill missing keys across frontend and backend locales, with improved key detection for CJK and multi-script strings.<br/>
 2. **Locale Management Improvements**: Changed default UI language to English, added system locale detection, reworked language options and labels in settings, and cleaned up legacy languages while fixing escape and spacing issues in multiple translations.<br/>
