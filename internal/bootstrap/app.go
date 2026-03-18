@@ -885,9 +885,8 @@ func handleChannelMessage(
 }
 
 type feishuStreamingReplyAdapter interface {
-	SendTextMessage(ctx context.Context, targetID string, text string) (string, error)
-	ReplyMessage(ctx context.Context, replyToMessageID string, content string) (string, error)
-	UpdateTextMessage(ctx context.Context, messageID string, text string) error
+	CreateStreamCardMessage(ctx context.Context, targetID string, replyToMessageID string, placeholder string) (*channels.FeishuStreamCardHandle, error)
+	UpdateStreamCardMessage(ctx context.Context, handle *channels.FeishuStreamCardHandle, text string, finish bool) error
 }
 
 type assistantMessageSnapshot struct {
@@ -968,14 +967,10 @@ func streamFeishuReply(
 	placeholder := i18n.T("channel.feishu_streaming_generating")
 
 	var (
-		streamMessageID string
-		err             error
+		streamHandle *channels.FeishuStreamCardHandle
+		err          error
 	)
-	if msg.MessageID != "" {
-		streamMessageID, err = adapter.ReplyMessage(replyCtx, msg.MessageID, placeholder)
-	} else {
-		streamMessageID, err = adapter.SendTextMessage(replyCtx, replyTarget, placeholder)
-	}
+	streamHandle, err = adapter.CreateStreamCardMessage(replyCtx, replyTarget, msg.MessageID, placeholder)
 	if err != nil {
 		return "", false, err
 	}
@@ -985,7 +980,7 @@ func streamFeishuReply(
 		waitCh <- chatService.WaitForGeneration(conversationID, requestID)
 	}()
 
-	ticker := time.NewTicker(1200 * time.Millisecond)
+	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
 	lastSent := placeholder
@@ -1006,39 +1001,29 @@ func streamFeishuReply(
 				finalResponse = i18n.T("error.channel_ai_reply_empty")
 			}
 
-			if finalResponse != lastSent {
-				updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				updateErr := adapter.UpdateTextMessage(updateCtx, streamMessageID, finalResponse)
-				updateCancel()
-				if updateErr != nil {
-					app.Logger.Error("channel message: final feishu stream update failed", "conv", conversationID, "message_id", streamMessageID, "error", updateErr)
-				}
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			updateErr := adapter.UpdateStreamCardMessage(updateCtx, streamHandle, finalResponse, true)
+			updateCancel()
+			if updateErr != nil {
+				app.Logger.Error("channel message: final feishu stream update failed", "conv", conversationID, "card_id", streamHandle.CardID, "error", updateErr)
 			}
 
 			return finalResponse, true, waitErr
 		case <-ticker.C:
-			pollCtx, pollCancel := context.WithTimeout(context.Background(), 2*time.Second)
-			snapshot, pollErr := fetchLatestAssistantMessage(pollCtx, db, conversationID)
-			pollCancel()
-			if pollErr != nil {
-				if !errors.Is(pollErr, sql.ErrNoRows) {
-					app.Logger.Warn("channel message: poll assistant message failed", "conv", conversationID, "error", pollErr)
-				}
-				continue
-			}
-			if strings.TrimSpace(snapshot.Content) == "" || snapshot.Content == lastSent {
+			currentContent, ok := chatService.GetGenerationContent(conversationID, requestID)
+			if !ok || strings.TrimSpace(currentContent) == "" || currentContent == lastSent {
 				continue
 			}
 
 			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			updateErr := adapter.UpdateTextMessage(updateCtx, streamMessageID, snapshot.Content)
+			updateErr := adapter.UpdateStreamCardMessage(updateCtx, streamHandle, currentContent, false)
 			updateCancel()
 			if updateErr != nil {
-				app.Logger.Warn("channel message: feishu stream update failed", "conv", conversationID, "message_id", streamMessageID, "error", updateErr)
+				app.Logger.Warn("channel message: feishu stream update failed", "conv", conversationID, "card_id", streamHandle.CardID, "error", updateErr)
 				continue
 			}
 
-			lastSent = snapshot.Content
+			lastSent = currentContent
 		}
 	}
 }
