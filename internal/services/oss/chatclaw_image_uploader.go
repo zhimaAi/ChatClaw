@@ -14,42 +14,12 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/sqlite"
+	"chatclaw/internal/services/providers"
 )
-
-// chatClawProviderInfo holds the minimal chatclaw provider fields needed for OSS upload.
-type chatClawProviderInfo struct {
-	APIKey      string
-	APIEndpoint string
-}
-
-// getChatClawProvider reads the chatclaw provider config directly from the sqlite DB.
-func getChatClawProvider(ctx context.Context) (*chatClawProviderInfo, error) {
-	db := sqlite.DB()
-	if db == nil {
-		return nil, fmt.Errorf("sqlite not initialized")
-	}
-	var row struct {
-		APIKey      string `bun:"api_key"`
-		APIEndpoint string `bun:"api_endpoint"`
-	}
-	if err := db.NewSelect().
-		TableExpr("providers").
-		ColumnExpr("api_key, api_endpoint").
-		Where("provider_id = ?", "chatclaw").
-		Limit(1).
-		Scan(ctx, &row); err != nil {
-		return nil, fmt.Errorf("query chatclaw provider: %w", err)
-	}
-	return &chatClawProviderInfo{
-		APIKey:      row.APIKey,
-		APIEndpoint: row.APIEndpoint,
-	}, nil
-}
 
 // UploadImageToChatClawOSS uploads a local image file to the ChatClaw OSS endpoint and returns the public HTTPS URL.
 func UploadImageToChatClawOSS(ctx context.Context, filePath string) (string, error) {
-	provider, err := getChatClawProvider(ctx)
+	provider, err := providers.GetChatClawConfig()
 	if err != nil {
 		return "", fmt.Errorf("get chatclaw provider: %w", err)
 	}
@@ -119,4 +89,3 @@ func UploadImageToChatClawOSS(ctx context.Context, filePath string) (string, err
 
 	return ossURL, nil
 }
-
