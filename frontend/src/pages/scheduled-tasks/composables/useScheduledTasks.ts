@@ -53,16 +53,21 @@ export function useScheduledTasks() {
     createDialogOpen.value = true
   }
 
-  async function openEditDialog(task: ScheduledTask, toForm: (task: ScheduledTask) => ScheduledTaskFormState) {
+  async function openEditDialog(
+    task: ScheduledTask,
+    toForm: (task: ScheduledTask) => ScheduledTaskFormState
+  ) {
     editingTask.value = task
     form.value = toForm(task)
     createDialogOpen.value = true
   }
 
-  async function submitForm(buildPayload: (form: ScheduledTaskFormState) => {
-    create: CreateScheduledTaskInput
-    update: UpdateScheduledTaskInput
-  }) {
+  async function submitForm(
+    buildPayload: (form: ScheduledTaskFormState) => {
+      create: CreateScheduledTaskInput
+      update: UpdateScheduledTaskInput
+    }
+  ) {
     if (saving.value) return
     saving.value = true
     try {

@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_invalid": "工具名稱只能包含英文字母、數字與底線，且必須以字母開頭",
   "error.assistant_mcp_tool_name_required": "必須填寫工具名稱",
   "error.assistant_mcp_tool_not_found": "找不到該工具",
-  "error.assistant_mcp_update_failed": "更新 Assistant MCP 失敗"
+  "error.assistant_mcp_update_failed": "更新 Assistant MCP 失敗",
+  "error.chat_too_many_files": "檔案數量超過限制",
+  "error.chat_file_too_large": "檔案大小超過限制",
+  "error.chat_invalid_file_type": "無效的檔案類型",
+  "error.file_not_found": "找不到檔案"
 }

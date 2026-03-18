@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_invalid": "Ime orodja lahko vsebuje le črke, številke in podčrtaje ter se mora začeti s črko",
   "error.assistant_mcp_tool_name_required": "Ime orodja je obvezno",
   "error.assistant_mcp_tool_not_found": "Orodje ni bilo najdeno",
-  "error.assistant_mcp_update_failed": "Posodobitev Assistant MCP ni uspela"
+  "error.assistant_mcp_update_failed": "Posodobitev Assistant MCP ni uspela",
+  "error.chat_too_many_files": "Število datotek presega omejitev",
+  "error.chat_file_too_large": "Velikost datoteke presega omejitev",
+  "error.chat_invalid_file_type": "Neveljavna vrsta datoteke",
+  "error.file_not_found": "Datoteka ni bila najdena"
 }

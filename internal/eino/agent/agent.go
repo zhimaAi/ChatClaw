@@ -18,6 +18,7 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
+	dingtalktools "chatclaw/internal/eino/tools/im/dingtalk"
 	feishutools "chatclaw/internal/eino/tools/im/feishu"
 	qqtools "chatclaw/internal/eino/tools/im/qq"
 	wecomtools "chatclaw/internal/eino/tools/im/wecom"
@@ -221,6 +222,7 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 	// IM sender tools should be directly available to the lead agent
 	allowedNames[tools.ToolIDFeishuSender] = true
 	allowedNames[tools.ToolIDWeComSender] = true
+	allowedNames[tools.ToolIDDingTalkSender] = true
 	allowedNames[tools.ToolIDQQSender] = true
 
 	// MCP tools (mcp__*) should be directly available to the lead agent
@@ -357,6 +359,11 @@ func buildIMTools(config Config, logger *slog.Logger) []tool.BaseTool {
 		}},
 		{"wecom_sender", func() (tool.BaseTool, error) {
 			return wecomtools.NewWeComSenderTool(&wecomtools.WeComSenderConfig{
+				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
+			})
+		}},
+		{"dingtalk_sender", func() (tool.BaseTool, error) {
+			return dingtalktools.NewDingTalkSenderTool(&dingtalktools.DingTalkSenderConfig{
 				Gateway: config.IMGateway, DefaultChannelID: config.IMDefaultChannelID, DefaultTargetID: config.IMDefaultTargetID,
 			})
 		}},

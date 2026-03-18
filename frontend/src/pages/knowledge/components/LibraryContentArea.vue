@@ -2,7 +2,14 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialogs, Events } from '@wailsio/runtime'
-import { Search, Upload, Plus, ArrowDownNarrowWide, ArrowUpNarrowWide, FolderPlus } from 'lucide-vue-next'
+import {
+  Search,
+  Upload,
+  Plus,
+  ArrowDownNarrowWide,
+  ArrowUpNarrowWide,
+  FolderPlus,
+} from 'lucide-vue-next'
 import IconUploadFile from '@/assets/icons/upload-file.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,10 +49,7 @@ import DeleteFolderDialog from './DeleteFolderDialog.vue'
 import MoveFolderDialog from './MoveFolderDialog.vue'
 import type { Document, DocumentStatus } from './DocumentCard.vue'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
-import {
-  LibraryService,
-  type Folder,
-} from '@bindings/chatclaw/internal/services/library'
+import { LibraryService, type Folder } from '@bindings/chatclaw/internal/services/library'
 import {
   DocumentService,
   type Document as BackendDocument,
@@ -86,6 +90,7 @@ const emit = defineEmits<{
   'folder-created': []
   'folder-updated': []
   'folder-deleted': []
+  'folder-tree-updated': [libraryId: number, folders: Folder[]]
 }>()
 
 const { t } = useI18n()
@@ -126,7 +131,10 @@ const folderToMove = ref<Folder | null>(null)
 const folderMapCache = ref<Map<number, Folder>>(new Map())
 
 // 构建文件夹 Map 缓存（一次性构建，避免重复递归）
-const buildFolderMap = (folders: Folder[], map: Map<number, Folder> = new Map()): Map<number, Folder> => {
+const buildFolderMap = (
+  folders: Folder[],
+  map: Map<number, Folder> = new Map()
+): Map<number, Folder> => {
   for (const folder of folders) {
     map.set(folder.id, folder)
     if (folder.children && folder.children.length > 0) {
@@ -137,9 +145,13 @@ const buildFolderMap = (folders: Folder[], map: Map<number, Folder> = new Map())
 }
 
 // 监听文件夹变化，更新缓存
-watch(folders, (newFolders) => {
-  folderMapCache.value = buildFolderMap(newFolders)
-}, { deep: true })
+watch(
+  folders,
+  (newFolders) => {
+    folderMapCache.value = buildFolderMap(newFolders)
+  },
+  { deep: true }
+)
 
 const isUploading = ref(false)
 const uploadTotal = ref(0)
@@ -153,7 +165,18 @@ const dropTargetRef = ref<HTMLElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 let dragDepth = 0
 
-const supportedUploadExtensions = ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'html', 'htm', 'ofd']
+const supportedUploadExtensions = [
+  'pdf',
+  'doc',
+  'docx',
+  'txt',
+  'md',
+  'csv',
+  'xlsx',
+  'html',
+  'htm',
+  'ofd',
+]
 const desktopUploadPattern = supportedUploadExtensions.map((ext) => `*.${ext}`).join(';')
 const browserUploadAccept = supportedUploadExtensions.map((ext) => `.${ext}`).join(',')
 
@@ -220,7 +243,10 @@ const convertDocument = (doc: BackendDocument): Document => {
 const loadFolders = async () => {
   if (!props.library?.id) return
   try {
+    // 后端已经返回树形结构，前端直接使用
     folders.value = await LibraryService.ListFolders(props.library.id)
+    // 将最新的完整树结构同步给父组件，用于左侧树保持一致
+    emit('folder-tree-updated', props.library.id, folders.value)
     // 每次文件夹结构变化时，同步刷新统计信息，确保"X项"显示准确
     void loadFolderStats()
   } catch (error) {
@@ -266,7 +292,11 @@ const loadMore = async (token?: number) => {
       sort_by: sortBy.value,
       // Root (null) should show only uncategorized (folder_id IS NULL), not documents from subfolders
       folder_id:
-        activeFolderId.value === null ? -1 : activeFolderId.value === -1 ? -1 : activeFolderId.value,
+        activeFolderId.value === null
+          ? -1
+          : activeFolderId.value === -1
+            ? -1
+            : activeFolderId.value,
     })
     if (currentToken !== loadToken) return
 
@@ -357,9 +387,7 @@ const displayFolders = computed(() => {
 const breadcrumbPath = computed(() => {
   if (!props.library?.name) return []
 
-  const path: Array<{ name: string; id: number | null }> = [
-    { name: props.library.name, id: null }
-  ]
+  const path: Array<{ name: string; id: number | null }> = [{ name: props.library.name, id: null }]
 
   // 根目录或未分组：仅显示知识库名
   if (!activeFolderId.value || activeFolderId.value <= 0) {
@@ -386,7 +414,7 @@ const currentBreadcrumbTitle = computed(() => {
   const path = breadcrumbPath.value
   if (path.length === 0) return ''
   if (path.length === 1) return path[0].name
-  return path.map(p => p.name).join(' / ')
+  return path.map((p) => p.name).join(' / ')
 })
 
 // 计算要显示的面包屑项（路径过长时，只显示首尾 + 倒数两级，中间用省略号）
@@ -397,7 +425,13 @@ const visibleBreadcrumbs = computed(() => {
     return path.map((item, idx) => ({ ...item, visible: true, index: idx, isEllipsis: false }))
   }
   // 路径过长：显示首个（库名）+ 省略号 + 倒数第二级 + 最后一级
-  const result: Array<{ name: string; id: number | null; visible: boolean; index: number; isEllipsis: boolean }> = []
+  const result: Array<{
+    name: string
+    id: number | null
+    visible: boolean
+    index: number
+    isEllipsis: boolean
+  }> = []
   const lastIndex = path.length - 1
   const secondLastIndex = path.length - 2
 
@@ -625,7 +659,8 @@ const handleAddDocument = async () => {
       await nextTick()
 
       // 上传文件，传入当前选中的文件夹 ID
-      const folderId = activeFolderId.value && activeFolderId.value > 0 ? activeFolderId.value : null
+      const folderId =
+        activeFolderId.value && activeFolderId.value > 0 ? activeFolderId.value : null
       const uploaded = await DocumentService.UploadDocuments({
         library_id: props.library.id,
         file_paths: result,
@@ -1036,15 +1071,12 @@ onMounted(() => {
 
   // 监听 Wails 原生文件拖拽事件
   if (appStore.isGUIMode) {
-    unsubscribeFileDrop = Events.On(
-      'filedrop:files',
-      (event: { data: { files: string[] } }) => {
-        const files = event.data?.files
-        if (files && files.length > 0) {
-          handleFileDrop(files)
-        }
+    unsubscribeFileDrop = Events.On('filedrop:files', (event: { data: { files: string[] } }) => {
+      const files = event.data?.files
+      if (files && files.length > 0) {
+        handleFileDrop(files)
       }
-    )
+    })
   }
 
   // 单个文档已入库事件（可用于小批量即时显示；大批量仍以 resetAndLoad 为主）
@@ -1061,9 +1093,7 @@ onMounted(() => {
       return
     }
     documents.value.unshift(converted)
-    documents.value.sort((a, b) =>
-      sortBy.value === 'created_asc' ? a.id - b.id : b.id - a.id
-    )
+    documents.value.sort((a, b) => (sortBy.value === 'created_asc' ? a.id - b.id : b.id - a.id))
     if (documents.value.length > PAGE_SIZE) {
       documents.value.length = PAGE_SIZE
     }
@@ -1103,11 +1133,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    ref="dropTargetRef"
-    class="relative flex min-h-0 flex-1 flex-col"
-    data-file-drop-target
-  >
+  <div ref="dropTargetRef" class="relative flex min-h-0 flex-1 flex-col" data-file-drop-target>
     <input
       ref="fileInputRef"
       type="file"
@@ -1115,7 +1141,7 @@ onUnmounted(() => {
       class="hidden"
       :accept="browserUploadAccept"
       @change="handleBrowserFileInputChange"
-    >
+    />
     <!-- 头部区域 -->
     <div class="flex h-12 items-center justify-between gap-4 px-4">
       <div class="flex min-w-0 flex-1 items-center gap-3">
@@ -1125,12 +1151,18 @@ onUnmounted(() => {
           :title="currentBreadcrumbTitle"
         >
           <template v-for="(item, idx) in visibleBreadcrumbs" :key="`${item.id ?? 'root'}-${idx}`">
-            <span v-if="Number(idx) > 0 && !item.isEllipsis" class="shrink-0 px-1 text-muted-foreground/60">/</span>
+            <span
+              v-if="Number(idx) > 0 && !item.isEllipsis"
+              class="shrink-0 px-1 text-muted-foreground/60"
+              >/</span
+            >
             <button
               v-if="!item.isEllipsis"
               type="button"
               class="shrink-0 truncate rounded px-1 py-0.5 text-sm transition-colors hover:bg-accent/50 hover:text-foreground"
-              :class="item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'"
+              :class="
+                item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'
+              "
               :title="item.name"
               @click="
                 () => {
@@ -1241,7 +1273,9 @@ onUnmounted(() => {
 
           <!-- 空状态（没有文件也没有文件夹时才显示） -->
           <div
-            v-else-if="filteredDocuments.length === 0 && (displayFolders.length === 0 || searchQuery.trim())"
+            v-else-if="
+              filteredDocuments.length === 0 && (displayFolders.length === 0 || searchQuery.trim())
+            "
             class="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"
           >
             <Upload class="size-10 opacity-40" />
@@ -1266,11 +1300,11 @@ onUnmounted(() => {
               <!-- 文件夹卡片（仅在显示"全部"时且未搜索时显示） -->
               <FolderCard
                 v-for="folder in displayFolders"
+                v-show="!searchQuery.trim()"
                 :key="`folder-${folder.id}`"
                 :folder="folder"
                 :document-count="getFolderItemCount(folder)"
                 :latest-updated-at="getFolderLatestUpdatedAt(folder)"
-                v-show="!searchQuery.trim()"
                 @click="handleFolderClick"
                 @rename="handleFolderRename"
                 @delete="handleFolderDelete"

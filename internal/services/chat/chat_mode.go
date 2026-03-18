@@ -205,6 +205,10 @@ func (s *ChatService) runChatModeCore(ctx context.Context, gc *generationContext
 				ChatEvent: gc.chatEvent(assistantMsg.ID),
 				Delta:     msg.Content,
 			})
+			// Notify registered streaming sinks (e.g. DingTalk real-time card updates).
+			if cb, ok := s.chunkCallbacks.Load(gc.conversationID); ok {
+				cb.(ChunkCallback)(ss.contentBuilder.String())
+			}
 		}
 
 		if msg.ResponseMeta != nil {

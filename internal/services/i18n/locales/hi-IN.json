@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_invalid": "टूल नाम में केवल अक्षर, अंक और अंडरस्कोर हो सकते हैं, और इसे किसी अक्षर से शुरू होना चाहिए",
   "error.assistant_mcp_tool_name_required": "टूल नाम आवश्यक है",
   "error.assistant_mcp_tool_not_found": "टूल नहीं मिला",
-  "error.assistant_mcp_update_failed": "Assistant MCP अपडेट करना विफल रहा"
+  "error.assistant_mcp_update_failed": "Assistant MCP अपडेट करना विफल रहा",
+  "error.chat_too_many_files": "फ़ाइलों की संख्या सीमा से अधिक है",
+  "error.chat_file_too_large": "फ़ाइल का आकार सीमा से अधिक है",
+  "error.chat_invalid_file_type": "अमान्य फ़ाइल प्रकार",
+  "error.file_not_found": "फ़ाइल नहीं मिली"
 }

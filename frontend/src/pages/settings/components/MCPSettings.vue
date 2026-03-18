@@ -185,19 +185,25 @@ function openEditDialog(server: MCPServer) {
   try {
     const arr = JSON.parse(server.args || '[]')
     if (Array.isArray(arr)) argsText = arr.join('\n')
-  } catch { /* keep empty */ }
+  } catch {
+    /* keep empty */
+  }
 
   let envPairs: Array<{ key: string; value: string }> = []
   try {
     const obj = JSON.parse(server.env || '{}')
     envPairs = Object.entries(obj).map(([k, v]) => ({ key: k, value: String(v) }))
-  } catch { /* keep empty */ }
+  } catch {
+    /* keep empty */
+  }
 
   let headerPairs: Array<{ key: string; value: string }> = []
   try {
     const obj = JSON.parse(server.headers || '{}')
     headerPairs = Object.entries(obj).map(([k, v]) => ({ key: k, value: String(v) }))
-  } catch { /* keep empty */ }
+  } catch {
+    /* keep empty */
+  }
 
   dialogForm.value = {
     id: server.id,
@@ -215,7 +221,10 @@ function openEditDialog(server: MCPServer) {
 }
 
 function parseLinesToArray(text: string): string {
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
   return JSON.stringify(lines)
 }
 
@@ -279,7 +288,7 @@ async function handleDialogSave() {
   } catch (error) {
     toast.error(
       getErrorMessage(error) ||
-        t(dialogMode.value === 'add' ? 'settings.mcp.addFailed' : 'settings.mcp.updateFailed'),
+        t(dialogMode.value === 'add' ? 'settings.mcp.addFailed' : 'settings.mcp.updateFailed')
     )
   } finally {
     dialogSaving.value = false
@@ -344,7 +353,7 @@ async function handleMCPEnabledChange(val: boolean) {
 
 // ==================== Computed ====================
 const dialogTitle = computed(() =>
-  dialogMode.value === 'add' ? t('settings.mcp.addServerTitle') : t('settings.mcp.editServer'),
+  dialogMode.value === 'add' ? t('settings.mcp.addServerTitle') : t('settings.mcp.editServer')
 )
 
 const canSave = computed(() => {
@@ -361,10 +370,25 @@ function serverSummary(server: MCPServer): string {
 }
 
 // ==================== Detail view ====================
-interface MCPToolInfo { name: string; description: string }
-interface MCPPromptInfo { name: string; description: string }
-interface MCPResourceInfo { name: string; uri: string; description: string; mimeType: string }
-interface InspectResult { tools: MCPToolInfo[]; prompts: MCPPromptInfo[]; resources: MCPResourceInfo[] }
+interface MCPToolInfo {
+  name: string
+  description: string
+}
+interface MCPPromptInfo {
+  name: string
+  description: string
+}
+interface MCPResourceInfo {
+  name: string
+  uri: string
+  description: string
+  mimeType: string
+}
+interface InspectResult {
+  tools: MCPToolInfo[]
+  prompts: MCPPromptInfo[]
+  resources: MCPResourceInfo[]
+}
 
 const detailServer = ref<MCPServer | null>(null)
 const detailLoading = ref(false)
@@ -378,7 +402,7 @@ async function showDetail(server: MCPServer) {
   detailLoading.value = true
   detailResult.value = null
   try {
-    detailResult.value = await MCPService.InspectServer(server.id) as InspectResult
+    detailResult.value = (await MCPService.InspectServer(server.id)) as InspectResult
   } catch (error) {
     toast.error(getErrorMessage(error) || t('settings.mcp.inspectFailed'))
   } finally {
@@ -401,16 +425,61 @@ function deleteFromDetail() {
 
 // ==================== Market ====================
 const mcpMarkets = [
-  { name: 'BigModel MCP Market', desc: '精选 MCP，极速接入。', url: 'https://bigmodel.cn/marketplace/index/mcp', logo: logoBigmodel },
-  { name: 'modelscope.cn', desc: '魔塔社区 MCP 服务器。', url: 'https://www.modelscope.cn/mcp', logo: logoModelscope },
-  { name: 'mcp.higress.ai', desc: 'Higress MCP 服务器。', url: 'https://mcp.higress.ai/', logo: logoHigress },
+  {
+    name: 'BigModel MCP Market',
+    desc: '精选 MCP，极速接入。',
+    url: 'https://bigmodel.cn/marketplace/index/mcp',
+    logo: logoBigmodel,
+  },
+  {
+    name: 'modelscope.cn',
+    desc: '魔塔社区 MCP 服务器。',
+    url: 'https://www.modelscope.cn/mcp',
+    logo: logoModelscope,
+  },
+  {
+    name: 'mcp.higress.ai',
+    desc: 'Higress MCP 服务器。',
+    url: 'https://mcp.higress.ai/',
+    logo: logoHigress,
+  },
   { name: 'mcp.so', desc: 'MCP 服务器发现平台。', url: 'https://mcp.so/', logo: logoMcpSo },
-  { name: 'smithery.ai', desc: 'Smithery MCP 工具。', url: 'https://smithery.ai/', logo: logoSmithery },
-  { name: 'glama.ai', desc: 'Glama MCP 服务器目录。', url: 'https://glama.ai/mcp/servers', logo: logoGlama },
-  { name: 'pulsemcp.com', desc: 'Pulse MCP 服务器。', url: 'https://www.pulsemcp.com/', logo: logoPulsemcp },
-  { name: 'mcp.composio.dev', desc: 'Composio MCP 开发工具。', url: 'https://mcp.composio.dev/', logo: logoComposio },
-  { name: 'Model Context Protocol Servers', desc: '官方 MCP 服务器集合。', url: 'https://github.com/modelcontextprotocol/servers', logo: logoGithub },
-  { name: 'awesome MCP Servers', desc: '精选的 MCP 服务器列表。', url: 'https://github.com/punkpeye/awesome-mcp-servers', logo: logoGithub },
+  {
+    name: 'smithery.ai',
+    desc: 'Smithery MCP 工具。',
+    url: 'https://smithery.ai/',
+    logo: logoSmithery,
+  },
+  {
+    name: 'glama.ai',
+    desc: 'Glama MCP 服务器目录。',
+    url: 'https://glama.ai/mcp/servers',
+    logo: logoGlama,
+  },
+  {
+    name: 'pulsemcp.com',
+    desc: 'Pulse MCP 服务器。',
+    url: 'https://www.pulsemcp.com/',
+    logo: logoPulsemcp,
+  },
+  {
+    name: 'mcp.composio.dev',
+    desc: 'Composio MCP 开发工具。',
+    url: 'https://mcp.composio.dev/',
+    logo: logoComposio,
+  },
+  {
+    name: 'Model Context Protocol Servers',
+    desc: '官方 MCP 服务器集合。',
+    url: 'https://github.com/modelcontextprotocol/servers',
+    logo: logoGithub,
+  },
+  {
+    name: 'awesome MCP Servers',
+    desc: '精选的 MCP 服务器列表。',
+    url: 'https://github.com/punkpeye/awesome-mcp-servers',
+    logo: logoGithub,
+  },
 ]
 
 async function openMarketLink(url: string) {
@@ -465,7 +534,12 @@ function openAddAssistantMcpDialog() {
 
 function openEditAssistantMcpDialog(item: AssistantMCP) {
   amcpDialogMode.value = 'edit'
-  amcpDialogForm.value = { id: item.id, name: item.name, description: item.description, port: item.port }
+  amcpDialogForm.value = {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    port: item.port,
+  }
   amcpDialogOpen.value = true
 }
 
@@ -480,10 +554,17 @@ async function handleSaveAssistantMcp() {
   amcpDialogSaving.value = true
   try {
     if (amcpDialogMode.value === 'add') {
-      await AssistantMCPService.Create({ name: form.name.trim(), description: form.description.trim() })
+      await AssistantMCPService.Create({
+        name: form.name.trim(),
+        description: form.description.trim(),
+      })
       toast.success(t('settings.mcp.assistantMcpCreateSuccess'))
     } else {
-      const updated = await AssistantMCPService.Update({ id: form.id, name: form.name.trim(), description: form.description.trim() })
+      const updated = await AssistantMCPService.Update({
+        id: form.id,
+        name: form.name.trim(),
+        description: form.description.trim(),
+      })
       toast.success(t('settings.mcp.assistantMcpUpdateSuccess'))
       if (updated && amcpDetail.value?.id === form.id) {
         amcpDetail.value = updated
@@ -496,7 +577,11 @@ async function handleSaveAssistantMcp() {
   } catch (error) {
     toast.error(
       getErrorMessage(error) ||
-        t(amcpDialogMode.value === 'add' ? 'settings.mcp.assistantMcpCreateFailed' : 'settings.mcp.assistantMcpUpdateFailed'),
+        t(
+          amcpDialogMode.value === 'add'
+            ? 'settings.mcp.assistantMcpCreateFailed'
+            : 'settings.mcp.assistantMcpUpdateFailed'
+        )
     )
   } finally {
     amcpDialogSaving.value = false
@@ -534,7 +619,9 @@ function parseTools(item: AssistantMCP): ToolEntry[] {
   try {
     const parsed = JSON.parse(item.tools || '[]')
     return Array.isArray(parsed) ? parsed : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 // Link agents dialog
@@ -603,7 +690,9 @@ async function showAmcpDetail(item: AssistantMCP) {
   connectionInfo.value = null
   try {
     connectionInfo.value = await AssistantMCPService.GetConnectionInfo(item.id)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function goBackFromAmcpDetail() {
@@ -690,10 +779,10 @@ onUnmounted(() => {
     <div class="flex items-center border-b border-border px-4 py-2">
       <div class="inline-flex rounded-lg bg-muted p-1">
         <button
-          v-for="tab in ([
+          v-for="tab in [
             { key: 'servers' as TopTab, label: t('settings.mcp.tabServers') },
             { key: 'settings' as TopTab, label: t('settings.mcp.tabSettings') },
-          ])"
+          ]"
           :key="tab.key"
           type="button"
           :class="
@@ -701,7 +790,7 @@ onUnmounted(() => {
               'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
               activeTopTab === tab.key
                 ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:text-foreground'
             )
           "
           @click="activeTopTab = tab.key"
@@ -713,7 +802,6 @@ onUnmounted(() => {
 
     <!-- ==================== MCP Tab ==================== -->
     <template v-if="activeTopTab === 'servers'">
-
       <!-- ==================== Detail View ==================== -->
       <template v-if="detailServer">
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -729,11 +817,16 @@ onUnmounted(() => {
           </div>
 
           <!-- Row 2: server info + actions -->
-          <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+          <div
+            class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3"
+          >
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 <span class="text-base font-semibold text-foreground">{{ detailServer.name }}</span>
-                <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                <Badge
+                  variant="secondary"
+                  class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                >
                   <Terminal v-if="detailServer.transport === 'stdio'" class="mr-0.5 size-2.5" />
                   <Globe v-else class="mr-0.5 size-2.5" />
                   {{ detailServer.transport === 'stdio' ? 'stdio' : 'HTTP' }}
@@ -764,18 +857,33 @@ onUnmounted(() => {
           <!-- Row 3: capability tabs -->
           <div class="flex shrink-0 items-center gap-1 border-b border-border px-4 py-2">
             <button
-              v-for="tab in ([
-                { key: 'tools' as DetailTab, label: t('settings.mcp.tabTools'), icon: Wrench, count: detailResult?.tools?.length ?? 0 },
-                { key: 'prompts' as DetailTab, label: t('settings.mcp.tabPrompts'), icon: MessageSquare, count: detailResult?.prompts?.length ?? 0 },
-                { key: 'resources' as DetailTab, label: t('settings.mcp.tabResources'), icon: Database, count: detailResult?.resources?.length ?? 0 },
-              ])"
+              v-for="tab in [
+                {
+                  key: 'tools' as DetailTab,
+                  label: t('settings.mcp.tabTools'),
+                  icon: Wrench,
+                  count: detailResult?.tools?.length ?? 0,
+                },
+                {
+                  key: 'prompts' as DetailTab,
+                  label: t('settings.mcp.tabPrompts'),
+                  icon: MessageSquare,
+                  count: detailResult?.prompts?.length ?? 0,
+                },
+                {
+                  key: 'resources' as DetailTab,
+                  label: t('settings.mcp.tabResources'),
+                  icon: Database,
+                  count: detailResult?.resources?.length ?? 0,
+                },
+              ]"
               :key="tab.key"
               :class="
                 cn(
                   'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                   detailTab === tab.key
                     ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
                 )
               "
               @click="detailTab = tab.key"
@@ -785,12 +893,14 @@ onUnmounted(() => {
               <Badge
                 v-if="detailResult && tab.count > 0"
                 variant="secondary"
-                :class="cn(
-                  'ml-0.5 px-1.5 py-0 text-[10px]',
-                  detailTab === tab.key
-                    ? 'bg-background/25 text-background'
-                    : 'bg-foreground/10 text-muted-foreground',
-                )"
+                :class="
+                  cn(
+                    'ml-0.5 px-1.5 py-0 text-[10px]',
+                    detailTab === tab.key
+                      ? 'bg-background/25 text-background'
+                      : 'bg-foreground/10 text-muted-foreground'
+                  )
+                "
               >
                 {{ tab.count }}
               </Badge>
@@ -806,7 +916,10 @@ onUnmounted(() => {
             <template v-else-if="detailResult">
               <!-- Tools -->
               <div v-if="detailTab === 'tools'">
-                <div v-if="detailResult.tools.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                <div
+                  v-if="detailResult.tools.length === 0"
+                  class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+                >
                   <Wrench class="size-8 opacity-40" />
                   <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
                 </div>
@@ -820,7 +933,10 @@ onUnmounted(() => {
                       <Wrench class="size-3.5 shrink-0 text-muted-foreground" />
                       <span class="text-sm font-medium text-foreground">{{ tool.name }}</span>
                     </div>
-                    <p v-if="tool.description" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                    <p
+                      v-if="tool.description"
+                      class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground"
+                    >
                       {{ tool.description }}
                     </p>
                   </div>
@@ -829,7 +945,10 @@ onUnmounted(() => {
 
               <!-- Prompts -->
               <div v-if="detailTab === 'prompts'">
-                <div v-if="detailResult.prompts.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                <div
+                  v-if="detailResult.prompts.length === 0"
+                  class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+                >
                   <MessageSquare class="size-8 opacity-40" />
                   <span class="text-sm">{{ t('settings.mcp.noPrompts') }}</span>
                 </div>
@@ -843,7 +962,10 @@ onUnmounted(() => {
                       <MessageSquare class="size-3.5 shrink-0 text-muted-foreground" />
                       <span class="text-sm font-medium text-foreground">{{ prompt.name }}</span>
                     </div>
-                    <p v-if="prompt.description" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                    <p
+                      v-if="prompt.description"
+                      class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground"
+                    >
                       {{ prompt.description }}
                     </p>
                   </div>
@@ -852,7 +974,10 @@ onUnmounted(() => {
 
               <!-- Resources -->
               <div v-if="detailTab === 'resources'">
-                <div v-if="detailResult.resources.length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                <div
+                  v-if="detailResult.resources.length === 0"
+                  class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+                >
                   <Database class="size-8 opacity-40" />
                   <span class="text-sm">{{ t('settings.mcp.noResources') }}</span>
                 </div>
@@ -865,12 +990,19 @@ onUnmounted(() => {
                     <div class="flex items-center gap-2">
                       <Database class="size-3.5 shrink-0 text-muted-foreground" />
                       <span class="text-sm font-medium text-foreground">{{ res.name }}</span>
-                      <Badge v-if="res.mimeType" variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                      <Badge
+                        v-if="res.mimeType"
+                        variant="secondary"
+                        class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                      >
                         {{ res.mimeType }}
                       </Badge>
                     </div>
                     <p class="mt-1 pl-5.5 text-xs text-muted-foreground/70">{{ res.uri }}</p>
-                    <p v-if="res.description" class="mt-0.5 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                    <p
+                      v-if="res.description"
+                      class="mt-0.5 pl-5.5 text-xs leading-relaxed text-muted-foreground"
+                    >
                       {{ res.description }}
                     </p>
                   </div>
@@ -887,18 +1019,18 @@ onUnmounted(() => {
         <div class="flex items-center justify-between px-4 py-2">
           <div class="flex gap-1">
             <button
-              v-for="subTab in ([
+              v-for="subTab in [
                 { key: 'installed' as SubTab, label: t('settings.mcp.tabInstalled') },
                 { key: 'assistantMcp' as SubTab, label: t('settings.mcp.tabAssistantMcp') },
                 { key: 'market' as SubTab, label: t('settings.mcp.tabMarket') },
-              ])"
+              ]"
               :key="subTab.key"
               :class="
                 cn(
                   'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                   activeSubTab === subTab.key
                     ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
+                    : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
                 )
               "
               @click="activeSubTab = subTab.key"
@@ -961,13 +1093,18 @@ onUnmounted(() => {
             >
               <div class="flex items-center gap-2">
                 <span class="truncate text-sm font-medium text-foreground">{{ server.name }}</span>
-                <Badge variant="secondary" class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
+                <Badge
+                  variant="secondary"
+                  class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                >
                   <Terminal v-if="server.transport === 'stdio'" class="mr-0.5 size-2.5" />
                   <Globe v-else class="mr-0.5 size-2.5" />
                   {{ server.transport === 'stdio' ? 'stdio' : 'HTTP' }}
                 </Badge>
               </div>
-              <p class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
+              <p
+                class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+              >
                 {{ serverSummary(server) }}
               </p>
               <div class="mt-auto flex items-center justify-between gap-2 pt-3">
@@ -1009,7 +1146,9 @@ onUnmounted(() => {
                 <span class="text-sm font-medium text-foreground">{{ item.name }}</span>
                 <p class="mt-0.5 text-xs text-muted-foreground">{{ item.desc }}</p>
               </div>
-              <ExternalLink class="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+              <ExternalLink
+                class="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+              />
             </div>
           </div>
         </div>
@@ -1028,10 +1167,14 @@ onUnmounted(() => {
                   {{ t('settings.mcp.tabAssistantMcp') }}
                 </button>
               </div>
-              <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+              <div
+                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3"
+              >
                 <div class="min-w-0 flex-1">
                   <span class="text-base font-semibold text-foreground">{{ amcpDetail.name }}</span>
-                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ amcpDetail.description }}</p>
+                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {{ amcpDetail.description }}
+                  </p>
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
                   <button
@@ -1054,18 +1197,36 @@ onUnmounted(() => {
                 <div class="rounded-md border border-border bg-muted/30 p-3">
                   <div class="flex flex-col gap-3 text-xs">
                     <div class="flex flex-col gap-1">
-                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                      <code class="select-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp` }}</code>
+                      <span class="text-muted-foreground">{{
+                        t('settings.mcp.assistantMcpUrl')
+                      }}</span>
+                      <code
+                        class="select-all rounded bg-background px-2 py-1 font-mono text-foreground"
+                        >{{
+                          connectionInfo?.url || `http://localhost:${amcpDetail.port}/mcp`
+                        }}</code
+                      >
                     </div>
                     <div class="flex flex-col gap-1">
-                      <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
-                      <code class="select-all break-all rounded bg-background px-2 py-1 font-mono text-foreground">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
+                      <span class="text-muted-foreground">{{
+                        t('settings.mcp.assistantMcpAuth')
+                      }}</span>
+                      <code
+                        class="select-all break-all rounded bg-background px-2 py-1 font-mono text-foreground"
+                        >{{
+                          connectionInfo?.authorization ||
+                          `Authorization: Bearer ${amcpDetail.token}`
+                        }}</code
+                      >
                     </div>
                   </div>
                 </div>
               </div>
               <div class="flex-1 overflow-auto px-4 py-3">
-                <div v-if="parseTools(amcpDetail).length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+                <div
+                  v-if="parseTools(amcpDetail).length === 0"
+                  class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+                >
                   <Wrench class="size-8 opacity-40" />
                   <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
                 </div>
@@ -1078,7 +1239,9 @@ onUnmounted(() => {
                     <template v-if="editingTool && editingTool.agentId === tool.agentId">
                       <div class="flex flex-col gap-2">
                         <div class="flex flex-col gap-1">
-                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolName') }}</Label>
+                          <Label class="text-xs">{{
+                            t('settings.mcp.assistantMcpToolName')
+                          }}</Label>
                           <Input
                             v-model="editToolForm.toolName"
                             class="font-mono text-xs"
@@ -1086,7 +1249,9 @@ onUnmounted(() => {
                           />
                         </div>
                         <div class="flex flex-col gap-1">
-                          <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
+                          <Label class="text-xs">{{
+                            t('settings.mcp.assistantMcpToolDesc')
+                          }}</Label>
                           <textarea
                             v-model="editToolForm.toolDescription"
                             rows="2"
@@ -1105,7 +1270,10 @@ onUnmounted(() => {
                             :disabled="editToolSaving || !editToolForm.toolName.trim()"
                             @click="handleSaveEditTool"
                           >
-                            <Loader2 v-if="editToolSaving" class="mr-1 inline size-3 animate-spin" />
+                            <Loader2
+                              v-if="editToolSaving"
+                              class="mr-1 inline size-3 animate-spin"
+                            />
                             {{ t('common.save') }}
                           </button>
                         </div>
@@ -1115,7 +1283,9 @@ onUnmounted(() => {
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                           <Wrench class="size-3.5 shrink-0 text-muted-foreground" />
-                          <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
+                          <span class="font-mono text-sm font-medium text-foreground">{{
+                            tool.toolName
+                          }}</span>
                         </div>
                         <div class="flex items-center gap-1">
                           <button
@@ -1132,7 +1302,10 @@ onUnmounted(() => {
                           </button>
                         </div>
                       </div>
-                      <p v-if="tool.toolDescription" class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground">
+                      <p
+                        v-if="tool.toolDescription"
+                        class="mt-1 pl-5.5 text-xs leading-relaxed text-muted-foreground"
+                      >
                         {{ tool.toolDescription }}
                       </p>
                     </template>
@@ -1159,66 +1332,78 @@ onUnmounted(() => {
               <span class="text-xs">{{ t('settings.mcp.assistantMcpNoItemsHint') }}</span>
             </div>
             <div v-else class="space-y-3">
-              <p v-if="!mcpEnabled && assistantMcps.length > 0" class="text-xs text-muted-foreground">
+              <p
+                v-if="!mcpEnabled && assistantMcps.length > 0"
+                class="text-xs text-muted-foreground"
+              >
                 {{ t('assistant.workspaceDrawer.mcpGlobalDisabled') }}
               </p>
               <div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-              <div
-                v-for="amcp in assistantMcps"
-                :key="amcp.id"
-                class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
-                @click="showAmcpDetail(amcp)"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="truncate text-sm font-medium text-foreground">{{ amcp.name }}</span>
-                  <div @click.stop>
-                    <Switch
-                      :model-value="amcp.enabled"
-                      :disabled="!mcpEnabled"
-                      class="scale-90"
-                      @update:model-value="() => handleToggleAssistantMcp(amcp)"
-                    />
+                <div
+                  v-for="amcp in assistantMcps"
+                  :key="amcp.id"
+                  class="group flex cursor-pointer flex-col rounded-lg border border-border p-3.5 transition-colors hover:bg-accent/30 dark:border-white/10"
+                  @click="showAmcpDetail(amcp)"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-sm font-medium text-foreground">{{
+                      amcp.name
+                    }}</span>
+                    <div @click.stop>
+                      <Switch
+                        :model-value="amcp.enabled"
+                        :disabled="!mcpEnabled"
+                        class="scale-90"
+                        @update:model-value="() => handleToggleAssistantMcp(amcp)"
+                      />
+                    </div>
                   </div>
-                </div>
-                <p class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground">
-                  {{ amcp.description }}
-                </p>
-                <div class="mt-auto flex items-center justify-between gap-2 pt-3">
-                  <span v-if="parseTools(amcp).length > 0" class="text-[10px] text-muted-foreground">
-                    {{ t('settings.mcp.assistantMcpToolCount', { count: parseTools(amcp).length }) }}
-                  </span>
-                  <span v-else />
-                  <div @click.stop>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger as-child>
-                        <button
-                          class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        >
-                          <MoreHorizontal class="size-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" class="w-36">
-                        <DropdownMenuItem @click="openLinkAgentsDialog(amcp)">
-                          <Plus class="mr-2 size-3.5" />
-                          {{ t('settings.mcp.assistantMcpAddTool') }}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem @click="openEditAssistantMcpDialog(amcp)">
-                          <Pencil class="mr-2 size-3.5" />
-                          {{ t('settings.mcp.assistantMcpEdit') }}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          class="text-destructive focus:text-destructive"
-                          @click="confirmDeleteAssistantMcp(amcp)"
-                        >
-                          <Trash2 class="mr-2 size-3.5" />
-                          {{ t('settings.mcp.assistantMcpDelete') }}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <p
+                    class="mt-1.5 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+                  >
+                    {{ amcp.description }}
+                  </p>
+                  <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                    <span
+                      v-if="parseTools(amcp).length > 0"
+                      class="text-[10px] text-muted-foreground"
+                    >
+                      {{
+                        t('settings.mcp.assistantMcpToolCount', { count: parseTools(amcp).length })
+                      }}
+                    </span>
+                    <span v-else />
+                    <div @click.stop>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <button
+                            class="inline-flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          >
+                            <MoreHorizontal class="size-3.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-36">
+                          <DropdownMenuItem @click="openLinkAgentsDialog(amcp)">
+                            <Plus class="mr-2 size-3.5" />
+                            {{ t('settings.mcp.assistantMcpAddTool') }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem @click="openEditAssistantMcpDialog(amcp)">
+                            <Pencil class="mr-2 size-3.5" />
+                            {{ t('settings.mcp.assistantMcpEdit') }}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            class="text-destructive focus:text-destructive"
+                            @click="confirmDeleteAssistantMcp(amcp)"
+                          >
+                            <Trash2 class="mr-2 size-3.5" />
+                            {{ t('settings.mcp.assistantMcpDelete') }}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </template>
@@ -1232,14 +1417,15 @@ onUnmounted(() => {
           <SettingsItem>
             <template #label>
               <div class="flex flex-col gap-1">
-                <span class="text-sm font-medium text-foreground">{{ t('settings.mcp.enable') }}</span>
-                <span class="text-xs text-muted-foreground">{{ t('settings.mcp.enableHint') }}</span>
+                <span class="text-sm font-medium text-foreground">{{
+                  t('settings.mcp.enable')
+                }}</span>
+                <span class="text-xs text-muted-foreground">{{
+                  t('settings.mcp.enableHint')
+                }}</span>
               </div>
             </template>
-            <Switch
-              :model-value="mcpEnabled"
-              @update:model-value="handleMCPEnabledChange"
-            />
+            <Switch :model-value="mcpEnabled" @update:model-value="handleMCPEnabledChange" />
           </SettingsItem>
         </SettingsCard>
       </div>
@@ -1267,7 +1453,9 @@ onUnmounted(() => {
           <div class="flex flex-col gap-1.5">
             <div class="flex items-center justify-between">
               <Label class="text-sm">{{ t('settings.mcp.description') }}</Label>
-              <span class="text-[10px] text-muted-foreground">{{ dialogForm.description.length }}/300</span>
+              <span class="text-[10px] text-muted-foreground"
+                >{{ dialogForm.description.length }}/300</span
+              >
             </div>
             <textarea
               v-model="dialogForm.description"
@@ -1287,7 +1475,9 @@ onUnmounted(() => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="stdio">{{ t('settings.mcp.transportStdio') }}</SelectItem>
-                <SelectItem value="streamableHttp">{{ t('settings.mcp.transportHttp') }}</SelectItem>
+                <SelectItem value="streamableHttp">{{
+                  t('settings.mcp.transportHttp')
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1322,7 +1512,10 @@ onUnmounted(() => {
                   {{ t('settings.mcp.addRow') }}
                 </button>
               </div>
-              <div v-if="dialogForm.envPairs.length === 0" class="text-xs text-muted-foreground py-1">
+              <div
+                v-if="dialogForm.envPairs.length === 0"
+                class="text-xs text-muted-foreground py-1"
+              >
                 {{ t('settings.mcp.envVarsPlaceholder') }}
               </div>
               <div
@@ -1330,17 +1523,9 @@ onUnmounted(() => {
                 :key="idx"
                 class="flex items-center gap-2"
               >
-                <Input
-                  v-model="pair.key"
-                  placeholder="KEY"
-                  class="flex-1 font-mono text-xs"
-                />
+                <Input v-model="pair.key" placeholder="KEY" class="flex-1 font-mono text-xs" />
                 <span class="text-muted-foreground text-xs">=</span>
-                <Input
-                  v-model="pair.value"
-                  placeholder="VALUE"
-                  class="flex-1 font-mono text-xs"
-                />
+                <Input v-model="pair.value" placeholder="VALUE" class="flex-1 font-mono text-xs" />
                 <button
                   type="button"
                   class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -1373,7 +1558,10 @@ onUnmounted(() => {
                   {{ t('settings.mcp.addRow') }}
                 </button>
               </div>
-              <div v-if="dialogForm.headerPairs.length === 0" class="text-xs text-muted-foreground py-1">
+              <div
+                v-if="dialogForm.headerPairs.length === 0"
+                class="text-xs text-muted-foreground py-1"
+              >
                 {{ t('settings.mcp.httpHeadersPlaceholder') }}
               </div>
               <div
@@ -1387,11 +1575,7 @@ onUnmounted(() => {
                   class="flex-1 font-mono text-xs"
                 />
                 <span class="text-muted-foreground text-xs">:</span>
-                <Input
-                  v-model="pair.value"
-                  placeholder="Value"
-                  class="flex-1 font-mono text-xs"
-                />
+                <Input v-model="pair.value" placeholder="Value" class="flex-1 font-mono text-xs" />
                 <button
                   type="button"
                   class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
@@ -1425,9 +1609,14 @@ onUnmounted(() => {
             :disabled="!canSave || dialogSaving || dialogTesting"
             @click="handleDialogSave"
           >
-            <Loader2 v-if="dialogTesting || dialogSaving" class="mr-1.5 inline size-3.5 animate-spin" />
+            <Loader2
+              v-if="dialogTesting || dialogSaving"
+              class="mr-1.5 inline size-3.5 animate-spin"
+            />
             <template v-if="dialogTesting">{{ t('settings.mcp.testing') }}</template>
-            <template v-else>{{ dialogMode === 'add' ? t('settings.mcp.addServer') : t('common.save') }}</template>
+            <template v-else>{{
+              dialogMode === 'add' ? t('settings.mcp.addServer') : t('common.save')
+            }}</template>
           </button>
         </DialogFooter>
       </DialogContent>
@@ -1443,7 +1632,9 @@ onUnmounted(() => {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="deleteTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel @click="deleteTarget = null">{{
+            t('common.cancel')
+          }}</AlertDialogCancel>
           <AlertDialogAction @click="handleDelete">{{ t('common.confirm') }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1454,10 +1645,18 @@ onUnmounted(() => {
       <DialogContent class="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {{ amcpDialogMode === 'add' ? t('settings.mcp.assistantMcpAddTitle') : t('settings.mcp.assistantMcpEditTitle') }}
+            {{
+              amcpDialogMode === 'add'
+                ? t('settings.mcp.assistantMcpAddTitle')
+                : t('settings.mcp.assistantMcpEditTitle')
+            }}
           </DialogTitle>
           <DialogDescription class="sr-only">
-            {{ amcpDialogMode === 'add' ? t('settings.mcp.assistantMcpAddTitle') : t('settings.mcp.assistantMcpEditTitle') }}
+            {{
+              amcpDialogMode === 'add'
+                ? t('settings.mcp.assistantMcpAddTitle')
+                : t('settings.mcp.assistantMcpEditTitle')
+            }}
           </DialogDescription>
         </DialogHeader>
 
@@ -1485,8 +1684,14 @@ onUnmounted(() => {
             <div class="flex flex-col gap-2 text-xs">
               <div class="flex flex-col gap-1">
                 <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                <code v-if="amcpDialogMode === 'edit'" class="rounded bg-background px-2 py-1 font-mono text-foreground">http://localhost:{{ amcpDialogForm.port }}/mcp</code>
-                <span v-else class="text-muted-foreground/70">{{ t('settings.mcp.assistantMcpAutoPort') }}</span>
+                <code
+                  v-if="amcpDialogMode === 'edit'"
+                  class="rounded bg-background px-2 py-1 font-mono text-foreground"
+                  >http://localhost:{{ amcpDialogForm.port }}/mcp</code
+                >
+                <span v-else class="text-muted-foreground/70">{{
+                  t('settings.mcp.assistantMcpAutoPort')
+                }}</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
@@ -1519,8 +1724,12 @@ onUnmounted(() => {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="amcpDeleteTarget = null">{{ t('common.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction @click="handleDeleteAssistantMcp">{{ t('common.confirm') }}</AlertDialogAction>
+          <AlertDialogCancel @click="amcpDeleteTarget = null">{{
+            t('common.cancel')
+          }}</AlertDialogCancel>
+          <AlertDialogAction @click="handleDeleteAssistantMcp">{{
+            t('common.confirm')
+          }}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1545,16 +1754,17 @@ onUnmounted(() => {
             <div
               v-for="agent in allAgents"
               :key="agent.id"
-              :class="cn(
-                'flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-accent/50',
-                selectedAgentIds.has(agent.id) ? 'border-foreground/40 bg-accent/30' : 'border-border',
-              )"
+              :class="
+                cn(
+                  'flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 transition-colors hover:bg-accent/50',
+                  selectedAgentIds.has(agent.id)
+                    ? 'border-foreground/40 bg-accent/30'
+                    : 'border-border'
+                )
+              "
               @click="toggleAgentSelection(agent.id)"
             >
-              <div
-                v-if="agent.icon"
-                class="size-8 shrink-0 overflow-hidden rounded-md"
-              >
+              <div v-if="agent.icon" class="size-8 shrink-0 overflow-hidden rounded-md">
                 <img :src="agent.icon" :alt="agent.name" class="size-full object-cover" />
               </div>
               <div
@@ -1565,12 +1775,14 @@ onUnmounted(() => {
               </div>
               <span class="flex-1 truncate text-sm text-foreground">{{ agent.name }}</span>
               <div
-                :class="cn(
-                  'flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
-                  selectedAgentIds.has(agent.id)
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-border',
-                )"
+                :class="
+                  cn(
+                    'flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+                    selectedAgentIds.has(agent.id)
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border'
+                  )
+                "
               >
                 <Check v-if="selectedAgentIds.has(agent.id)" class="size-3" />
               </div>

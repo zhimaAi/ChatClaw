@@ -167,6 +167,12 @@ func EnsureChatClawInitialized() error {
 	return err
 }
 
+// GetChatClawConfig returns the ChatClaw provider config from sqlite.
+// Convenience package-level wrapper around GetProvider("chatclaw").
+func GetChatClawConfig() (*Provider, error) {
+	return (&ProvidersService{}).GetProvider("chatclaw")
+}
+
 // fetchPublicIP fetches the machine's public IP via api.ipify.org
 func fetchPublicIP() (string, error) {
 	// Multiple fallbacks for restricted networks (CN-only, captive portals, etc.).
@@ -178,9 +184,9 @@ func fetchPublicIP() (string, error) {
 		"https://ifconfig.me/ip",
 		"https://ident.me/",
 		// CN-friendly providers (often reachable inside CN)
-		"https://myip.ipip.net",                  // contains IP in text
-		"http://pv.sohu.com/cityjson?ie=utf-8",   // contains "cip": "x.x.x.x"
-		"https://ip.3322.net",                    // plain text
+		"https://myip.ipip.net",                // contains IP in text
+		"http://pv.sohu.com/cityjson?ie=utf-8", // contains "cip": "x.x.x.x"
+		"https://ip.3322.net",                  // plain text
 	}
 
 	var lastErr error
@@ -541,7 +547,7 @@ func (s *ProvidersService) syncChatClawModelsToDB(providerID string, groups []Mo
 // chatClawModelItem /custom-model/list API response item
 type chatClawModelItem struct {
 	ModelID   string `json:"model_id"`
-	ID        string `json:"id"` // alternative field
+	ID        string `json:"id"`        // alternative field
 	ModelName string `json:"modelName"` // display name
 	Name      string `json:"name"`      // fallback
 	ModelType string `json:"modelType"` // for grouping: llm, embedding, rerank
@@ -776,19 +782,19 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 			return nil, errs.New("error.cannot_disable_memory_provider")
 		}
 
-	// 禁止关闭其语义分段模型正被知识库使用的供应商
-	var libraryName string
-	if err := db.NewSelect().
-		Table("library").
-		Column("name").
-		Where("raptor_llm_provider_id = ?", providerID).
-		Limit(1).
-		Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, errs.Wrap("error.library_read_failed", err)
-	}
-	if libraryName != "" {
-		return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
-	}
+		// 禁止关闭其语义分段模型正被知识库使用的供应商
+		var libraryName string
+		if err := db.NewSelect().
+			Table("library").
+			Column("name").
+			Where("raptor_llm_provider_id = ?", providerID).
+			Limit(1).
+			Scan(ctx, &libraryName); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.Wrap("error.library_read_failed", err)
+		}
+		if libraryName != "" {
+			return nil, errs.Newf("error.cannot_disable_provider_with_semantic_segment_in_use", map[string]any{"LibraryName": libraryName})
+		}
 	}
 
 	// 构建更新语句

@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_invalid": "Le nom de l'outil ne peut contenir que des lettres, des chiffres et des underscores, et doit commencer par une lettre",
   "error.assistant_mcp_tool_name_required": "Le nom de l'outil est requis",
   "error.assistant_mcp_tool_not_found": "Outil introuvable",
-  "error.assistant_mcp_update_failed": "Échec de la mise à jour de l'Assistant MCP"
+  "error.assistant_mcp_update_failed": "Échec de la mise à jour de l'Assistant MCP",
+  "error.chat_too_many_files": "Le nombre de fichiers dépasse la limite",
+  "error.chat_file_too_large": "La taille du fichier dépasse la limite",
+  "error.chat_invalid_file_type": "Type de fichier invalide",
+  "error.file_not_found": "Fichier introuvable"
 }

@@ -19,10 +19,7 @@ function detectSystemLocale(): Locale | null {
   }
 
   const candidates: string[] = []
-  const primary =
-    navigator.language ||
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (navigator as any).userLanguage
+  const primary = navigator.language || (navigator as any).userLanguage
   if (primary) {
     candidates.push(primary)
   }
@@ -36,18 +33,14 @@ function detectSystemLocale(): Locale | null {
     if (!normalized) continue
 
     const lower = normalized.toLowerCase()
-    const fullMatch = SUPPORTED_LOCALES.find(
-      (l) => l.toLowerCase() === lower,
-    )
+    const fullMatch = SUPPORTED_LOCALES.find((l) => l.toLowerCase() === lower)
     if (fullMatch) {
       return fullMatch
     }
 
     const base = lower.split('-')[0]
     if (!base) continue
-    const baseMatch = SUPPORTED_LOCALES.find((l) =>
-      l.toLowerCase().startsWith(`${base}-`),
-    )
+    const baseMatch = SUPPORTED_LOCALES.find((l) => l.toLowerCase().startsWith(`${base}-`))
     if (baseMatch) {
       return baseMatch
     }
@@ -94,7 +87,6 @@ export async function fetchLocale(): Promise<Locale> {
 }
 
 async function ensureLocaleLoaded(locale: Locale) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const global = i18n.global as any
   if (!global.availableLocales.includes(locale)) {
     const messages = await loadLocaleMessages(locale)
@@ -134,7 +126,7 @@ export function useLocaleSync(localeRef?: Ref<string>) {
   const localeValue = localeRef ?? useI18n().locale
 
   const unsubscribe = Events.On('locale:changed', async (event: any) => {
-    const payload = Array.isArray(event?.data) ? event.data[0] : event?.data ?? event
+    const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     const newLocale = payload?.locale
     if (newLocale && SUPPORTED_LOCALES.includes(newLocale as Locale)) {
       await ensureLocaleLoaded(newLocale as Locale)

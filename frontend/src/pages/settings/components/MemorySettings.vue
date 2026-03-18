@@ -55,7 +55,7 @@ const loadData = async () => {
   try {
     const providers = (await ProvidersService.ListProviders()) || []
     const enabledProviders = providers.filter((p) => p.enabled)
-    
+
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
         try {
@@ -73,7 +73,7 @@ const loadData = async () => {
 
     for (const item of details) {
       if (!item.detail) continue
-      
+
       const llmGroup = item.detail.model_groups?.find((g) => g.type === 'llm')
       const llmModels = (llmGroup?.models || []).filter((m) => m.enabled)
       if (llmModels.length > 0) {
@@ -100,22 +100,21 @@ const loadData = async () => {
     ])
 
     memoryEnabled.value = enabled?.value === 'true'
-    
+
     if (extProv?.value && extMod?.value) {
       extractSelectedKey.value = `${extProv.value}::${extMod.value}`
     }
-    
+
     if (embProv?.value && embMod?.value) {
       const key = `${embProv.value}::${embMod.value}`
       embeddingSelectedKey.value = key
       savedEmbeddingKey.value = key
     }
-    
+
     if (embDim?.value) {
       embeddingDimension.value = embDim.value
       savedEmbeddingDimension.value = embDim.value
     }
-
   } catch (error) {
     console.error('Failed to load memory settings:', error)
     toast.error(getErrorMessage(error) || t('settings.memory.saveFailed'))
@@ -155,11 +154,11 @@ const handleSave = () => {
 
 const doSave = async () => {
   saving.value = true
-  
+
   try {
     const [extProv, extMod] = extractSelectedKey.value.split('::')
     const [embProv, embMod] = embeddingSelectedKey.value.split('::')
-    
+
     await SettingsService.UpdateMemorySettings({
       enabled: memoryEnabled.value,
       extract_provider_id: extProv || '',
@@ -171,7 +170,7 @@ const doSave = async () => {
 
     savedEmbeddingKey.value = embeddingSelectedKey.value
     savedEmbeddingDimension.value = embeddingDimension.value
-    
+
     toast.success(t('settings.memory.saved'))
   } catch (error) {
     console.error('Failed to save memory settings:', error)
@@ -193,7 +192,9 @@ function isProviderFree(g: Group): boolean {
 </script>
 
 <template>
-  <div class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5">
+  <div
+    class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+  >
     <div class="flex flex-col gap-1.5">
       <h2 class="text-lg font-semibold tracking-tight">{{ t('settings.memory.title') }}</h2>
     </div>
@@ -213,12 +214,13 @@ function isProviderFree(g: Group): boolean {
       </div>
 
       <div class="flex flex-col gap-6 border-t border-border pt-6 dark:border-white/10">
-        
         <!-- Extract Model -->
         <div class="flex flex-col gap-2">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium">{{ t('settings.memory.extractModel') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('settings.memory.extractModelHint') }}</span>
+            <span class="text-xs text-muted-foreground">{{
+              t('settings.memory.extractModelHint')
+            }}</span>
           </div>
           <Select v-model="extractSelectedKey" :disabled="saving">
             <SelectTrigger class="w-full">
@@ -228,11 +230,18 @@ function isProviderFree(g: Group): boolean {
               <SelectGroup v-for="g in extractGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
                   <span>{{ g.provider.name }}</span>
-                  <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                  <span
+                    v-if="isProviderFree(g)"
+                    class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                  >
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`">
+                <SelectItem
+                  v-for="m in g.models"
+                  :key="`${g.provider.provider_id}::${m.model_id}`"
+                  :value="`${g.provider.provider_id}::${m.model_id}`"
+                >
                   {{ m.name }}
                 </SelectItem>
               </SelectGroup>
@@ -244,7 +253,9 @@ function isProviderFree(g: Group): boolean {
         <div class="flex flex-col gap-2">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium">{{ t('settings.memory.embeddingModel') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('settings.memory.embeddingModelHint') }}</span>
+            <span class="text-xs text-muted-foreground">{{
+              t('settings.memory.embeddingModelHint')
+            }}</span>
           </div>
           <Select v-model="embeddingSelectedKey" :disabled="saving">
             <SelectTrigger class="w-full">
@@ -254,11 +265,18 @@ function isProviderFree(g: Group): boolean {
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
                   <span>{{ g.provider.name }}</span>
-                  <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                  <span
+                    v-if="isProviderFree(g)"
+                    class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                  >
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`">
+                <SelectItem
+                  v-for="m in g.models"
+                  :key="`${g.provider.provider_id}::${m.model_id}`"
+                  :value="`${g.provider.provider_id}::${m.model_id}`"
+                >
                   {{ m.name }}
                 </SelectItem>
               </SelectGroup>
@@ -270,15 +288,11 @@ function isProviderFree(g: Group): boolean {
         <div class="flex flex-col gap-2">
           <div class="flex flex-col gap-1">
             <span class="text-sm font-medium">{{ t('settings.memory.embeddingDimension') }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('settings.memory.embeddingDimensionHint') }}</span>
+            <span class="text-xs text-muted-foreground">{{
+              t('settings.memory.embeddingDimensionHint')
+            }}</span>
           </div>
-          <Input
-            v-model="embeddingDimension"
-            type="number"
-            min="1"
-            step="1"
-            :disabled="saving"
-          />
+          <Input v-model="embeddingDimension" type="number" min="1" step="1" :disabled="saving" />
         </div>
       </div>
 
@@ -294,10 +308,14 @@ function isProviderFree(g: Group): boolean {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{{ t('settings.memory.confirmRebuildTitle') }}</AlertDialogTitle>
-          <AlertDialogDescription>{{ t('settings.memory.confirmRebuildDesc') }}</AlertDialogDescription>
+          <AlertDialogDescription>{{
+            t('settings.memory.confirmRebuildDesc')
+          }}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="showRebuildConfirm = false">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel @click="showRebuildConfirm = false">{{
+            t('common.cancel')
+          }}</AlertDialogCancel>
           <AlertDialogAction
             class="bg-foreground text-background hover:bg-foreground/90"
             @click="confirmRebuild"

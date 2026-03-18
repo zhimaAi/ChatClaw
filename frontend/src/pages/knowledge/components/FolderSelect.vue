@@ -52,7 +52,10 @@ const selectedValue = computed({
 })
 
 // 递归展平文件夹树，用于显示
-const flattenFolders = (folders: Folder[], prefix = ''): Array<Folder & { displayName: string }> => {
+const flattenFolders = (
+  folders: Folder[],
+  prefix = ''
+): Array<Folder & { displayName: string }> => {
   const result: Array<Folder & { displayName: string }> = []
   for (const folder of folders) {
     const displayName = prefix ? `${prefix} / ${folder.name}` : folder.name

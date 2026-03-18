@@ -61,20 +61,20 @@ const emit = defineEmits<{
   'update:activeAgentId': [value: number]
   'update:activeTeamRobotId': [value: string | null]
   'update:listMode': [value: ListMode]
-  'create': []
-  'openSettings': [agent: Agent]
-  'openChannels': [agent: Agent]
-  'newConversation': []
-  'newConversationForAgent': [agentId: number]
-  'newConversationForTeamRobot': [robotId: string]
-  'selectConversationForTeamRobot': [robotId: string, conversation: Conversation]
-  'selectConversation': [conversation: Conversation]
-  'selectConversationForAgent': [agentId: number, conversation: Conversation]
-  'togglePin': [conversation: Conversation]
-  'openRename': [conversation: Conversation]
-  'openDelete': [conversation: Conversation]
-  'closeSidebar': []
-  'goBind': []
+  create: []
+  openSettings: [agent: Agent]
+  openChannels: [agent: Agent]
+  newConversation: []
+  newConversationForAgent: [agentId: number]
+  newConversationForTeamRobot: [robotId: string]
+  selectConversationForTeamRobot: [robotId: string, conversation: Conversation]
+  selectConversation: [conversation: Conversation]
+  selectConversationForAgent: [agentId: number, conversation: Conversation]
+  togglePin: [conversation: Conversation]
+  openRename: [conversation: Conversation]
+  openDelete: [conversation: Conversation]
+  closeSidebar: []
+  goBind: []
 }>()
 
 const { t } = useI18n()
@@ -111,10 +111,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
     "
   >
     <!-- Snap mode: close button at top -->
-    <div
-      v-if="isSnapMode"
-      class="flex items-center justify-end border-b border-border px-2 py-1.5"
-    >
+    <div v-if="isSnapMode" class="flex items-center justify-end border-b border-border px-2 py-1.5">
       <Button
         size="icon"
         variant="ghost"
@@ -218,7 +215,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                 'group flex h-11 w-full items-center gap-2 rounded px-2 text-left outline-none transition-colors',
                 a.id === activeAgentId
                   ? 'bg-zinc-100 text-foreground dark:bg-accent'
-                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
+                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground active:bg-accent/70 dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
               )
             "
             role="button"
@@ -318,7 +315,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                   'group flex items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
                   activeConversationId === conv.id
                     ? 'bg-accent/60 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/70'
                 )
               "
               role="button"
@@ -331,7 +328,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               <!-- Conversation menu -->
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                  class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground active:bg-background/80 group-hover:opacity-100"
                   @click.stop
                 >
                   <MoreHorizontal class="size-3.5" />
@@ -362,7 +359,10 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </div>
 
       <!-- Team mode: robot list from ChatWiki getRobotList (only when has robots) -->
-      <div v-if="listMode === 'team' && teamBound && teamRobots.length > 0" class="flex flex-col gap-1.5">
+      <div
+        v-if="listMode === 'team' && teamBound && teamRobots.length > 0"
+        class="flex flex-col gap-1.5"
+      >
         <div v-for="r in teamRobots" :key="r.id" class="flex flex-col">
           <div
             :class="
@@ -370,7 +370,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                 'group flex h-11 w-full items-center gap-2 rounded px-2 text-left outline-none transition-colors',
                 r.id === activeTeamRobotId
                   ? 'bg-zinc-100 text-foreground dark:bg-accent'
-                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
+                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground active:bg-accent/70 dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
               )
             "
             role="button"
@@ -421,7 +421,9 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                       {{ t('assistant.menu.history') }}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent class="max-h-[300px] w-56 overflow-y-auto">
-                      <template v-if="getAllAgentConversations(getTeamConversationAgentId(r.id)).length > 0">
+                      <template
+                        v-if="getAllAgentConversations(getTeamConversationAgentId(r.id)).length > 0"
+                      >
                         <DropdownMenuItem
                           v-for="conv in getAllAgentConversations(getTeamConversationAgentId(r.id))"
                           :key="conv.id"
@@ -456,7 +458,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                   'group flex items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
                   activeConversationId === conv.id
                     ? 'bg-accent/60 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/70'
                 )
               "
               role="button"
@@ -468,7 +470,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               <span class="min-w-0 flex-1 truncate">{{ conv.name }}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                  class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground active:bg-background/80 group-hover:opacity-100"
                   @click.stop
                 >
                   <MoreHorizontal class="size-3.5" />

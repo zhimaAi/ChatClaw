@@ -2,12 +2,7 @@
 import { onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, X } from 'lucide-vue-next'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Select,
   SelectContent,
@@ -42,10 +37,10 @@ const emit = defineEmits<{
   'update:listMode': [value: SnapListMode]
   'update:activeAgentId': [value: number]
   'update:activeTeamRobotId': [value: string | null]
-  'newConversation': []
-  'cancelSnap': []
-  'findAndAttach': []
-  'closeWindow': []
+  newConversation: []
+  cancelSnap: []
+  findAndAttach: []
+  closeWindow: []
 }>()
 
 const { t } = useI18n()
@@ -167,16 +162,19 @@ const handleAssistantChange = (value: unknown) => {
     @pointercancel.capture="onHeaderPointerUp"
   >
     <!-- Left: List mode (personal/team) + Assistant selector -->
-    <div data-no-drag="true" class="flex min-w-0 items-center gap-1.5" style="--wails-draggable: no-drag">
+    <div
+      data-no-drag="true"
+      class="flex min-w-0 items-center gap-1.5"
+      style="--wails-draggable: no-drag"
+    >
       <!-- First dropdown: Personal / Team -->
-      <Select
-        :model-value="listMode"
-        @update:model-value="handleListModeChange"
-      >
+      <Select :model-value="listMode" @update:model-value="handleListModeChange">
         <SelectTrigger
           class="h-7 w-auto min-w-[72px] max-w-[90px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50"
         >
-          <span class="truncate">{{ listMode === 'personal' ? t('assistant.modes.personal') : t('assistant.modes.team') }}</span>
+          <span class="truncate">{{
+            listMode === 'personal' ? t('assistant.modes.personal') : t('assistant.modes.team')
+          }}</span>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -188,8 +186,12 @@ const handleAssistantChange = (value: unknown) => {
 
       <!-- Second dropdown: Agent (personal) or Team robot (team) -->
       <Select
-        :model-value="listMode === 'personal' ? (activeAgentId?.toString() ?? '') : (activeTeamRobotId ?? '')"
-        :disabled="listMode === 'personal' ? agents.length === 0 : (teamLoading || teamRobots.length === 0)"
+        :model-value="
+          listMode === 'personal' ? (activeAgentId?.toString() ?? '') : (activeTeamRobotId ?? '')
+        "
+        :disabled="
+          listMode === 'personal' ? agents.length === 0 : teamLoading || teamRobots.length === 0
+        "
         @update:model-value="handleAssistantChange"
       >
         <SelectTrigger
@@ -197,19 +199,32 @@ const handleAssistantChange = (value: unknown) => {
         >
           <template v-if="listMode === 'personal'">
             <div v-if="activeAgent" class="flex items-center gap-1.5">
-              <img v-if="activeAgent.icon" :src="activeAgent.icon" class="size-4 rounded object-contain" />
+              <img
+                v-if="activeAgent.icon"
+                :src="activeAgent.icon"
+                class="size-4 rounded object-contain"
+              />
               <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
               <span class="truncate">{{ activeAgent.name }}</span>
             </div>
-            <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+            <span v-else class="text-muted-foreground">{{
+              t('assistant.placeholders.noAgentSelected')
+            }}</span>
           </template>
           <template v-else>
             <div v-if="activeTeamRobot" class="flex items-center gap-1.5">
-              <img v-if="activeTeamRobot.icon" :src="activeTeamRobot.icon" class="size-4 rounded object-contain" alt="" />
+              <img
+                v-if="activeTeamRobot.icon"
+                :src="activeTeamRobot.icon"
+                class="size-4 rounded object-contain"
+                alt=""
+              />
               <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
               <span class="truncate">{{ activeTeamRobot.name }}</span>
             </div>
-            <span v-else class="text-muted-foreground">{{ t('assistant.placeholders.noAgentSelected') }}</span>
+            <span v-else class="text-muted-foreground">{{
+              t('assistant.placeholders.noAgentSelected')
+            }}</span>
           </template>
         </SelectTrigger>
         <SelectContent>
@@ -242,7 +257,11 @@ const handleAssistantChange = (value: unknown) => {
     <div class="mx-2 min-w-4 flex-1" />
 
     <!-- Right: New conversation + Snap toggle icon -->
-    <div data-no-drag="true" class="flex items-center justify-end gap-2" style="--wails-draggable: no-drag">
+    <div
+      data-no-drag="true"
+      class="flex items-center justify-end gap-2"
+      style="--wails-draggable: no-drag"
+    >
       <TooltipProvider :delay-duration="300">
         <Tooltip>
           <TooltipTrigger as-child>

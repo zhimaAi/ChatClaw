@@ -219,5 +219,9 @@
   "error.assistant_mcp_tool_name_required": "工具名称不能为空",
   "error.assistant_mcp_tool_name_invalid": "工具名称只能包含字母、数字和下划线，且必须以字母开头",
   "error.assistant_mcp_tool_name_duplicate": "工具名称已存在",
-  "error.assistant_mcp_tool_not_found": "未找到该工具"
+  "error.assistant_mcp_tool_not_found": "未找到该工具",
+  "error.chat_too_many_files": "文件数量超过限制",
+  "error.chat_file_too_large": "文件大小超过限制",
+  "error.chat_invalid_file_type": "不支持的文件类型",
+  "error.file_not_found": "文件未找到"
 }
