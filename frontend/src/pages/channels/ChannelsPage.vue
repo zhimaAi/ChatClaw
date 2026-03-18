@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus,
@@ -83,7 +83,13 @@ const channelToBind = ref<Channel | null>(null)
 /** True when bind dialog was opened right after creating a channel (show auto-generate option) */
 const bindFromCreate = ref(false)
 const toggleDialogOpen = ref(false)
-const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
+const channelToToggle = ref<{ channel: Channel, val: boolean } | null>(null)
+const unbindDialogOpen = ref(false)
+const channelToUnbind = ref<Channel | null>(null)
+
+watch(unbindDialogOpen, (open) => {
+  if (!open) channelToUnbind.value = null
+})
 
 const selectedFilter = ref<string>('all')
 
@@ -252,13 +258,22 @@ async function confirmToggle() {
   }
 }
 
-async function handleUnbind(channel: Channel) {
+function openUnbindConfirm(channel: Channel) {
+  channelToUnbind.value = channel
+  unbindDialogOpen.value = true
+}
+
+async function confirmUnbindAssistant() {
+  const ch = channelToUnbind.value
+  if (!ch) return
   try {
-    await ChannelService.UnbindAgent(channel.id)
+    await ChannelService.UnbindAgent(ch.id)
     toast.success(t('channels.unbindSuccess'))
     loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
+  } finally {
+    unbindDialogOpen.value = false
   }
 }
 
@@ -606,11 +621,9 @@ onMounted(loadData)
                         : t('channels.card.switchBind')
                     }}
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    class="gap-2 rounded px-4 py-[5px]"
-                    :disabled="channel.agent_id === 0"
-                    @click="handleUnbind(channel)"
-                  >
+                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" 
+                      @click="openUnbindConfirm(channel)" 
+                      :disabled="channel.agent_id === 0">
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
                   </DropdownMenuItem>
@@ -898,6 +911,27 @@ onMounted(loadData)
           <Button
             class="bg-primary text-primary-foreground hover:bg-primary/90"
             @click="confirmToggle"
+          >
+            {{ t('common.confirm') }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Unbind assistant confirmation -->
+    <AlertDialog v-model:open="unbindDialogOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('channels.unbindConfirmTitle') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('channels.unbindConfirmDesc', { name: channelToUnbind?.name ?? '' }) }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <Button
+            class="bg-primary text-primary-foreground hover:bg-primary/90"
+            @click="confirmUnbindAssistant"
           >
             {{ t('common.confirm') }}
           </Button>

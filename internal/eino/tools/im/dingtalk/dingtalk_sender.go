@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -95,13 +94,13 @@ func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	descEN := "Send a message, image or file to DingTalk via a connected channel. " +
 		"Supports sending to group conversations or individual users by conversationId. " +
 		"For text: provide content as plain text (sent as Markdown) or JSON with msg_type (text/markdown). " +
-		"For images: provide pic_url with a public HTTPS image URL (sent as sampleImageMsg). " +
+		"For images: provide pic_url with a public HTTPS image URL (sent as image message). " +
 		"For files: provide file_path; the tool uploads media to DingTalk then sends a file message. " +
 		"By default text messages use typewriter mode (animated streaming card). " +
 		"Use send_mode=normal for short acknowledgments, simple replies, or when animation is not appropriate."
 	descZH := "通过已连接的钉钉渠道发送消息、图片或文件。支持发送到群聊或个人会话（通过 conversationId）。" +
 		"发送文本：content 可以是纯文本（自动以 Markdown 格式发送）或包含 msg_type（text/markdown）的 JSON。" +
-		"发送图片：提供 pic_url（公开 HTTPS 图片地址），以 sampleImageMsg 类型发送。" +
+		"发送图片：提供 pic_url（公开 HTTPS 图片地址），以图片消息发送。" +
 		"发送文件：提供 file_path，本工具会先上传到钉钉再发送文件消息。" +
 		"文本消息默认使用打字机模式（动画流式卡片）。" +
 		"对于简短回复、确认消息或不适合动画的场景，使用 send_mode=normal 发送普通消息。"
@@ -149,15 +148,15 @@ func (t *dingTalkSenderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			"pic_url": {
 				Type: schema.String,
 				Desc: selectDesc(
-					"Public HTTPS URL of an image to send as a sampleImageMsg. When provided, content is ignored and the image is sent directly. Must be a valid public URL accessible by DingTalk servers.",
-					"要发送的图片公开 HTTPS 地址，以 sampleImageMsg 类型发送。提供此参数时 content 被忽略。必须是钉钉服务器可访问的公开 URL。",
+					"Public HTTPS URL of an image to send as image message. When provided, content is ignored and the image is sent directly. Must be a valid public URL accessible by DingTalk servers.",
+					"要发送的图片公开 HTTPS 地址，以图片消息发送。提供此参数时 content 被忽略。必须是钉钉服务器可访问的公开 URL。",
 				),
 			},
 			"file_path": {
 				Type: schema.String,
 				Desc: selectDesc(
-					"Local file path. The file is uploaded through DingTalk media upload API first, then sent as a file message to the target conversation.",
-					"本地文件路径。工具会先调用钉钉媒体上传接口，再以文件消息发送到目标会话。",
+					"Local file path. Images are uploaded to OSS first, then sent as Markdown. Non-image files trigger a notice (DingTalk only supports image attachments).",
+					"本地文件路径。图片会上传至 OSS 后以 Markdown 发送。非图片文件会发送提示（钉钉仅支持图片附件）。",
 				),
 			},
 			"send_mode": {
@@ -186,15 +185,18 @@ func (t *dingTalkSenderTool) InvokableRun(ctx context.Context, argsJSON string, 
 	}
 
 	// Priority order:
-	// 1) When file_path is set, handle via sendByFilePath (image upload / non-image notice).
-	// 2) When pic_url is set (public URL), send the image message directly.
-	// 3) When send_mode is "typewriter" and content is text-only, use streaming card.
-	// 4) Otherwise send content as text/markdown via webhook.
+	// 1) When file_path or pic_url is set: handle via sendByFilePath.
+	//    - Network URL: embed directly in Markdown as ![image](url).
+	//    - Local path: upload to OSS first, then embed in Markdown.
+	// 2) When send_mode is "typewriter" and content is text-only, use streaming card.
+	// 3) Otherwise send content as text/markdown via webhook.
 	if in.FilePath != "" {
 		return t.sendByFilePath(ctx, adapter, in)
 	}
 	if in.PicURL != "" {
-		return t.sendMarkdownWithAttachments(ctx, adapter, in)
+		in2 := in
+		in2.FilePath = in.PicURL
+		return t.sendByFilePath(ctx, adapter, in2)
 	}
 	if in.SendMode == "typewriter" {
 		return t.sendTypewriter(ctx, adapter, in)
@@ -276,108 +278,7 @@ func (t *dingTalkSenderTool) resolveDingTalkAdapter(channelID int64) (channels.P
 	return adapter, ""
 }
 
-func (t *dingTalkSenderTool) sendImageByURL(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
-	// Follow DingTalk single-chat image convention:
-	// msg_type=image with photo_url (compatibility key pic_url is also preserved).
-	payloadJSON, err := json.Marshal(map[string]string{
-		"msg_type":  "image",
-		"photo_url": in.PicURL,
-		"pic_url":   in.PicURL,
-	})
-	if err != nil {
-		slog.Error("[dingtalk_sender] failed to marshal image payload",
-			"error", err,
-			"pic_url", in.PicURL,
-			"target_id", in.TargetID,
-		)
-		return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
-	}
-	payload := string(payloadJSON)
-	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
-		return fmt.Sprintf("Error: failed to send image message: %s", err.Error()), nil
-	}
-	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
-}
-
-func (t *dingTalkSenderTool) sendMarkdownWithAttachments(ctx context.Context, adapter channels.PlatformAdapter, in dingTalkSenderInput) (string, error) {
-	// Unified behavior:
-	// - Only image-type attachments are supported.
-	// - Whether PicURL or FilePath is provided, we treat it as an image file path.
-	// - Image must be uploaded first via UploadMessageFile to get mediaID.
-
-	sourcePath := strings.TrimSpace(in.FilePath)
-	if sourcePath == "" {
-		sourcePath = strings.TrimSpace(in.PicURL)
-	}
-
-	if sourcePath == "" {
-		slog.Warn("[dingtalk_sender] sendMarkdownWithAttachments called without PicURL or FilePath",
-			"channel_id", in.ChannelID,
-			"target_id", in.TargetID,
-		)
-		return "Error: PicURL or FilePath is required for image sending", nil
-	}
-
-	// Only support image-type files.
-	if !isImageFilePath(sourcePath) {
-		slog.Warn("[dingtalk_sender] non-image attachment not supported",
-			"channel_id", in.ChannelID,
-			"target_id", in.TargetID,
-			"source_path", sourcePath,
-		)
-		return "Error: only image-type attachments are supported for DingTalk", nil
-	}
-
-	dingAdapter, ok := adapter.(*channels.DingTalkAdapter)
-	if !ok {
-		slog.Error("[dingtalk_sender] attachment adapter type assertion failed",
-			"channel_id", in.ChannelID,
-		)
-		return "Error: image upload is only supported on DingTalk channels", nil
-	}
-
-	if _, err := os.Stat(sourcePath); err != nil {
-		slog.Error("[dingtalk_sender] image file not accessible",
-			"file_path", sourcePath,
-			"error", err,
-		)
-		return fmt.Sprintf("Error: image file not accessible: %s", err.Error()), nil
-	}
-
-	mediaID, _, err := dingAdapter.UploadMessageFile(ctx, sourcePath)
-	if err != nil {
-		slog.Error("[dingtalk_sender] failed to upload image file",
-			"file_path", sourcePath,
-			"error", err,
-		)
-		return fmt.Sprintf("Error: failed to upload image file: %s", err.Error()), nil
-	}
-
-	// Build sampleImageMsg payload using mediaID as photoURL.
-	payloadBody := map[string]any{
-		"msg_type": "sampleImageMsg",
-		"msg_key":  "sampleImageMsg",
-		"media_id": mediaID,
-	}
-
-	payloadBytes, err := json.Marshal(payloadBody)
-	if err != nil {
-		slog.Error("[dingtalk_sender] failed to marshal sampleImageMsg payload",
-			"error", err,
-			"target_id", in.TargetID,
-		)
-		return fmt.Sprintf("Error: failed to build image message payload: %s", err.Error()), nil
-	}
-
-	payload := string(payloadBytes)
-	if err := sendDingTalkPayload(ctx, adapter, in.ChannelID, in.TargetID, payload); err != nil {
-		return fmt.Sprintf("Error: failed to send image message: %s", err.Error()), nil
-	}
-
-	return fmt.Sprintf("Image sent successfully to %s via DingTalk channel %d.", in.TargetID, in.ChannelID), nil
-}
-
-// sendByFilePath handles the file_path field:
+// sendByFilePath handles the file_path field (also used for pic_url):
 //   - Non-image files: DingTalk does not support them; send an explanatory notice message.
 //   - Image files that are already a network URL: send directly as a Markdown message.
 //   - Local image files: upload to ChatClaw OSS first, then send as a Markdown message.
