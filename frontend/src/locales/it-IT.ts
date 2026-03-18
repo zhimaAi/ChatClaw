@@ -1311,6 +1311,11 @@ export default {
         botName: "WeCom",
         description: "Robot WeCom",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "Bot QQ Open Platform tramite WebSocket",
+      },
     },
     authType: {
       token: "Token",
@@ -1318,6 +1323,8 @@ export default {
     },
     comingSoon: "Prossimamente",
     agentFallback: "Assistente IA",
+    unbindConfirmTitle: "Conferma scollegamento",
+    unbindConfirmDesc: "Scollegare l'assistente dal canale \"{name}\"? I messaggi non saranno gestiti fino a un nuovo collegamento.",
     unbindSuccess: "Assistente scollegato",
     bindSuccess: "Assistente collegato con successo",
     card: {

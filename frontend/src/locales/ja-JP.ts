@@ -1308,6 +1308,11 @@ export default {
         botName: "WeCom",
         description: "企業微信ボット",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQオープンプラットフォームのボット（WebSocket）",
+      },
     },
     authType: {
       token: "トークン",
@@ -1315,6 +1320,8 @@ export default {
     },
     comingSoon: "近日公開",
     agentFallback: "AIアシスタント",
+    unbindConfirmTitle: "バインド解除の確認",
+    unbindConfirmDesc: "チャンネル「{name}」とアシスタントのバインドを解除しますか？再度バインドするまでメッセージは処理されません。",
     unbindSuccess: "アシスタントのバインドを解除しました",
     bindSuccess: "アシスタントがバインドされました",
     card: {

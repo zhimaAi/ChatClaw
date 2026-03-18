@@ -1317,6 +1317,11 @@ export default {
         botName: "WeCom",
         description: "Kurumsal WeChat Bot",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ Açık Platform botu, WebSocket ile",
+      },
     },
     authType: {
       token: "Belirteç",
@@ -1324,6 +1329,8 @@ export default {
     },
     comingSoon: "Yakında",
     agentFallback: "AI asistanı",
+    unbindConfirmTitle: "Bağlantıyı kaldırmayı onayla",
+    unbindConfirmDesc: "\"{name}\" kanalından asistanın bağlantısını kaldır? Yeniden bağlanana kadar mesajlar işlenmez.",
     unbindSuccess: "Asistanın bağlantısı kaldırıldı",
     bindSuccess: "Asistan başarıyla bağlandı",
     card: {

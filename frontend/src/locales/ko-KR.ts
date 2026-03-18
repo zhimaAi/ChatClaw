@@ -1430,6 +1430,11 @@ export default {
         description: "WhatsApp Business API 接入",
         name: "WhatsApp",
       },
+      qq: {
+        botName: "QQ",
+        description: "QQ 오픈 플랫폼 봇, WebSocket 연동",
+        name: "QQ",
+      },
     },
     authType: {
       token: "토큰",
@@ -1535,6 +1540,8 @@ export default {
       total: "频道总数",
     },
     subtitle: "管理您的消息频道和连接",
+    unbindConfirmTitle: "연결 해제 확인",
+    unbindConfirmDesc: "채널 \"{name}\"에서 어시스턴트 연결을 해제할까요? 다시 연결해야 메시지를 처리합니다.",
     unbindSuccess: "已解绑助手",
   },
   scheduledTasks: {

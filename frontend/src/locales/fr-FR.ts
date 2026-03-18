@@ -1317,6 +1317,11 @@ export default {
         botName: "WeCom",
         description: "Bot WeChat Entreprise",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "Bot QQ Open Platform via WebSocket",
+      },
     },
     authType: {
       token: "Jeton",
@@ -1324,6 +1329,8 @@ export default {
     },
     comingSoon: "Bientôt disponible",
     agentFallback: "Assistant IA",
+    unbindConfirmTitle: "Confirmer le déliaison",
+    unbindConfirmDesc: "Délier l'assistant du canal « {name} » ? Les messages ne seront pas traités tant que vous ne liez pas à nouveau.",
     unbindSuccess: "Assistant délié",
     bindSuccess: "Assistant lié avec succès",
     card: {

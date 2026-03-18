@@ -1318,6 +1318,11 @@ export default {
         botName: "WeCom",
         description: "بوت WeChat المؤسسي",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "بوت QQ منصة مفتوحة عبر WebSocket",
+      },
     },
     authType: {
       token: "Token",
@@ -1325,6 +1330,8 @@ export default {
     },
     comingSoon: "قريبًا",
     agentFallback: "مساعد الذكاء الاصطناعي",
+    unbindConfirmTitle: "تأكيد إلغاء الربط",
+    unbindConfirmDesc: "إلغاء ربط المساعد عن القناة \"{name}\"؟ لن تُعالج الرسائل حتى تعيد الربط.",
     unbindSuccess: "تم إلغاء ربط المساعد",
     bindSuccess: "تم ربط المساعد بنجاح",
     card: {

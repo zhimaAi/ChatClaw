@@ -1308,6 +1308,11 @@ export default {
         botName: "WeCom",
         description: "Enterprise WeChat bot",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ Open Platform bot via WebSocket",
+      },
     },
     authType: {
       token: "Token",
@@ -1315,6 +1320,8 @@ export default {
     },
     comingSoon: "Coming soon",
     agentFallback: "AI Assistant",
+    unbindConfirmTitle: "Confirm unbind",
+    unbindConfirmDesc: "Unbind the assistant from channel \"{name}\"? You must bind again for the assistant to handle messages on this channel.",
     unbindSuccess: "Assistant unbound",
     bindSuccess: "Assistant bound successfully",
     card: {

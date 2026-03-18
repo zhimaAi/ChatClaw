@@ -1317,6 +1317,11 @@ export default {
         botName: "WeCom",
         description: "Bot za podjetja WeChat",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "Bot QQ Open Platform prek WebSocket",
+      },
     },
     authType: {
       token: "Žeton",
@@ -1324,6 +1329,8 @@ export default {
     },
     comingSoon: "Kmalu na voljo",
     agentFallback: "AI pomočnik",
+    unbindConfirmTitle: "Potrdite odvezo",
+    unbindConfirmDesc: "Odvezati pomočnika od kanala \"{name}\"? Sporočila na tem kanalu ne bodo obdelana, dokler znova ne povežete.",
     unbindSuccess: "Pomočnik odvezan",
     bindSuccess: "Pomočnik uspešno vezan",
     card: {

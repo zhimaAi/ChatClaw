@@ -1317,6 +1317,11 @@ export default {
         botName: "WeCom",
         description: "Unternehmens-WeChat Bot",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ-Open-Platform-Bot über WebSocket",
+      },
     },
     authType: {
       token: "Token",
@@ -1324,6 +1329,8 @@ export default {
     },
     comingSoon: "Demnächst",
     agentFallback: "KI-Assistent",
+    unbindConfirmTitle: "Bindung aufheben bestätigen",
+    unbindConfirmDesc: "Assistent vom Kanal \"{name}\" lösen? Nachrichten werden erst wieder verarbeitet, wenn Sie neu binden.",
     unbindSuccess: "Assistent gelöst",
     bindSuccess: "Assistent erfolgreich gebunden",
     card: {

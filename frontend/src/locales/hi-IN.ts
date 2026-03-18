@@ -1335,6 +1335,11 @@ export default {
         botName: "WeCom",
         description: "एंटरप्राइज WeChat बॉट",
       },
+      qq: {
+        name: "QQ",
+        botName: "QQ",
+        description: "QQ ओपन प्लेटफ़ॉर्म बॉट, WebSocket के माध्यम से",
+      },
     },
     authType: {
       token: "टोकन",
@@ -1342,6 +1347,8 @@ export default {
     },
     comingSoon: "जल्द आ रहा है",
     agentFallback: "AI असिस्टेंट",
+    unbindConfirmTitle: "अनबाइंड की पुष्टि",
+    unbindConfirmDesc: "चैनल \"{name}\" से असिस्टेंट अनबाइंड करें? फिर से बाइंड किए बिना संदेश संसाधित नहीं होंगे।",
     unbindSuccess: "असिस्टेंट अनबाइंड",
     bindSuccess: "असिस्टेंट सफलतापूर्वक बाइंड",
     card: {
