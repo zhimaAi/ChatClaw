@@ -204,6 +204,7 @@
   "error.channel_agent_create_not_available": "Auto-Assistent-Erstellung nicht verfügbar",
   "error.channel_ai_reply_failed": "KI-Antwort fehlgeschlagen: {{.Error}}",
   "error.channel_ai_reply_empty": "KI-Antwort fehlgeschlagen: Leere Antwort generiert",
+  "error.dingtalk_network_dns_failed": "DingTalk-Verbindung fehlgeschlagen: DNS-Auflösungsfehler, bitte Netzwerk- oder DNS-Einstellungen prüfen",
   "channel.feishu_streaming_generating": "Streaming-Antwort wird erstellt, bitte warten...",
   "channel.feishu_stream_output_enabled": "Streaming-Ausgabe ist aktiviert. Zukünftige Antworten werden während der Generierung gesendet.",
   "channel.feishu_stream_output_disabled": "Streaming-Ausgabe ist deaktiviert. Zukünftige Antworten werden gesendet, sobald das vollständige Ergebnis bereit ist.",

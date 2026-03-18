@@ -204,6 +204,7 @@
   "error.channel_agent_create_not_available": "無法使用自動建立助理",
   "error.channel_ai_reply_failed": "AI 回覆失敗：{{.Error}}",
   "error.channel_ai_reply_empty": "AI 回覆失敗：產生空白回覆",
+  "error.dingtalk_network_dns_failed": "釘釘連線失敗：DNS 解析異常，請檢查網路或 DNS 設定",
   "channel.feishu_streaming_generating": "正在串流生成回覆，請稍候...",
   "channel.feishu_stream_output_enabled": "已開啟串流輸出，後續回覆將邊生成邊發送。",
   "channel.feishu_stream_output_disabled": "已關閉串流輸出，後續回覆將在完整生成後發送。",
