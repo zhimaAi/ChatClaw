@@ -233,14 +233,22 @@ type ChatRetrievalEvent struct {
 	Items []RetrievalItem `json:"items"`
 }
 
+// ChatUserMessageEvent event sent when a user message is inserted (for external callers like MCP).
+type ChatUserMessageEvent struct {
+	ChatEvent
+	Content    string `json:"content"`
+	ImagesJSON string `json:"images_json,omitempty"`
+}
+
 // Event names
 const (
-	EventChatStart     = "chat:start"
-	EventChatChunk     = "chat:chunk"
-	EventChatThinking  = "chat:thinking"
-	EventChatTool      = "chat:tool"
-	EventChatRetrieval = "chat:retrieval"
-	EventChatComplete  = "chat:complete"
-	EventChatStopped   = "chat:stopped"
-	EventChatError     = "chat:error"
+	EventChatStart       = "chat:start"
+	EventChatChunk       = "chat:chunk"
+	EventChatThinking    = "chat:thinking"
+	EventChatTool        = "chat:tool"
+	EventChatRetrieval   = "chat:retrieval"
+	EventChatComplete    = "chat:complete"
+	EventChatStopped     = "chat:stopped"
+	EventChatError       = "chat:error"
+	EventChatUserMessage = "chat:user-message"
 )
