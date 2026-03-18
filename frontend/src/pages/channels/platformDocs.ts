@@ -5,6 +5,7 @@ const DEFAULT_PLATFORM_DOCS_URL = 'https://docs.ichatclaw.com/docs/chatClaw-acce
 const PLATFORM_DOCS_URLS: Record<string, string> = {
   feishu: 'https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu',
   wecom: 'https://docs.ichatclaw.com/docs/chatClaw-access-to-work-weixin-robot',
+  dingtalk: 'https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk',
   qq: 'https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu',
 }
 
