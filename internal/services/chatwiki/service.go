@@ -168,6 +168,8 @@ type ChatWikiService struct {
 	refreshMu sync.Mutex // serializes token refresh inside GetBinding
 }
 
+var bindingWriteMu sync.Mutex
+
 // NewChatWikiService creates a new ChatWikiService instance (used by bootstrap and Wails bindings).
 func NewChatWikiService(app *application.App) *ChatWikiService {
 	return &ChatWikiService{
@@ -285,30 +287,7 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ttlInt, _ := strconv.ParseInt(ttl, 10, 64)
-	expInt, _ := strconv.ParseInt(exp, 10, 64)
-	now := time.Now().UTC()
-	chatWikiVersion = normalizeChatWikiVersion(chatWikiVersion)
-
-	// Delete old bindings, keep only latest
-	if _, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
-		if app != nil {
-			app.Logger.Warn("Failed to delete old chatwiki bindings", "error", err)
-		}
-	}
-
-	m := &bindingModel{
-		ServerURL:       serverURL,
-		Token:           token,
-		TTL:             ttlInt,
-		Exp:             expInt,
-		UserID:          userID,
-		UserName:        userName,
-		ChatWikiVersion: chatWikiVersion,
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}
-	_, err := db.NewInsert().Model(m).Exec(ctx)
+	err := saveBindingWithDB(ctx, db, serverURL, token, ttl, exp, userID, userName, chatWikiVersion)
 	if err != nil {
 		if app != nil {
 			app.Logger.Error("Failed to save chatwiki binding", "error", err)
@@ -319,6 +298,36 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 		app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
 	}
 	return nil
+}
+
+func saveBindingWithDB(ctx context.Context, db bun.IDB, serverURL, token, ttl, exp, userID, userName, chatWikiVersion string) error {
+	ttlInt, _ := strconv.ParseInt(ttl, 10, 64)
+	expInt, _ := strconv.ParseInt(exp, 10, 64)
+	now := time.Now().UTC()
+	chatWikiVersion = normalizeChatWikiVersion(chatWikiVersion)
+
+	bindingWriteMu.Lock()
+	defer bindingWriteMu.Unlock()
+
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
+			return err
+		}
+
+		m := &bindingModel{
+			ServerURL:       serverURL,
+			Token:           token,
+			TTL:             ttlInt,
+			Exp:             expInt,
+			UserID:          userID,
+			UserName:        userName,
+			ChatWikiVersion: chatWikiVersion,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		_, err := tx.NewInsert().Model(m).Exec(ctx)
+		return err
+	})
 }
 
 func resolveChatWikiVersionFromLoginSource(loginSource string) string {

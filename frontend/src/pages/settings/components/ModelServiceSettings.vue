@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { useSettingsStore } from '@/stores/settings'
@@ -23,6 +23,7 @@ const loadingProviders = ref(false)
 const loadingDetail = ref(false)
 const loadError = ref<string | null>(null)
 const detailError = ref<string | null>(null)
+let unsubscribeModelsChanged: (() => void) | null = null
 
 const applyPendingProviderSelection = () => {
   const pendingProviderId = settingsStore.consumePendingModelServiceProviderId()
@@ -141,6 +142,16 @@ const handleRefresh = () => {
 // 组件挂载时加载数据
 onMounted(() => {
   void loadProviders()
+  unsubscribeModelsChanged = Events.On('models:changed', () => {
+    if (selectedProviderId.value) {
+      void loadProviderDetail(selectedProviderId.value)
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeModelsChanged?.()
+  unsubscribeModelsChanged = null
 })
 </script>
 

@@ -131,9 +131,9 @@ const remainingTimeText = computed(() =>
   t('settings.chatwiki.remainingTime', { seconds: remainingSeconds.value })
 )
 
-async function loadBinding() {
+async function loadBinding(force = false) {
   try {
-    const binding = await getBindingCached()
+    const binding = force ? await ChatWikiService.GetBinding() : await getBindingCached()
     currentBinding.value = binding ?? null
   } catch (error) {
     console.error('Failed to load chatwiki binding:', error)
@@ -362,7 +362,8 @@ function listenAuthCallback() {
     try {
       await saveBindingFromCallback(data)
       authUser.value = data
-      await loadBinding()
+      clearChatwikiCache()
+      await loadBinding(true)
       view.value = 'success'
     } catch (error) {
       console.error('Failed to save chatwiki binding from auth callback:', error)
@@ -461,7 +462,8 @@ async function finishSuccess() {
     await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
     await ProvidersService.GetProviderWithModels('chatwiki')
     // Reload binding so list view shows latest auth status (bound/expired, user info)
-    await loadBinding()
+    clearChatwikiCache()
+    await loadBinding(true)
     notifyChatwikiBindingChanged(currentBinding.value)
     Events.Emit('models:changed')
     toast.success(t('settings.chatwiki.syncSuccess'))
