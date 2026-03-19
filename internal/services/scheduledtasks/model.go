@@ -56,6 +56,19 @@ type scheduledTaskRunModel struct {
 	SnapshotAgentID    int64      `bun:"snapshot_agent_id,notnull"`
 }
 
+type scheduledTaskOperationLogModel struct {
+	bun.BaseModel `bun:"table:scheduled_task_operation_logs,alias:stol"`
+
+	ID               int64     `bun:"id,pk,autoincrement"`
+	CreatedAt        time.Time `bun:"created_at,notnull"`
+	TaskID           int64     `bun:"task_id,notnull"`
+	TaskNameSnapshot string    `bun:"task_name_snapshot,notnull"`
+	OperationType    string    `bun:"operation_type,notnull"`
+	OperationSource  string    `bun:"operation_source,notnull"`
+	ChangedFieldsJSON string   `bun:"changed_fields_json,notnull"`
+	TaskSnapshotJSON string    `bun:"task_snapshot_json,notnull"`
+}
+
 type scheduledTaskAgentRow struct {
 	ID                   int64  `bun:"id"`
 	DefaultLLMProviderID string `bun:"default_llm_provider_id"`
@@ -71,6 +84,7 @@ var _ bun.BeforeInsertHook = (*scheduledTaskModel)(nil)
 var _ bun.BeforeUpdateHook = (*scheduledTaskModel)(nil)
 var _ bun.BeforeInsertHook = (*scheduledTaskRunModel)(nil)
 var _ bun.BeforeUpdateHook = (*scheduledTaskRunModel)(nil)
+var _ bun.BeforeInsertHook = (*scheduledTaskOperationLogModel)(nil)
 
 func (*scheduledTaskModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
 	now := sqlite.NowUTC()
@@ -93,6 +107,11 @@ func (*scheduledTaskRunModel) BeforeInsert(ctx context.Context, query *bun.Inser
 
 func (*scheduledTaskRunModel) BeforeUpdate(ctx context.Context, query *bun.UpdateQuery) error {
 	query.Set("updated_at = ?", sqlite.NowUTC())
+	return nil
+}
+
+func (*scheduledTaskOperationLogModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	query.Value("created_at", "?", sqlite.NowUTC())
 	return nil
 }
 
@@ -137,5 +156,17 @@ func (m *scheduledTaskRunModel) toDTO() ScheduledTaskRun {
 		DurationMS:         m.DurationMS,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
+	}
+}
+
+func (m *scheduledTaskOperationLogModel) toDTO(changedFields []ScheduledTaskOperationChangedField) ScheduledTaskOperationLog {
+	return ScheduledTaskOperationLog{
+		ID:               m.ID,
+		TaskID:           m.TaskID,
+		TaskNameSnapshot: m.TaskNameSnapshot,
+		OperationType:    m.OperationType,
+		OperationSource:  m.OperationSource,
+		ChangedFields:    changedFields,
+		CreatedAt:        m.CreatedAt,
 	}
 }

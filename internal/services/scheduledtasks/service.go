@@ -224,6 +224,10 @@ func (s *ScheduledTasksService) ValidateSchedule(scheduleType, scheduleValue, cr
 }
 
 func (s *ScheduledTasksService) CreateScheduledTask(input CreateScheduledTaskInput) (*ScheduledTask, error) {
+	return s.CreateScheduledTaskWithSource(input, OperationSourceManual)
+}
+
+func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateScheduledTaskInput, source string) (*ScheduledTask, error) {
 	db, err := s.dbOrGlobal()
 	if err != nil {
 		return nil, err
@@ -263,11 +267,19 @@ func (s *ScheduledTasksService) CreateScheduledTask(input CreateScheduledTaskInp
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
 	}
+	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeCreate, source, s.buildCreateChangedFields(*model), s.buildTaskSnapshot(ctx, db, *model)); err != nil {
+		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
+		return nil, call.err
+	}
 	call.task = &dto
 	return &dto, nil
 }
 
 func (s *ScheduledTasksService) UpdateScheduledTask(id int64, input UpdateScheduledTaskInput) (*ScheduledTask, error) {
+	return s.UpdateScheduledTaskWithSource(id, input, OperationSourceManual)
+}
+
+func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input UpdateScheduledTaskInput, source string) (*ScheduledTask, error) {
 	if id <= 0 {
 		return nil, errs.New("error.scheduled_task_id_required")
 	}
@@ -282,6 +294,7 @@ func (s *ScheduledTasksService) UpdateScheduledTask(id int64, input UpdateSchedu
 	if err != nil {
 		return nil, err
 	}
+	beforeModel := model
 	if err := s.applyUpdateInput(&model, input); err != nil {
 		return nil, err
 	}
@@ -310,10 +323,17 @@ func (s *ScheduledTasksService) UpdateScheduledTask(id int64, input UpdateSchedu
 	if err := s.scheduler.register(dto, func() { s.runScheduledTask(dto.ID, RunTriggerSchedule) }); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
 	}
+	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeUpdate, source, s.buildUpdateChangedFields(ctx, db, beforeModel, model), s.buildTaskSnapshot(ctx, db, model)); err != nil {
+		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
+	}
 	return &dto, nil
 }
 
 func (s *ScheduledTasksService) DeleteScheduledTask(id int64) error {
+	return s.DeleteScheduledTaskWithSource(id, OperationSourceManual)
+}
+
+func (s *ScheduledTasksService) DeleteScheduledTaskWithSource(id int64, source string) error {
 	if id <= 0 {
 		return errs.New("error.scheduled_task_id_required")
 	}
@@ -323,6 +343,11 @@ func (s *ScheduledTasksService) DeleteScheduledTask(id int64) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	model, err := s.getTaskModel(ctx, db, id)
+	if err != nil {
+		return err
+	}
 
 	now := time.Now().UTC()
 	res, err := db.NewUpdate().
@@ -341,11 +366,18 @@ func (s *ScheduledTasksService) DeleteScheduledTask(id int64) error {
 	}
 
 	s.scheduler.unregister(id)
+	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeDelete, source, s.buildDeleteChangedFields(model), s.buildTaskSnapshot(ctx, db, model)); err != nil {
+		return errs.Wrap("error.scheduled_task_delete_failed", err)
+	}
 	return nil
 }
 
 func (s *ScheduledTasksService) SetScheduledTaskEnabled(id int64, enabled bool) (*ScheduledTask, error) {
-	return s.UpdateScheduledTask(id, UpdateScheduledTaskInput{Enabled: &enabled})
+	return s.SetScheduledTaskEnabledWithSource(id, enabled, OperationSourceManual)
+}
+
+func (s *ScheduledTasksService) SetScheduledTaskEnabledWithSource(id int64, enabled bool, source string) (*ScheduledTask, error) {
+	return s.UpdateScheduledTaskWithSource(id, UpdateScheduledTaskInput{Enabled: &enabled}, source)
 }
 
 func (s *ScheduledTasksService) RunScheduledTaskNow(id int64) (*ScheduledTaskRun, error) {
@@ -443,6 +475,73 @@ func (s *ScheduledTasksService) GetScheduledTaskRunDetail(runID int64) (*Schedul
 		}
 	}
 	return detail, nil
+}
+
+func (s *ScheduledTasksService) ListScheduledTaskOperationLogs(taskID int64, page, pageSize int) ([]ScheduledTaskOperationLog, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := db.NewSelect().
+		Model((*scheduledTaskOperationLogModel)(nil)).
+		OrderExpr("created_at DESC, id DESC").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize)
+	if taskID > 0 {
+		query = query.Where("task_id = ?", taskID)
+	}
+
+	var models []scheduledTaskOperationLogModel
+	if err := query.Scan(ctx, &models); err != nil {
+		return nil, errs.Wrap("error.scheduled_task_operation_log_list_failed", err)
+	}
+
+	out := make([]ScheduledTaskOperationLog, 0, len(models))
+	for i := range models {
+		changedFields := decodeScheduledTaskOperationChangedFields(models[i].ChangedFieldsJSON)
+		out = append(out, models[i].toDTO(changedFields))
+	}
+	return out, nil
+}
+
+func (s *ScheduledTasksService) GetScheduledTaskOperationLogDetail(logID int64) (*ScheduledTaskOperationLogDetail, error) {
+	if logID <= 0 {
+		return nil, errs.New("error.scheduled_task_operation_log_id_required")
+	}
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var model scheduledTaskOperationLogModel
+	if err := db.NewSelect().
+		Model(&model).
+		Where("id = ?", logID).
+		Limit(1).
+		Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.New("error.scheduled_task_operation_log_not_found")
+		}
+		return nil, errs.Wrap("error.scheduled_task_operation_log_read_failed", err)
+	}
+
+	changedFields := decodeScheduledTaskOperationChangedFields(model.ChangedFieldsJSON)
+	snapshot := decodeScheduledTaskOperationSnapshot(model.TaskSnapshotJSON)
+	return &ScheduledTaskOperationLogDetail{
+		Log:          model.toDTO(changedFields),
+		TaskSnapshot: snapshot,
+	}, nil
 }
 
 func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput) (*scheduledTaskModel, error) {
@@ -1161,6 +1260,254 @@ func (s *ScheduledTasksService) mustGetCronExpr(ctx context.Context, db *bun.DB,
 	var cronExpr string
 	_ = db.NewSelect().Table("scheduled_tasks").Column("cron_expr").Where("id = ?", taskID).Scan(ctx, &cronExpr)
 	return cronExpr
+}
+
+func (s *ScheduledTasksService) insertOperationLog(
+	ctx context.Context,
+	db *bun.DB,
+	taskID int64,
+	taskName string,
+	operationType string,
+	source string,
+	changedFields []ScheduledTaskOperationChangedField,
+	snapshot ScheduledTaskOperationSnapshot,
+) error {
+	changedFieldsJSON, err := json.Marshal(changedFields)
+	if err != nil {
+		return err
+	}
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	model := &scheduledTaskOperationLogModel{
+		TaskID:            taskID,
+		TaskNameSnapshot:  strings.TrimSpace(taskName),
+		OperationType:     normalizeOperationType(operationType),
+		OperationSource:   normalizeOperationSource(source),
+		ChangedFieldsJSON: string(changedFieldsJSON),
+		TaskSnapshotJSON:  string(snapshotJSON),
+	}
+	_, err = db.NewInsert().Model(model).Exec(ctx)
+	return err
+}
+
+func (s *ScheduledTasksService) buildCreateChangedFields(task scheduledTaskModel) []ScheduledTaskOperationChangedField {
+	return []ScheduledTaskOperationChangedField{
+		{FieldKey: "status", FieldLabel: "状态", Before: "", After: formatEnabledDisplay(task.Enabled)},
+		{FieldKey: "name", FieldLabel: "名称", Before: "", After: task.Name},
+		{FieldKey: "prompt", FieldLabel: "提示词", Before: "", After: task.Prompt},
+		{FieldKey: "agent", FieldLabel: "关联助手", Before: "", After: formatAgentDisplay(task.AgentID)},
+		{FieldKey: "notification_channels", FieldLabel: "通知渠道", Before: "", After: formatNotificationChannelsDisplay(task.NotificationPlatform, parseNotificationChannelIDs(task.NotificationChannelIDs))},
+		{FieldKey: "schedule_time", FieldLabel: "执行时间", Before: "", After: formatScheduleDisplay(task.ScheduleType, task.ScheduleValue, task.CronExpr)},
+	}
+}
+
+func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db *bun.DB, before, after scheduledTaskModel) []ScheduledTaskOperationChangedField {
+	changed := make([]ScheduledTaskOperationChangedField, 0, 6)
+	if before.Enabled != after.Enabled {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "status",
+			FieldLabel: "状态",
+			Before:     formatEnabledDisplay(before.Enabled),
+			After:      formatEnabledDisplay(after.Enabled),
+		})
+	}
+	if before.Name != after.Name {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "name",
+			FieldLabel: "名称",
+			Before:     before.Name,
+			After:      after.Name,
+		})
+	}
+	if before.Prompt != after.Prompt {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "prompt",
+			FieldLabel: "提示词",
+			Before:     before.Prompt,
+			After:      after.Prompt,
+		})
+	}
+	if before.AgentID != after.AgentID {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "agent",
+			FieldLabel: "关联助手",
+			Before:     formatAgentDisplay(before.AgentID),
+			After:      formatAgentDisplay(after.AgentID),
+		})
+	}
+	if before.NotificationPlatform != after.NotificationPlatform || before.NotificationChannelIDs != after.NotificationChannelIDs {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "notification_channels",
+			FieldLabel: "通知渠道",
+			Before:     formatNotificationChannelsDisplay(before.NotificationPlatform, parseNotificationChannelIDs(before.NotificationChannelIDs)),
+			After:      formatNotificationChannelsDisplay(after.NotificationPlatform, parseNotificationChannelIDs(after.NotificationChannelIDs)),
+		})
+	}
+	beforeSchedule := formatScheduleDisplay(before.ScheduleType, before.ScheduleValue, before.CronExpr)
+	afterSchedule := formatScheduleDisplay(after.ScheduleType, after.ScheduleValue, after.CronExpr)
+	if before.ScheduleType != after.ScheduleType || before.ScheduleValue != after.ScheduleValue || before.CronExpr != after.CronExpr {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "schedule_time",
+			FieldLabel: "执行时间",
+			Before:     beforeSchedule,
+			After:      afterSchedule,
+		})
+	}
+	if len(changed) == 0 {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "status",
+			FieldLabel: "状态",
+			Before:     formatEnabledDisplay(before.Enabled),
+			After:      formatEnabledDisplay(after.Enabled),
+		})
+	}
+	_ = ctx
+	_ = db
+	return changed
+}
+
+func (s *ScheduledTasksService) buildDeleteChangedFields(task scheduledTaskModel) []ScheduledTaskOperationChangedField {
+	return []ScheduledTaskOperationChangedField{
+		{
+			FieldKey:   "status",
+			FieldLabel: "状态",
+			Before:     formatEnabledDisplay(task.Enabled),
+			After:      "已删除",
+		},
+	}
+}
+
+func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.DB, task scheduledTaskModel) ScheduledTaskOperationSnapshot {
+	_ = ctx
+	_ = db
+	return ScheduledTaskOperationSnapshot{
+		TaskID:                 task.ID,
+		Name:                   task.Name,
+		Prompt:                 task.Prompt,
+		AgentID:                task.AgentID,
+		AgentName:              formatAgentDisplay(task.AgentID),
+		NotificationPlatform:   task.NotificationPlatform,
+		NotificationChannelIDs: parseNotificationChannelIDs(task.NotificationChannelIDs),
+		NotificationChannels:   formatNotificationChannelsDisplay(task.NotificationPlatform, parseNotificationChannelIDs(task.NotificationChannelIDs)),
+		ScheduleType:           task.ScheduleType,
+		ScheduleValue:          task.ScheduleValue,
+		CronExpr:               task.CronExpr,
+		ScheduleDescription:    formatScheduleDisplay(task.ScheduleType, task.ScheduleValue, task.CronExpr),
+		Timezone:               task.Timezone,
+		Enabled:                task.Enabled,
+	}
+}
+
+func normalizeOperationType(operationType string) string {
+	switch strings.TrimSpace(strings.ToLower(operationType)) {
+	case OperationTypeCreate:
+		return OperationTypeCreate
+	case OperationTypeDelete:
+		return OperationTypeDelete
+	default:
+		return OperationTypeUpdate
+	}
+}
+
+func normalizeOperationSource(source string) string {
+	if strings.TrimSpace(strings.ToLower(source)) == OperationSourceAI {
+		return OperationSourceAI
+	}
+	return OperationSourceManual
+}
+
+func decodeScheduledTaskOperationChangedFields(raw string) []ScheduledTaskOperationChangedField {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []ScheduledTaskOperationChangedField{}
+	}
+	var items []ScheduledTaskOperationChangedField
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []ScheduledTaskOperationChangedField{}
+	}
+	return items
+}
+
+func decodeScheduledTaskOperationSnapshot(raw string) ScheduledTaskOperationSnapshot {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ScheduledTaskOperationSnapshot{}
+	}
+	var snapshot ScheduledTaskOperationSnapshot
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		return ScheduledTaskOperationSnapshot{}
+	}
+	return snapshot
+}
+
+func formatEnabledDisplay(enabled bool) string {
+	if enabled {
+		return "启用"
+	}
+	return "停用"
+}
+
+func formatAgentDisplay(agentID int64) string {
+	if agentID <= 0 {
+		return "-"
+	}
+	return strconv.FormatInt(agentID, 10)
+}
+
+func formatNotificationChannelsDisplay(platform string, channelIDs []int64) string {
+	if strings.TrimSpace(platform) == "" || len(channelIDs) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		parts = append(parts, strconv.FormatInt(channelID, 10))
+	}
+	return fmt.Sprintf("%s: %s", strings.TrimSpace(platform), strings.Join(parts, ", "))
+}
+
+func formatScheduleDisplay(scheduleType, scheduleValue, cronExpr string) string {
+	switch scheduleType {
+	case ScheduleTypePreset:
+		switch scheduleValue {
+		case "every_minute":
+			return "每分钟"
+		case "every_5_minutes":
+			return "每5分钟"
+		case "every_15_minutes":
+			return "每15分钟"
+		case "every_hour":
+			return "每小时"
+		case "every_day_0900":
+			return "每日9点"
+		case "every_day_1800":
+			return "每日18点"
+		case "weekdays_0900":
+			return "工作日9点"
+		case "every_monday_0900":
+			return "每周一9点"
+		case "every_month_1_0900":
+			return "每月1日9点"
+		default:
+			return scheduleValue
+		}
+	case ScheduleTypeCustom:
+		return scheduleValue
+	case ScheduleTypeCron:
+		if strings.TrimSpace(cronExpr) != "" {
+			return strings.TrimSpace(cronExpr)
+		}
+		return scheduleValue
+	default:
+		if strings.TrimSpace(cronExpr) != "" {
+			return strings.TrimSpace(cronExpr)
+		}
+		if strings.TrimSpace(scheduleValue) != "" {
+			return strings.TrimSpace(scheduleValue)
+		}
+		return "-"
+	}
 }
 
 func taskModelsToDTOs(models []scheduledTaskModel) []ScheduledTask {

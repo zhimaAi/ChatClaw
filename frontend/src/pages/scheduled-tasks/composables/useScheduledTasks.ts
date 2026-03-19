@@ -80,9 +80,13 @@ export function useScheduledTasks() {
     try {
       const payload = buildPayload(form.value)
       if (editingTask.value?.id) {
-        await ScheduledTasksService.UpdateScheduledTask(editingTask.value.id, payload.update)
+        await ScheduledTasksService.UpdateScheduledTaskWithSource(
+          editingTask.value.id,
+          payload.update,
+          'manual'
+        )
       } else {
-        await ScheduledTasksService.CreateScheduledTask(payload.create)
+        await ScheduledTasksService.CreateScheduledTaskWithSource(payload.create, 'manual')
       }
       createDialogOpen.value = false
       await loadTasks()
@@ -96,7 +100,7 @@ export function useScheduledTasks() {
 
   async function deleteTask(task: ScheduledTask) {
     try {
-      await ScheduledTasksService.DeleteScheduledTask(task.id)
+      await ScheduledTasksService.DeleteScheduledTaskWithSource(task.id, 'manual')
       await loadTasks()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -105,7 +109,7 @@ export function useScheduledTasks() {
 
   async function toggleTask(task: ScheduledTask, enabled: boolean) {
     try {
-      await ScheduledTasksService.SetScheduledTaskEnabled(task.id, enabled)
+      await ScheduledTasksService.SetScheduledTaskEnabledWithSource(task.id, enabled, 'manual')
       await loadTasks()
     } catch (error) {
       toast.error(getErrorMessage(error))
