@@ -45,6 +45,13 @@ func (s *BrowserService) OpenURL(url string) error {
 		return errs.New("error.browser_unsupported_url_scheme")
 	}
 
+	// On Windows, use custom impl to avoid flashing cmd window; Wails app.Browser.OpenURL spawns cmd.
+	if runtime.GOOS == "windows" {
+		if err := openURLWindows(u); err != nil {
+			return errs.Wrap("error.browser_open_failed", err)
+		}
+		return nil
+	}
 	if err := s.app.Browser.OpenURL(u); err != nil {
 		return errs.Wrap("error.browser_open_failed", err)
 	}
