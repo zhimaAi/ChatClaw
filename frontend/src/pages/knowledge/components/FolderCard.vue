@@ -63,7 +63,7 @@ const handleCardClick = () => {
         </DropdownMenuItem>
         <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('move', folder)">
           <FolderPlus class="size-4 text-muted-foreground" />
-          {{ t('knowledge.folder.move.title') }}
+          {{ t('knowledge.folder.move.action') }}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
