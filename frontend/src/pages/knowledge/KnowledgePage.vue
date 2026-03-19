@@ -1143,16 +1143,16 @@ const handleRemoveImage = (id: string) => {
         )
       "
     >
-      <div class="flex items-center gap-2 border-b border-border px-2 py-2">
+      <div class="flex w-full items-center justify-between gap-2 border-b border-border px-2 py-2">
         <template v-if="!sidebarCollapsed">
-          <div class="inline-flex min-w-0 flex-1 rounded-md bg-muted p-1">
+          <div class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]">
             <button
               type="button"
               :class="
                 cn(
-                  'rounded px-3 py-1 text-sm transition-colors',
+                  'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'personal'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
                     : 'text-muted-foreground hover:text-foreground'
                 )
               "
@@ -1164,9 +1164,9 @@ const handleRemoveImage = (id: string) => {
               type="button"
               :class="
                 cn(
-                  'rounded px-3 py-1 text-sm transition-colors',
+                  'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'team'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
                     : 'text-muted-foreground hover:text-foreground'
                 )
               "
