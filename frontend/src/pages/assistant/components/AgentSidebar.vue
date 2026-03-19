@@ -189,14 +189,12 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
         </div>
       </div>
 
-      <!-- Team mode: not bound - hint only (no bind button in sidebar; right side shows full empty-style block with button) -->
+      <!-- Team mode: not bound - full-width bar, same row height as list items (design: 48px, card bg, bottom border, centered muted text) -->
       <div
         v-else-if="listMode === 'team' && !teamBound"
-        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+        class="flex h-12 w-full shrink-0 items-center justify-center border-b border-border bg-card text-sm font-normal text-muted-foreground"
       >
-        <div class="text-center text-sm text-muted-foreground">
-          {{ t('knowledge.team.notBoundTitle') }}
-        </div>
+        {{ t('knowledge.team.notBoundTitle') }}
       </div>
 
       <!-- Team mode: bound but no robots - empty data hint only (same style as personal empty) -->
