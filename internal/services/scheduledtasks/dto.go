@@ -24,6 +24,13 @@ const (
 	RunStatusRunning = "running"
 	RunStatusSuccess = "success"
 	RunStatusFailed  = "failed"
+
+	OperationTypeCreate = "create"
+	OperationTypeUpdate = "update"
+	OperationTypeDelete = "delete"
+
+	OperationSourceManual = "manual"
+	OperationSourceAI     = "ai"
 )
 
 type ScheduledTask struct {
@@ -113,4 +120,43 @@ type ScheduledTaskRunDetail struct {
 	Run          ScheduledTaskRun            `json:"run"`
 	Conversation *conversations.Conversation `json:"conversation"`
 	Messages     []chat.Message              `json:"messages"`
+}
+
+type ScheduledTaskOperationChangedField struct {
+	FieldKey   string `json:"field_key"`
+	FieldLabel string `json:"field_label"`
+	Before     string `json:"before"`
+	After      string `json:"after"`
+}
+
+type ScheduledTaskOperationSnapshot struct {
+	TaskID                 int64   `json:"task_id"`
+	Name                   string  `json:"name"`
+	Prompt                 string  `json:"prompt"`
+	AgentID                int64   `json:"agent_id"`
+	AgentName              string  `json:"agent_name"`
+	NotificationPlatform   string  `json:"notification_platform"`
+	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
+	NotificationChannels   string  `json:"notification_channels"`
+	ScheduleType           string  `json:"schedule_type"`
+	ScheduleValue          string  `json:"schedule_value"`
+	CronExpr               string  `json:"cron_expr"`
+	ScheduleDescription    string  `json:"schedule_description"`
+	Timezone               string  `json:"timezone"`
+	Enabled                bool    `json:"enabled"`
+}
+
+type ScheduledTaskOperationLog struct {
+	ID               int64                               `json:"id"`
+	TaskID           int64                               `json:"task_id"`
+	TaskNameSnapshot string                              `json:"task_name_snapshot"`
+	OperationType    string                              `json:"operation_type"`
+	OperationSource  string                              `json:"operation_source"`
+	ChangedFields    []ScheduledTaskOperationChangedField `json:"changed_fields"`
+	CreatedAt        time.Time                           `json:"created_at"`
+}
+
+type ScheduledTaskOperationLogDetail struct {
+	Log          ScheduledTaskOperationLog      `json:"log"`
+	TaskSnapshot ScheduledTaskOperationSnapshot `json:"task_snapshot"`
 }

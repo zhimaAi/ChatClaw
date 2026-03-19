@@ -1,6 +1,10 @@
 import { formatUtcDateTime } from '@/composables/useDateTime'
 import { SCHEDULE_PRESET_LABELS, WEEKDAY_OPTIONS } from './constants'
-import type { ScheduledTask, ScheduledTaskFormState } from './types'
+import type {
+  ScheduledTask,
+  ScheduledTaskFormState,
+  ScheduledTaskOperationSnapshot,
+} from './types'
 
 export function formatTaskTime(value?: string | Date | null) {
   if (!value) return '-'
@@ -127,6 +131,62 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
 
   if (task.schedule_type === 'cron') {
     form.cronExpr = task.cron_expr
+  }
+
+  return form
+}
+
+export function operationSnapshotToForm(
+  snapshot: ScheduledTaskOperationSnapshot
+): ScheduledTaskFormState {
+  const form = createEmptyForm()
+  form.id = snapshot.task_id
+  form.name = snapshot.name
+  form.prompt = snapshot.prompt
+  form.agentId = snapshot.agent_id
+  form.notificationPlatform = snapshot.notification_platform || ''
+  form.notificationChannelIds = Array.isArray(snapshot.notification_channel_ids)
+    ? [...snapshot.notification_channel_ids]
+    : []
+  form.enabled = snapshot.enabled
+  form.scheduleType = (snapshot.schedule_type || 'preset') as ScheduledTaskFormState['scheduleType']
+  form.cronExpr = snapshot.cron_expr || ''
+
+  if (snapshot.schedule_type === 'preset') {
+    form.schedulePreset = (snapshot.schedule_value ||
+      'every_day_0900') as ScheduledTaskFormState['schedulePreset']
+  }
+
+  if (snapshot.schedule_type === 'custom') {
+    try {
+      const parsed = JSON.parse(snapshot.schedule_value) as {
+        hour: number
+        minute: number
+        interval_minutes?: number
+        weekdays?: number[]
+        day_of_month?: number
+      }
+      if (parsed.interval_minutes) {
+        form.customMode = 'interval'
+        form.customIntervalMinutes = parsed.interval_minutes
+        return form
+      }
+      form.customHour = parsed.hour ?? 9
+      form.customMinute = parsed.minute ?? 0
+      if (parsed.day_of_month) {
+        form.customMode = 'monthly'
+        form.customDayOfMonth = parsed.day_of_month
+      } else if (parsed.weekdays?.length) {
+        form.customMode = 'weekly'
+        form.customWeekdays = parsed.weekdays
+      }
+    } catch {
+      //
+    }
+  }
+
+  if (snapshot.schedule_type === 'cron') {
+    form.cronExpr = snapshot.cron_expr || snapshot.schedule_value
   }
 
   return form

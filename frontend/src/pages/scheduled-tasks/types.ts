@@ -1,5 +1,8 @@
 import type {
   ScheduledTask,
+  ScheduledTaskOperationLog,
+  ScheduledTaskOperationLogDetail,
+  ScheduledTaskOperationSnapshot,
   ScheduledTaskRun,
   ScheduledTaskRunDetail,
   ScheduledTaskSummary,
@@ -9,6 +12,9 @@ import type { Channel } from '@bindings/chatclaw/internal/services/channels'
 
 export type {
   ScheduledTask,
+  ScheduledTaskOperationLog,
+  ScheduledTaskOperationLogDetail,
+  ScheduledTaskOperationSnapshot,
   ScheduledTaskRun,
   ScheduledTaskRunDetail,
   ScheduledTaskSummary,

@@ -89,7 +89,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			}, nil
 		},
 		CreateScheduledTaskFn: func(input tools.ScheduledTaskCreateInput) (*tools.ScheduledTaskRecord, error) {
-			created, err := scheduledTasksService.CreateScheduledTask(scheduledtasks.CreateScheduledTaskInput{
+			created, err := scheduledTasksService.CreateScheduledTaskWithSource(scheduledtasks.CreateScheduledTaskInput{
 				Name:                   input.Name,
 				Prompt:                 input.Prompt,
 				AgentID:                input.AgentID,
@@ -99,7 +99,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 				ScheduleValue:          input.ScheduleValue,
 				CronExpr:               input.CronExpr,
 				Enabled:                input.Enabled,
-			})
+			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +107,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			return &record, nil
 		},
 		UpdateScheduledTaskFn: func(id int64, input tools.ScheduledTaskUpdateInput) (*tools.ScheduledTaskRecord, error) {
-			updated, err := scheduledTasksService.UpdateScheduledTask(id, scheduledtasks.UpdateScheduledTaskInput{
+			updated, err := scheduledTasksService.UpdateScheduledTaskWithSource(id, scheduledtasks.UpdateScheduledTaskInput{
 				Name:                   input.Name,
 				Prompt:                 input.Prompt,
 				AgentID:                input.AgentID,
@@ -117,7 +117,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 				ScheduleValue:          input.ScheduleValue,
 				CronExpr:               input.CronExpr,
 				Enabled:                input.Enabled,
-			})
+			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}
@@ -125,10 +125,10 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			return &record, nil
 		},
 		DeleteScheduledTaskFn: func(id int64) error {
-			return scheduledTasksService.DeleteScheduledTask(id)
+			return scheduledTasksService.DeleteScheduledTaskWithSource(id, scheduledtasks.OperationSourceAI)
 		},
 		SetScheduledTaskFn: func(id int64, enabled bool) (*tools.ScheduledTaskRecord, error) {
-			updated, err := scheduledTasksService.SetScheduledTaskEnabled(id, enabled)
+			updated, err := scheduledTasksService.SetScheduledTaskEnabledWithSource(id, enabled, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}

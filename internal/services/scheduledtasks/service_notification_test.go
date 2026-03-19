@@ -248,6 +248,16 @@ func newScheduledTasksTestDB(t *testing.T) *bun.DB {
 			snapshot_prompt text not null,
 			snapshot_agent_id integer not null
 		);`,
+		`create table scheduled_task_operation_logs (
+			id integer primary key,
+			created_at datetime not null default current_timestamp,
+			task_id integer not null,
+			task_name_snapshot text not null default '',
+			operation_type text not null,
+			operation_source text not null,
+			changed_fields_json text not null default '[]',
+			task_snapshot_json text not null default '{}'
+		);`,
 		`create table messages (
 			id integer primary key,
 			conversation_id integer not null,

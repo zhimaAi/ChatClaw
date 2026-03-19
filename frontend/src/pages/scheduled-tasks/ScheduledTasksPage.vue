@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Clock3, LoaderCircle, Plus, RefreshCcw } from 'lucide-vue-next'
+import { Clock3, FileText, LoaderCircle, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import {
   AlertDialog,
@@ -14,11 +14,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { useScheduledTasks } from './composables/useScheduledTasks'
 import CreateTaskDialog from './components/CreateTaskDialog.vue'
+import OperationLogListDialog from './components/OperationLogListDialog.vue'
 import TaskRunHistoryDialog from './components/TaskRunHistoryDialog.vue'
 import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
 import { createDeleteTaskConfirmation } from './deleteTaskConfirmation'
-import type { ScheduledTaskFormState, ScheduledTask } from './types'
+import type { ScheduledTask, ScheduledTaskFormState } from './types'
 import { taskToForm } from './utils'
 
 defineProps<{
@@ -54,6 +55,7 @@ const summaryLabels = computed(() => ({
 }))
 
 const hasTasks = computed(() => tasks.value.length > 0)
+const operationLogOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const deletingTask = ref(false)
 const pendingDeleteTask = ref<Pick<ScheduledTask, 'id' | 'name'> | null>(null)
@@ -179,6 +181,14 @@ async function handleDeleteConfirm() {
         <button
           type="button"
           class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#f5f5f5] px-4 text-sm font-medium text-[#171717] transition-colors hover:bg-[#ebebeb]"
+          @click="operationLogOpen = true"
+        >
+          <FileText class="size-4" />
+          操作记录
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#f5f5f5] px-4 text-sm font-medium text-[#171717] transition-colors hover:bg-[#ebebeb]"
           @click="reloadAll"
         >
           <RefreshCcw class="size-4" />
@@ -258,6 +268,11 @@ async function handleDeleteConfirm() {
       :open="!!historyTask"
       :task="historyTask"
       @update:open="(value) => !value && (historyTask = null)"
+    />
+
+    <OperationLogListDialog
+      :open="operationLogOpen"
+      @update:open="(value) => (operationLogOpen = value)"
     />
 
     <AlertDialog :open="deleteDialogOpen" @update:open="(value) => !value && handleDeleteCancel()">
