@@ -133,7 +133,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
             cn(
               'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
               listMode === 'personal'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
                 : 'text-muted-foreground hover:text-foreground'
             )
           "
@@ -146,7 +146,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
             cn(
               'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
               listMode === 'team'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
                 : 'text-muted-foreground hover:text-foreground'
             )
           "
