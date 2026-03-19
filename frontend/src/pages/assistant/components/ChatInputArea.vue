@@ -8,13 +8,12 @@ import {
   ArrowUp,
   Square,
   Check,
-  Lightbulb,
   X,
+  Trash2,
   Image as ImageIcon,
   FileText,
   Mic,
   Video,
-  File,
   Plus,
   MoreHorizontal,
 } from 'lucide-vue-next'
@@ -40,7 +39,18 @@ import {
 } from 'reka-ui'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
+import IconKnowledge from '@/assets/icons/knowledge-icon.svg'
+import IconUpload from '@/assets/icons/upload-icon.svg'
+import IconThink from '@/assets/icons/think-icon.svg'
+import IconClean from '@/assets/icons/clean-icon.svg'
+import fileIconDocx from '@/assets/images/file-icons/file-icon-docx.png'
+import fileIconNormal from '@/assets/images/file-icons/file-icon-normal.png'
+import fileIconPdf from '@/assets/images/file-icons/file-icon-pdf.png'
+import fileIconPpt from '@/assets/images/file-icons/file-icon-ppt.png'
+import fileIconTxt from '@/assets/images/file-icons/file-icon-txt.png'
+import fileIconXls from '@/assets/images/file-icons/file-icon-xls.png'
+import fileIconXlsx from '@/assets/images/file-icons/file-icon-xlsx.png'
+import fileIconZip from '@/assets/images/file-icons/file-icon-zip.png'
 import ChatModeSelector from './ChatModeSelector.vue'
 import {
   DropdownMenu,
@@ -223,9 +233,44 @@ const visibleTeamLibraries = computed(() => selectedTeamLibraries.value.slice(0,
 const teamOverflowCount = computed(() =>
   Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
 )
+const selectedKnowledgeCount = computed(
+  () => props.selectedLibraryIds.length + (props.assistantSelectedTeamLibraryIds?.length ?? 0)
+)
+const knowledgeLibraryTab = ref<'personal' | 'team'>('personal')
+const hasPersonalLibraries = computed(() => props.libraries.length > 0)
+const hasAssistantTeamLibraries = computed(() => (props.assistantTeamLibraries?.length ?? 0) > 0)
+const knowledgeButtonTitle = computed(() => {
+  if (props.assistantSelectedTeamLibraryIds && props.assistantSelectedTeamLibraryIds.length > 0) {
+    if (props.assistantSelectedTeamLibraryIds.length === 1) {
+      return (
+        props.assistantTeamLibraries.find((l) => l.id === props.assistantSelectedTeamLibraryIds?.[0])
+          ?.name ?? ''
+      )
+    }
+    return t('assistant.chat.selectedCount', { count: props.assistantSelectedTeamLibraryIds.length })
+  }
+
+  if (props.selectedLibraryIds.length > 0) {
+    return t('assistant.chat.selectedCount', { count: props.selectedLibraryIds.length })
+  }
+
+  return t('assistant.chat.selectKnowledge')
+})
 
 // Control knowledge select dropdown open state (so "更多" 菜单可以复用同一套选择逻辑)
 const knowledgeSelectOpen = ref(false)
+
+const resetKnowledgeLibraryTab = () => {
+  if (hasPersonalLibraries.value) {
+    knowledgeLibraryTab.value = 'personal'
+    return
+  }
+  if (hasAssistantTeamLibraries.value) {
+    knowledgeLibraryTab.value = 'team'
+    return
+  }
+  knowledgeLibraryTab.value = 'personal'
+}
 
 function handleRemoveTeamLibrary(id: string) {
   emit('toggleAssistantTeamLibrary', id)
@@ -338,6 +383,34 @@ const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+const FILE_ICON_MAP: Record<string, string> = {
+  pdf: fileIconPdf,
+  doc: fileIconDocx,
+  docx: fileIconDocx,
+  ppt: fileIconPpt,
+  pptx: fileIconPpt,
+  xls: fileIconXls,
+  xlsx: fileIconXlsx,
+  txt: fileIconTxt,
+  csv: fileIconTxt,
+  md: fileIconTxt,
+  json: fileIconTxt,
+  xml: fileIconTxt,
+  html: fileIconTxt,
+  rtf: fileIconTxt,
+  log: fileIconTxt,
+  zip: fileIconZip,
+  rar: fileIconZip,
+  '7z': fileIconZip,
+  tar: fileIconZip,
+  gz: fileIconZip,
+}
+
+const getFileIcon = (fileName: string): string => {
+  const ext = fileName.split('.').pop()?.trim().toLowerCase() || ''
+  return FILE_ICON_MAP[ext] || fileIconNormal
 }
 
 const handleSelectImagesClick = () => {
@@ -504,8 +577,8 @@ onMounted(() => {
     if (toolbarRef.value) {
       toolbarObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          // Threshold: when toolbar width is below ~480px, collapse extra buttons
-          isToolbarNarrow.value = entry.contentRect.width < 480
+          // Threshold: when toolbar width is below ~560px, collapse extra buttons to avoid wrap
+          isToolbarNarrow.value = entry.contentRect.width < 560
         }
       })
       toolbarObserver.observe(toolbarRef.value)
@@ -567,42 +640,57 @@ onUnmounted(() => {
         @drop="handleDrop"
       >
         <!-- Image preview area -->
-        <div v-if="pendingImages.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
-          <div
-            v-for="img in pendingImages"
-            :key="img.id"
-            class="group relative h-16 w-16 overflow-hidden rounded-md border border-border bg-muted/40"
-          >
-            <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
-            <button
-              class="absolute right-0 top-0 flex size-4 cursor-pointer items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
-              @click="handleRemoveImage(img.id)"
+        <div
+          v-if="pendingImages.length > 0"
+          class="mb-3"
+        >
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="img in pendingImages"
+              :key="img.id"
+              class="group relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-border/70 bg-muted/40"
             >
-              <X class="size-3" />
-            </button>
+              <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
+              <div
+                class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/95 via-background/60 to-transparent px-1.5 pt-4 pb-1"
+              >
+                <p class="truncate text-[10px] text-foreground/90">{{ img.fileName }}</p>
+              </div>
+              <button
+                class="absolute right-1 top-1 flex size-5 cursor-pointer items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground active:scale-95"
+                @click="handleRemoveImage(img.id)"
+              >
+                <X class="size-3" />
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- File preview area -->
-        <div v-if="pendingFiles.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
-          <div
-            v-for="f in pendingFiles"
-            :key="f.id"
-            class="group relative flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
-          >
-            <File class="size-4 shrink-0 text-muted-foreground" />
-            <div class="flex min-w-0 flex-col">
-              <span class="truncate text-xs font-medium text-foreground" :title="f.fileName">{{
-                f.fileName
-              }}</span>
-              <span class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
-            </div>
-            <button
-              class="ml-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
-              @click="emit('removeFile', f.id)"
+        <div
+          v-if="pendingFiles.length > 0"
+          class="mb-3"
+        >
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="f in pendingFiles"
+              :key="f.id"
+              class="group relative flex min-w-[220px] max-w-[282px] items-center gap-2 rounded-2xl bg-muted px-4 py-2"
             >
-              <X class="size-3" />
-            </button>
+              <img :src="getFileIcon(f.fileName)" class="h-6 w-6 shrink-0 object-contain" :alt="f.fileName" />
+              <div class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-sm text-foreground" :title="f.fileName">{{
+                  f.fileName
+                }}</span>
+                <span class="text-xs leading-5 text-muted-foreground">{{ formatFileSize(f.size) }}</span>
+              </div>
+              <button
+                class="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
+                @click="emit('removeFile', f.id)"
+              >
+                <Trash2 class="size-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -613,25 +701,26 @@ onUnmounted(() => {
             (selectedLibraryIds.length > 0 ||
               (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0))
           "
-          class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
+          class="-mt-1 mb-3 flex flex-wrap items-center gap-2"
         >
           <!-- Personal libraries -->
           <div
             v-for="lib in visibleLibraries"
             :key="'p-' + lib.id"
-            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+            class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
           >
-            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[148px] truncate">{{ lib.name }}</span>
             <button
-              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
+              class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
               @click="handleRemoveLibrary(lib.id)"
             >
-              <X class="size-3" />
+              <X class="size-4" />
             </button>
           </div>
           <span
             v-if="overflowCount > 0"
-            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+            class="inline-flex h-8 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground"
           >
             +{{ overflowCount }}
           </span>
@@ -639,30 +728,32 @@ onUnmounted(() => {
           <div
             v-for="lib in visibleTeamLibraries"
             :key="'t-' + lib.id"
-            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+            class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
             :title="lib.name"
           >
-            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[148px] truncate">{{ lib.name }}</span>
             <button
-              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
+              class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
               @click="handleRemoveTeamLibrary(lib.id)"
             >
-              <X class="size-3" />
+              <X class="size-4" />
             </button>
           </div>
           <span
             v-if="teamOverflowCount > 0"
-            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+            class="inline-flex h-8 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground"
           >
             +{{ teamOverflowCount }}
           </span>
         </div>
-        <div v-else-if="selectedTeamLibrary" class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5">
+        <div v-else-if="selectedTeamLibrary" class="-mt-1 mb-3 flex flex-wrap items-center gap-2">
           <div
-            class="flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-2 py-0.5 text-xs text-muted-foreground"
+            class="flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80"
             :title="selectedTeamLibrary.name"
           >
-            <span class="max-w-[160px] truncate">{{ selectedTeamLibrary.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[188px] truncate">{{ selectedTeamLibrary.name }}</span>
           </div>
         </div>
 
@@ -692,10 +783,10 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                    class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:scale-95"
                     @click="emit('new-conversation')"
                   >
-                    <Plus class="size-4 text-muted-foreground" />
+                    <Plus class="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -703,6 +794,7 @@ onUnmounted(() => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <div v-if="!isTeamMode" class="mx-0.5 h-6 w-px shrink-0 bg-border/70" />
 
             <!-- ChatModeSelector: show in both modes，内部自己处理悬浮提示 -->
             <ChatModeSelector
@@ -723,7 +815,7 @@ onUnmounted(() => {
                       @update:model-value="(v: any) => v && emit('update:activeAgentId', Number(v))"
                     >
                       <SelectTrigger
-                        class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95"
+                        class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-transparent bg-muted px-3 text-xs shadow-none hover:bg-muted/80 active:bg-muted/90 active:scale-95"
                       >
                         <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
                           <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
@@ -766,7 +858,7 @@ onUnmounted(() => {
                         <SelectTrigger
                           :class="
                             cn(
-                              'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95',
+                              'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-transparent bg-muted px-3 text-xs shadow-none hover:bg-muted/80 active:bg-muted/90 active:scale-95',
                               useCompactToolbar && 'max-w-[140px]'
                             )
                           "
@@ -843,17 +935,17 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background"
+                    class="size-8 rounded-full border border-transparent bg-muted"
                     :class="
                       enableThinking
-                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
-                        : 'hover:bg-muted/40 active:bg-muted active:scale-95'
+                        ? 'text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95'
+                        : 'text-muted-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95'
                     "
                     @click="emit('update:enableThinking', !enableThinking)"
                   >
-                    <Lightbulb
+                    <IconThink
                       class="size-4 pointer-events-none"
-                      :class="enableThinking ? 'text-primary' : 'text-muted-foreground'"
+                      :class="enableThinking ? 'text-foreground' : 'text-muted-foreground'"
                     />
                   </Button>
                 </TooltipTrigger>
@@ -872,7 +964,7 @@ onUnmounted(() => {
             <input
               ref="fileInputRef"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/svg+xml,image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
               multiple
               class="hidden"
               @change="handleFilesSelected"
@@ -886,151 +978,163 @@ onUnmounted(() => {
               @change="handleDocFilesSelected"
             />
 
-            <!-- Knowledge base select: same slot for personal (multi-select) and team (single from current category); position unchanged -->
-            <SelectRoot
-              v-if="!isTeamMode && !selectedTeamLibrary"
-              :model-value="selectedLibraryIds"
-              :open="knowledgeSelectOpen"
-              multiple
-              @update:model-value="
-                (v: any) => {
-                  emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v])
-                  handleLibrarySelectionChange()
-                }
-              "
-              @update:open="
-                (open: boolean) => {
-                  knowledgeSelectOpen = open
-                  open && emit('loadLibraries')
-                }
-              "
-            >
-              <SelectTriggerRaw
-                as-child
-                :title="
-                  assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0
-                    ? assistantSelectedTeamLibraryIds.length === 1
-                      ? (assistantTeamLibraries.find(
-                          (l) => l.id === assistantSelectedTeamLibraryIds[0]
-                        )?.name ?? '')
-                      : t('assistant.chat.selectedCount', {
-                          count: assistantSelectedTeamLibraryIds.length,
-                        })
-                    : selectedLibraryIds.length > 0
-                      ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
-                      : t('assistant.chat.selectKnowledge')
-                "
-              >
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  :class="
-                    cn(
-                      'size-8 rounded-full border border-border bg-background',
-                      (assistantSelectedTeamLibraryIds &&
-                        assistantSelectedTeamLibraryIds.length > 0) ||
-                        selectedLibraryIds.length > 0
-                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
-                        : 'hover:bg-muted/40 active:bg-muted active:scale-95',
-                      useCompactToolbar &&
-                        'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
-                    )
-                  "
-                >
-                  <IconSelectKnowledge
-                    class="size-4 pointer-events-none"
-                    :class="
-                      (assistantSelectedTeamLibraryIds &&
-                        assistantSelectedTeamLibraryIds.length > 0) ||
-                      selectedLibraryIds.length > 0
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    "
-                  />
-                </Button>
-              </SelectTriggerRaw>
-              <SelectPortal>
+            <!-- Knowledge base select: icon-only like upload file/image; tooltip shows "选择知识库" -->
+            <TooltipProvider v-if="!isTeamMode && !selectedTeamLibrary">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <span class="inline-flex">
+                    <SelectRoot
+                      :model-value="selectedLibraryIds"
+                      :open="knowledgeSelectOpen"
+                      multiple
+                      @update:model-value="
+                        (v: any) => {
+                          emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v])
+                          handleLibrarySelectionChange()
+                        }
+                      "
+                      @update:open="
+                        (open: boolean) => {
+                          knowledgeSelectOpen = open
+                          if (open) {
+                            resetKnowledgeLibraryTab()
+                            emit('loadLibraries')
+                          }
+                        }
+                      "
+                    >
+                      <SelectTriggerRaw as-child>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          :class="
+                            cn(
+                              'relative size-8 rounded-full border border-transparent bg-muted shadow-none',
+                              (assistantSelectedTeamLibraryIds &&
+                                assistantSelectedTeamLibraryIds.length > 0) ||
+                              selectedLibraryIds.length > 0
+                                ? 'text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95'
+                                : 'text-muted-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95',
+                              useCompactToolbar &&
+                                'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
+                            )
+                          "
+                        >
+                          <IconKnowledge class="size-4 shrink-0 pointer-events-none" />
+                          <span
+                            v-if="selectedKnowledgeCount > 0"
+                            class="pointer-events-none absolute -top-1 -right-1 inline-flex min-w-4 items-center justify-center rounded-full border border-border bg-background px-1 text-[10px] leading-4 text-foreground/80"
+                          >
+                            {{ selectedKnowledgeCount }}
+                          </span>
+                        </Button>
+                      </SelectTriggerRaw>
+                      <SelectPortal>
                 <SelectContentRaw
-                  class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                  class="z-50 w-[300px] overflow-hidden rounded-[6px] border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]"
                   position="popper"
                   :side-offset="5"
                 >
-                  <SelectViewport>
-                    <!-- Clear selection option - use a div with click handler since SelectItem would add it to selection -->
-                    <div
-                      class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground"
+                  <div class="mb-1 flex items-center justify-between gap-1 px-0.5">
+                    <div class="flex items-center gap-0.5 rounded-[6px] bg-muted/70 p-0.5">
+                      <button
+                        class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
+                        :class="
+                          knowledgeLibraryTab === 'personal'
+                            ? 'bg-foreground text-background'
+                            : 'text-foreground hover:bg-background/70'
+                        "
+                        @click.stop="knowledgeLibraryTab = 'personal'"
+                      >
+                        {{ t('knowledge.tabs.personal') }}
+                      </button>
+                      <button
+                        class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
+                        :class="
+                          knowledgeLibraryTab === 'team'
+                            ? 'bg-foreground text-background'
+                            : 'text-foreground hover:bg-background/70'
+                        "
+                        @click.stop="knowledgeLibraryTab = 'team'"
+                      >
+                        {{ t('knowledge.tabs.team') }}
+                      </button>
+                    </div>
+                    <button
+                      class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      :title="t('assistant.chat.clearSelected')"
                       @click.stop="handleClearLibrarySelection"
                     >
-                      {{ t('assistant.chat.clearSelected') }}
-                    </div>
-                    <SelectSeparator
-                      v-if="
-                        libraries.length > 0 ||
-                        (assistantTeamLibraries && assistantTeamLibraries.length > 0)
-                      "
-                      class="mx-1 my-1 h-px bg-muted"
-                    />
+                      <IconClean class="size-4" />
+                    </button>
+                  </div>
+                  <SelectViewport class="max-h-[260px] space-y-0.5 overflow-y-auto rounded-[4px]">
                     <!-- Personal libraries (multi-select) -->
-                    <template v-if="libraries.length > 0">
-                      <div
-                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
-                      >
-                        {{ t('assistant.chat.personalKnowledgeSection') }}
-                      </div>
-                      <SelectItemRaw
-                        v-for="lib in libraries"
-                        :key="lib.id"
-                        :value="Number(lib.id)"
-                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
-                      >
-                        <SelectItemIndicator
-                          class="absolute left-2 flex size-4 items-center justify-center"
+                    <template v-if="knowledgeLibraryTab === 'personal'">
+                      <template v-if="libraries.length > 0">
+                        <SelectItemRaw
+                          v-for="lib in libraries"
+                          :key="lib.id"
+                          :value="Number(lib.id)"
+                          class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
                         >
-                          <Check class="size-4 text-primary" />
-                        </SelectItemIndicator>
-                        <SelectItemText>{{ lib.name }}</SelectItemText>
-                      </SelectItemRaw>
-                    </template>
-                    <template
-                      v-else-if="!(assistantTeamLibraries && assistantTeamLibraries.length > 0)"
-                    >
-                      <div class="px-2 py-1.5 text-sm text-muted-foreground">
+                          <span
+                            class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
+                          >
+                            <IconKnowledge class="size-4" />
+                          </span>
+                          <SelectItemText class="flex-1 truncate">{{ lib.name }}</SelectItemText>
+                          <SelectItemIndicator
+                            class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
+                          >
+                            <Check class="size-4" />
+                          </SelectItemIndicator>
+                        </SelectItemRaw>
+                      </template>
+                      <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
                         {{ t('assistant.chat.noKnowledge') }}
                       </div>
                     </template>
-                    <!-- ChatWiki team libraries: multi-select like personal; recall id = comma-separated -->
-                    <template v-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
-                      <SelectSeparator
-                        v-if="libraries.length > 0"
-                        class="mx-1 my-1 h-px bg-muted"
-                      />
-                      <div
-                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
-                      >
-                        {{ t('assistant.chat.chatwikiSection') }}
-                      </div>
+
+                    <!-- Team libraries (multi-select) -->
+                    <template v-else-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
                       <div
                         v-for="lib in assistantTeamLibraries"
                         :key="`team-${lib.id}`"
-                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                        class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors hover:bg-muted"
                         @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
                       >
+                        <span
+                          class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
+                        >
+                          <IconKnowledge class="size-4" />
+                        </span>
+                        <span class="flex-1 truncate">{{ lib.name }}</span>
                         <span
                           v-if="
                             assistantSelectedTeamLibraryIds &&
                             assistantSelectedTeamLibraryIds.includes(lib.id)
                           "
-                          class="absolute left-2 flex size-4 items-center justify-center"
+                          class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
                         >
-                          <Check class="size-4 text-primary" />
+                          <Check class="size-4" />
                         </span>
-                        <span class="pl-0">{{ lib.name }}</span>
                       </div>
                     </template>
+                    <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
+                      {{ t('assistant.chat.noKnowledge') }}
+                    </div>
                   </SelectViewport>
                 </SelectContentRaw>
               </SelectPortal>
-            </SelectRoot>
+                    </SelectRoot>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ t('assistant.chat.selectKnowledge') }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <!-- Team tab: same icon position as personal, opens current category team library list.
                  Rendered whenever selectedTeamLibrary is set; disabled when list is empty so the
@@ -1045,32 +1149,37 @@ onUnmounted(() => {
               >
                 <SelectTriggerRaw as-child :title="selectedTeamLibrary.name">
                   <Button
-                    size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95"
+                    class="h-8 max-w-[180px] rounded-full border border-transparent bg-muted px-2.5 text-xs shadow-none hover:bg-muted/85 active:bg-muted/90 active:scale-95"
                   >
-                    <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+                    <IconKnowledge class="size-4 shrink-0 pointer-events-none text-foreground" />
+                    <span class="truncate text-foreground">{{ selectedTeamLibrary.name }}</span>
                   </Button>
                 </SelectTriggerRaw>
                 <SelectPortal>
                   <SelectContentRaw
-                    class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                    class="z-50 w-[300px] overflow-hidden rounded-[6px] border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]"
                     position="popper"
                     :side-offset="5"
                   >
-                    <SelectViewport>
+                    <SelectViewport class="max-h-[260px] space-y-0.5 overflow-y-auto rounded-[4px]">
                       <SelectItemRaw
                         v-for="lib in teamLibraries"
                         :key="lib.id"
                         :value="lib.id"
-                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                        class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors data-highlighted:bg-muted data-highlighted:text-foreground"
                       >
-                        <SelectItemIndicator
-                          class="absolute left-2 flex size-4 items-center justify-center"
+                        <span
+                          class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
                         >
-                          <Check class="size-4 text-primary" />
+                          <IconKnowledge class="size-4" />
+                        </span>
+                        <SelectItemText class="flex-1 truncate">{{ lib.name }}</SelectItemText>
+                        <SelectItemIndicator
+                          class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
+                        >
+                          <Check class="size-4" />
                         </SelectItemIndicator>
-                        <SelectItemText>{{ lib.name }}</SelectItemText>
                       </SelectItemRaw>
                     </SelectViewport>
                   </SelectContentRaw>
@@ -1079,13 +1188,13 @@ onUnmounted(() => {
               <!-- Library list not yet loaded: show icon in active state but non-interactive -->
               <Button
                 v-else
-                size="icon"
                 variant="ghost"
                 disabled
                 :title="selectedTeamLibrary.name"
-                class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10"
+                class="h-8 max-w-[180px] rounded-full border border-transparent bg-muted px-2.5 text-xs"
               >
-                <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+                <IconKnowledge class="size-4 shrink-0 pointer-events-none text-foreground" />
+                <span class="truncate text-foreground">{{ selectedTeamLibrary.name }}</span>
               </Button>
             </template>
 
@@ -1097,10 +1206,10 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                      class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                       @click="handleSelectFilesClick"
                     >
-                      <File class="size-4 text-muted-foreground" />
+                      <IconUpload class="size-4" />
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -1119,10 +1228,10 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                      class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                       @click="handleSelectImagesClick"
                     >
-                      <ImageIcon class="size-4 text-muted-foreground" />
+                      <ImageIcon class="size-4" />
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -1138,9 +1247,9 @@ onUnmounted(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                  class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                 >
-                  <MoreHorizontal class="size-4 text-muted-foreground" />
+                  <MoreHorizontal class="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1148,7 +1257,7 @@ onUnmounted(() => {
                 class="w-40 rounded-[6px] shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)]"
               >
                 <DropdownMenuItem class="gap-2" @select="handleSelectFilesClick">
-                  <File class="size-4 text-muted-foreground" />
+                  <IconUpload class="size-4 text-muted-foreground" />
                   <span class="text-xs text-foreground">{{ t('assistant.chat.uploadFile') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem class="gap-2" @select="handleSelectImagesClick">
@@ -1158,7 +1267,7 @@ onUnmounted(() => {
                   }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  class="gap-2"
+                  class="flex items-center justify-between gap-2"
                   @select="
                     () => {
                       knowledgeSelectOpen = true
@@ -1166,10 +1275,18 @@ onUnmounted(() => {
                     }
                   "
                 >
-                  <IconSelectKnowledge class="size-4 text-muted-foreground" />
-                  <span class="text-xs text-foreground">{{
-                    t('assistant.chat.selectKnowledge')
-                  }}</span>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <IconKnowledge class="size-4 text-muted-foreground" />
+                    <span class="truncate text-xs text-foreground">{{
+                      t('assistant.chat.selectKnowledge')
+                    }}</span>
+                  </div>
+                  <span
+                    v-if="selectedKnowledgeCount > 0"
+                    class="inline-flex min-w-4 items-center justify-center rounded-full border border-border px-1.5 text-[10px] text-muted-foreground"
+                  >
+                    {{ selectedKnowledgeCount }}
+                  </span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1178,7 +1295,7 @@ onUnmounted(() => {
           <template v-if="isGenerating">
             <Button
               size="icon"
-              class="size-6 rounded-full bg-muted-foreground/20 text-foreground hover:bg-muted-foreground/30 active:bg-muted-foreground/50 active:scale-95"
+              class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95"
               :title="t('assistant.chat.stop')"
               @click="emit('stop')"
             >
@@ -1193,7 +1310,7 @@ onUnmounted(() => {
                   <span class="inline-flex" @click="handleDisabledSendClick">
                     <Button
                       size="icon"
-                      class="size-6 pointer-events-none rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
+                      class="size-8 pointer-events-none rounded-full border border-transparent bg-muted text-muted-foreground disabled:opacity-100"
                       disabled
                     >
                       <ArrowUp class="size-4" />
@@ -1208,7 +1325,7 @@ onUnmounted(() => {
             <Button
               v-else
               size="icon"
-              class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/75 active:scale-95"
+              class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95"
               :title="t('assistant.chat.send')"
               @click="handleSendClick"
             >
