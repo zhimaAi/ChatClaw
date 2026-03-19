@@ -124,7 +124,7 @@ const handleNavClick = (module: NavModule) => {
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+              : 'text-accent-foreground hover:bg-accent/50'
           )
         "
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
@@ -134,14 +134,7 @@ const handleNavClick = (module: NavModule) => {
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          class="size-4 shrink-0 opacity-100"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
@@ -158,7 +151,7 @@ const handleNavClick = (module: NavModule) => {
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+              : 'text-accent-foreground hover:bg-accent/50'
           )
         "
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
@@ -168,14 +161,7 @@ const handleNavClick = (module: NavModule) => {
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          class="size-4 shrink-0 opacity-100"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
