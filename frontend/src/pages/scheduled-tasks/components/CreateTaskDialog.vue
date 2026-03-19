@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
-import type { Agent, ScheduledTaskFormState } from '../types'
+import type { Agent, Channel, ScheduledTaskFormState } from '../types'
 import { createSubmitLock } from './submitLock'
 
 const props = defineProps<{
@@ -20,6 +20,7 @@ const props = defineProps<{
   title: string
   form: ScheduledTaskFormState
   agents: Agent[]
+  channels: Channel[]
 }>()
 
 const emit = defineEmits<{
@@ -68,6 +69,46 @@ const selectedWeeklyDay = computed({
   },
 })
 
+const notificationPlatformOptions = computed(() => {
+  const labels: Record<string, string> = {
+    feishu: '飞书',
+    dingtalk: '钉钉',
+    wecom: '企微',
+    qq: 'QQ',
+  }
+  const seen = new Set<string>()
+  return props.channels
+    .filter((channel) => channel.enabled)
+    .filter((channel) => {
+      const platform = channel.platform || ''
+      if (!platform || seen.has(platform)) return false
+      seen.add(platform)
+      return true
+    })
+    .map((channel) => ({
+      value: channel.platform,
+      label: labels[channel.platform] || channel.name || channel.platform,
+    }))
+})
+
+const filteredNotificationChannels = computed(() => {
+  if (!props.form.notificationPlatform) return []
+  return props.channels.filter(
+    (channel) => channel.enabled && channel.platform === props.form.notificationPlatform
+  )
+})
+
+const selectedNotificationChannelValue = computed({
+  get() {
+    return props.form.notificationChannelIds.map(String)
+  },
+  set(values: string[]) {
+    props.form.notificationChannelIds = values
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+  },
+})
+
 function closeDialog() {
   submitLock.reset()
   submitLocked.value = submitLock.isLocked()
@@ -104,6 +145,11 @@ function selectMonthlyDay(value: number) {
   props.form.customDayOfMonth = value
 }
 
+function handleNotificationPlatformChange(value: string) {
+  props.form.notificationPlatform = value
+  props.form.notificationChannelIds = []
+}
+
 function handleSubmit() {
   if (!submitLock.acquire(props.saving)) {
     syncSubmitLockedState()
@@ -129,6 +175,23 @@ watch(
       submitLock.reset()
       syncSubmitLockedState()
     }
+  }
+)
+
+watch(
+  () => props.form.notificationPlatform,
+  (platform) => {
+    if (!platform) {
+      props.form.notificationChannelIds = []
+      return
+    }
+
+    const availableChannelIds = new Set(
+      filteredNotificationChannels.value.map((channel) => channel.id)
+    )
+    props.form.notificationChannelIds = props.form.notificationChannelIds.filter((channelId) =>
+      availableChannelIds.has(channelId)
+    )
   }
 )
 </script>
@@ -187,6 +250,63 @@ watch(
                   class="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]"
                 />
               </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-[15px] font-semibold text-[#1f2937]">
+                通知
+                <span class="ml-1 text-xs font-medium text-[#94a3b8]">可选</span>
+              </label>
+              <div class="relative">
+                <select
+                  :value="form.notificationPlatform"
+                  class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                  @change="
+                    handleNotificationPlatformChange(
+                      ($event.target as HTMLSelectElement).value
+                    )
+                  "
+                >
+                  <option value="">不发送通知</option>
+                  <option
+                    v-for="option in notificationPlatformOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+                <ChevronDown
+                  class="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <label class="block text-[15px] font-semibold text-[#1f2937]">选择频道</label>
+              <div class="relative">
+                <select
+                  v-model="selectedNotificationChannelValue"
+                  multiple
+                  :disabled="!form.notificationPlatform"
+                  class="min-h-[110px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] disabled:cursor-not-allowed disabled:bg-[#f8fafc] disabled:text-[#94a3b8]"
+                >
+                  <option
+                    v-for="channel in filteredNotificationChannels"
+                    :key="channel.id"
+                    :value="String(channel.id)"
+                  >
+                    {{ channel.name }}
+                  </option>
+                </select>
+              </div>
+              <p class="text-xs text-[#94a3b8]">
+                {{
+                  form.notificationPlatform
+                    ? '可多选，任务完成后会通过这些频道发送结果。'
+                    : '先选择通知类型，再从对应主菜单频道中多选具体频道。'
+                }}
+              </p>
             </div>
           </section>
 

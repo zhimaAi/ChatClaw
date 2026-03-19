@@ -3,13 +3,16 @@ package scheduledtasks
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
 	"chatclaw/internal/sqlite"
@@ -19,15 +22,17 @@ import (
 )
 
 type ScheduledTasksService struct {
-	app             *application.App
-	db              *bun.DB
-	scheduler       *scheduler
-	runnerDeps      runDependencies
-	createMu        sync.Mutex
-	createRuns      map[string]*createCall
-	recentCreates   map[string]recentCreate
-	now             func() time.Time
-	duplicateWindow time.Duration
+	app                 *application.App
+	db                  *bun.DB
+	scheduler           *scheduler
+	runnerDeps          runDependencies
+	notificationGateway *channels.Gateway
+	notificationSender  taskNotificationSender
+	createMu            sync.Mutex
+	createRuns          map[string]*createCall
+	recentCreates       map[string]recentCreate
+	now                 func() time.Time
+	duplicateWindow     time.Duration
 }
 
 type createCall struct {
@@ -39,6 +44,10 @@ type createCall struct {
 type recentCreate struct {
 	task      ScheduledTask
 	expiresAt time.Time
+}
+
+type taskNotificationSender interface {
+	SendTaskResult(ctx context.Context, task ScheduledTask, content string) error
 }
 
 func NewScheduledTasksService(app *application.App, convSvc *conversations.ConversationsService, chatSvc *chat.ChatService) *ScheduledTasksService {
@@ -69,6 +78,10 @@ func NewScheduledTasksServiceForTest(app *application.App, db *bun.DB, convSvc c
 			chat:          chatSvc,
 		},
 	}
+}
+
+func (s *ScheduledTasksService) SetNotificationGateway(gw *channels.Gateway) {
+	s.notificationGateway = gw
 }
 
 func (s *ScheduledTasksService) dbOrGlobal() (*bun.DB, error) {
@@ -280,6 +293,8 @@ func (s *ScheduledTasksService) UpdateScheduledTask(id int64, input UpdateSchedu
 		Set("name = ?", model.Name).
 		Set("prompt = ?", model.Prompt).
 		Set("agent_id = ?", model.AgentID).
+		Set("notification_platform = ?", model.NotificationPlatform).
+		Set("notification_channel_ids = ?", model.NotificationChannelIDs).
 		Set("schedule_type = ?", model.ScheduleType).
 		Set("schedule_value = ?", model.ScheduleValue).
 		Set("cron_expr = ?", model.CronExpr).
@@ -449,16 +464,18 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 	}
 
 	model := &scheduledTaskModel{
-		Name:          name,
-		Prompt:        prompt,
-		AgentID:       input.AgentID,
-		ScheduleType:  schedule.ScheduleType,
-		ScheduleValue: schedule.ScheduleValue,
-		CronExpr:      schedule.CronExpr,
-		Timezone:      schedule.Timezone,
-		Enabled:       input.Enabled,
-		LastStatus:    TaskStatusPending,
-		LastError:     "",
+		Name:                   name,
+		Prompt:                 prompt,
+		AgentID:                input.AgentID,
+		NotificationPlatform:   normalizeNotificationPlatform(input.NotificationPlatform),
+		NotificationChannelIDs: mustMarshalNotificationChannelIDs(input.NotificationChannelIDs),
+		ScheduleType:           schedule.ScheduleType,
+		ScheduleValue:          schedule.ScheduleValue,
+		CronExpr:               schedule.CronExpr,
+		Timezone:               schedule.Timezone,
+		Enabled:                input.Enabled,
+		LastStatus:             TaskStatusPending,
+		LastError:              "",
 	}
 	if input.Enabled {
 		model.NextRunAt = schedule.NextRunAt
@@ -466,11 +483,59 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 	return model, nil
 }
 
+func normalizeNotificationPlatform(platform string) string {
+	return strings.TrimSpace(strings.ToLower(platform))
+}
+
+func normalizeNotificationChannelIDs(channelIDs []int64) []int64 {
+	if len(channelIDs) == 0 {
+		return []int64{}
+	}
+
+	seen := make(map[int64]struct{}, len(channelIDs))
+	out := make([]int64, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		if channelID <= 0 {
+			continue
+		}
+		if _, exists := seen[channelID]; exists {
+			continue
+		}
+		seen[channelID] = struct{}{}
+		out = append(out, channelID)
+	}
+	return out
+}
+
+func mustMarshalNotificationChannelIDs(channelIDs []int64) string {
+	normalized := normalizeNotificationChannelIDs(channelIDs)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}
+
+func parseNotificationChannelIDs(raw string) []int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []int64{}
+	}
+
+	var ids []int64
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []int64{}
+	}
+	return normalizeNotificationChannelIDs(ids)
+}
+
 func createTaskFingerprint(model *scheduledTaskModel) string {
 	return strings.Join([]string{
 		model.Name,
 		model.Prompt,
 		strconv.FormatInt(model.AgentID, 10),
+		model.NotificationPlatform,
+		model.NotificationChannelIDs,
 		model.ScheduleType,
 		model.ScheduleValue,
 		model.CronExpr,
@@ -554,6 +619,12 @@ func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, inpu
 	}
 	if input.Enabled != nil {
 		model.Enabled = *input.Enabled
+	}
+	if input.NotificationPlatform != nil {
+		model.NotificationPlatform = normalizeNotificationPlatform(*input.NotificationPlatform)
+	}
+	if input.NotificationChannelIDs != nil {
+		model.NotificationChannelIDs = mustMarshalNotificationChannelIDs(*input.NotificationChannelIDs)
 	}
 
 	needsScheduleRebuild := input.ScheduleType != nil || input.ScheduleValue != nil || input.CronExpr != nil
@@ -901,6 +972,13 @@ func (s *ScheduledTasksService) completeRun(ctx context.Context, taskID, runID, 
 	if assistantMessageID > 0 {
 		_ = s.setRunAssistantMessage(ctx, runID, assistantMessageID)
 	}
+	taskModel, err := s.getTaskModel(ctx, db, taskID)
+	if err != nil {
+		return err
+	}
+	if notifyErr := s.notifyTaskResult(ctx, taskModel, assistantMessageID); notifyErr != nil {
+		return s.failRun(ctx, taskID, runID, fmt.Sprintf("scheduled task notification failed: %v", notifyErr), startedAt)
+	}
 	if _, err := db.NewUpdate().
 		Model((*scheduledTaskRunModel)(nil)).
 		Set("status = ?", RunStatusSuccess).
@@ -921,6 +999,130 @@ func (s *ScheduledTasksService) completeRun(ctx context.Context, taskID, runID, 
 		return errs.Wrap("error.scheduled_task_run_update_failed", err)
 	}
 	return nil
+}
+
+func (s *ScheduledTasksService) notifyTaskResult(ctx context.Context, task scheduledTaskModel, assistantMessageID int64) error {
+	channelIDs := parseNotificationChannelIDs(task.NotificationChannelIDs)
+	if task.NotificationPlatform == "" || len(channelIDs) == 0 || assistantMessageID <= 0 {
+		return nil
+	}
+
+	content, err := s.getMessageContent(ctx, assistantMessageID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(content) == "" {
+		return nil
+	}
+
+	dto := task.toDTO()
+	if s.notificationSender != nil {
+		return s.notificationSender.SendTaskResult(ctx, dto, content)
+	}
+	return s.sendTaskResultToChannels(ctx, dto, content)
+}
+
+func (s *ScheduledTasksService) getMessageContent(ctx context.Context, messageID int64) (string, error) {
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return "", err
+	}
+
+	var content string
+	if err := db.NewSelect().
+		Table("messages").
+		Column("content").
+		Where("id = ?", messageID).
+		Limit(1).
+		Scan(ctx, &content); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", errs.New("error.scheduled_task_run_failed")
+		}
+		return "", errs.Wrap("error.scheduled_task_run_failed", err)
+	}
+	return content, nil
+}
+
+func (s *ScheduledTasksService) sendTaskResultToChannels(ctx context.Context, task ScheduledTask, content string) error {
+	if s.notificationGateway == nil {
+		return fmt.Errorf("notification gateway not configured")
+	}
+
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return err
+	}
+
+	for _, channelID := range task.NotificationChannelIDs {
+		channel, err := s.getNotificationChannel(ctx, db, channelID)
+		if err != nil {
+			return err
+		}
+		if normalizeNotificationPlatform(channel.Platform) != task.NotificationPlatform {
+			return fmt.Errorf("channel %d platform mismatch", channelID)
+		}
+		if !channel.Enabled {
+			return fmt.Errorf("channel %d is disabled", channelID)
+		}
+
+		targetID, err := s.getLatestChannelTarget(ctx, db, channelID)
+		if err != nil {
+			return err
+		}
+
+		adapter := s.notificationGateway.GetAdapter(channelID)
+		if adapter == nil {
+			return fmt.Errorf("channel %d is not connected", channelID)
+		}
+		if err := adapter.SendMessage(ctx, targetID, content); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type scheduledTaskNotificationChannelRow struct {
+	ID       int64  `bun:"id"`
+	Platform string `bun:"platform"`
+	Enabled  bool   `bun:"enabled"`
+}
+
+func (s *ScheduledTasksService) getNotificationChannel(ctx context.Context, db *bun.DB, channelID int64) (scheduledTaskNotificationChannelRow, error) {
+	var model scheduledTaskNotificationChannelRow
+	if err := db.NewSelect().
+		Table("channels").
+		Column("id", "platform", "enabled").
+		Where("id = ?", channelID).
+		Limit(1).
+		Scan(ctx, &model); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return scheduledTaskNotificationChannelRow{}, fmt.Errorf("channel %d not found", channelID)
+		}
+		return scheduledTaskNotificationChannelRow{}, err
+	}
+	return model, nil
+}
+
+func (s *ScheduledTasksService) getLatestChannelTarget(ctx context.Context, db *bun.DB, channelID int64) (string, error) {
+	var lastSenderID string
+	if err := db.NewSelect().
+		Table("channels").
+		Column("last_sender_id").
+		Where("id = ?", channelID).
+		Limit(1).
+		Scan(ctx, &lastSenderID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("channel %d not found", channelID)
+		}
+		return "", err
+	}
+
+	lastSenderID = strings.TrimSpace(lastSenderID)
+	if lastSenderID == "" {
+		return "", fmt.Errorf("channel %d has no last sender id", channelID)
+	}
+	return lastSenderID, nil
 }
 
 func (s *ScheduledTasksService) failRun(ctx context.Context, taskID, runID int64, errorMessage string, startedAt time.Time) error {

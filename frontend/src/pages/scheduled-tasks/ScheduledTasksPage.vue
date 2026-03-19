@@ -3,10 +3,6 @@ import { computed, ref } from 'vue'
 import { Clock3, LoaderCircle, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import {
-  CreateScheduledTaskInput,
-  UpdateScheduledTaskInput,
-} from '@bindings/chatclaw/internal/services/scheduledtasks'
-import {
   AlertDialog,
   AlertDialogCancel,
   AlertDialogContent,
@@ -36,6 +32,7 @@ const {
   tasks,
   summary,
   agents,
+  channels,
   createDialogOpen,
   historyTask,
   editingTask,
@@ -103,25 +100,29 @@ function buildPayload(state: ScheduledTaskFormState) {
         ? customPayload
         : state.cronExpr
 
-  const create = new CreateScheduledTaskInput({
+  const create = {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
+    notification_platform: state.notificationPlatform,
+    notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,
     schedule_value: scheduleValue,
     cron_expr: state.scheduleType === 'cron' ? state.cronExpr : '',
     enabled: state.enabled,
-  })
+  }
 
-  const update = new UpdateScheduledTaskInput({
+  const update = {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
+    notification_platform: state.notificationPlatform,
+    notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,
     schedule_value: scheduleValue,
     cron_expr: state.scheduleType === 'cron' ? state.cronExpr : '',
     enabled: state.enabled,
-  })
+  }
 
   return { create, update }
 }
@@ -248,6 +249,7 @@ async function handleDeleteConfirm() {
       :title="editingTask ? t('scheduledTasks.edit') : t('scheduledTasks.create')"
       :form="form"
       :agents="agents"
+      :channels="channels"
       @update:open="(value) => (createDialogOpen = value)"
       @submit="handleSubmit"
     />

@@ -90,13 +90,15 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 		},
 		CreateScheduledTaskFn: func(input tools.ScheduledTaskCreateInput) (*tools.ScheduledTaskRecord, error) {
 			created, err := scheduledTasksService.CreateScheduledTask(scheduledtasks.CreateScheduledTaskInput{
-				Name:          input.Name,
-				Prompt:        input.Prompt,
-				AgentID:       input.AgentID,
-				ScheduleType:  input.ScheduleType,
-				ScheduleValue: input.ScheduleValue,
-				CronExpr:      input.CronExpr,
-				Enabled:       input.Enabled,
+				Name:                   input.Name,
+				Prompt:                 input.Prompt,
+				AgentID:                input.AgentID,
+				NotificationPlatform:   input.NotificationPlatform,
+				NotificationChannelIDs: input.NotificationChannelIDs,
+				ScheduleType:           input.ScheduleType,
+				ScheduleValue:          input.ScheduleValue,
+				CronExpr:               input.CronExpr,
+				Enabled:                input.Enabled,
 			})
 			if err != nil {
 				return nil, err
@@ -106,13 +108,15 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 		},
 		UpdateScheduledTaskFn: func(id int64, input tools.ScheduledTaskUpdateInput) (*tools.ScheduledTaskRecord, error) {
 			updated, err := scheduledTasksService.UpdateScheduledTask(id, scheduledtasks.UpdateScheduledTaskInput{
-				Name:          input.Name,
-				Prompt:        input.Prompt,
-				AgentID:       input.AgentID,
-				ScheduleType:  input.ScheduleType,
-				ScheduleValue: input.ScheduleValue,
-				CronExpr:      input.CronExpr,
-				Enabled:       input.Enabled,
+				Name:                   input.Name,
+				Prompt:                 input.Prompt,
+				AgentID:                input.AgentID,
+				NotificationPlatform:   input.NotificationPlatform,
+				NotificationChannelIDs: input.NotificationChannelIDs,
+				ScheduleType:           input.ScheduleType,
+				ScheduleValue:          input.ScheduleValue,
+				CronExpr:               input.CronExpr,
+				Enabled:                input.Enabled,
 			})
 			if err != nil {
 				return nil, err
@@ -144,22 +148,24 @@ func convertScheduledTaskRecords(items []scheduledtasks.ScheduledTask) []tools.S
 
 func convertScheduledTaskRecord(item scheduledtasks.ScheduledTask) tools.ScheduledTaskRecord {
 	return tools.ScheduledTaskRecord{
-		ID:            item.ID,
-		Name:          item.Name,
-		Prompt:        item.Prompt,
-		AgentID:       item.AgentID,
-		ScheduleType:  item.ScheduleType,
-		ScheduleValue: item.ScheduleValue,
-		CronExpr:      item.CronExpr,
-		Timezone:      item.Timezone,
-		Enabled:       item.Enabled,
-		LastRunAt:     item.LastRunAt,
-		NextRunAt:     item.NextRunAt,
-		LastStatus:    item.LastStatus,
-		LastError:     item.LastError,
-		LastRunID:     item.LastRunID,
-		CreatedAt:     item.CreatedAt,
-		UpdatedAt:     item.UpdatedAt,
+		ID:                     item.ID,
+		Name:                   item.Name,
+		Prompt:                 item.Prompt,
+		AgentID:                item.AgentID,
+		NotificationPlatform:   item.NotificationPlatform,
+		NotificationChannelIDs: item.NotificationChannelIDs,
+		ScheduleType:           item.ScheduleType,
+		ScheduleValue:          item.ScheduleValue,
+		CronExpr:               item.CronExpr,
+		Timezone:               item.Timezone,
+		Enabled:                item.Enabled,
+		LastRunAt:              item.LastRunAt,
+		NextRunAt:              item.NextRunAt,
+		LastStatus:             item.LastStatus,
+		LastError:              item.LastError,
+		LastRunID:              item.LastRunID,
+		CreatedAt:              item.CreatedAt,
+		UpdatedAt:              item.UpdatedAt,
 	}
 }
 

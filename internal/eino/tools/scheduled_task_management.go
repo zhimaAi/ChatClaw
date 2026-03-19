@@ -20,43 +20,49 @@ type ScheduledTaskAgent struct {
 }
 
 type ScheduledTaskRecord struct {
-	ID            int64      `json:"id"`
-	Name          string     `json:"name"`
-	Prompt        string     `json:"prompt"`
-	AgentID       int64      `json:"agent_id"`
-	AgentName     string     `json:"agent_name,omitempty"`
-	ScheduleType  string     `json:"schedule_type"`
-	ScheduleValue string     `json:"schedule_value"`
-	CronExpr      string     `json:"cron_expr"`
-	Timezone      string     `json:"timezone,omitempty"`
-	Enabled       bool       `json:"enabled"`
-	LastRunAt     *time.Time `json:"last_run_at,omitempty"`
-	NextRunAt     *time.Time `json:"next_run_at,omitempty"`
-	LastStatus    string     `json:"last_status,omitempty"`
-	LastError     string     `json:"last_error,omitempty"`
-	LastRunID     *int64     `json:"last_run_id,omitempty"`
-	CreatedAt     time.Time  `json:"created_at,omitempty"`
-	UpdatedAt     time.Time  `json:"updated_at,omitempty"`
+	ID                     int64      `json:"id"`
+	Name                   string     `json:"name"`
+	Prompt                 string     `json:"prompt"`
+	AgentID                int64      `json:"agent_id"`
+	AgentName              string     `json:"agent_name,omitempty"`
+	NotificationPlatform   string     `json:"notification_platform,omitempty"`
+	NotificationChannelIDs []int64    `json:"notification_channel_ids,omitempty"`
+	ScheduleType           string     `json:"schedule_type"`
+	ScheduleValue          string     `json:"schedule_value"`
+	CronExpr               string     `json:"cron_expr"`
+	Timezone               string     `json:"timezone,omitempty"`
+	Enabled                bool       `json:"enabled"`
+	LastRunAt              *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt              *time.Time `json:"next_run_at,omitempty"`
+	LastStatus             string     `json:"last_status,omitempty"`
+	LastError              string     `json:"last_error,omitempty"`
+	LastRunID              *int64     `json:"last_run_id,omitempty"`
+	CreatedAt              time.Time  `json:"created_at,omitempty"`
+	UpdatedAt              time.Time  `json:"updated_at,omitempty"`
 }
 
 type ScheduledTaskCreateInput struct {
-	Name          string `json:"name"`
-	Prompt        string `json:"prompt"`
-	AgentID       int64  `json:"agent_id"`
-	ScheduleType  string `json:"schedule_type"`
-	ScheduleValue string `json:"schedule_value"`
-	CronExpr      string `json:"cron_expr"`
-	Enabled       bool   `json:"enabled"`
+	Name                   string  `json:"name"`
+	Prompt                 string  `json:"prompt"`
+	AgentID                int64   `json:"agent_id"`
+	NotificationPlatform   string  `json:"notification_platform"`
+	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
+	ScheduleType           string  `json:"schedule_type"`
+	ScheduleValue          string  `json:"schedule_value"`
+	CronExpr               string  `json:"cron_expr"`
+	Enabled                bool    `json:"enabled"`
 }
 
 type ScheduledTaskUpdateInput struct {
-	Name          *string `json:"name"`
-	Prompt        *string `json:"prompt"`
-	AgentID       *int64  `json:"agent_id"`
-	ScheduleType  *string `json:"schedule_type"`
-	ScheduleValue *string `json:"schedule_value"`
-	CronExpr      *string `json:"cron_expr"`
-	Enabled       *bool   `json:"enabled"`
+	Name                   *string  `json:"name"`
+	Prompt                 *string  `json:"prompt"`
+	AgentID                *int64   `json:"agent_id"`
+	NotificationPlatform   *string  `json:"notification_platform"`
+	NotificationChannelIDs *[]int64 `json:"notification_channel_ids"`
+	ScheduleType           *string  `json:"schedule_type"`
+	ScheduleValue          *string  `json:"schedule_value"`
+	CronExpr               *string  `json:"cron_expr"`
+	Enabled                *bool    `json:"enabled"`
 }
 
 type ScheduledTaskRunRecord struct {

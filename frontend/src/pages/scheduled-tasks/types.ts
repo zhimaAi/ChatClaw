@@ -5,8 +5,16 @@ import type {
   ScheduledTaskSummary,
 } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { Channel } from '@bindings/chatclaw/internal/services/channels'
 
-export type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail, ScheduledTaskSummary, Agent }
+export type {
+  ScheduledTask,
+  ScheduledTaskRun,
+  ScheduledTaskRunDetail,
+  ScheduledTaskSummary,
+  Agent,
+  Channel,
+}
 
 export type SchedulePresetValue =
   | 'every_minute'
@@ -26,6 +34,8 @@ export interface ScheduledTaskFormState {
   name: string
   prompt: string
   agentId: number | null
+  notificationPlatform: string
+  notificationChannelIds: number[]
   enabled: boolean
   scheduleType: 'preset' | 'custom' | 'cron'
   schedulePreset: SchedulePresetValue
