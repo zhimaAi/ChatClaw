@@ -29,9 +29,11 @@ const (
 type ScheduledTask struct {
 	ID int64 `json:"id"`
 
-	Name    string `json:"name"`
-	Prompt  string `json:"prompt"`
-	AgentID int64  `json:"agent_id"`
+	Name                   string  `json:"name"`
+	Prompt                 string  `json:"prompt"`
+	AgentID                int64   `json:"agent_id"`
+	NotificationPlatform   string  `json:"notification_platform"`
+	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
 
 	ScheduleType  string     `json:"schedule_type"`
 	ScheduleValue string     `json:"schedule_value"`
@@ -76,13 +78,15 @@ type ScheduledTaskSummary struct {
 }
 
 type CreateScheduledTaskInput struct {
-	Name          string `json:"name"`
-	Prompt        string `json:"prompt"`
-	AgentID       int64  `json:"agent_id"`
-	ScheduleType  string `json:"schedule_type"`
-	ScheduleValue string `json:"schedule_value"`
-	CronExpr      string `json:"cron_expr"`
-	Enabled       bool   `json:"enabled"`
+	Name                   string  `json:"name"`
+	Prompt                 string  `json:"prompt"`
+	AgentID                int64   `json:"agent_id"`
+	ScheduleType           string  `json:"schedule_type"`
+	ScheduleValue          string  `json:"schedule_value"`
+	CronExpr               string  `json:"cron_expr"`
+	Enabled                bool    `json:"enabled"`
+	NotificationPlatform   string  `json:"notification_platform"`
+	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
 }
 
 type ScheduleValidationResult struct {
@@ -94,13 +98,15 @@ type ScheduleValidationResult struct {
 }
 
 type UpdateScheduledTaskInput struct {
-	Name          *string `json:"name"`
-	Prompt        *string `json:"prompt"`
-	AgentID       *int64  `json:"agent_id"`
-	ScheduleType  *string `json:"schedule_type"`
-	ScheduleValue *string `json:"schedule_value"`
-	CronExpr      *string `json:"cron_expr"`
-	Enabled       *bool   `json:"enabled"`
+	Name                   *string  `json:"name"`
+	Prompt                 *string  `json:"prompt"`
+	AgentID                *int64   `json:"agent_id"`
+	ScheduleType           *string  `json:"schedule_type"`
+	ScheduleValue          *string  `json:"schedule_value"`
+	CronExpr               *string  `json:"cron_expr"`
+	Enabled                *bool    `json:"enabled"`
+	NotificationPlatform   *string  `json:"notification_platform"`
+	NotificationChannelIDs *[]int64 `json:"notification_channel_ids"`
 }
 
 type ScheduledTaskRunDetail struct {

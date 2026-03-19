@@ -360,6 +360,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 	channelGW = channelGateway
 	chatService.SetGateway(channelGateway)
+	scheduledTasksService.SetNotificationGateway(channelGateway)
 	channelService := channels.NewChannelService(app, channelGateway, func(channelName string) (int64, error) {
 		return ensureChannelAgent(agentsService, channelName)
 	})
@@ -729,6 +730,10 @@ func handleChannelMessage(
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+
+	if err := channels.UpdateChannelLastSenderID(ctx, db, msg.ChannelID, msg.SenderID); err != nil {
+		app.Logger.Warn("channel message: failed to update last sender id", "channel_id", msg.ChannelID, "sender_id", msg.SenderID, "error", err)
+	}
 
 	var channelRow struct {
 		AgentID     int64  `bun:"agent_id"`

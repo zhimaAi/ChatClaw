@@ -17,19 +17,21 @@ type scheduledTaskModel struct {
 	UpdatedAt time.Time  `bun:"updated_at,notnull"`
 	DeletedAt *time.Time `bun:"deleted_at"`
 
-	Name          string     `bun:"name,notnull"`
-	Prompt        string     `bun:"prompt,notnull"`
-	AgentID       int64      `bun:"agent_id,notnull"`
-	ScheduleType  string     `bun:"schedule_type,notnull"`
-	ScheduleValue string     `bun:"schedule_value,notnull"`
-	CronExpr      string     `bun:"cron_expr,notnull"`
-	Timezone      string     `bun:"timezone,notnull"`
-	Enabled       bool       `bun:"enabled,notnull"`
-	LastRunAt     *time.Time `bun:"last_run_at"`
-	NextRunAt     *time.Time `bun:"next_run_at"`
-	LastStatus    string     `bun:"last_status,notnull"`
-	LastError     string     `bun:"last_error,notnull"`
-	LastRunID     *int64     `bun:"last_run_id"`
+	Name                   string     `bun:"name,notnull"`
+	Prompt                 string     `bun:"prompt,notnull"`
+	AgentID                int64      `bun:"agent_id,notnull"`
+	NotificationPlatform   string     `bun:"notification_platform,notnull"`
+	NotificationChannelIDs string     `bun:"notification_channel_ids,notnull"`
+	ScheduleType           string     `bun:"schedule_type,notnull"`
+	ScheduleValue          string     `bun:"schedule_value,notnull"`
+	CronExpr               string     `bun:"cron_expr,notnull"`
+	Timezone               string     `bun:"timezone,notnull"`
+	Enabled                bool       `bun:"enabled,notnull"`
+	LastRunAt              *time.Time `bun:"last_run_at"`
+	NextRunAt              *time.Time `bun:"next_run_at"`
+	LastStatus             string     `bun:"last_status,notnull"`
+	LastError              string     `bun:"last_error,notnull"`
+	LastRunID              *int64     `bun:"last_run_id"`
 }
 
 type scheduledTaskRunModel struct {
@@ -96,22 +98,24 @@ func (*scheduledTaskRunModel) BeforeUpdate(ctx context.Context, query *bun.Updat
 
 func (m *scheduledTaskModel) toDTO() ScheduledTask {
 	return ScheduledTask{
-		ID:            m.ID,
-		Name:          m.Name,
-		Prompt:        m.Prompt,
-		AgentID:       m.AgentID,
-		ScheduleType:  m.ScheduleType,
-		ScheduleValue: m.ScheduleValue,
-		CronExpr:      m.CronExpr,
-		Timezone:      m.Timezone,
-		Enabled:       m.Enabled,
-		LastRunAt:     m.LastRunAt,
-		NextRunAt:     m.NextRunAt,
-		LastStatus:    m.LastStatus,
-		LastError:     m.LastError,
-		LastRunID:     m.LastRunID,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
+		ID:                     m.ID,
+		Name:                   m.Name,
+		Prompt:                 m.Prompt,
+		AgentID:                m.AgentID,
+		NotificationPlatform:   m.NotificationPlatform,
+		NotificationChannelIDs: parseNotificationChannelIDs(m.NotificationChannelIDs),
+		ScheduleType:           m.ScheduleType,
+		ScheduleValue:          m.ScheduleValue,
+		CronExpr:               m.CronExpr,
+		Timezone:               m.Timezone,
+		Enabled:                m.Enabled,
+		LastRunAt:              m.LastRunAt,
+		NextRunAt:              m.NextRunAt,
+		LastStatus:             m.LastStatus,
+		LastError:              m.LastError,
+		LastRunID:              m.LastRunID,
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 }
 

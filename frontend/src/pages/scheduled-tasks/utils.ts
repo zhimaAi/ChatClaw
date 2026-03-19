@@ -63,6 +63,8 @@ export function createEmptyForm(): ScheduledTaskFormState {
     name: '',
     prompt: '',
     agentId: null,
+    notificationPlatform: '',
+    notificationChannelIds: [],
     enabled: true,
     scheduleType: 'preset',
     schedulePreset: 'every_day_0900',
@@ -82,6 +84,10 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   form.name = task.name
   form.prompt = task.prompt
   form.agentId = task.agent_id
+  form.notificationPlatform = (task as any).notification_platform || ''
+  form.notificationChannelIds = Array.isArray((task as any).notification_channel_ids)
+    ? [...(task as any).notification_channel_ids]
+    : []
   form.enabled = task.enabled
   form.scheduleType = task.schedule_type as ScheduledTaskFormState['scheduleType']
   form.cronExpr = task.cron_expr

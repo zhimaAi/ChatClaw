@@ -2,12 +2,17 @@ import { onMounted, ref } from 'vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
 import {
-  CreateScheduledTaskInput,
   ScheduledTasksService,
-  UpdateScheduledTaskInput,
 } from '@bindings/chatclaw/internal/services/scheduledtasks'
-import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskSummary, Agent } from '../types'
+import type {
+  ScheduledTask,
+  ScheduledTaskFormState,
+  ScheduledTaskSummary,
+  Agent,
+  Channel,
+} from '../types'
 import { createEmptyForm } from '../utils'
 
 export function useScheduledTasks() {
@@ -16,6 +21,7 @@ export function useScheduledTasks() {
   const tasks = ref<ScheduledTask[]>([])
   const summary = ref<ScheduledTaskSummary | null>(null)
   const agents = ref<Agent[]>([])
+  const channels = ref<Channel[]>([])
 
   const createDialogOpen = ref(false)
   const historyTask = ref<ScheduledTask | null>(null)
@@ -23,8 +29,12 @@ export function useScheduledTasks() {
   const form = ref<ScheduledTaskFormState>(createEmptyForm())
 
   async function loadBaseOptions() {
-    const agentList = await AgentsService.ListAgents()
+    const [agentList, channelList] = await Promise.all([
+      AgentsService.ListAgents(),
+      ChannelService.ListChannels(),
+    ])
     agents.value = agentList || []
+    channels.value = channelList || []
   }
 
   async function loadTasks() {
@@ -63,10 +73,7 @@ export function useScheduledTasks() {
   }
 
   async function submitForm(
-    buildPayload: (form: ScheduledTaskFormState) => {
-      create: CreateScheduledTaskInput
-      update: UpdateScheduledTaskInput
-    }
+    buildPayload: (form: ScheduledTaskFormState) => { create: any, update: any }
   ) {
     if (saving.value) return
     saving.value = true
@@ -125,6 +132,7 @@ export function useScheduledTasks() {
     tasks,
     summary,
     agents,
+    channels,
     createDialogOpen,
     historyTask,
     editingTask,
