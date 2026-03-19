@@ -20,6 +20,9 @@ import IconChannels from '@/assets/icons/channels.svg'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
 import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
+import IconChevronDown from '@/assets/icons/down-icon.svg'
+import IconChevronRight from '@/assets/icons/right-icon.svg'
+import IconSession from '@/assets/icons/session-icon.svg'
 import { Pin, PinOff, MoreHorizontal } from 'lucide-vue-next'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import type { Conversation } from '@bindings/chatclaw/internal/services/conversations'
@@ -123,12 +126,12 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </Button>
     </div>
 
-    <div class="flex items-center justify-between gap-2 p-3">
-      <div class="inline-flex rounded-md bg-muted p-1">
+    <div class="flex items-center justify-between gap-2 border-b border-border px-2 py-2">
+      <div class="inline-flex rounded-lg bg-muted p-[3px]">
         <button
           :class="
             cn(
-              'rounded px-3 py-1 text-sm transition-colors',
+              'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
               listMode === 'personal'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -141,7 +144,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
         <button
           :class="
             cn(
-              'rounded px-3 py-1 text-sm transition-colors',
+              'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
               listMode === 'team'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -157,14 +160,15 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
         v-if="listMode === 'personal'"
         size="icon"
         variant="ghost"
+        class="size-6 rounded-md text-muted-foreground hover:text-foreground"
         :disabled="loading"
         @click="emit('create')"
       >
-        <IconAgentAdd class="size-4 text-muted-foreground" />
+        <IconAgentAdd class="size-4" />
       </Button>
     </div>
 
-    <div class="flex-1 overflow-auto px-2 pb-3">
+    <div class="flex-1 overflow-auto">
       <!-- Personal mode: empty state -->
       <div
         v-if="listMode === 'personal' && agents.length === 0"
@@ -206,16 +210,19 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </div>
 
       <!-- Personal mode: agent list -->
-      <div v-if="listMode === 'personal'" class="flex flex-col gap-1.5">
+      <div v-if="listMode === 'personal'" class="flex flex-col">
         <div v-for="a in agents" :key="a.id" class="flex flex-col">
           <!-- Agent item -->
           <div
             :class="
               cn(
-                'group flex h-11 w-full items-center gap-2 rounded px-2 text-left outline-none transition-colors',
+                'group flex h-12 w-full items-center gap-2 px-2 text-left outline-none transition-colors',
+                a.id === activeAgentId && getAgentConversations(a.id).length > 0
+                  ? 'border-b-0'
+                  : 'border-b border-border/70',
                 a.id === activeAgentId
-                  ? 'bg-zinc-100 text-foreground dark:bg-accent'
-                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground active:bg-accent/70 dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
+                  ? 'bg-card text-foreground'
+                  : 'bg-background text-foreground hover:bg-accent/40 active:bg-accent/60'
               )
             "
             role="button"
@@ -225,15 +232,25 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
             @keydown.enter.prevent="handleAgentClick(a.id)"
             @keydown.space.prevent="handleAgentClick(a.id)"
           >
-            <div
-              class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
+            <span
+              class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+              aria-hidden="true"
             >
-              <img v-if="a.icon" :src="a.icon" class="size-6 object-contain" />
-              <img v-else :src="logoSrc" class="size-6 opacity-90" alt="ChatClaw logo" />
+              <IconChevronDown
+                v-if="a.id === activeAgentId"
+                class="size-4"
+              />
+              <IconChevronRight v-else class="size-4" />
+            </span>
+            <div
+              class="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-muted/70 text-foreground"
+            >
+              <img v-if="a.icon" :src="a.icon" class="size-full object-cover" />
+              <img v-else :src="logoSrc" class="size-5 opacity-90" alt="ChatClaw logo" />
             </div>
 
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-normal">
+              <div class="truncate text-sm font-medium text-foreground">
                 {{ a.name }}
               </div>
             </div>
@@ -244,11 +261,18 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               <Button
                 size="icon"
                 variant="ghost"
-                class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                :class="
+                  cn(
+                    'size-6 rounded-md text-muted-foreground transition-opacity hover:bg-muted/70 hover:text-foreground',
+                    a.id === activeAgentId
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                  )
+                "
                 :title="t('assistant.sidebar.newConversation')"
                 @click.stop="emit('newConversationForAgent', a.id)"
               >
-                <IconNewConversation class="size-4 text-muted-foreground" />
+                <IconNewConversation class="size-4" />
               </Button>
 
               <!-- Settings dropdown -->
@@ -257,7 +281,14 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                    :class="
+                      cn(
+                        'size-6 rounded-md text-muted-foreground transition-opacity hover:bg-muted/70 hover:text-foreground',
+                        a.id === activeAgentId
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                      )
+                    "
                     :title="t('assistant.actions.settings')"
                     @click.stop
                   >
@@ -305,17 +336,17 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
           <!-- Conversation list (max 3 items) - only show for active agent -->
           <div
             v-if="a.id === activeAgentId && getAgentConversations(a.id).length > 0"
-            class="mt-1 flex flex-col gap-0.5"
+            class="flex flex-col border-b border-border/70 pb-1"
           >
             <div
               v-for="conv in getAgentConversations(a.id)"
               :key="conv.id"
               :class="
                 cn(
-                  'group flex items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                  'group mx-2 mt-0.5 flex h-10 items-center gap-1.5 rounded-md px-2 text-left text-sm transition-colors',
                   activeConversationId === conv.id
-                    ? 'bg-accent/60 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/70'
+                    ? 'bg-accent text-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-accent/40 hover:text-foreground active:bg-accent/60'
                 )
               "
               role="button"
@@ -323,8 +354,34 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               @click="emit('selectConversation', conv)"
               @keydown.enter.prevent="emit('selectConversation', conv)"
             >
-              <Pin v-if="conv.is_pinned" class="size-3 shrink-0 text-muted-foreground" />
-              <span class="min-w-0 flex-1 truncate">{{ conv.name }}</span>
+              <span
+                class="inline-flex size-[18px] shrink-0 items-center justify-center overflow-visible [&_svg]:block [&_svg]:size-4"
+                aria-hidden="true"
+              >
+                <IconSession
+                  :class="
+                    cn(
+                      activeConversationId === conv.id
+                        ? 'text-foreground/70'
+                        : 'text-muted-foreground [.group:hover_&]:text-foreground/70'
+                    )
+                  "
+                />
+              </span>
+              <Pin
+                v-if="conv.is_pinned"
+                class="size-3 shrink-0 text-muted-foreground [.group:hover_&]:text-foreground/80"
+              />
+              <span
+                :class="
+                  cn(
+                    'min-w-0 flex-1 truncate',
+                    activeConversationId === conv.id
+                      ? 'text-foreground'
+                      : 'text-muted-foreground group-hover:text-foreground/90'
+                  )
+                "
+              >{{ conv.name }}</span>
               <!-- Conversation menu -->
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -359,18 +416,19 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </div>
 
       <!-- Team mode: robot list from ChatWiki getRobotList (only when has robots) -->
-      <div
-        v-if="listMode === 'team' && teamBound && teamRobots.length > 0"
-        class="flex flex-col gap-1.5"
-      >
+      <div v-if="listMode === 'team' && teamBound && teamRobots.length > 0" class="flex flex-col">
         <div v-for="r in teamRobots" :key="r.id" class="flex flex-col">
           <div
             :class="
               cn(
-                'group flex h-11 w-full items-center gap-2 rounded px-2 text-left outline-none transition-colors',
+                'group flex h-12 w-full items-center gap-2 px-2 text-left outline-none transition-colors',
+                r.id === activeTeamRobotId &&
+                  getAgentConversations(getTeamConversationAgentId(r.id)).length > 0
+                  ? 'border-b-0'
+                  : 'border-b border-border/70',
                 r.id === activeTeamRobotId
-                  ? 'bg-zinc-100 text-foreground dark:bg-accent'
-                  : 'bg-white text-muted-foreground shadow-[0px_1px_4px_0px_rgba(0,0,0,0.1)] hover:bg-accent/50 hover:text-foreground active:bg-accent/70 dark:bg-zinc-800/50 dark:shadow-[0px_1px_4px_0px_rgba(255,255,255,0.05)]'
+                  ? 'bg-card text-foreground'
+                  : 'bg-background text-foreground hover:bg-accent/40 active:bg-accent/60'
               )
             "
             role="button"
@@ -379,14 +437,24 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
             @keydown.enter.prevent="handleTeamRobotClick(r.id)"
             @keydown.space.prevent="handleTeamRobotClick(r.id)"
           >
-            <div
-              class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
+            <span
+              class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+              aria-hidden="true"
             >
-              <img v-if="r.icon" :src="r.icon" class="size-6 object-contain" alt="" />
-              <img v-else :src="logoSrc" class="size-6 opacity-90" alt="ChatClaw logo" />
+              <IconChevronDown
+                v-if="r.id === activeTeamRobotId"
+                class="size-4"
+              />
+              <IconChevronRight v-else class="size-4" />
+            </span>
+            <div
+              class="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-muted/70 text-foreground"
+            >
+              <img v-if="r.icon" :src="r.icon" class="size-full object-cover" alt="" />
+              <img v-else :src="logoSrc" class="size-5 opacity-90" alt="ChatClaw logo" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-normal">{{ r.name }}</div>
+              <div class="truncate text-sm font-medium text-foreground">{{ r.name }}</div>
             </div>
 
             <!-- Action buttons (same as personal agents) -->
@@ -394,18 +462,32 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               <Button
                 size="icon"
                 variant="ghost"
-                class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                :class="
+                  cn(
+                    'size-6 rounded-md text-muted-foreground transition-opacity hover:bg-muted/70 hover:text-foreground',
+                    r.id === activeTeamRobotId
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                  )
+                "
                 :title="t('assistant.sidebar.newConversation')"
                 @click.stop="emit('newConversationForTeamRobot', r.id)"
               >
-                <IconNewConversation class="size-4 text-muted-foreground" />
+                <IconNewConversation class="size-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger as-child>
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-7 opacity-0 group-hover:opacity-100 hover:bg-muted/60 dark:hover:bg-white/10"
+                    :class="
+                      cn(
+                        'size-6 rounded-md text-muted-foreground transition-opacity hover:bg-muted/70 hover:text-foreground',
+                        r.id === activeTeamRobotId
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                      )
+                    "
                     :title="t('assistant.menu.history')"
                     @click.stop
                   >
@@ -448,17 +530,17 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               r.id === activeTeamRobotId &&
               getAgentConversations(getTeamConversationAgentId(r.id)).length > 0
             "
-            class="mt-1 flex flex-col gap-0.5"
+            class="flex flex-col border-b border-border/70 pb-1"
           >
             <div
               v-for="conv in getAgentConversations(getTeamConversationAgentId(r.id))"
               :key="conv.id"
               :class="
                 cn(
-                  'group flex items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                  'group mx-2 mt-0.5 flex h-10 items-center gap-1.5 rounded-md px-2 text-left text-sm transition-colors',
                   activeConversationId === conv.id
-                    ? 'bg-accent/60 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/70'
+                    ? 'bg-accent text-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-accent/40 hover:text-foreground active:bg-accent/60'
                 )
               "
               role="button"
@@ -466,8 +548,34 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               @click="emit('selectConversationForTeamRobot', r.id, conv)"
               @keydown.enter.prevent="emit('selectConversationForTeamRobot', r.id, conv)"
             >
-              <Pin v-if="conv.is_pinned" class="size-3 shrink-0 text-muted-foreground" />
-              <span class="min-w-0 flex-1 truncate">{{ conv.name }}</span>
+              <span
+                class="inline-flex size-[18px] shrink-0 items-center justify-center overflow-visible [&_svg]:block [&_svg]:size-4"
+                aria-hidden="true"
+              >
+                <IconSession
+                  :class="
+                    cn(
+                      activeConversationId === conv.id
+                        ? 'text-foreground/70'
+                        : 'text-muted-foreground [.group:hover_&]:text-foreground/70'
+                    )
+                  "
+                />
+              </span>
+              <Pin
+                v-if="conv.is_pinned"
+                class="size-3 shrink-0 text-muted-foreground [.group:hover_&]:text-foreground/80"
+              />
+              <span
+                :class="
+                  cn(
+                    'min-w-0 flex-1 truncate',
+                    activeConversationId === conv.id
+                      ? 'text-foreground'
+                      : 'text-muted-foreground group-hover:text-foreground/90'
+                  )
+                "
+              >{{ conv.name }}</span>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground active:bg-background/80 group-hover:opacity-100"
