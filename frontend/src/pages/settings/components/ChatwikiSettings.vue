@@ -362,8 +362,12 @@ function listenAuthCallback() {
     try {
       await saveBindingFromCallback(data)
       authUser.value = data
+      await ProvidersService.GetProviderWithModels('chatwiki')
       clearChatwikiCache()
       await loadBinding(true)
+      notifyChatwikiBindingChanged(data)
+      Events.Emit('chatwiki:model-catalog-refresh')
+      Events.Emit('models:changed')
       view.value = 'success'
     } catch (error) {
       console.error('Failed to save chatwiki binding from auth callback:', error)
@@ -465,6 +469,7 @@ async function finishSuccess() {
     clearChatwikiCache()
     await loadBinding(true)
     notifyChatwikiBindingChanged(currentBinding.value)
+    Events.Emit('chatwiki:model-catalog-refresh')
     Events.Emit('models:changed')
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
@@ -494,6 +499,7 @@ async function confirmUnbind() {
     robots.value = []
     libraries.value = []
     notifyChatwikiBindingChanged(null)
+    Events.Emit('chatwiki:model-catalog-refresh')
     Events.Emit('models:changed')
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)

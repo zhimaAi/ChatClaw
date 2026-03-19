@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Events } from '@wailsio/runtime'
 import {
   ChevronDown,
   ChevronUp,
@@ -70,6 +71,7 @@ const catalogError = ref('')
 const llmRegionFilter = ref<'all' | 'CN' | 'Global'>('all')
 const collapsedGroups = ref<Record<string, boolean>>({})
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
+let unsubscribeCatalogRefresh: (() => void) | null = null
 
 const isBound = computed(() => !!currentBinding.value && modelCatalog.value?.bound !== false)
 const showAccountCard = computed(() => {
@@ -77,6 +79,13 @@ const showAccountCard = computed(() => {
 })
 const showCreditsCard = computed(() => {
   return showAccountCard.value && shouldShowChatwikiCreditsCard(currentBinding.value)
+})
+const showDevLoginButton = computed(() => {
+  return (
+    showAccountCard.value &&
+    !showCreditsCard.value &&
+    currentBinding.value?.chatwiki_version?.trim().toLowerCase() === 'dev'
+  )
 })
 const todayUse = computed(() => extractStatValue(modelCatalog.value, 'today_use'))
 const allSurplus = computed(() => extractStatValue(modelCatalog.value, 'all_surplus'))
@@ -328,8 +337,13 @@ watch(
   { immediate: true }
 )
 
+unsubscribeCatalogRefresh = Events.On('chatwiki:model-catalog-refresh', () => {
+  void loadPageData(true)
+})
+
 onBeforeUnmount(() => {
   stopAutoRefresh()
+  unsubscribeCatalogRefresh?.()
 })
 </script>
 
@@ -385,6 +399,14 @@ onBeforeUnmount(() => {
               @click="openBillingPage"
             >
               {{ t('settings.chatwiki.buyCredits') }}
+            </Button>
+            <Button
+              v-else-if="showDevLoginButton"
+              size="sm"
+              class="h-9 rounded-lg bg-[#2f67f6] px-3.5 text-sm font-medium text-white shadow-[0_4px_10px_rgba(47,103,246,0.2)] hover:bg-[#2558db]"
+              @click="handleLoginNow"
+            >
+              {{ t('settings.chatwiki.loginNow') }}
             </Button>
           </div>
 

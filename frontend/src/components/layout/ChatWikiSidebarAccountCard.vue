@@ -70,14 +70,18 @@ function handleClick() {
 
 let unsubscribeBindingChanged: (() => void) | null = null
 let unsubscribeModelsChanged: (() => void) | null = null
+let unsubscribeCatalogRefresh: (() => void) | null = null
 
 onMounted(() => {
   void loadState()
   unsubscribeBindingChanged = onChatwikiBindingChanged(() => {
-    void loadState()
+    void loadState('polling')
   })
   unsubscribeModelsChanged = Events.On('models:changed', () => {
-    void loadState()
+    void loadState('polling')
+  })
+  unsubscribeCatalogRefresh = Events.On('chatwiki:model-catalog-refresh', () => {
+    void loadState('polling')
   })
 })
 
@@ -85,6 +89,7 @@ onBeforeUnmount(() => {
   stopAutoRefresh()
   unsubscribeBindingChanged?.()
   unsubscribeModelsChanged?.()
+  unsubscribeCatalogRefresh?.()
 })
 </script>
 
