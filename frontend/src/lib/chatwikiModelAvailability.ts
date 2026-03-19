@@ -1,4 +1,5 @@
 import { i18n } from '@/i18n'
+import { getNormalizedChatwikiAvailability } from './chatwikiBindingVersion'
 
 type ModelLike = {
   model_id: string
@@ -26,8 +27,7 @@ export const CHATWIKI_PROVIDER_ID = 'chatwiki'
 export function getChatwikiAvailabilityStatus(
   binding: ChatwikiBindingLike
 ): ChatwikiAvailabilityStatus {
-  if (!binding) return 'unbound'
-  return binding.chatwiki_version === 'dev' ? 'non_cloud' : 'available'
+  return getNormalizedChatwikiAvailability(binding)
 }
 
 function normalizeAvailabilityStatus(

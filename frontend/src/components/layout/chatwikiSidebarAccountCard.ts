@@ -1,4 +1,5 @@
 import { i18n } from '@/i18n'
+import { isChatwikiDevBinding } from '@/lib/chatwikiBindingVersion'
 
 export type ChatwikiSidebarBindingLike = {
   chatwiki_version?: string | null
@@ -86,8 +87,7 @@ function formatCreditsLabel(value: string): string {
 
 export function isChatwikiCloudBinding(binding: ChatwikiSidebarBindingLike | null): boolean {
   if (!binding) return false
-  const version = normalizeText(binding.chatwiki_version).toLowerCase()
-  return !!version && version !== 'dev'
+  return !isChatwikiDevBinding(binding) && !!normalizeText(binding.chatwiki_version)
 }
 
 export function shouldAutoRefreshChatwikiCredits(

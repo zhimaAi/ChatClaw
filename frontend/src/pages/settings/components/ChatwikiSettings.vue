@@ -141,6 +141,14 @@ async function loadBinding(force = false) {
   }
 }
 
+async function refreshBindingStateAndModelViews() {
+  clearChatwikiCache()
+  await loadBinding(true)
+  notifyChatwikiBindingChanged(currentBinding.value)
+  Events.Emit('chatwiki:model-catalog-refresh')
+  Events.Emit('models:changed')
+}
+
 async function loadRobots() {
   if (!isBound.value) return
   robotsLoading.value = true
@@ -363,11 +371,7 @@ function listenAuthCallback() {
       await saveBindingFromCallback(data)
       authUser.value = data
       await ProvidersService.GetProviderWithModels('chatwiki')
-      clearChatwikiCache()
-      await loadBinding(true)
-      notifyChatwikiBindingChanged(data)
-      Events.Emit('chatwiki:model-catalog-refresh')
-      Events.Emit('models:changed')
+      await refreshBindingStateAndModelViews()
       view.value = 'success'
     } catch (error) {
       console.error('Failed to save chatwiki binding from auth callback:', error)
@@ -465,12 +469,7 @@ async function finishSuccess() {
     // Sync apps and knowledge bases after (re-)binding so list view has fresh data
     await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
     await ProvidersService.GetProviderWithModels('chatwiki')
-    // Reload binding so list view shows latest auth status (bound/expired, user info)
-    clearChatwikiCache()
-    await loadBinding(true)
-    notifyChatwikiBindingChanged(currentBinding.value)
-    Events.Emit('chatwiki:model-catalog-refresh')
-    Events.Emit('models:changed')
+    await refreshBindingStateAndModelViews()
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
   } catch (error) {
@@ -498,9 +497,7 @@ async function confirmUnbind() {
     authUser.value = null
     robots.value = []
     libraries.value = []
-    notifyChatwikiBindingChanged(null)
-    Events.Emit('chatwiki:model-catalog-refresh')
-    Events.Emit('models:changed')
+    await refreshBindingStateAndModelViews()
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)
   }
