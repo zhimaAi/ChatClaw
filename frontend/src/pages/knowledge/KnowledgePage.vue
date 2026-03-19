@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings, FileText, Folder as FolderIcon } from 'lucide-vue-next'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
+import IconKnowledgeIcon from '@/assets/icons/knowledge-icon.svg'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -36,6 +37,8 @@ import IconMarkdown from '@/assets/icons/file-markdown.svg'
 import IconHtml from '@/assets/icons/file-html.svg'
 import IconCsv from '@/assets/icons/file-csv.svg'
 import IconOfd from '@/assets/icons/file-ofd.svg'
+import IconDown from '@/assets/icons/down-icon.svg'
+import IconRight from '@/assets/icons/right-icon.svg'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -68,7 +71,7 @@ import {
   getLibraryListOnlyOpen as getLibraryListOnlyOpenCached,
 } from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { Book, BookOpen, FileStack } from 'lucide-vue-next'
+import { FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
@@ -1230,7 +1233,7 @@ const handleRemoveImage = (id: string) => {
         </span>
       </button>
 
-      <div class="flex-1 overflow-auto px-2 pb-2 pt-2">
+      <div class="flex-1 overflow-auto">
         <div v-if="loading" class="px-2 py-6 text-sm text-muted-foreground">
           {{ sidebarCollapsed ? '' : t('knowledge.loading') }}
         </div>
@@ -1292,13 +1295,11 @@ const handleRemoveImage = (id: string) => {
           </div>
           <div
             v-else-if="!teamBound"
-            class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+            class="flex h-12 w-full shrink-0 items-center justify-center border-b border-border bg-card text-sm font-normal text-muted-foreground"
           >
-            <div class="text-center text-sm text-muted-foreground">
-              {{ t('knowledge.team.notBoundTitle') }}
-            </div>
+            {{ t('knowledge.team.notBoundTitle') }}
           </div>
-          <div v-else class="flex flex-col gap-1">
+          <div v-else class="flex flex-col">
             <!-- Always show the three category tabs when team is bound -->
             <div class="mx-1 mb-1 inline-flex rounded-md bg-muted p-1">
               <button
@@ -1349,12 +1350,7 @@ const handleRemoveImage = (id: string) => {
               <div
                 v-for="lib in teamLibraries"
                 :key="lib.id"
-                class="group/teamlib mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow"
-                :class="
-                  selectedTeamLibraryId === lib.id
-                    ? 'border-primary/60'
-                    : 'hover:border-muted-foreground/60'
-                "
+                class="group/teamlib flex flex-col border-b border-border text-sm transition-colors"
               >
                 <!-- Team library row: click to expand/collapse -->
                 <div class="flex items-center gap-1.5">
@@ -1370,17 +1366,14 @@ const handleRemoveImage = (id: string) => {
                     "
                     @click="handleTeamLibraryClick(lib.id)"
                   >
-                    <component
-                      :is="expandedTeamLibraries.has(lib.id) ? BookOpen : Book"
-                      :class="
-                        cn(
-                          'size-4 shrink-0',
-                          expandedTeamLibraries.has(lib.id)
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
-                        )
-                      "
-                    />
+                    <span
+                      class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                      aria-hidden
+                    >
+                      <IconDown v-if="expandedTeamLibraries.has(lib.id)" class="size-4" />
+                      <IconRight v-else class="size-4" />
+                    </span>
+                    <IconKnowledgeIcon class="size-5 shrink-0 text-muted-foreground" />
                     <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                       {{ lib.name }}
                     </span>
@@ -1404,7 +1397,7 @@ const handleRemoveImage = (id: string) => {
                 <!-- Team groups (sidebar): shown when expanded -->
                 <div
                   v-if="expandedTeamLibraries.has(lib.id)"
-                  class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
+                  class="flex w-full flex-col overflow-hidden px-1.5 pb-1.5"
                 >
                   <!-- All groups -->
                   <div
@@ -1457,11 +1450,11 @@ const handleRemoveImage = (id: string) => {
           </div>
         </div>
 
-        <div v-else class="flex flex-col gap-1">
+        <div v-else class="flex flex-col">
           <div
             v-for="lib in libraries"
             :key="lib.id"
-            class="group/library mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow hover:border-muted-foreground/60"
+            class="group/library flex flex-col border-b border-border text-sm transition-colors"
           >
             <!-- 知识库行：点击整行即可展开/收起 -->
             <div class="flex items-center gap-1.5">
@@ -1477,11 +1470,14 @@ const handleRemoveImage = (id: string) => {
                 "
                 @click="handleLibraryClick(lib.id)"
               >
-                <BookOpen
-                  v-if="expandedLibraries.has(lib.id)"
-                  class="size-4 shrink-0 text-primary"
-                />
-                <Book v-else class="size-4 shrink-0 text-muted-foreground" />
+                <span
+                  class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                  aria-hidden
+                >
+                  <IconDown v-if="expandedLibraries.has(lib.id)" class="size-4" />
+                  <IconRight v-else class="size-4" />
+                </span>
+                <IconKnowledgeIcon class="size-5 shrink-0 text-muted-foreground" />
                 <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                   {{ lib.name }}
                 </span>
@@ -1517,7 +1513,7 @@ const handleRemoveImage = (id: string) => {
             <!-- Folder tree -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
+              class="flex w-full flex-col overflow-hidden px-1.5 pb-1.5"
             >
               <!-- Uncategorized option: full-width clickable row -->
               <div
