@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { Check, ChevronDown, Clock3 } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { onClickOutside, useEventListener } from '@vueuse/core'
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -10,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
 import type { Agent, Channel, ScheduledTaskFormState } from '../types'
 
@@ -31,6 +34,8 @@ const props = withDefaults(
   }
 )
 
+const { t } = useI18n()
+
 const scheduleTypeOptions = [
   { value: 'preset', label: '快捷设置' },
   { value: 'custom', label: '自定义时间' },
@@ -45,6 +50,71 @@ const customModeOptions = [
 ] as const
 
 const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
+const calendarWeekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
+
+type CalendarDay = {
+  key: string
+  isoDate: string
+  label: number
+  inCurrentMonth: boolean
+  isSelected: boolean
+  isToday: boolean
+}
+
+function createSafeDate(year: number, month: number, day: number) {
+  return new Date(year, month, day, 12, 0, 0, 0)
+}
+
+function startOfMonth(date: Date) {
+  return createSafeDate(date.getFullYear(), date.getMonth(), 1)
+}
+
+function addMonths(date: Date, amount: number) {
+  return createSafeDate(date.getFullYear(), date.getMonth() + amount, 1)
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function formatDateKey(date: Date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`
+}
+
+function parseDateKey(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null
+  const date = createSafeDate(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  return date
+}
+
+function formatCalendarTitle(date: Date) {
+  return `${date.getFullYear()}年 ${padDatePart(date.getMonth() + 1)}月`
+}
+
+function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): CalendarDay[] {
+  const monthStart = startOfMonth(monthAnchor)
+  const gridStart = createSafeDate(monthStart.getFullYear(), monthStart.getMonth(), 1 - monthStart.getDay())
+  const todayKey = formatDateKey(new Date())
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const current = createSafeDate(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index)
+    const isoDate = formatDateKey(current)
+    return {
+      key: isoDate,
+      isoDate,
+      label: current.getDate(),
+      inCurrentMonth: current.getMonth() === monthStart.getMonth(),
+      isSelected: isoDate === selectedDateKey,
+      isToday: isoDate === todayKey,
+    }
+  })
+}
 
 const customTimeValue = computed({
   get() {
@@ -66,6 +136,87 @@ const selectedWeeklyDay = computed({
     if (props.readonly) return
     props.form.customWeekdays = [value]
   },
+})
+
+const expirationDateValue = computed({
+  get() {
+    return props.form.expiresAtDate
+  },
+  set(value: string) {
+    if (props.readonly) return
+    props.form.expiresAtDate = value
+  },
+})
+
+const expirationPickerOpen = ref(false)
+const expirationPickerRef = ref<HTMLElement | null>(null)
+const visibleExpirationMonth = ref(startOfMonth(parseDateKey(props.form.expiresAtDate) ?? new Date()))
+
+const expirationDisplayValue = computed(() => {
+  if (!props.form.expiresAtDate) return ''
+  const [year = '', month = '', day = ''] = props.form.expiresAtDate.split('-')
+  if (!year || !month || !day) return ''
+  return `${year} / ${month} / ${day}`
+})
+
+const expirationCalendarTitle = computed(() => formatCalendarTitle(visibleExpirationMonth.value))
+const expirationCalendarWeeks = computed(() => {
+  const days = buildCalendarDays(visibleExpirationMonth.value, props.form.expiresAtDate)
+  return Array.from({ length: 6 }, (_, index) => days.slice(index * 7, index * 7 + 7))
+})
+
+function syncVisibleExpirationMonth(value: string) {
+  visibleExpirationMonth.value = startOfMonth(parseDateKey(value) ?? new Date())
+}
+
+function openExpirationPicker() {
+  if (props.readonly) return
+  syncVisibleExpirationMonth(props.form.expiresAtDate)
+  expirationPickerOpen.value = true
+}
+
+function closeExpirationPicker() {
+  expirationPickerOpen.value = false
+}
+
+function toggleExpirationPicker() {
+  if (props.readonly) return
+  if (expirationPickerOpen.value) {
+    closeExpirationPicker()
+    return
+  }
+  openExpirationPicker()
+}
+
+function goToPreviousExpirationMonth() {
+  visibleExpirationMonth.value = addMonths(visibleExpirationMonth.value, -1)
+}
+
+function goToNextExpirationMonth() {
+  visibleExpirationMonth.value = addMonths(visibleExpirationMonth.value, 1)
+}
+
+function selectExpirationDate(value: string) {
+  expirationDateValue.value = value
+  syncVisibleExpirationMonth(value)
+  closeExpirationPicker()
+}
+
+function selectTodayExpirationDate() {
+  selectExpirationDate(formatDateKey(new Date()))
+}
+
+function clearExpirationDate() {
+  expirationDateValue.value = ''
+  syncVisibleExpirationMonth('')
+  closeExpirationPicker()
+}
+
+const formExpired = computed(() => {
+  if (!props.form.expiresAtDate) return false
+  const expiresAt = new Date(`${props.form.expiresAtDate}T23:59:59`)
+  if (Number.isNaN(expiresAt.getTime())) return props.form.isExpired
+  return expiresAt.getTime() <= Date.now()
 })
 
 const notificationPlatformOptions = computed(() => {
@@ -116,7 +267,9 @@ const selectedNotificationChannels = computed(() => {
   }))
 })
 
-const selectedNotificationChannelValue = computed(() => props.form.notificationChannelIds.map(String))
+const selectedNotificationChannelValue = computed(() =>
+  props.form.notificationChannelIds.map(String)
+)
 
 const notificationChannelTriggerLabel = computed(() => {
   if (!props.form.notificationPlatform) return '请先选择通知类型'
@@ -219,6 +372,25 @@ watch(
     )
   }
 )
+
+watch(
+  () => props.form.expiresAtDate,
+  (value) => {
+    if (expirationPickerOpen.value) return
+    syncVisibleExpirationMonth(value)
+  }
+)
+
+onClickOutside(expirationPickerRef, () => {
+  if (!expirationPickerOpen.value) return
+  closeExpirationPicker()
+})
+
+useEventListener(window, 'keydown', (event) => {
+  if (event.key === 'Escape' && expirationPickerOpen.value) {
+    closeExpirationPicker()
+  }
+})
 </script>
 
 <template>
@@ -265,6 +437,159 @@ watch(
 
       <div class="space-y-2">
         <label class="block text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.form.expiresAt') }}
+          <span class="ml-1 text-xs font-medium text-[#94a3b8]">{{
+            t('scheduledTasks.form.expiresAtOptional')
+          }}</span>
+        </label>
+        <div ref="expirationPickerRef" class="relative">
+          <button
+            type="button"
+            :disabled="readonly"
+            :aria-expanded="expirationPickerOpen"
+            class="group flex h-11 w-full items-center justify-between rounded-xl border px-4 text-left text-sm outline-none transition-[border-color,box-shadow,background-color] disabled:cursor-default"
+            :class="[
+              expirationPickerOpen
+                ? 'border-[#2563eb] bg-white shadow-[0_0_0_4px_rgba(191,219,254,0.9)]'
+                : 'border-[#dbe3ec] bg-white hover:border-[#cbd5e1]',
+              readonly ? 'bg-[#f8fafc] text-[#475569]' : 'text-[#111827]',
+            ]"
+            @click="toggleExpirationPicker"
+          >
+            <div class="flex min-w-0 flex-1 items-center gap-3">
+              <div
+                class="flex size-8 shrink-0 items-center justify-center rounded-lg border"
+                :class="
+                  expirationPickerOpen
+                    ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#2563eb]'
+                    : 'border-[#e2e8f0] bg-[#f8fafc] text-[#64748b]'
+                "
+              >
+                <CalendarDays class="size-4" />
+              </div>
+              <div class="min-w-0">
+                <p class="truncate font-medium">
+                  {{ expirationDisplayValue || '选择到期日期' }}
+                </p>
+                <p class="truncate text-xs text-[#94a3b8]">
+                  {{ expirationDisplayValue ? '任务将在当日 23:59 后自动过期' : '未设置则长期有效' }}
+                </p>
+              </div>
+            </div>
+            <ChevronDown
+              class="size-4 shrink-0 text-[#94a3b8] transition-transform"
+              :class="expirationPickerOpen ? 'rotate-180 text-[#2563eb]' : ''"
+            />
+          </button>
+
+          <div
+            v-if="expirationPickerOpen"
+            class="absolute left-0 z-50 mt-3 w-full min-w-[320px] overflow-hidden rounded-[22px] border border-[#dbe3ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_100%)] shadow-[0_22px_60px_rgba(15,23,42,0.18)] backdrop-blur"
+          >
+            <div class="border-b border-[#e5eef8] px-4 pb-4 pt-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-[13px] font-medium uppercase tracking-[0.18em] text-[#94a3b8]">
+                    到期时间
+                  </p>
+                  <h4 class="mt-1 text-base font-semibold text-[#0f172a]">
+                    {{ expirationCalendarTitle }}
+                  </h4>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex size-9 items-center justify-center rounded-full border border-[#dbe3ec] bg-white text-[#475569] transition-colors hover:border-[#bfdbfe] hover:bg-[#eff6ff] hover:text-[#2563eb]"
+                    @click="goToPreviousExpirationMonth"
+                  >
+                    <ChevronLeft class="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex size-9 items-center justify-center rounded-full border border-[#dbe3ec] bg-white text-[#475569] transition-colors hover:border-[#bfdbfe] hover:bg-[#eff6ff] hover:text-[#2563eb]"
+                    @click="goToNextExpirationMonth"
+                  >
+                    <ChevronRight class="size-4" />
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="expirationDisplayValue"
+                class="mt-3 inline-flex rounded-full border border-[#dbe3ec] bg-white px-3 py-1 text-xs font-medium text-[#475569]"
+              >
+                已选：{{ expirationDisplayValue }}
+              </div>
+            </div>
+
+            <div class="px-4 pb-4 pt-3">
+              <div class="mb-2 grid grid-cols-7 gap-1">
+                <span
+                  v-for="weekday in calendarWeekdayLabels"
+                  :key="weekday"
+                  class="flex h-8 items-center justify-center text-xs font-semibold text-[#94a3b8]"
+                >
+                  {{ weekday }}
+                </span>
+              </div>
+
+              <div class="space-y-1">
+                <div
+                  v-for="(week, weekIndex) in expirationCalendarWeeks"
+                  :key="'week-' + weekIndex"
+                  class="grid grid-cols-7 gap-1"
+                >
+                  <button
+                    v-for="day in week"
+                    :key="day.key"
+                    type="button"
+                    :class="
+                      cn(
+                        'flex h-10 items-center justify-center rounded-xl border text-sm font-medium transition-all',
+                        day.isSelected
+                          ? 'border-[#111827] bg-[#111827] text-white shadow-[0_10px_22px_rgba(15,23,42,0.18)]'
+                          : day.isToday
+                            ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+                            : day.inCurrentMonth
+                              ? 'border-transparent bg-white text-[#334155] hover:border-[#dbe3ec] hover:bg-[#f8fafc]'
+                              : 'border-transparent bg-transparent text-[#c0cad6] hover:bg-[#f8fafc]',
+                      )
+                    "
+                    @click="selectExpirationDate(day.isoDate)"
+                  >
+                    {{ day.label }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between border-t border-[#e5eef8] bg-white/80 px-4 py-3">
+              <button
+                type="button"
+                class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#2563eb] transition-colors hover:bg-[#eff6ff]"
+                @click="selectTodayExpirationDate"
+              >
+                今天
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#64748b] transition-colors hover:bg-[#f1f5f9]"
+                @click="clearExpirationDate"
+              >
+                清空
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-[#94a3b8]">
+          {{ t('scheduledTasks.form.expiresAtHint') }}
+        </p>
+        <p v-if="formExpired" class="text-xs font-medium text-[#dc2626]">
+          {{ t('scheduledTasks.form.expiredHint') }}
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-[15px] font-semibold text-[#1f2937]">
           通知
           <span class="ml-1 text-xs font-medium text-[#94a3b8]">可选</span>
         </label>
@@ -273,9 +598,7 @@ watch(
             :value="form.notificationPlatform"
             :disabled="readonly"
             class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] disabled:bg-[#f8fafc] disabled:text-[#475569]"
-            @change="
-              handleNotificationPlatformChange(($event.target as HTMLSelectElement).value)
-            "
+            @change="handleNotificationPlatformChange(($event.target as HTMLSelectElement).value)"
           >
             <option value="">不发送通知</option>
             <option
@@ -530,7 +853,9 @@ watch(
       </div>
     </section>
 
-    <section class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4">
+    <section
+      class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4"
+    >
       <div class="space-y-1">
         <h3 class="text-[15px] font-semibold text-[#1f2937]">立即启用</h3>
         <p class="text-sm text-[#94a3b8]">创建后立即开始运行此任务</p>

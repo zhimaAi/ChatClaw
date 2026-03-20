@@ -1,11 +1,10 @@
 import { onMounted, ref } from 'vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { i18n } from '@/i18n'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
-import {
-  ScheduledTasksService,
-} from '@bindings/chatclaw/internal/services/scheduledtasks'
+import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import type {
   ScheduledTask,
   ScheduledTaskFormState,
@@ -73,7 +72,7 @@ export function useScheduledTasks() {
   }
 
   async function submitForm(
-    buildPayload: (form: ScheduledTaskFormState) => { create: any, update: any }
+    buildPayload: (form: ScheduledTaskFormState) => { create: any; update: any }
   ) {
     if (saving.value) return
     saving.value = true
@@ -108,6 +107,14 @@ export function useScheduledTasks() {
   }
 
   async function toggleTask(task: ScheduledTask, enabled: boolean) {
+    if (enabled && (task as any).is_expired) {
+      const translate = (i18n?.global as any)?.t
+      const message = translate
+        ? translate('scheduledTasks.expiredCannotEnable')
+        : '已过期，不能再开启'
+      toast.error(String(message))
+      return
+    }
     try {
       await ScheduledTasksService.SetScheduledTaskEnabledWithSource(task.id, enabled, 'manual')
       await loadTasks()

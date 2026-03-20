@@ -22,17 +22,20 @@ import (
 )
 
 type ScheduledTasksService struct {
-	app                 *application.App
-	db                  *bun.DB
-	scheduler           *scheduler
-	runnerDeps          runDependencies
-	notificationGateway *channels.Gateway
-	notificationSender  taskNotificationSender
-	createMu            sync.Mutex
-	createRuns          map[string]*createCall
-	recentCreates       map[string]recentCreate
-	now                 func() time.Time
-	duplicateWindow     time.Duration
+	app                  *application.App
+	db                   *bun.DB
+	scheduler            *scheduler
+	runnerDeps           runDependencies
+	notificationGateway  *channels.Gateway
+	notificationSender   taskNotificationSender
+	createMu             sync.Mutex
+	createRuns           map[string]*createCall
+	recentCreates        map[string]recentCreate
+	now                  func() time.Time
+	duplicateWindow      time.Duration
+	expirationSweepEvery time.Duration
+	expirationSweepStop  chan struct{}
+	expirationSweepDone  chan struct{}
 }
 
 type createCall struct {
@@ -52,10 +55,11 @@ type taskNotificationSender interface {
 
 func NewScheduledTasksService(app *application.App, convSvc *conversations.ConversationsService, chatSvc *chat.ChatService) *ScheduledTasksService {
 	svc := &ScheduledTasksService{
-		app:             app,
-		scheduler:       newScheduler(),
-		now:             time.Now,
-		duplicateWindow: time.Second,
+		app:                  app,
+		scheduler:            newScheduler(),
+		now:                  time.Now,
+		duplicateWindow:      time.Second,
+		expirationSweepEvery: time.Minute,
 	}
 	if convSvc != nil {
 		svc.runnerDeps.conversations = convSvc
@@ -68,11 +72,12 @@ func NewScheduledTasksService(app *application.App, convSvc *conversations.Conve
 
 func NewScheduledTasksServiceForTest(app *application.App, db *bun.DB, convSvc conversationService, chatSvc chatService) *ScheduledTasksService {
 	return &ScheduledTasksService{
-		app:             app,
-		db:              db,
-		scheduler:       newScheduler(),
-		now:             time.Now,
-		duplicateWindow: time.Second,
+		app:                  app,
+		db:                   db,
+		scheduler:            newScheduler(),
+		now:                  time.Now,
+		duplicateWindow:      time.Second,
+		expirationSweepEvery: time.Minute,
 		runnerDeps: runDependencies{
 			conversations: convSvc,
 			chat:          chatSvc,
@@ -97,10 +102,15 @@ func (s *ScheduledTasksService) dbOrGlobal() (*bun.DB, error) {
 
 func (s *ScheduledTasksService) Start() error {
 	s.scheduler.start()
-	return s.reloadEnabledTasks()
+	if err := s.reloadEnabledTasks(); err != nil {
+		return err
+	}
+	s.startExpirationSweeper()
+	return nil
 }
 
 func (s *ScheduledTasksService) Stop() {
+	s.stopExpirationSweeper()
 	s.scheduler.stop()
 }
 
@@ -126,7 +136,7 @@ func (s *ScheduledTasksService) ListScheduledTasks() ([]ScheduledTask, error) {
 		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
 			return nil, err
 		}
-		out = append(out, models[i].toDTO())
+		out = append(out, s.toScheduledTaskDTO(models[i]))
 	}
 	return out, nil
 }
@@ -147,7 +157,7 @@ func (s *ScheduledTasksService) GetScheduledTaskByID(id int64) (*ScheduledTask, 
 	if err != nil {
 		return nil, err
 	}
-	dto := model.toDTO()
+	dto := s.toScheduledTaskDTO(model)
 	return &dto, nil
 }
 
@@ -236,6 +246,9 @@ func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateSchedu
 	if err != nil {
 		return nil, err
 	}
+	if model.Enabled && s.isTaskExpired(model.ExpiresAt) {
+		return nil, errs.New("error.scheduled_task_expired")
+	}
 	fingerprint := createTaskFingerprint(model)
 	cachedTask, call, isLeader := s.beginCreateCall(fingerprint)
 	if cachedTask != nil {
@@ -262,7 +275,7 @@ func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateSchedu
 		return nil, call.err
 	}
 
-	dto := model.toDTO()
+	dto := s.toScheduledTaskDTO(*model)
 	if err := s.scheduler.register(dto, func() { s.runScheduledTask(dto.ID, RunTriggerSchedule) }); err != nil {
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
@@ -298,6 +311,13 @@ func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input Up
 	if err := s.applyUpdateInput(&model, input); err != nil {
 		return nil, err
 	}
+	if s.isTaskExpired(model.ExpiresAt) {
+		if shouldRejectExpiredEnable(beforeModel.Enabled, input.Enabled) {
+			return nil, errs.New("error.scheduled_task_expired")
+		}
+		model.Enabled = false
+		model.NextRunAt = nil
+	}
 	if err := s.ensureAgentExists(ctx, db, model.AgentID); err != nil {
 		return nil, err
 	}
@@ -313,13 +333,14 @@ func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input Up
 		Set("cron_expr = ?", model.CronExpr).
 		Set("timezone = ?", model.Timezone).
 		Set("enabled = ?", model.Enabled).
+		Set("expires_at = ?", model.ExpiresAt).
 		Set("next_run_at = ?", model.NextRunAt).
 		Where("id = ?", id).
 		Exec(ctx); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
 	}
 
-	dto := model.toDTO()
+	dto := s.toScheduledTaskDTO(model)
 	if err := s.scheduler.register(dto, func() { s.runScheduledTask(dto.ID, RunTriggerSchedule) }); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
 	}
@@ -556,8 +577,9 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 	if input.AgentID <= 0 {
 		return nil, errs.New("error.agent_id_required")
 	}
+	expiresAt := normalizeScheduledTaskExpiration(input.ExpiresAt)
 
-	schedule, err := parseSchedule(input.ScheduleType, input.ScheduleValue, input.CronExpr, time.Now())
+	schedule, err := parseSchedule(input.ScheduleType, input.ScheduleValue, input.CronExpr, s.currentTime())
 	if err != nil {
 		return nil, errs.Wrap("error.scheduled_task_schedule_invalid", err)
 	}
@@ -573,6 +595,7 @@ func (s *ScheduledTasksService) buildCreateModel(input CreateScheduledTaskInput)
 		CronExpr:               schedule.CronExpr,
 		Timezone:               schedule.Timezone,
 		Enabled:                input.Enabled,
+		ExpiresAt:              expiresAt,
 		LastStatus:             TaskStatusPending,
 		LastError:              "",
 	}
@@ -640,6 +663,7 @@ func createTaskFingerprint(model *scheduledTaskModel) string {
 		model.CronExpr,
 		model.Timezone,
 		strconv.FormatBool(model.Enabled),
+		formatTimeFingerprint(model.ExpiresAt),
 	}, "\x00")
 }
 
@@ -695,6 +719,42 @@ func (s *ScheduledTasksService) currentTime() time.Time {
 	return s.now().UTC()
 }
 
+func (s *ScheduledTasksService) toScheduledTaskDTO(model scheduledTaskModel) ScheduledTask {
+	dto := model.toDTO()
+	dto.IsExpired = s.isTaskExpired(model.ExpiresAt)
+	return dto
+}
+
+func normalizeScheduledTaskExpiration(expiresAt *time.Time) *time.Time {
+	if expiresAt == nil {
+		return nil
+	}
+	value := expiresAt.UTC()
+	return &value
+}
+
+func formatTimeFingerprint(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func shouldRejectExpiredEnable(beforeEnabled bool, requestedEnabled *bool) bool {
+	return requestedEnabled != nil && *requestedEnabled && !beforeEnabled
+}
+
+func (s *ScheduledTasksService) isTaskExpired(expiresAt *time.Time) bool {
+	return isScheduledTaskExpired(expiresAt, s.currentTime())
+}
+
+func isScheduledTaskExpired(expiresAt *time.Time, now time.Time) bool {
+	if expiresAt == nil {
+		return false
+	}
+	return !expiresAt.After(now)
+}
+
 func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, input UpdateScheduledTaskInput) error {
 	if input.Name != nil {
 		value := strings.TrimSpace(*input.Name)
@@ -719,6 +779,9 @@ func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, inpu
 	if input.Enabled != nil {
 		model.Enabled = *input.Enabled
 	}
+	if input.ExpiresAt != nil {
+		model.ExpiresAt = normalizeScheduledTaskExpiration(input.ExpiresAt)
+	}
 	if input.NotificationPlatform != nil {
 		model.NotificationPlatform = normalizeNotificationPlatform(*input.NotificationPlatform)
 	}
@@ -740,7 +803,7 @@ func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, inpu
 		if input.CronExpr != nil {
 			cronExpr = *input.CronExpr
 		}
-		schedule, err := parseSchedule(scheduleType, scheduleValue, cronExpr, time.Now())
+		schedule, err := parseSchedule(scheduleType, scheduleValue, cronExpr, s.currentTime())
 		if err != nil {
 			return errs.Wrap("error.scheduled_task_schedule_invalid", err)
 		}
@@ -755,7 +818,7 @@ func (s *ScheduledTasksService) applyUpdateInput(model *scheduledTaskModel, inpu
 		}
 	} else if input.Enabled != nil {
 		if model.Enabled {
-			nextRunAt, err := s.scheduler.next(model.CronExpr, time.Now())
+			nextRunAt, err := s.scheduler.next(model.CronExpr, s.currentTime())
 			if err != nil {
 				return errs.Wrap("error.scheduled_task_schedule_invalid", err)
 			}
@@ -851,6 +914,9 @@ func (s *ScheduledTasksService) reloadEnabledTasks() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if _, err := s.disableExpiredTasks(ctx); err != nil {
+		return err
+	}
 
 	var models []scheduledTaskModel
 	if err := db.NewSelect().
@@ -865,7 +931,7 @@ func (s *ScheduledTasksService) reloadEnabledTasks() error {
 		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
 			return err
 		}
-		task := models[i].toDTO()
+		task := s.toScheduledTaskDTO(models[i])
 		if err := s.scheduler.register(task, func() { s.runScheduledTask(task.ID, RunTriggerSchedule) }); err != nil {
 			return err
 		}
@@ -878,7 +944,7 @@ func (s *ScheduledTasksService) ensureTaskNextRunAt(ctx context.Context, db *bun
 		return nil
 	}
 
-	nextRunAt, err := s.scheduler.next(model.CronExpr, time.Now())
+	nextRunAt, err := s.scheduler.next(model.CronExpr, s.currentTime())
 	if err != nil {
 		return nil
 	}
@@ -907,7 +973,92 @@ func (s *ScheduledTasksService) runScheduledTask(taskID int64, triggerType strin
 	if err != nil {
 		return
 	}
+	if triggerType == RunTriggerSchedule && s.isTaskExpired(task.ExpiresAt) {
+		_, _ = s.disableScheduledTask(ctx, db, task.ID)
+		return
+	}
 	_, _ = s.executeTask(context.Background(), task, triggerType)
+}
+
+func (s *ScheduledTasksService) startExpirationSweeper() {
+	if s.expirationSweepEvery <= 0 || s.expirationSweepStop != nil {
+		return
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	s.expirationSweepStop = stop
+	s.expirationSweepDone = done
+
+	go func() {
+		ticker := time.NewTicker(s.expirationSweepEvery)
+		defer ticker.Stop()
+		defer close(done)
+		for {
+			select {
+			case <-ticker.C:
+				_, _ = s.disableExpiredTasks(context.Background())
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
+func (s *ScheduledTasksService) stopExpirationSweeper() {
+	if s.expirationSweepStop == nil {
+		return
+	}
+	close(s.expirationSweepStop)
+	<-s.expirationSweepDone
+	s.expirationSweepStop = nil
+	s.expirationSweepDone = nil
+}
+
+func (s *ScheduledTasksService) disableExpiredTasks(ctx context.Context) (int, error) {
+	db, err := s.dbOrGlobal()
+	if err != nil {
+		return 0, err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var models []scheduledTaskModel
+	if err := db.NewSelect().
+		Model(&models).
+		Where("deleted_at IS NULL").
+		Where("enabled = ?", true).
+		Where("expires_at IS NOT NULL").
+		Where("expires_at <= ?", s.currentTime()).
+		Scan(ctx); err != nil {
+		return 0, errs.Wrap("error.scheduled_task_list_failed", err)
+	}
+	for i := range models {
+		if _, err := s.disableScheduledTask(ctx, db, models[i].ID); err != nil {
+			return 0, err
+		}
+	}
+	return len(models), nil
+}
+
+func (s *ScheduledTasksService) disableScheduledTask(ctx context.Context, db *bun.DB, taskID int64) (bool, error) {
+	res, err := db.NewUpdate().
+		Model((*scheduledTaskModel)(nil)).
+		Set("enabled = ?", false).
+		Set("next_run_at = NULL").
+		Where("id = ?", taskID).
+		Where("deleted_at IS NULL").
+		Where("enabled = ?", true).
+		Exec(ctx)
+	if err != nil {
+		return false, errs.Wrap("error.scheduled_task_update_failed", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows > 0 {
+		s.scheduler.unregister(taskID)
+		return true, nil
+	}
+	return false, nil
 }
 
 func (s *ScheduledTasksService) createRun(ctx context.Context, task scheduledTaskModel, triggerType string) (*scheduledTaskRunModel, error) {
@@ -1293,7 +1444,7 @@ func (s *ScheduledTasksService) insertOperationLog(
 }
 
 func (s *ScheduledTasksService) buildCreateChangedFields(task scheduledTaskModel) []ScheduledTaskOperationChangedField {
-	return []ScheduledTaskOperationChangedField{
+	changed := []ScheduledTaskOperationChangedField{
 		{FieldKey: "status", FieldLabel: "状态", Before: "", After: formatEnabledDisplay(task.Enabled)},
 		{FieldKey: "name", FieldLabel: "名称", Before: "", After: task.Name},
 		{FieldKey: "prompt", FieldLabel: "提示词", Before: "", After: task.Prompt},
@@ -1301,6 +1452,15 @@ func (s *ScheduledTasksService) buildCreateChangedFields(task scheduledTaskModel
 		{FieldKey: "notification_channels", FieldLabel: "通知渠道", Before: "", After: formatNotificationChannelsDisplay(task.NotificationPlatform, parseNotificationChannelIDs(task.NotificationChannelIDs))},
 		{FieldKey: "schedule_time", FieldLabel: "执行时间", Before: "", After: formatScheduleDisplay(task.ScheduleType, task.ScheduleValue, task.CronExpr)},
 	}
+	if task.ExpiresAt != nil {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "expires_at",
+			FieldLabel: "到期时间",
+			Before:     "-",
+			After:      formatExpirationDisplay(task.ExpiresAt),
+		})
+	}
+	return changed
 }
 
 func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db *bun.DB, before, after scheduledTaskModel) []ScheduledTaskOperationChangedField {
@@ -1355,6 +1515,14 @@ func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db
 			After:      afterSchedule,
 		})
 	}
+	if !timePointersEqual(before.ExpiresAt, after.ExpiresAt) {
+		changed = append(changed, ScheduledTaskOperationChangedField{
+			FieldKey:   "expires_at",
+			FieldLabel: "到期时间",
+			Before:     formatExpirationDisplay(before.ExpiresAt),
+			After:      formatExpirationDisplay(after.ExpiresAt),
+		})
+	}
 	if len(changed) == 0 {
 		changed = append(changed, ScheduledTaskOperationChangedField{
 			FieldKey:   "status",
@@ -1397,6 +1565,8 @@ func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.D
 		ScheduleDescription:    formatScheduleDisplay(task.ScheduleType, task.ScheduleValue, task.CronExpr),
 		Timezone:               task.Timezone,
 		Enabled:                task.Enabled,
+		ExpiresAt:              task.ExpiresAt,
+		IsExpired:              s.isTaskExpired(task.ExpiresAt),
 	}
 }
 
@@ -1447,6 +1617,20 @@ func formatEnabledDisplay(enabled bool) string {
 		return "启用"
 	}
 	return "停用"
+}
+
+func formatExpirationDisplay(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return "-"
+	}
+	return expiresAt.UTC().Format("2006-01-02 15:04:05")
+}
+
+func timePointersEqual(left, right *time.Time) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return left.Equal(*right)
 }
 
 func formatAgentDisplay(agentID int64) string {

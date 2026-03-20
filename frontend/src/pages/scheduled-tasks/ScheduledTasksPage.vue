@@ -20,7 +20,7 @@ import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
 import { createDeleteTaskConfirmation } from './deleteTaskConfirmation'
 import type { ScheduledTask, ScheduledTaskFormState } from './types'
-import { taskToForm } from './utils'
+import { buildExpirationDateTime, taskToForm } from './utils'
 
 defineProps<{
   tabId: string
@@ -106,6 +106,7 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
+    expires_at: buildExpirationDateTime(state.expiresAtDate),
     notification_platform: state.notificationPlatform,
     notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,
@@ -118,6 +119,7 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
+    expires_at: buildExpirationDateTime(state.expiresAtDate),
     notification_platform: state.notificationPlatform,
     notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,

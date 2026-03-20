@@ -222,6 +222,7 @@ func newScheduledTasksTestDB(t *testing.T) *bun.DB {
 			cron_expr text not null,
 			timezone text not null default 'Local',
 			enabled boolean not null default true,
+			expires_at datetime,
 			notification_platform text not null default '',
 			notification_channel_ids text not null default '[]',
 			last_run_at datetime,

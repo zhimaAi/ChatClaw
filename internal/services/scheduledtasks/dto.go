@@ -47,6 +47,8 @@ type ScheduledTask struct {
 	CronExpr      string     `json:"cron_expr"`
 	Timezone      string     `json:"timezone"`
 	Enabled       bool       `json:"enabled"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	IsExpired     bool       `json:"is_expired"`
 	LastRunAt     *time.Time `json:"last_run_at"`
 	NextRunAt     *time.Time `json:"next_run_at"`
 	LastStatus    string     `json:"last_status"`
@@ -85,15 +87,16 @@ type ScheduledTaskSummary struct {
 }
 
 type CreateScheduledTaskInput struct {
-	Name                   string  `json:"name"`
-	Prompt                 string  `json:"prompt"`
-	AgentID                int64   `json:"agent_id"`
-	ScheduleType           string  `json:"schedule_type"`
-	ScheduleValue          string  `json:"schedule_value"`
-	CronExpr               string  `json:"cron_expr"`
-	Enabled                bool    `json:"enabled"`
-	NotificationPlatform   string  `json:"notification_platform"`
-	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
+	Name                   string     `json:"name"`
+	Prompt                 string     `json:"prompt"`
+	AgentID                int64      `json:"agent_id"`
+	ScheduleType           string     `json:"schedule_type"`
+	ScheduleValue          string     `json:"schedule_value"`
+	CronExpr               string     `json:"cron_expr"`
+	Enabled                bool       `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at"`
+	NotificationPlatform   string     `json:"notification_platform"`
+	NotificationChannelIDs []int64    `json:"notification_channel_ids"`
 }
 
 type ScheduleValidationResult struct {
@@ -105,15 +108,16 @@ type ScheduleValidationResult struct {
 }
 
 type UpdateScheduledTaskInput struct {
-	Name                   *string  `json:"name"`
-	Prompt                 *string  `json:"prompt"`
-	AgentID                *int64   `json:"agent_id"`
-	ScheduleType           *string  `json:"schedule_type"`
-	ScheduleValue          *string  `json:"schedule_value"`
-	CronExpr               *string  `json:"cron_expr"`
-	Enabled                *bool    `json:"enabled"`
-	NotificationPlatform   *string  `json:"notification_platform"`
-	NotificationChannelIDs *[]int64 `json:"notification_channel_ids"`
+	Name                   *string    `json:"name"`
+	Prompt                 *string    `json:"prompt"`
+	AgentID                *int64     `json:"agent_id"`
+	ScheduleType           *string    `json:"schedule_type"`
+	ScheduleValue          *string    `json:"schedule_value"`
+	CronExpr               *string    `json:"cron_expr"`
+	Enabled                *bool      `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at"`
+	NotificationPlatform   *string    `json:"notification_platform"`
+	NotificationChannelIDs *[]int64   `json:"notification_channel_ids"`
 }
 
 type ScheduledTaskRunDetail struct {
@@ -130,30 +134,32 @@ type ScheduledTaskOperationChangedField struct {
 }
 
 type ScheduledTaskOperationSnapshot struct {
-	TaskID                 int64   `json:"task_id"`
-	Name                   string  `json:"name"`
-	Prompt                 string  `json:"prompt"`
-	AgentID                int64   `json:"agent_id"`
-	AgentName              string  `json:"agent_name"`
-	NotificationPlatform   string  `json:"notification_platform"`
-	NotificationChannelIDs []int64 `json:"notification_channel_ids"`
-	NotificationChannels   string  `json:"notification_channels"`
-	ScheduleType           string  `json:"schedule_type"`
-	ScheduleValue          string  `json:"schedule_value"`
-	CronExpr               string  `json:"cron_expr"`
-	ScheduleDescription    string  `json:"schedule_description"`
-	Timezone               string  `json:"timezone"`
-	Enabled                bool    `json:"enabled"`
+	TaskID                 int64      `json:"task_id"`
+	Name                   string     `json:"name"`
+	Prompt                 string     `json:"prompt"`
+	AgentID                int64      `json:"agent_id"`
+	AgentName              string     `json:"agent_name"`
+	NotificationPlatform   string     `json:"notification_platform"`
+	NotificationChannelIDs []int64    `json:"notification_channel_ids"`
+	NotificationChannels   string     `json:"notification_channels"`
+	ScheduleType           string     `json:"schedule_type"`
+	ScheduleValue          string     `json:"schedule_value"`
+	CronExpr               string     `json:"cron_expr"`
+	ScheduleDescription    string     `json:"schedule_description"`
+	Timezone               string     `json:"timezone"`
+	Enabled                bool       `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at"`
+	IsExpired              bool       `json:"is_expired"`
 }
 
 type ScheduledTaskOperationLog struct {
-	ID               int64                               `json:"id"`
-	TaskID           int64                               `json:"task_id"`
-	TaskNameSnapshot string                              `json:"task_name_snapshot"`
-	OperationType    string                              `json:"operation_type"`
-	OperationSource  string                              `json:"operation_source"`
+	ID               int64                                `json:"id"`
+	TaskID           int64                                `json:"task_id"`
+	TaskNameSnapshot string                               `json:"task_name_snapshot"`
+	OperationType    string                               `json:"operation_type"`
+	OperationSource  string                               `json:"operation_source"`
 	ChangedFields    []ScheduledTaskOperationChangedField `json:"changed_fields"`
-	CreatedAt        time.Time                           `json:"created_at"`
+	CreatedAt        time.Time                            `json:"created_at"`
 }
 
 type ScheduledTaskOperationLogDetail struct {

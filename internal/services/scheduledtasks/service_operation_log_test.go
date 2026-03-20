@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/uptrace/bun"
 )
@@ -121,18 +122,69 @@ func TestUpdateScheduledTaskWritesSingleLogWithMultipleChangedFields(t *testing.
 	assertChangedFieldPresent(t, changed, "notification_channels")
 }
 
+func TestUpdateScheduledTaskWritesExpirationChangedField(t *testing.T) {
+	db := newScheduledTasksTestDB(t)
+	insertScheduledTasksAgent(t, db, 7)
+
+	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	expiresAt := time.Date(2026, 4, 1, 23, 59, 59, 0, time.UTC)
+	updated, err := svc.UpdateScheduledTask(created.ID, UpdateScheduledTaskInput{
+		ExpiresAt: &expiresAt,
+	})
+	if err != nil {
+		t.Fatalf("UpdateScheduledTask returned error: %v", err)
+	}
+	if updated.ExpiresAt == nil || !updated.ExpiresAt.Equal(expiresAt) {
+		t.Fatalf("expected updated expires_at %v, got %v", expiresAt, updated.ExpiresAt)
+	}
+
+	logs := readScheduledTaskOperationLogs(t, db)
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	}
+
+	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	if len(changed) != 1 {
+		t.Fatalf("expected only expiration changed field, got %d", len(changed))
+	}
+	if changed[0].FieldKey != "expires_at" {
+		t.Fatalf("expected changed field key expires_at, got %q", changed[0].FieldKey)
+	}
+	if changed[0].FieldLabel != "到期时间" {
+		t.Fatalf("expected changed field label 到期时间, got %q", changed[0].FieldLabel)
+	}
+	if changed[0].Before != "-" {
+		t.Fatalf("expected before value -, got %q", changed[0].Before)
+	}
+	if changed[0].After != "2026-04-01 23:59:59" {
+		t.Fatalf("expected after value 2026-04-01 23:59:59, got %q", changed[0].After)
+	}
+}
+
 func TestSetScheduledTaskEnabledWritesStatusOperationLog(t *testing.T) {
 	db := newScheduledTasksTestDB(t)
 	insertScheduledTasksAgent(t, db, 7)
 
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
-		Name:         "Morning digest",
-		Prompt:       "Send today's digest",
-		AgentID:      7,
-		ScheduleType: ScheduleTypePreset,
-		ScheduleValue:"every_day_0900",
-		Enabled:      true,
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
 	})
 	if err != nil {
 		t.Fatalf("CreateScheduledTask returned error: %v", err)
@@ -163,12 +215,12 @@ func TestDeleteScheduledTaskWritesDeleteOperationLogWithPreDeleteSnapshot(t *tes
 
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
-		Name:         "Morning digest",
-		Prompt:       "Send today's digest",
-		AgentID:      7,
-		ScheduleType: ScheduleTypePreset,
-		ScheduleValue:"every_day_0900",
-		Enabled:      true,
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
 	})
 	if err != nil {
 		t.Fatalf("CreateScheduledTask returned error: %v", err)
@@ -201,12 +253,12 @@ func TestCreateScheduledTaskWithAISourceWritesAIOperationLog(t *testing.T) {
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 
 	_, err := svc.CreateScheduledTaskWithSource(CreateScheduledTaskInput{
-		Name:         "Morning digest",
-		Prompt:       "Send today's digest",
-		AgentID:      7,
-		ScheduleType: ScheduleTypePreset,
-		ScheduleValue:"every_day_0900",
-		Enabled:      true,
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
 	}, OperationSourceAI)
 	if err != nil {
 		t.Fatalf("CreateScheduledTaskWithSource returned error: %v", err)
@@ -227,12 +279,12 @@ func TestOperationLogDetailReturnsStoredSnapshot(t *testing.T) {
 
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
-		Name:         "Morning digest",
-		Prompt:       "Send today's digest",
-		AgentID:      7,
-		ScheduleType: ScheduleTypePreset,
-		ScheduleValue:"every_day_0900",
-		Enabled:      true,
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
 	})
 	if err != nil {
 		t.Fatalf("CreateScheduledTask returned error: %v", err)

@@ -1,14 +1,38 @@
 import { formatUtcDateTime } from '@/composables/useDateTime'
 import { SCHEDULE_PRESET_LABELS, WEEKDAY_OPTIONS } from './constants'
-import type {
-  ScheduledTask,
-  ScheduledTaskFormState,
-  ScheduledTaskOperationSnapshot,
-} from './types'
+import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskOperationSnapshot } from './types'
 
 export function formatTaskTime(value?: string | Date | null) {
   if (!value) return '-'
   return formatUtcDateTime(value)
+}
+
+export function formatDateOnly(value?: string | Date | null) {
+  if (!value) return '-'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function toDateInputValue(value?: string | Date | null) {
+  if (!value) return ''
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function buildExpirationDateTime(dateOnly: string) {
+  const value = dateOnly.trim()
+  if (!value) return null
+  const [year, month, day] = value.split('-').map((item) => Number(item))
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, 23, 59, 59)
 }
 
 export function formatDuration(ms: number) {
@@ -67,6 +91,8 @@ export function createEmptyForm(): ScheduledTaskFormState {
     name: '',
     prompt: '',
     agentId: null,
+    expiresAtDate: '',
+    isExpired: false,
     notificationPlatform: '',
     notificationChannelIds: [],
     enabled: true,
@@ -88,6 +114,8 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   form.name = task.name
   form.prompt = task.prompt
   form.agentId = task.agent_id
+  form.expiresAtDate = toDateInputValue((task as any).expires_at)
+  form.isExpired = !!(task as any).is_expired
   form.notificationPlatform = (task as any).notification_platform || ''
   form.notificationChannelIds = Array.isArray((task as any).notification_channel_ids)
     ? [...(task as any).notification_channel_ids]
@@ -144,6 +172,8 @@ export function operationSnapshotToForm(
   form.name = snapshot.name
   form.prompt = snapshot.prompt
   form.agentId = snapshot.agent_id
+  form.expiresAtDate = toDateInputValue((snapshot as any).expires_at)
+  form.isExpired = !!(snapshot as any).is_expired
   form.notificationPlatform = snapshot.notification_platform || ''
   form.notificationChannelIds = Array.isArray(snapshot.notification_channel_ids)
     ? [...snapshot.notification_channel_ids]

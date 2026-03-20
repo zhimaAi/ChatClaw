@@ -27,6 +27,7 @@ type scheduledTaskModel struct {
 	CronExpr               string     `bun:"cron_expr,notnull"`
 	Timezone               string     `bun:"timezone,notnull"`
 	Enabled                bool       `bun:"enabled,notnull"`
+	ExpiresAt              *time.Time `bun:"expires_at"`
 	LastRunAt              *time.Time `bun:"last_run_at"`
 	NextRunAt              *time.Time `bun:"next_run_at"`
 	LastStatus             string     `bun:"last_status,notnull"`
@@ -59,14 +60,14 @@ type scheduledTaskRunModel struct {
 type scheduledTaskOperationLogModel struct {
 	bun.BaseModel `bun:"table:scheduled_task_operation_logs,alias:stol"`
 
-	ID               int64     `bun:"id,pk,autoincrement"`
-	CreatedAt        time.Time `bun:"created_at,notnull"`
-	TaskID           int64     `bun:"task_id,notnull"`
-	TaskNameSnapshot string    `bun:"task_name_snapshot,notnull"`
-	OperationType    string    `bun:"operation_type,notnull"`
-	OperationSource  string    `bun:"operation_source,notnull"`
-	ChangedFieldsJSON string   `bun:"changed_fields_json,notnull"`
-	TaskSnapshotJSON string    `bun:"task_snapshot_json,notnull"`
+	ID                int64     `bun:"id,pk,autoincrement"`
+	CreatedAt         time.Time `bun:"created_at,notnull"`
+	TaskID            int64     `bun:"task_id,notnull"`
+	TaskNameSnapshot  string    `bun:"task_name_snapshot,notnull"`
+	OperationType     string    `bun:"operation_type,notnull"`
+	OperationSource   string    `bun:"operation_source,notnull"`
+	ChangedFieldsJSON string    `bun:"changed_fields_json,notnull"`
+	TaskSnapshotJSON  string    `bun:"task_snapshot_json,notnull"`
 }
 
 type scheduledTaskAgentRow struct {
@@ -128,6 +129,8 @@ func (m *scheduledTaskModel) toDTO() ScheduledTask {
 		CronExpr:               m.CronExpr,
 		Timezone:               m.Timezone,
 		Enabled:                m.Enabled,
+		ExpiresAt:              m.ExpiresAt,
+		IsExpired:              isScheduledTaskExpired(m.ExpiresAt, time.Now().UTC()),
 		LastRunAt:              m.LastRunAt,
 		NextRunAt:              m.NextRunAt,
 		LastStatus:             m.LastStatus,
