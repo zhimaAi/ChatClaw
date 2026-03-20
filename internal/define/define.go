@@ -3,7 +3,8 @@ package define
 import (
 	"os"
 	"path/filepath"
-	"strconv"
+
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 // AppID 用于文件系统/配置目录等"标识用途"
@@ -89,7 +90,8 @@ func DefaultAgentNameForLocale(locale string) string {
 	return "Default Assistant"
 }
 
-// OpenClawManagedAgentID returns the managed OpenClaw agent ID for a local agent.
-func OpenClawManagedAgentID(localID int64) string {
-	return OpenClawManagedAgentIDPrefix + strconv.FormatInt(localID, 10)
+// NewOpenClawManagedAgentID generates a unique OpenClaw agent ID using NanoID.
+func NewOpenClawManagedAgentID() string {
+	id, _ := gonanoid.New(8)
+	return OpenClawManagedAgentIDPrefix + id
 }

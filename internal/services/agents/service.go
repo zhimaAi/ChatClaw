@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -303,23 +302,12 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		return nil, err
 	}
 
-	m := newAgentModel(name, fmt.Sprintf("pending-%d", time.Now().UnixNano()), prompt, icon)
+	m := newAgentModel(name, define.NewOpenClawManagedAgentID(), prompt, icon)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		if _, err := tx.NewInsert().Model(m).Exec(ctx); err != nil {
-			return err
-		}
-		m.OpenClawAgentID = define.OpenClawManagedAgentID(m.ID)
-		_, err := tx.NewUpdate().
-			Model((*agentModel)(nil)).
-			Set("openclaw_agent_id = ?", m.OpenClawAgentID).
-			Where("id = ?", m.ID).
-			Exec(ctx)
-		return err
-	}); err != nil {
+	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
 		return nil, errs.Wrap("error.agent_create_failed", err)
 	}
 
