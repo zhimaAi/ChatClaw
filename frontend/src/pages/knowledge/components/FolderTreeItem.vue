@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Folder as FolderIcon, FolderClosed, FolderOpen } from 'lucide-vue-next'
+import IconDown from '@/assets/icons/down-icon.svg'
+import IconRight from '@/assets/icons/right-icon.svg'
 import type { Folder } from '@bindings/chatclaw/internal/services/library'
 
 const props = defineProps<{
@@ -47,7 +49,7 @@ const handleFolderClick = (folderId: number, event?: Event) => {
   <div class="flex w-full flex-col">
     <!-- Current folder row: full-width clickable -->
     <div
-      class="group flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+      class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
       :style="{ paddingLeft: `${(props.level || 0) * 20}px` }"
       :class="
         isSelected
@@ -56,6 +58,20 @@ const handleFolderClick = (folderId: number, event?: Event) => {
       "
       @click="handleFolderClick(folder.id, $event)"
     >
+      <!-- Expand/collapse arrow (only when has children) -->
+      <span
+        v-if="hasChildren"
+        class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+        aria-hidden
+      >
+        <IconDown v-if="isExpanded" class="size-4" />
+        <IconRight v-else class="size-4" />
+      </span>
+      <span
+        v-else
+        class="flex size-4 shrink-0"
+        aria-hidden
+      />
       <!-- Folder state icon (display only) -->
       <span class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground">
         <component

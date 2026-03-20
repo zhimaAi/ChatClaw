@@ -714,6 +714,7 @@ export default {
       freeBadge: "Gratis",
       noModel: "Nessun modello",
       selectKnowledge: "Seleziona knowledge base",
+      knowledgeChipRemoveNotSupported: "Rimozione non disponibile in questa modalità",
       selectImages: "Seleziona immagini",
       selectImagesDisabled: "Devi selezionare un modello che supporta immagini",
       selectImage: "Seleziona immagine",
@@ -1150,6 +1151,7 @@ export default {
       deleteSuccess: "Eliminazione riuscita",
       move: {
         title: "Sposta cartella",
+        action: "Sposta",
         selectFolder: "Seleziona cartella target",
         moveToHere: "Sposta qui",
         success: "Spostamento riuscito",
