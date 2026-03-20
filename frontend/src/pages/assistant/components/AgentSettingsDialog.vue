@@ -172,6 +172,7 @@ watch(
 )
 
 const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.value !== '')
+const isMainAgent = computed(() => props.agent?.openclaw_agent_id === 'main')
 
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
@@ -873,13 +874,17 @@ const handleDelete = async () => {
                   {{ t('assistant.settings.delete.title') }}
                 </div>
                 <div class="max-w-[420px] text-center text-sm text-muted-foreground">
-                  {{ t('assistant.settings.delete.hint') }}
+                  {{
+                    isMainAgent
+                      ? t('assistant.settings.delete.protected')
+                      : t('assistant.settings.delete.hint')
+                  }}
                 </div>
 
                 <Button
                   variant="outline"
                   class="border-border text-foreground hover:bg-accent"
-                  :disabled="saving"
+                  :disabled="saving || isMainAgent"
                   @click="deleteConfirmOpen = true"
                 >
                   {{ t('assistant.settings.delete.action') }}

@@ -891,6 +891,7 @@ export default {
       delete: {
         title: "Delete Agent",
         hint: "Deleting the agent will remove all related conversations. This cannot be undone.",
+        protected: "The default assistant is a system agent and cannot be deleted.",
         action: "Delete",
         confirmTitle: "Confirm Delete",
         confirmDesc: "Are you sure you want to delete ",

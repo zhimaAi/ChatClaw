@@ -79,6 +79,7 @@
   "error.agent_create_failed": "failed to create agent",
   "error.agent_update_failed": "failed to update agent",
   "error.agent_delete_failed": "failed to delete agent",
+  "error.agent_default_delete_forbidden": "the default agent cannot be deleted",
   "error.agent_name_required": "agent name is required",
   "error.agent_name_too_long": "agent name cannot exceed 100 characters",
   "error.agent_prompt_required": "prompt is required",
