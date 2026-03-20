@@ -31,10 +31,6 @@ export default {
       name: "Knowledge Search",
       description: "Search relevant content from knowledge base",
     },
-    memoryRetriever: {
-      name: "Memory Search",
-      description: "Search relevant facts from long-term memory",
-    },
     execute: {
       name: "Execute Command",
       description: "Execute a shell command in the system terminal",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "Model Service",
       generalSettings: "General Settings",
-      memorySettings: "Long-term Memory",
       skills: "Skills Settings",
       mcp: "MCPSettings",
       snapSettings: "Snap Settings",

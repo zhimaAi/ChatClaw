@@ -755,12 +755,12 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 		if err := db.NewSelect().
 			Table("settings").
 			Column("key", "value").
-			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id", "memory_extract_provider_id", "memory_embedding_provider_id"})).
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
 			Scan(ctx, &rows); err != nil {
 			return nil, errs.Wrap("error.setting_read_failed", err)
 		}
 
-		var embeddingProviderID, embeddingModelID, memoryExtractProviderID, memoryEmbeddingProviderID string
+		var embeddingProviderID, embeddingModelID string
 		for _, r := range rows {
 			if !r.Value.Valid {
 				continue
@@ -770,17 +770,10 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 				embeddingProviderID = strings.TrimSpace(r.Value.String)
 			case "embedding_model_id":
 				embeddingModelID = strings.TrimSpace(r.Value.String)
-			case "memory_extract_provider_id":
-				memoryExtractProviderID = strings.TrimSpace(r.Value.String)
-			case "memory_embedding_provider_id":
-				memoryEmbeddingProviderID = strings.TrimSpace(r.Value.String)
 			}
 		}
 		if embeddingProviderID != "" && embeddingModelID != "" && embeddingProviderID == providerID {
 			return nil, errs.New("error.cannot_disable_global_embedding_provider")
-		}
-		if memoryExtractProviderID == providerID || memoryEmbeddingProviderID == providerID {
-			return nil, errs.New("error.cannot_disable_memory_provider")
 		}
 
 		// 禁止关闭其语义分段模型正被知识库使用的供应商
@@ -1373,12 +1366,12 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		if err := db.NewSelect().
 			Table("settings").
 			Column("key", "value").
-			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id", "memory_embedding_provider_id", "memory_embedding_model_id"})).
+			Where("key IN (?)", bun.In([]string{"embedding_provider_id", "embedding_model_id"})).
 			Scan(ctx, &rows); err != nil {
 			return errs.Wrap("error.setting_read_failed", err)
 		}
 
-		var embeddingProviderID, embeddingModelID, memoryEmbeddingProviderID, memoryEmbeddingModelID string
+		var embeddingProviderID, embeddingModelID string
 		for _, r := range rows {
 			if !r.Value.Valid {
 				continue
@@ -1388,20 +1381,12 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 				embeddingProviderID = strings.TrimSpace(r.Value.String)
 			case "embedding_model_id":
 				embeddingModelID = strings.TrimSpace(r.Value.String)
-			case "memory_embedding_provider_id":
-				memoryEmbeddingProviderID = strings.TrimSpace(r.Value.String)
-			case "memory_embedding_model_id":
-				memoryEmbeddingModelID = strings.TrimSpace(r.Value.String)
 			}
 		}
 
 		if embeddingProviderID != "" && embeddingModelID != "" &&
 			providerID == embeddingProviderID && modelID == embeddingModelID {
 			return errs.New("error.cannot_delete_global_embedding_model")
-		}
-		if memoryEmbeddingProviderID != "" && memoryEmbeddingModelID != "" &&
-			providerID == memoryEmbeddingProviderID && modelID == memoryEmbeddingModelID {
-			return errs.New("error.cannot_delete_memory_embedding_model")
 		}
 	}
 
@@ -1419,36 +1404,6 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 		}
 		if libraryName != "" {
 			return errs.Newf("error.cannot_delete_semantic_segment_model_in_use", map[string]any{"LibraryName": libraryName})
-		}
-
-		type row struct {
-			Key   string         `bun:"key"`
-			Value sql.NullString `bun:"value"`
-		}
-		rows := make([]row, 0, 2)
-		if err := db.NewSelect().
-			Table("settings").
-			Column("key", "value").
-			Where("key IN (?)", bun.In([]string{"memory_extract_provider_id", "memory_extract_model_id"})).
-			Scan(ctx, &rows); err != nil {
-			return errs.Wrap("error.setting_read_failed", err)
-		}
-
-		var memoryExtractProviderID, memoryExtractModelID string
-		for _, r := range rows {
-			if !r.Value.Valid {
-				continue
-			}
-			switch r.Key {
-			case "memory_extract_provider_id":
-				memoryExtractProviderID = strings.TrimSpace(r.Value.String)
-			case "memory_extract_model_id":
-				memoryExtractModelID = strings.TrimSpace(r.Value.String)
-			}
-		}
-		if memoryExtractProviderID != "" && memoryExtractModelID != "" &&
-			providerID == memoryExtractProviderID && modelID == memoryExtractModelID {
-			return errs.New("error.cannot_delete_memory_extract_model")
 		}
 	}
 
