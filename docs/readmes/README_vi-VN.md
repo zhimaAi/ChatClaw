@@ -33,53 +33,89 @@ Nhận AI cá nhân như OpenClaw trong 5 phút. Bảo mật Sandbox, với trì
 
 ### Trợ lý Chat AI
 
-Hỏi trợ lý AI bất kỳ câu hỏi nào, và nó sẽ thông minh tìm kiếm cơ sở tri thức của bạn để tạo ra câu trả lời liên quan.
+Đặt bất kỳ câu hỏi nào cho trợ lý AI; nó sẽ tìm kiếm thông minh trong cơ sở kiến thức của bạn để tạo câu trả lời phù hợp.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
-### Tạo PPT Nhanh
+### Tạo PPT nhanh
 
-Gửi một lệnh một câu cho trợ lý thông minh để tự động tạo và tạo bài thuyết trình PowerPoint.
+Gửi một lệnh một câu cho trợ lý thông minh để tự động tạo và tạo bản trình bày PowerPoint.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
-### Quản lý Kỹ năng
+### Quản lý kỹ năng
 
-Sử dụng lệnh để robot giúp bạn tìm các tính năng đã cài đặt trên máy tính hoặc cài đặt các plugin mở rộng mới.
+Dùng lệnh để trợ lý giúp bạn tìm các tính năng đã cài trên máy tính hoặc cài plugin mở rộng mới.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
 
-### Cơ sở Tri thức | Lưu trữ Vector hóa Tài liệu
+### MCP: Mở rộng năng lực không giới hạn
 
-Tải lên tài liệu của bạn (ví dụ: TXT, PDF, Word, Excel, CSV, HTML, Markdown). Hệ thống sẽ tự động phân tích, chia nhỏ và chuyển đổi thành embedding vector, lưu trữ trong cơ sở tri thức riêng tư của bạn để truy xuất và sử dụng chính xác bởi mô hình AI.
+Thêm máy chủ MCP bên ngoài để kết nối an toàn và hiệu quả với nhiều nguồn dữ liệu và công cụ, giúp trợ lý vượt khỏi công việc hàng ngày sang quy trình chuyên nghiệp.
 
-![](../../images/4.png)
+![](../../images/previews/en/image6.png)
 
-### Chọn Văn bản để Q&A Tức thì
+### Chế độ Sandbox: Bảo vệ kép
 
-Chọn bất kỳ văn bản nào trên màn hình, nó sẽ được tự động sao chép và điền vào hộp câu hỏi nhanh nổi. Bằng một cú nhấp chuột, gửi nó đến trợ lý AI để có câu trả lời tức thì.
+Chọn giữa thực thi cách ly sandbox (cách ly cấp OS, phạm vi lệnh hạn chế) và thực thi gốc (linh hoạt hơn). Chuyển đổi tự do để cân bằng bảo mật và tiện lợi.
 
-![](../../images/5.png)
+![](../../images/previews/en/image8.png)
 
-![](../../images/6.png)
+### Bộ nhớ: Tương tác tự nhiên và thông minh hơn
 
-### Cửa sổ Snap Thông minh
+Bật hội thoại theo ngữ cảnh và hỗ trợ cá nhân hóa. Trợ lý có thể liên tục học và tiến hóa như một đối tác đang phát triển.
 
-Trợ lý thông minh có thể gắn bên cạnh các cửa sổ ứng dụng khác. Chuyển đổi nhanh giữa các trợ lý AI được cấu hình khác nhau để đặt câu hỏi. Robot tạo câu trả lời dựa trên cơ sở tri thức được kết nối của bạn và hỗ trợ gửi phản hồi bằng một cú nhấp chuột trực tiếp vào cuộc trò chuyện của bạn.
+![](../../images/previews/en/image9.png)
 
-![](../../images/7.png)
+### Cơ sở kiến thức nhóm dùng chung
 
-### Một Câu hỏi, Nhiều Câu trả lời: So sánh Dễ dàng
+Cho phép truy cập một cú nhấp vào ChatWiki để đồng bộ robot và cơ sở kiến thức, chia sẻ cấu hình và kiểm soát quyền thành viên.
 
-Bạn không cần lặp lại câu hỏi. Tham khảo ý kiến nhiều "chuyên gia AI" cùng lúc và xem câu trả lời của họ song song trong một giao diện. Điều này cho phép so sánh dễ dàng và giúp bạn đưa ra kết luận tốt nhất.
+![](../../images/previews/en/image10.png)
 
-![](../../images/8.png)
+### Cơ sở kiến thức | Lưu trữ véc-tơ tài liệu
 
-### Bóng Launcher Một Cú nhấp
+Tải tài liệu lên (TXT, PDF, Word, Excel, CSV, HTML, Markdown). Hệ thống tự động phân tích, tách và chuyển thành embedding véc-tơ để truy xuất chính xác.
 
-Nhấp vào quả bóng nổi trên màn hình để đánh thức hoặc mở cửa sổ ứng dụng chính ChatClaw.
+![](../../images/previews/en/image11.png)
 
-![](../../images/9.png)
+### Tích hợp kênh IM phong phú
+
+Tích hợp nhà cung cấp IM (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram, v.v.) qua SDK để nhanh chóng bật tạo kênh, quản lý người dùng và nhắn tin.
+
+![](../../images/previews/en/image12.png)
+
+### Tác vụ theo lịch
+
+Để trợ lý tự động thực hiện hành động vào thời điểm hoặc khoảng thời gian đặt trước: nhắc nhở, công việc định kỳ và bảo trì cấp hệ thống.
+
+![](../../images/previews/en/image13.png)
+
+### Chọn văn bản để Hỏi đáp tức thì
+
+Chọn bất kỳ văn bản nào trên màn hình; nó được tự động sao chép vào hộp hỏi nhanh nổi. Một cú nhấp để hỏi, câu trả lời tức thì.
+
+![](../../images/previews/en/image14.png)
+
+![](../../images/previews/en/image15.png)
+
+### Thanh bên thông minh
+
+Gắn trợ lý bên cạnh các cửa sổ khác, chuyển nhanh giữa các trợ lý cấu hình khác nhau và gửi phản hồi đã tạo vào cuộc hội thoại bằng một cú nhấp.
+
+![](../../images/previews/en/image16.png)
+
+### Một câu hỏi, nhiều câu trả lời: So sánh dễ dàng
+
+Tham khảo nhiều "chuyên gia AI" cùng lúc và xem phản hồi của họ cạnh nhau để so sánh dễ dàng.
+
+![](../../images/previews/en/image17.png)
+
+### Nút khởi chạy một cú nhấp
+
+Nhấp vào quả cầu nổi trên màn hình để ngay lập tức mở hoặc đánh thức cửa sổ chính ChatClaw.
+
+![](../../images/previews/en/image18.png)
 
 ## Triển khai Chế độ Máy chủ
 
@@ -250,3 +286,7 @@ ChatClaw_D2/
 ├── docs:                       # Tài liệu phát triển
 └── images:                      # Ảnh chụp màn hình README
 ```
+
+
+
+

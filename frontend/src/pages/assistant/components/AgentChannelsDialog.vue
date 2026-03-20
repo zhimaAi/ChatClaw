@@ -46,9 +46,9 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
 
-/** Platforms that support create/bind in UI (feishu + wecom). */
+/** Platforms that support create/bind in UI (feishu + wecom + dingtalk). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
 }
 
 const channels = ref<Channel[]>([])
@@ -91,6 +91,7 @@ const selectedPlatformChannels = computed(() => {
 })
 
 const isFeishu = computed(() => selectedPlatformMeta.value?.id === 'feishu')
+const isDingTalk = computed(() => selectedPlatformMeta.value?.id === 'dingtalk')
 const isWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
 const inlineAppIdLabel = computed(() => (isWeCom.value ? 'Bot ID' : t('channels.config.appId')))
 const inlineAppSecretLabel = computed(() =>
@@ -210,7 +211,7 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
-    const selectableIds = ['feishu', 'wecom', 'qq']
+    const selectableIds = ['feishu', 'wecom', 'dingtalk', 'qq']
     const hasSelectedPlatform = platforms.value.some(
       (platform) => platform.id === selectedPlatformId.value
     )
@@ -358,7 +359,12 @@ async function handleToggleChannel(channel: Channel, enabled: boolean) {
 }
 
 function isSelectableChannelPlatform(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
+  return (
+    platformId === 'feishu' ||
+    platformId === 'wecom' ||
+    platformId === 'dingtalk' ||
+    platformId === 'qq'
+  )
 }
 
 function openPlatformDocs() {

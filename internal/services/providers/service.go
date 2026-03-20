@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -166,6 +167,12 @@ func EnsureChatClawInitialized() error {
 		Set("updated_at = ?", sqlite.NowUTC()).
 		Exec(ctx)
 	return err
+}
+
+// GetChatClawConfig returns the ChatClaw provider config from sqlite.
+// Convenience package-level wrapper around GetProvider("chatclaw").
+func GetChatClawConfig() (*Provider, error) {
+	return (&ProvidersService{}).GetProvider("chatclaw")
 }
 
 // fetchPublicIP fetches the machine's public IP via api.ipify.org
@@ -1002,6 +1009,18 @@ func (s *ProvidersService) checkAzure(ctx context.Context, input CheckAPIKeyInpu
 				Message: "invalid extra_config: " + err.Error(),
 			}, nil
 		}
+	}
+	if input.APIEndpoint == "" {
+		return &CheckAPIKeyResult{
+			Success: false,
+			Message: fmt.Errorf("azure api endpoint is required").Error(),
+		}, nil
+	}
+	if extraConfig.APIVersion == "" {
+		return &CheckAPIKeyResult{
+			Success: false,
+			Message: fmt.Errorf("azure api version is required").Error(),
+		}, nil
 	}
 
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{

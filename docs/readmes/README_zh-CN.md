@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
 <img src="../../frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
 </p>
 
@@ -37,51 +37,93 @@ Get OpenClaw-like personal AI agent in 5 mins. Sandbox-secured, with an ultra-sm
 
 向 AI 助手提出任何问题，它会智能搜索您的知识库并生成相关回答。
 
-![](../../images/1.png)
+![](../../images/previews/zh-CN/image1.png)
+
+### 双模式切换，高效搞定各类需求
+
+聊天模式适配多场景多轮问答与推理；任务模式搭配内置技能市场，让 AI Agent 自主拆解并推进多步骤任务，提升效率。
+
+![](../../images/previews/zh-CN/image2.png)
 
 ### PPT 快速生成
 
 向智能助手发送一句话指令，即可自动创建和生成 PowerPoint 演示文稿。
 
-![](../../images/2.png)
+![](../../images/previews/zh-CN/image4.png)
 
 ### 技能管理器
 
 使用指令让机器人帮您查找电脑上已安装的功能或安装新的扩展插件。
 
-![](../../images/3.png)
+![](../../images/previews/zh-CN/image6.png)
+
+### MCP-无限扩展机器人的能力
+
+支持添加外部 MCP，安全、高效地连接和调用各种外部数据源与工具，让机器人从日常任务走向更专业的领域。
+
+![](../../images/previews/zh-CN/image8.png)
+
+### 沙箱模式双重防护，电脑数据更安全
+
+内置沙箱模式与本机执行双选项：沙箱模式采用 OS 级隔离技术限定命令执行范围；本机执行更灵活。两种模式自由切换，兼顾安全与便捷。
+
+![](../../images/previews/zh-CN/image10.png)
+
+### 记忆功能-交互更自然，更智能
+
+实现上下文对话，提供个性化服务，完成复杂任务，持续学习和进化，让机器人像不断成长的伙伴。
+
+![](../../images/previews/zh-CN/image11.png)
+
+### 共享团队知识库
+
+一键授权接入 ChatWiki，同步机器人和知识库，完成配置同步与知识库共享，并满足成员访问与使用权限限制。
+
+![](../../images/previews/zh-CN/image13.png)
 
 ### 知识库 | 文档向量化存储
 
-上传您的文档（如 TXT、PDF、Word、Excel、CSV、HTML、Markdown），系统会自动解析、分割并转换为向量嵌入，存储到您的私有知识库中，供 AI 模型进行精准检索和利用。
+上传文档（TXT、PDF、Word、Excel、CSV、HTML、Markdown），系统自动解析、分割并转换为向量嵌入，存储到私有知识库中供精准检索与利用。
 
-![](../../images/4.png)
+![](../../images/previews/zh-CN/image14.png)
+
+### 丰富的im频道接入
+
+通过集成 IM 服务商（飞书、企微、QQ、钉钉、LINE、Discord、WhatsApp、X/Twitter、Telegram 等）SDK，快速实现频道创建、用户管理与消息收发等能力。
+
+![](../../images/previews/zh-CN/image15.png)
+
+### 定时任务—自动化完成指令
+
+让机器人在预设时间点或时间间隔自动执行特定操作：准时提醒、周期性工作、系统级维护任务等。
+
+![](../../images/previews/zh-CN/image16.png)
 
 ### 划词即时问答
 
-选中屏幕上的任意文字，它会被自动复制并填入悬浮快问框。一键发送给 AI 助手，即刻获得回答。
+选中屏幕上的任意文字，会被自动复制并填入悬浮快问框，一键发送给 AI 助手，即刻获得回答。
 
-![](../../images/5.png)
+![](../../images/previews/zh-CN/image17.png)
 
-![](../../images/6.png)
+![](../../images/previews/zh-CN/image18.png)
 
-### 智能贴靠窗口
+### 智能侧边栏
 
-可以贴靠在其他应用窗口旁的智能助手。在其中快速切换不同配置的 AI 助手进行提问。机器人根据您关联的知识库生成回答，并支持一键将回复发送到您的对话中。
+可以贴靠在其他应用窗口旁的智能助手，在其中快速切换不同配置的 AI 助手进行提问，并支持一键将回复发送到对话中。
 
-![](../../images/7.png)
+![](../../images/previews/zh-CN/image19.png)
 
 ### 一问多答：轻松比较
 
-无需重复提问。同时咨询多个"AI 专家"，在同一界面中并排查看它们的回复。方便比较，帮助您得出最佳结论。
+无需重复提问，同时咨询多个 "AI 专家"，在同一界面中并排查看回复，方便比较并得出最佳结论。
 
-![](../../images/8.png)
+![](../../images/previews/zh-CN/image21.png)
 
 ### 一键启动球
 
 点击桌面上的悬浮球，即可唤醒或打开 ChatClaw 主应用窗口。
 
-![](../../images/9.png)
+![](../../images/previews/zh-CN/image22.png)
 
 ## 服务器模式部署
 
@@ -252,3 +294,7 @@ ChatClaw_D2/
 ├── docs/                       # 开发文档
 └── images/                     # README 截图
 ```
+
+
+
+

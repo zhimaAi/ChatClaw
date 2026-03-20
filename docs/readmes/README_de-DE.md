@@ -33,53 +33,89 @@ Erhalten Sie in 5 Minuten einen persönlichen KI-Agenten wie OpenClaw. Sandbox-g
 
 ### KI-Chat-Assistent
 
-Stellen Sie Ihrem KI-Assistenten eine beliebige Frage, und er wird intelligent Ihre Wissensbasis durchsuchen, um eine relevante Antwort zu generieren.
+Stellen Sie Ihrem KI-Assistenten eine beliebige Frage, und er durchsucht intelligent Ihre Wissensbasis, um eine relevante Antwort zu generieren.
 
-![](../../images/1.png)
+![](../../images/previews/en/image1.png)
 
 ### PPT-Schnellgenerierung
 
-Senden Sie einen Ein-Satz-Befehl an den intelligenten Assistenten, um automatisch eine PowerPoint-Präsentation zu erstellen und zu generieren.
+Senden Sie einen Ein-Satz-Befehl an den intelligenten Assistenten, um automatisch eine PowerPoint-Präsentation zu erstellen.
 
-![](../../images/2.png)
+![](../../images/previews/en/image3.png)
 
 ### Skill-Manager
 
-Verwenden Sie einen Befehl, damit der Roboter Ihnen hilft, installierte Funktionen auf Ihrem Computer zu finden oder neue Erweiterungs-Plugins zu installieren.
+Verwenden Sie einen Befehl, damit der Assistent Sie beim Finden installierter Funktionen auf Ihrem Computer oder beim Installieren neuer Erweiterungs-Plugins unterstützt.
 
-![](../../images/3.png)
+![](../../images/previews/en/image5.png)
+
+### MCP: Unbegrenzte Erweiterbarkeit
+
+Externe MCP-Server hinzufügen, um sicher und effizient mit verschiedenen Datenquellen und Tools zu verbinden und Ihren Assistenten von alltäglichen Aufgaben bis zu professionellen Workflows einzusetzen.
+
+![](../../images/previews/en/image6.png)
+
+### Sandbox-Modus: Doppelter Schutz
+
+Wählen Sie zwischen sandbox-isolierter Ausführung (OS-Level-Isolation, eingeschränkter Befehlsumfang) und nativer Ausführung (flexibler). Wechseln Sie frei zwischen Sicherheit und Komfort.
+
+![](../../images/previews/en/image8.png)
+
+### Gedächtnis: Natürlichere, intelligentere Interaktion
+
+Kontextuelle Gespräche und personalisierte Unterstützung. Der Assistent kann kontinuierlich dazulernen und sich weiterentwickeln wie ein wachsender Partner.
+
+![](../../images/previews/en/image9.png)
+
+### Geteilte Team-Wissensbasis
+
+Ein-Klick-Zugriff auf ChatWiki autorisieren, um Roboter und Wissensbasen zu synchronisieren, Konfigurationen zu teilen und Berechtigungen zu verwalten.
+
+![](../../images/previews/en/image10.png)
 
 ### Wissensbasis | Dokument-Vektorisierungsspeicher
 
-Laden Sie Ihre Dokumente hoch (z.B. TXT, PDF, Word, Excel, CSV, HTML, Markdown). Das System wird sie automatisch analysieren, aufteilen und in Vektor-Embeddings konvertieren und in Ihrer privaten Wissensbasis speichern, die vom KI-Modell für präzise Abfrage und Nutzung verwendet werden kann.
+Dokumente hochladen (TXT, PDF, Word, Excel, CSV, HTML, Markdown). Das System parst, teilt und konvertiert sie automatisch in Vektor-Embeddings für präzise Abfrage.
 
-![](../../images/4.png)
+![](../../images/previews/en/image11.png)
 
-### Textauswahl für sofortige Fragen & Antworten
+### Reichhaltige IM-Kanal-Integrationen
 
-Wählen Sie einen beliebigen Text auf Ihrem Bildschirm aus, er wird automatisch kopiert und in ein schwebendes Schnellfragefeld gefüllt. Senden Sie ihn mit einem Klick an den KI-Assistenten für eine sofortige Antwort.
+IM-Anbieter (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram usw.) per SDK integrieren, um Kanalerstellung, Nutzerverwaltung und Messaging schnell zu ermöglichen.
 
-![](../../images/5.png)
+![](../../images/previews/en/image12.png)
 
-![](../../images/6.png)
+### Geplante Aufgaben
 
-### Intelligentes Snap-Fenster
+Lassen Sie Ihren Assistenten automatisch Aktionen zu festen Zeiten oder in Intervallen ausführen: Erinnerungen, wiederkehrende Aufgaben, Systemwartung.
 
-Ein intelligenter Assistent, der neben anderen Anwendungsfenstern angedockt werden kann. Wechseln Sie schnell zwischen verschieden konfigurierten KI-Assistenten darin, um Fragen zu stellen. Der Roboter generiert Antworten basierend auf Ihrer verbundenen Wissensbasis und unterstützt das Senden von Antworten mit einem Klick direkt in Ihre Konversation.
+![](../../images/previews/en/image13.png)
 
-![](../../images/7.png)
+### Textauswahl für sofortige Q&A
+
+Wählen Sie beliebigen Text auf dem Bildschirm; er wird automatisch in ein schwebendes Schnellfragefeld kopiert. Ein Klick für die Frage, sofortige Antworten.
+
+![](../../images/previews/en/image14.png)
+
+![](../../images/previews/en/image15.png)
+
+### Intelligente Seitenleiste
+
+Assistent neben anderen Fenstern andocken, schnell zwischen unterschiedlich konfigurierten Assistenten wechseln und generierte Antworten per Klick in Ihre Gespräche senden.
+
+![](../../images/previews/en/image16.png)
 
 ### Eine Frage, mehrere Antworten: Einfach vergleichen
 
-Sie müssen Ihre Frage nicht wiederholen. Konsultieren Sie gleichzeitig mehrere "KI-Experten" und sehen Sie ihre Antworten nebeneinander in einer einzigen Oberfläche. Dies ermöglicht einfachen Vergleich und hilft Ihnen, die beste Schlussfolgerung zu ziehen.
+Konsultieren Sie mehrere „KI-Experten“ gleichzeitig und sehen Sie deren Antworten nebeneinander zum einfachen Vergleich.
 
-![](../../images/8.png)
+![](../../images/previews/en/image17.png)
 
 ### Ein-Klick-Starterball
 
-Klicken Sie auf den schwebenden Ball auf Ihrem Desktop, um das Hauptanwendungsfenster von ChatClaw sofort aufzuwecken oder zu öffnen.
+Klicken Sie auf den schwebenden Ball auf Ihrem Desktop, um das ChatClaw-Hauptfenster zu öffnen oder zu aktivieren.
 
-![](../../images/9.png)
+![](../../images/previews/en/image18.png)
 
 ## Server-Modus-Bereitstellung
 
@@ -250,3 +286,7 @@ ChatClaw_D2/
 ├── docs:                       # Entwicklungsdokumentation
 └── images:                      # README-Screenshots
 ```
+
+
+
+

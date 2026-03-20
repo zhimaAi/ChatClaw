@@ -36,6 +36,7 @@ export const ChatEventType = {
   COMPLETE: 'chat:complete',
   STOPPED: 'chat:stopped',
   ERROR: 'chat:error',
+  USER_MESSAGE: 'chat:user-message',
 } as const
 
 // Tool call info for display
@@ -531,6 +532,44 @@ export const useChatStore = defineStore('chat', () => {
     delete activeRequestByConversation.value[conversationId]
   }
 
+  // Handle user message event (emitted by backend after inserting user message).
+  // When the user sends from the UI, an optimistic message with a negative ID
+  // already exists — replace it with the real backend ID instead of duplicating.
+  const handleChatUserMessage = (event: any) => {
+    const data = extractEventData(event)
+    if (!data) return
+
+    const { conversation_id, message_id, content, images_json } = data
+
+    const messages = messagesByConversation.value[conversation_id]
+    if (messages) {
+      const optimisticIdx = messages.findIndex(
+        (m) => m.id < 0 && m.role === MessageRole.USER && m.content === (content || '')
+      )
+      if (optimisticIdx >= 0) {
+        const next = [...messages]
+        next[optimisticIdx] = { ...next[optimisticIdx], id: message_id } as Message
+        messagesByConversation.value[conversation_id] = next
+        return
+      }
+    }
+
+    upsertMessage(conversation_id, message_id, {
+      id: message_id,
+      conversation_id,
+      role: MessageRole.USER,
+      content: content || '',
+      status: MessageStatus.SUCCESS,
+      thinking_content: '',
+      tool_calls: '[]',
+      images_json: images_json || '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+  }
+
   // Handle chat events from backend
   const handleChatStart = (event: any) => {
     const data = extractEventData(event)
@@ -993,6 +1032,12 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     debug('subscribe', { subscriptionRefCount })
+    unsubscribers.push(
+      Events.On(ChatEventType.USER_MESSAGE, (e: any) => {
+        debug(ChatEventType.USER_MESSAGE, extractEventData(e))
+        handleChatUserMessage(e)
+      })
+    )
     unsubscribers.push(
       Events.On(ChatEventType.START, (e: any) => {
         debug(ChatEventType.START, extractEventData(e))
