@@ -17,3 +17,10 @@ func openURLWindows(u string) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: CREATE_NO_WINDOW}
 	return cmd.Start()
 }
+
+// setCmdHideWindow hides the console window for subprocesses on Windows.
+func setCmdHideWindow(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: CREATE_NO_WINDOW,
+	}
+}

@@ -76,6 +76,7 @@ func (s *BrowserService) OpenDirectory(dir string) error {
 		cmd = exec.Command("open", dir)
 	case "windows":
 		cmd = exec.Command("explorer", dir)
+		setCmdHideWindow(cmd)
 	default:
 		cmd = exec.Command("xdg-open", dir)
 	}
@@ -103,6 +104,7 @@ func (s *BrowserService) OpenFile(filePath string) error {
 		cmd = exec.Command("open", filePath)
 	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", "", filePath)
+		setCmdHideWindow(cmd)
 	default:
 		cmd = exec.Command("xdg-open", filePath)
 	}
