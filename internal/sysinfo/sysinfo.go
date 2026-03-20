@@ -42,6 +42,7 @@ func windowsVersion() string {
 	// CurrentBuild >= 22000 → Windows 11; else Windows 10
 	cmd := exec.Command("powershell", "-NoProfile", "-Command",
 		"$b = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').CurrentBuild; if ([int]$b -ge 22000) { '11' } else { '10' }")
+	setCmdHideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
