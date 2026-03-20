@@ -41,7 +41,6 @@ import (
 var UnlimitedIterations = math.MaxInt32
 
 const (
-	appDataDir     = ".chatclaw"        // top-level app data directory under $HOME
 	einoMetaDir    = ".eino"            // per-session metadata directory under WorkDir
 	sessionsSubdir = "sessions"         // subdirectory for per-agent/conversation working dirs
 	reductionDir   = "reduction"        // reduction middleware offload directory
@@ -388,7 +387,8 @@ func buildIMTools(config Config, logger *slog.Logger) []tool.BaseTool {
 
 // newFilteringSkillBackend creates a filteringSkillBackend for reading skill content.
 func newFilteringSkillBackend(backend *tools.Backend, logger *slog.Logger) *filteringSkillBackend {
-	baseDir := filepath.Join(backend.HomeDir(), ".chatclaw", "skills")
+	appDir, _ := define.AppDataDir()
+	baseDir := filepath.Join(appDir, "skills")
 	_ = os.MkdirAll(baseDir, 0o755)
 	return &filteringSkillBackend{
 		fsBackend: backend,
@@ -405,7 +405,10 @@ func buildSessionsDir(config Config, b *tools.Backend) string {
 	}
 	base := config.WorkDir
 	if base == "" {
-		base = filepath.Join(b.HomeDir(), appDataDir)
+		base, _ = define.AppDataDir()
+		if base == "" {
+			base = filepath.Join(b.HomeDir(), ".chatclaw")
+		}
 	}
 	return filepath.Join(base, sessionsSubdir, idHash(config.AgentID))
 }
@@ -472,7 +475,10 @@ func buildBackend(config Config, logger *slog.Logger) *tools.Backend {
 
 	baseWorkDir := config.WorkDir
 	if baseWorkDir == "" {
-		baseWorkDir = filepath.Join(homeDir, appDataDir)
+		baseWorkDir, _ = define.AppDataDir()
+		if baseWorkDir == "" {
+			baseWorkDir = filepath.Join(homeDir, ".chatclaw")
+		}
 	}
 
 	workDir := buildSessionWorkDir(baseWorkDir, config.AgentID, config.ConversationID)
@@ -504,7 +510,7 @@ func buildSessionWorkDir(baseWorkDir string, agentID, conversationID int64) stri
 }
 
 func resolveCodexBin() string {
-	cfgDir, err := os.UserConfigDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return ""
 	}
@@ -512,7 +518,7 @@ func resolveCodexBin() string {
 	if runtime.GOOS == "windows" {
 		binName += ".exe"
 	}
-	candidate := filepath.Join(cfgDir, define.AppID, "bin", binName)
+	candidate := filepath.Join(dir, "bin", binName)
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate
 	}

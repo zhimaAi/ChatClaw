@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/eino/embedding"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/document"
@@ -272,20 +273,20 @@ func (s *SettingsService) GetWorkspaceSettings() (*UpdateWorkspaceSettingsInput,
 
 // GetSkillsDir returns the fixed skills directory path ($HOME/.chatclaw/skills).
 func (s *SettingsService) GetSkillsDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	appDir, err := define.AppDataDir()
 	if err != nil {
 		return "", errs.Wrap("error.setting_read_failed", err)
 	}
-	return filepath.Join(homeDir, ".chatclaw", "skills"), nil
+	return filepath.Join(appDir, "skills"), nil
 }
 
 // GetMCPDir returns the fixed MCP servers directory path ($HOME/.chatclaw/mcp).
 func (s *SettingsService) GetMCPDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	appDir, err := define.AppDataDir()
 	if err != nil {
 		return "", errs.Wrap("error.setting_read_failed", err)
 	}
-	dir := filepath.Join(homeDir, ".chatclaw", "mcp")
+	dir := filepath.Join(appDir, "mcp")
 	_ = os.MkdirAll(dir, 0o755)
 	return dir, nil
 }

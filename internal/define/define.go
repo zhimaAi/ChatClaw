@@ -1,6 +1,9 @@
 package define
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+)
 
 // AppID 用于文件系统/配置目录等"标识用途"
 const AppID = "chatclaw"
@@ -23,6 +26,15 @@ func GetChatWikiCloudURL() string {
 		return v
 	}
 	return ChatWikiCloudURL
+}
+
+// AppDataDir returns the unified app data directory: $HOME/.chatclaw
+func AppDataDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "."+AppID), nil
 }
 
 // IsDev 是否为开发环境

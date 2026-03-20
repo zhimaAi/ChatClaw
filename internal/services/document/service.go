@@ -124,11 +124,11 @@ func (s *DocumentService) db() (*bun.DB, error) {
 
 // GetDocumentsDir 获取文档存储目录
 func (s *DocumentService) GetDocumentsDir() (string, error) {
-	cfgDir, err := os.UserConfigDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return "", errs.Wrap("error.document_dir_failed", err)
 	}
-	return filepath.Join(cfgDir, define.AppID, "documents"), nil
+	return filepath.Join(dir, "documents"), nil
 }
 
 // ListDocumentsPage 获取知识库文档分页（cursor 分页）

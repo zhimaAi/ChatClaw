@@ -25,11 +25,11 @@ import (
 )
 
 func defaultWorkDir() string {
-	home, err := os.UserHomeDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".chatclaw")
+	return dir
 }
 
 // GetDefaultWorkDir returns the default working directory path for agents.
