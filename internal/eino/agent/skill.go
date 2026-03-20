@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/sqlite"
 
@@ -23,7 +24,8 @@ const skillFileName = "SKILL.md"
 // It uses a filtering backend that dynamically queries the DB for enabled slugs
 // on every List/Get call, so newly installed skills are available immediately.
 func buildSkillHandler(ctx context.Context, b *tools.Backend, logger *slog.Logger) adk.ChatModelAgentMiddleware {
-	baseDir := filepath.Join(b.HomeDir(), ".chatclaw", "skills")
+	appDir, _ := define.AppDataDir()
+	baseDir := filepath.Join(appDir, "skills")
 	if err := os.MkdirAll(baseDir, 0o755); err != nil {
 		logger.Warn("[agent] failed to create skills directory", "dir", baseDir, "error", err)
 		return nil

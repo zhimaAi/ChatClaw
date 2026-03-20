@@ -35,11 +35,10 @@ func InitDB(app *application.App) error {
 }
 
 func doInitDB(app *application.App) error {
-	cfgDir, err := os.UserConfigDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(cfgDir, define.AppID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
