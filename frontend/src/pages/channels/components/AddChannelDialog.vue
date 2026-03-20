@@ -48,6 +48,20 @@ function getPlatformIcon(platformId: string): string | null {
   return platformIconMap[platformId] || null
 }
 
+function getPlatformIconBg(platformId: string): string {
+  switch (platformId) {
+    case 'wecom':
+      return '#E6FFE6'
+    case 'qq':
+    case 'dingtalk':
+      return '#E5F3FF'
+    case 'feishu':
+      return '#E1FAF7'
+    default:
+      return '#F5F5F5'
+  }
+}
+
 /** Platforms that support adding a channel in UI (feishu + wecom + dingtalk + qq). */
 function isChannelPlatformSelectable(platformId: string) {
   return (
@@ -67,51 +81,56 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="sm:max-w-[480px] p-0 gap-0 overflow-hidden">
-      <DialogHeader class="px-6 py-4">
-        <DialogTitle class="text-lg font-semibold text-[#0a0a0a] dark:text-foreground">
+    <DialogContent
+      class="sm:max-w-[540px] gap-0 overflow-hidden p-0 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+    >
+      <DialogHeader class="gap-1 px-6 pb-3 pt-5 text-left sm:text-left">
+        <DialogTitle class="text-lg font-semibold tracking-tight text-foreground">
           {{ t('channels.add.title') }}
         </DialogTitle>
-        <DialogDescription class="hidden">{{ t('channels.add.desc') }}</DialogDescription>
+        <DialogDescription class="text-left leading-5">
+          {{ t('channels.add.desc') }}
+        </DialogDescription>
       </DialogHeader>
 
-      <div class="px-6 pb-6 pt-2">
-        <div
-          class="flex flex-col items-start overflow-clip rounded-xl border border-[#e5e5e5] bg-white shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card"
-        >
+      <div class="max-h-[min(420px,calc(100vh-12rem))] overflow-y-auto px-6 pb-6 pt-1">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div
             v-for="platform in platforms"
             :key="platform.id"
-            class="flex w-full items-center justify-between border-b border-[#f0f0f0] p-4 last:border-b-0 transition-colors dark:border-border"
-            :class="[
+            class="flex min-w-0 items-center justify-between gap-2 rounded-2xl border p-3 transition-all shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:bg-card sm:p-4"
+            :class="
               isChannelPlatformSelectable(platform.id)
-                ? 'cursor-pointer hover:bg-[#fcfcfc] dark:hover:bg-muted/50'
-                : 'cursor-not-allowed opacity-50 bg-[#f9f9f9] dark:bg-muted/20',
-            ]"
+                ? localSelected?.id === platform.id
+                  ? 'cursor-pointer border-[#171717] bg-white dark:border-primary'
+                  : 'cursor-pointer border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
+                : 'cursor-not-allowed border-border bg-muted/25 opacity-50 dark:bg-muted/20'
+            "
             @click="
               isChannelPlatformSelectable(platform.id)
                 ? handleSelect(platform)
                 : toast.default(t('channels.comingSoon'))
             "
           >
-            <div class="flex flex-1 items-center gap-2">
+            <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-[11px]">
               <div
-                class="relative flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden"
+                class="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full"
+                :style="{ backgroundColor: getPlatformIconBg(platform.id) }"
               >
                 <img
                   v-if="getPlatformIcon(platform.id)"
                   :src="getPlatformIcon(platform.id)!"
                   :alt="platform.id"
-                  class="block h-full w-full object-contain"
+                  class="block h-5 w-5 object-contain"
                 />
-                <span v-else class="text-xs">🤖</span>
+                <span v-else class="text-xs leading-none text-muted-foreground">🤖</span>
               </div>
-              <p class="text-sm font-medium leading-[20px] text-[#0a0a0a] dark:text-foreground">
+              <p class="truncate text-sm font-medium leading-[22px] text-[#171717] dark:text-foreground">
                 {{ getPlatformDisplayName(platform.id, platform.name) }}
               </p>
             </div>
 
-            <div class="flex items-center shrink-0">
+            <div class="flex shrink-0 items-center sm:ml-2">
               <div
                 class="flex h-4 w-4 items-center justify-center rounded-full border transition-colors"
                 :class="
@@ -123,7 +142,7 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
                 <div
                   v-if="localSelected?.id === platform.id"
                   class="h-1.5 w-1.5 rounded-full bg-white dark:bg-primary-foreground"
-                ></div>
+                />
               </div>
             </div>
           </div>
@@ -131,16 +150,17 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
       </div>
 
       <DialogFooter
-        class="px-6 py-4 border-t border-[#f0f0f0] bg-white dark:border-border/50 dark:bg-muted/20"
+        class="border-t border-[#f0f0f0] bg-background px-6 py-4 dark:border-border/50 dark:bg-muted/20"
       >
         <Button
-          class="h-9 px-4 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+          variant="secondary"
+          class="h-9 border-0 bg-[#f5f5f5] px-4 text-[#171717] shadow-none hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
           @click="open = false"
         >
           {{ t('common.cancel') }}
         </Button>
         <Button
-          class="h-9 px-4 bg-[#171717] text-white hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+          class="h-9 bg-[#171717] px-4 text-white shadow-none hover:bg-[#171717]/90 disabled:opacity-50 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="!localSelected"
           @click="handleConfirm"
         >
