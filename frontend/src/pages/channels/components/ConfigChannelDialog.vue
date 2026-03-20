@@ -246,7 +246,7 @@ async function handleOpenExternalLink(url: string) {
               :href="platformTipConfig.platformUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="underline hover:text-primary"
+              class="text-[#EF4444] no-underline hover:opacity-90"
               @click.prevent="handleOpenExternalLink(platformTipConfig.platformUrl)"
               >{{ platformTipConfig.platformLink }}</a
             >
@@ -255,7 +255,7 @@ async function handleOpenExternalLink(url: string) {
               :href="platformTipConfig.docsUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="underline hover:text-primary"
+              class="text-[#EF4444] no-underline hover:opacity-90"
               @click.prevent="handleOpenExternalLink(platformTipConfig.docsUrl)"
               >{{ platformTipConfig.guideLink }}</a
             >
