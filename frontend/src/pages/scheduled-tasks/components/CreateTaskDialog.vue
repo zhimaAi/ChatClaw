@@ -9,7 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
 import type { Agent, ScheduledTaskFormState } from '../types'
@@ -51,7 +53,33 @@ const dialogSubtitle = computed(() =>
 const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
 const submitLock = createSubmitLock()
 const submitLocked = ref(false)
-const submitDisabled = computed(() => props.saving || submitLocked.value)
+
+const canSubmit = computed(() => {
+  if (!props.form.name.trim()) return false
+  if (!props.form.prompt.trim()) return false
+  if (props.form.agentId == null || props.form.agentId <= 0) return false
+
+  if (props.form.scheduleType === 'cron' && !props.form.cronExpr.trim()) return false
+
+  if (props.form.scheduleType === 'custom' && props.form.customMode === 'interval') {
+    const n = Number(props.form.customIntervalMinutes)
+    if (!Number.isFinite(n) || n < 1 || n > 59) return false
+  }
+
+  if (
+    props.form.scheduleType === 'custom' &&
+    props.form.customMode === 'weekly' &&
+    !props.form.customWeekdays?.length
+  ) {
+    return false
+  }
+
+  return true
+})
+
+const submitActionDisabled = computed(
+  () => !canSubmit.value || props.saving || submitLocked.value
+)
 
 const customTimeValue = computed({
   get() {
@@ -110,6 +138,8 @@ function selectMonthlyDay(value: number) {
 }
 
 function handleSubmit() {
+  if (!canSubmit.value || props.saving) return
+
   if (!submitLock.acquire(props.saving)) {
     syncSubmitLockedState()
     return
@@ -141,53 +171,69 @@ watch(
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
+      size="xl"
       :show-close-button="true"
-      class="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
+      class="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 !max-w-[780px] shadow-lg dark:shadow-none dark:ring-1 dark:ring-white/10"
     >
       <DialogHeader
-        class="flex shrink-0 flex-row items-baseline gap-3 border-b border-[#eef2f6] px-7 py-6"
+        class="flex shrink-0 flex-row flex-wrap items-baseline gap-2 border-b border-border px-6 pb-3 pt-4"
       >
-        <DialogTitle class="text-lg font-semibold text-[#111827]">
+        <DialogTitle class="text-xl font-semibold text-[#0a0a0a] dark:text-foreground">
           {{ title }}
         </DialogTitle>
-        <p class="text-sm font-medium text-[#94a3b8]">
+        <p class="text-sm text-muted-foreground">
           {{ dialogSubtitle }}
         </p>
       </DialogHeader>
 
-      <div class="flex-1 overflow-y-auto px-7">
-        <div class="space-y-6 py-6">
-          <section class="space-y-5">
-            <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">
+      <div class="flex-1 overflow-y-auto px-6">
+        <div class="space-y-6 py-4">
+          <section class="space-y-4">
+            <div class="space-y-1.5">
+              <Label
+                for="scheduled-task-name"
+                class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+              >
+                <span class="text-destructive" aria-hidden="true">*</span>
                 {{ t('scheduledTasks.dialog.nameLabel') }}
-              </label>
+              </Label>
               <Input
+                id="scheduled-task-name"
                 v-model="form.name"
                 :placeholder="t('scheduledTasks.dialog.namePlaceholder')"
-                class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4 text-sm text-[#111827] placeholder:text-[#a0aec0] focus-visible:border-[#2563eb] focus-visible:ring-[#bfdbfe]"
+                class="h-10"
               />
             </div>
 
-            <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">
+            <div class="space-y-1.5">
+              <Label
+                for="scheduled-task-prompt"
+                class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+              >
+                <span class="text-destructive" aria-hidden="true">*</span>
                 {{ t('scheduledTasks.dialog.promptLabel') }}
-              </label>
+              </Label>
               <textarea
+                id="scheduled-task-prompt"
                 v-model="form.prompt"
-                class="min-h-[118px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                class="min-h-[118px] w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm leading-6 text-foreground shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                 :placeholder="t('scheduledTasks.dialog.promptPlaceholder')"
               />
             </div>
 
-            <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">
+            <div class="space-y-1.5">
+              <Label
+                for="scheduled-task-agent"
+                class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+              >
+                <span class="text-destructive" aria-hidden="true">*</span>
                 {{ t('scheduledTasks.dialog.agentLabel') }}
-              </label>
+              </Label>
               <div class="relative">
                 <select
+                  id="scheduled-task-agent"
                   v-model.number="form.agentId"
-                  class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                  class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                 >
                   <option :value="null">{{ t('scheduledTasks.dialog.selectAgent') }}</option>
                   <option v-for="agent in agents" :key="agent.id" :value="agent.id">
@@ -195,7 +241,7 @@ watch(
                   </option>
                 </select>
                 <ChevronDown
-                  class="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]"
+                  class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                 />
               </div>
             </div>
@@ -203,10 +249,10 @@ watch(
 
           <section class="space-y-4">
             <div class="space-y-1">
-              <h3 class="text-[15px] font-semibold text-[#1f2937]">
+              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">
                 {{ t('scheduledTasks.dialog.scheduleTitle') }}
               </h3>
-              <p class="text-sm text-[#94a3b8]">
+              <p class="text-sm text-muted-foreground">
                 {{ t('scheduledTasks.dialog.scheduleHint') }}
               </p>
             </div>
@@ -216,11 +262,11 @@ watch(
                 v-for="option in scheduleTypeOptions"
                 :key="option.value"
                 type="button"
-                class="inline-flex h-10 items-center rounded-xl border px-4 text-sm font-medium transition-colors"
+                class="inline-flex h-9 items-center rounded-md border px-3.5 text-sm font-medium transition-colors"
                 :class="
                   form.scheduleType === option.value
-                    ? 'border-[#2563eb] bg-[#eff6ff] text-[#2563eb]'
-                    : 'border-[#dbe3ec] bg-white text-[#64748b] hover:border-[#cbd5e1] hover:text-[#0f172a]'
+                    ? 'border-border bg-muted text-foreground dark:border-white/10'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground dark:border-white/10'
                 "
                 @click="selectScheduleType(option.value)"
               >
@@ -228,35 +274,40 @@ watch(
               </button>
             </div>
 
-            <div class="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+            <div
+              class="rounded-lg border border-border bg-muted/20 p-4 dark:border-white/10 dark:bg-white/5"
+            >
               <div v-if="form.scheduleType === 'preset'" class="space-y-2">
-                <label class="block text-sm font-semibold text-[#334155]">
-                  {{ t('scheduledTasks.dialog.presetLabel') }}
-                </label>
+                <span class="block text-sm font-medium text-foreground">
+                   {{ t('scheduledTasks.dialog.presetLabel') }}
+                </span>
                 <div class="grid gap-3 md:grid-cols-2">
                   <button
                     v-for="item in SCHEDULE_PRESETS"
                     :key="item.value"
                     type="button"
-                    class="flex min-h-11 items-center gap-3 rounded-xl border bg-white px-4 py-3 text-left text-sm transition-all"
+                    class="flex min-h-11 items-center gap-3 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors dark:border-white/10"
                     :class="
                       form.schedulePreset === item.value
-                        ? 'border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8] shadow-[0_0_0_1px_rgba(37,99,235,0.08)]'
-                        : 'border-[#dbe3ec] text-[#334155] hover:border-[#cbd5e1] hover:bg-[#f8fafc]'
+                        ? 'border-foreground/25 bg-muted/40 text-foreground'
+                        : 'border-border text-foreground/90 hover:bg-muted/30 dark:border-white/10'
                     "
                     @click="form.schedulePreset = item.value"
                   >
-                    <Clock3 class="size-4 shrink-0" />
+                    <Clock3 class="size-4 shrink-0 text-muted-foreground" />
                     <span class="flex-1 font-medium">{{ t(item.labelKey) }}</span>
-                    <Check v-if="form.schedulePreset === item.value" class="size-4 shrink-0" />
+                    <Check
+                      v-if="form.schedulePreset === item.value"
+                      class="size-4 shrink-0 text-primary"
+                    />
                   </button>
                 </div>
               </div>
 
               <div v-else-if="form.scheduleType === 'custom'" class="space-y-4">
-                <div class="flex items-start gap-5">
+                <div class="flex flex-wrap items-start gap-4">
                   <div
-                    class="inline-flex overflow-hidden rounded-2xl border border-[#dbe3ec] bg-white"
+                    class="inline-flex overflow-hidden rounded-lg border border-border bg-card dark:border-white/10"
                   >
                     <div class="w-[140px] shrink-0">
                       <button
@@ -266,15 +317,15 @@ watch(
                         class="flex h-12 w-full items-center justify-between px-4 text-sm font-medium transition-colors"
                         :class="
                           form.customMode === item.value
-                            ? 'bg-[#f3f4f6] text-[#111827]'
-                            : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                            ? 'bg-muted text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                         "
                         @click="selectCustomMode(item.value)"
                       >
                         <span>{{ t(item.labelKey) }}</span>
                         <ChevronDown
                           v-if="item.value !== 'daily' && item.value !== 'interval'"
-                          class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
+                          class="size-4 shrink-0 rotate-[-90deg] text-muted-foreground"
                           :class="form.customMode === item.value ? 'opacity-100' : 'opacity-40'"
                         />
                       </button>
@@ -282,7 +333,7 @@ watch(
 
                     <div
                       v-if="form.customMode === 'weekly'"
-                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
+                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-border dark:border-white/10"
                     >
                       <button
                         v-for="item in WEEKDAY_OPTIONS"
@@ -291,22 +342,22 @@ watch(
                         class="flex h-12 w-full items-center justify-between px-4 text-sm transition-colors"
                         :class="
                           selectedWeeklyDay === item.value
-                            ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                            : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                            ? 'bg-muted font-medium text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                         "
                         @click="selectWeeklyDay(item.value)"
                       >
                         <span>{{ t(item.labelKey) }}</span>
                         <Check
                           v-if="selectedWeeklyDay === item.value"
-                          class="size-4 shrink-0 text-[#2563eb]"
+                          class="size-4 shrink-0 text-primary"
                         />
                       </button>
                     </div>
 
                     <div
                       v-else-if="form.customMode === 'monthly'"
-                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
+                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-border dark:border-white/10"
                     >
                       <button
                         v-for="day in monthlyOptions"
@@ -315,8 +366,8 @@ watch(
                         class="flex h-12 w-full items-center px-4 text-sm transition-colors"
                         :class="
                           form.customDayOfMonth === day
-                            ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                            : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#111827]'
+                            ? 'bg-muted font-medium text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                         "
                         @click="selectMonthlyDay(day)"
                       >
@@ -332,18 +383,16 @@ watch(
                       min="1"
                       max="59"
                       step="1"
-                      class="h-9 w-[120px] rounded-md border-[#dbe3ec] bg-white text-sm shadow-none"
+                      class="h-9 w-[120px]"
                     />
-                    <span class="ml-3 text-sm text-[#64748b]">
-                      {{ t('scheduledTasks.dialog.minutes') }}
-                    </span>
+                    <span class="ml-3 text-sm text-muted-foreground"> {{ t('scheduledTasks.dialog.minutes') }}</span>
                   </div>
 
                   <Input
                     v-else-if="form.customMode === 'daily'"
                     v-model="customTimeValue"
                     type="time"
-                    class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm"
+                    class="h-10 w-[156px]"
                   />
                 </div>
 
@@ -351,17 +400,22 @@ watch(
                   v-if="form.customMode === 'weekly' || form.customMode === 'monthly'"
                   v-model="customTimeValue"
                   type="time"
-                  class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm"
+                  class="h-10 w-[156px]"
                 />
               </div>
 
               <div v-else class="space-y-2">
-                <label class="block text-sm font-semibold text-[#334155]">
+                <Label
+                  for="scheduled-task-cron"
+                  class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
+                >
+                  <span class="text-destructive" aria-hidden="true">*</span>
                   {{ t('scheduledTasks.dialog.cronLabel') }}
-                </label>
+                </Label>
                 <textarea
+                  id="scheduled-task-cron"
                   v-model="form.cronExpr"
-                  class="min-h-[108px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 font-mono text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                  class="min-h-[108px] w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm leading-6 text-foreground shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                   :placeholder="t('scheduledTasks.dialog.cronPlaceholder')"
                 />
               </div>
@@ -369,39 +423,29 @@ watch(
           </section>
 
           <section
-            class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4"
+            class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10"
           >
             <div class="space-y-1">
-              <h3 class="text-[15px] font-semibold text-[#1f2937]">
-                {{ t('scheduledTasks.dialog.enableNowTitle') }}
-              </h3>
-              <p class="text-sm text-[#94a3b8]">{{ t('scheduledTasks.dialog.enableNowHint') }}</p>
+              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">{{ t('scheduledTasks.dialog.enableNowTitle') }}</h3>
+              <p class="text-sm text-muted-foreground"> {{ t('scheduledTasks.dialog.enableNowHint') }}</p>
             </div>
             <Switch
               :model-value="form.enabled"
-              class="data-[state=checked]:bg-[#111827] data-[state=unchecked]:bg-[#cbd5e1]"
               @update:model-value="(value) => (form.enabled = !!value)"
             />
           </section>
         </div>
       </div>
 
-      <DialogFooter class="shrink-0 border-t border-[#eef2f6] px-7 py-5 sm:justify-end">
-        <button
-          type="button"
-          class="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-[#dbe3ec] bg-white px-5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#f8fafc]"
-          @click="closeDialog"
-        >
+      <DialogFooter
+        class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end"
+      >
+        <Button type="button" variant="outline" @click="closeDialog">
           {{ t('common.cancel') }}
-        </button>
-        <button
-          type="button"
-          :disabled="submitDisabled"
-          class="inline-flex h-11 min-w-[116px] items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f172a] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
-          @click="handleSubmit"
-        >
-          {{ submitDisabled ? t('scheduledTasks.dialog.submitting') : t('common.confirm') }}
-        </button>
+        </Button>
+        <Button type="button" :disabled="submitActionDisabled" @click="handleSubmit">
+          {{ saving || submitLocked ? t('scheduledTasks.dialog.submitting') : t('common.confirm') }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

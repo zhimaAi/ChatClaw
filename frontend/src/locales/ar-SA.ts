@@ -714,6 +714,7 @@ export default {
       freeBadge: "مجاني",
       noModel: "لا يوجد نموذج متاح",
       selectKnowledge: "اختر قاعدة المعرفة",
+      knowledgeChipRemoveNotSupported: "لا يمكن الإزالة في هذا الوضع",
       selectImages: "اختر الصور",
       selectImagesDisabled: "اختر نموذجًا يدعم إدخال الصور",
       selectImage: "اختر صورة",
@@ -1151,6 +1152,7 @@ export default {
       deleteSuccess: "تم الحذف",
       move: {
         title: "نقل المجلد",
+        action: "نقل",
         selectFolder: "اختر المجلد المستهدف",
         moveToHere: "نقل إلى هنا",
         success: "تم النقل بنجاح",
