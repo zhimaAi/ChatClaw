@@ -83,6 +83,7 @@
   "error.agent_create_failed": "创建助手失败",
   "error.agent_update_failed": "更新助手失败",
   "error.agent_delete_failed": "删除助手失败",
+  "error.agent_default_delete_forbidden": "默认助手不可删除",
   "error.agent_name_required": "缺少助手名称",
   "error.agent_name_too_long": "助手名称不能超过100个字符",
   "error.agent_prompt_required": "缺少提示词",

@@ -3,6 +3,7 @@ package define
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // AppID 用于文件系统/配置目录等"标识用途"
@@ -13,6 +14,12 @@ const SingleInstanceUniqueID = "com.sesame.chatclaw"
 
 // AppDisplayName 用于 UI 展示
 const AppDisplayName = "ChatClaw"
+
+// OpenClaw managed agent IDs.
+const (
+	OpenClawMainAgentID          = "main"
+	OpenClawManagedAgentIDPrefix = "chatclaw-agent-"
+)
 
 // DefaultSQLiteFileName 默认 SQLite 数据库文件名
 const DefaultSQLiteFileName = "data.sqlite"
@@ -72,4 +79,17 @@ func DefaultAgentPromptForLocale(locale string) string {
 		"- If the user's question is vague, guide them to clarify before answering.\n" +
 		"- If a knowledge base is linked, all answers must come from that knowledge base; if not linked, answer from the correct direction.\n" +
 		"- Note that the knowledge base may contain unrelated information — carefully analyse the user's question and select the most relevant knowledge to answer."
+}
+
+// DefaultAgentNameForLocale returns the built-in default agent name for the given locale.
+func DefaultAgentNameForLocale(locale string) string {
+	if locale == "zh-CN" {
+		return "默认助手"
+	}
+	return "Default Assistant"
+}
+
+// OpenClawManagedAgentID returns the managed OpenClaw agent ID for a local agent.
+func OpenClawManagedAgentID(localID int64) string {
+	return OpenClawManagedAgentIDPrefix + strconv.FormatInt(localID, 10)
 }

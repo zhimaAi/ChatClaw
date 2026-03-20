@@ -33,12 +33,12 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
+	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/services/textselection"
-	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/toolchain"
 	"chatclaw/internal/services/tray"
 	"chatclaw/internal/services/updater"
@@ -307,6 +307,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 	// 注册助手服务
 	agentsService := agents.NewAgentsService(app)
+	if err := agentsService.EnsureMainAgent(); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("ensure main agent: %w", err)
+	}
 	app.RegisterService(application.NewService(agentsService))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
@@ -372,6 +376,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
 	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
+	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, agentsService)
+	agentsService.SetChangeHook(agentSyncer.MarkDirty)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
@@ -607,6 +613,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		agentSyncer.Close()
 		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())

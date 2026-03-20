@@ -40,14 +40,14 @@ func seedDataForLocale(locale string) defaultSeedContent {
 	if locale == "zh-CN" {
 		return defaultSeedContent{
 			LibraryName: "默认知识库",
-			AgentName:   "默认助手",
+			AgentName:   define.DefaultAgentNameForLocale(locale),
 			AgentPrompt: define.DefaultAgentPromptForLocale(locale),
 		}
 	}
 	// en-US and all other locales
 	return defaultSeedContent{
 		LibraryName: "Default Library",
-		AgentName:   "Default Assistant",
+		AgentName:   define.DefaultAgentNameForLocale(locale),
 		AgentPrompt: define.DefaultAgentPromptForLocale(locale),
 	}
 }
@@ -102,30 +102,30 @@ func seedDefaultData(ctx context.Context, db *bun.DB) error {
 
 		if hasLibraryIDs {
 			_, err = db.ExecContext(ctx, `
-				INSERT INTO agents (created_at, updated_at, name, prompt, icon,
+				INSERT INTO agents (created_at, updated_at, name, openclaw_agent_id, prompt, icon,
 					default_llm_provider_id, default_llm_model_id,
 					llm_temperature, llm_top_p, llm_max_context_count, llm_max_tokens,
 					enable_llm_temperature, enable_llm_top_p, enable_llm_max_tokens,
 					retrieval_match_threshold, retrieval_top_k, library_ids)
-				VALUES (?, ?, ?, ?, '',
+				VALUES (?, ?, ?, ?, ?, '',
 					'', '',
 					0.5, 1.0, 50, 1000,
 					0, 0, 0,
 					0.5, 20, ?)
-			`, now, now, data.AgentName, data.AgentPrompt, libraryIDs)
+			`, now, now, data.AgentName, define.OpenClawMainAgentID, data.AgentPrompt, libraryIDs)
 		} else {
 			_, err = db.ExecContext(ctx, `
-				INSERT INTO agents (created_at, updated_at, name, prompt, icon,
+				INSERT INTO agents (created_at, updated_at, name, openclaw_agent_id, prompt, icon,
 					default_llm_provider_id, default_llm_model_id,
 					llm_temperature, llm_top_p, llm_max_context_count, llm_max_tokens,
 					enable_llm_temperature, enable_llm_top_p, enable_llm_max_tokens,
 					retrieval_match_threshold, retrieval_top_k)
-				VALUES (?, ?, ?, ?, '',
+				VALUES (?, ?, ?, ?, ?, '',
 					'', '',
 					0.5, 1.0, 50, 1000,
 					0, 0, 0,
 					0.5, 20)
-			`, now, now, data.AgentName, data.AgentPrompt)
+			`, now, now, data.AgentName, define.OpenClawMainAgentID, data.AgentPrompt)
 		}
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("seed: insert agent: %w", err)

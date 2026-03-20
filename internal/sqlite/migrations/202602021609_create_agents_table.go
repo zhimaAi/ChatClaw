@@ -16,6 +16,7 @@ create table if not exists agents (
     updated_at datetime not null default current_timestamp,
 	
     name varchar(100) not null,
+    openclaw_agent_id varchar(128) not null unique,
     prompt varchar(1000) not null,
 	icon text not null default '',
 	

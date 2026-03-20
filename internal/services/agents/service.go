@@ -7,11 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"chatclaw/internal/define"
@@ -39,8 +41,10 @@ func (s *AgentsService) GetDefaultWorkDir() string {
 
 // AgentsService 助手服务（暴露给前端调用）
 type AgentsService struct {
-	app    *application.App
-	testDB *bun.DB
+	app        *application.App
+	testDB     *bun.DB
+	changeMu   sync.RWMutex
+	changeHook func()
 }
 
 func NewAgentsService(app *application.App) *AgentsService {
@@ -60,6 +64,83 @@ func (s *AgentsService) db() (*bun.DB, error) {
 		return nil, errs.New("error.sqlite_not_initialized")
 	}
 	return db, nil
+}
+
+// SetChangeHook registers a callback invoked after successful agent mutations.
+func (s *AgentsService) SetChangeHook(fn func()) {
+	s.changeMu.Lock()
+	defer s.changeMu.Unlock()
+	s.changeHook = fn
+}
+
+func (s *AgentsService) notifyChange() {
+	s.changeMu.RLock()
+	fn := s.changeHook
+	s.changeMu.RUnlock()
+	if fn != nil {
+		go fn()
+	}
+}
+
+func newAgentModel(name, openclawAgentID, prompt, icon string) *agentModel {
+	return &agentModel{
+		Name:            strings.TrimSpace(name),
+		OpenClawAgentID: strings.TrimSpace(openclawAgentID),
+		Prompt:          strings.TrimSpace(prompt),
+		Icon:            strings.TrimSpace(icon),
+
+		// 允许为空：用户可在「模型设置」里选择
+		DefaultLLMProviderID:    "",
+		DefaultLLMModelID:       "",
+		LLMTemperature:          0.5,
+		LLMTopP:                 1.0,
+		LLMMaxContextCount:      50,
+		LLMMaxTokens:            1000,
+		EnableLLMTemperature:    false,
+		EnableLLMTopP:           false,
+		EnableLLMMaxTokens:      false,
+		RetrievalMatchThreshold: 0.5,
+		RetrievalTopK:           20,
+
+		SandboxMode:    "codex",
+		SandboxNetwork: true,
+		WorkDir:        defaultWorkDir(),
+
+		MCPServerIDs:        "[]",
+		MCPServerEnabledIDs: "[]",
+	}
+}
+
+// EnsureMainAgent guarantees that the system default agent mapped to OpenClaw "main" exists.
+// Uses INSERT ... ON CONFLICT DO NOTHING for atomic idempotent insertion.
+func (s *AgentsService) EnsureMainAgent() error {
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	agent := newAgentModel(
+		define.DefaultAgentNameForLocale(i18n.GetLocale()),
+		define.OpenClawMainAgentID,
+		define.DefaultAgentPromptForLocale(i18n.GetLocale()),
+		"",
+	)
+
+	result, err := db.NewInsert().Model(agent).
+		On("CONFLICT (openclaw_agent_id) DO NOTHING").
+		Exec(ctx)
+	if err != nil {
+		return errs.Wrap("error.agent_create_failed", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		s.notifyChange()
+	}
+	return nil
 }
 
 func (s *AgentsService) ListAgentsForMatching() ([]AgentMatch, error) {
@@ -144,6 +225,31 @@ func (s *AgentsService) ListAgents() ([]Agent, error) {
 	return out, nil
 }
 
+// ListAgentsForOpenClawSync returns agents in a stable order for config reconciliation.
+func (s *AgentsService) ListAgentsForOpenClawSync() ([]Agent, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	models := make([]agentModel, 0)
+	if err := db.NewSelect().
+		Model(&models).
+		OrderExpr("CASE WHEN openclaw_agent_id = ? THEN 0 ELSE 1 END ASC, id ASC", define.OpenClawMainAgentID).
+		Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.agent_list_failed", err)
+	}
+
+	out := make([]Agent, 0, len(models))
+	for i := range models {
+		out = append(out, models[i].toDTO())
+	}
+	return out, nil
+}
+
 func (s *AgentsService) GetAgent(id int64) (*Agent, error) {
 	if id <= 0 {
 		return nil, errs.New("error.agent_id_required")
@@ -197,40 +303,28 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		return nil, err
 	}
 
-	m := &agentModel{
-		Name:   name,
-		Prompt: prompt,
-		Icon:   icon,
-
-		// 允许为空：用户可在「模型设置」里选择
-		DefaultLLMProviderID:    "",
-		DefaultLLMModelID:       "",
-		LLMTemperature:          0.5,
-		LLMTopP:                 1.0,
-		LLMMaxContextCount:      50,
-		LLMMaxTokens:            1000,
-		EnableLLMTemperature:    false,
-		EnableLLMTopP:           false,
-		EnableLLMMaxTokens:      false,
-		RetrievalMatchThreshold: 0.5,
-		RetrievalTopK:           20,
-
-		SandboxMode:    "codex",
-		SandboxNetwork: true,
-		WorkDir:        defaultWorkDir(),
-
-		MCPServerIDs:        "[]",
-		MCPServerEnabledIDs: "[]",
-	}
+	m := newAgentModel(name, fmt.Sprintf("pending-%d", time.Now().UnixNano()), prompt, icon)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
+	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewInsert().Model(m).Exec(ctx); err != nil {
+			return err
+		}
+		m.OpenClawAgentID = define.OpenClawManagedAgentID(m.ID)
+		_, err := tx.NewUpdate().
+			Model((*agentModel)(nil)).
+			Set("openclaw_agent_id = ?", m.OpenClawAgentID).
+			Where("id = ?", m.ID).
+			Exec(ctx)
+		return err
+	}); err != nil {
 		return nil, errs.Wrap("error.agent_create_failed", err)
 	}
 
 	dto := m.toDTO()
+	s.notifyChange()
 	return &dto, nil
 }
 
@@ -422,7 +516,12 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 		return nil, errs.Newf("error.agent_not_found", map[string]any{"ID": id})
 	}
 
-	return s.GetAgent(id)
+	updated, err := s.GetAgent(id)
+	if err != nil {
+		return nil, err
+	}
+	s.notifyChange()
+	return updated, nil
 }
 
 func (s *AgentsService) DeleteAgent(id int64) error {
@@ -437,6 +536,22 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+
+	var openclawAgentID string
+	if err := db.NewSelect().
+		Table("agents").
+		Column("openclaw_agent_id").
+		Where("id = ?", id).
+		Limit(1).
+		Scan(ctx, &openclawAgentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errs.Newf("error.agent_not_found", map[string]any{"ID": id})
+		}
+		return errs.Wrap("error.agent_read_failed", err)
+	}
+	if openclawAgentID == define.OpenClawMainAgentID {
+		return errs.New("error.agent_default_delete_forbidden")
+	}
 
 	result, err := db.NewDelete().
 		Model((*agentModel)(nil)).
@@ -453,9 +568,12 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 
 	// 跨库级联删除该 Agent 的长期记忆数据
 	if err := memory.DeleteAgentMemories(ctx, id); err != nil {
-		s.app.Logger.Warn("failed to delete agent memories", "agent_id", id, "error", err)
+		if s.app != nil {
+			s.app.Logger.Warn("failed to delete agent memories", "agent_id", id, "error", err)
+		}
 	}
 
+	s.notifyChange()
 	return nil
 }
 
