@@ -34,7 +34,9 @@ type Model struct {
 	ProviderID    string    `json:"provider_id"`
 	ModelID       string    `json:"model_id"`
 	Name          string    `json:"name"`
-	Type          string    `json:"type"` // llm, embedding, rerank
+	ModelSupplier string    `json:"model_supplier"`
+	UniModelName  string    `json:"uni_model_name"`
+	Type          string    `json:"type"`         // llm, embedding, rerank
 	Capabilities  []string  `json:"capabilities"` // 支持的输入类型: text, image, audio, video, file
 	IsBuiltin     bool      `json:"is_builtin"`
 	Enabled       bool      `json:"enabled"`
@@ -67,7 +69,7 @@ type UpdateProviderInput struct {
 type CreateModelInput struct {
 	ModelID      string   `json:"model_id"`
 	Name         string   `json:"name"`
-	Type         string   `json:"type"` // llm, embedding, rerank
+	Type         string   `json:"type"`         // llm, embedding, rerank
 	Capabilities []string `json:"capabilities"` // 支持的输入类型: text, image, audio, video, file
 }
 
@@ -175,16 +177,18 @@ func (m *modelModel) toDTO() Model {
 	var capabilities []string
 	_ = json.Unmarshal([]byte(m.Capabilities), &capabilities)
 	return Model{
-		ID:           m.ID,
-		ProviderID:   m.ProviderID,
-		ModelID:      m.ModelID,
-		Name:         m.Name,
-		Type:         m.Type,
-		Capabilities: capabilities,
-		IsBuiltin:    m.IsBuiltin,
-		Enabled:      m.Enabled,
-		SortOrder:    m.SortOrder,
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		ID:            m.ID,
+		ProviderID:    m.ProviderID,
+		ModelID:       m.ModelID,
+		Name:          m.Name,
+		ModelSupplier: "",
+		UniModelName:  "",
+		Type:          m.Type,
+		Capabilities:  capabilities,
+		IsBuiltin:     m.IsBuiltin,
+		Enabled:       m.Enabled,
+		SortOrder:     m.SortOrder,
+		CreatedAt:     m.CreatedAt,
+		UpdatedAt:     m.UpdatedAt,
 	}
 }

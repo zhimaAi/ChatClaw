@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Check, ChevronDown, Clock3 } from 'lucide-vue-next'
 import {
   Dialog,
@@ -27,21 +28,25 @@ const emit = defineEmits<{
   submit: []
 }>()
 
+const { t } = useI18n()
+
 const scheduleTypeOptions = [
-  { value: 'preset', label: '快捷设置' },
-  { value: 'custom', label: '自定义时间' },
-  { value: 'cron', label: 'Linux Crontab 代码' },
+  { value: 'preset', labelKey: 'scheduledTasks.dialog.scheduleType.preset' },
+  { value: 'custom', labelKey: 'scheduledTasks.dialog.scheduleType.custom' },
+  { value: 'cron', labelKey: 'scheduledTasks.dialog.scheduleType.cron' },
 ] as const
 
 const customModeOptions = [
-  { value: 'interval', label: '每间隔' },
-  { value: 'daily', label: '每天执行' },
-  { value: 'weekly', label: '每周执行' },
-  { value: 'monthly', label: '每月执行' },
+  { value: 'interval', labelKey: 'scheduledTasks.dialog.customMode.interval' },
+  { value: 'daily', labelKey: 'scheduledTasks.dialog.customMode.daily' },
+  { value: 'weekly', labelKey: 'scheduledTasks.dialog.customMode.weekly' },
+  { value: 'monthly', labelKey: 'scheduledTasks.dialog.customMode.monthly' },
 ] as const
 
 const dialogSubtitle = computed(() =>
-  props.form.id ? '更新自动化的 AI 任务' : '安排自动化的 AI 任务'
+  props.form.id
+    ? t('scheduledTasks.dialog.subtitleEdit')
+    : t('scheduledTasks.dialog.subtitleCreate')
 )
 const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
 const submitLock = createSubmitLock()
@@ -154,31 +159,37 @@ watch(
         <div class="space-y-6 py-6">
           <section class="space-y-5">
             <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">任务名称</label>
+              <label class="block text-[15px] font-semibold text-[#1f2937]">
+                {{ t('scheduledTasks.dialog.nameLabel') }}
+              </label>
               <Input
                 v-model="form.name"
-                placeholder="例如：早间简报"
+                :placeholder="t('scheduledTasks.dialog.namePlaceholder')"
                 class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4 text-sm text-[#111827] placeholder:text-[#a0aec0] focus-visible:border-[#2563eb] focus-visible:ring-[#bfdbfe]"
               />
             </div>
 
             <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">消息提示词</label>
+              <label class="block text-[15px] font-semibold text-[#1f2937]">
+                {{ t('scheduledTasks.dialog.promptLabel') }}
+              </label>
               <textarea
                 v-model="form.prompt"
                 class="min-h-[118px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                placeholder="AI 应该做什么？例如：给我一份今天的新闻和天气摘要"
+                :placeholder="t('scheduledTasks.dialog.promptPlaceholder')"
               />
             </div>
 
             <div class="space-y-2">
-              <label class="block text-[15px] font-semibold text-[#1f2937]">关联 AI 助手</label>
+              <label class="block text-[15px] font-semibold text-[#1f2937]">
+                {{ t('scheduledTasks.dialog.agentLabel') }}
+              </label>
               <div class="relative">
                 <select
                   v-model.number="form.agentId"
                   class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
                 >
-                  <option :value="null">请选择助手</option>
+                  <option :value="null">{{ t('scheduledTasks.dialog.selectAgent') }}</option>
                   <option v-for="agent in agents" :key="agent.id" :value="agent.id">
                     {{ agent.name }}
                   </option>
@@ -192,8 +203,12 @@ watch(
 
           <section class="space-y-4">
             <div class="space-y-1">
-              <h3 class="text-[15px] font-semibold text-[#1f2937]">设置定时时间</h3>
-              <p class="text-sm text-[#94a3b8]">选择快捷方案，或按你的节奏自定义执行时间。</p>
+              <h3 class="text-[15px] font-semibold text-[#1f2937]">
+                {{ t('scheduledTasks.dialog.scheduleTitle') }}
+              </h3>
+              <p class="text-sm text-[#94a3b8]">
+                {{ t('scheduledTasks.dialog.scheduleHint') }}
+              </p>
             </div>
 
             <div class="flex flex-wrap gap-2">
@@ -209,13 +224,15 @@ watch(
                 "
                 @click="selectScheduleType(option.value)"
               >
-                {{ option.label }}
+                {{ t(option.labelKey) }}
               </button>
             </div>
 
             <div class="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
               <div v-if="form.scheduleType === 'preset'" class="space-y-2">
-                <label class="block text-sm font-semibold text-[#334155]">快捷设置</label>
+                <label class="block text-sm font-semibold text-[#334155]">
+                  {{ t('scheduledTasks.dialog.presetLabel') }}
+                </label>
                 <div class="grid gap-3 md:grid-cols-2">
                   <button
                     v-for="item in SCHEDULE_PRESETS"
@@ -230,7 +247,7 @@ watch(
                     @click="form.schedulePreset = item.value"
                   >
                     <Clock3 class="size-4 shrink-0" />
-                    <span class="flex-1 font-medium">{{ item.label }}</span>
+                    <span class="flex-1 font-medium">{{ t(item.labelKey) }}</span>
                     <Check v-if="form.schedulePreset === item.value" class="size-4 shrink-0" />
                   </button>
                 </div>
@@ -254,7 +271,7 @@ watch(
                         "
                         @click="selectCustomMode(item.value)"
                       >
-                        <span>{{ item.label }}</span>
+                        <span>{{ t(item.labelKey) }}</span>
                         <ChevronDown
                           v-if="item.value !== 'daily' && item.value !== 'interval'"
                           class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
@@ -265,7 +282,7 @@ watch(
 
                     <div
                       v-if="form.customMode === 'weekly'"
-                      class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
+                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
                     >
                       <button
                         v-for="item in WEEKDAY_OPTIONS"
@@ -279,7 +296,7 @@ watch(
                         "
                         @click="selectWeeklyDay(item.value)"
                       >
-                        <span>{{ item.label }}</span>
+                        <span>{{ t(item.labelKey) }}</span>
                         <Check
                           v-if="selectedWeeklyDay === item.value"
                           class="size-4 shrink-0 text-[#2563eb]"
@@ -289,7 +306,7 @@ watch(
 
                     <div
                       v-else-if="form.customMode === 'monthly'"
-                      class="w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec] max-h-[336px]"
+                      class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
                     >
                       <button
                         v-for="day in monthlyOptions"
@@ -303,7 +320,7 @@ watch(
                         "
                         @click="selectMonthlyDay(day)"
                       >
-                        {{ day }}号
+                        {{ t('scheduledTasks.dialog.monthlyDay', { day }) }}
                       </button>
                     </div>
                   </div>
@@ -317,7 +334,9 @@ watch(
                       step="1"
                       class="h-9 w-[120px] rounded-md border-[#dbe3ec] bg-white text-sm shadow-none"
                     />
-                    <span class="ml-3 text-sm text-[#64748b]">分钟</span>
+                    <span class="ml-3 text-sm text-[#64748b]">
+                      {{ t('scheduledTasks.dialog.minutes') }}
+                    </span>
                   </div>
 
                   <Input
@@ -337,11 +356,13 @@ watch(
               </div>
 
               <div v-else class="space-y-2">
-                <label class="block text-sm font-semibold text-[#334155]">Linux Crontab 代码</label>
+                <label class="block text-sm font-semibold text-[#334155]">
+                  {{ t('scheduledTasks.dialog.cronLabel') }}
+                </label>
                 <textarea
                   v-model="form.cronExpr"
                   class="min-h-[108px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 font-mono text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                  placeholder="例如 0 9 * * *"
+                  :placeholder="t('scheduledTasks.dialog.cronPlaceholder')"
                 />
               </div>
             </div>
@@ -351,8 +372,10 @@ watch(
             class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4"
           >
             <div class="space-y-1">
-              <h3 class="text-[15px] font-semibold text-[#1f2937]">立即启用</h3>
-              <p class="text-sm text-[#94a3b8]">创建后立即开始运行此任务</p>
+              <h3 class="text-[15px] font-semibold text-[#1f2937]">
+                {{ t('scheduledTasks.dialog.enableNowTitle') }}
+              </h3>
+              <p class="text-sm text-[#94a3b8]">{{ t('scheduledTasks.dialog.enableNowHint') }}</p>
             </div>
             <Switch
               :model-value="form.enabled"
@@ -369,7 +392,7 @@ watch(
           class="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-[#dbe3ec] bg-white px-5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#f8fafc]"
           @click="closeDialog"
         >
-          取消
+          {{ t('common.cancel') }}
         </button>
         <button
           type="button"
@@ -377,7 +400,7 @@ watch(
           class="inline-flex h-11 min-w-[116px] items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f172a] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
           @click="handleSubmit"
         >
-          {{ submitDisabled ? '提交中...' : '确定' }}
+          {{ submitDisabled ? t('scheduledTasks.dialog.submitting') : t('common.confirm') }}
         </button>
       </DialogFooter>
     </DialogContent>

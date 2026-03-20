@@ -49,9 +49,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
+import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 interface PendingImage {
   id: string
@@ -155,6 +163,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+
+function getDisplayModelName(providerId: string, model: Model): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    chatwikiAvailability.value
+  )
+}
 
 const handleChatEnter = (event: KeyboardEvent) => {
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
@@ -286,6 +303,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const inputContainerRef = ref<HTMLDivElement | null>(null)
 const toolbarRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 const isToolbarNarrow = ref(false)
 
 const MAX_IMAGES = 4
@@ -496,6 +514,21 @@ let toolbarObserver: ResizeObserver | null = null
 
 // Setup event listeners
 onMounted(() => {
+  void getChatwikiBinding()
+    .then((binding) => {
+      chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
+    })
+    .catch(() => {
+      chatwikiAvailability.value = 'unbound'
+    })
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged((bound) => {
+    chatwikiAvailability.value =
+      typeof bound === 'boolean'
+        ? bound
+          ? 'available'
+          : 'unbound'
+        : getChatwikiAvailabilityStatus(bound)
+  })
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
   }
@@ -514,6 +547,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
   if (textareaRef.value) {
     textareaRef.value.removeEventListener('paste', handlePaste)
   }
@@ -793,7 +828,13 @@ onUnmounted(() => {
                               <SelectLabel
                                 class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
                               >
-                                <span>{{ pw.provider.name }}</span>
+                                <span>{{
+                                  formatProviderDisplayLabel(
+                                    pw.provider.provider_id,
+                                    pw.provider.name,
+                                    chatwikiAvailability
+                                  )
+                                }}</span>
                                 <span
                                   v-if="isProviderFree(pw)"
                                   class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
@@ -807,9 +848,17 @@ onUnmounted(() => {
                                     v-for="m in g.models"
                                     :key="pw.provider.provider_id + '::' + m.model_id"
                                     :value="pw.provider.provider_id + '::' + m.model_id"
+                                    :disabled="
+                                      isModelSelectionDisabled(
+                                        pw.provider.provider_id,
+                                        chatwikiAvailability
+                                      )
+                                    "
                                   >
                                     <div class="flex items-center gap-2">
-                                      <span>{{ m.name }}</span>
+                                      <span>{{
+                                        getDisplayModelName(pw.provider.provider_id, m)
+                                      }}</span>
                                       <template v-if="m.capabilities && m.capabilities.length > 0">
                                         <span
                                           v-for="cap in m.capabilities.slice(0, 3)"

@@ -21,6 +21,7 @@ import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconChannels from '@/assets/icons/channels.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
@@ -149,6 +150,7 @@ const handleNavClick = (module: NavModule) => {
 
     <!-- 底部导航区域 -->
     <div class="flex w-full flex-col gap-1">
+      <ChatWikiSidebarAccountCard v-if="!navigationStore.sidebarCollapsed" />
       <button
         v-for="item in bottomNavItems"
         :key="item.key"
