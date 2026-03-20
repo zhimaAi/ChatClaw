@@ -1146,7 +1146,7 @@ const handleRemoveImage = (id: string) => {
         )
       "
     >
-      <div class="flex w-full items-center justify-between gap-2 border-b border-border px-2 py-2">
+      <div class="flex w-full items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2">
         <template v-if="!sidebarCollapsed">
           <div class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]">
             <button
@@ -1295,7 +1295,7 @@ const handleRemoveImage = (id: string) => {
           </div>
           <div
             v-else-if="!teamBound"
-            class="flex h-12 w-full shrink-0 items-center justify-center border-b border-border bg-card text-sm font-normal text-muted-foreground"
+            class="flex h-12 w-full shrink-0 items-center justify-center border-b border-[#F5F5F5] bg-card text-sm font-normal text-muted-foreground"
           >
             {{ t('knowledge.team.notBoundTitle') }}
           </div>
@@ -1341,7 +1341,7 @@ const handleRemoveImage = (id: string) => {
             </div>
             <div
               v-if="teamLibraries.length === 0"
-              class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+              class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-[#F5F5F5] bg-card p-4 text-sm text-muted-foreground"
             >
               {{ t('knowledge.team.empty') }}
             </div>
@@ -1350,15 +1350,15 @@ const handleRemoveImage = (id: string) => {
               <div
                 v-for="lib in teamLibraries"
                 :key="lib.id"
-                class="group/teamlib flex flex-col border-b border-border text-sm transition-colors"
+                class="group/library flex flex-col border-b border-[#F5F5F5] text-sm transition-colors"
               >
-                <!-- Team library row: click to expand/collapse -->
+                <!-- Team library row: click to expand/collapse (aligned with personal library row) -->
                 <div class="flex items-center gap-1.5">
                   <div
                     role="button"
                     :class="
                       cn(
-                        'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
+                        'group flex h-11 flex-1 cursor-pointer items-center gap-2 px-2 text-left font-normal transition-colors',
                         selectedTeamLibraryId === lib.id
                           ? 'bg-accent/60 text-accent-foreground'
                           : 'text-foreground hover:bg-accent/40'
@@ -1377,31 +1377,31 @@ const handleRemoveImage = (id: string) => {
                     <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                       {{ lib.name }}
                     </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                        :title="t('knowledge.item.menu')"
+                        @click.stop
+                      >
+                        <MoreHorizontal class="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" class="w-40">
+                        <DropdownMenuItem class="gap-2">
+                          <IconLibSettings class="size-4 text-muted-foreground" />
+                          {{ t('knowledge.item.settings') }}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
-                      :title="t('knowledge.item.menu')"
-                      @click.stop
-                    >
-                      <MoreHorizontal class="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-40">
-                      <DropdownMenuItem class="gap-2">
-                        <IconLibSettings class="size-4 text-muted-foreground" />
-                        {{ t('knowledge.item.settings') }}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
                 <!-- Team groups (sidebar): shown when expanded -->
                 <div
                   v-if="expandedTeamLibraries.has(lib.id)"
                   class="flex w-full flex-col overflow-hidden px-1.5 pt-1 pb-1.5"
                 >
-                  <!-- All groups -->
+                  <!-- All groups: same row chrome as personal "uncategorized" -->
                   <div
-                    class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                    class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                     :class="
                       selectedTeamLibraryId === lib.id && selectedTeamGroupId === TEAM_ALL_GROUP_ID
                         ? 'bg-accent text-accent-foreground'
@@ -1409,8 +1409,16 @@ const handleRemoveImage = (id: string) => {
                     "
                     @click.stop="handleTeamGroupSelect(TEAM_ALL_GROUP_ID)"
                   >
-                    <FolderIcon class="size-4 shrink-0" />
-                    <span class="min-w-0 flex-1 truncate text-xs">
+                    <span class="flex size-4 shrink-0" aria-hidden />
+                    <span
+                      class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                    >
+                      <FolderIcon class="size-4 shrink-0" />
+                    </span>
+                    <span
+                      class="min-w-0 flex-1 truncate text-xs"
+                      :title="t('knowledge.team.allGroups')"
+                    >
                       {{ t('knowledge.team.allGroups') }}
                     </span>
                   </div>
@@ -1427,7 +1435,7 @@ const handleRemoveImage = (id: string) => {
                         (g) => g.id !== TEAM_ALL_GROUP_ID
                       )"
                       :key="`team-sidebar-group-${lib.id}-${group.id}`"
-                      class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                      class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                       :class="
                         selectedTeamLibraryId === lib.id && selectedTeamGroupId === group.id
                           ? 'bg-accent text-accent-foreground'
@@ -1435,7 +1443,12 @@ const handleRemoveImage = (id: string) => {
                       "
                       @click.stop="handleTeamGroupSelect(group.id)"
                     >
-                      <FolderIcon class="size-4 shrink-0" />
+                      <span class="flex size-4 shrink-0" aria-hidden />
+                      <span
+                        class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                      >
+                        <FolderIcon class="size-4 shrink-0" />
+                      </span>
                       <span class="min-w-0 flex-1 truncate text-xs" :title="group.name">
                         {{ group.name }}
                       </span>
@@ -1454,7 +1467,7 @@ const handleRemoveImage = (id: string) => {
           <div
             v-for="lib in libraries"
             :key="lib.id"
-            class="group/library flex flex-col border-b border-border text-sm transition-colors"
+            class="group/library flex flex-col border-b border-[#F5F5F5] text-sm transition-colors"
           >
             <!-- 知识库行：点击整行即可展开/收起 -->
             <div class="flex items-center gap-1.5">
@@ -1610,7 +1623,7 @@ const handleRemoveImage = (id: string) => {
         class="flex h-full items-center justify-center px-8"
       >
         <div
-          class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+          class="rounded-2xl border border-[#F5F5F5] bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           {{ t('knowledge.team.empty') }}
         </div>
@@ -1620,7 +1633,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 0"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1737,7 +1750,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 3"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1799,7 +1812,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 2"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1877,7 +1890,7 @@ const handleRemoveImage = (id: string) => {
         <div
           class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
-          <div class="space-y-1 border-b border-border pb-4">
+          <div class="space-y-1 border-b border-[#F5F5F5] pb-4">
             <h3 class="text-base font-medium text-foreground">
               {{ selectedTeamLibrary?.name ?? '' }}
             </h3>

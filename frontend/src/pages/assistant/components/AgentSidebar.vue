@@ -107,14 +107,14 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
   <aside
     :class="
       cn(
-        'flex shrink-0 flex-col border-r border-border bg-background transition-all duration-200 w-sidebar',
+        'flex shrink-0 flex-col border-r border-[#F5F5F5] bg-background transition-all duration-200 w-sidebar',
         // In snap mode, sidebar is an overlay
         isSnapMode && 'absolute inset-y-0 left-0 z-20 shadow-lg'
       )
     "
   >
     <!-- Snap mode: close button at top -->
-    <div v-if="isSnapMode" class="flex items-center justify-end border-b border-border px-2 py-1.5">
+    <div v-if="isSnapMode" class="flex items-center justify-end border-b border-[#F5F5F5] px-2 py-1.5">
       <Button
         size="icon"
         variant="ghost"
@@ -126,7 +126,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       </Button>
     </div>
 
-    <div class="flex items-center justify-between gap-2 border-b border-border px-2 py-2">
+    <div class="flex items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2">
       <div class="inline-flex rounded-lg bg-muted p-[3px]">
         <button
           :class="
@@ -172,7 +172,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       <!-- Personal mode: empty state -->
       <div
         v-if="listMode === 'personal' && agents.length === 0"
-        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-[#F5F5F5] bg-card p-4 text-sm text-muted-foreground"
       >
         <div class="text-center text-sm text-muted-foreground">
           {{ t('assistant.empty') }}
@@ -182,7 +182,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       <!-- Team mode: loading binding -->
       <div
         v-if="listMode === 'team' && !teamBindingChecked"
-        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-[#F5F5F5] bg-card p-4 text-sm text-muted-foreground"
       >
         <div class="text-center text-sm text-muted-foreground">
           {{ t('knowledge.loading') }}
@@ -192,7 +192,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       <!-- Team mode: not bound - full-width bar, same row height as list items (design: 48px, card bg, bottom border, centered muted text) -->
       <div
         v-else-if="listMode === 'team' && !teamBound"
-        class="flex h-12 w-full shrink-0 items-center justify-center border-b border-border bg-card text-sm font-normal text-muted-foreground"
+        class="flex h-12 w-full shrink-0 items-center justify-center border-b border-[#F5F5F5] bg-card text-sm font-normal text-muted-foreground"
       >
         {{ t('knowledge.team.notBoundTitle') }}
       </div>
@@ -200,7 +200,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
       <!-- Team mode: bound but no robots - empty data hint only (same style as personal empty) -->
       <div
         v-else-if="listMode === 'team' && teamBound && teamRobots.length === 0"
-        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+        class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-[#F5F5F5] bg-card p-4 text-sm text-muted-foreground"
       >
         <div class="text-center text-sm text-muted-foreground">
           {{ t('assistant.teamEmpty') }}
@@ -217,7 +217,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                 'group flex h-12 w-full items-center gap-2 px-2 text-left outline-none transition-colors',
                 a.id === activeAgentId && getAgentConversations(a.id).length > 0
                   ? 'border-b-0'
-                  : 'border-b border-border/70',
+                  : 'border-b border-[#F5F5F5]/70',
                 a.id === activeAgentId
                   ? 'bg-card text-foreground'
                   : 'bg-background text-foreground hover:bg-accent/40 active:bg-accent/60'
@@ -334,7 +334,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
           <!-- Conversation list (max 3 items) - only show for active agent -->
           <div
             v-if="a.id === activeAgentId && getAgentConversations(a.id).length > 0"
-            class="flex flex-col border-b border-border/70 pb-1"
+            class="flex flex-col border-b border-[#F5F5F5]/70 pb-1"
           >
             <div
               v-for="conv in getAgentConversations(a.id)"
@@ -423,7 +423,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                 r.id === activeTeamRobotId &&
                   getAgentConversations(getTeamConversationAgentId(r.id)).length > 0
                   ? 'border-b-0'
-                  : 'border-b border-border/70',
+                  : 'border-b border-[#F5F5F5]/70',
                 r.id === activeTeamRobotId
                   ? 'bg-card text-foreground'
                   : 'bg-background text-foreground hover:bg-accent/40 active:bg-accent/60'
@@ -528,7 +528,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               r.id === activeTeamRobotId &&
               getAgentConversations(getTeamConversationAgentId(r.id)).length > 0
             "
-            class="flex flex-col border-b border-border/70 pb-1"
+            class="flex flex-col border-b border-[#F5F5F5]/70 pb-1"
           >
             <div
               v-for="conv in getAgentConversations(getTeamConversationAgentId(r.id))"
