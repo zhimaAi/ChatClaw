@@ -184,6 +184,7 @@ func vecSearch(ctx context.Context, mainDB *bun.DB, agentID int64, queries []str
 	}
 
 	embedder, err := embedding.NewEmbedder(ctx, &embedding.ProviderConfig{
+		ProviderID:   providerID,
 		ProviderType: prov.Type,
 		APIKey:       prov.APIKey,
 		APIEndpoint:  prov.APIEndpoint,

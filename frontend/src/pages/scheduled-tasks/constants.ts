@@ -1,34 +1,63 @@
 import type { SchedulePresetValue } from './types'
 
 export const SCHEDULE_PRESET_LABELS: Record<SchedulePresetValue, string> = {
-  every_minute: '每分钟',
-  every_5_minutes: '每 5 分钟',
-  every_15_minutes: '每 15 分钟',
-  every_hour: '每小时',
-  every_day_0900: '每天上午 9 点',
-  every_day_1800: '每天下午 6 点',
-  weekdays_0900: '工作日上午 9 点',
-  every_monday_0900: '每周一上午 9 点',
-  every_month_1_0900: '每月（1号上午 9 点）',
+  every_minute: 'scheduledTasks.presets.everyMinute',
+  every_5_minutes: 'scheduledTasks.presets.every5Minutes',
+  every_15_minutes: 'scheduledTasks.presets.every15Minutes',
+  every_hour: 'scheduledTasks.presets.everyHour',
+  every_day_0900: 'scheduledTasks.presets.everyDay0900',
+  every_day_1800: 'scheduledTasks.presets.everyDay1800',
+  weekdays_0900: 'scheduledTasks.presets.weekdays0900',
+  every_monday_0900: 'scheduledTasks.presets.everyMonday0900',
+  every_month_1_0900: 'scheduledTasks.presets.everyMonth10900',
 }
 
-export const SCHEDULE_PRESETS: Array<{ value: SchedulePresetValue; label: string }> = [
-  { value: 'every_minute', label: '每分钟' },
-  { value: 'every_5_minutes', label: '每 5 分钟' },
-  { value: 'every_15_minutes', label: '每 15 分钟' },
-  { value: 'every_hour', label: '每小时' },
-  { value: 'every_day_0900', label: '每天上午 9 点' },
-  { value: 'every_day_1800', label: '每天下午 6 点' },
-  { value: 'every_monday_0900', label: '每周一上午 9 点' },
-  { value: 'every_month_1_0900', label: '每月（1号上午 9 点）' },
+export const SCHEDULE_PRESETS: Array<{ value: SchedulePresetValue; labelKey: string }> = [
+  { value: 'every_minute', labelKey: 'scheduledTasks.presets.everyMinute' },
+  { value: 'every_5_minutes', labelKey: 'scheduledTasks.presets.every5Minutes' },
+  { value: 'every_15_minutes', labelKey: 'scheduledTasks.presets.every15Minutes' },
+  { value: 'every_hour', labelKey: 'scheduledTasks.presets.everyHour' },
+  { value: 'every_day_0900', labelKey: 'scheduledTasks.presets.everyDay0900' },
+  { value: 'every_day_1800', labelKey: 'scheduledTasks.presets.everyDay1800' },
+  { value: 'weekdays_0900', labelKey: 'scheduledTasks.presets.weekdays0900' },
+  { value: 'every_monday_0900', labelKey: 'scheduledTasks.presets.everyMonday0900' },
+  { value: 'every_month_1_0900', labelKey: 'scheduledTasks.presets.everyMonth10900' },
 ]
 
 export const WEEKDAY_OPTIONS = [
-  { value: 0, label: '星期日', shortLabel: '周日' },
-  { value: 1, label: '星期一', shortLabel: '周一' },
-  { value: 2, label: '星期二', shortLabel: '周二' },
-  { value: 3, label: '星期三', shortLabel: '周三' },
-  { value: 4, label: '星期四', shortLabel: '周四' },
-  { value: 5, label: '星期五', shortLabel: '周五' },
-  { value: 6, label: '星期六', shortLabel: '周六' },
-]
+  {
+    value: 0,
+    labelKey: 'scheduledTasks.weekdays.sunday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.sunday',
+  },
+  {
+    value: 1,
+    labelKey: 'scheduledTasks.weekdays.monday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.monday',
+  },
+  {
+    value: 2,
+    labelKey: 'scheduledTasks.weekdays.tuesday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.tuesday',
+  },
+  {
+    value: 3,
+    labelKey: 'scheduledTasks.weekdays.wednesday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.wednesday',
+  },
+  {
+    value: 4,
+    labelKey: 'scheduledTasks.weekdays.thursday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.thursday',
+  },
+  {
+    value: 5,
+    labelKey: 'scheduledTasks.weekdays.friday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.friday',
+  },
+  {
+    value: 6,
+    labelKey: 'scheduledTasks.weekdays.saturday',
+    shortLabelKey: 'scheduledTasks.weekdaysShort.saturday',
+  },
+] as const
