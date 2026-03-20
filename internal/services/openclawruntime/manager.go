@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -40,12 +41,14 @@ type Manager struct {
 	expectedStopPID int
 	shuttingDown    bool
 	reconnecting    atomic.Bool
+
+	syncer *configSyncer
 }
 
-func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
+func NewManager(app *application.App, settingsSvc *settings.SettingsService, providersSvc *providers.ProvidersService) *Manager {
 	store := newConfigStore(settingsSvc)
 	cfg := store.Get()
-	return &Manager{
+	m := &Manager{
 		app:   app,
 		store: store,
 		status: RuntimeStatus{
@@ -53,6 +56,8 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Ma
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		},
 	}
+	m.syncer = newConfigSyncer(m, providersSvc)
+	return m
 }
 
 func (m *Manager) Start() {
@@ -184,6 +189,16 @@ func (m *Manager) reconcile(restart bool) error {
 	})
 	m.broadcastGatewayState(GatewayConnectionState{Connected: true, Authenticated: true})
 	m.notifyReadyHooks()
+
+	// Sync provider/model config to OpenClaw Gateway after connection is established
+	go func() {
+		syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer syncCancel()
+		if err := m.syncer.SyncNow(syncCtx); err != nil {
+			m.app.Logger.Warn("openclaw: initial config sync failed (non-fatal)", "error", err)
+		}
+	}()
+
 	return nil
 }
 
@@ -599,4 +614,10 @@ func shouldRetryConnect(err error) bool {
 		}
 	}
 	return false
+}
+
+// NotifyConfigChanged triggers a debounced config sync to OpenClaw Gateway.
+// Call this when provider/model configuration changes in ChatClaw.
+func (m *Manager) NotifyConfigChanged() {
+	m.syncer.RequestSync()
 }

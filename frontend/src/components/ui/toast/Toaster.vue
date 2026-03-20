@@ -19,11 +19,11 @@ const { toasts, dismiss } = useToast()
       :duration="t.duration"
       @update:open="(open) => !open && dismiss(t.id)"
     >
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
         <!-- 黑白灰科技风：图标用灰阶，不用彩色 -->
         <CircleCheck v-if="t.variant === 'success'" class="size-5 shrink-0 text-muted-foreground" />
         <CircleX v-else-if="t.variant === 'error'" class="size-5 shrink-0 text-foreground/80" />
-        <div class="grid gap-1">
+        <div class="grid gap-1 min-w-0">
           <ToastTitle v-if="t.title">{{ t.title }}</ToastTitle>
         </div>
       </div>
