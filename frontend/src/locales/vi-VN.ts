@@ -715,6 +715,7 @@ export default {
       freeBadge: "Miễn phí",
       noModel: "Không có mô hình khả dụng",
       selectKnowledge: "Chọn Cơ sở tri thức",
+      knowledgeChipRemoveNotSupported: "Chế độ hiện tại không hỗ trợ gỡ bỏ",
       selectImages: "Chọn hình ảnh",
       selectImagesDisabled: "Chọn mô hình hỗ trợ đầu vào hình ảnh",
       selectImage: "Chọn hình ảnh",
@@ -1151,6 +1152,7 @@ export default {
       deleteSuccess: "Xóa thành công",
       move: {
         title: "Di chuyển thư mục",
+        action: "Di chuyển",
         selectFolder: "Chọn thư mục đích",
         moveToHere: "Di chuyển đến đây",
         success: "Di chuyển thành công",

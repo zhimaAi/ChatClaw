@@ -715,6 +715,7 @@ export default {
       freeBadge: "ফ্রি",
       noModel: "কোনো মডেল নেই",
       selectKnowledge: "নলেজ বেস সিলেক্ট",
+      knowledgeChipRemoveNotSupported: "এই মোডে সরানো সমর্থিত নয়",
       selectImages: "ইমেজ সিলেক্ট",
       selectImagesDisabled: "ইমেজ ইনপুট সাপোর্ট করে এমন মডেল সিলেক্ট করুন",
       selectImage: "ইমেজ সিলেক্ট",
@@ -1151,6 +1152,7 @@ export default {
       deleteSuccess: "মুছে গেছে",
       move: {
         title: "ফোল্ডার মুভ",
+        action: "মুভ",
         selectFolder: "টার্গেট ফোল্ডার সিলেক্ট",
         moveToHere: "এখানে মুভ",
         success: "মুভ সফল",

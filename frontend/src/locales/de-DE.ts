@@ -713,6 +713,7 @@ export default {
       freeBadge: "Kostenlos",
       noModel: "Kein Modell verfügbar",
       selectKnowledge: "Wissensdatenbank auswählen",
+      knowledgeChipRemoveNotSupported: "In diesem Modus ist das Entfernen nicht möglich",
       selectImages: "Bilder auswählen",
       selectImagesDisabled: "Wählen Sie ein Modell, das Bildeingabe unterstützt",
       selectImage: "Bild auswählen",
@@ -1149,6 +1150,7 @@ export default {
       deleteSuccess: "Gelöscht",
       move: {
         title: "Ordner verschieben",
+        action: "Verschieben",
         selectFolder: "Zielordner auswählen",
         moveToHere: "Hierher verschieben",
         success: "Erfolgreich verschoben",
