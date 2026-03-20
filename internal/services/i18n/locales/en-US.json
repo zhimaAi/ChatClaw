@@ -40,8 +40,6 @@
   "error.model_delete_failed": "failed to delete model",
   "error.cannot_delete_builtin_model": "cannot delete builtin model",
   "error.cannot_delete_global_embedding_model": "cannot delete: this model is set as the global embedding model",
-  "error.cannot_delete_memory_embedding_model": "cannot delete: this model is set as the long-term memory embedding model",
-  "error.cannot_delete_memory_extract_model": "cannot delete: this model is set as the long-term memory extraction model",
   "error.cannot_delete_semantic_segment_model_in_use": "cannot delete: this model is used as semantic segmentation model by library '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "cannot delete: this rerank model is used by library '{{.LibraryName}}'",
   "error.no_llm_model": "provider '{{.ProviderID}}' has no available LLM model",

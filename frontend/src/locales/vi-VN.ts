@@ -31,10 +31,6 @@ export default {
       name: "Tìm kiếm Cơ sở tri thức",
       description: "Truy xuất nội dung liên quan từ Cơ sở tri thức",
     },
-    memoryRetriever: {
-      name: "Tìm kiếm Bộ nhớ",
-      description: "Truy xuất các sự kiện liên quan từ bộ nhớ dài hạn",
-    },
     execute: {
       name: "Thực thi lệnh",
       description: "Thực thi lệnh Shell trong terminal hệ thống",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "Dịch vụ Mô hình",
       generalSettings: "Cài đặt chung",
-      memorySettings: "Bộ nhớ dài hạn",
       skills: "Cài đặt Kỹ năng",
       mcp: "Cài đặt MCP",
       snapSettings: "Cài đặt Snap",

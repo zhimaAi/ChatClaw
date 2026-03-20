@@ -40,8 +40,6 @@
   "error.model_delete_failed": "모델 삭제 실패",
   "error.cannot_delete_builtin_model": "기본 제공 모델은 삭제할 수 없습니다",
   "error.cannot_delete_global_embedding_model": "삭제할 수 없습니다: 이 모델이 전역 임베딩 모델로 설정되어 있습니다",
-  "error.cannot_delete_memory_embedding_model": "삭제할 수 없습니다: 이 모델이 기억 임베딩 모델로 설정되어 있습니다",
-  "error.cannot_delete_memory_extract_model": "삭제할 수 없습니다: 이 모델이 기억 추출 모델로 설정되어 있습니다",
   "error.cannot_delete_semantic_segment_model_in_use": "삭제할 수 없습니다: 이 모델이 라이브러리 '{{.LibraryName}}'에서 의미론적 세그먼테이션 모델로 사용되고 있습니다",
   "error.cannot_delete_rerank_model_in_use": "삭제할 수 없습니다: 이 모델이 라이브러리 '{{.LibraryName}}'에서 사용되고 있습니다",
   "error.no_llm_model": "공급자 '{{.ProviderID}}'에 사용 가능한 LLM 모델이 없습니다",

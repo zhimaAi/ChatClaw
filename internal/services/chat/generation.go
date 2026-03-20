@@ -16,7 +16,6 @@ import (
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/services/mcp"
-	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/sqlite"
 
@@ -251,13 +250,6 @@ func (s *ChatService) runGenerationCore(ctx context.Context, gc *generationConte
 	}
 
 	combinedCleanup()
-
-	if agentExtras.MemoryEnabled {
-		go func() {
-			time.Sleep(1 * time.Second)
-			memory.RunMemoryExtraction(context.Background(), s.app, conversationID)
-		}()
-	}
 }
 
 // resumeGeneration continues a previously interrupted generation.
@@ -361,31 +353,6 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 		} else if retrieverTool != nil {
 			extraTools = append(extraTools, retrieverTool)
 			s.app.Logger.Info("[chat] library retriever tool created", "libraries", len(agentExtras.LibraryIDs), "topK", agentConfig.RetrievalTopK, "threshold", agentExtras.MatchThreshold)
-		}
-	}
-
-	if agentExtras.MemoryEnabled {
-		memoryTool, toolErr := tools.NewMemoryRetrieverTool(ctx, &tools.MemoryRetrieverConfig{
-			AgentID:        agentExtras.AgentID,
-			TopK:           agentConfig.RetrievalTopK,
-			MatchThreshold: agentExtras.MatchThreshold,
-		})
-		if toolErr != nil {
-			s.app.Logger.Warn("[chat] failed to create memory retriever tool", "error", toolErr)
-		} else if memoryTool != nil {
-			extraTools = append(extraTools, memoryTool)
-			s.app.Logger.Info("[chat] memory retriever tool created", "agent_id", agentExtras.AgentID)
-		}
-	}
-
-	if agentExtras.MemoryEnabled {
-		cpCtx, cpCancel := context.WithTimeout(ctx, 2*time.Second)
-		coreProfile, _ := memory.GetCoreProfileContent(cpCtx, agentExtras.AgentID)
-		cpCancel()
-		if coreProfile != "" {
-			extraHandlers = append(extraHandlers, einoagent.NewInstructionHandler(
-				"\n\n# User Core Profile\nThe following core profile contains long-term facts about the user and this conversation's context. Always respect and utilize this information when formulating your response:\n"+coreProfile,
-			))
 		}
 	}
 

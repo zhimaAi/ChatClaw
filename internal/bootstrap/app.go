@@ -214,11 +214,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("sqlite init: %w", err)
 	}
 
-	// 初始化记忆数据库
-	if err := memory.InitDB(app); err != nil {
-		return nil, nil, fmt.Errorf("memory db init: %w", err)
-	}
-
 	// ChatClaw: default enabled, auto-generate API key at startup
 	if err := providers.EnsureChatClawInitialized(); err != nil {
 		app.Logger.Warn("EnsureChatClawInitialized failed (non-fatal)", "error", err)
@@ -348,7 +343,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return newScheduledTaskManagementTools(agentsService, scheduledTasksService)
 	})
 	app.RegisterService(application.NewService(scheduledTasksService))
-	// 注册记忆服务
+	// 注册记忆服务（OpenClaw workspace 文件读写）
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
@@ -621,7 +616,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		if tm := taskmanager.Get(); tm != nil {
 			tm.StopNow()
 		}
-		memory.CloseDB()
 		sqlite.Close()
 		// Close log file last so all shutdown logs are captured.
 		logCleanup()

@@ -31,10 +31,6 @@ export default {
       name: "استرجاع قاعدة المعرفة",
       description: "استرجاع المحتوى ذي الصلة من قاعدة المعرفة",
     },
-    memoryRetriever: {
-      name: "استرجاع الذاكرة",
-      description: "استرجاع الحقائق ذات الصلة من الذاكرة طويلة المدى",
-    },
     execute: {
       name: "تنفيذ الأمر",
       description: "Execute shell commands on the system",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "خدمة النموذج",
       generalSettings: "الإعدادات العامة",
-      memorySettings: "الذاكرة طويلة المدى",
       skills: "إعدادات المهارات",
       mcp: "إعدادات MCP",
       snapSettings: "إعدادات الالتقاط",
