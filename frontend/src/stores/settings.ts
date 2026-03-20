@@ -8,7 +8,6 @@ export type SettingsMenuItem =
   | 'modelService'
   | 'generalSettings'
   | 'openclawRuntime'
-  | 'memorySettings'
   | 'skills'
   | 'mcp'
   | 'snapSettings'

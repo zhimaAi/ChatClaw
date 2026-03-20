@@ -31,10 +31,6 @@ export default {
       name: "지식베이스 검색",
       description: "지식베이스에서 관련 콘텐츠 검색",
     },
-    memoryRetriever: {
-      name: "메모리 검색",
-      description: "장기 기억에서 관련 사실 검색",
-    },
     execute: {
       name: "명령 실행",
       description: "시스템 터미널에서 셸 명령 실행",
@@ -222,7 +218,6 @@ export default {
     menu: {
       modelService: "모델 서비스",
       generalSettings: "일반 설정",
-      memorySettings: "장기 메모리",
       skills: "스킬 설정",
       mcp: "MCP설정",
       snapSettings: "스냅 설정",

@@ -40,8 +40,6 @@
   "error.model_delete_failed": "মডেল ডিলিট ব্যর্থ",
   "error.cannot_delete_builtin_model": "বিল্ট-ইন মডেল ডিলিট করা যায় না",
   "error.cannot_delete_global_embedding_model": "ডিলিট করা যায় না: এই মডেল গ্লোবাল এম্বেডিং মডেল হিসেবে সেট করা আছে",
-  "error.cannot_delete_memory_embedding_model": "ডিলিট করা যায় না: এই মডেল দীর্ঘমেয়াদী মেমোরি এম্বেডিং মডেল হিসেবে সেট করা আছে",
-  "error.cannot_delete_memory_extract_model": "ডিলিট করা যায় না: এই মডেল দীর্ঘমেয়াদী মেমোরি এক্সট্রাক্ট মডেল হিসেবে সেট করা আছে",
   "error.cannot_delete_semantic_segment_model_in_use": "ডিলিট করা যায় না: '{{.LibraryName}}' লাইব্রেরি দ্বারা এই মডেল সিমান্টিক সেগমেন্ট মডেল হিসেবে ব্যবহৃত হচ্ছে",
   "error.cannot_delete_rerank_model_in_use": "ডিলিট করা যায় না: '{{.LibraryName}}' লাইব্রেরি দ্বারা এই রির‍্যাঙ্ক মডেল ব্যবহৃত হচ্ছে",
   "error.no_llm_model": "প্রোভাইডার '{{.ProviderID}}' এ কোনো উপলব্ধ LLM মডেল নেই",

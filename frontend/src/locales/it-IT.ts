@@ -31,10 +31,6 @@ export default {
       name: "Ricerca knowledge base",
       description: "Recupera contenuti rilevanti dalla knowledge base",
     },
-    memoryRetriever: {
-      name: "Recupero memoria",
-      description: "Recupera fatti rilevanti dalla memoria a lungo termine",
-    },
     execute: {
       name: "Esegui comando",
       description: "Esegui un comando Shell nel terminale di sistema",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "Servizio modello",
       generalSettings: "Impostazioni generali",
-      memorySettings: "Memoria a lungo termine",
       skills: "Impostazioni competenze",
       mcp: "Impostazioni MCP",
       snapSettings: "Impostazioni snap",

@@ -40,8 +40,6 @@
   "error.model_delete_failed": "刪除模型失敗",
   "error.cannot_delete_builtin_model": "無法刪除內建模型",
   "error.cannot_delete_global_embedding_model": "無法刪除：此模型已設定為全域嵌入模型",
-  "error.cannot_delete_memory_embedding_model": "無法刪除：此模型已設定為記憶嵌入模型",
-  "error.cannot_delete_memory_extract_model": "無法刪除：此模型已設定為記憶擷取模型",
   "error.cannot_delete_semantic_segment_model_in_use": "無法刪除：此模型正由圖書館 '{{.LibraryName}}' 作為語義分割模型使用",
   "error.cannot_delete_rerank_model_in_use": "無法刪除：此模型正由圖書館 '{{.LibraryName}}' 使用",
   "error.no_llm_model": "供應商 '{{.ProviderID}}' 沒有可用的 LLM 模型",

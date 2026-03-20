@@ -31,10 +31,6 @@ export default {
       name: "नॉलेज सर्च",
       description: "नॉलेज बेस से प्रासंगिक सामग्री खोजें",
     },
-    memoryRetriever: {
-      name: "मेमोरी सर्च",
-      description: "दीर्घकालिक मेमोरी से प्रासंगिक तथ्य खोजें",
-    },
     execute: {
       name: "कमांड एक्जीक्यूट करें",
       description: "सिस्टम टर्मिनल में शेल कमांड एक्जीक्यूट करें",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "मॉडल सर्विस",
       generalSettings: "सामान्य सेटिंग्स",
-      memorySettings: "दीर्घकालिक मेमोरी",
       skills: "स्किल सेटिंग्स",
       mcp: "MCPसेटिंग्स",
       snapSettings: "स्नैप सेटिंग्स",

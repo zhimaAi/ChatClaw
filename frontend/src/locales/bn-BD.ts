@@ -31,10 +31,6 @@ export default {
       name: "নলেজ বেস অনুসন্ধান",
       description: "নলেজ বেস থেকে প্রাসঙ্গিক বিষয়বস্তু অনুসন্ধান করুন",
     },
-    memoryRetriever: {
-      name: "মেমরি অনুসন্ধান",
-      description: "দীর্ঘমেয়াদী মেমরি থেকে প্রাসঙ্গিক তথ্য অনুসন্ধান করুন",
-    },
     execute: {
       name: "কমান্ড বাস্তবায়ন",
       description: "সিস্টেম টার্মিনালে শেল কমান্ড বাস্তবায়ন করুন",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "মডেল সার্ভিস",
       generalSettings: "সাধারণ সেটিংস",
-      memorySettings: "দীর্ঘমেয়াদী মেমরি",
       skills: "স্কিল সেটিংস",
       mcp: "MCPসেটিংস",
       snapSettings: "স্ন্যাপ সেটিংস",

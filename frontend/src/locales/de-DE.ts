@@ -31,10 +31,6 @@ export default {
       name: "Wissensdatenbank-Suche",
       description: "Relevante Inhalte aus der Wissensdatenbank abrufen",
     },
-    memoryRetriever: {
-      name: "Speicherabruf",
-      description: "Relevante Fakten aus dem Langzeitgedächtnis abrufen",
-    },
     execute: {
       name: "Befehl ausführen",
       description: "Einen Shell-Befehl im Systemterminal ausführen",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "Modell-Dienst",
       generalSettings: "Allgemeine Einstellungen",
-      memorySettings: "Langzeiterinnerung",
       skills: "Fähigkeiten-Einstellungen",
       mcp: "MCP-Einstellungen",
       snapSettings: "Andock-Einstellungen",

@@ -31,10 +31,6 @@ export default {
       name: "Búsqueda en base de conocimientos",
       description: "Recupera contenido relevante de la base de conocimientos",
     },
-    memoryRetriever: {
-      name: "Búsqueda en memoria",
-      description: "Recupera hechos relevantes de la memoria a largo plazo",
-    },
     execute: {
       name: "Ejecutar comando",
       description: "Ejecuta un comando Shell en la terminal del sistema",
@@ -214,7 +210,6 @@ export default {
     menu: {
       modelService: "Servicio de modelo",
       generalSettings: "Configuración general",
-      memorySettings: "Memoria a largo plazo",
       skills: "Configuración de habilidades",
       mcp: "Configuración de MCP",
       snapSettings: "Configuración de snap",

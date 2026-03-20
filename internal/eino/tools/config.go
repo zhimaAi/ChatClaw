@@ -55,7 +55,6 @@ const (
 	ToolIDSequentialThinking = "sequential_thinking"
 	ToolIDWikipedia          = "wikipedia_search"
 	ToolIDLibraryRetriever   = "library_retriever"
-	ToolIDMemoryRetriever    = "memory_retriever"
 
 	// Filesystem tool IDs — registered as independent tools, not via filesystem middleware.
 	ToolIDLs        = "ls"

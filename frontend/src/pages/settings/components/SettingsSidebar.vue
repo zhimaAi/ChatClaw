@@ -9,7 +9,6 @@ import { useSettingsStore, useAppStore, type SettingsMenuItem } from '@/stores'
 import ModelServiceIcon from '@/assets/icons/model-service.svg'
 import GeneralSettingsIcon from '@/assets/icons/general-settings.svg'
 import BindChatclawIcon from '@/assets/icons/bind_chatclaw.svg'
-import MemorySettingsIcon from '@/assets/icons/memory.svg'
 import SkillsIcon from '@/assets/icons/skills.svg'
 import MCPIcon from '@/assets/icons/mcp.svg'
 import SnapSettingsIcon from '@/assets/icons/snap-settings.svg'
@@ -33,7 +32,6 @@ const allMenuItems: MenuItem[] = [
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
   { id: 'openclawRuntime', labelKey: 'settings.menu.openclawRuntime', icon: ToolsIcon },
   { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: BindChatclawIcon },
-  { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'mcp', labelKey: 'settings.menu.mcp', icon: MCPIcon },
   {

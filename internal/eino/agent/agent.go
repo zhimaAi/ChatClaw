@@ -206,7 +206,6 @@ func buildLeadAgentTools(allTools []tool.BaseTool, extraTools []tool.BaseTool, s
 		"ls":                  true,
 		"confirm_execution":   true,
 		"sequential_thinking": true,
-		"memory_retriever":    true,
 		"library_retriever":   true,
 	}
 
@@ -256,7 +255,7 @@ func buildHandlers(ctx context.Context, b *tools.Backend, config Config, chatMod
 	sessionsDir := buildSessionsDir(config, b)
 	handlers = append(handlers, NewInstructionHandler(buildCorePrompt(b.HomeDir(), b.WorkDir(), sessionsDir)))
 
-	// 2. Extra handlers from caller (e.g. memory core profile)
+	// 2. Extra handlers from caller
 	handlers = append(handlers, extraHandlers...)
 
 	// 3. Tools & sandbox prompt
@@ -537,8 +536,7 @@ func (h *instructionHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatMo
 }
 
 // NewInstructionHandler creates a handler that appends the given text to the
-// agent's system instruction. Exported so callers can inject extra prompts
-// (e.g. memory core profile) using the same mechanism.
+// agent's system instruction.
 func NewInstructionHandler(instruction string) adk.ChatModelAgentMiddleware {
 	return &instructionHandler{instruction: instruction}
 }
