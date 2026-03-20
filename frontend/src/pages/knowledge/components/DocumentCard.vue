@@ -20,15 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
 import IconDocumentCover from '@/assets/icons/document-cover.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import { DocumentService } from '@bindings/chatclaw/internal/services/document'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -142,33 +135,7 @@ const statusConfig = computed(() => {
   }
 })
 
-const FileIcon = computed(() => {
-  const fileType = props.document.fileType?.toLowerCase()
-  switch (fileType) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-})
+const fileIconUrl = computed(() => getFileTypeIconUrl(props.document.fileType || ''))
 
 // 错误提示显示状态
 const showErrorTip = ref(false)
@@ -418,7 +385,7 @@ const handleCardClick = () => {
     <!-- Footer: file type + date -->
     <div class="mx-2 mt-auto flex items-center justify-between pb-2">
       <div class="flex items-center gap-1">
-        <component :is="FileIcon" class="size-[14px]" />
+        <img :src="fileIconUrl" alt="" class="size-[14px] object-contain" />
         <span class="text-xs text-muted-foreground/70">{{ document.fileType }}</span>
       </div>
       <span class="text-xs text-muted-foreground/60">{{ formatDate(document.createdAt) }}</span>

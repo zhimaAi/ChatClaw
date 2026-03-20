@@ -9,14 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 
 const { t } = useI18n()
 
@@ -81,33 +74,7 @@ const getFileExtension = (file: TeamFile) => {
     .toLowerCase()
 }
 
-const getFileIcon = (file: TeamFile) => {
-  const ext = getFileExtension(file)
-  switch (ext) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-}
+const getFileIconUrl = (file: TeamFile) => getFileTypeIconUrl(getFileExtension(file))
 
 const getFileStatusLabel = (status: number) => {
   if (status === 3) return t('knowledge.content.status.failed')
@@ -187,7 +154,7 @@ const handleCardClick = () => {
     >
       <img v-if="canShowThumb" :src="fileThumbUrl" class="size-full object-contain" alt="" />
       <div v-else class="absolute inset-0 flex items-center justify-center">
-        <component :is="getFileIcon(file)" class="size-10 text-muted-foreground/40" />
+        <img :src="getFileIconUrl(file)" alt="" class="size-10 object-contain opacity-40" />
       </div>
     </div>
 
@@ -239,7 +206,7 @@ const handleCardClick = () => {
     <!-- Footer -->
     <div class="mx-2 mt-auto flex items-center justify-between pb-2">
       <div class="flex items-center gap-1">
-        <component :is="getFileIcon(file)" class="size-[14px]" />
+        <img :src="getFileIconUrl(file)" alt="" class="size-[14px] object-contain" />
         <span class="text-xs text-muted-foreground/70">{{ getFileExtension(file) || '-' }}</span>
       </div>
       <span class="text-xs text-muted-foreground/60">{{ formatDate(getDate()) }}</span>

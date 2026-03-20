@@ -29,14 +29,7 @@ import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import IconDown from '@/assets/icons/down-icon.svg'
 import IconRight from '@/assets/icons/right-icon.svg'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
@@ -248,33 +241,8 @@ const getTeamFileExtension = (file: ChatWikiLibraryFile) => {
     .toLowerCase()
 }
 
-const getTeamFileIcon = (file: ChatWikiLibraryFile) => {
-  const ext = getTeamFileExtension(file)
-  switch (ext) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-}
+const getTeamFileIconUrl = (file: ChatWikiLibraryFile) =>
+  getFileTypeIconUrl(getTeamFileExtension(file))
 
 const formatTeamFileDate = (dateStr: string) => {
   const date = new Date(dateStr)

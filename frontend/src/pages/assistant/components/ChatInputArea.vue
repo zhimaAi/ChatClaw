@@ -43,14 +43,7 @@ import IconKnowledge from '@/assets/icons/knowledge-icon.svg'
 import IconUpload from '@/assets/icons/upload-icon.svg'
 import IconThink from '@/assets/icons/think-icon.svg'
 import IconClean from '@/assets/icons/clean-icon.svg'
-import fileIconDocx from '@/assets/images/file-icons/file-icon-docx.png'
-import fileIconNormal from '@/assets/images/file-icons/file-icon-normal.png'
-import fileIconPdf from '@/assets/images/file-icons/file-icon-pdf.png'
-import fileIconPpt from '@/assets/images/file-icons/file-icon-ppt.png'
-import fileIconTxt from '@/assets/images/file-icons/file-icon-txt.png'
-import fileIconXls from '@/assets/images/file-icons/file-icon-xls.png'
-import fileIconXlsx from '@/assets/images/file-icons/file-icon-xlsx.png'
-import fileIconZip from '@/assets/images/file-icons/file-icon-zip.png'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import ChatModeSelector from './ChatModeSelector.vue'
 import {
   DropdownMenu,
@@ -385,32 +378,9 @@ const formatFileSize = (bytes: number): string => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-const FILE_ICON_MAP: Record<string, string> = {
-  pdf: fileIconPdf,
-  doc: fileIconDocx,
-  docx: fileIconDocx,
-  ppt: fileIconPpt,
-  pptx: fileIconPpt,
-  xls: fileIconXls,
-  xlsx: fileIconXlsx,
-  txt: fileIconTxt,
-  csv: fileIconTxt,
-  md: fileIconTxt,
-  json: fileIconTxt,
-  xml: fileIconTxt,
-  html: fileIconTxt,
-  rtf: fileIconTxt,
-  log: fileIconTxt,
-  zip: fileIconZip,
-  rar: fileIconZip,
-  '7z': fileIconZip,
-  tar: fileIconZip,
-  gz: fileIconZip,
-}
-
 const getFileIcon = (fileName: string): string => {
   const ext = fileName.split('.').pop()?.trim().toLowerCase() || ''
-  return FILE_ICON_MAP[ext] || fileIconNormal
+  return getFileTypeIconUrl(ext)
 }
 
 const handleSelectImagesClick = () => {
