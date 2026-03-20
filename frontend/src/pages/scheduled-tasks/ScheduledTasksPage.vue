@@ -166,13 +166,13 @@ async function handleDeleteConfirm() {
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-auto bg-[#fafafa] px-6 py-6">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div class="space-y-1">
-        <div class="text-[28px] font-semibold tracking-[-0.02em] text-[#171717]">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">
           {{ t('scheduledTasks.title') }}
-        </div>
-        <div class="text-sm text-[#737373]">
+        </h1>
+        <p class="text-sm text-[#737373] dark:text-muted-foreground">
           {{ t('scheduledTasks.subtitle') }}
-        </div>
+        </p>
       </div>
       <div class="flex items-center gap-2 self-start">
         <button
