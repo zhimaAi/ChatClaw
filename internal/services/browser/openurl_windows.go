@@ -7,10 +7,13 @@ import (
 	"syscall"
 )
 
+// CREATE_NO_WINDOW prevents a console window from being created.
+const CREATE_NO_WINDOW = 0x08000000
+
 // openURLWindows opens the given URL in the default browser without showing a command prompt window.
-// Uses SysProcAttr.HideWindow to suppress the cmd.exe window on Windows.
+// Uses rundll32 url.dll,FileProtocolHandler to bypass cmd.exe entirely (cmd /c start would flash a console).
 func openURLWindows(u string) error {
-	cmd := exec.Command("cmd", "/c", "start", "", u)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: CREATE_NO_WINDOW}
 	return cmd.Start()
 }
