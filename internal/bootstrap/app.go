@@ -302,7 +302,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册设置服务
 	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
 	// 注册供应商服务
-	app.RegisterService(application.NewService(providers.NewProvidersService(app)))
+	providersSvc := providers.NewProvidersService(app)
+	app.RegisterService(application.NewService(providersSvc))
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 	// 注册助手服务
@@ -375,10 +376,14 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
-	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app), providersSvc)
 	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, agentsService)
 	agentsService.SetChangeHook(agentSyncer.MarkDirty)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
+	// Listen for provider config changes and sync to OpenClaw Gateway
+	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
+		openclawManager.NotifyConfigChanged()
+	})
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
 
