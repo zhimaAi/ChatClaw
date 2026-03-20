@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings, FileText, Folder as FolderIcon } from 'lucide-vue-next'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
 import IconKnowledgeIcon from '@/assets/icons/knowledge-icon.svg'
+import { Events } from '@wailsio/runtime'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -198,6 +199,7 @@ const teamNormalPage = ref<'groups' | 'files'>('groups')
 const teamScrollContainerRef = ref<HTMLElement | null>(null)
 let teamNormalRequestID = 0
 let teamScrollRafID: number | null = null
+let unsubscribeModelsChanged: (() => void) | null = null
 const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
@@ -969,6 +971,10 @@ onMounted(async () => {
   await loadModels()
   selectDefaultModel(activeAgent.value, null)
   isInitialMount = false
+
+  unsubscribeModelsChanged = Events.On('models:changed', () => {
+    void loadModels()
+  })
 })
 
 onUnmounted(() => {
@@ -976,6 +982,8 @@ onUnmounted(() => {
     window.cancelAnimationFrame(teamScrollRafID)
     teamScrollRafID = null
   }
+  unsubscribeModelsChanged?.()
+  unsubscribeModelsChanged = null
 })
 
 // When switching to team tab, always re-check binding and load
@@ -988,6 +996,9 @@ watch(activeTab, (tab) => {
 // When this module tab becomes active and we're on team tab but unbound, re-check (e.g. after binding in settings)
 const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 watch(isTabActive, (active) => {
+  if (active) {
+    void loadModels()
+  }
   if (active && activeTab.value === 'team' && !teamBound.value) {
     void checkTeamBindingAndLoad()
   }

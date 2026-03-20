@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Switch } from '@/components/ui/switch'
@@ -30,12 +30,23 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { Provider, Model } from '@bindings/chatclaw/internal/services/providers'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
 const showRebuildConfirm = ref(false)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 const memoryEnabled = ref(false)
 const extractSelectedKey = ref('')
@@ -53,7 +64,11 @@ const embeddingGroups = ref<Group[]>([])
 const loadData = async () => {
   loading.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
 
     const details = await Promise.all(
@@ -101,19 +116,42 @@ const loadData = async () => {
 
     memoryEnabled.value = enabled?.value === 'true'
 
-    if (extProv?.value && extMod?.value) {
-      extractSelectedKey.value = `${extProv.value}::${extMod.value}`
-    }
+    const nextExtractKey = clearUnavailableChatwikiSelection(
+      extProv?.value && extMod?.value ? `${extProv.value}::${extMod.value}` : '',
+      chatwikiAvailability.value
+    )
+    extractSelectedKey.value = nextExtractKey
 
-    if (embProv?.value && embMod?.value) {
-      const key = `${embProv.value}::${embMod.value}`
+    const nextEmbeddingKey = clearUnavailableChatwikiSelection(
+      embProv?.value && embMod?.value ? `${embProv.value}::${embMod.value}` : '',
+      chatwikiAvailability.value
+    )
+    if (nextEmbeddingKey) {
+      const key = nextEmbeddingKey
       embeddingSelectedKey.value = key
       savedEmbeddingKey.value = key
+    } else {
+      embeddingSelectedKey.value = ''
+      savedEmbeddingKey.value = ''
     }
 
     if (embDim?.value) {
       embeddingDimension.value = embDim.value
       savedEmbeddingDimension.value = embDim.value
+    }
+
+    if (
+      (extProv?.value && extMod?.value && !nextExtractKey) ||
+      (embProv?.value && embMod?.value && !nextEmbeddingKey)
+    ) {
+      await SettingsService.UpdateMemorySettings({
+        enabled: enabled?.value === 'true',
+        extract_provider_id: nextExtractKey ? nextExtractKey.split('::')[0] : '',
+        extract_model_id: nextExtractKey ? nextExtractKey.split('::')[1] : '',
+        embedding_provider_id: nextEmbeddingKey ? nextEmbeddingKey.split('::')[0] : '',
+        embedding_model_id: nextEmbeddingKey ? nextEmbeddingKey.split('::')[1] : '',
+        embedding_dimension: Number.parseInt(embDim?.value || '1536', 10),
+      })
     }
   } catch (error) {
     console.error('Failed to load memory settings:', error)
@@ -125,6 +163,14 @@ const loadData = async () => {
 
 onMounted(() => {
   loadData()
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    void loadData()
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
 })
 
 const isValid = computed(() => {
@@ -189,6 +235,14 @@ function isProviderFree(g: Group): boolean {
   const p = g.provider as { is_free?: boolean }
   return Boolean(p?.is_free)
 }
+
+function getModelLabel(providerId: string, model: Model): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    chatwikiAvailability.value
+  )
+}
 </script>
 
 <template>
@@ -229,20 +283,19 @@ function isProviderFree(g: Group): boolean {
             <SelectContent>
               <SelectGroup v-for="g in extractGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
-                  <span
-                    v-if="isProviderFree(g)"
-                    class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                  >
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      chatwikiAvailability
+                    )
+                  }}</span>
+                  <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem
-                  v-for="m in g.models"
-                  :key="`${g.provider.provider_id}::${m.model_id}`"
-                  :value="`${g.provider.provider_id}::${m.model_id}`"
-                >
-                  {{ m.name }}
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)">
+                  {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>
@@ -264,20 +317,19 @@ function isProviderFree(g: Group): boolean {
             <SelectContent>
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
-                  <span
-                    v-if="isProviderFree(g)"
-                    class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                  >
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      chatwikiAvailability
+                    )
+                  }}</span>
+                  <span v-if="isProviderFree(g)" class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
                     {{ t('assistant.chat.freeBadge') }}
                   </span>
                 </SelectLabel>
-                <SelectItem
-                  v-for="m in g.models"
-                  :key="`${g.provider.provider_id}::${m.model_id}`"
-                  :value="`${g.provider.provider_id}::${m.model_id}`"
-                >
-                  {{ m.name }}
+                <SelectItem v-for="m in g.models" :key="`${g.provider.provider_id}::${m.model_id}`" :value="`${g.provider.provider_id}::${m.model_id}`" :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)">
+                  {{ getModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

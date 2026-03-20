@@ -25,6 +25,15 @@ func GetChatWikiCloudURL() string {
 	return ChatWikiCloudURL
 }
 
+// GetModelChatWikiURL returns the ChatWiki model service URL.
+// Overridable via MODEL_CHATWIKI_URL environment variable.
+func GetModelChatWikiURL() string {
+	if v := os.Getenv("MODEL_CHATWIKI_URL"); v != "" {
+		return v
+	}
+	return ModelChatWikiUrl
+}
+
 // IsDev 是否为开发环境
 func IsDev() bool {
 	return Env == "development"

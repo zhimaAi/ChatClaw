@@ -302,24 +302,25 @@ ChatClaw_D2/
 To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
 
 
-### 2026/03/13
-1. **Internationalization Overhaul & i18n Skill**: Added `i18n-check` skill, AI-powered translation scripts, and formatting/comparison utilities to auto-fill missing keys across frontend and backend locales, with improved key detection for CJK and multi-script strings.<br/>
-2. **Locale Management Improvements**: Changed default UI language to English, added system locale detection, reworked language options and labels in settings, and cleaned up legacy languages while fixing escape and spacing issues in multiple translations.<br/>
-3. **Assistant MCP & Server UX**: Refined MCP server management in `WorkspaceDrawer`, improved server selection and removal logic, and optimized how MCP servers are attached to agents and governed by global settings, along with list performance and debouncing fixes.<br/>
-4. **Brand & Version Update**: Refreshed application icons and images with a new logo set and bumped application version to `0.5.0`, aligning related configuration and dependency versions.<br/>
+### 2026/03/18
+1. **README Refresh (Multi-language)**: Updated README files across multiple languages with new previews, clearer capability descriptions, and consistent image paths/structure.<br/>
+2. **Channel Integrations & Messaging**: Improved messaging flows and guardrails for multiple channels (e.g., QQ config dedup & image sending, WeCom/Feishu streaming output, DingTalk checks and related config updates).<br/>
+3. **Docs/Tooling**: Added `readme-from-docx` skill documentation for syncing README content from Word documents, including image extraction and localization guidelines.<br/>
 
-### 2026/03/12
-1. **Assistant MCP Integration**: Added Assistant MCP functionality with UI and backend support, including server control based on a global MCP setting and updated indicators to reflect MCP availability in the workspace.<br/>
-2. **Rich Message Editing with Images**: Enhanced chat message editing to support attaching images and saving image payloads into the work directory, reusing the multimodal image upload pipeline for edited messages.<br/>
-3. **Team Library Recall Chat**: Introduced team library recall chat support, enabling conversations that can recall and use team libraries within shared team sessions.<br/>
-4. **MCP Command UX on Windows**: Implemented console window hiding for MCP command execution on Windows and registered the Windows URL scheme to improve deep-link and protocol handling.<br/>
-5. **Model & Auth Tweaks**: Updated model detection to support additional Qwen types, refined ChatWiki bind/logout flows, and adjusted tool status reporting for MCP-related tools.<br/>
+### 2026/03/17
+1. **Chat File Upload (End-to-End)**: Delivered file attachment support across chat UI and backend services, including type/size validation, message state integration, and consistent handling alongside image attachments.<br/>
+2. **Chat Input UX Upgrade**: Enhanced `ChatInputArea` with a new conversation entry, dropdown integrations, a compact mode selector with icon toggles, and a bottom toolbar for better ergonomics.<br/>
+3. **In-App Selection Context Menu**: Added an in-app text selection popup with actions and an option to disable selection search, with `TextSelectionService` and settings synchronization.<br/>
+4. **MCP Defaults & Reliability**: Enabled MCP by default via SQLite migration and hardened MCP settings flows (tool add/remove state handling, validation, cleanup) to reduce edge-case failures.<br/>
+5. **Model Config Validation**: Strengthened Azure chat/embedding configuration validation (endpoint/version requirements) and refined thinking feature initialization logic for safer defaults.<br/>
+6. **Project Hygiene**: Added `think_docs/` convention + `.gitignore` entry, removed legacy Klingon locale artifacts, and applied small refactors for readability/maintainability (e.g., button handlers).<br/>
 
-### 2026/03/11
-1. **MCP Toolchain for Agents**: Enabled MCP tools to be directly exposed to the lead agent via `mcp__`-prefixed tools, and added per-agent MCP server enable/disable controls with quick navigation from the workspace drawer to MCP settings.<br/>
-2. **Task & Cron Management**: Extended scheduled task features with execution history, improved failure statistics and success criteria, and new tools for querying runs, alongside a new task-creation dialog workflow.<br/>
-3. **Toolchain Installation UX**: Added test installation features and download progress tracking for the toolchain, increased download/read timeouts for long-running installs, and improved GitHub proxy and mirror handling for version fetching.<br/>
-4. **ChatWiki & Token Handling**: Improved ChatWiki token management with better reload behavior and local caching, and refined related editing tools and prompts with updated Chinese/English copy.<br/>
+### 2026/03/16
+1. **New Style / Knowledge UI Refactor**: Major refactor of `KnowledgePage` folder/library behaviors with debounced expansion, improved folder-tree synchronization, and upgraded team knowledge UI via `TeamFolderCard`/`TeamFileCard` components.<br/>
+2. **Assistant MCP Feature Expansion**: Added an Assistant MCP detail view (edit + tool management) and improved service networking behavior (host binding checks, `127.0.0.1` usage, CORS/OPTIONS handling).<br/>
+3. **i18n Loading Improvements**: Refactored i18n initialization to support async locale message loading and made message typing more flexible for dynamic locale structures.<br/>
+4. **Performance & Build Optimizations**: Improved Vite bundling via manual chunking and async component loading in `App.vue`; added reusable `copyToClipboard` utility; tuned server-mode performance and tokenizer dictionary loading for Chinese segmentation.<br/>
+5. **Build/Dev Workflow Updates**: Updated `development.md` and Dockerfiles for clearer, more reliable build steps (bindings generation, frontend deps), plus backend app init/systray refinements for stability.<br/>
 
 
 

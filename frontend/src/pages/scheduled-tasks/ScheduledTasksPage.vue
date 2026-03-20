@@ -268,7 +268,7 @@ async function handleDeleteConfirm() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deletingTask" @click="handleDeleteCancel">
-            {{ t('common.cancel', '取消') }}
+            {{ t('common.cancel') }}
           </AlertDialogCancel>
           <Button :disabled="deletingTask" variant="default" @click.prevent="handleDeleteConfirm">
             <LoaderCircle v-if="deletingTask" class="size-4 shrink-0 animate-spin" />
