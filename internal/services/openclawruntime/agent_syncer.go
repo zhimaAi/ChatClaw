@@ -1,11 +1,11 @@
 package openclawruntime
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -43,6 +43,23 @@ type AgentSyncer struct {
 	closed           bool
 }
 
+// agentsListResult mirrors the Gateway agents.list response.
+type agentsListResult struct {
+	DefaultID string              `json:"defaultId"`
+	Agents    []agentsListEntry   `json:"agents"`
+}
+
+type agentsListEntry struct {
+	ID       string               `json:"id"`
+	Name     string               `json:"name"`
+	Identity *agentsListIdentity  `json:"identity,omitempty"`
+}
+
+type agentsListIdentity struct {
+	Name string `json:"name,omitempty"`
+}
+
+// configGetResult is used only for main-agent config.patch fallback.
 type configGetResult struct {
 	Config map[string]any `json:"config"`
 	Hash   string         `json:"hash"`
@@ -151,46 +168,248 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 		return err
 	}
 
-	agentsList, err := s.agentsSvc.ListAgentsForOpenClawSync()
+	desiredAgents, err := s.agentsSvc.ListAgentsForOpenClawSync()
 	if err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Fetch current Gateway agent list via agents.list RPC
+	var gatewayList agentsListResult
+	if err := s.manager.request(ctx, "agents.list", map[string]any{}, &gatewayList); err != nil {
+		return fmt.Errorf("agents.list: %w", err)
+	}
+
+	// Build lookup maps (keys are lowercased to match Gateway's normalizeAgentId)
+	gatewayMap := make(map[string]agentsListEntry, len(gatewayList.Agents))
+	for _, entry := range gatewayList.Agents {
+		gatewayMap[strings.ToLower(entry.ID)] = entry
+	}
+
+	desiredMap := make(map[string]agents.Agent, len(desiredAgents))
+	for _, a := range desiredAgents {
+		desiredMap[strings.ToLower(a.OpenClawAgentID)] = a
+	}
+
+	changed := false
+
+	// --- Phase 1: Create or update agents that should exist ---
+	for _, agent := range desiredAgents {
+		agentID := agent.OpenClawAgentID
+		normalizedID := strings.ToLower(agentID)
+
+		existing, existsInGateway := gatewayMap[normalizedID]
+		if !existsInGateway {
+			if agentID == define.OpenClawMainAgentID {
+				// "main" cannot be created via agents.create; use config.patch
+				if err := s.ensureMainAgentViaConfigPatch(ctx, agent); err != nil {
+					return fmt.Errorf("ensure main agent: %w", err)
+				}
+			} else {
+				if err := s.createAgent(ctx, agent); err != nil {
+					return fmt.Errorf("agents.create %s: %w", agentID, err)
+				}
+			}
+			changed = true
+			continue
+		}
+
+		// Agent exists; check if update is needed
+		if needsUpdate(existing, agent) {
+			if agentID == define.OpenClawMainAgentID {
+				if err := s.ensureMainAgentViaConfigPatch(ctx, agent); err != nil {
+					return fmt.Errorf("update main agent: %w", err)
+				}
+			} else {
+				if err := s.updateAgent(ctx, agent); err != nil {
+					return fmt.Errorf("agents.update %s: %w", agentID, err)
+				}
+			}
+			changed = true
+		}
+	}
+
+	// --- Phase 2: Delete managed agents that no longer exist in ChatClaw ---
+	for _, entry := range gatewayList.Agents {
+		normalizedEntryID := strings.ToLower(entry.ID)
+		if !isManagedAgentID(normalizedEntryID) {
+			continue
+		}
+		if _, wanted := desiredMap[normalizedEntryID]; wanted {
+			continue
+		}
+		if entry.ID == define.OpenClawMainAgentID {
+			// Never delete the main agent
+			continue
+		}
+		if err := s.deleteAgent(ctx, entry.ID); err != nil {
+			return fmt.Errorf("agents.delete %s: %w", entry.ID, err)
+		}
+		changed = true
+	}
+
+	if changed {
+		s.recordWriteAttempt()
+	}
+	s.markSynced(gen)
+	return nil
+}
+
+// createAgent calls agents.create to set up workspace/agentDir/sessions,
+// then patchAgentIdentity to set the real display name and identity
+// (agents.create derives agentId from the name param, so we pass the
+// openclaw_agent_id as name; identity is not part of the create/update schema).
+func (s *AgentSyncer) createAgent(ctx context.Context, agent agents.Agent) error {
+	workspace := s.resolveAgentWorkspace(agent)
+
+	var createResp map[string]any
+	if err := s.manager.request(ctx, "agents.create", map[string]any{
+		"name":      agent.OpenClawAgentID,
+		"workspace": workspace,
+	}, &createResp); err != nil {
+		return err
+	}
+
+	return s.patchAgentIdentity(ctx, agent)
+}
+
+// resolveAgentWorkspace returns the workspace directory for an agent.
+// Each agent gets its own isolated workspace under the state dir, following
+// OpenClaw's convention: $STATE_DIR/workspace-{agentId}.
+func (s *AgentSyncer) resolveAgentWorkspace(agent agents.Agent) string {
+	return filepath.Join(s.stateDir(), "workspace-"+agent.OpenClawAgentID)
+}
+
+// resolveAgentDir returns the agent config directory, following
+// OpenClaw's convention: $STATE_DIR/agents/{agentId}/agent.
+func (s *AgentSyncer) resolveAgentDir(agent agents.Agent) string {
+	return filepath.Join(s.stateDir(), "agents", agent.OpenClawAgentID, "agent")
+}
+
+func (s *AgentSyncer) stateDir() string {
+	dir := s.agentsSvc.GetDefaultWorkDir()
+	if dir == "" {
+		return "."
+	}
+	return dir
+}
+
+func (s *AgentSyncer) updateAgent(ctx context.Context, agent agents.Agent) error {
+	return s.patchAgentIdentity(ctx, agent)
+}
+
+// patchAgentIdentity updates the name and identity.name for a non-main agent
+// via config.patch, since agents.update schema does not include identity.
+func (s *AgentSyncer) patchAgentIdentity(ctx context.Context, agent agents.Agent) error {
+	var cfg configGetResult
+	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
+		return fmt.Errorf("config.get for identity patch: %w", err)
+	}
+
+	existingList := extractAgentList(cfg.Config)
+	newList := make([]any, 0, len(existingList))
+	found := false
+	for _, item := range existingList {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			newList = append(newList, item)
+			continue
+		}
+		id, _ := obj["id"].(string)
+		if id == agent.OpenClawAgentID {
+			found = true
+			obj["name"] = agent.Name
+			obj["identity"] = map[string]any{"name": agent.Name}
+			newList = append(newList, obj)
+		} else {
+			newList = append(newList, item)
+		}
+	}
+	if !found {
+		return fmt.Errorf("agent %s not found in config after create", agent.OpenClawAgentID)
+	}
+
+	patchRaw, err := json.Marshal(map[string]any{
+		"agents": map[string]any{"list": newList},
+	})
+	if err != nil {
+		return fmt.Errorf("marshal identity patch: %w", err)
+	}
+
+	return s.manager.request(ctx, "config.patch", map[string]any{
+		"raw":      string(patchRaw),
+		"baseHash": cfg.Hash,
+	}, nil)
+}
+
+func (s *AgentSyncer) deleteAgent(ctx context.Context, agentID string) error {
+	return s.manager.request(ctx, "agents.delete", map[string]any{
+		"agentId":     agentID,
+		"deleteFiles": false,
+	}, nil)
+}
+
+// ensureMainAgentViaConfigPatch handles the "main" agent which cannot be
+// created/deleted via the agents.create/delete RPCs (they forbid "main").
+// Falls back to config.patch to insert it into agents.list.
+func (s *AgentSyncer) ensureMainAgentViaConfigPatch(ctx context.Context, agent agents.Agent) error {
 	var cfg configGetResult
 	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
 		return err
 	}
 
 	existingList := extractAgentList(cfg.Config)
-	desiredList := append(buildManagedAgents(agentsList), filterUnmanagedAgents(existingList)...)
-	if agentListsEqual(normalizeForCompare(existingList), normalizeForCompare(desiredList)) {
-		s.markSynced(gen)
-		return nil
+
+	mainEntry := map[string]any{
+		"id":        define.OpenClawMainAgentID,
+		"name":      agent.Name,
+		"default":   true,
+		"workspace": s.resolveAgentWorkspace(agent),
+		"agentDir":  s.resolveAgentDir(agent),
+		"identity": map[string]any{
+			"name": agent.Name,
+		},
+	}
+
+	// Prepend the main entry, keep everything else
+	newList := []any{mainEntry}
+	for _, item := range existingList {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			newList = append(newList, item)
+			continue
+		}
+		id, _ := obj["id"].(string)
+		if id == define.OpenClawMainAgentID {
+			continue
+		}
+		newList = append(newList, item)
 	}
 
 	patchRaw, err := json.Marshal(map[string]any{
 		"agents": map[string]any{
-			"list": desiredList,
+			"list": newList,
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("marshal agent config patch: %w", err)
+		return fmt.Errorf("marshal main agent config patch: %w", err)
 	}
 
-	s.recordWriteAttempt()
-	var patchResp map[string]any
-	if err := s.manager.request(ctx, "config.patch", map[string]any{
+	return s.manager.request(ctx, "config.patch", map[string]any{
 		"raw":      string(patchRaw),
 		"baseHash": cfg.Hash,
-	}, &patchResp); err != nil {
-		return err
-	}
+	}, nil)
+}
 
-	s.markSynced(gen)
-	return nil
+// needsUpdate compares the Gateway entry against the desired ChatClaw agent state.
+func needsUpdate(existing agentsListEntry, desired agents.Agent) bool {
+	existingName := existing.Name
+	if existing.Identity != nil && existing.Identity.Name != "" {
+		existingName = existing.Identity.Name
+	}
+	return existingName != desired.Name
 }
 
 func extractAgentList(cfg map[string]any) []any {
@@ -205,85 +424,11 @@ func extractAgentList(cfg map[string]any) []any {
 	return list
 }
 
-func buildManagedAgents(list []agents.Agent) []any {
-	out := make([]any, 0, len(list))
-	for _, agent := range list {
-		entry := map[string]any{
-			"id":   agent.OpenClawAgentID,
-			"name": agent.Name,
-			"identity": map[string]any{
-				"name": agent.Name,
-			},
-		}
-		if agent.OpenClawAgentID == define.OpenClawMainAgentID {
-			entry["default"] = true
-		}
-		out = append(out, entry)
-	}
-	return out
-}
-
-func filterUnmanagedAgents(existing []any) []any {
-	out := make([]any, 0, len(existing))
-	for _, item := range existing {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			out = append(out, item)
-			continue
-		}
-		id, _ := obj["id"].(string)
-		if isManagedAgentID(strings.TrimSpace(id)) {
-			continue
-		}
-		out = append(out, item)
-	}
-	return out
-}
-
 func isManagedAgentID(id string) bool {
+	if define.OpenClawManagedAgentIDPrefix == "" {
+		return true
+	}
 	return id == define.OpenClawMainAgentID || strings.HasPrefix(id, define.OpenClawManagedAgentIDPrefix)
-}
-
-// normalizeForCompare strips Gateway-added fields from managed agents so that
-// comparison only considers the fields ChatClaw actually writes (id, name,
-// identity, default). Unmanaged agents are kept as-is.
-func normalizeForCompare(list []any) []any {
-	out := make([]any, 0, len(list))
-	for _, item := range list {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			out = append(out, item)
-			continue
-		}
-		id, _ := obj["id"].(string)
-		if !isManagedAgentID(strings.TrimSpace(id)) {
-			out = append(out, item)
-			continue
-		}
-		normalized := map[string]any{"id": id, "name": obj["name"]}
-		if identity, ok := obj["identity"]; ok {
-			if idMap, ok := identity.(map[string]any); ok {
-				normalized["identity"] = map[string]any{"name": idMap["name"]}
-			}
-		}
-		if def, ok := obj["default"]; ok {
-			normalized["default"] = def
-		}
-		out = append(out, normalized)
-	}
-	return out
-}
-
-func agentListsEqual(a, b []any) bool {
-	left, err := json.Marshal(a)
-	if err != nil {
-		return false
-	}
-	right, err := json.Marshal(b)
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(left, right)
 }
 
 func (s *AgentSyncer) snapshot() (uint64, uint64, time.Time, bool) {
