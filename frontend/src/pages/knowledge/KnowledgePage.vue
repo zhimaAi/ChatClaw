@@ -1134,8 +1134,8 @@ const handleRemoveImage = (id: string) => {
                 cn(
                   'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'personal'
-                    ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground shadow-sm font-medium'
+                    : 'text-foreground'
                 )
               "
               @click="activeTab = 'personal'"
@@ -1148,8 +1148,8 @@ const handleRemoveImage = (id: string) => {
                 cn(
                   'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'team'
-                    ? 'bg-background text-foreground shadow-sm font-medium text-[#0A0A0A]'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground shadow-sm font-medium'
+                    : 'text-foreground'
                 )
               "
               @click="activeTab = 'team'"
@@ -1287,7 +1287,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 0
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 0"
               >
@@ -1299,7 +1299,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 2
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 2"
               >
@@ -1311,7 +1311,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 3
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 3"
               >
