@@ -32,6 +32,7 @@ require (
 	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/mark3labs/mcp-go v0.44.1
+	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
@@ -139,7 +140,6 @@ require (
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/lmittmann/tint v1.1.2 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
-	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/meguminnnnnnnnn/go-openai v0.1.1 // indirect

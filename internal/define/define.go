@@ -19,7 +19,7 @@ const AppDisplayName = "ChatClaw"
 // OpenClaw managed agent IDs.
 const (
 	OpenClawMainAgentID          = "main"
-	OpenClawManagedAgentIDPrefix = "chatclaw-agent-"
+	OpenClawManagedAgentIDPrefix = ""
 )
 
 // DefaultSQLiteFileName 默认 SQLite 数据库文件名
@@ -90,8 +90,10 @@ func DefaultAgentNameForLocale(locale string) string {
 	return "Default Assistant"
 }
 
-// NewOpenClawManagedAgentID generates a unique OpenClaw agent ID using NanoID.
+// NewOpenClawManagedAgentID generates a unique lowercase OpenClaw agent ID.
+// Uses only lowercase alphanumeric chars to match normalizeAgentId behavior.
 func NewOpenClawManagedAgentID() string {
-	id, _ := gonanoid.New(8)
+	const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	id, _ := gonanoid.Generate(alphabet, 8)
 	return OpenClawManagedAgentIDPrefix + id
 }
