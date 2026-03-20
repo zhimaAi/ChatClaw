@@ -715,6 +715,7 @@ export default {
       freeBadge: "Brezplačno",
       noModel: "Ni na voljo modelov",
       selectKnowledge: "Izberi bazo znanja",
+      knowledgeChipRemoveNotSupported: "V tem načinu odstranitev ni podprta",
       selectImages: "Izberi slike",
       selectImagesDisabled: "Izberite model, ki podpira vnos slik",
       selectImage: "Izberi sliko",
@@ -1151,6 +1152,7 @@ export default {
       deleteSuccess: "Uspešno izbrisano",
       move: {
         title: "Premakni mapo",
+        action: "Premakni",
         selectFolder: "Izberi ciljno mapo",
         moveToHere: "Premakni sem",
         success: "Uspešno premaknjeno",

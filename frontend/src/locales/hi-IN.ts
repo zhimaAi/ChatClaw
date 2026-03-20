@@ -732,6 +732,7 @@ export default {
       freeBadge: "मुफ्त",
       noModel: "कोई मॉडल उपलब्ध नहीं",
       selectKnowledge: "नॉलेज बेस चुनें",
+      knowledgeChipRemoveNotSupported: "इस मोड में हटाना समर्थित नहीं है",
       selectImages: "इमेज चुनें",
       selectImagesDisabled: "इमेज इनपुट सपोर्ट करने वाला मॉडल चुनें",
       selectImage: "इमेज चुनें",
@@ -1168,6 +1169,7 @@ export default {
       deleteSuccess: "हटाया गया",
       move: {
         title: "फोल्डर ले जाएं",
+        action: "ले जाएं",
         selectFolder: "लक्ष्य फोल्डर चुनें",
         moveToHere: "यहां ले जाएं",
         success: "सफलतापूर्वक ले जाया गया",

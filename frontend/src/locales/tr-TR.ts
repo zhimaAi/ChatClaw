@@ -713,6 +713,7 @@ export default {
       freeBadge: "Ücretsiz",
       noModel: "Mevcut model yok",
       selectKnowledge: "Bilgi tabanı seç",
+      knowledgeChipRemoveNotSupported: "Bu modda kaldırma desteklenmiyor",
       selectImages: "Resim seç",
       selectImagesDisabled: "Girişi destekleyen bir model seçin",
       selectImage: "Resim seç",
@@ -1149,6 +1150,7 @@ export default {
       deleteSuccess: "Silindi",
       move: {
         title: "Klasörü taşı",
+        action: "Taşı",
         selectFolder: "Hedef klasör seç",
         moveToHere: "Buraya taşı",
         success: "Başarıyla taşındı",

@@ -20,6 +20,7 @@ import {
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { platformIconMap } from '@/assets/icons/snap/platformIcons'
+import { getPlatformDocsUrl } from '@/pages/channels/platformDocs'
 
 const props = defineProps<{
   platform?: PlatformMeta | null
@@ -64,9 +65,33 @@ watch(open, (val) => {
 
 const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform)
 
-const isFeishu = computed(() => currentPlatformId.value === 'feishu')
-const isDingTalk = computed(() => currentPlatformId.value === 'dingtalk')
 const isWeCom = computed(() => currentPlatformId.value === 'wecom')
+
+const PLATFORM_TIP_ENTRIES: Record<
+  string,
+  { platformUrl: string }
+> = {
+  feishu: { platformUrl: 'https://open.feishu.cn/' },
+  dingtalk: { platformUrl: 'https://open.dingtalk.com/' },
+  qq: { platformUrl: 'https://q.qq.com/#/' },
+  wecom: { platformUrl: 'https://work.weixin.qq.com/' },
+}
+
+const platformTipConfig = computed(() => {
+  const pid = currentPlatformId.value
+  if (!pid) return null
+  const entry = PLATFORM_TIP_ENTRIES[pid]
+  if (!entry) return null
+  return {
+    platformUrl: entry.platformUrl,
+    docsUrl: getPlatformDocsUrl(pid),
+    prefix: t(`channels.config.${pid}TipPrefix`),
+    platformLink: t(`channels.config.${pid}PlatformLink`),
+    middle: t(`channels.config.${pid}TipMiddle`),
+    guideLink: t(`channels.config.${pid}GuideLink`),
+    suffix: t(`channels.config.${pid}TipSuffix`),
+  }
+})
 const appIdLabel = computed(() =>
   isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId')
 )
@@ -211,58 +236,31 @@ async function handleOpenExternalLink(url: string) {
       </DialogHeader>
 
       <form class="px-6 pb-4" @submit.prevent="handleSave">
-        <!-- Feishu tip card -->
-        <div v-if="isFeishu" class="mt-4 rounded-lg border border-border bg-card px-4 py-3">
-          <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-            {{ t('channels.config.feishuTipPrefix') }}
-            <a
-              href="https://open.feishu.cn/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline hover:text-primary"
-              @click.prevent="handleOpenExternalLink('https://open.feishu.cn/')"
-              >{{ t('channels.config.feishuPlatformLink') }}</a
-            >
-            {{ t('channels.config.feishuTipMiddle') }}
-            <a
-              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline hover:text-primary"
-              @click.prevent="
-                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-feishu')
-              "
-              >{{ t('channels.config.feishuGuideLink') }}</a
-            >
-            {{ t('channels.config.feishuTipSuffix') }}
-          </p>
-        </div>
-
-        <!-- DingTalk tip card -->
+        <!-- Platform tip card (Feishu / DingTalk / QQ / WeCom) -->
         <div
-          v-if="isDingTalk"
+          v-if="platformTipConfig"
           class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
         >
           <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-            {{ t('channels.config.dingtalkTipPrefix') }}
+            {{ platformTipConfig.prefix }}
             <a
-              href="https://open.dingtalk.com/"
+              :href="platformTipConfig.platformUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="underline hover:text-primary"
-              @click.prevent="handleOpenExternalLink('https://open.dingtalk.com/')"
-            >{{ t('channels.config.dingtalkPlatformLink') }}</a>
-            {{ t('channels.config.dingtalkTipMiddle') }}
+              class="text-[#EF4444] no-underline hover:opacity-90"
+              @click.prevent="handleOpenExternalLink(platformTipConfig.platformUrl)"
+              >{{ platformTipConfig.platformLink }}</a
+            >
+            {{ platformTipConfig.middle }}
             <a
-              href="https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk-robot"
+              :href="platformTipConfig.docsUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="underline hover:text-primary"
-              @click.prevent="
-                handleOpenExternalLink('https://docs.ichatclaw.com/docs/chatClaw-access-to-dingtalk-robot')
-              "
-            >{{ t('channels.config.dingtalkGuideLink') }}</a>
-            {{ t('channels.config.dingtalkTipSuffix') }}
+              class="text-[#EF4444] no-underline hover:opacity-90"
+              @click.prevent="handleOpenExternalLink(platformTipConfig.docsUrl)"
+              >{{ platformTipConfig.guideLink }}</a
+            >
+            {{ platformTipConfig.suffix }}
           </p>
         </div>
 
@@ -294,7 +292,7 @@ async function handleOpenExternalLink(url: string) {
             for="channel-name"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ t('channels.config.name') }}
           </Label>
           <Input
@@ -310,7 +308,7 @@ async function handleOpenExternalLink(url: string) {
             for="app-id"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ appIdLabel }}
           </Label>
           <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" maxlength="60" />
@@ -320,7 +318,7 @@ async function handleOpenExternalLink(url: string) {
             for="app-secret"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ appSecretLabel }}
           </Label>
           <Input

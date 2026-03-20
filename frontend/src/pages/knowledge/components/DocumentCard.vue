@@ -20,15 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
 import IconDocumentCover from '@/assets/icons/document-cover.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import { DocumentService } from '@bindings/chatclaw/internal/services/document'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -142,33 +135,7 @@ const statusConfig = computed(() => {
   }
 })
 
-const FileIcon = computed(() => {
-  const fileType = props.document.fileType?.toLowerCase()
-  switch (fileType) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-})
+const fileIconUrl = computed(() => getFileTypeIconUrl(props.document.fileType || ''))
 
 // 错误提示显示状态
 const showErrorTip = ref(false)
@@ -275,12 +242,12 @@ const handleCardClick = () => {
 
 <template>
   <div
-    class="group relative flex h-[182px] w-[166px] flex-col rounded-xl border border-border bg-card transition-shadow hover:shadow-md dark:hover:shadow-none dark:hover:ring-1 dark:hover:ring-white/10 cursor-pointer"
+    class="group relative flex h-[182px] w-[166px] cursor-pointer flex-col border border-border bg-card shadow-sm transition-[box-shadow] hover:shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5 dark:hover:ring-white/10"
     @click="handleCardClick"
   >
-    <!-- 缩略图区域 -->
+    <!-- Thumbnail area: 6px radius per design, muted bg #f2f4f7 -->
     <div
-      class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted"
+      class="relative mx-2 mt-2 h-[86px] w-[150px] overflow-hidden border border-border bg-[#f2f4f7] dark:bg-muted"
     >
       <img
         v-if="document.thumbIcon"
@@ -311,11 +278,11 @@ const handleCardClick = () => {
       {{ t('knowledge.content.fileMissing') }}
     </div>
 
-    <!-- 状态徽章 -->
+    <!-- Status badge -->
     <div
       v-if="statusConfig.show"
       ref="badgeRef"
-      class="absolute left-[11px] top-[11px]"
+      class="absolute left-3 top-3"
       @mouseenter="
         () => {
           cancelCloseErrorTip()
@@ -357,10 +324,10 @@ const handleCardClick = () => {
       </div>
     </Teleport>
 
-    <!-- 悬停菜单按钮 -->
+    <!-- Hover menu -->
     <DropdownMenu>
       <DropdownMenuTrigger
-        class="absolute right-[9px] top-[9px] flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+        class="absolute right-2 top-2 flex size-6 items-center justify-center bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
         @click.stop
       >
         <MoreHorizontal class="size-4" />
@@ -407,18 +374,18 @@ const handleCardClick = () => {
       </DropdownMenuContent>
     </DropdownMenu>
 
-    <!-- 标题 -->
+    <!-- Title: 14px / 22px line-height per design -->
     <p
-      class="mx-[7px] mt-[8px] line-clamp-2 h-[44px] text-left text-sm leading-[22px] text-foreground"
+      class="mx-2 mt-2 line-clamp-2 h-[44px] text-left text-sm font-medium leading-[22px] text-foreground"
       :title="document.name"
     >
       {{ document.name }}
     </p>
 
-    <!-- 底部信息 -->
-    <div class="mx-[7px] mt-auto flex items-center justify-between pb-[7px]">
+    <!-- Footer: file type + date -->
+    <div class="mx-2 mt-auto flex items-center justify-between pb-2">
       <div class="flex items-center gap-1">
-        <component :is="FileIcon" class="size-[14px]" />
+        <img :src="fileIconUrl" alt="" class="size-[14px] object-contain" />
         <span class="text-xs text-muted-foreground/70">{{ document.fileType }}</span>
       </div>
       <span class="text-xs text-muted-foreground/60">{{ formatDate(document.createdAt) }}</span>
