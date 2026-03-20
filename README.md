@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
 <img src="./frontend/src/assets/images/logo-floatingball.png" width="150" height="150">
 </p>
 
@@ -42,51 +42,87 @@ Get OpenClaw-like knowledge base personal AI agent in 5 mins. Sandbox-secured, w
 
 Ask your AI assistant any question, and it will intelligently search your knowledge base to generate a relevant answer.
 
-![](./images/1.png)
+![](./images/previews/en/image1.png)
 
 ### PPT Quick Generate
 
 Send a one-sentence command to the smart assistant to automatically create and generate a PowerPoint presentation.
 
-![](./images/2.png)
+![](./images/previews/en/image3.png)
 
 ### Skill Manager
 
-Use a command to have the robot help you find installed features on your computer or install new extension plugins.
+Use a command to have the assistant help you find installed features on your computer or install new extension plugins.
 
-![](./images/3.png)
+![](./images/previews/en/image5.png)
 
-### Knowledge | Document Vectorization Storage
+### MCP: Unlimited Capability Extensions
 
-Upload your documents (e.g., TXT, PDF, Word, Excel, CSV, HTML, Markdown). The system will automatically parse, split, and convert them into vector embeddings, storing them in your private knowledge base for precise retrieval and utilization by the AI model.
+Add external MCP servers to securely and efficiently connect to diverse data sources and tools, enabling your assistant to go beyond daily tasks into professional workflows.
 
-![](./images/4.png)
+![](./images/previews/en/image6.png)
+
+### Sandbox Mode: Double Protection
+
+Choose between sandbox-isolated execution (OS-level isolation, restricted command scope) and native execution (more flexible). Switch freely to balance safety and convenience.
+
+![](./images/previews/en/image8.png)
+
+### Memory: More Natural, Smarter Interactions
+
+Enable contextual conversations and personalized assistance. The assistant can continuously learn and evolve so it feels like a growing partner.
+
+![](./images/previews/en/image9.png)
+
+### Shared Team Knowledge Base
+
+Authorize one-click access to ChatWiki to sync robots and knowledge bases, share configurations, and control member permissions.
+
+![](./images/previews/en/image10.png)
+
+### Knowledge Base | Document Vectorization Storage
+
+Upload documents (TXT, PDF, Word, Excel, CSV, HTML, Markdown). The system automatically parses, splits, and converts them into vector embeddings for precise retrieval.
+
+![](./images/previews/en/image11.png)
+
+### Rich IM Channel Integrations
+
+Integrate IM providers (Feishu, WeCom, QQ, DingTalk, LINE, Discord, WhatsApp, X/Twitter, Telegram, etc.) via SDKs to quickly enable channel creation, user management, and messaging.
+
+![](./images/previews/en/image12.png)
+
+### Scheduled Tasks
+
+Let your assistant automatically execute actions at preset times or intervals: reminders, recurring work, and system-level maintenance.
+
+![](./images/previews/en/image13.png)
 
 ### Text Selection for Instant Q&A
 
-Select any text on your screen, and it will be automatically copied and filled into a floating quick-ask box. With one click, send it to the AI assistant for an immediate answer.
+Select any text on your screen. It is automatically copied into a floating quick-ask box. One click to ask, instant answers.
 
-![](./images/5.png)
+![](./images/previews/en/image14.png)
 
-![](./images/6.png)
+![](./images/previews/en/image15.png)
 
-### Smart Snap Window
+### Smart Sidebar
 
-An intelligent assistant that can snap alongside other application windows. Quickly switch between differently configured AI assistants within it to ask questions. The bot generates answers based on your connected knowledge base and supports one-click sending of responses directly into your conversation.
+Snap the assistant alongside other windows, quickly switch between differently configured assistants, and one-click send generated replies into your conversations.
 
-![](./images/7.png)
+![](./images/previews/en/image16.png)
 
 ### One Question, Multiple Answers: Compare with Ease
 
-No need to repeat your query. Consult multiple "AI experts" simultaneously and view their responses side-by-side in a single interface. This allows for easy comparison and helps you arrive at the best conclusion.
+Consult multiple "AI experts" simultaneously and view their responses side-by-side for easy comparison.
 
-![](./images/8.png)
+![](./images/previews/en/image17.png)
 
 ### One-Click Launcher Ball
 
-Click the floating ball on your desktop to instantly wake up or open the main ChatClaw application window.
+Click the floating ball on your desktop to instantly wake up or open the main ChatClaw window.
 
-![](./images/9.png)
+![](./images/previews/en/image18.png)
 
 ## Server Mode Deployment
 
@@ -266,21 +302,26 @@ ChatClaw_D2/
 To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
 
 
-### 2026/03/13
-1. **Internationalization Overhaul & i18n Skill**: Added `i18n-check` skill, AI-powered translation scripts, and formatting/comparison utilities to auto-fill missing keys across frontend and backend locales, with improved key detection for CJK and multi-script strings.<br/>
-2. **Locale Management Improvements**: Changed default UI language to English, added system locale detection, reworked language options and labels in settings, and cleaned up legacy languages while fixing escape and spacing issues in multiple translations.<br/>
-3. **Assistant MCP & Server UX**: Refined MCP server management in `WorkspaceDrawer`, improved server selection and removal logic, and optimized how MCP servers are attached to agents and governed by global settings, along with list performance and debouncing fixes.<br/>
-4. **Brand & Version Update**: Refreshed application icons and images with a new logo set and bumped application version to `0.5.0`, aligning related configuration and dependency versions.<br/>
+### 2026/03/18
+1. **README Refresh (Multi-language)**: Updated README files across multiple languages with new previews, clearer capability descriptions, and consistent image paths/structure.<br/>
+2. **Channel Integrations & Messaging**: Improved messaging flows and guardrails for multiple channels (e.g., QQ config dedup & image sending, WeCom/Feishu streaming output, DingTalk checks and related config updates).<br/>
+3. **Docs/Tooling**: Added `readme-from-docx` skill documentation for syncing README content from Word documents, including image extraction and localization guidelines.<br/>
 
-### 2026/03/12
-1. **Assistant MCP Integration**: Added Assistant MCP functionality with UI and backend support, including server control based on a global MCP setting and updated indicators to reflect MCP availability in the workspace.<br/>
-2. **Rich Message Editing with Images**: Enhanced chat message editing to support attaching images and saving image payloads into the work directory, reusing the multimodal image upload pipeline for edited messages.<br/>
-3. **Team Library Recall Chat**: Introduced team library recall chat support, enabling conversations that can recall and use team libraries within shared team sessions.<br/>
-4. **MCP Command UX on Windows**: Implemented console window hiding for MCP command execution on Windows and registered the Windows URL scheme to improve deep-link and protocol handling.<br/>
-5. **Model & Auth Tweaks**: Updated model detection to support additional Qwen types, refined ChatWiki bind/logout flows, and adjusted tool status reporting for MCP-related tools.<br/>
+### 2026/03/17
+1. **Chat File Upload (End-to-End)**: Delivered file attachment support across chat UI and backend services, including type/size validation, message state integration, and consistent handling alongside image attachments.<br/>
+2. **Chat Input UX Upgrade**: Enhanced `ChatInputArea` with a new conversation entry, dropdown integrations, a compact mode selector with icon toggles, and a bottom toolbar for better ergonomics.<br/>
+3. **In-App Selection Context Menu**: Added an in-app text selection popup with actions and an option to disable selection search, with `TextSelectionService` and settings synchronization.<br/>
+4. **MCP Defaults & Reliability**: Enabled MCP by default via SQLite migration and hardened MCP settings flows (tool add/remove state handling, validation, cleanup) to reduce edge-case failures.<br/>
+5. **Model Config Validation**: Strengthened Azure chat/embedding configuration validation (endpoint/version requirements) and refined thinking feature initialization logic for safer defaults.<br/>
+6. **Project Hygiene**: Added `think_docs/` convention + `.gitignore` entry, removed legacy Klingon locale artifacts, and applied small refactors for readability/maintainability (e.g., button handlers).<br/>
 
-### 2026/03/11
-1. **MCP Toolchain for Agents**: Enabled MCP tools to be directly exposed to the lead agent via `mcp__`-prefixed tools, and added per-agent MCP server enable/disable controls with quick navigation from the workspace drawer to MCP settings.<br/>
-2. **Task & Cron Management**: Extended scheduled task features with execution history, improved failure statistics and success criteria, and new tools for querying runs, alongside a new task-creation dialog workflow.<br/>
-3. **Toolchain Installation UX**: Added test installation features and download progress tracking for the toolchain, increased download/read timeouts for long-running installs, and improved GitHub proxy and mirror handling for version fetching.<br/>
-4. **ChatWiki & Token Handling**: Improved ChatWiki token management with better reload behavior and local caching, and refined related editing tools and prompts with updated Chinese/English copy.<br/>
+### 2026/03/16
+1. **New Style / Knowledge UI Refactor**: Major refactor of `KnowledgePage` folder/library behaviors with debounced expansion, improved folder-tree synchronization, and upgraded team knowledge UI via `TeamFolderCard`/`TeamFileCard` components.<br/>
+2. **Assistant MCP Feature Expansion**: Added an Assistant MCP detail view (edit + tool management) and improved service networking behavior (host binding checks, `127.0.0.1` usage, CORS/OPTIONS handling).<br/>
+3. **i18n Loading Improvements**: Refactored i18n initialization to support async locale message loading and made message typing more flexible for dynamic locale structures.<br/>
+4. **Performance & Build Optimizations**: Improved Vite bundling via manual chunking and async component loading in `App.vue`; added reusable `copyToClipboard` utility; tuned server-mode performance and tokenizer dictionary loading for Chinese segmentation.<br/>
+5. **Build/Dev Workflow Updates**: Updated `development.md` and Dockerfiles for clearer, more reliable build steps (bindings generation, frontend deps), plus backend app init/systray refinements for stability.<br/>
+
+
+
+

@@ -48,9 +48,14 @@ function getPlatformIcon(platformId: string): string | null {
   return platformIconMap[platformId] || null
 }
 
-/** Platforms that support adding a channel in UI (feishu + wecom + qq). */
+/** Platforms that support adding a channel in UI (feishu + wecom + dingtalk + qq). */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'qq'
+  return (
+    platformId === 'feishu' ||
+    platformId === 'wecom' ||
+    platformId === 'dingtalk' ||
+    platformId === 'qq'
+  )
 }
 
 function getPlatformDisplayName(platformId: string, fallbackName?: string): string {

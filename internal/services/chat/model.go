@@ -61,7 +61,7 @@ type Message struct {
 	ToolCallID      string    `json:"tool_call_id,omitempty"`
 	ToolCallName    string    `json:"tool_call_name,omitempty"`
 	ThinkingContent string    `json:"thinking_content,omitempty"`
-	Segments        string    `json:"segments,omitempty"` // JSON array for interleaved content/tool-call order
+	Segments        string    `json:"segments,omitempty"`    // JSON array for interleaved content/tool-call order
 	ImagesJSON      string    `json:"images_json,omitempty"` // raw JSON string of []ImagePayload
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -233,14 +233,22 @@ type ChatRetrievalEvent struct {
 	Items []RetrievalItem `json:"items"`
 }
 
+// ChatUserMessageEvent event sent when a user message is inserted (for external callers like MCP).
+type ChatUserMessageEvent struct {
+	ChatEvent
+	Content    string `json:"content"`
+	ImagesJSON string `json:"images_json,omitempty"`
+}
+
 // Event names
 const (
-	EventChatStart     = "chat:start"
-	EventChatChunk     = "chat:chunk"
-	EventChatThinking  = "chat:thinking"
-	EventChatTool      = "chat:tool"
-	EventChatRetrieval = "chat:retrieval"
-	EventChatComplete  = "chat:complete"
-	EventChatStopped   = "chat:stopped"
-	EventChatError     = "chat:error"
+	EventChatStart       = "chat:start"
+	EventChatChunk       = "chat:chunk"
+	EventChatThinking    = "chat:thinking"
+	EventChatTool        = "chat:tool"
+	EventChatRetrieval   = "chat:retrieval"
+	EventChatComplete    = "chat:complete"
+	EventChatStopped     = "chat:stopped"
+	EventChatError       = "chat:error"
+	EventChatUserMessage = "chat:user-message"
 )
