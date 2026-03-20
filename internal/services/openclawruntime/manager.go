@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"chatclaw/internal/services/settings"
@@ -29,6 +30,8 @@ type Manager struct {
 	status       RuntimeStatus
 	gatewayState GatewayConnectionState
 	client       *GatewayClient
+	readyAt      time.Time
+	readyHooks   []func()
 	process      *exec.Cmd
 	processPID   int
 	processDone  chan error
@@ -36,6 +39,7 @@ type Manager struct {
 
 	expectedStopPID int
 	shuttingDown    bool
+	reconnecting    atomic.Bool
 }
 
 func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
@@ -169,12 +173,17 @@ func (m *Manager) reconcile(restart bool) error {
 		}
 	}
 
+	m.mu.Lock()
+	m.readyAt = time.Now()
+	m.mu.Unlock()
+
 	m.broadcastStatus(RuntimeStatus{
 		Phase: PhaseConnected, Message: "OpenClaw Gateway connected",
 		InstalledVersion: version, GatewayPID: pid,
 		GatewayURL: gatewayURL(cfg.GatewayPort),
 	})
 	m.broadcastGatewayState(GatewayConnectionState{Connected: true, Authenticated: true})
+	m.notifyReadyHooks()
 	return nil
 }
 
@@ -278,6 +287,7 @@ func (m *Manager) handleProcessExit(pid int, exitErr error) {
 		m.processDone = nil
 		m.processLog = nil
 		m.client = nil
+		m.readyAt = time.Time{}
 	}
 	shuttingDown := m.shuttingDown
 	m.mu.Unlock()
@@ -286,12 +296,20 @@ func (m *Manager) handleProcessExit(pid int, exitErr error) {
 		return
 	}
 
+	if !m.reconnecting.CompareAndSwap(false, true) {
+		m.app.Logger.Info("openclaw: skipping process-exit reconnect, already in progress", "pid", pid)
+		return
+	}
+
 	m.broadcastStatus(RuntimeStatus{
 		Phase: PhaseRestarting, Message: "OpenClaw Gateway exited, restarting",
 		GatewayURL: gatewayURL(m.store.Get().GatewayPort),
 	})
-	time.Sleep(1500 * time.Millisecond)
-	_ = m.reconcile(false)
+	go func() {
+		defer m.reconnecting.Store(false)
+		time.Sleep(1500 * time.Millisecond)
+		_ = m.reconcile(false)
+	}()
 }
 
 // --- WebSocket client management ---
@@ -360,6 +378,7 @@ func (m *Manager) closeClient() {
 	m.mu.Lock()
 	client := m.client
 	m.client = nil
+	m.readyAt = time.Time{}
 	m.mu.Unlock()
 	if client != nil {
 		_ = client.Close()
@@ -374,10 +393,18 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 		return
 	}
 	m.client = nil
+	m.readyAt = time.Time{}
 	m.mu.Unlock()
 
 	m.broadcastGatewayState(GatewayConnectionState{Reconnecting: true, LastError: errStr(err)})
+
+	if !m.reconnecting.CompareAndSwap(false, true) {
+		m.app.Logger.Info("openclaw: skipping disconnect reconnect, already in progress")
+		return
+	}
+
 	go func() {
+		defer m.reconnecting.Store(false)
 		time.Sleep(500 * time.Millisecond)
 		_ = m.reconcile(false)
 	}()
@@ -407,6 +434,46 @@ func (m *Manager) isShuttingDown() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.shuttingDown
+}
+
+func (m *Manager) isReady() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.client != nil && !m.readyAt.IsZero()
+}
+
+func (m *Manager) readySince() time.Time {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.readyAt
+}
+
+func (m *Manager) request(ctx context.Context, method string, params any, out any) error {
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil {
+		return errors.New("gateway websocket is not connected")
+	}
+	return client.Request(ctx, method, params, out)
+}
+
+func (m *Manager) registerReadyHook(fn func()) {
+	if fn == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.readyHooks = append(m.readyHooks, fn)
+}
+
+func (m *Manager) notifyReadyHooks() {
+	m.mu.RLock()
+	hooks := append([]func(){}, m.readyHooks...)
+	m.mu.RUnlock()
+	for _, fn := range hooks {
+		go fn()
+	}
 }
 
 // --- Helpers ---
