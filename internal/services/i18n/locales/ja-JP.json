@@ -40,8 +40,6 @@
   "error.model_delete_failed": "モデルの削除に失敗しました",
   "error.cannot_delete_builtin_model": "組み込みモデルは削除できません",
   "error.cannot_delete_global_embedding_model": "削除できません：このモデルはグローバル埋め込みモデルとして設定されています",
-  "error.cannot_delete_memory_embedding_model": "削除できません：このモデルは記憶埋め込みモデルとして設定されています",
-  "error.cannot_delete_memory_extract_model": "削除できません：このモデルは記憶抽出モデルとして設定されています",
   "error.cannot_delete_semantic_segment_model_in_use": "削除できません：このモデルはライブラリ'{{.LibraryName}}'によってセマンティックセグメンテーションモデルとして使用されています",
   "error.cannot_delete_rerank_model_in_use": "削除できません：このモデルはライブラリ'{{.LibraryName}}'によって使用されています",
   "error.no_llm_model": "プロバイダー'{{.ProviderID}}'には利用可能なLLMモデルがありません",
