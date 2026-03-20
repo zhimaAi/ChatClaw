@@ -1204,7 +1204,7 @@ const handleRemoveImage = (id: string) => {
       <!-- Sidebar collapse/expand handle (AI assistant style) -->
       <button
         type="button"
-        class="group/handle absolute -right-3 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
+        class="group/handle absolute -right-8 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
         :aria-label="
           sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse')
         "
@@ -1397,7 +1397,7 @@ const handleRemoveImage = (id: string) => {
                 <!-- Team groups (sidebar): shown when expanded -->
                 <div
                   v-if="expandedTeamLibraries.has(lib.id)"
-                  class="flex w-full flex-col overflow-hidden px-1.5 pb-1.5"
+                  class="flex w-full flex-col overflow-hidden px-1.5 pt-1 pb-1.5"
                 >
                   <!-- All groups -->
                   <div
@@ -1462,7 +1462,7 @@ const handleRemoveImage = (id: string) => {
                 role="button"
                 :class="
                   cn(
-                    'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
+                    'group flex h-11 flex-1 cursor-pointer items-center gap-2 px-2 text-left font-normal transition-colors',
                     selectedLibraryId === lib.id
                       ? 'bg-accent/60 text-accent-foreground'
                       : 'text-foreground hover:bg-accent/40'
@@ -1513,11 +1513,11 @@ const handleRemoveImage = (id: string) => {
             <!-- Folder tree -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="flex w-full flex-col overflow-hidden px-1.5 pb-1.5"
+              class="flex w-full flex-col overflow-hidden px-1.5 pt-1 pb-1.5"
             >
-              <!-- Uncategorized option: full-width clickable row -->
+              <!-- Uncategorized: same style as first-level folder -->
               <div
-                class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                 :class="
                   selectedFolderId === -1 && selectedLibraryId === lib.id
                     ? 'bg-accent text-accent-foreground'
@@ -1525,7 +1525,12 @@ const handleRemoveImage = (id: string) => {
                 "
                 @click.stop="handleFolderClick(-1, lib.id)"
               >
-                <FileStack class="size-4 shrink-0 text-muted-foreground" />
+                <span class="flex size-4 shrink-0" aria-hidden />
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                >
+                  <FolderIcon class="size-4 shrink-0" />
+                </span>
                 <span
                   class="min-w-0 flex-1 truncate text-xs"
                   :title="t('knowledge.folder.uncategorized')"

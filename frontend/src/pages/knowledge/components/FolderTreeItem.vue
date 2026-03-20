@@ -49,7 +49,7 @@ const handleFolderClick = (folderId: number, event?: Event) => {
   <div class="flex w-full flex-col">
     <!-- Current folder row: full-width clickable -->
     <div
-      class="group flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+      class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
       :style="{ paddingLeft: `${(props.level || 0) * 20}px` }"
       :class="
         isSelected
