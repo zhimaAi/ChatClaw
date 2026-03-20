@@ -891,6 +891,7 @@ export default {
       delete: {
         title: "删除助手",
         hint: "删除助手后，将清理所有的对话记录，操作不可逆",
+        protected: "默认助手是系统保留助手，不能删除。",
         action: "删除",
         confirmTitle: "确认删除",
         confirmDesc: "确定要删除助手「{name}」吗？此操作无法撤销。",

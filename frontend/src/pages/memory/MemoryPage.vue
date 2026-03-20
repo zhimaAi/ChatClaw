@@ -34,7 +34,7 @@ const selectedAgent = computed(() =>
 const workspaceId = computed(() => {
   const agent = selectedAgent.value
   if (!agent) return ''
-  return (agent as any).openclaw_agent_id ?? ''
+  return agent.openclaw_agent_id ?? ''
 })
 
 async function loadAgents() {
