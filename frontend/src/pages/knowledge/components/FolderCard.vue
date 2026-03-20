@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { MoreHorizontal } from 'lucide-vue-next'
-import { Folder } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import folderIcon from '@/assets/images/folder-icon.png'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,23 +38,28 @@ const handleCardClick = () => {
 
 <template>
   <div
-    class="group relative flex h-[182px] w-[166px] cursor-pointer flex-col border border-border bg-card shadow-sm transition-[box-shadow] hover:shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5 dark:hover:ring-white/10"
+    class="group relative flex h-[182px] w-[166px] cursor-pointer flex-col rounded-xl border border-[#f0f0f0] bg-white shadow-sm transition-[box-shadow,border-color,background-color] duration-200 hover:border-black/[0.08] hover:bg-[#f5f5f5] hover:shadow-[0_2px_12px_rgba(0,0,0,0.07)] dark:border-white/15 dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/5 dark:hover:border-white/25 dark:hover:bg-muted dark:hover:shadow-none dark:hover:ring-white/12"
     @click="handleCardClick"
   >
     <!-- Folder icon area: 6px radius, muted bg per design -->
     <div
-      class="relative mx-2 mt-2 flex h-[86px] w-[150px] items-center justify-center overflow-hidden border border-border bg-[#f2f4f7] dark:bg-muted"
+      class="relative mx-[7px] mt-[7px] flex h-[86px] w-[150px] items-center justify-center overflow-hidden rounded-md dark:border-border dark:bg-muted"
     >
-      <Folder class="size-12 text-muted-foreground/60" />
+      <img
+        :src="folderIcon"
+        alt=""
+        class="h-auto w-[120px] max-w-full object-contain select-none"
+        draggable="false"
+      />
     </div>
 
     <!-- Hover menu -->
     <DropdownMenu>
       <DropdownMenuTrigger
-        class="absolute right-2 top-2 flex size-6 items-center justify-center bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+        class="absolute right-[9px] top-[9px] z-10 flex size-6 items-center justify-center rounded-md bg-black/45 p-1 text-white opacity-0 shadow-none transition-[opacity,background-color] hover:bg-black/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-white group-hover:opacity-100 dark:bg-white/20 dark:text-white dark:hover:bg-white/30 dark:focus-visible:ring-offset-card"
         @click.stop
       >
-        <MoreHorizontal class="size-4" />
+        <MoreHorizontal class="size-4 shrink-0" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" class="w-auto min-w-max">
         <DropdownMenuItem class="gap-2 whitespace-nowrap" @select="emit('rename', folder)">
@@ -77,7 +82,7 @@ const handleCardClick = () => {
 
     <!-- Title: 14px / 22px line-height per design -->
     <p
-      class="mx-2 mt-2 line-clamp-2 h-[44px] text-left text-sm font-medium leading-[22px] text-foreground"
+      class="mx-2 mt-2 line-clamp-2 h-[44px] text-center text-sm font-medium leading-[22px] text-foreground"
       :title="folder.name"
     >
       {{ folder.name }}

@@ -79,6 +79,7 @@ const PLATFORM_TIP_ENTRIES: Record<
 
 const platformTipConfig = computed(() => {
   const pid = currentPlatformId.value
+  if (!pid) return null
   const entry = PLATFORM_TIP_ENTRIES[pid]
   if (!entry) return null
   return {
