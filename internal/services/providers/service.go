@@ -827,6 +827,9 @@ func (s *ProvidersService) UpdateProvider(providerID string, input UpdateProvide
 		return nil, errs.Newf("error.provider_not_found", map[string]any{"ProviderID": providerID})
 	}
 
+	// Notify OpenClaw Gateway of provider config change
+	s.app.Event.Emit("providers:config-changed", nil)
+
 	return s.GetProvider(providerID)
 }
 
@@ -1202,6 +1205,9 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 		return nil, errs.Wrap("error.model_create_failed", err)
 	}
 
+	// Notify OpenClaw Gateway of model config change
+	s.app.Event.Emit("providers:config-changed", nil)
+
 	dto := m.toDTO()
 	return &dto, nil
 }
@@ -1269,6 +1275,9 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	if rowsAffected == 0 {
 		return nil, errs.Newf("error.model_not_found", map[string]any{"ModelID": modelID})
 	}
+
+	// Notify OpenClaw Gateway of model config change
+	s.app.Event.Emit("providers:config-changed", nil)
 
 	return s.GetModel(providerID, modelID)
 }
@@ -1451,6 +1460,9 @@ func (s *ProvidersService) DeleteModel(providerID string, modelID string) error 
 	if err != nil {
 		return errs.Wrap("error.model_delete_failed", err)
 	}
+
+	// Notify OpenClaw Gateway of model config change
+	s.app.Event.Emit("providers:config-changed", nil)
 
 	return nil
 }
