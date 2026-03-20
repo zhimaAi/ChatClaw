@@ -292,7 +292,7 @@ async function handleOpenExternalLink(url: string) {
             for="channel-name"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ t('channels.config.name') }}
           </Label>
           <Input
@@ -308,7 +308,7 @@ async function handleOpenExternalLink(url: string) {
             for="app-id"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ appIdLabel }}
           </Label>
           <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" maxlength="60" />
@@ -318,7 +318,7 @@ async function handleOpenExternalLink(url: string) {
             for="app-secret"
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
-            <span class="text-[#0a0a0a] dark:text-foreground">*</span>
+            <span class="text-destructive" aria-hidden="true">*</span>
             {{ appSecretLabel }}
           </Label>
           <Input
