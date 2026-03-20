@@ -23,6 +23,7 @@ import SkillsSettings from './components/SkillsSettings.vue'
 import MCPSettings from './components/MCPSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
+import OpenClawRuntimeSettings from './components/OpenClawRuntimeSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
 import { useSettingsStore, type SettingsMenuItem } from '@/stores'
 
@@ -33,6 +34,7 @@ const settingsStore = useSettingsStore()
 const menuLabelKeys: Record<SettingsMenuItem, string> = {
   modelService: 'settings.menu.modelService',
   generalSettings: 'settings.menu.generalSettings',
+  openclawRuntime: 'settings.menu.openclawRuntime',
   memorySettings: 'settings.menu.memorySettings',
   skills: 'settings.menu.skills',
   mcp: 'settings.menu.mcp',
@@ -46,6 +48,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
 const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: ModelServiceSettings,
   generalSettings: GeneralSettings,
+  openclawRuntime: OpenClawRuntimeSettings,
   memorySettings: MemorySettings,
   skills: SkillsSettings,
   mcp: MCPSettings,

@@ -38,6 +38,7 @@ const (
 	CategoryWorkspace Category = "workspace" // 工作区设置
 	CategorySkills    Category = "skills"    // 技能设置
 	CategoryMCP       Category = "mcp"       // MCP 设置
+	CategoryOpenClaw  Category = "openclaw"  // OpenClaw 设置
 )
 
 type Setting struct {
@@ -185,6 +186,9 @@ func inferCategoryFromKey(key string) Category {
 	}
 	if strings.HasPrefix(key, "mcp_") {
 		return CategoryMCP
+	}
+	if strings.HasPrefix(key, "openclaw_") {
+		return CategoryOpenClaw
 	}
 	return CategoryGeneral
 }

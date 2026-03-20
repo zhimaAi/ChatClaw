@@ -38,6 +38,7 @@ import (
 	"chatclaw/internal/services/settings"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/services/textselection"
+	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/toolchain"
 	"chatclaw/internal/services/tray"
 	"chatclaw/internal/services/updater"
@@ -369,6 +370,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
+	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
+	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
 
@@ -539,6 +543,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		floatingBallService.InitFromSettings()
 		// Ensure external toolchain binaries (uv, bun) are installed/updated in background.
 		go toolchainService.EnsureAll()
+		// Start OpenClaw Gateway in background.
+		openclawManager.Start()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
 		// Start all enabled channel gateway connections in background.
@@ -601,6 +607,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()

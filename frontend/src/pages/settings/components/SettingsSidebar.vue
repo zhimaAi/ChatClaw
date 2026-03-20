@@ -31,6 +31,7 @@ interface MenuItem {
 const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
+  { id: 'openclawRuntime', labelKey: 'settings.menu.openclawRuntime', icon: ToolsIcon },
   { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: BindChatclawIcon },
   { id: 'memorySettings', labelKey: 'settings.menu.memorySettings', icon: MemorySettingsIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
