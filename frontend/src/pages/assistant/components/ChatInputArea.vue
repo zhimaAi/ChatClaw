@@ -574,15 +574,20 @@ onUnmounted(() => {
         'flex px-6',
         currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating
           ? 'flex-1 items-center justify-center'
-          : 'pb-4'
+          : currentMode === 'knowledge'
+            ? 'pb-2'
+            : 'pb-4'
       )
     "
   >
     <div
       :class="
         cn(
-          'flex w-full flex-col items-center gap-10',
-          chatMessages.length === 0 && !isGenerating && '-translate-y-10'
+          'flex w-full flex-col items-center',
+          currentMode === 'assistant' &&
+            chatMessages.length === 0 &&
+            !isGenerating &&
+            'gap-10 -translate-y-10'
         )
       "
     >

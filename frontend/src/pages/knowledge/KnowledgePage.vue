@@ -1540,7 +1540,7 @@ const handleRemoveImage = (id: string) => {
     </aside>
 
     <!-- 右侧：内容区 -->
-    <main class="flex flex-1 flex-col overflow-hidden bg-background">
+    <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <!-- 团队知识库 -->
       <div
         v-if="activeTab === 'team' && !teamBindingChecked"
@@ -1938,7 +1938,7 @@ const handleRemoveImage = (id: string) => {
       />
 
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->
-      <div v-if="showChatInputArea" class="bg-background pt-3">
+      <div v-if="showChatInputArea" class="mt-auto shrink-0 bg-background pt-1 pb-1">
         <ChatInputArea
           v-model:chat-input="chatInput"
           v-model:chat-mode="chatMode"
