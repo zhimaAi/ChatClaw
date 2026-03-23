@@ -468,9 +468,6 @@ useEventListener(window, 'keydown', (event) => {
                 <p class="truncate font-medium">
                   {{ expirationDisplayValue || '选择到期日期' }}
                 </p>
-                <p class="truncate text-xs text-[#94a3b8]">
-                  {{ expirationDisplayValue ? '任务将在当日 23:59 后自动过期' : '未设置则长期有效' }}
-                </p>
               </div>
             </div>
             <ChevronDown
@@ -485,14 +482,6 @@ useEventListener(window, 'keydown', (event) => {
           >
             <div class="border-b border-[#e5eef8] px-4 pb-4 pt-4">
               <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p class="text-[13px] font-medium uppercase tracking-[0.18em] text-[#94a3b8]">
-                    到期时间
-                  </p>
-                  <h4 class="mt-1 text-base font-semibold text-[#0f172a]">
-                    {{ expirationCalendarTitle }}
-                  </h4>
-                </div>
                 <div class="flex items-center gap-2">
                   <button
                     type="button"
@@ -509,12 +498,6 @@ useEventListener(window, 'keydown', (event) => {
                     <ChevronRight class="size-4" />
                   </button>
                 </div>
-              </div>
-              <div
-                v-if="expirationDisplayValue"
-                class="mt-3 inline-flex rounded-full border border-[#dbe3ec] bg-white px-3 py-1 text-xs font-medium text-[#475569]"
-              >
-                已选：{{ expirationDisplayValue }}
               </div>
             </div>
 
@@ -577,9 +560,6 @@ useEventListener(window, 'keydown', (event) => {
             </div>
           </div>
         </div>
-        <p v-if="formExpired" class="text-xs font-medium text-[#dc2626]">
-          {{ t('scheduledTasks.form.expiredHint') }}
-        </p>
       </div>
 
       <div class="space-y-2">
