@@ -74,11 +74,10 @@ func (s *OpenClawAgentsService) notifyChange() {
 	}
 }
 
-func newOpenClawAgentModel(name, openclawAgentID, prompt, icon string) *openClawAgentModel {
+func newOpenClawAgentModel(name, openclawAgentID, icon string) *openClawAgentModel {
 	return &openClawAgentModel{
 		Name:            strings.TrimSpace(name),
 		OpenClawAgentID: strings.TrimSpace(openclawAgentID),
-		Prompt:          strings.TrimSpace(prompt),
 		Icon:            strings.TrimSpace(icon),
 
 		DefaultLLMProviderID:    "",
@@ -114,7 +113,6 @@ func (s *OpenClawAgentsService) EnsureMainAgent() error {
 	agent := newOpenClawAgentModel(
 		define.DefaultAgentNameForLocale(i18n.GetLocale()),
 		define.OpenClawMainAgentID,
-		define.DefaultAgentPromptForLocale(i18n.GetLocale()),
 		"",
 	)
 
@@ -219,11 +217,6 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 		return nil, errs.New("error.agent_name_too_long")
 	}
 
-	prompt := strings.TrimSpace(input.Prompt)
-	if len([]rune(prompt)) > 1000 {
-		return nil, errs.New("error.agent_prompt_too_long")
-	}
-
 	icon := strings.TrimSpace(input.Icon)
 	if icon != "" && len(icon) > 250_000 {
 		return nil, errs.New("error.agent_icon_too_large")
@@ -234,7 +227,7 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 		return nil, err
 	}
 
-	m := newOpenClawAgentModel(name, define.NewOpenClawManagedAgentID(), prompt, icon)
+	m := newOpenClawAgentModel(name, define.NewOpenClawManagedAgentID(), icon)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -249,7 +242,7 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 }
 
 func (s *OpenClawAgentsService) GetDefaultPrompt() string {
-	return define.DefaultAgentPromptForLocale(i18n.GetLocale())
+	return ""
 }
 
 func (s *OpenClawAgentsService) ReadIconFile(path string) (string, error) {
@@ -339,14 +332,6 @@ func (s *OpenClawAgentsService) UpdateAgent(id int64, input UpdateOpenClawAgentI
 			return nil, errs.New("error.agent_name_too_long")
 		}
 		q = q.Set("name = ?", name)
-	}
-
-	if input.Prompt != nil {
-		prompt := strings.TrimSpace(*input.Prompt)
-		if len([]rune(prompt)) > 1000 {
-			return nil, errs.New("error.agent_prompt_too_long")
-		}
-		q = q.Set("prompt = ?", prompt)
 	}
 
 	if input.Icon != nil {

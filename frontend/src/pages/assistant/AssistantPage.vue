@@ -49,7 +49,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAgents } from './composables/useAgents'
-import { provideAgentService, type AgentServiceApi } from './composables/agentServiceProvider'
 import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
@@ -67,17 +66,13 @@ const props = withDefaults(
     mode?: 'main' | 'snap' | 'embedded'
     initialConversationId?: number | null
     initialAgentId?: number | null
-    agentService?: AgentServiceApi
   }>(),
   {
     mode: 'main',
     initialConversationId: null,
     initialAgentId: null,
-    agentService: undefined,
   }
 )
-
-provideAgentService(props.agentService)
 
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')
@@ -95,7 +90,6 @@ const navigationStore = useNavigationStore()
 const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
 
-// Use composables
 const { agents, activeAgentId, loading, loadAgents, createAgent, updateAgent, deleteAgent } =
   useAgents()
 
@@ -615,7 +609,7 @@ const handleSelectConversation = async (conversation: Conversation) => {
   await nextTick()
   isRestoringConversation = false
 
-  // Set chat mode from conversation
+  // Set chat mode from conversation (skip if forced to task mode)
   chatMode.value = conversation.chat_mode || 'task'
 }
 
@@ -1483,7 +1477,6 @@ onMounted(() => {
         if (pendingData.enableThinking != null) {
           enableThinking.value = pendingData.enableThinking
         }
-        // Apply chat mode
         if (pendingData.chatMode) {
           chatMode.value = pendingData.chatMode
         }
@@ -1976,6 +1969,7 @@ onUnmounted(() => {
             data-snap-wake="true"
             :chat-input="chatInput"
             :chat-mode="chatMode"
+            :hide-chat-mode-selector="false"
             :selected-model-key="selectedModelKey"
             :selected-model-info="selectedModelInfo"
             :providers-with-models="providersWithModels"
@@ -2047,6 +2041,7 @@ onUnmounted(() => {
         data-snap-wake="true"
         :chat-input="chatInput"
         :chat-mode="chatMode"
+        :hide-chat-mode-selector="false"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"
         :providers-with-models="providersWithModels"

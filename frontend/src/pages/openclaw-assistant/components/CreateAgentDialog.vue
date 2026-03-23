@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useThemeLogo } from '@/composables/useLogo'
 import { Dialogs } from '@wailsio/runtime'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import { OpenClawAgentsService } from '@bindings/chatclaw/internal/services/openclawagents'
 import { defaultAvatars } from '@/assets/avatars'
 import {
   Dialog,
@@ -27,7 +27,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
-const hidePrompt = ref(false)
+const hidePrompt = ref(true)
 
 const name = ref('')
 const prompt = ref('')
@@ -44,7 +44,7 @@ watch(
     icon.value = ''
     if (!hidePrompt.value) {
       try {
-        prompt.value = await AgentsService.GetDefaultPrompt()
+        prompt.value = await OpenClawAgentsService.GetDefaultPrompt()
       } catch {
         // Fallback: leave prompt empty if the backend call fails
       }
@@ -74,7 +74,7 @@ const handlePickIcon = async () => {
       ],
     })
     if (!path) return
-    icon.value = await AgentsService.ReadIconFile(path)
+    icon.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     // User cancelled the file dialog — not an error
     if (String(error).includes('cancelled by user')) return

@@ -14,7 +14,6 @@ type OpenClawAgent struct {
 
 	Name            string `json:"name"`
 	OpenClawAgentID string `json:"openclaw_agent_id"`
-	Prompt          string `json:"prompt"`
 	Icon            string `json:"icon"`
 
 	DefaultLLMProviderID    string  `json:"default_llm_provider_id"`
@@ -47,15 +46,13 @@ type OpenClawAgentMatch struct {
 }
 
 type CreateOpenClawAgentInput struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
-	Icon   string `json:"icon"`
+	Name string `json:"name"`
+	Icon string `json:"icon"`
 }
 
 type UpdateOpenClawAgentInput struct {
-	Name   *string `json:"name"`
-	Prompt *string `json:"prompt"`
-	Icon   *string `json:"icon"`
+	Name *string `json:"name"`
+	Icon *string `json:"icon"`
 
 	DefaultLLMProviderID *string `json:"default_llm_provider_id"`
 	DefaultLLMModelID    *string `json:"default_llm_model_id"`
@@ -88,7 +85,6 @@ type openClawAgentModel struct {
 
 	Name            string `bun:"name,notnull"`
 	OpenClawAgentID string `bun:"openclaw_agent_id,notnull"`
-	Prompt          string `bun:"prompt,notnull"`
 	Icon            string `bun:"icon,notnull"`
 
 	DefaultLLMProviderID    string  `bun:"default_llm_provider_id,notnull"`
@@ -134,7 +130,6 @@ func (m *openClawAgentModel) toDTO() OpenClawAgent {
 
 		Name:            m.Name,
 		OpenClawAgentID: m.OpenClawAgentID,
-		Prompt:          m.Prompt,
 		Icon:            m.Icon,
 
 		DefaultLLMProviderID:    m.DefaultLLMProviderID,

@@ -12,8 +12,10 @@ import {
   Unlink,
   Edit,
 } from 'lucide-vue-next'
-import type { Agent } from '@bindings/chatclaw/internal/services/agents'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import {
+  OpenClawAgentsService,
+  type OpenClawAgent,
+} from '@bindings/chatclaw/internal/services/openclawagents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { Button } from '@/components/ui/button'
@@ -40,7 +42,7 @@ import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/channels/platformDocs'
 
 const props = defineProps<{
-  agent: Agent | null
+  agent: OpenClawAgent | null
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -54,7 +56,7 @@ function isChannelPlatformSelectable(platformId: string) {
 
 const channels = ref<Channel[]>([])
 const platforms = ref<PlatformMeta[]>([])
-const agents = ref<Agent[]>([])
+const agents = ref<OpenClawAgent[]>([])
 const loading = ref(false)
 const actionLoadingId = ref<number | null>(null)
 const selectedPlatformId = ref('')
@@ -205,7 +207,7 @@ async function loadData() {
     const [channelList, platformList, agentList] = await Promise.all([
       ChannelService.ListChannels(),
       ChannelService.GetSupportedPlatforms(),
-      AgentsService.ListAgents(),
+      OpenClawAgentsService.ListAgents(),
     ])
 
     channels.value = channelList || []
@@ -272,7 +274,7 @@ async function handlePickAvatar() {
     })
 
     if (!path) return
-    inlineFormAvatar.value = await AgentsService.ReadIconFile(path)
+    inlineFormAvatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to pick icon:', error)
