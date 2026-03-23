@@ -92,12 +92,26 @@ func newOpenClawAgentModel(name, openclawAgentID, icon string) *openClawAgentMod
 		RetrievalMatchThreshold: 0.5,
 		RetrievalTopK:           20,
 
-		SandboxMode:    "codex",
+		SandboxMode:    "off",
 		SandboxNetwork: true,
 		WorkDir:        defaultWorkDir(),
 
 		MCPServerIDs:        "[]",
 		MCPServerEnabledIDs: "[]",
+
+		IdentityEmoji: "",
+		IdentityTheme: "",
+
+		GroupChatMentionPatterns: "[]",
+
+		ToolsProfile: "",
+		ToolsAllow:   "[]",
+		ToolsDeny:    "[]",
+
+		HeartbeatEvery: "",
+
+		ParamsTemperature: "",
+		ParamsMaxTokens:   "",
 	}
 }
 
@@ -222,12 +236,48 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 		return nil, errs.New("error.agent_icon_too_large")
 	}
 
+	providerID := strings.TrimSpace(input.DefaultLLMProviderID)
+	modelID := strings.TrimSpace(input.DefaultLLMModelID)
+	if (providerID == "") != (modelID == "") {
+		return nil, errs.New("error.agent_default_llm_incomplete")
+	}
+
 	db, err := s.db()
 	if err != nil {
 		return nil, err
 	}
 
+	if providerID != "" && modelID != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := ensureLLMModelExists(ctx, db, providerID, modelID); err != nil {
+			return nil, err
+		}
+	}
+
 	m := newOpenClawAgentModel(name, define.NewOpenClawManagedAgentID(), icon)
+	m.DefaultLLMProviderID = providerID
+	m.DefaultLLMModelID = modelID
+
+	m.IdentityEmoji = strings.TrimSpace(input.IdentityEmoji)
+	m.IdentityTheme = strings.TrimSpace(input.IdentityTheme)
+
+	if v := strings.TrimSpace(input.GroupChatMentionPatterns); v != "" {
+		m.GroupChatMentionPatterns = v
+	}
+
+	m.ToolsProfile = strings.TrimSpace(input.ToolsProfile)
+	if v := strings.TrimSpace(input.ToolsAllow); v != "" {
+		m.ToolsAllow = v
+	}
+	if v := strings.TrimSpace(input.ToolsDeny); v != "" {
+		m.ToolsDeny = v
+	}
+
+	m.HeartbeatEvery = strings.TrimSpace(input.HeartbeatEvery)
+
+	m.ParamsTemperature = strings.TrimSpace(input.ParamsTemperature)
+	m.ParamsMaxTokens = strings.TrimSpace(input.ParamsMaxTokens)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -381,8 +431,11 @@ func (s *OpenClawAgentsService) UpdateAgent(id int64, input UpdateOpenClawAgentI
 
 	if input.SandboxMode != nil {
 		mode := strings.TrimSpace(*input.SandboxMode)
-		if mode != "codex" && mode != "native" {
-			mode = "codex"
+		switch mode {
+		case "off", "non-main", "all":
+			// valid OpenClaw values
+		default:
+			mode = "off"
 		}
 		q = q.Set("sandbox_mode = ?", mode)
 	}
@@ -400,6 +453,34 @@ func (s *OpenClawAgentsService) UpdateAgent(id int64, input UpdateOpenClawAgentI
 	}
 	if input.MCPServerEnabledIDs != nil {
 		q = q.Set("mcp_server_enabled_ids = ?", *input.MCPServerEnabledIDs)
+	}
+
+	if input.IdentityEmoji != nil {
+		q = q.Set("identity_emoji = ?", strings.TrimSpace(*input.IdentityEmoji))
+	}
+	if input.IdentityTheme != nil {
+		q = q.Set("identity_theme = ?", strings.TrimSpace(*input.IdentityTheme))
+	}
+	if input.GroupChatMentionPatterns != nil {
+		q = q.Set("group_chat_mention_patterns = ?", strings.TrimSpace(*input.GroupChatMentionPatterns))
+	}
+	if input.ToolsProfile != nil {
+		q = q.Set("tools_profile = ?", strings.TrimSpace(*input.ToolsProfile))
+	}
+	if input.ToolsAllow != nil {
+		q = q.Set("tools_allow = ?", strings.TrimSpace(*input.ToolsAllow))
+	}
+	if input.ToolsDeny != nil {
+		q = q.Set("tools_deny = ?", strings.TrimSpace(*input.ToolsDeny))
+	}
+	if input.HeartbeatEvery != nil {
+		q = q.Set("heartbeat_every = ?", strings.TrimSpace(*input.HeartbeatEvery))
+	}
+	if input.ParamsTemperature != nil {
+		q = q.Set("params_temperature = ?", strings.TrimSpace(*input.ParamsTemperature))
+	}
+	if input.ParamsMaxTokens != nil {
+		q = q.Set("params_max_tokens = ?", strings.TrimSpace(*input.ParamsMaxTokens))
 	}
 
 	result, err := q.Exec(ctx)

@@ -34,12 +34,37 @@ export function useAgents() {
     }
   }
 
-  const createAgent = async (data: { name: string; prompt: string; icon: string }) => {
+  const createAgent = async (data: {
+    name: string
+    icon: string
+    defaultLLMProviderId?: string
+    defaultLLMModelId?: string
+    identityEmoji?: string
+    identityTheme?: string
+    groupChatMentionPatterns?: string
+    toolsProfile?: string
+    toolsAllow?: string
+    toolsDeny?: string
+    heartbeatEvery?: string
+    paramsTemperature?: string
+    paramsMaxTokens?: string
+  }) => {
     loading.value = true
     try {
       const created = await OpenClawAgentsService.CreateAgent({
         name: data.name,
         icon: data.icon,
+        default_llm_provider_id: data.defaultLLMProviderId ?? '',
+        default_llm_model_id: data.defaultLLMModelId ?? '',
+        identity_emoji: data.identityEmoji ?? '',
+        identity_theme: data.identityTheme ?? '',
+        group_chat_mention_patterns: data.groupChatMentionPatterns ?? '[]',
+        tools_profile: data.toolsProfile ?? '',
+        tools_allow: data.toolsAllow ?? '[]',
+        tools_deny: data.toolsDeny ?? '[]',
+        heartbeat_every: data.heartbeatEvery ?? '',
+        params_temperature: data.paramsTemperature ?? '',
+        params_max_tokens: data.paramsMaxTokens ?? '',
       })
       if (!created) {
         throw new Error(t('assistant.errors.createFailed'))

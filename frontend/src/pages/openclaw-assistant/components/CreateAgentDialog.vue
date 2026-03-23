@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useThemeLogo } from '@/composables/useLogo'
-import { Dialogs } from '@wailsio/runtime'
-import { OpenClawAgentsService } from '@bindings/chatclaw/internal/services/openclawagents'
-import { defaultAvatars } from '@/assets/avatars'
+import { ProviderIcon } from '@/components/ui/provider-icon'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +20,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  ProvidersService,
+  type ProviderWithModels,
+} from '@bindings/chatclaw/internal/services/providers'
+
+export interface CreateAgentData {
+  name: string
+  icon: string
+  defaultLLMProviderId: string
+  defaultLLMModelId: string
+  identityEmoji: string
+  identityTheme: string
+  groupChatMentionPatterns: string
+  toolsProfile: string
+  toolsAllow: string
+  toolsDeny: string
+  heartbeatEvery: string
+  paramsTemperature: string
+  paramsMaxTokens: string
+}
 
 const props = defineProps<{
   open: boolean
@@ -22,69 +48,119 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  create: [data: { name: string; prompt: string; icon: string }]
+  create: [data: CreateAgentData]
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
-const hidePrompt = ref(true)
 
 const name = ref('')
-const prompt = ref('')
-const icon = ref<string>('') // data URL
+const identityEmoji = ref('')
+const identityTheme = ref('')
+
+const providersWithModels = ref<ProviderWithModels[]>([])
+const modelProviderId = ref('')
+const modelId = ref('')
+const modelName = ref('')
+const modelKey = ref('')
 
 const isValid = computed(() => name.value.trim() !== '')
+const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.value !== '')
+
+function isProviderFree(pw: ProviderWithModels | undefined): boolean {
+  if (!pw?.provider) return false
+  const p = pw.provider as { is_free?: boolean }
+  return Boolean(p.is_free)
+}
+
+const selectedProviderIsFree = computed(() => {
+  if (!modelProviderId.value || !providersWithModels.value.length) return false
+  const pw = providersWithModels.value.find(
+    (p) => p.provider?.provider_id === modelProviderId.value
+  )
+  return isProviderFree(pw)
+})
+
+const loadModels = async () => {
+  try {
+    const providers = await ProvidersService.ListProviders()
+    const enabled = providers.filter((p) => p.enabled)
+    const results: ProviderWithModels[] = []
+    for (const p of enabled) {
+      try {
+        const withModels = await ProvidersService.GetProviderWithModels(p.provider_id)
+        if (withModels) results.push(withModels)
+      } catch (error: unknown) {
+        console.warn(`Failed to load provider models (${p.provider_id}) in create dialog:`, error)
+      }
+    }
+    providersWithModels.value = results
+  } catch (error: unknown) {
+    console.warn('Failed to load models in create dialog:', error)
+  }
+}
 
 watch(
   () => props.open,
   async (open) => {
     if (!open) return
     name.value = ''
-    prompt.value = ''
-    icon.value = ''
-    if (!hidePrompt.value) {
-      try {
-        prompt.value = await OpenClawAgentsService.GetDefaultPrompt()
-      } catch {
-        // Fallback: leave prompt empty if the backend call fails
-      }
-    }
+    identityEmoji.value = ''
+    identityTheme.value = ''
+    modelProviderId.value = ''
+    modelId.value = ''
+    modelName.value = ''
+    modelKey.value = ''
+    void loadModels()
   }
 )
 
-const handleClose = () => emit('update:open', false)
-
-const handleSelectDefaultAvatar = (src: string) => {
-  icon.value = src
-}
-
-const handlePickIcon = async () => {
-  if (props.loading) return
-  try {
-    const path = await Dialogs.OpenFile({
-      CanChooseFiles: true,
-      CanChooseDirectories: false,
-      AllowsMultipleSelection: false,
-      Title: t('assistant.icon.pickTitle'),
-      Filters: [
-        {
-          DisplayName: t('assistant.icon.filterImages'),
-          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
-        },
-      ],
-    })
-    if (!path) return
-    icon.value = await OpenClawAgentsService.ReadIconFile(path)
-  } catch (error) {
-    // User cancelled the file dialog — not an error
-    if (String(error).includes('cancelled by user')) return
-    console.error('Failed to pick icon:', error)
+const onModelKeyChange = (val: any) => {
+  if (typeof val !== 'string') return
+  modelKey.value = val
+  if (!val) {
+    clearDefaultModel()
+    return
+  }
+  const [p, m] = val.split('::')
+  modelProviderId.value = p ?? ''
+  modelId.value = m ?? ''
+  modelName.value = ''
+  for (const pw of providersWithModels.value) {
+    if (pw.provider.provider_id !== modelProviderId.value) continue
+    for (const group of pw.model_groups) {
+      if (group.type !== 'llm') continue
+      const found = group.models.find((x) => x.model_id === modelId.value)
+      if (found) modelName.value = found.name
+    }
   }
 }
 
+const clearDefaultModel = () => {
+  modelProviderId.value = ''
+  modelId.value = ''
+  modelName.value = ''
+  modelKey.value = ''
+}
+
+const handleClose = () => emit('update:open', false)
+
 const handleCreate = () => {
   if (!isValid.value || props.loading) return
-  emit('create', { name: name.value.trim(), prompt: prompt.value.trim(), icon: icon.value })
+  emit('create', {
+    name: name.value.trim(),
+    icon: '',
+    defaultLLMProviderId: modelProviderId.value,
+    defaultLLMModelId: modelId.value,
+    identityEmoji: identityEmoji.value,
+    identityTheme: identityTheme.value,
+    groupChatMentionPatterns: '[]',
+    toolsProfile: '',
+    toolsAllow: '[]',
+    toolsDeny: '[]',
+    heartbeatEvery: '',
+    paramsTemperature: '',
+    paramsMaxTokens: '',
+  })
 }
 </script>
 
@@ -96,52 +172,6 @@ const handleCreate = () => {
       </DialogHeader>
 
       <div class="flex flex-col gap-4 py-4">
-        <div class="flex flex-col items-center gap-2">
-          <button
-            class="flex size-icon-box items-center justify-center rounded-icon-box border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
-            type="button"
-            @click="handlePickIcon"
-          >
-            <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-            <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
-          </button>
-          <div class="text-xs text-muted-foreground">
-            {{ t('assistant.icon.hint') }}
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-2">
-          <div class="text-xs text-muted-foreground">
-            {{ t('assistant.icon.defaultAvatars') }}
-          </div>
-          <div class="flex flex-wrap gap-3">
-            <button
-              v-for="avatar in defaultAvatars"
-              :key="avatar.id"
-              type="button"
-              class="relative flex size-12 items-center justify-center rounded-xl border transition-colors"
-              :class="
-                icon === avatar.src
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border bg-background hover:border-foreground/40 hover:bg-muted/60 dark:border-white/10'
-              "
-              @click="handleSelectDefaultAvatar(avatar.src)"
-            >
-              <img :src="avatar.src" class="size-10 rounded-lg object-cover" />
-              <div
-                v-if="icon === avatar.src"
-                class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"
-              >
-                <span
-                  class="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
-                >
-                  ✓
-                </span>
-              </div>
-            </button>
-          </div>
-        </div>
-
         <div class="flex flex-col gap-1.5">
           <label class="text-sm font-medium text-foreground">
             {{ t('assistant.fields.name') }}
@@ -154,16 +184,98 @@ const handleCreate = () => {
           />
         </div>
 
-        <div v-if="!hidePrompt" class="flex flex-col gap-1.5">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium text-foreground">
+              {{ t('assistant.fields.identityEmoji') }}
+            </label>
+            <Input
+              v-model="identityEmoji"
+              :placeholder="t('assistant.fields.identityEmojiPlaceholder')"
+              maxlength="10"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium text-foreground">
+              {{ t('assistant.fields.identityTheme') }}
+            </label>
+            <Input
+              v-model="identityTheme"
+              :placeholder="t('assistant.fields.identityThemePlaceholder')"
+              maxlength="200"
+            />
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
           <label class="text-sm font-medium text-foreground">
-            {{ t('assistant.fields.prompt') }}
+            {{ t('assistant.settings.model.defaultModel') }}
           </label>
-          <textarea
-            v-model="prompt"
-            :placeholder="t('assistant.fields.promptPlaceholder')"
-            maxlength="1000"
-            class="min-h-[110px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+          <div class="flex min-w-0 items-center gap-2">
+            <Select :model-value="modelKey" @update:model-value="onModelKeyChange">
+              <SelectTrigger class="h-9 w-full rounded-md border border-border bg-background">
+                <div v-if="hasDefaultModel" class="flex min-w-0 items-center gap-2">
+                  <ProviderIcon
+                    :icon="modelProviderId"
+                    :size="16"
+                    class="text-foreground"
+                  />
+                  <div class="min-w-0 truncate text-sm font-medium text-foreground">
+                    {{ modelName || modelId }}
+                  </div>
+                  <span
+                    v-if="selectedProviderIsFree"
+                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                  >
+                    {{ t('assistant.chat.freeBadge') }}
+                  </span>
+                </div>
+                <div v-else class="text-sm text-muted-foreground">
+                  {{ t('assistant.settings.model.noDefaultModel') }}
+                </div>
+              </SelectTrigger>
+              <SelectContent class="max-h-[260px]">
+                <SelectGroup>
+                  <SelectLabel>{{ t('assistant.settings.model.defaultModel') }}</SelectLabel>
+                  <template
+                    v-for="pw in providersWithModels"
+                    :key="pw.provider.provider_id"
+                  >
+                    <SelectLabel class="mt-2 flex items-center gap-1.5">
+                      <span>{{ pw.provider.name }}</span>
+                      <span
+                        v-if="isProviderFree(pw)"
+                        class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                      >
+                        {{ t('assistant.chat.freeBadge') }}
+                      </span>
+                    </SelectLabel>
+                    <template v-for="g in pw.model_groups" :key="g.type">
+                      <template v-if="g.type === 'llm'">
+                        <SelectItem
+                          v-for="m in g.models"
+                          :key="pw.provider.provider_id + '::' + m.model_id"
+                          :value="pw.provider.provider_id + '::' + m.model_id"
+                        >
+                          {{ m.name }}
+                        </SelectItem>
+                      </template>
+                    </template>
+                  </template>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              v-if="hasDefaultModel"
+              size="icon"
+              variant="ghost"
+              :disabled="loading"
+              :title="t('assistant.settings.model.clear')"
+              @click="clearDefaultModel"
+            >
+              <Trash2 class="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

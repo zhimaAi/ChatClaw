@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -315,15 +316,77 @@ func (s *AgentSyncer) upsertAgentConfig(ctx context.Context, agent openclawagent
 
 	existingList := extractAgentList(cfg.Config)
 
+	identity := map[string]any{"name": agent.Name}
+	if agent.IdentityEmoji != "" {
+		identity["emoji"] = agent.IdentityEmoji
+	}
+	if agent.IdentityTheme != "" {
+		identity["theme"] = agent.IdentityTheme
+	}
+
 	entry := map[string]any{
 		"id":        agent.OpenClawAgentID,
 		"name":      agent.Name,
 		"workspace": s.resolveAgentWorkspace(agent),
 		"agentDir":  s.resolveAgentDir(agent),
-		"identity":  map[string]any{"name": agent.Name},
+		"identity":  identity,
 	}
 	if agent.OpenClawAgentID == define.OpenClawMainAgentID {
 		entry["default"] = true
+	}
+
+	if agent.SandboxMode != "" {
+		entry["sandbox"] = map[string]any{"mode": agent.SandboxMode}
+	}
+
+	if agent.GroupChatMentionPatterns != "" && agent.GroupChatMentionPatterns != "[]" {
+		var patterns []string
+		if json.Unmarshal([]byte(agent.GroupChatMentionPatterns), &patterns) == nil && len(patterns) > 0 {
+			entry["groupChat"] = map[string]any{"mentionPatterns": patterns}
+		}
+	}
+
+	if agent.ToolsProfile != "" || (agent.ToolsAllow != "" && agent.ToolsAllow != "[]") || (agent.ToolsDeny != "" && agent.ToolsDeny != "[]") {
+		tools := map[string]any{}
+		if agent.ToolsProfile != "" {
+			tools["profile"] = agent.ToolsProfile
+		}
+		if agent.ToolsAllow != "" && agent.ToolsAllow != "[]" {
+			var allow []string
+			if json.Unmarshal([]byte(agent.ToolsAllow), &allow) == nil && len(allow) > 0 {
+				tools["allow"] = allow
+			}
+		}
+		if agent.ToolsDeny != "" && agent.ToolsDeny != "[]" {
+			var deny []string
+			if json.Unmarshal([]byte(agent.ToolsDeny), &deny) == nil && len(deny) > 0 {
+				tools["deny"] = deny
+			}
+		}
+		if len(tools) > 0 {
+			entry["tools"] = tools
+		}
+	}
+
+	if agent.HeartbeatEvery != "" {
+		entry["heartbeat"] = map[string]any{"every": agent.HeartbeatEvery}
+	}
+
+	if agent.ParamsTemperature != "" || agent.ParamsMaxTokens != "" {
+		params := map[string]any{}
+		if agent.ParamsTemperature != "" {
+			if v, err := strconv.ParseFloat(agent.ParamsTemperature, 64); err == nil {
+				params["temperature"] = v
+			}
+		}
+		if agent.ParamsMaxTokens != "" {
+			if v, err := strconv.Atoi(agent.ParamsMaxTokens); err == nil {
+				params["maxTokens"] = v
+			}
+		}
+		if len(params) > 0 {
+			entry["params"] = params
+		}
 	}
 
 	newList := make([]any, 0, len(existingList)+1)

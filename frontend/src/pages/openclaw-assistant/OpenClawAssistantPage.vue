@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { getLogoDataUrl } from '@/composables/useLogo'
-import CreateAgentDialog from './components/CreateAgentDialog.vue'
+import CreateAgentDialog, { type CreateAgentData } from './components/CreateAgentDialog.vue'
 import AgentSettingsDialog from './components/AgentSettingsDialog.vue'
 import AgentChannelsDialog from './components/AgentChannelsDialog.vue'
 import RenameConversationDialog from './components/RenameConversationDialog.vue'
@@ -391,7 +391,7 @@ const loadLibrariesFn = async () => {
   }
 }
 
-const handleCreate = async (data: { name: string; prompt: string; icon: string }) => {
+const handleCreate = async (data: CreateAgentData) => {
   try {
     await createAgent(data)
     createOpen.value = false
@@ -422,7 +422,7 @@ const openChannels = (agent: OpenClawAgent) => {
 
 const handleOpenWorkspaceSettings = () => {
   if (activeAgent.value) {
-    openSettings(activeAgent.value, 'workspace')
+    openSettings(activeAgent.value, 'advanced')
   }
 }
 

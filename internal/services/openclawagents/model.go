@@ -36,6 +36,25 @@ type OpenClawAgent struct {
 	MCPServerIDs        string `json:"mcp_server_ids"`
 	MCPServerEnabledIDs string `json:"mcp_server_enabled_ids"`
 
+	// OpenClaw identity
+	IdentityEmoji string `json:"identity_emoji"`
+	IdentityTheme string `json:"identity_theme"`
+
+	// OpenClaw group chat
+	GroupChatMentionPatterns string `json:"group_chat_mention_patterns"`
+
+	// OpenClaw tools
+	ToolsProfile string `json:"tools_profile"`
+	ToolsAllow   string `json:"tools_allow"`
+	ToolsDeny    string `json:"tools_deny"`
+
+	// OpenClaw heartbeat
+	HeartbeatEvery string `json:"heartbeat_every"`
+
+	// OpenClaw per-agent model params
+	ParamsTemperature string `json:"params_temperature"`
+	ParamsMaxTokens   string `json:"params_max_tokens"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -46,8 +65,24 @@ type OpenClawAgentMatch struct {
 }
 
 type CreateOpenClawAgentInput struct {
-	Name string `json:"name"`
-	Icon string `json:"icon"`
+	Name                 string `json:"name"`
+	Icon                 string `json:"icon"`
+	DefaultLLMProviderID string `json:"default_llm_provider_id"`
+	DefaultLLMModelID    string `json:"default_llm_model_id"`
+
+	IdentityEmoji string `json:"identity_emoji"`
+	IdentityTheme string `json:"identity_theme"`
+
+	GroupChatMentionPatterns string `json:"group_chat_mention_patterns"`
+
+	ToolsProfile string `json:"tools_profile"`
+	ToolsAllow   string `json:"tools_allow"`
+	ToolsDeny    string `json:"tools_deny"`
+
+	HeartbeatEvery string `json:"heartbeat_every"`
+
+	ParamsTemperature string `json:"params_temperature"`
+	ParamsMaxTokens   string `json:"params_max_tokens"`
 }
 
 type UpdateOpenClawAgentInput struct {
@@ -74,6 +109,20 @@ type UpdateOpenClawAgentInput struct {
 	MCPEnabled          *bool   `json:"mcp_enabled"`
 	MCPServerIDs        *string `json:"mcp_server_ids"`
 	MCPServerEnabledIDs *string `json:"mcp_server_enabled_ids"`
+
+	IdentityEmoji *string `json:"identity_emoji"`
+	IdentityTheme *string `json:"identity_theme"`
+
+	GroupChatMentionPatterns *string `json:"group_chat_mention_patterns"`
+
+	ToolsProfile *string `json:"tools_profile"`
+	ToolsAllow   *string `json:"tools_allow"`
+	ToolsDeny    *string `json:"tools_deny"`
+
+	HeartbeatEvery *string `json:"heartbeat_every"`
+
+	ParamsTemperature *string `json:"params_temperature"`
+	ParamsMaxTokens   *string `json:"params_max_tokens"`
 }
 
 type openClawAgentModel struct {
@@ -106,6 +155,20 @@ type openClawAgentModel struct {
 	MCPEnabled          bool   `bun:"mcp_enabled,notnull"`
 	MCPServerIDs        string `bun:"mcp_server_ids,notnull"`
 	MCPServerEnabledIDs string `bun:"mcp_server_enabled_ids,notnull"`
+
+	IdentityEmoji string `bun:"identity_emoji,notnull"`
+	IdentityTheme string `bun:"identity_theme,notnull"`
+
+	GroupChatMentionPatterns string `bun:"group_chat_mention_patterns,notnull"`
+
+	ToolsProfile string `bun:"tools_profile,notnull"`
+	ToolsAllow   string `bun:"tools_allow,notnull"`
+	ToolsDeny    string `bun:"tools_deny,notnull"`
+
+	HeartbeatEvery string `bun:"heartbeat_every,notnull"`
+
+	ParamsTemperature string `bun:"params_temperature,notnull"`
+	ParamsMaxTokens   string `bun:"params_max_tokens,notnull"`
 }
 
 var _ bun.BeforeInsertHook = (*openClawAgentModel)(nil)
@@ -151,6 +214,20 @@ func (m *openClawAgentModel) toDTO() OpenClawAgent {
 		MCPEnabled:          m.MCPEnabled,
 		MCPServerIDs:        m.MCPServerIDs,
 		MCPServerEnabledIDs: m.MCPServerEnabledIDs,
+
+		IdentityEmoji: m.IdentityEmoji,
+		IdentityTheme: m.IdentityTheme,
+
+		GroupChatMentionPatterns: m.GroupChatMentionPatterns,
+
+		ToolsProfile: m.ToolsProfile,
+		ToolsAllow:   m.ToolsAllow,
+		ToolsDeny:    m.ToolsDeny,
+
+		HeartbeatEvery: m.HeartbeatEvery,
+
+		ParamsTemperature: m.ParamsTemperature,
+		ParamsMaxTokens:   m.ParamsMaxTokens,
 
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
