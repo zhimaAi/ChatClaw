@@ -334,7 +334,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(chatService))
 	// Wire chat bridge for assistant MCP (avoids cyclic import)
 	assistantMCPService.SetChatBridge(assistantmcp.NewChatBridge(
-		conversationsService.FindOrCreateByExternalID,
+		func(agentID int64, externalID, name string) (int64, error) {
+			return conversationsService.FindOrCreateByExternalID(agentID, externalID, name, "")
+		},
 		func(convID int64, content, tabID string) (string, int64, error) {
 			res, err := chatService.SendMessage(chat.SendMessageInput{
 				ConversationID: convID,

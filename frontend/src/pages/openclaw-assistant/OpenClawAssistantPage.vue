@@ -793,6 +793,7 @@ const handleSend = async () => {
       await createConversation(
         new CreateConversationInput({
           agent_id: activeAgentId.value,
+          agent_type: 'openclaw',
           name:
             messageContent.slice(0, 50) ||
             (imagesToSend.length > 0

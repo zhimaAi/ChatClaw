@@ -2,6 +2,7 @@ package openclawruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,9 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// EventListener receives gateway events. Parameters are event name and raw JSON payload.
+type EventListener func(event string, payload json.RawMessage)
 
 type Manager struct {
 	app   *application.App
@@ -40,6 +44,9 @@ type Manager struct {
 	expectedStopPID int
 	shuttingDown    bool
 	reconnecting    atomic.Bool
+
+	eventListenersMu sync.RWMutex
+	eventListeners   map[string]EventListener // keyed by caller-chosen ID
 }
 
 func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
@@ -52,6 +59,7 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Ma
 			Phase:      PhaseIdle,
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		},
+		eventListeners: make(map[string]EventListener),
 	}
 }
 
@@ -350,7 +358,7 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 			DeviceIdentity:  identity,
 			StoredDeviceTok: storedTok,
 			Scopes:          []string{"operator.read", "operator.write", "operator.admin"},
-			OnEvent:         func(GatewayEventFrame) {},
+			OnEvent:         m.dispatchEvent,
 			OnDisconnect:    m.handleGatewayDisconnect,
 		})
 		hello, err := client.Connect(ctx)
@@ -461,6 +469,33 @@ func (m *Manager) Request(ctx context.Context, method string, params any, out an
 		return errors.New("gateway websocket is not connected")
 	}
 	return client.Request(ctx, method, params, out)
+}
+
+// AddEventListener registers a listener for gateway events with the given key.
+// The caller is responsible for removing it when done via RemoveEventListener.
+func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
+	m.eventListenersMu.Lock()
+	defer m.eventListenersMu.Unlock()
+	m.eventListeners[key] = fn
+}
+
+// RemoveEventListener removes the listener registered under key.
+func (m *Manager) RemoveEventListener(key string) {
+	m.eventListenersMu.Lock()
+	defer m.eventListenersMu.Unlock()
+	delete(m.eventListeners, key)
+}
+
+func (m *Manager) dispatchEvent(ev GatewayEventFrame) {
+	m.eventListenersMu.RLock()
+	listeners := make([]EventListener, 0, len(m.eventListeners))
+	for _, fn := range m.eventListeners {
+		listeners = append(listeners, fn)
+	}
+	m.eventListenersMu.RUnlock()
+	for _, fn := range listeners {
+		fn(ev.Event, ev.Payload)
+	}
 }
 
 func (m *Manager) RegisterReadyHook(fn func()) {
