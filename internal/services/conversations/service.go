@@ -110,7 +110,7 @@ func (s *ConversationsService) GetConversation(id int64) (*Conversation, error) 
 
 // FindOrCreateByExternalID looks up a conversation by agent_id + external_id.
 // If none exists, it creates one with the given name and returns the ID.
-func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalID, name string) (int64, error) {
+func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalID, name, agentType string) (int64, error) {
 	db, err := s.db()
 	if err != nil {
 		return 0, err
@@ -132,8 +132,12 @@ func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalI
 		return m.ID, nil
 	}
 
+	if agentType == "" {
+		agentType = AgentTypeEino
+	}
 	conv, createErr := s.CreateConversation(CreateConversationInput{
 		AgentID:    agentID,
+		AgentType:  agentType,
 		Name:       name,
 		ExternalID: externalID,
 		ChatMode:   ChatModeTask,
@@ -189,8 +193,14 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 		return nil, errs.New("error.agent_id_required")
 	}
 
-	// Team conversations use virtual agent groups, so no agent table validation is needed.
-	if teamType != TeamTypeTeam {
+	agentType := strings.TrimSpace(input.AgentType)
+	if agentType == "" {
+		agentType = AgentTypeEino
+	}
+
+	// Team conversations use virtual agent groups; OpenClaw conversations reference openclaw_agents table.
+	// Only validate against the agents table for standard eino agents.
+	if teamType != TeamTypeTeam && agentType != AgentTypeOpenClaw {
 		var agentCount int
 		if err := db.NewSelect().
 			Table("agents").
@@ -212,6 +222,7 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	teamLibraryID := strings.TrimSpace(input.TeamLibraryID)
 	m := &conversationModel{
 		AgentID:        input.AgentID,
+		AgentType:      agentType,
 		Name:           name,
 		ExternalID:     strings.TrimSpace(input.ExternalID),
 		LastMessage:    lastMessage,
