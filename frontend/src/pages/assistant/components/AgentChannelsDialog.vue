@@ -12,7 +12,8 @@ import {
   Unlink,
   Edit,
 } from 'lucide-vue-next'
-import { type Agent, AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { useAgentService } from '../composables/agentServiceProvider'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
+const agentSvc = useAgentService()
 
 /** Platforms that support create/bind in UI (feishu + wecom + dingtalk). */
 function isChannelPlatformSelectable(platformId: string) {
@@ -204,7 +206,7 @@ async function loadData() {
     const [channelList, platformList, agentList] = await Promise.all([
       ChannelService.ListChannels(),
       ChannelService.GetSupportedPlatforms(),
-      AgentsService.ListAgents(),
+      agentSvc.ListAgents(),
     ])
 
     channels.value = channelList || []
@@ -271,7 +273,7 @@ async function handlePickAvatar() {
     })
 
     if (!path) return
-    inlineFormAvatar.value = await AgentsService.ReadIconFile(path)
+    inlineFormAvatar.value = await agentSvc.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to pick icon:', error)

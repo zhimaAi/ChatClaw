@@ -41,7 +41,8 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { useAgentService } from '../composables/agentServiceProvider'
 import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
@@ -65,6 +66,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const agentSvc = useAgentService()
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -112,7 +114,7 @@ watch(
         ? (props.initialTab as TabKey)
         : 'model'
     void loadModels()
-    void AgentsService.GetDefaultWorkDir().then((dir) => {
+    void agentSvc.GetDefaultWorkDir().then((dir) => {
       defaultWorkDir.value = dir
     })
     void ToolchainService.GetToolStatus('codex').then((status) => {
@@ -282,7 +284,7 @@ const handlePickIcon = async () => {
       ],
     })
     if (!path) return
-    icon.value = await AgentsService.ReadIconFile(path)
+    icon.value = await agentSvc.ReadIconFile(path)
     iconChanged.value = true
   } catch (error) {
     // User cancelled the file dialog — not an error
@@ -327,7 +329,7 @@ const handleSave = async () => {
     if (wantsModelUpdate && (modelProviderId.value === '') !== (modelId.value === '')) {
       throw new Error(t('assistant.errors.defaultModelIncomplete'))
     }
-    const updated = await AgentsService.UpdateAgent(props.agent.id, {
+    const updated = await agentSvc.UpdateAgent(props.agent.id, {
       name: name.value.trim(),
       prompt: prompt.value.trim(),
       icon: iconChanged.value ? icon.value : null,
@@ -366,7 +368,7 @@ const handleDelete = async () => {
   if (!props.agent) return
   saving.value = true
   try {
-    await AgentsService.DeleteAgent(props.agent.id)
+    await agentSvc.DeleteAgent(props.agent.id)
     emit('deleted', props.agent.id)
     toast.success(t('assistant.toasts.deleted'))
     emit('update:open', false)

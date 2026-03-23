@@ -49,6 +49,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAgents } from './composables/useAgents'
+import { provideAgentService, type AgentServiceApi } from './composables/agentServiceProvider'
 import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
@@ -66,13 +67,17 @@ const props = withDefaults(
     mode?: 'main' | 'snap' | 'embedded'
     initialConversationId?: number | null
     initialAgentId?: number | null
+    agentService?: AgentServiceApi
   }>(),
   {
     mode: 'main',
     initialConversationId: null,
     initialAgentId: null,
+    agentService: undefined,
   }
 )
+
+provideAgentService(props.agentService)
 
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')

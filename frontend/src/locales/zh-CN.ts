@@ -149,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "AI助手",
+    openclawAssistant: "OpenClaw助手",
     knowledge: "知识库",
     scheduledTasks: "定时任务",
     skills: "技能",

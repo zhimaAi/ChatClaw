@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/services/agents"
+	"chatclaw/internal/services/openclawagents"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -30,7 +30,7 @@ var retryAfterPattern = regexp.MustCompile(`retryAfterMs[^0-9]*(\d+)`)
 type AgentSyncer struct {
 	app       *application.App
 	manager   *Manager
-	agentsSvc *agents.AgentsService
+	agentsSvc *openclawagents.OpenClawAgentsService
 
 	wakeCh chan struct{}
 	stopCh chan struct{}
@@ -65,7 +65,7 @@ type configGetResult struct {
 	Hash   string         `json:"hash"`
 }
 
-func NewAgentSyncer(app *application.App, manager *Manager, agentsSvc *agents.AgentsService) *AgentSyncer {
+func NewAgentSyncer(app *application.App, manager *Manager, agentsSvc *openclawagents.OpenClawAgentsService) *AgentSyncer {
 	s := &AgentSyncer{
 		app:       app,
 		manager:   manager,
@@ -188,7 +188,7 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 		gatewayMap[strings.ToLower(entry.ID)] = entry
 	}
 
-	desiredMap := make(map[string]agents.Agent, len(desiredAgents))
+	desiredMap := make(map[string]openclawagents.OpenClawAgent, len(desiredAgents))
 	for _, a := range desiredAgents {
 		desiredMap[strings.ToLower(a.OpenClawAgentID)] = a
 	}
@@ -261,7 +261,7 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 // then patchAgentIdentity to set the real display name and identity
 // (agents.create derives agentId from the name param, so we pass the
 // openclaw_agent_id as name; identity is not part of the create/update schema).
-func (s *AgentSyncer) createAgent(ctx context.Context, agent agents.Agent) error {
+func (s *AgentSyncer) createAgent(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	workspace := s.resolveAgentWorkspace(agent)
 
 	var createResp map[string]any
@@ -278,13 +278,13 @@ func (s *AgentSyncer) createAgent(ctx context.Context, agent agents.Agent) error
 // resolveAgentWorkspace returns the workspace directory for an agent.
 // Each agent gets its own isolated workspace under the state dir, following
 // OpenClaw's convention: $STATE_DIR/workspace-{agentId}.
-func (s *AgentSyncer) resolveAgentWorkspace(agent agents.Agent) string {
+func (s *AgentSyncer) resolveAgentWorkspace(agent openclawagents.OpenClawAgent) string {
 	return filepath.Join(s.stateDir(), "workspace-"+agent.OpenClawAgentID)
 }
 
 // resolveAgentDir returns the agent config directory, following
 // OpenClaw's convention: $STATE_DIR/agents/{agentId}/agent.
-func (s *AgentSyncer) resolveAgentDir(agent agents.Agent) string {
+func (s *AgentSyncer) resolveAgentDir(agent openclawagents.OpenClawAgent) string {
 	return filepath.Join(s.stateDir(), "agents", agent.OpenClawAgentID, "agent")
 }
 
@@ -296,13 +296,13 @@ func (s *AgentSyncer) stateDir() string {
 	return dir
 }
 
-func (s *AgentSyncer) updateAgent(ctx context.Context, agent agents.Agent) error {
+func (s *AgentSyncer) updateAgent(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	return s.patchAgentIdentity(ctx, agent)
 }
 
 // patchAgentIdentity updates the name and identity.name for a non-main agent
 // via config.patch, since agents.update schema does not include identity.
-func (s *AgentSyncer) patchAgentIdentity(ctx context.Context, agent agents.Agent) error {
+func (s *AgentSyncer) patchAgentIdentity(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	var cfg configGetResult
 	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
 		return fmt.Errorf("config.get for identity patch: %w", err)
@@ -354,7 +354,7 @@ func (s *AgentSyncer) deleteAgent(ctx context.Context, agentID string) error {
 // ensureMainAgentViaConfigPatch handles the "main" agent which cannot be
 // created/deleted via the agents.create/delete RPCs (they forbid "main").
 // Falls back to config.patch to insert it into agents.list.
-func (s *AgentSyncer) ensureMainAgentViaConfigPatch(ctx context.Context, agent agents.Agent) error {
+func (s *AgentSyncer) ensureMainAgentViaConfigPatch(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	var cfg configGetResult
 	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
 		return err
@@ -404,7 +404,7 @@ func (s *AgentSyncer) ensureMainAgentViaConfigPatch(ctx context.Context, agent a
 }
 
 // needsUpdate compares the Gateway entry against the desired ChatClaw agent state.
-func needsUpdate(existing agentsListEntry, desired agents.Agent) bool {
+func needsUpdate(existing agentsListEntry, desired openclawagents.OpenClawAgent) bool {
 	existingName := existing.Name
 	if existing.Identity != nil && existing.Identity.Name != "" {
 		existingName = existing.Identity.Name

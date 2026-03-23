@@ -20,6 +20,9 @@ const DocumentViewerPage = defineAsyncComponent(
   () => import('@/pages/document/DocumentViewerPage.vue')
 )
 const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
+const OpenClawAssistantPage = defineAsyncComponent(
+  () => import('@/pages/openclaw-assistant/OpenClawAssistantPage.vue')
+)
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
@@ -123,6 +126,7 @@ async function handleDisableSelectionSearchFromPopup() {
  */
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
+  'openclaw-assistant': OpenClawAssistantPage,
   knowledge: KnowledgePage,
   'scheduled-tasks': ScheduledTasksPage,
   skills: SkillsPage,

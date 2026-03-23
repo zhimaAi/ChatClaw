@@ -33,6 +33,7 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
+	"chatclaw/internal/services/openclawagents"
 	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
@@ -308,6 +309,13 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("ensure main agent: %w", err)
 	}
 	app.RegisterService(application.NewService(agentsService))
+	// 注册 OpenClaw 助手服务
+	openClawAgentsService := openclawagents.NewOpenClawAgentsService(app)
+	if err := openClawAgentsService.EnsureMainAgent(); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("ensure openclaw main agent: %w", err)
+	}
+	app.RegisterService(application.NewService(openClawAgentsService))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
 	app.RegisterService(application.NewService(conversationsService))
@@ -372,8 +380,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
 	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app), providersSvc)
-	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, agentsService)
-	agentsService.SetChangeHook(agentSyncer.MarkDirty)
+	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, openClawAgentsService)
+	openClawAgentsService.SetChangeHook(agentSyncer.MarkDirty)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
 	// Listen for provider config changes and sync to OpenClaw Gateway
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
