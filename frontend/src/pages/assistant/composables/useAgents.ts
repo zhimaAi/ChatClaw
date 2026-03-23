@@ -2,10 +2,12 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { useAgentService } from './agentServiceProvider'
 
 export function useAgents() {
   const { t } = useI18n()
+  const svc = useAgentService()
   const agents = ref<Agent[]>([])
   const activeAgentId = ref<number | null>(null)
   const loading = ref(false)
@@ -15,7 +17,7 @@ export function useAgents() {
   const loadAgents = async () => {
     loading.value = true
     try {
-      const list = await AgentsService.ListAgents()
+      const list = await svc.ListAgents()
       agents.value = list
 
       // Preserve current selection if possible; otherwise fall back to first agent (or null)
@@ -35,7 +37,7 @@ export function useAgents() {
   const createAgent = async (data: { name: string; prompt: string; icon: string }) => {
     loading.value = true
     try {
-      const created = await AgentsService.CreateAgent({
+      const created = await svc.CreateAgent({
         name: data.name,
         prompt: data.prompt,
         icon: data.icon,

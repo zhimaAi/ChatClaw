@@ -149,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "AI pomočnik",
+    openclawAssistant: "OpenClaw pomočnik",
     knowledge: "Baza znanja",
     scheduledTasks: "Načrtovana opravila",
     skills: "Veščine",

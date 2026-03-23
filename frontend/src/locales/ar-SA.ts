@@ -149,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "مساعد الذكاء الاصطناعي",
+    openclawAssistant: "مساعد OpenClaw",
     knowledge: "قاعدة المعرفة",
     scheduledTasks: "المهام المجدولة",
     skills: "المهارات",

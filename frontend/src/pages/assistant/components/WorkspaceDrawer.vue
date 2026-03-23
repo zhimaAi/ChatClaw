@@ -25,10 +25,10 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import {
-  AgentsService,
   type FileEntry,
   UpdateAgentInput,
 } from '@bindings/chatclaw/internal/services/agents'
+import { useAgentService } from '../composables/agentServiceProvider'
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
@@ -59,6 +59,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const agentSvc = useAgentService()
 const navigationStore = useNavigationStore()
 const settingsStore = useSettingsStore()
 const MAX_TREE_DEPTH = 3
@@ -78,7 +79,7 @@ const displayWorkDir = computed(() => props.agent?.work_dir || defaultWorkDir.va
 const refreshFileTree = async () => {
   if (!props.agent || !props.conversationId) return
   try {
-    const files = await AgentsService.ListWorkspaceFiles(props.agent.id, props.conversationId)
+    const files = await agentSvc.ListWorkspaceFiles(props.agent.id, props.conversationId)
     fileTree.value = files || []
   } catch {
     // Silently ignore refresh errors
@@ -100,9 +101,9 @@ const loadWorkspaceData = async () => {
   if (!props.agent || !props.conversationId) return
   loading.value = true
   try {
-    const dir = await AgentsService.GetWorkspaceDir(props.agent.id, props.conversationId)
+    const dir = await agentSvc.GetWorkspaceDir(props.agent.id, props.conversationId)
     workspaceDir.value = dir
-    const files = await AgentsService.ListWorkspaceFiles(props.agent.id, props.conversationId)
+    const files = await agentSvc.ListWorkspaceFiles(props.agent.id, props.conversationId)
     fileTree.value = files || []
   } catch (error) {
     console.error('Failed to load workspace data:', error)
@@ -216,7 +217,7 @@ async function loadMCPServers() {
 async function handleMCPEnabledChange(val: boolean) {
   if (!props.agent) return
   try {
-    await AgentsService.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_enabled: val }))
+    await agentSvc.UpdateAgent(props.agent.id, new UpdateAgentInput({ mcp_enabled: val }))
     props.agent.mcp_enabled = val
   } catch (error) {
     console.error('Failed to update mcp_enabled:', error)
@@ -252,7 +253,7 @@ async function handleModalConfirm() {
   const json = JSON.stringify(newIds)
   const enabledJson = JSON.stringify(newEnabledIds)
   try {
-    await AgentsService.UpdateAgent(
+    await agentSvc.UpdateAgent(
       props.agent.id,
       new UpdateAgentInput({ mcp_server_ids: json, mcp_server_enabled_ids: enabledJson })
     )
@@ -275,7 +276,7 @@ async function handleRemoveServer(serverId: string) {
   const idsJson = JSON.stringify(newIds)
   const enabledJson = JSON.stringify(newEnabledIds)
   try {
-    await AgentsService.UpdateAgent(
+    await agentSvc.UpdateAgent(
       props.agent.id,
       new UpdateAgentInput({ mcp_server_ids: idsJson, mcp_server_enabled_ids: enabledJson })
     )
@@ -323,7 +324,7 @@ let unsubTool: (() => void) | null = null
 let unsubComplete: (() => void) | null = null
 
 onMounted(() => {
-  void AgentsService.GetDefaultWorkDir().then((dir) => {
+  void agentSvc.GetDefaultWorkDir().then((dir) => {
     defaultWorkDir.value = dir
   })
 

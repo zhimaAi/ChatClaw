@@ -42,6 +42,7 @@ import WindowControlButtons from './WindowControlButtons.vue'
  */
 const moduleTabIcons: Partial<Record<NavModule, any>> = {
   assistant: IconAssistant,
+  'openclaw-assistant': IconAssistant,
   knowledge: IconKnowledge,
   memory: IconMemory,
   multiask: IconMultiask,

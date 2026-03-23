@@ -47,6 +47,11 @@ const allTopNavItems: NavItem[] = [
     icon: IconAssistant,
   },
   {
+    key: 'openclaw-assistant',
+    labelKey: 'nav.openclawAssistant',
+    icon: IconAssistant,
+  },
+  {
     key: 'knowledge',
     labelKey: 'nav.knowledge',
     icon: IconKnowledge,

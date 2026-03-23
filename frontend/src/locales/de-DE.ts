@@ -149,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "KI-Assistent",
+    openclawAssistant: "OpenClaw Assistent",
     knowledge: "Wissensdatenbank",
     scheduledTasks: "Geplante Aufgaben",
     skills: "Fähigkeiten",
