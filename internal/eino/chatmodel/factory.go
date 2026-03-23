@@ -19,6 +19,8 @@ import (
 
 // ProviderConfig 创建 ChatModel 所需的配置
 type ProviderConfig struct {
+	// ProviderID 供应商 ID（如 chatwiki/openai）
+	ProviderID string
 	// ProviderType 供应商类型（openai, azure, ollama, gemini, anthropic）
 	ProviderType string
 	// APIKey 供应商的 API 密钥
@@ -68,6 +70,9 @@ func newOpenAIChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	}
 	if cfg.APIEndpoint != "" {
 		config.BaseURL = cfg.APIEndpoint
+	}
+	if cfg.DisableThinking {
+		config.ExtraFields = map[string]any{"enable_thinking": false}
 	}
 	return openai.NewChatModel(ctx, config)
 }

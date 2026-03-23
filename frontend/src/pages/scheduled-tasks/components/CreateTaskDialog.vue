@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   Dialog,
   DialogContent,
@@ -7,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import type { Agent, Channel, ScheduledTaskFormState } from '../types'
 import { createSubmitLock } from './submitLock'
 import TaskFormContent from './TaskFormContent.vue'
@@ -25,12 +27,42 @@ const emit = defineEmits<{
   submit: []
 }>()
 
+const { t } = useI18n()
+
 const dialogSubtitle = computed(() =>
-  props.form.id ? '更新自动化 AI 任务' : '安排自动化 AI 任务'
+  props.form.id
+    ? t('scheduledTasks.dialog.subtitleEdit')
+    : t('scheduledTasks.dialog.subtitleCreate')
 )
 const submitLock = createSubmitLock()
 const submitLocked = ref(false)
-const submitDisabled = computed(() => props.saving || submitLocked.value)
+
+const canSubmit = computed(() => {
+  if (!props.form.name.trim()) return false
+  if (!props.form.prompt.trim()) return false
+  if (props.form.agentId == null || props.form.agentId <= 0) return false
+
+  if (props.form.scheduleType === 'cron' && !props.form.cronExpr.trim()) return false
+
+  if (props.form.scheduleType === 'custom' && props.form.customMode === 'interval') {
+    const n = Number(props.form.customIntervalMinutes)
+    if (!Number.isFinite(n) || n < 1 || n > 59) return false
+  }
+
+  if (
+    props.form.scheduleType === 'custom' &&
+    props.form.customMode === 'weekly' &&
+    !props.form.customWeekdays?.length
+  ) {
+    return false
+  }
+
+  return true
+})
+
+const submitActionDisabled = computed(
+  () => !canSubmit.value || props.saving || submitLocked.value
+)
 
 function closeDialog() {
   submitLock.reset()
@@ -43,6 +75,8 @@ function syncSubmitLockedState() {
 }
 
 function handleSubmit() {
+  if (!canSubmit.value || props.saving) return
+
   if (!submitLock.acquire(props.saving)) {
     syncSubmitLockedState()
     return
@@ -74,16 +108,17 @@ watch(
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
+      size="xl"
       :show-close-button="true"
-      class="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-[#e5e7eb] bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:!w-auto sm:min-w-[780px] sm:!max-w-[780px]"
+      class="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 !max-w-[780px] shadow-lg dark:shadow-none dark:ring-1 dark:ring-white/10"
     >
       <DialogHeader
-        class="flex shrink-0 flex-row items-baseline gap-3 border-b border-[#eef2f6] px-7 py-6"
+        class="flex shrink-0 flex-row flex-wrap items-baseline gap-2 border-b border-border px-6 pb-3 pt-4"
       >
-        <DialogTitle class="text-lg font-semibold text-[#111827]">
+        <DialogTitle class="text-xl font-semibold text-[#0a0a0a] dark:text-foreground">
           {{ title }}
         </DialogTitle>
-        <p class="text-sm font-medium text-[#94a3b8]">
+        <p class="text-sm text-muted-foreground">
           {{ dialogSubtitle }}
         </p>
       </DialogHeader>
@@ -92,22 +127,15 @@ watch(
         <TaskFormContent :form="form" :agents="agents" :channels="channels" />
       </div>
 
-      <DialogFooter class="shrink-0 border-t border-[#eef2f6] px-7 py-5 sm:justify-end">
-        <button
-          type="button"
-          class="inline-flex h-11 min-w-[92px] items-center justify-center rounded-xl border border-[#dbe3ec] bg-white px-5 text-sm font-medium text-[#475569] transition-colors hover:bg-[#f8fafc]"
-          @click="closeDialog"
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          :disabled="submitDisabled"
-          class="inline-flex h-11 min-w-[116px] items-center justify-center rounded-xl bg-[#111827] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0f172a] disabled:cursor-not-allowed disabled:bg-[#94a3b8]"
-          @click="handleSubmit"
-        >
-          {{ submitDisabled ? '提交中...' : '确定' }}
-        </button>
+      <DialogFooter
+        class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end"
+      >
+        <Button type="button" variant="outline" @click="closeDialog">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button type="button" :disabled="submitActionDisabled" @click="handleSubmit">
+          {{ saving || submitLocked ? t('scheduledTasks.dialog.submitting') : t('common.confirm') }}
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

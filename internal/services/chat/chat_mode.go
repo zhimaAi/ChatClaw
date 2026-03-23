@@ -346,6 +346,7 @@ func (s *ChatService) retrieveFromKnowledgeBase(ctx context.Context, db *bun.DB,
 	}
 
 	embedder, err := einoembed.NewEmbedder(ctx, &einoembed.ProviderConfig{
+		ProviderID:   embeddingConfig.ProviderID,
 		ProviderType: embeddingConfig.ProviderType,
 		APIKey:       embeddingConfig.APIKey,
 		APIEndpoint:  embeddingConfig.APIEndpoint,

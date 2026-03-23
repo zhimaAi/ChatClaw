@@ -12,6 +12,8 @@ import {
 } from 'reka-ui'
 import { Check } from 'lucide-vue-next'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import IconTask from '@/assets/icons/task-icon.svg'
+import IconSession from '@/assets/icons/session-icon.svg'
 
 const props = defineProps<{
   modelValue: string
@@ -24,6 +26,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+function toggleCompactMode() {
+  emit('update:modelValue', props.modelValue === 'task' ? 'chat' : 'task')
+}
+
 const modes = [
   { id: 'chat', labelKey: 'assistant.chatMode.chat', descKey: 'assistant.chatMode.chatDesc' },
   { id: 'task', labelKey: 'assistant.chatMode.task', descKey: 'assistant.chatMode.taskDesc' },
@@ -31,77 +37,32 @@ const modes = [
 </script>
 
 <template>
-  <!-- 极简模式：两个图标的开关式切换，每个按钮有独立的悬浮提示 -->
+  <!-- Compact: single button toggles mode; icon reflects current mode -->
   <div v-if="compact" class="flex shrink-0 items-center rounded-full bg-muted p-0.5">
-    <!-- 任务模式按钮 -->
     <TooltipProvider :delay-duration="300">
       <Tooltip>
         <TooltipTrigger as-child>
           <button
             type="button"
-            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
-            :class="
-              modelValue === 'task'
-                ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground'
-                : 'text-muted-foreground'
-            "
-            @click="emit('update:modelValue', 'task')"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-[#F5F5F5] text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:bg-[#EFEFEF] active:bg-[#EAEAEA] active:scale-95"
+            @click="toggleCompactMode"
           >
-            <!-- Task icon: target / crosshair -->
-            <svg
-              class="size-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+            <span
+              class="inline-flex size-4 shrink-0 items-center justify-center [&_svg]:block [&_svg]:size-4"
+              aria-hidden="true"
             >
-              <path d="M12 2v4" />
-              <path d="M12 18v4" />
-              <path d="M2 12h4" />
-              <path d="M18 12h4" />
-              <circle cx="12" cy="12" r="4" />
-              <circle cx="12" cy="12" r="8" />
-            </svg>
+              <IconTask v-if="modelValue === 'task'" />
+              <IconSession v-else />
+            </span>
           </button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-
-    <!-- 聊天模式按钮 -->
-    <TooltipProvider :delay-duration="300">
-      <Tooltip>
-        <TooltipTrigger as-child>
-          <button
-            type="button"
-            class="ml-0.5 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-all hover:bg-background/80 active:bg-background/60 active:scale-95"
-            :class="
-              modelValue === 'chat'
-                ? 'bg-background shadow-[0_1px_2px_rgba(0,0,0,0.04)] text-foreground'
-                : 'text-muted-foreground'
-            "
-            @click="emit('update:modelValue', 'chat')"
-          >
-            <!-- Chat icon: speech bubble -->
-            <svg
-              class="size-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
-            </svg>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}</p>
+          <p v-if="modelValue === 'task'">
+            {{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}
+          </p>
+          <p v-else>
+            {{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}
+          </p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

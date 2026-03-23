@@ -465,7 +465,7 @@ onMounted(() => {
                   'rounded px-3 py-1 text-sm transition-colors',
                   activeMemoryTab === tab.key
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 )
               "
               @click="activeMemoryTab = tab.key"

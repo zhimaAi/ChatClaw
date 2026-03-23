@@ -20,9 +20,9 @@ type BuiltinModelConfig struct {
 	Capabilities []string // 支持的输入类型: text, image, audio, video, file
 }
 
-// BuiltinProviders 内置供应商列表（chatclaw 默认置顶，将通过接口查询信息）
+// BuiltinProviders 内置供应商列表
 var BuiltinProviders = []BuiltinProviderConfig{
-	{ProviderID: "chatclaw", Name: "ChatClaw", Type: "openai", Icon: "chatclaw", SortOrder: 0, APIEndpoint: ServerURL},
+	{ProviderID: "chatwiki", Name: "Chatwiki", Type: "openai", Icon: "chatclaw", SortOrder: 0, APIEndpoint: ""},
 	{ProviderID: "openai", Name: "OpenAI", Type: "openai", Icon: "openai", SortOrder: 1, APIEndpoint: "https://api.openai.com/v1"},
 	{ProviderID: "azure", Name: "Azure OpenAI", Type: "azure", Icon: "azure", SortOrder: 2, APIEndpoint: ""},
 	{ProviderID: "anthropic", Name: "Anthropic", Type: "anthropic", Icon: "anthropic", SortOrder: 3, APIEndpoint: "https://api.anthropic.com/v1"},
@@ -36,14 +36,8 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
 }
 
-// BuiltinModels 内置模型列表（初始化时写入 models 表；ChatClaw 默认几条，与本地/服务器常见免费模型一致，后续可由 SyncChatClawModels 增删改）
+// BuiltinModels 内置模型列表（初始化时写入 models 表）
 var BuiltinModels = []BuiltinModelConfig{
-	// ChatClaw（免费模型，初始化即写入；与 custom-model/list 返回的 modelName 一致时可被同步逻辑更新）
-	{ProviderID: "chatclaw", ModelID: "Qwen/Qwen3-8B", Name: "Qwen/Qwen3-8B", Type: "llm", SortOrder: 0, Capabilities: []string{"text", "image"}},
-	{ProviderID: "chatclaw", ModelID: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Name: "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B", Type: "llm", SortOrder: 1, Capabilities: []string{"text", "image"}},
-	{ProviderID: "chatclaw", ModelID: "BAAI/bge-m3", Name: "BAAI/bge-m3", Type: "embedding", SortOrder: 0, Capabilities: []string{"text"}},
-	{ProviderID: "chatclaw", ModelID: "BAAI/bge-reranker-v2-m3", Name: "BAAI/bge-reranker-v2-m3", Type: "rerank", SortOrder: 0, Capabilities: []string{"text"}},
-
 	// OpenAI
 	{ProviderID: "openai", ModelID: "gpt-5.4", Name: "GPT-5.4", Type: "llm", SortOrder: 100, Capabilities: []string{"text", "image", "file"}},
 	{ProviderID: "openai", ModelID: "gpt-5.4-pro", Name: "GPT-5.4 Pro", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image", "file"}},
@@ -120,10 +114,9 @@ var BuiltinModels = []BuiltinModelConfig{
 }
 
 // GetBuiltinProviderDefaultEndpoint 获取内置供应商的默认 API 地址
-// ChatClaw 直接使用 ServerURL
 func GetBuiltinProviderDefaultEndpoint(providerID string) (string, bool) {
-	if providerID == "chatclaw" {
-		return ServerURL, true
+	if providerID == "chatwiki" {
+		return "", true
 	}
 	for _, p := range BuiltinProviders {
 		if p.ProviderID == providerID {

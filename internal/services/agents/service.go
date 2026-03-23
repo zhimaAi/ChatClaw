@@ -314,7 +314,7 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 		} else if newProviderID == "" || newModelID == "" {
 			return nil, errs.New("error.agent_default_llm_incomplete")
 		} else {
-			if err := ensureLLMModelExists(ctx, db, newProviderID, newModelID); err != nil {
+			if err := ensureLLMModelExists(ctx, db, s.app, newProviderID, newModelID); err != nil {
 				return nil, err
 			}
 		}
@@ -551,7 +551,7 @@ func readDirTree(dir string, maxDepth int) ([]FileEntry, error) {
 	return result, nil
 }
 
-func ensureLLMModelExists(ctx context.Context, db *bun.DB, providerID, modelID string) error {
+func ensureLLMModelExists(ctx context.Context, db *bun.DB, app *application.App, providerID, modelID string) error {
 	providerID = strings.TrimSpace(providerID)
 	modelID = strings.TrimSpace(modelID)
 	if providerID == "" {
