@@ -40,8 +40,6 @@
   "error.model_delete_failed": "मॉडल हटाने में विफल",
   "error.cannot_delete_builtin_model": "बिल्ट-इन मॉडल हटाया नहीं जा सकता",
   "error.cannot_delete_global_embedding_model": "हटाया नहीं जा सकता: यह मॉडल वैश्विक एम्बेडिंग मॉडल के रूप में सेट है",
-  "error.cannot_delete_memory_embedding_model": "हटाया नहीं जा सकता: यह मॉडल स्मृति एम्बेडिंग मॉडल के रूप में सेट है",
-  "error.cannot_delete_memory_extract_model": "हटाया नहीं जा सकता: यह मॉडल स्मृति निष्कर्षण मॉडल के रूप में सेट है",
   "error.cannot_delete_semantic_segment_model_in_use": "हटाया नहीं जा सकता: यह मॉडल पुस्तकालय '{{.LibraryName}}' द्वारा सिमांतिक सेगमेंटेशन मॉडल के रूप में उपयोग किया जा रहा है",
   "error.cannot_delete_rerank_model_in_use": "हटाया नहीं जा सकता: यह मॉडल पुस्तकालय '{{.LibraryName}}' द्वारा उपयोग किया जा रहा है",
   "error.no_llm_model": "प्रोवाइडर '{{.ProviderID}}' के पास कोई उपलब्ध LLM मॉडल नहीं है",

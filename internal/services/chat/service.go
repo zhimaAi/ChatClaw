@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"chatclaw/internal/define"
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
 	"chatclaw/internal/errs"
@@ -140,11 +141,11 @@ func (s *ChatService) resolveWorkDir(ctx context.Context, db *bun.DB, agentID, c
 
 // defaultWorkDir returns the default working directory for agents
 func defaultWorkDir() string {
-	home, err := os.UserHomeDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".chatclaw")
+	return dir
 }
 
 // saveImagesToWorkDir saves images and files to the conversation's work directory and returns updated payloads.

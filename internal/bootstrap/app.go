@@ -33,6 +33,8 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
+	"chatclaw/internal/services/openclawagents"
+	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
@@ -213,10 +215,16 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("sqlite init: %w", err)
 	}
 
-	// 初始化记忆数据库
-	if err := memory.InitDB(app); err != nil {
-		return nil, nil, fmt.Errorf("memory db init: %w", err)
+	// ChatClaw: default enabled, auto-generate API key at startup
+	if err := providers.EnsureChatClawInitialized(); err != nil {
+		app.Logger.Warn("EnsureChatClawInitialized failed (non-fatal)", "error", err)
 	}
+	// ChatClaw: refresh model cache on every app start (add/update/delete). Async, silent; errors only logged.
+	go func() {
+		if err := providers.NewProvidersService(app).SyncChatClawModels(); err != nil {
+			app.Logger.Warn("SyncChatClawModels failed (non-fatal)", "error", err)
+		}
+	}()
 
 	// 初始化设置缓存
 	if err := settings.InitCache(app); err != nil {
@@ -253,12 +261,24 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
 	chatWikiService := chatwiki.NewChatWikiService(app)
 	// 注册供应商服务
-	app.RegisterService(application.NewService(providers.NewProvidersService(app)))
+	providersSvc := providers.NewProvidersService(app)
+	app.RegisterService(application.NewService(providersSvc))
 	// 注册浏览器服务
 	app.RegisterService(application.NewService(browser.NewBrowserService(app)))
 	// 注册助手服务
 	agentsService := agents.NewAgentsService(app)
+	if err := agentsService.EnsureMainAgent(); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("ensure main agent: %w", err)
+	}
 	app.RegisterService(application.NewService(agentsService))
+	// 注册 OpenClaw 助手服务
+	openClawAgentsService := openclawagents.NewOpenClawAgentsService(app)
+	if err := openClawAgentsService.EnsureMainAgent(); err != nil {
+		sqlite.Close()
+		return nil, nil, fmt.Errorf("ensure openclaw main agent: %w", err)
+	}
+	app.RegisterService(application.NewService(openClawAgentsService))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
 	app.RegisterService(application.NewService(conversationsService))
@@ -297,7 +317,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return newScheduledTaskManagementTools(agentsService, scheduledTasksService)
 	})
 	app.RegisterService(application.NewService(scheduledTasksService))
-	// 注册记忆服务
+	// 注册记忆服务（OpenClaw workspace 文件读写）
 	app.RegisterService(application.NewService(memory.NewMemoryService(app)))
 	// 注册知识库服务
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
@@ -320,6 +340,15 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
+	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app), providersSvc)
+	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, openClawAgentsService)
+	openClawAgentsService.SetChangeHook(agentSyncer.MarkDirty)
+	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
+	// Listen for provider config changes and sync to OpenClaw Gateway
+	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
+		openclawManager.NotifyConfigChanged()
+	})
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
 
@@ -490,6 +519,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		floatingBallService.InitFromSettings()
 		// Ensure external toolchain binaries (uv, bun) are installed/updated in background.
 		go toolchainService.EnsureAll()
+		// Start OpenClaw Gateway in background.
+		openclawManager.Start()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
 		// Warm Chatwiki model cache when account is already bound.
@@ -558,6 +589,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
+		agentSyncer.Close()
+		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()
@@ -566,7 +599,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		if tm := taskmanager.Get(); tm != nil {
 			tm.StopNow()
 		}
-		memory.CloseDB()
 		sqlite.Close()
 		// Close log file last so all shutdown logs are captured.
 		logCleanup()

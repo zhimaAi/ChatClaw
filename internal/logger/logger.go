@@ -209,11 +209,11 @@ func New() (logger *slog.Logger, cleanup func(), err error) {
 	return logger, cleanup, nil
 }
 
-// resolveLogDir returns the directory for log files: <UserConfigDir>/chatclaw/logs
+// resolveLogDir returns the directory for log files: $HOME/.chatclaw/logs
 func resolveLogDir() (string, error) {
-	cfgDir, err := os.UserConfigDir()
+	dir, err := define.AppDataDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(cfgDir, define.AppID, logDirName), nil
+	return filepath.Join(dir, logDirName), nil
 }

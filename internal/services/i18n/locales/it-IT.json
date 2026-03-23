@@ -40,8 +40,6 @@
   "error.model_delete_failed": "Eliminazione modello non riuscita",
   "error.cannot_delete_builtin_model": "Impossibile eliminare il modello integrato",
   "error.cannot_delete_global_embedding_model": "Impossibile eliminare: questo modello è impostato come modello di embedding globale",
-  "error.cannot_delete_memory_embedding_model": "Impossibile eliminare: questo modello è impostato come modello di embedding della memoria",
-  "error.cannot_delete_memory_extract_model": "Impossibile eliminare: questo modello è impostato come modello di estrazione della memoria",
   "error.cannot_delete_semantic_segment_model_in_use": "Impossibile eliminare: questo modello è utilizzato come modello di segmentazione semantica dalla libreria '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "Impossibile eliminare: questo modello è utilizzato dalla libreria '{{.LibraryName}}'",
   "error.no_llm_model": "Il provider '{{.ProviderID}}' non ha modelli LLM disponibili",

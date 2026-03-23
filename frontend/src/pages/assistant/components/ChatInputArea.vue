@@ -88,6 +88,7 @@ const props = withDefaults(
     mode?: 'assistant' | 'knowledge'
     chatInput: string
     chatMode: string
+    hideChatModeSelector?: boolean
     selectedModelKey: string
     selectedModelInfo: {
       providerId: string
@@ -125,6 +126,7 @@ const props = withDefaults(
   }>(),
   {
     mode: 'assistant',
+    hideChatModeSelector: false,
     isTeamMode: false,
     selectedTeamLibrary: null,
     teamLibraries: () => [],
@@ -828,7 +830,7 @@ onUnmounted(() => {
 
             <!-- ChatModeSelector: show in both modes，内部自己处理悬浮提示 -->
             <ChatModeSelector
-              v-if="!isTeamMode"
+              v-if="!isTeamMode && !hideChatModeSelector"
               :model-value="chatMode"
               :compact="true"
               @update:model-value="(v) => emit('update:chatMode', v)"

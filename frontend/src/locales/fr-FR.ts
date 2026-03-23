@@ -31,10 +31,6 @@ export default {
       name: "Recherche dans la base de connaissances",
       description: "Récupérer le contenu pertinent de la base de connaissances",
     },
-    memoryRetriever: {
-      name: "Récupération de mémoire",
-      description: "Récupérer les faits pertinents de la mémoire à long terme",
-    },
     execute: {
       name: "Exécuter commande",
       description: "Exécuter une commande Shell dans le terminal système",
@@ -153,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "Assistant IA",
+    openclawAssistant: "Assistant OpenClaw",
     knowledge: "Base de connaissances",
     scheduledTasks: "Tâches planifiées",
     skills: "Compétences",
@@ -214,7 +211,6 @@ export default {
     menu: {
       modelService: "Service de modèle",
       generalSettings: "Paramètres généraux",
-      memorySettings: "Mémoire à long terme",
       skills: "Paramètres des compétences",
       mcp: "Paramètres MCP",
       snapSettings: "Paramètres de snap",

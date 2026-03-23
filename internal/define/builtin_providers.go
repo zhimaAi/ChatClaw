@@ -34,6 +34,7 @@ var BuiltinProviders = []BuiltinProviderConfig{
 	{ProviderID: "doubao", Name: "豆包", Type: "openai", Icon: "doubao", SortOrder: 9, APIEndpoint: "https://ark.cn-beijing.volces.com/api/v3"},
 	{ProviderID: "baidu", Name: "百度文心", Type: "openai", Icon: "baidu", SortOrder: 10, APIEndpoint: "https://qianfan.baidubce.com/v2"},
 	{ProviderID: "ollama", Name: "Ollama", Type: "ollama", Icon: "ollama", SortOrder: 11, APIEndpoint: "http://localhost:11434"},
+	{ProviderID: "minimax", Name: "MiniMax", Type: "anthropic", Icon: "minimax", SortOrder: 12, APIEndpoint: "https://api.minimaxi.com/anthropic"},
 }
 
 // BuiltinModels 内置模型列表（初始化时写入 models 表）
@@ -111,6 +112,10 @@ var BuiltinModels = []BuiltinModelConfig{
 	{ProviderID: "grok", ModelID: "grok-4-1-fast-reasoning-pro", Name: "Grok 4.1 Fast Reasoning Pro", Type: "llm", SortOrder: 101, Capabilities: []string{"text", "image"}},
 	{ProviderID: "grok", ModelID: "grok-4-fast-reasoning", Name: "Grok 4 Fast Reasoning", Type: "llm", SortOrder: 102, Capabilities: []string{"text", "image"}},
 	{ProviderID: "grok", ModelID: "grok-4-fast-non-reasoning", Name: "Grok 4 Fast Non-Reasoning", Type: "llm", SortOrder: 103, Capabilities: []string{"text", "image"}},
+
+	// MiniMax
+	{ProviderID: "minimax", ModelID: "MiniMax-M2.7", Name: "MiniMax-M2.7", Type: "llm", SortOrder: 100, Capabilities: []string{"text"}},
+	{ProviderID: "minimax", ModelID: "MiniMax-M2.7-highspeed", Name: "MiniMax-M2.7-highspeed", Type: "llm", SortOrder: 101, Capabilities: []string{"text"}},
 }
 
 // GetBuiltinProviderDefaultEndpoint 获取内置供应商的默认 API 地址

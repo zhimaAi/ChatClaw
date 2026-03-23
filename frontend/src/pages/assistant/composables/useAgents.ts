@@ -18,7 +18,6 @@ export function useAgents() {
       const list = await AgentsService.ListAgents()
       agents.value = list
 
-      // Preserve current selection if possible; otherwise fall back to first agent (or null)
       const currentId = activeAgentId.value
       if (currentId != null && list.some((a) => a.id === currentId)) {
         // keep currentId

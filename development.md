@@ -65,6 +65,9 @@ Windows 打包（生成安装包）需要安装 **makensis（NSIS）**。
 ## 开发
 
 ```bash
+# 安装 openclaw
+go run ./internal/tools/openclawbundle -config build/runtime.yml
+
 # gui模式
 wails3 dev
 

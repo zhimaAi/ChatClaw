@@ -220,9 +220,9 @@ type ChatErrorEvent struct {
 	ErrorData any    `json:"error_data,omitempty"`
 }
 
-// RetrievalItem represents a single retrieval result from knowledge base or memory.
+// RetrievalItem represents a single retrieval result from knowledge base.
 type RetrievalItem struct {
-	Source  string  `json:"source"` // "knowledge" or "memory"
+	Source  string  `json:"source"` // "knowledge"
 	Content string  `json:"content"`
 	Score   float64 `json:"score"`
 }

@@ -27,6 +27,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const hidePrompt = ref(false)
 
 const name = ref('')
 const prompt = ref('')
@@ -41,10 +42,12 @@ watch(
     name.value = ''
     prompt.value = ''
     icon.value = ''
-    try {
-      prompt.value = await AgentsService.GetDefaultPrompt()
-    } catch {
-      // Fallback: leave prompt empty if the backend call fails
+    if (!hidePrompt.value) {
+      try {
+        prompt.value = await AgentsService.GetDefaultPrompt()
+      } catch {
+        // Fallback: leave prompt empty if the backend call fails
+      }
     }
   }
 )
@@ -151,7 +154,7 @@ const handleCreate = () => {
           />
         </div>
 
-        <div class="flex flex-col gap-1.5">
+        <div v-if="!hidePrompt" class="flex flex-col gap-1.5">
           <label class="text-sm font-medium text-foreground">
             {{ t('assistant.fields.prompt') }}
           </label>

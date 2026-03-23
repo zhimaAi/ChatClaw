@@ -79,6 +79,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const hidePrompt = ref(false)
 
 function getDisplayModelName(
   providerId: string,
@@ -206,6 +207,7 @@ watch(
 )
 
 const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.value !== '')
+const isMainAgent = computed(() => props.agent?.openclaw_agent_id === 'main')
 
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
@@ -388,7 +390,7 @@ const handleSave = async () => {
     }
     const updated = await AgentsService.UpdateAgent(props.agent.id, {
       name: name.value.trim(),
-      prompt: prompt.value.trim(),
+      prompt: hidePrompt.value ? null : prompt.value.trim(),
       icon: iconChanged.value ? icon.value : null,
       default_llm_provider_id: wantsModelUpdate ? modelProviderId.value : null,
       default_llm_model_id: wantsModelUpdate ? modelId.value : null,
@@ -777,7 +779,7 @@ const handleDelete = async () => {
                   />
                 </div>
 
-                <div class="flex flex-col gap-1.5">
+                <div v-if="!hidePrompt" class="flex flex-col gap-1.5">
                   <label class="text-sm font-medium text-foreground">
                     {{ t('assistant.fields.prompt') }}
                   </label>
@@ -945,13 +947,17 @@ const handleDelete = async () => {
                   {{ t('assistant.settings.delete.title') }}
                 </div>
                 <div class="max-w-[420px] text-center text-sm text-muted-foreground">
-                  {{ t('assistant.settings.delete.hint') }}
+                  {{
+                    isMainAgent
+                      ? t('assistant.settings.delete.protected')
+                      : t('assistant.settings.delete.hint')
+                  }}
                 </div>
 
                 <Button
                   variant="outline"
                   class="border-border text-foreground hover:bg-accent"
-                  :disabled="saving"
+                  :disabled="saving || isMainAgent"
                   @click="deleteConfirmOpen = true"
                 >
                   {{ t('assistant.settings.delete.action') }}

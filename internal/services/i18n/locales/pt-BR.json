@@ -40,8 +40,6 @@
   "error.model_delete_failed": "Falha ao excluir modelo",
   "error.cannot_delete_builtin_model": "Não pode excluir modelo integrado",
   "error.cannot_delete_global_embedding_model": "Não pode excluir: este modelo está configurado como modelo de incorporação global",
-  "error.cannot_delete_memory_embedding_model": "Não pode excluir: este modelo está configurado como modelo de incorporação de memória",
-  "error.cannot_delete_memory_extract_model": "Não pode excluir: este modelo está configurado como modelo de extração de memória",
   "error.cannot_delete_semantic_segment_model_in_use": "Não pode excluir: este modelo está sendo usado como modelo de segmentação semântica pela biblioteca '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "Não pode excluir: este modelo está sendo usado pela biblioteca '{{.LibraryName}}'",
   "error.no_llm_model": "Provedor '{{.ProviderID}}' não tem modelo LLM disponível",

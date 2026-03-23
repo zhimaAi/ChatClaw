@@ -17,12 +17,12 @@ defineProps<{
 import SettingsSidebar from './components/SettingsSidebar.vue'
 import GeneralSettings from './components/GeneralSettings.vue'
 import ChatwikiSettings from './components/ChatwikiSettings.vue'
-import MemorySettings from './components/MemorySettings.vue'
 import ModelServiceSettings from './components/ModelServiceSettings.vue'
 import SkillsSettings from './components/SkillsSettings.vue'
 import MCPSettings from './components/MCPSettings.vue'
 import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
+import OpenClawRuntimeSettings from './components/OpenClawRuntimeSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
 import { useSettingsStore, type SettingsMenuItem } from '@/stores'
 
@@ -33,7 +33,7 @@ const settingsStore = useSettingsStore()
 const menuLabelKeys: Record<SettingsMenuItem, string> = {
   modelService: 'settings.menu.modelService',
   generalSettings: 'settings.menu.generalSettings',
-  memorySettings: 'settings.menu.memorySettings',
+  openclawRuntime: 'settings.menu.openclawRuntime',
   skills: 'settings.menu.skills',
   mcp: 'settings.menu.mcp',
   snapSettings: 'settings.menu.snapSettings',
@@ -46,7 +46,7 @@ const menuLabelKeys: Record<SettingsMenuItem, string> = {
 const menuComponents: Record<SettingsMenuItem, Component | null> = {
   modelService: ModelServiceSettings,
   generalSettings: GeneralSettings,
-  memorySettings: MemorySettings,
+  openclawRuntime: OpenClawRuntimeSettings,
   skills: SkillsSettings,
   mcp: MCPSettings,
   snapSettings: SnapSettings,

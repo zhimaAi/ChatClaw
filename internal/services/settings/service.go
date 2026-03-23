@@ -12,10 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"chatclaw/internal/eino/embedding"
+	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/document"
-	"chatclaw/internal/services/memory"
 	"chatclaw/internal/sqlite"
 	"chatclaw/internal/taskmanager"
 
@@ -37,6 +36,7 @@ const (
 	CategoryWorkspace Category = "workspace" // 工作区设置
 	CategorySkills    Category = "skills"    // 技能设置
 	CategoryMCP       Category = "mcp"       // MCP 设置
+	CategoryOpenClaw  Category = "openclaw"  // OpenClaw 设置
 )
 
 type Setting struct {
@@ -185,6 +185,9 @@ func inferCategoryFromKey(key string) Category {
 	if strings.HasPrefix(key, "mcp_") {
 		return CategoryMCP
 	}
+	if strings.HasPrefix(key, "openclaw_") {
+		return CategoryOpenClaw
+	}
 	return CategoryGeneral
 }
 
@@ -272,20 +275,20 @@ func (s *SettingsService) GetWorkspaceSettings() (*UpdateWorkspaceSettingsInput,
 
 // GetSkillsDir returns the fixed skills directory path ($HOME/.chatclaw/skills).
 func (s *SettingsService) GetSkillsDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	appDir, err := define.AppDataDir()
 	if err != nil {
 		return "", errs.Wrap("error.setting_read_failed", err)
 	}
-	return filepath.Join(homeDir, ".chatclaw", "skills"), nil
+	return filepath.Join(appDir, "skills"), nil
 }
 
 // GetMCPDir returns the fixed MCP servers directory path ($HOME/.chatclaw/mcp).
 func (s *SettingsService) GetMCPDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	appDir, err := define.AppDataDir()
 	if err != nil {
 		return "", errs.Wrap("error.setting_read_failed", err)
 	}
-	dir := filepath.Join(homeDir, ".chatclaw", "mcp")
+	dir := filepath.Join(appDir, "mcp")
 	_ = os.MkdirAll(dir, 0o755)
 	return dir, nil
 }
@@ -370,184 +373,6 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 	// Fire-and-forget: rebuild vector table and submit re-embedding tasks.
 	go s.triggerReembedAllDocuments(input.Dimension)
 	return nil
-}
-
-type UpdateMemorySettingsInput struct {
-	Enabled             bool   `json:"enabled"`
-	ExtractProviderID   string `json:"extract_provider_id"`
-	ExtractModelID      string `json:"extract_model_id"`
-	EmbeddingProviderID string `json:"embedding_provider_id"`
-	EmbeddingModelID    string `json:"embedding_model_id"`
-	EmbeddingDimension  int    `json:"embedding_dimension"`
-}
-
-func (s *SettingsService) UpdateMemorySettings(input UpdateMemorySettingsInput) error {
-	// Remember old values to decide whether to trigger rebuild.
-	oldDim, _ := GetValue("memory_embedding_dimension")
-	oldProvider, _ := GetValue("memory_embedding_provider_id")
-	oldModel, _ := GetValue("memory_embedding_model_id")
-
-	db, err := dbForWrite()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	enabledStr := "false"
-	if input.Enabled {
-		enabledStr = "true"
-	}
-
-	updates := []struct {
-		Key string
-		Val string
-	}{
-		{Key: "memory_enabled", Val: enabledStr},
-		{Key: "memory_extract_provider_id", Val: strings.TrimSpace(input.ExtractProviderID)},
-		{Key: "memory_extract_model_id", Val: strings.TrimSpace(input.ExtractModelID)},
-		{Key: "memory_embedding_provider_id", Val: strings.TrimSpace(input.EmbeddingProviderID)},
-		{Key: "memory_embedding_model_id", Val: strings.TrimSpace(input.EmbeddingModelID)},
-		{Key: "memory_embedding_dimension", Val: fmt.Sprintf("%d", input.EmbeddingDimension)},
-	}
-
-	if err := db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		for _, u := range updates {
-			result, err := tx.NewUpdate().
-				Model((*settingModel)(nil)).
-				Set("value = ?", u.Val).
-				Where("key = ?", u.Key).
-				Exec(ctx)
-			if err != nil {
-				return errs.Wrap("error.setting_write_failed", err)
-			}
-			rows, _ := result.RowsAffected()
-			if rows == 0 {
-				return errs.Newf("error.setting_not_found", map[string]any{"Key": u.Key})
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	for _, u := range updates {
-		setCachedValue(u.Key, u.Val)
-	}
-
-	changed := oldProvider != input.EmbeddingProviderID || oldModel != input.EmbeddingModelID || strings.TrimSpace(oldDim) != fmt.Sprintf("%d", input.EmbeddingDimension)
-	if !changed || input.EmbeddingDimension <= 0 || !input.Enabled {
-		return nil
-	}
-
-	// Trigger rebuild of memory vector tables
-	go s.triggerRebuildMemoryVectors(input.EmbeddingDimension)
-	return nil
-}
-
-func (s *SettingsService) triggerRebuildMemoryVectors(dimension int) {
-	reembedMu.Lock()
-	defer reembedMu.Unlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if err := memory.RebuildVectorTables(ctx, dimension); err != nil {
-		s.app.Logger.Error("[memory] rebuild vector tables failed", "error", err)
-		return
-	}
-	s.app.Logger.Info("[memory] vector tables rebuilt", "dimension", dimension)
-
-	memDB := memory.DB()
-	if memDB == nil {
-		return
-	}
-
-	embProviderID, _ := GetValue("memory_embedding_provider_id")
-	embModelID, _ := GetValue("memory_embedding_model_id")
-	if embProviderID == "" || embModelID == "" {
-		s.app.Logger.Warn("[memory] embedding model not configured, skip re-embed")
-		return
-	}
-
-	mainDB := sqlite.DB()
-	if mainDB == nil {
-		return
-	}
-
-	type providerRow struct {
-		Type        string `bun:"type"`
-		APIKey      string `bun:"api_key"`
-		APIEndpoint string `bun:"api_endpoint"`
-		ExtraConfig string `bun:"extra_config"`
-	}
-	var prov providerRow
-	if err := mainDB.NewSelect().Table("providers").
-		Column("type", "api_key", "api_endpoint", "extra_config").
-		Where("provider_id = ?", embProviderID).
-		Scan(ctx, &prov); err != nil {
-		s.app.Logger.Error("[memory] get embedding provider failed", "error", err)
-		return
-	}
-
-	embedder, err := embedding.NewEmbedder(ctx, &embedding.ProviderConfig{
-		ProviderID:   embProviderID,
-		ProviderType: prov.Type,
-		APIKey:       prov.APIKey,
-		APIEndpoint:  prov.APIEndpoint,
-		ModelID:      embModelID,
-		Dimension:    dimension,
-		ExtraConfig:  prov.ExtraConfig,
-	})
-	if err != nil {
-		s.app.Logger.Error("[memory] create embedder failed", "error", err)
-		return
-	}
-
-	// Re-embed thematic facts
-	var facts []memory.ThematicFact
-	if err := memDB.NewSelect().Model(&facts).Scan(ctx); err != nil {
-		s.app.Logger.Error("[memory] query thematic facts failed", "error", err)
-	} else {
-		for _, f := range facts {
-			text := f.Topic + ": " + f.Content
-			vecs, embErr := embedder.EmbedStrings(ctx, []string{text})
-			if embErr != nil {
-				s.app.Logger.Warn("[memory] embed thematic fact failed", "id", f.ID, "error", embErr)
-				continue
-			}
-			if len(vecs) > 0 {
-				vecJSON, _ := json.Marshal(vecs[0])
-				if _, err := memDB.ExecContext(ctx, `INSERT INTO thematic_facts_vec(id, embedding) VALUES (?, ?)`, f.ID, string(vecJSON)); err != nil {
-					s.app.Logger.Warn("[memory] insert thematic vec failed", "id", f.ID, "error", err)
-				}
-			}
-		}
-		s.app.Logger.Info("[memory] thematic facts re-embedded", "count", len(facts))
-	}
-
-	// Re-embed event streams
-	var events []memory.EventStream
-	if err := memDB.NewSelect().Model(&events).Scan(ctx); err != nil {
-		s.app.Logger.Error("[memory] query event streams failed", "error", err)
-	} else {
-		for _, e := range events {
-			vecs, embErr := embedder.EmbedStrings(ctx, []string{e.Content})
-			if embErr != nil {
-				s.app.Logger.Warn("[memory] embed event stream failed", "id", e.ID, "error", embErr)
-				continue
-			}
-			if len(vecs) > 0 {
-				vecJSON, _ := json.Marshal(vecs[0])
-				if _, err := memDB.ExecContext(ctx, `INSERT INTO event_streams_vec(id, embedding) VALUES (?, ?)`, e.ID, string(vecJSON)); err != nil {
-					s.app.Logger.Warn("[memory] insert event vec failed", "id", e.ID, "error", err)
-				}
-			}
-		}
-		s.app.Logger.Info("[memory] event streams re-embedded", "count", len(events))
-	}
-
-	s.app.Logger.Info("[memory] vector rebuild complete")
 }
 
 func (s *SettingsService) triggerReembedAllDocuments(dimension int) {

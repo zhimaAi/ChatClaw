@@ -31,10 +31,6 @@ export default {
       name: "Bilgi tabanı araması",
       description: "Bilgi tabanından ilgili içeriği al",
     },
-    memoryRetriever: {
-      name: "Bellek araması",
-      description: "Uzun vadeli bellekten ilgili gerçekleri al",
-    },
     execute: {
       name: "Komut çalıştır",
       description: "Sistem terminalinde Shell komutu çalıştır",
@@ -153,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "AI asistanı",
+    openclawAssistant: "OpenClaw Asistanı",
     knowledge: "Bilgi tabanı",
     scheduledTasks: "Planlı görevler",
     skills: "Beceriler",
@@ -214,7 +211,6 @@ export default {
     menu: {
       modelService: "Model servisi",
       generalSettings: "Genel ayarlar",
-      memorySettings: "Uzun vadeli bellek",
       skills: "Beceri ayarları",
       mcp: "MCPayarları",
       snapSettings: "Snap ayarları",

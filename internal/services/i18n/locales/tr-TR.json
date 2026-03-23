@@ -40,8 +40,6 @@
   "error.model_delete_failed": "Model silme başarısız",
   "error.cannot_delete_builtin_model": "Yerleşik model silinemez",
   "error.cannot_delete_global_embedding_model": "Silinemez: Bu model global gömme modeli olarak ayarlandı",
-  "error.cannot_delete_memory_embedding_model": "Silinemez: Bu model hafıza gömme modeli olarak ayarlandı",
-  "error.cannot_delete_memory_extract_model": "Silinemez: Bu model hafıza çıkarma modeli olarak ayarlandı",
   "error.cannot_delete_semantic_segment_model_in_use": "Silinemez: Bu model '{{.LibraryName}}' kütüphanesi tarafından anlamsal bölümleme modeli olarak kullanılıyor",
   "error.cannot_delete_rerank_model_in_use": "Silinemez: Bu model '{{.LibraryName}}' kütüphanesi tarafından kullanılıyor",
   "error.no_llm_model": "'{{.ProviderID}}' sağlayıcısının kullanılabilir LLM modeli yok",

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
@@ -34,8 +35,8 @@ type SkillsService struct {
 }
 
 func NewSkillsService(app *application.App) *SkillsService {
-	homeDir, _ := os.UserHomeDir()
-	skillsDir := filepath.Join(homeDir, ".chatclaw", "skills")
+	appDir, _ := define.AppDataDir()
+	skillsDir := filepath.Join(appDir, "skills")
 	_ = os.MkdirAll(skillsDir, 0o755)
 
 	return &SkillsService{
