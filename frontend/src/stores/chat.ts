@@ -160,11 +160,21 @@ export const useChatStore = defineStore('chat', () => {
     errorByConversation.value[conversationId] = null
 
     try {
-      const messages = await ChatService.GetMessages(conversationId)
+      const isOpenClaw = openClawConversations.value.has(conversationId)
+      const messages = isOpenClaw
+        ? await ChatService.GetOpenClawMessages(conversationId)
+        : await ChatService.GetMessages(conversationId)
       const fetched = messages ?? []
       const current = messagesByConversation.value[conversationId] ?? []
       const streaming = streamingByConversation.value[conversationId]
 
+      if (isOpenClaw) {
+        // OpenClaw messages are not in local DB; IDs are ephemeral.
+        // If actively streaming, keep current state; otherwise replace.
+        if (!streaming) {
+          messagesByConversation.value[conversationId] = fetched
+        }
+      } else {
       const normalizeContent = (v: unknown) => String(v ?? '').trim()
 
       // IMPORTANT:
@@ -208,6 +218,7 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         messagesByConversation.value[conversationId] = merged
+      }
       }
 
       // Build a map of tool results from tool-role messages (tool_call_id → content)
@@ -715,6 +726,10 @@ export const useChatStore = defineStore('chat', () => {
       // Ignore errors when stopping (might already be stopped)
       console.warn('Stop generation error:', error)
     }
+  }
+
+  const markOpenClawConversation = (conversationId: number) => {
+    openClawConversations.value.add(conversationId)
   }
 
   // Clear messages for a conversation
@@ -1325,6 +1340,7 @@ export const useChatStore = defineStore('chat', () => {
     stopGeneration,
     clearMessages,
     appendLocalMessage,
+    markOpenClawConversation,
 
     // Event subscription
     subscribe,
