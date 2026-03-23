@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"chatclaw/internal/errs"
@@ -149,10 +150,11 @@ func newClaudeChatModel(ctx context.Context, cfg *ProviderConfig) (model.ChatMod
 	}
 
 	return claude.NewChatModel(ctx, &claude.Config{
-		APIKey:    cfg.APIKey,
-		Model:     cfg.ModelID,
-		BaseURL:   baseURL,
-		MaxTokens: 4096,
+		APIKey:     cfg.APIKey,
+		Model:      cfg.ModelID,
+		BaseURL:    baseURL,
+		MaxTokens:  4096,
+		HTTPClient: &http.Client{Timeout: cfg.Timeout},
 	})
 }
 

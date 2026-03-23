@@ -22,8 +22,7 @@ type AgentExtras struct {
 	LibraryIDs          []int64
 	TeamLibraryID       string // optional: ChatWiki team library id for external recall
 	MatchThreshold      float64
-	MemoryEnabled       bool
-	ChatMode            string // "chat" or "task"
+	ChatMode            string   // "chat" or "task"
 	MCPEnabled          bool
 	MCPServerIDs        []string // IDs in agent list
 	MCPServerEnabledIDs []string // IDs enabled for generation (subset)
@@ -136,10 +135,6 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 
 	instruction := fmt.Sprintf("# System Instruction\n\n%s", strings.TrimSpace(agent.Prompt))
 
-	var memoryEnabledStr string
-	_ = db.NewSelect().Table("settings").Column("value").Where("key = ?", "memory_enabled").Scan(ctx, &memoryEnabledStr)
-	memoryEnabled := memoryEnabledStr == "true"
-
 	agentConfig := einoagent.Config{
 		Name:            agent.Name,
 		Instruction:     instruction,
@@ -207,7 +202,6 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		LibraryIDs:          convLibraryIDs,
 		TeamLibraryID:       teamLibraryID,
 		MatchThreshold:      agent.RetrievalMatchThreshold,
-		MemoryEnabled:       memoryEnabled,
 		ChatMode:            chatMode,
 		MCPEnabled:          agent.MCPEnabled && settings.GetBool("mcp_enabled", false),
 		MCPServerIDs:        mcpServerIDs,

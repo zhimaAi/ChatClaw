@@ -32,6 +32,7 @@ require (
 	github.com/larksuite/oapi-sdk-go/v3 v3.5.3
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/mark3labs/mcp-go v0.44.1
+	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db

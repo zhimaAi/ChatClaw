@@ -116,14 +116,14 @@ func NewToolchainService(app *application.App) *ToolchainService {
 // BinDir returns the path to the bin directory where tools are installed.
 func (s *ToolchainService) BinDir() string {
 	s.initOnce.Do(func() {
-		cfgDir, err := os.UserConfigDir()
+		dir, err := define.AppDataDir()
 		if err != nil {
 			if s.app != nil {
-				s.app.Logger.Error("toolchain: failed to get config dir", "error", err)
+				s.app.Logger.Error("toolchain: failed to get app data dir", "error", err)
 			}
 			return
 		}
-		s.binDir = filepath.Join(cfgDir, define.AppID, "bin")
+		s.binDir = filepath.Join(dir, "bin")
 	})
 	return s.binDir
 }

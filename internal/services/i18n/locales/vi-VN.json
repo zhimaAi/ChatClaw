@@ -40,8 +40,6 @@
   "error.model_delete_failed": "Xóa mô hình thất bại",
   "error.cannot_delete_builtin_model": "Không thể xóa mô hình tích hợp",
   "error.cannot_delete_global_embedding_model": "Không thể xóa: Mô hình này được đặt làm mô hình nhúng toàn cục",
-  "error.cannot_delete_memory_embedding_model": "Không thể xóa: Mô hình này được đặt làm mô hình nhúng bộ nhớ",
-  "error.cannot_delete_memory_extract_model": "Không thể xóa: Mô hình này được đặt làm mô hình trích xuất bộ nhớ",
   "error.cannot_delete_semantic_segment_model_in_use": "Không thể xóa: Mô hình này đang được sử dụng làm mô hình phân đoạn ngữ nghĩa bởi thư viện '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "Không thể xóa: Mô hình này đang được thư viện '{{.LibraryName}}' sử dụng",
   "error.no_llm_model": "Nhà cung cấp '{{.ProviderID}}' không có mô hình LLM khả dụng",

@@ -25,10 +25,10 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import {
-  AgentsService,
   type FileEntry,
   UpdateAgentInput,
 } from '@bindings/chatclaw/internal/services/agents'
+import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'

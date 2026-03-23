@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 export type SettingsMenuItem =
   | 'modelService'
   | 'generalSettings'
-  | 'memorySettings'
+  | 'openclawRuntime'
   | 'skills'
   | 'mcp'
   | 'snapSettings'

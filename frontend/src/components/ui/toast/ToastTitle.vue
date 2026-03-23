@@ -8,7 +8,7 @@ defineProps<{
 </script>
 
 <template>
-  <RekaToastTitle :class="cn('text-sm font-semibold', $props.class)">
+  <RekaToastTitle :class="cn('text-sm font-semibold break-words', $props.class)">
     <slot />
   </RekaToastTitle>
 </template>

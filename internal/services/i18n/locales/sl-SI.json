@@ -40,8 +40,6 @@
   "error.model_delete_failed": "Brisanje modela ni uspelo",
   "error.cannot_delete_builtin_model": "Vgrajenega modela ni mogoče izbrisati",
   "error.cannot_delete_global_embedding_model": "Ni mogoče izbrisati: ta model je nastavljen kot globalni model za vdelavo",
-  "error.cannot_delete_memory_embedding_model": "Ni mogoče izbrisati: ta model je nastavljen kot model za vdelavo spomina",
-  "error.cannot_delete_memory_extract_model": "Ni mogoče izbrisati: ta model je nastavljen kot model za ekstrakcijo spomina",
   "error.cannot_delete_semantic_segment_model_in_use": "Ni mogoče izbrisati: ta model se uporablja kot model semantičnega segmentiranja s strani knjižnice '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "Ni mogoče izbrisati: ta model uporablja knjižnica '{{.LibraryName}}'",
   "error.no_llm_model": "Ponudnik '{{.ProviderID}}' nima na voljo nobenega modela LLM",

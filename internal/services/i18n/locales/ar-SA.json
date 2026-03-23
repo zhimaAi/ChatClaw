@@ -40,8 +40,6 @@
   "error.model_delete_failed": "فشل في حذف النموذج",
   "error.cannot_delete_builtin_model": "لا يمكن حذف النموذج المدمج",
   "error.cannot_delete_global_embedding_model": "لا يمكن الحذف: هذا النموذج مُعين كنموذج تضمين عالمي",
-  "error.cannot_delete_memory_embedding_model": "لا يمكن الحذف: هذا النموذج مُعين كنموذج تضمين للذاكرة",
-  "error.cannot_delete_memory_extract_model": "لا يمكن الحذف: هذا النموذج مُعين كنموذج استخراج للذاكرة",
   "error.cannot_delete_semantic_segment_model_in_use": "لا يمكن الحذف: هذا النموذج يُستخدم كنموذج تقسيم دلالي بواسطة المكتبة '{{.LibraryName}}'",
   "error.cannot_delete_rerank_model_in_use": "لا يمكن حذف: هذا النموذج يُستخدم بواسطة المكتبة '{{.LibraryName}}'",
   "error.no_llm_model": "المزود '{{.ProviderID}}' ليس لديه نموذج LLM متاح",

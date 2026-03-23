@@ -12,7 +12,8 @@ import {
   Unlink,
   Edit,
 } from 'lucide-vue-next'
-import { type Agent, AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { Button } from '@/components/ui/button'

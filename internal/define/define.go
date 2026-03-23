@@ -1,6 +1,11 @@
 package define
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+
+	gonanoid "github.com/matoous/go-nanoid/v2"
+)
 
 // AppID 用于文件系统/配置目录等"标识用途"
 const AppID = "chatclaw"
@@ -10,6 +15,12 @@ const SingleInstanceUniqueID = "com.sesame.chatclaw"
 
 // AppDisplayName 用于 UI 展示
 const AppDisplayName = "ChatClaw"
+
+// OpenClaw managed agent IDs.
+const (
+	OpenClawMainAgentID          = "main"
+	OpenClawManagedAgentIDPrefix = ""
+)
 
 // DefaultSQLiteFileName 默认 SQLite 数据库文件名
 const DefaultSQLiteFileName = "data.sqlite"
@@ -32,6 +43,15 @@ func GetModelChatWikiURL() string {
 		return v
 	}
 	return ModelChatWikiUrl
+}
+
+// AppDataDir returns the unified app data directory: $HOME/.chatclaw
+func AppDataDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "."+AppID), nil
 }
 
 // IsDev 是否为开发环境
@@ -69,4 +89,20 @@ func DefaultAgentPromptForLocale(locale string) string {
 		"- If the user's question is vague, guide them to clarify before answering.\n" +
 		"- If a knowledge base is linked, all answers must come from that knowledge base; if not linked, answer from the correct direction.\n" +
 		"- Note that the knowledge base may contain unrelated information — carefully analyse the user's question and select the most relevant knowledge to answer."
+}
+
+// DefaultAgentNameForLocale returns the built-in default agent name for the given locale.
+func DefaultAgentNameForLocale(locale string) string {
+	if locale == "zh-CN" {
+		return "默认助手"
+	}
+	return "Default Assistant"
+}
+
+// NewOpenClawManagedAgentID generates a unique lowercase OpenClaw agent ID.
+// Uses only lowercase alphanumeric chars to match normalizeAgentId behavior.
+func NewOpenClawManagedAgentID() string {
+	const alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	id, _ := gonanoid.Generate(alphabet, 8)
+	return OpenClawManagedAgentIDPrefix + id
 }

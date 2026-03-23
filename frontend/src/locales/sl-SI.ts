@@ -31,10 +31,6 @@ export default {
       name: "Iskanje v bazi znanja",
       description: "Pridobi ustrezne vsebine iz baze znanja",
     },
-    memoryRetriever: {
-      name: "Iskanje v spominu",
-      description: "Pridobi ustrezna dejstva iz dolgoročnega spomina",
-    },
     execute: {
       name: "Izvajanje ukaza",
       description: "Izvede ukaz Shell v sistemskem terminalu",
@@ -153,6 +149,7 @@ export default {
   },
   nav: {
     assistant: "AI pomočnik",
+    openclawAssistant: "OpenClaw pomočnik",
     knowledge: "Baza znanja",
     scheduledTasks: "Načrtovana opravila",
     skills: "Veščine",
@@ -214,7 +211,6 @@ export default {
     menu: {
       modelService: "Storitev modela",
       generalSettings: "Splošne nastavitve",
-      memorySettings: "Dolgoročni spomin",
       skills: "Nastavitve veščin",
       mcp: "Nastavitve MCP",
       snapSettings: "Nastavitve snap",
