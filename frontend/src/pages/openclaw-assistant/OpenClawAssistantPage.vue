@@ -584,8 +584,7 @@ const handleSelectConversationForTeamRobot = (robotId: string, conversation: Con
 
 const handleSelectConversation = async (conversation: Conversation) => {
   activeConversationId.value = conversation.id
-  // Load messages from backend via chatStore
-  chatStore.loadMessages(conversation.id)
+  chatStore.markOpenClawConversation(conversation.id)
 
   // Set model selection from conversation's saved model
   if (conversation.llm_provider_id && conversation.llm_model_id) {

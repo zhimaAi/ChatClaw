@@ -75,6 +75,238 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	}, nil
 }
 
+func extractTextFromContent(content any) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []any:
+		var parts []string
+		for _, block := range v {
+			if bm, ok := block.(map[string]any); ok {
+				if t, _ := bm["type"].(string); t == "text" {
+					if text, _ := bm["text"].(string); text != "" {
+						parts = append(parts, text)
+					}
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return ""
+}
+
+// GetOpenClawMessages fetches conversation history from the OpenClaw Gateway
+// via the sessions.get WebSocket RPC method.
+func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, error) {
+	if conversationID <= 0 {
+		return nil, errs.New("error.chat_conversation_id_required")
+	}
+	if s.openclawGateway == nil || !s.openclawGateway.IsReady() {
+		return nil, nil
+	}
+
+	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var result struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content any    `json:"content"`
+		} `json:"messages"`
+	}
+	if err := s.openclawGateway.Request(ctx, "sessions.get", map[string]any{
+		"key":   sessionKey,
+		"limit": 200,
+	}, &result); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] sessions.get failed",
+			"conv", conversationID, "err", err)
+		return nil, nil
+	}
+
+	// OpenClaw transcripts break a single agent turn into multiple
+	// assistant+toolResult messages (e.g. thinking→toolCalls→toolResults→
+	// thinking→toolCalls→toolResults→final text). We merge consecutive
+	// assistant/toolResult messages into one assistant Message and build
+	// ordered segments so the frontend can render them interleaved.
+
+	type toolCallEntry struct {
+		id   string
+		name string
+	}
+
+	type segment struct {
+		Type        string           `json:"type"`
+		Content     string           `json:"content,omitempty"`
+		ToolCallIDs []string         `json:"tool_call_ids,omitempty"`
+	}
+
+	type assistantGroup struct {
+		segments      []segment
+		allToolCalls  []map[string]any
+		toolResults   []Message
+		contentAll    strings.Builder
+		thinkingAll   strings.Builder
+		// pending tracks toolCall ids from the most recent assistant message,
+		// consumed in order by subsequent toolResult messages.
+		pending []toolCallEntry
+	}
+
+	// appendToolCallSegment adds a tool call id to the last 'tools' segment,
+	// or creates a new one if the last segment is not 'tools'.
+	appendToolCallSeg := func(g *assistantGroup, id string) {
+		if n := len(g.segments); n > 0 && g.segments[n-1].Type == "tools" {
+			g.segments[n-1].ToolCallIDs = append(g.segments[n-1].ToolCallIDs, id)
+		} else {
+			g.segments = append(g.segments, segment{Type: "tools", ToolCallIDs: []string{id}})
+		}
+	}
+
+	var messages []Message
+	var msgIDCounter int64
+	now := time.Now()
+
+	var group *assistantGroup
+
+	flushGroup := func() {
+		if group == nil {
+			return
+		}
+		msgIDCounter--
+		msg := Message{
+			ID:              msgIDCounter,
+			ConversationID:  conversationID,
+			Role:            "assistant",
+			Content:         group.contentAll.String(),
+			ThinkingContent: group.thinkingAll.String(),
+			Status:          StatusSuccess,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if len(group.allToolCalls) > 0 {
+			tc, _ := json.Marshal(group.allToolCalls)
+			msg.ToolCalls = string(tc)
+		}
+		if len(group.segments) > 0 {
+			seg, _ := json.Marshal(group.segments)
+			msg.Segments = string(seg)
+		}
+		messages = append(messages, msg)
+		messages = append(messages, group.toolResults...)
+		group = nil
+	}
+
+	for _, m := range result.Messages {
+		if m.Role == "system" {
+			continue
+		}
+
+		if m.Role == "toolResult" {
+			resultContent := extractTextFromContent(m.Content)
+			if group != nil && len(group.pending) > 0 {
+				tc := group.pending[0]
+				group.pending = group.pending[1:]
+				msgIDCounter--
+				group.toolResults = append(group.toolResults, Message{
+					ID:             msgIDCounter,
+					ConversationID: conversationID,
+					Role:           "tool",
+					Content:        resultContent,
+					ToolCallID:     tc.id,
+					ToolCallName:   tc.name,
+					Status:         StatusSuccess,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+				})
+			}
+			continue
+		}
+
+		if m.Role == "assistant" {
+			if group == nil {
+				group = &assistantGroup{}
+			}
+			group.pending = nil
+
+			blocks, ok := m.Content.([]any)
+			if !ok {
+				if s, ok := m.Content.(string); ok && s != "" {
+					if group.contentAll.Len() > 0 {
+						group.contentAll.WriteString("\n")
+					}
+					group.contentAll.WriteString(s)
+					group.segments = append(group.segments, segment{Type: "content", Content: s})
+				}
+				continue
+			}
+			for _, block := range blocks {
+				bm, ok := block.(map[string]any)
+				if !ok {
+					continue
+				}
+				blockType, _ := bm["type"].(string)
+				switch blockType {
+				case "text":
+					if text, _ := bm["text"].(string); text != "" {
+						if group.contentAll.Len() > 0 {
+							group.contentAll.WriteString("\n")
+						}
+						group.contentAll.WriteString(text)
+						group.segments = append(group.segments, segment{Type: "content", Content: text})
+					}
+				case "thinking":
+					if t, _ := bm["thinking"].(string); t != "" {
+						if group.thinkingAll.Len() > 0 {
+							group.thinkingAll.WriteString("\n\n")
+						}
+						group.thinkingAll.WriteString(t)
+						group.segments = append(group.segments, segment{Type: "thinking", Content: t})
+					}
+				case "toolCall":
+					name, _ := bm["name"].(string)
+					id, _ := bm["id"].(string)
+					argsRaw := bm["arguments"]
+					argsJSON, _ := json.Marshal(argsRaw)
+					group.allToolCalls = append(group.allToolCalls, map[string]any{
+						"id":       id,
+						"type":     "function",
+						"function": map[string]any{"name": name, "arguments": string(argsJSON)},
+					})
+					entry := toolCallEntry{id: id, name: name}
+					group.pending = append(group.pending, entry)
+					appendToolCallSeg(group, id)
+				}
+			}
+			continue
+		}
+
+		// User or other role: flush any pending assistant group first.
+		flushGroup()
+
+		msgIDCounter--
+		contentStr := extractTextFromContent(m.Content)
+		if m.Role == "user" {
+			contentStr = strings.TrimLeft(contentStr, " \t\n")
+			if idx := strings.Index(contentStr, "] "); idx != -1 && strings.HasPrefix(contentStr, "[") {
+				contentStr = strings.TrimLeft(contentStr[idx+2:], " \t\n")
+			}
+		}
+
+		messages = append(messages, Message{
+			ID:             msgIDCounter,
+			ConversationID: conversationID,
+			Role:           m.Role,
+			Content:        contentStr,
+			Status:         StatusSuccess,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		})
+	}
+	flushGroup()
+
+	return messages, nil
+}
+
 // SendOpenClawMessage sends a message via the OpenClaw WebSocket chat.run API.
 // Messages are NOT stored in the local database; OpenClaw manages session history.
 func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageResult, error) {
@@ -312,6 +544,23 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 				}
 			}
 
+		case "thinking":
+			var d struct {
+				Text  string `json:"text"`
+				Delta string `json:"delta"`
+			}
+			if json.Unmarshal(frame.Data, &d) != nil {
+				return
+			}
+			delta := d.Delta
+			if delta != "" {
+				st.thinkingBuilder.WriteString(delta)
+				emit(EventChatThinking, ChatThinkingEvent{
+					ChatEvent: ce(),
+					Delta:     delta,
+				})
+			}
+
 		case "tool":
 			var d struct {
 				Phase      string          `json:"phase"`
@@ -371,11 +620,6 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 				return
 			}
 			switch d.Phase {
-			case "thinking":
-				emit(EventChatThinking, ChatThinkingEvent{
-					ChatEvent: ce(),
-					Delta:     "...",
-				})
 			case "end":
 				st.finishReason = "stop"
 				select {
