@@ -58,7 +58,7 @@ export function useConversations(tabId: string) {
     setAgentLoading(agentId, true)
     const previousConversationId = activeConversationId.value
     try {
-      const list = await ConversationsService.ListConversations(agentId)
+      const list = await ConversationsService.ListConversations(agentId, 'openclaw')
       const next = list || []
       conversationsByAgent.value = {
         ...conversationsByAgent.value,
