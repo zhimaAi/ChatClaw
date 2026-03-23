@@ -18,6 +18,7 @@ import (
 	"chatclaw/internal/define"
 	"chatclaw/internal/device"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/chatwiki"
 	"chatclaw/internal/sqlite"
 
 	"github.com/cloudwego/eino-ext/components/model/claude"
@@ -290,6 +291,14 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 	if err != nil {
 		return nil, err
 	}
+	if providerID == "chatwiki" {
+		if s.app != nil {
+			if _, err := chatwiki.NewChatWikiService(s.app).GetModelCatalog(true); err != nil {
+				s.app.Logger.Error("[providers] GetProviderWithModels chatwiki refresh catalog failed", "provider_id", providerID, "error", err)
+				return nil, err
+			}
+		}
+	}
 
 	db, err := s.db()
 	if err != nil {
@@ -329,10 +338,24 @@ func (s *ProvidersService) GetProviderWithModels(providerID string) (*ProviderWi
 		}
 	}
 
-	return &ProviderWithModels{
+	result := &ProviderWithModels{
 		Provider:    *provider,
 		ModelGroups: groups,
-	}, nil
+	}
+	if s.app != nil {
+		llmCount := 0
+		for _, group := range groups {
+			if group.Type == "llm" {
+				llmCount += len(group.Models)
+			}
+		}
+		s.app.Logger.Info("[providers] GetProviderWithModels done",
+			"provider_id", providerID,
+			"group_count", len(groups),
+			"llm_count", llmCount,
+		)
+	}
+	return result, nil
 }
 
 // SyncChatClawModels fetches ChatClaw model list and syncs it to local `models` table.
@@ -1111,6 +1134,9 @@ func (s *ProvidersService) CreateModel(providerID string, input CreateModelInput
 	if providerID == "chatclaw" {
 		return nil, errs.New("error.chatclaw_models_readonly")
 	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatclaw_models_readonly")
+	}
 
 	input.ModelID = strings.TrimSpace(input.ModelID)
 	if input.ModelID == "" {
@@ -1215,6 +1241,9 @@ func (s *ProvidersService) UpdateModel(providerID string, modelID string, input 
 	if providerID == "chatclaw" {
 		return nil, errs.New("error.chatclaw_models_readonly")
 	}
+	if providerID == "chatwiki" {
+		return nil, errs.New("error.chatclaw_models_readonly")
+	}
 
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
@@ -1315,6 +1344,9 @@ func (s *ProvidersService) GetModel(providerID string, modelID string) (*Model, 
 func (s *ProvidersService) DeleteModel(providerID string, modelID string) error {
 	providerID = strings.TrimSpace(providerID)
 	if providerID == "chatclaw" {
+		return errs.New("error.chatclaw_models_readonly")
+	}
+	if providerID == "chatwiki" {
 		return errs.New("error.chatclaw_models_readonly")
 	}
 	if providerID == "" {

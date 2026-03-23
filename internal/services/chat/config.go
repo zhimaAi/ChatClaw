@@ -20,10 +20,10 @@ import (
 type AgentExtras struct {
 	AgentID             int64
 	LibraryIDs          []int64
-	TeamLibraryID       string   // optional: ChatWiki team library id for external recall
+	TeamLibraryID       string // optional: ChatWiki team library id for external recall
 	MatchThreshold      float64
 	MemoryEnabled       bool
-	ChatMode            string   // "chat" or "task"
+	ChatMode            string // "chat" or "task"
 	MCPEnabled          bool
 	MCPServerIDs        []string // IDs in agent list
 	MCPServerEnabledIDs []string // IDs enabled for generation (subset)
@@ -77,9 +77,9 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		SandboxMode             string  `bun:"sandbox_mode"`
 		SandboxNetwork          bool    `bun:"sandbox_network"`
 		WorkDir                 string  `bun:"work_dir"`
-		MCPEnabled              bool   `bun:"mcp_enabled"`
-		MCPServerIDs            string `bun:"mcp_server_ids"`
-		MCPServerEnabledIDs     string `bun:"mcp_server_enabled_ids"`
+		MCPEnabled              bool    `bun:"mcp_enabled"`
+		MCPServerIDs            string  `bun:"mcp_server_ids"`
+		MCPServerEnabledIDs     string  `bun:"mcp_server_enabled_ids"`
 	}
 	var agent agentRow
 	if err := db.NewSelect().

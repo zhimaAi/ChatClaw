@@ -21,6 +21,8 @@ const (
 
 // ProviderConfig 创建 Embedder 所需的配置
 type ProviderConfig struct {
+	// ProviderID 供应商 ID（如 chatwiki/openai）
+	ProviderID string
 	// ProviderType 供应商类型（openai, azure, ollama, gemini, anthropic）
 	ProviderType string
 	// APIKey 供应商的 API 密钥
@@ -74,6 +76,9 @@ func NewEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embedder, 
 
 // newOpenAIEmbedder 创建 OpenAI Embedder
 func newOpenAIEmbedder(ctx context.Context, cfg *ProviderConfig) (embedding.Embedder, error) {
+	if cfg.ProviderID == "chatwiki" {
+		return newChatWikiEmbedder(cfg), nil
+	}
 	config := &openaiembed.EmbeddingConfig{
 		APIKey:  cfg.APIKey,
 		Model:   cfg.ModelID,

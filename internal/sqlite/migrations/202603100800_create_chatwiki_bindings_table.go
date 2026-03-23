@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS chatwiki_bindings (
     exp INTEGER NOT NULL DEFAULT 0,
     user_id TEXT NOT NULL,
     user_name TEXT NOT NULL DEFAULT '',
+    chatwiki_version TEXT NOT NULL DEFAULT 'dev',
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL
 );

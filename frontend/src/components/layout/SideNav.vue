@@ -21,6 +21,7 @@ import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconChannels from '@/assets/icons/channels.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
@@ -124,7 +125,7 @@ const handleNavClick = (module: NavModule) => {
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+              : 'text-accent-foreground hover:bg-accent/50'
           )
         "
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
@@ -134,14 +135,7 @@ const handleNavClick = (module: NavModule) => {
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          class="size-4 shrink-0 opacity-100"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
@@ -149,6 +143,7 @@ const handleNavClick = (module: NavModule) => {
 
     <!-- 底部导航区域 -->
     <div class="flex w-full flex-col gap-1">
+      <ChatWikiSidebarAccountCard v-if="!navigationStore.sidebarCollapsed" />
       <button
         v-for="item in bottomNavItems"
         :key="item.key"
@@ -158,7 +153,7 @@ const handleNavClick = (module: NavModule) => {
             navigationStore.sidebarCollapsed && 'justify-center',
             navigationStore.activeModule === item.key
               ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
+              : 'text-accent-foreground hover:bg-accent/50'
           )
         "
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
@@ -168,14 +163,7 @@ const handleNavClick = (module: NavModule) => {
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          class="size-4 shrink-0 opacity-100"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>

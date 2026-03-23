@@ -373,12 +373,12 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 }
 
 type UpdateMemorySettingsInput struct {
-	Enabled               bool   `json:"enabled"`
-	ExtractProviderID     string `json:"extract_provider_id"`
-	ExtractModelID        string `json:"extract_model_id"`
-	EmbeddingProviderID   string `json:"embedding_provider_id"`
-	EmbeddingModelID      string `json:"embedding_model_id"`
-	EmbeddingDimension    int    `json:"embedding_dimension"`
+	Enabled             bool   `json:"enabled"`
+	ExtractProviderID   string `json:"extract_provider_id"`
+	ExtractModelID      string `json:"extract_model_id"`
+	EmbeddingProviderID string `json:"embedding_provider_id"`
+	EmbeddingModelID    string `json:"embedding_model_id"`
+	EmbeddingDimension  int    `json:"embedding_dimension"`
 }
 
 func (s *SettingsService) UpdateMemorySettings(input UpdateMemorySettingsInput) error {
@@ -491,6 +491,7 @@ func (s *SettingsService) triggerRebuildMemoryVectors(dimension int) {
 	}
 
 	embedder, err := embedding.NewEmbedder(ctx, &embedding.ProviderConfig{
+		ProviderID:   embProviderID,
 		ProviderType: prov.Type,
 		APIKey:       prov.APIKey,
 		APIEndpoint:  prov.APIEndpoint,

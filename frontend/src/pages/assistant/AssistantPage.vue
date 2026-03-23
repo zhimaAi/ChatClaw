@@ -54,6 +54,8 @@ import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
 import { useTeamRobots } from './composables/useTeamRobots'
 import { supportsMultimodal } from '@/composables/useMultimodal'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { clearUnavailableChatwikiSelection } from '@/lib/chatwikiModelAvailability'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -597,7 +599,31 @@ const handleSelectConversation = async (conversation: Conversation) => {
 
   // Set model selection from conversation's saved model
   if (conversation.llm_provider_id && conversation.llm_model_id) {
-    selectedModelKey.value = `${conversation.llm_provider_id}::${conversation.llm_model_id}`
+    const binding = await getChatwikiBinding().catch(() => null)
+    const nextKey = clearUnavailableChatwikiSelection(
+      `${conversation.llm_provider_id}::${conversation.llm_model_id}`,
+      binding
+    )
+    if (nextKey) {
+      selectedModelKey.value = nextKey
+    } else {
+      selectedModelKey.value = ''
+      try {
+        const cleared = await ConversationsService.UpdateConversation(
+          conversation.id,
+          new UpdateConversationInput({
+            llm_provider_id: '',
+            llm_model_id: '',
+          })
+        )
+        if (cleared) {
+          handleConversationUpdated(cleared)
+        }
+      } catch (error) {
+        console.warn('Failed to clear unavailable Chatwiki conversation model:', error)
+      }
+      selectDefaultModel(activeAgent.value, conversation)
+    }
   }
 
   // Personal + team knowledge can both be selected; recall runs both paths when set
