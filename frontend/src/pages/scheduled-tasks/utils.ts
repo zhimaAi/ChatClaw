@@ -1,6 +1,6 @@
 import { formatUtcDateTime } from '@/composables/useDateTime'
 import { i18n } from '@/i18n'
-import { SCHEDULE_PRESET_LABELS, WEEKDAY_OPTIONS } from './constants'
+import { SCHEDULE_PRESET_LABELS, TASK_COPY_NAME_SUFFIX, WEEKDAY_OPTIONS } from './constants'
 import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskOperationSnapshot } from './types'
 
 export function formatTaskTime(value?: string | Date | null) {
@@ -166,6 +166,17 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   if (task.schedule_type === 'cron') {
     form.cronExpr = task.cron_expr
   }
+
+  return form
+}
+
+export function taskToCopyForm(task: ScheduledTask): ScheduledTaskFormState {
+  const form = taskToForm(task)
+  const normalizedName = form.name.trim()
+
+  // A copied task must be created as a brand-new record instead of overwriting the source task.
+  form.id = null
+  form.name = normalizedName ? `${normalizedName}${TASK_COPY_NAME_SUFFIX}` : TASK_COPY_NAME_SUFFIX
 
   return form
 }

@@ -22,6 +22,7 @@ const { t } = useI18n()
 
 const emit = defineEmits<{
   edit: [task: ScheduledTask]
+  copy: [task: ScheduledTask]
   delete: [task: ScheduledTask]
   run: [task: ScheduledTask]
   history: [task: ScheduledTask]
@@ -172,6 +173,9 @@ function statusTextClass(task: ScheduledTask) {
                   }}</DropdownMenuItem>
                   <DropdownMenuItem @select="emit('edit', task)">{{
                     t('scheduledTasks.edit')
+                  }}</DropdownMenuItem>
+                  <DropdownMenuItem @select="emit('copy', task)">{{
+                    t('scheduledTasks.copy')
                   }}</DropdownMenuItem>
                   <DropdownMenuItem
                     class="text-red-600 focus:text-red-600"

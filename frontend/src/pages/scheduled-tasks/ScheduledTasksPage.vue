@@ -20,7 +20,7 @@ import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
 import { createDeleteTaskConfirmation } from './deleteTaskConfirmation'
 import type { ScheduledTask, ScheduledTaskFormState } from './types'
-import { buildExpirationDateTime, taskToForm } from './utils'
+import { buildExpirationDateTime, taskToCopyForm, taskToForm } from './utils'
 
 defineProps<{
   tabId: string
@@ -140,6 +140,12 @@ async function handleEdit(task: ScheduledTask) {
   await openEditDialog(task, taskToForm)
 }
 
+function handleCopy(task: ScheduledTask) {
+  editingTask.value = null
+  form.value = taskToCopyForm(task)
+  createDialogOpen.value = true
+}
+
 function syncPendingDeleteTask() {
   pendingDeleteTask.value = deleteTaskConfirmation.pendingTask()
 }
@@ -244,6 +250,7 @@ async function handleDeleteConfirm() {
           :tasks="tasks"
           :agents="agents"
           @edit="handleEdit"
+          @copy="handleCopy"
           @run="runTaskNow"
           @history="(task) => (historyTask = task)"
           @toggle="toggleTask"

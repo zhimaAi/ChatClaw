@@ -1446,6 +1446,7 @@ export default {
     failed: '失败',
     runNow: '立即运行',
     history: '历史记录',
+    copy: '复制',
     delete: '删除',
     deleteConfirmTitle: '确认删除',
     deleteConfirmDescription: '确定要删除任务“{name}”吗？此操作无法撤销。',
