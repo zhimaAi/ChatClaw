@@ -65,7 +65,7 @@ import { clearUnavailableChatwikiSelection } from '@/lib/chatwikiModelAvailabili
 const props = withDefaults(
   defineProps<{
     tabId: string
-    mode?: 'main' | 'snap' | 'embedded'
+    mode?: 'main' | 'snap' | 'embedded' | 'history-iframe'
     initialConversationId?: number | null
     initialAgentId?: number | null
   }>(),
@@ -79,6 +79,12 @@ const props = withDefaults(
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')
 const isEmbeddedMode = computed(() => props.mode === 'embedded')
+const isHistoryIframeMode = computed(() => props.mode === 'history-iframe')
+const isIsolatedIframeMode = computed(() => isEmbeddedMode.value || isHistoryIframeMode.value)
+const hideAssistantSidebar = computed(() => isEmbeddedMode.value || isHistoryIframeMode.value)
+const showHistoryConversationShell = computed(
+  () => isHistoryIframeMode.value && activeDisplayConversationId.value != null
+)
 
 type ListMode = 'personal' | 'team'
 
@@ -398,7 +404,7 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
   try {
     await createAgent(data)
     createOpen.value = false
-    if (!isEmbeddedMode.value) {
+    if (!isIsolatedIframeMode.value) {
       updateCurrentTab()
     }
 
@@ -439,7 +445,7 @@ const handleUpdated = (updated: Agent) => {
 
   // If updating the currently selected agent
   if (activeAgentId.value === updated.id) {
-    if (!isEmbeddedMode.value) {
+    if (!isIsolatedIframeMode.value) {
       updateCurrentTab()
     }
     // Sync model selection if default model changed
@@ -1260,7 +1266,7 @@ const confirmDeleteConversation = async () => {
  * Update current tab's icon and title to match selected agent
  */
 const updateCurrentTab = () => {
-  if (isEmbeddedMode.value) return
+  if (isIsolatedIframeMode.value) return
   const agent = activeAgent.value
   // Use agent's custom icon or default logo
   const icon = agent?.icon || getLogoDataUrl()
@@ -1272,7 +1278,7 @@ const updateCurrentTab = () => {
 // Watch for active agent changes to update selected model, tab info, and load conversations
 watch(activeAgentId, async (newAgentId, oldAgentId) => {
   selectDefaultModel(activeAgent.value, activeConversation.value)
-  if (!isEmbeddedMode.value) {
+  if (!isIsolatedIframeMode.value) {
     updateCurrentTab()
   }
   if (newAgentId && oldAgentId !== undefined) {
@@ -1362,7 +1368,7 @@ watch(activeTeamRobotId, (newId, oldId) => {
 // 当前标签页是否激活
 // For snap/embedded mode, always consider it active since it does not follow main tab visibility.
 const isTabActive = computed(
-  () => isSnapMode.value || isEmbeddedMode.value || navigationStore.activeTabId === props.tabId
+  () => isSnapMode.value || isIsolatedIframeMode.value || navigationStore.activeTabId === props.tabId
 )
 
 async function initializeEmbeddedConversation() {
@@ -1458,7 +1464,7 @@ onMounted(() => {
     await loadModels()
     await loadLibrariesFn()
 
-    if (isEmbeddedMode.value) {
+    if (isIsolatedIframeMode.value) {
       await initializeEmbeddedConversation()
     } else {
       // Snap mode: restore list mode and assistant selection from cache (default: personal)
@@ -1569,7 +1575,7 @@ onMounted(() => {
   chatStore.subscribe()
 
   // Listen for text selection to send to assistant (main mode only)
-  if (!isSnapMode.value && !isEmbeddedMode.value) {
+  if (!isSnapMode.value && !isIsolatedIframeMode.value) {
     unsubscribeTextSelection = Events.On('text-selection:send-to-assistant', (event: any) => {
       const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
       const text = payload?.text ?? ''
@@ -1777,7 +1783,7 @@ onUnmounted(() => {
 
       <!-- Left side: Agent list (collapsible, overlay in snap mode when expanded; always show so personal/team tab can switch when empty) -->
       <AgentSidebar
-        v-if="!isEmbeddedMode && !sidebarCollapsed"
+        v-if="!hideAssistantSidebar && !sidebarCollapsed"
         :agents="agents"
         :active-agent-id="activeAgentId"
         :active-conversation-id="activeDisplayConversationId"
@@ -1817,7 +1823,7 @@ onUnmounted(() => {
       <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <!-- Collapse/Expand handle (snap mode: floating, draggable) -->
         <div
-          v-if="!isEmbeddedMode && isSnapMode"
+          v-if="!hideAssistantSidebar && isSnapMode"
           class="absolute left-0.5 z-10 cursor-grab active:cursor-grabbing"
           :style="{ top: snapBtnTop + 'px' }"
           @pointerdown="onSnapBtnPointerDown"
@@ -1851,7 +1857,7 @@ onUnmounted(() => {
         </div>
         <!-- Collapse/Expand handle (non-snap mode: in-flow) -->
         <div
-          v-if="!isEmbeddedMode && !isSnapMode"
+          v-if="!hideAssistantSidebar && !isSnapMode"
           class="relative z-10 flex w-8 shrink-0 items-center justify-center"
         >
           <button
@@ -1890,7 +1896,7 @@ onUnmounted(() => {
           <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode).
            Always render to avoid layout shift when switching chat mode; hide button via invisible. -->
           <div
-            v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team'"
+            v-if="!isAgentEmpty && !isHistoryIframeMode && !isSnapMode && listMode !== 'team'"
             class="flex shrink-0 items-center justify-end px-2 pt-1"
           >
             <Button
@@ -1909,7 +1915,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Agent list empty state (personal tab, no agents) -->
-          <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
+          <div v-if="isAgentEmpty && !showHistoryConversationShell" class="flex h-full items-center justify-center px-8">
             <div class="flex flex-col items-center gap-4">
               <div class="grid size-10 place-items-center rounded-lg bg-muted">
                 <IconAssistant class="size-4 text-muted-foreground" />
@@ -1990,7 +1996,7 @@ onUnmounted(() => {
           <!-- Input area: hide when personal empty or team empty/unbound -->
           <ChatInputArea
             v-if="
-              !isAgentEmpty &&
+              (!isAgentEmpty || showHistoryConversationShell) &&
               !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
               (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
             "
@@ -2047,7 +2053,7 @@ onUnmounted(() => {
         <!-- Workspace drawer panel (task mode only; hidden in team mode).
          Always rendered to avoid layout shift; auto-closed when not in task mode. -->
         <WorkspaceDrawer
-          v-if="!isSnapMode && listMode !== 'team'"
+          v-if="!isSnapMode && !isHistoryIframeMode && listMode !== 'team'"
           :open="workspaceDrawerOpen && chatMode === 'task'"
           :agent="activeAgent"
           :conversation-id="activeConversationId"
@@ -2060,7 +2066,7 @@ onUnmounted(() => {
       <!-- Input area (snap mode with messages: full-width at bottom) -->
       <ChatInputArea
         v-if="
-          !isAgentEmpty &&
+          (!isAgentEmpty || showHistoryConversationShell) &&
           !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
           isSnapMode &&
           (chatMessages.length > 0 || isGenerating)

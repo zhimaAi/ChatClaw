@@ -1012,6 +1012,45 @@ export const useChatStore = defineStore('chat', () => {
     return Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
   }
 
+  const handleForwardedEvent = (eventName: string, payload: any) => {
+    const wrappedEvent = { data: payload }
+    if (eventName === ChatEventType.USER_MESSAGE) {
+      handleChatUserMessage(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.START) {
+      handleChatStart(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.CHUNK) {
+      handleChatChunk(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.THINKING) {
+      handleChatThinking(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.TOOL) {
+      handleChatTool(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.RETRIEVAL) {
+      handleChatRetrieval(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.COMPLETE) {
+      handleChatComplete(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.STOPPED) {
+      handleChatStopped(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.ERROR) {
+      handleChatError(wrappedEvent)
+    }
+  }
+
   // Subscribe to chat events
   let unsubscribers: Array<() => void> = []
   let subscriptionRefCount = 0
@@ -1128,5 +1167,6 @@ export const useChatStore = defineStore('chat', () => {
     // Event subscription
     subscribe,
     unsubscribe,
+    handleForwardedEvent,
   }
 })

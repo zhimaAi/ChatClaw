@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
@@ -7,7 +7,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail } from '../types'
 import { formatDuration, formatTaskTime } from '../utils'
 import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
-import EmbeddedAssistantPage from '@/pages/assistant/components/EmbeddedAssistantPage.vue'
+import { Events } from '@wailsio/runtime'
+import { ChatEventType } from '@/stores/chat'
+
+// Query keys for the isolated history iframe page.
+const HISTORY_RUN_PAGE_PATH = 'history-run.html'
+const QUERY_KEY_CONVERSATION_ID = 'conversationId'
+const QUERY_KEY_AGENT_ID = 'agentId'
+const HISTORY_IFRAME_TITLE = 'Scheduled task run conversation'
+const FORWARDED_CHAT_EVENT_TYPE = 'history-run-chat-event'
 
 const props = defineProps<{
   open: boolean
@@ -22,7 +30,49 @@ const loading = ref(false)
 const runs = ref<ScheduledTaskRun[]>([])
 const selectedRunId = ref<number | null>(null)
 const selectedDetail = ref<ScheduledTaskRunDetail | null>(null)
+const iframeRef = ref<HTMLIFrameElement | null>(null)
 const { t } = useI18n()
+
+const iframeSrc = computed(() => {
+  const conversationId = selectedDetail.value?.conversation?.id
+  if (!conversationId) return ''
+
+  const params = new URLSearchParams()
+  params.set(QUERY_KEY_CONVERSATION_ID, String(conversationId))
+
+  const agentId = selectedDetail.value?.conversation?.agent_id
+  if (agentId && agentId > 0) {
+    params.set(QUERY_KEY_AGENT_ID, String(agentId))
+  }
+
+  return `${HISTORY_RUN_PAGE_PATH}?${params.toString()}`
+})
+
+const forwardChatEventToIframe = (eventName: string, event: any) => {
+  const iframeWindow = iframeRef.value?.contentWindow
+  if (!iframeWindow) return
+
+  const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+  iframeWindow.postMessage(
+    {
+      type: FORWARDED_CHAT_EVENT_TYPE,
+      eventName,
+      payload,
+    },
+    window.location.origin
+  )
+}
+
+const chatEventNames = Object.values(ChatEventType)
+const chatEventUnsubscribers = chatEventNames.map((eventName) =>
+  Events.On(eventName, (event: any) => {
+    forwardChatEventToIframe(eventName, event)
+  })
+)
+
+onUnmounted(() => {
+  chatEventUnsubscribers.forEach((unsubscribe) => unsubscribe?.())
+})
 
 function displayRunStatusLabel(status: string) {
   if (status === 'running') return t('scheduledTasks.statusRunning')
@@ -67,9 +117,7 @@ async function selectRun(run: ScheduledTaskRun) {
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
-    <DialogContent
-      class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]"
-    >
+    <DialogContent class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]">
       <DialogHeader>
         <DialogTitle>{{ task?.name }} / {{ t('scheduledTasks.runHistoryTitle') }}</DialogTitle>
       </DialogHeader>
@@ -127,10 +175,13 @@ async function selectRun(run: ScheduledTaskRun) {
           >
             {{ t('scheduledTasks.conversationEmpty') }}
           </div>
-          <EmbeddedAssistantPage
+          <iframe
             v-else
-            :conversation-id="selectedDetail.conversation.id"
-            :agent-id="selectedDetail.conversation.agent_id"
+            ref="iframeRef"
+            :key="iframeSrc"
+            :src="iframeSrc"
+            :title="HISTORY_IFRAME_TITLE"
+            class="h-full w-full border-0"
           />
         </div>
       </div>

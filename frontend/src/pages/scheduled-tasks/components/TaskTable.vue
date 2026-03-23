@@ -85,17 +85,6 @@ function statusTextClass(task: ScheduledTask) {
                   {{ task.name }}
                 </div>
                 <div class="truncate text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
-                <div
-                  v-if="task.expires_at"
-                  class="text-xs leading-5"
-                  :class="task.is_expired ? 'text-[#dc2626]' : 'text-[#94a3b8]'"
-                >
-                  {{
-                    task.is_expired
-                      ? `已于 ${formatDateOnly(task.expires_at)} 过期`
-                      : `到期：${formatDateOnly(task.expires_at)}`
-                  }}
-                </div>
               </div>
             </td>
             <td class="px-5 py-3.5">
