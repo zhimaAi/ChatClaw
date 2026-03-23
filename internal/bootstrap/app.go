@@ -379,13 +379,15 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
-	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app), providersSvc)
-	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, openClawAgentsService)
-	openClawAgentsService.SetChangeHook(agentSyncer.MarkDirty)
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
+	configSvc := openclawruntime.NewConfigService(openclawManager)
+	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
+	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
+	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
+	openClawAgentsService.SetGateway(agentGWSvc)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
-	// Listen for provider config changes and sync to OpenClaw Gateway
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
-		openclawManager.NotifyConfigChanged()
+		go configSvc.Sync(context.Background())
 	})
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
@@ -621,7 +623,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
-		agentSyncer.Close()
 		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())

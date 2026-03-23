@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { EmojiPicker } from '@/components/ui/emoji-picker'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import {
   Select,
@@ -437,11 +438,7 @@ const handleDelete = async () => {
                   <label class="text-sm font-medium text-foreground">
                     {{ t('assistant.fields.identityEmoji') }}
                   </label>
-                  <Input
-                    v-model="identityEmoji"
-                    :placeholder="t('assistant.fields.identityEmojiPlaceholder')"
-                    maxlength="10"
-                  />
+                  <EmojiPicker v-model="identityEmoji" />
                 </div>
 
                 <div class="flex flex-col gap-1.5">
