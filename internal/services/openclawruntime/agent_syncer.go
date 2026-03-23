@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -200,16 +201,34 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 		normalizedID := strings.ToLower(agentID)
 
 		existing, existsInGateway := gatewayMap[normalizedID]
-		if !existsInGateway {
-			// agents.create initialises workspace dirs, agentDir, sessions
-			// store, and AGENTS.md/SOUL.md scaffolding that config.patch alone
-			// does not provide.
+
+		// Ensure workspace directory exists.  The Gateway may report the
+		// agent as existing (e.g. the implicit "main") even when its
+		// workspace has never been scaffolded on disk.
+		wsDir := s.resolveAgentWorkspace(agent)
+		wsMissing := false
+		if _, statErr := os.Stat(wsDir); os.IsNotExist(statErr) {
+			wsMissing = true
+		}
+
+		if wsMissing && agentID == define.OpenClawMainAgentID {
+			// "main" is a reserved name — agents.create rejects it.
+			// Create the workspace directory ourselves and let
+			// upsertAgentConfig handle the config entry.
+			if err := os.MkdirAll(wsDir, 0o755); err != nil {
+				return fmt.Errorf("mkdir workspace %s: %w", wsDir, err)
+			}
+			if err := s.upsertAgentConfig(ctx, agent); err != nil {
+				return fmt.Errorf("config.patch upsert %s: %w", agentID, err)
+			}
+			changed = true
+			continue
+		}
+
+		if wsMissing || !existsInGateway {
 			if err := s.createAgentDirs(ctx, agent); err != nil {
 				return fmt.Errorf("agents.create %s: %w", agentID, err)
 			}
-			// Atomically set the correct name/identity/workspace/agentDir via
-			// config.patch (replaces the placeholder name written by
-			// agents.create with the real display name).
 			if err := s.upsertAgentConfig(ctx, agent); err != nil {
 				return fmt.Errorf("config.patch upsert %s: %w", agentID, err)
 			}
