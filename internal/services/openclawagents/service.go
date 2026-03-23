@@ -36,15 +36,30 @@ func (s *OpenClawAgentsService) GetDefaultWorkDir() string {
 	return defaultWorkDir()
 }
 
+// GatewayAgentOps is the interface for direct Gateway agent operations.
+// Implemented by openclawruntime.AgentService; injected to avoid circular imports.
+type GatewayAgentOps interface {
+	OnAgentCreated(agent OpenClawAgent)
+	OnAgentUpdated(agent OpenClawAgent)
+	OnAgentDeleted(openclawAgentID string)
+}
+
 type OpenClawAgentsService struct {
-	app        *application.App
-	testDB     *bun.DB
-	changeMu   sync.RWMutex
-	changeHook func()
+	app       *application.App
+	testDB    *bun.DB
+	gatewayMu sync.RWMutex
+	gateway   GatewayAgentOps
 }
 
 func NewOpenClawAgentsService(app *application.App) *OpenClawAgentsService {
 	return &OpenClawAgentsService{app: app}
+}
+
+// SetGateway injects the Gateway agent operations. Called once during bootstrap.
+func (s *OpenClawAgentsService) SetGateway(gw GatewayAgentOps) {
+	s.gatewayMu.Lock()
+	defer s.gatewayMu.Unlock()
+	s.gateway = gw
 }
 
 func (s *OpenClawAgentsService) db() (*bun.DB, error) {
@@ -58,20 +73,10 @@ func (s *OpenClawAgentsService) db() (*bun.DB, error) {
 	return db, nil
 }
 
-// SetChangeHook registers a callback invoked after successful agent mutations.
-func (s *OpenClawAgentsService) SetChangeHook(fn func()) {
-	s.changeMu.Lock()
-	defer s.changeMu.Unlock()
-	s.changeHook = fn
-}
-
-func (s *OpenClawAgentsService) notifyChange() {
-	s.changeMu.RLock()
-	fn := s.changeHook
-	s.changeMu.RUnlock()
-	if fn != nil {
-		go fn()
-	}
+func (s *OpenClawAgentsService) getGateway() GatewayAgentOps {
+	s.gatewayMu.RLock()
+	defer s.gatewayMu.RUnlock()
+	return s.gateway
 }
 
 func newOpenClawAgentModel(name, openclawAgentID, icon string) *openClawAgentModel {
@@ -130,17 +135,12 @@ func (s *OpenClawAgentsService) EnsureMainAgent() error {
 		"",
 	)
 
-	result, err := db.NewInsert().Model(agent).
+	if _, err := db.NewInsert().Model(agent).
 		On("CONFLICT (openclaw_agent_id) DO NOTHING").
-		Exec(ctx)
-	if err != nil {
+		Exec(ctx); err != nil {
 		return errs.Wrap("error.agent_create_failed", err)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected > 0 {
-		s.notifyChange()
-	}
 	return nil
 }
 
@@ -236,48 +236,13 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 		return nil, errs.New("error.agent_icon_too_large")
 	}
 
-	providerID := strings.TrimSpace(input.DefaultLLMProviderID)
-	modelID := strings.TrimSpace(input.DefaultLLMModelID)
-	if (providerID == "") != (modelID == "") {
-		return nil, errs.New("error.agent_default_llm_incomplete")
-	}
-
 	db, err := s.db()
 	if err != nil {
 		return nil, err
 	}
 
-	if providerID != "" && modelID != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := ensureLLMModelExists(ctx, db, providerID, modelID); err != nil {
-			return nil, err
-		}
-	}
-
 	m := newOpenClawAgentModel(name, define.NewOpenClawManagedAgentID(), icon)
-	m.DefaultLLMProviderID = providerID
-	m.DefaultLLMModelID = modelID
-
 	m.IdentityEmoji = strings.TrimSpace(input.IdentityEmoji)
-	m.IdentityTheme = strings.TrimSpace(input.IdentityTheme)
-
-	if v := strings.TrimSpace(input.GroupChatMentionPatterns); v != "" {
-		m.GroupChatMentionPatterns = v
-	}
-
-	m.ToolsProfile = strings.TrimSpace(input.ToolsProfile)
-	if v := strings.TrimSpace(input.ToolsAllow); v != "" {
-		m.ToolsAllow = v
-	}
-	if v := strings.TrimSpace(input.ToolsDeny); v != "" {
-		m.ToolsDeny = v
-	}
-
-	m.HeartbeatEvery = strings.TrimSpace(input.HeartbeatEvery)
-
-	m.ParamsTemperature = strings.TrimSpace(input.ParamsTemperature)
-	m.ParamsMaxTokens = strings.TrimSpace(input.ParamsMaxTokens)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -287,7 +252,9 @@ func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*Op
 	}
 
 	dto := m.toDTO()
-	s.notifyChange()
+	if gw := s.getGateway(); gw != nil {
+		go gw.OnAgentCreated(dto)
+	}
 	return &dto, nil
 }
 
@@ -497,7 +464,9 @@ func (s *OpenClawAgentsService) UpdateAgent(id int64, input UpdateOpenClawAgentI
 	if err != nil {
 		return nil, err
 	}
-	s.notifyChange()
+	if gw := s.getGateway(); gw != nil {
+		go gw.OnAgentUpdated(*updated)
+	}
 	return updated, nil
 }
 
@@ -543,7 +512,9 @@ func (s *OpenClawAgentsService) DeleteAgent(id int64) error {
 		return errs.Newf("error.agent_not_found", map[string]any{"ID": id})
 	}
 
-	s.notifyChange()
+	if gw := s.getGateway(); gw != nil {
+		go gw.OnAgentDeleted(openclawAgentID)
+	}
 	return nil
 }
 
