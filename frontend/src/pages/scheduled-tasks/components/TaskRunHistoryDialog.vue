@@ -16,6 +16,7 @@ const QUERY_KEY_CONVERSATION_ID = 'conversationId'
 const QUERY_KEY_AGENT_ID = 'agentId'
 const HISTORY_IFRAME_TITLE = 'Scheduled task run conversation'
 const FORWARDED_CHAT_EVENT_TYPE = 'history-run-chat-event'
+const FORWARDED_CHAT_STATE_TYPE = 'history-run-chat-state'
 
 const props = defineProps<{
   open: boolean
@@ -31,6 +32,7 @@ const runs = ref<ScheduledTaskRun[]>([])
 const selectedRunId = ref<number | null>(null)
 const selectedDetail = ref<ScheduledTaskRunDetail | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
+const latestChatEventByConversation = new Map<number, { eventName: string; payload: any }>()
 const { t } = useI18n()
 
 const iframeSrc = computed(() => {
@@ -50,14 +52,37 @@ const iframeSrc = computed(() => {
 
 const forwardChatEventToIframe = (eventName: string, event: any) => {
   const iframeWindow = iframeRef.value?.contentWindow
-  if (!iframeWindow) return
 
   const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+  const conversationId = Number(payload?.conversation_id)
+  if (Number.isFinite(conversationId) && conversationId > 0) {
+    latestChatEventByConversation.set(conversationId, { eventName, payload })
+  }
+
+  if (!iframeWindow) return
   iframeWindow.postMessage(
     {
       type: FORWARDED_CHAT_EVENT_TYPE,
       eventName,
       payload,
+    },
+    window.location.origin
+  )
+}
+
+const syncLatestChatStateToIframe = () => {
+  const iframeWindow = iframeRef.value?.contentWindow
+  const conversationId = selectedDetail.value?.conversation?.id
+  if (!iframeWindow || !conversationId) return
+
+  const latest = latestChatEventByConversation.get(conversationId)
+  if (!latest) return
+
+  iframeWindow.postMessage(
+    {
+      type: FORWARDED_CHAT_STATE_TYPE,
+      eventName: latest.eventName,
+      payload: latest.payload,
     },
     window.location.origin
   )
@@ -182,6 +207,7 @@ async function selectRun(run: ScheduledTaskRun) {
             :src="iframeSrc"
             :title="HISTORY_IFRAME_TITLE"
             class="h-full w-full border-0"
+            @load="syncLatestChatStateToIframe"
           />
         </div>
       </div>
