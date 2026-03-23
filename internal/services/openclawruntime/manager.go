@@ -138,8 +138,8 @@ func (m *Manager) reconcile(restart bool) error {
 		return fail("verifyInstalled", err, "", 0)
 	}
 
-	if _, err := ensureBaseConfigFile(bundle); err != nil {
-		return fail("ensureBaseConfigFile", err, version, 0)
+	if err := ensureOpenResponsesEnabled(bundle); err != nil {
+		return fail("ensureOpenResponsesEnabled", err, version, 0)
 	}
 
 	// Start process if needed
@@ -443,6 +443,16 @@ func (m *Manager) IsReady() bool {
 	return m.client != nil && !m.readyAt.IsZero()
 }
 
+// GatewayURL returns the HTTP base URL of the running OpenClaw Gateway.
+func (m *Manager) GatewayURL() string {
+	return gatewayURL(m.store.Get().GatewayPort)
+}
+
+// GatewayToken returns the auth token for the running OpenClaw Gateway.
+func (m *Manager) GatewayToken() string {
+	return m.store.Get().GatewayToken
+}
+
 func (m *Manager) Request(ctx context.Context, method string, params any, out any) error {
 	m.mu.RLock()
 	client := m.client
@@ -492,16 +502,35 @@ func verifyInstalled(bundle *bundledRuntime) (string, error) {
 	return version, nil
 }
 
-func ensureBaseConfigFile(bundle *bundledRuntime) (created bool, err error) {
+// ensureOpenResponsesEnabled uses `openclaw config set` to enable the
+// OpenResponses HTTP endpoint via the standard CLI.
+func ensureOpenResponsesEnabled(bundle *bundledRuntime) error {
 	if err := os.MkdirAll(bundle.StateDir, 0o700); err != nil {
-		return false, fmt.Errorf("create openclaw state dir: %w", err)
+		return fmt.Errorf("create openclaw state dir: %w", err)
 	}
-	if _, err := os.Stat(bundle.ConfigPath); err == nil {
-		return false, nil
-	} else if !os.IsNotExist(err) {
-		return false, fmt.Errorf("stat openclaw config: %w", err)
+
+	env := []string{
+		"OPENCLAW_CONFIG_PATH=" + bundle.ConfigPath,
+		"OPENCLAW_STATE_DIR=" + bundle.StateDir,
 	}
-	return true, writeJSONFile(bundle.ConfigPath, map[string]any{}, 0o600)
+	for _, entry := range os.Environ() {
+		if k, _, ok := strings.Cut(entry, "="); ok {
+			if k == "OPENCLAW_CONFIG_PATH" || k == "OPENCLAW_STATE_DIR" {
+				continue
+			}
+		}
+		env = append(env, entry)
+	}
+
+	cmd := exec.Command(bundle.CLIPath, "config", "set",
+		"gateway.http.endpoints.responses.enabled", "true")
+	cmd.Env = env
+	cmd.Dir = bundle.Root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("openclaw config set responses.enabled: %w: %s", err, string(out))
+	}
+	return nil
 }
 
 func parseVersionOutput(output string) (string, error) {
