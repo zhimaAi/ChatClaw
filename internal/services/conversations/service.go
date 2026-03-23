@@ -47,11 +47,15 @@ func (s *ConversationsService) serializeLibraryIDs(ids []int64) string {
 }
 
 // ListConversations 获取指定助手的会话列表（置顶优先，然后按更新时间倒序）
-func (s *ConversationsService) ListConversations(agentID int64) ([]Conversation, error) {
+// agentType 为空时默认过滤 "eino" 类型会话。
+func (s *ConversationsService) ListConversations(agentID int64, agentType string) ([]Conversation, error) {
 	if agentID <= 0 {
 		return nil, errs.New("error.agent_id_required")
 	}
-	s.app.Logger.Info("[conversations] ListConversations start", "agent_id", agentID)
+	if agentType == "" {
+		agentType = AgentTypeEino
+	}
+	s.app.Logger.Info("[conversations] ListConversations start", "agent_id", agentID, "agent_type", agentType)
 
 	db, err := s.db()
 	if err != nil {
@@ -65,11 +69,12 @@ func (s *ConversationsService) ListConversations(agentID int64) ([]Conversation,
 	if err := db.NewSelect().
 		Model(&models).
 		Where("agent_id = ?", agentID).
+		Where("agent_type = ?", agentType).
 		OrderExpr("is_pinned DESC, updated_at DESC, id DESC").
 		Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.conversation_list_failed", err)
 	}
-	s.app.Logger.Info("[conversations] ListConversations loaded", "agent_id", agentID, "count", len(models))
+	s.app.Logger.Info("[conversations] ListConversations loaded", "agent_id", agentID, "agent_type", agentType, "count", len(models))
 
 	out := make([]Conversation, 0, len(models))
 	for i := range models {

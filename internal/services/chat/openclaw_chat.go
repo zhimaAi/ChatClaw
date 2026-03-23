@@ -192,12 +192,17 @@ func (st *openClawChatRunState) nextSeq() int {
 	return int(atomic.AddInt32(&st.seq, 1))
 }
 
-func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID string) ChatEvent {
+func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID string, messageID ...int64) ChatEvent {
+	var mid int64
+	if len(messageID) > 0 {
+		mid = messageID[0]
+	}
 	return ChatEvent{
 		ConversationID: conversationID,
 		TabID:          tabID,
 		RequestID:      requestID,
 		Seq:            st.nextSeq(),
+		MessageID:      mid,
 		Ts:             time.Now().UnixMilli(),
 	}
 }
@@ -207,8 +212,16 @@ func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID
 func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, cfg openClawAgentConfig) {
 	st := &openClawChatRunState{}
 
+	// Use a unique negative ID for the assistant message placeholder so it doesn't
+	// collide with other messages (OpenClaw messages are not persisted in DB).
+	assistantMsgID := -conversationID*1000 - int64(time.Now().UnixMilli()%100000)
+
 	emit := func(eventName string, payload any) {
 		s.app.Event.Emit(eventName, payload)
+	}
+
+	ce := func() ChatEvent {
+		return st.chatEvent(conversationID, tabID, requestID, assistantMsgID)
 	}
 
 	emitError := func(errorKey string, errorData any) {
@@ -216,23 +229,19 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			"conv", conversationID, "tab", tabID, "req", requestID,
 			"key", errorKey, "data", errorData)
 		emit(EventChatError, ChatErrorEvent{
-			ChatEvent: st.chatEvent(conversationID, tabID, requestID),
+			ChatEvent: ce(),
 			Status:    StatusError,
 			ErrorKey:  errorKey,
 			ErrorData: errorData,
 		})
 	}
 
-	// Emit user message event so frontend can display it immediately
-	emit(EventChatUserMessage, ChatUserMessageEvent{
-		ChatEvent:  st.chatEvent(conversationID, tabID, requestID),
-		Content:    userContent,
-		ImagesJSON: "[]",
-	})
+	// No need to emit chat:user-message — the frontend already has the optimistic
+	// user message inserted in sendOpenClawMessage before calling the backend.
 
 	// Emit start event
 	emit(EventChatStart, ChatStartEvent{
-		ChatEvent: st.chatEvent(conversationID, tabID, requestID),
+		ChatEvent: ce(),
 		Status:    StatusStreaming,
 	})
 
@@ -262,13 +271,17 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			return
 		}
 
-		// Route by runId if known, otherwise by sessionKey
+		s.app.Logger.Debug("[openclaw-chat] agent event",
+			"conv", conversationID,
+			"stream", frame.Stream,
+			"runId", frame.RunID)
+
+		// Route by runId if known, otherwise accept all events
+		// (sessionKey may not be present in all event payloads)
 		if rid, _ := activeRunID.Load().(string); rid != "" {
-			if frame.RunID != rid {
+			if frame.RunID != "" && frame.RunID != rid {
 				return
 			}
-		} else if frame.SessionKey != sessionKey {
-			return
 		}
 
 		// Capture runId from the first matching event
@@ -280,46 +293,22 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		switch frame.Stream {
 		case "assistant":
 			var d struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+				Text  string `json:"text"`
+				Delta string `json:"delta"`
 			}
 			if json.Unmarshal(frame.Data, &d) != nil {
 				return
 			}
-			if d.Text != "" {
-				// The server sends cumulative text, not deltas.
-				// Extract the actual delta by comparing with what we already have.
-				prev := st.contentBuilder.String()
-				if len(d.Text) > len(prev) && strings.HasPrefix(d.Text, prev) {
-					delta := d.Text[len(prev):]
-					st.contentBuilder.Reset()
-					st.contentBuilder.WriteString(d.Text)
-					s.appendGenerationContent(conversationID, requestID, delta)
-					emit(EventChatChunk, ChatChunkEvent{
-						ChatEvent: st.chatEvent(conversationID, tabID, requestID),
-						Delta:     delta,
-					})
-					if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
-						cb.(ChunkCallback)(d.Text)
-					}
-				} else if d.Text != prev {
-					// Fallback: full replacement (shouldn't happen normally)
-					delta := d.Text
-					if len(prev) > 0 {
-						delta = d.Text[len(prev):]
-					}
-					st.contentBuilder.Reset()
-					st.contentBuilder.WriteString(d.Text)
-					if delta != "" {
-						s.appendGenerationContent(conversationID, requestID, delta)
-						emit(EventChatChunk, ChatChunkEvent{
-							ChatEvent: st.chatEvent(conversationID, tabID, requestID),
-							Delta:     delta,
-						})
-					}
-					if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
-						cb.(ChunkCallback)(d.Text)
-					}
+			delta := d.Delta
+			if delta != "" {
+				st.contentBuilder.WriteString(delta)
+				s.appendGenerationContent(conversationID, requestID, delta)
+				emit(EventChatChunk, ChatChunkEvent{
+					ChatEvent: ce(),
+					Delta:     delta,
+				})
+				if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
+					cb.(ChunkCallback)(st.contentBuilder.String())
 				}
 			}
 
@@ -335,6 +324,10 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			if json.Unmarshal(frame.Data, &d) != nil {
 				return
 			}
+			s.app.Logger.Debug("[openclaw-chat] tool event",
+				"conv", conversationID,
+				"phase", d.Phase, "name", d.Name,
+				"toolCallId", d.ToolCallID)
 			switch d.Phase {
 			case "start":
 				argsJSON := ""
@@ -342,7 +335,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 					argsJSON = string(d.Input)
 				}
 				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  st.chatEvent(conversationID, tabID, requestID),
+					ChatEvent:  ce(),
 					Type:       "call",
 					ToolCallID: d.ToolCallID,
 					ToolName:   d.Name,
@@ -354,7 +347,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 					resultJSON = string(d.Result)
 				}
 				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  st.chatEvent(conversationID, tabID, requestID),
+					ChatEvent:  ce(),
 					Type:       "result",
 					ToolCallID: d.ToolCallID,
 					ToolName:   d.Name,
@@ -362,7 +355,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 				})
 			case "error":
 				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  st.chatEvent(conversationID, tabID, requestID),
+					ChatEvent:  ce(),
 					Type:       "result",
 					ToolCallID: d.ToolCallID,
 					ToolName:   d.Name,
@@ -381,7 +374,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			switch d.Phase {
 			case "thinking":
 				emit(EventChatThinking, ChatThinkingEvent{
-					ChatEvent: st.chatEvent(conversationID, tabID, requestID),
+					ChatEvent: ce(),
 					Delta:     "...",
 				})
 			case "end":
@@ -421,7 +414,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	if reqErr != nil {
 		if ctx.Err() != nil {
 			emit(EventChatStopped, ChatStoppedEvent{
-				ChatEvent: st.chatEvent(conversationID, tabID, requestID),
+				ChatEvent: ce(),
 				Status:    StatusCancelled,
 			})
 			return
@@ -451,14 +444,14 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		}
 
 		emit(EventChatStopped, ChatStoppedEvent{
-			ChatEvent: st.chatEvent(conversationID, tabID, requestID),
+			ChatEvent: ce(),
 			Status:    StatusCancelled,
 		})
 		return
 	}
 
 	emit(EventChatComplete, ChatCompleteEvent{
-		ChatEvent:    st.chatEvent(conversationID, tabID, requestID),
+		ChatEvent:    ce(),
 		Status:       StatusSuccess,
 		FinishReason: st.finishReason,
 	})
