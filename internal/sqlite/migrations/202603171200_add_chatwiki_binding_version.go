@@ -9,16 +9,14 @@ import (
 func init() {
 	Migrations.MustRegister(
 		func(ctx context.Context, db *bun.DB) error {
-			var columns []struct {
-				Name string `bun:"name"`
-			}
-			if err := db.NewRaw("PRAGMA table_info(chatwiki_bindings)").Scan(ctx, &columns); err != nil {
+			var colCount int
+			if err := db.QueryRowContext(ctx,
+				`SELECT COUNT(1) FROM pragma_table_info('chatwiki_bindings') WHERE name = 'chatwiki_version'`,
+			).Scan(&colCount); err != nil {
 				return err
 			}
-			for _, column := range columns {
-				if column.Name == "chatwiki_version" {
-					return nil
-				}
+			if colCount > 0 {
+				return nil
 			}
 
 			_, err := db.ExecContext(ctx, `
