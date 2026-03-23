@@ -76,10 +76,38 @@ export interface StreamingMessageState {
   toolCalls: ToolCallInfo[]
   segments: MessageSegment[] // Ordered segments for interleaved rendering
   status: string
+  isOpenClaw?: boolean // OpenClaw messages are not persisted in local DB
 }
 
 // Auto-decrementing counter for local optimistic message IDs (always negative to avoid collision with backend IDs)
 let localMessageCounter = 0
+
+function deepCloneToolCall(tc: ToolCallInfo): ToolCallInfo {
+  return {
+    ...tc,
+    childToolCalls: tc.childToolCalls?.map((c) => ({ ...c })),
+    childContent: tc.childContent,
+    childThinkingContent: tc.childThinkingContent,
+  }
+}
+
+function persistStreamingSegments(
+  segmentsByMessage: Record<number, MessageSegment[]>,
+  messageId: number,
+  segments: MessageSegment[]
+) {
+  segmentsByMessage[messageId] = segments.map((seg) => {
+    if (seg.type === 'thinking') {
+      return { type: 'thinking' as const, content: seg.content }
+    } else if (seg.type === 'content') {
+      return { type: 'content' as const, content: seg.content }
+    } else if (seg.type === 'retrieval') {
+      return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
+    } else {
+      return { type: 'tools' as const, toolCalls: seg.toolCalls.map(deepCloneToolCall) }
+    }
+  })
+}
 
 export const useChatStore = defineStore('chat', () => {
   // Messages by conversation ID
@@ -90,6 +118,9 @@ export const useChatStore = defineStore('chat', () => {
 
   // Active request ID by conversation (to match events)
   const activeRequestByConversation = ref<Record<number, string>>({})
+
+  // Track which conversations are OpenClaw (messages not persisted in local DB)
+  const openClawConversations = ref<Set<number>>(new Set())
 
   // Loading state by conversation
   const loadingByConversation = ref<Record<number, boolean>>({})
@@ -488,6 +519,8 @@ export const useChatStore = defineStore('chat', () => {
       updated_at: null as any,
     } as any)
 
+    openClawConversations.value.add(conversationId)
+
     try {
       const result = await ChatService.SendOpenClawMessage(
         new SendMessageInput({
@@ -647,6 +680,8 @@ export const useChatStore = defineStore('chat', () => {
 
     delete streamingByConversation.value[conversationId]
     delete activeRequestByConversation.value[conversationId]
+
+    openClawConversations.value.add(conversationId)
 
     try {
       const result = await ChatService.EditAndResendOpenClaw(
@@ -1064,12 +1099,20 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.SUCCESS,
       } as any)
 
-      // Clear streaming state first
-      delete streamingByConversation.value[conversation_id]
-      delete activeRequestByConversation.value[conversation_id]
+      if (openClawConversations.value.has(conversation_id)) {
+        persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
+        setTimeout(() => {
+          delete streamingByConversation.value[conversation_id]
+          delete activeRequestByConversation.value[conversation_id]
+        }, 0)
+      } else {
+        // Clear streaming state first
+        delete streamingByConversation.value[conversation_id]
+        delete activeRequestByConversation.value[conversation_id]
 
-      // Refresh messages from backend - segments will be loaded from backend
-      void loadMessages(conversation_id)
+        // Refresh messages from backend - segments will be loaded from backend
+        void loadMessages(conversation_id)
+      }
     }
   }
 
@@ -1088,12 +1131,20 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.CANCELLED,
       } as any)
 
-      // Clear streaming state first
-      delete streamingByConversation.value[conversation_id]
-      delete activeRequestByConversation.value[conversation_id]
+      if (openClawConversations.value.has(conversation_id)) {
+        persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
+        setTimeout(() => {
+          delete streamingByConversation.value[conversation_id]
+          delete activeRequestByConversation.value[conversation_id]
+        }, 0)
+      } else {
+        // Clear streaming state first
+        delete streamingByConversation.value[conversation_id]
+        delete activeRequestByConversation.value[conversation_id]
 
-      // Refresh messages from backend - segments will be loaded from backend
-      void loadMessages(conversation_id)
+        // Refresh messages from backend - segments will be loaded from backend
+        void loadMessages(conversation_id)
+      }
     }
   }
 
@@ -1142,25 +1193,8 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.ERROR,
       } as any)
 
-      // For errors, persist streaming segments locally since we don't call loadMessages.
-      // Deep-clone to detach from reactive streaming state.
-      const deepCloneToolCall = (tc: ToolCallInfo): ToolCallInfo => ({
-        ...tc,
-        childToolCalls: tc.childToolCalls?.map((c) => ({ ...c })),
-        childContent: tc.childContent,
-        childThinkingContent: tc.childThinkingContent,
-      })
-      segmentsByMessage.value[streaming.messageId] = streaming.segments.map((seg) => {
-        if (seg.type === 'thinking') {
-          return { type: 'thinking' as const, content: seg.content }
-        } else if (seg.type === 'content') {
-          return { type: 'content' as const, content: seg.content }
-        } else if (seg.type === 'retrieval') {
-          return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
-        } else {
-          return { type: 'tools' as const, toolCalls: seg.toolCalls.map(deepCloneToolCall) }
-        }
-      })
+      // Persist streaming segments locally since we don't call loadMessages for errors.
+      persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
 
       // Clear streaming state after a tick to let the UI read from segments first
       setTimeout(() => {

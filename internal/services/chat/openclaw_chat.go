@@ -317,9 +317,10 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 				Phase      string          `json:"phase"`
 				Name       string          `json:"name"`
 				ToolCallID string          `json:"toolCallId"`
-				Input      json.RawMessage `json:"input"`
+				Args       json.RawMessage `json:"args"`
 				Result     json.RawMessage `json:"result"`
-				Error      string          `json:"error"`
+				Meta       string          `json:"meta"`
+				IsError    bool            `json:"isError"`
 			}
 			if json.Unmarshal(frame.Data, &d) != nil {
 				return
@@ -331,8 +332,8 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			switch d.Phase {
 			case "start":
 				argsJSON := ""
-				if len(d.Input) > 0 {
-					argsJSON = string(d.Input)
+				if len(d.Args) > 0 {
+					argsJSON = string(d.Args)
 				}
 				emit(EventChatTool, ChatToolEvent{
 					ChatEvent:  ce(),
@@ -345,21 +346,19 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 				resultJSON := ""
 				if len(d.Result) > 0 {
 					resultJSON = string(d.Result)
+				} else if d.Meta != "" {
+					resultJSON = fmt.Sprintf(`{"summary":%q}`, d.Meta)
+				}
+				toolType := "result"
+				if d.IsError {
+					toolType = "result"
 				}
 				emit(EventChatTool, ChatToolEvent{
 					ChatEvent:  ce(),
-					Type:       "result",
+					Type:       toolType,
 					ToolCallID: d.ToolCallID,
 					ToolName:   d.Name,
 					ResultJSON: resultJSON,
-				})
-			case "error":
-				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  ce(),
-					Type:       "result",
-					ToolCallID: d.ToolCallID,
-					ToolName:   d.Name,
-					ResultJSON: fmt.Sprintf(`{"error":%q}`, d.Error),
 				})
 			}
 
