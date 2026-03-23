@@ -15,7 +15,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -41,14 +40,12 @@ type Manager struct {
 	expectedStopPID int
 	shuttingDown    bool
 	reconnecting    atomic.Bool
-
-	syncer *configSyncer
 }
 
-func NewManager(app *application.App, settingsSvc *settings.SettingsService, providersSvc *providers.ProvidersService) *Manager {
+func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
 	store := newConfigStore(settingsSvc)
 	cfg := store.Get()
-	m := &Manager{
+	return &Manager{
 		app:   app,
 		store: store,
 		status: RuntimeStatus{
@@ -56,8 +53,6 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService, pro
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		},
 	}
-	m.syncer = newConfigSyncer(m, providersSvc)
-	return m
 }
 
 func (m *Manager) Start() {
@@ -189,15 +184,6 @@ func (m *Manager) reconcile(restart bool) error {
 	})
 	m.broadcastGatewayState(GatewayConnectionState{Connected: true, Authenticated: true})
 	m.notifyReadyHooks()
-
-	// Sync provider/model config to OpenClaw Gateway after connection is established
-	go func() {
-		syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer syncCancel()
-		if err := m.syncer.SyncNow(syncCtx); err != nil {
-			m.app.Logger.Warn("openclaw: initial config sync failed (non-fatal)", "error", err)
-		}
-	}()
 
 	return nil
 }
@@ -451,19 +437,13 @@ func (m *Manager) isShuttingDown() bool {
 	return m.shuttingDown
 }
 
-func (m *Manager) isReady() bool {
+func (m *Manager) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.client != nil && !m.readyAt.IsZero()
 }
 
-func (m *Manager) readySince() time.Time {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.readyAt
-}
-
-func (m *Manager) request(ctx context.Context, method string, params any, out any) error {
+func (m *Manager) Request(ctx context.Context, method string, params any, out any) error {
 	m.mu.RLock()
 	client := m.client
 	m.mu.RUnlock()
@@ -473,7 +453,7 @@ func (m *Manager) request(ctx context.Context, method string, params any, out an
 	return client.Request(ctx, method, params, out)
 }
 
-func (m *Manager) registerReadyHook(fn func()) {
+func (m *Manager) RegisterReadyHook(fn func()) {
 	if fn == nil {
 		return
 	}
@@ -616,8 +596,3 @@ func shouldRetryConnect(err error) bool {
 	return false
 }
 
-// NotifyConfigChanged triggers a debounced config sync to OpenClaw Gateway.
-// Call this when provider/model configuration changes in ChatClaw.
-func (m *Manager) NotifyConfigChanged() {
-	m.syncer.RequestSync()
-}

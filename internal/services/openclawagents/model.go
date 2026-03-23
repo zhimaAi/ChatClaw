@@ -65,24 +65,9 @@ type OpenClawAgentMatch struct {
 }
 
 type CreateOpenClawAgentInput struct {
-	Name                 string `json:"name"`
-	Icon                 string `json:"icon"`
-	DefaultLLMProviderID string `json:"default_llm_provider_id"`
-	DefaultLLMModelID    string `json:"default_llm_model_id"`
-
+	Name          string `json:"name"`
+	Icon          string `json:"icon"`
 	IdentityEmoji string `json:"identity_emoji"`
-	IdentityTheme string `json:"identity_theme"`
-
-	GroupChatMentionPatterns string `json:"group_chat_mention_patterns"`
-
-	ToolsProfile string `json:"tools_profile"`
-	ToolsAllow   string `json:"tools_allow"`
-	ToolsDeny    string `json:"tools_deny"`
-
-	HeartbeatEvery string `json:"heartbeat_every"`
-
-	ParamsTemperature string `json:"params_temperature"`
-	ParamsMaxTokens   string `json:"params_max_tokens"`
 }
 
 type UpdateOpenClawAgentInput struct {
