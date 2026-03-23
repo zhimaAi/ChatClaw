@@ -38,6 +38,15 @@ type ScheduledTasksService struct {
 	expirationSweepDone  chan struct{}
 }
 
+const (
+	// snapshotDisplayEmpty is the unified placeholder used when snapshot display data is unavailable.
+	snapshotDisplayEmpty = "-"
+	// notificationChannelsDisplayPrefixSeparator separates platform and channel labels in snapshot display text.
+	notificationChannelsDisplayPrefixSeparator = ": "
+	// notificationChannelsDisplayNameSeparator separates multiple channel labels in snapshot display text.
+	notificationChannelsDisplayNameSeparator = ", "
+)
+
 type createCall struct {
 	done chan struct{}
 	task *ScheduledTask
@@ -280,7 +289,7 @@ func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateSchedu
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
 	}
-	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeCreate, source, s.buildCreateChangedFields(*model), s.buildTaskSnapshot(ctx, db, *model)); err != nil {
+	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeCreate, source, s.buildCreateChangedFields(ctx, db, *model), s.buildTaskSnapshot(ctx, db, *model)); err != nil {
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
 	}
@@ -1443,13 +1452,23 @@ func (s *ScheduledTasksService) insertOperationLog(
 	return err
 }
 
-func (s *ScheduledTasksService) buildCreateChangedFields(task scheduledTaskModel) []ScheduledTaskOperationChangedField {
+func (s *ScheduledTasksService) buildCreateChangedFields(ctx context.Context, db *bun.DB, task scheduledTaskModel) []ScheduledTaskOperationChangedField {
 	changed := []ScheduledTaskOperationChangedField{
 		{FieldKey: "status", FieldLabel: "状态", Before: "", After: formatEnabledDisplay(task.Enabled)},
 		{FieldKey: "name", FieldLabel: "名称", Before: "", After: task.Name},
 		{FieldKey: "prompt", FieldLabel: "提示词", Before: "", After: task.Prompt},
-		{FieldKey: "agent", FieldLabel: "关联助手", Before: "", After: formatAgentDisplay(task.AgentID)},
-		{FieldKey: "notification_channels", FieldLabel: "通知渠道", Before: "", After: formatNotificationChannelsDisplay(task.NotificationPlatform, parseNotificationChannelIDs(task.NotificationChannelIDs))},
+		{FieldKey: "agent", FieldLabel: "关联助手", Before: "", After: s.resolveOperationLogAgentDisplay(ctx, db, task.AgentID)},
+		{
+			FieldKey:   "notification_channels",
+			FieldLabel: "通知渠道",
+			Before:     "",
+			After: s.resolveOperationLogNotificationChannelsDisplay(
+				ctx,
+				db,
+				task.NotificationPlatform,
+				parseNotificationChannelIDs(task.NotificationChannelIDs),
+			),
+		},
 		{FieldKey: "schedule_time", FieldLabel: "执行时间", Before: "", After: formatScheduleDisplay(task.ScheduleType, task.ScheduleValue, task.CronExpr)},
 	}
 	if task.ExpiresAt != nil {
@@ -1493,16 +1512,26 @@ func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db
 		changed = append(changed, ScheduledTaskOperationChangedField{
 			FieldKey:   "agent",
 			FieldLabel: "关联助手",
-			Before:     formatAgentDisplay(before.AgentID),
-			After:      formatAgentDisplay(after.AgentID),
+			Before:     s.resolveOperationLogAgentDisplay(ctx, db, before.AgentID),
+			After:      s.resolveOperationLogAgentDisplay(ctx, db, after.AgentID),
 		})
 	}
 	if before.NotificationPlatform != after.NotificationPlatform || before.NotificationChannelIDs != after.NotificationChannelIDs {
 		changed = append(changed, ScheduledTaskOperationChangedField{
 			FieldKey:   "notification_channels",
 			FieldLabel: "通知渠道",
-			Before:     formatNotificationChannelsDisplay(before.NotificationPlatform, parseNotificationChannelIDs(before.NotificationChannelIDs)),
-			After:      formatNotificationChannelsDisplay(after.NotificationPlatform, parseNotificationChannelIDs(after.NotificationChannelIDs)),
+			Before: s.resolveOperationLogNotificationChannelsDisplay(
+				ctx,
+				db,
+				before.NotificationPlatform,
+				parseNotificationChannelIDs(before.NotificationChannelIDs),
+			),
+			After: s.resolveOperationLogNotificationChannelsDisplay(
+				ctx,
+				db,
+				after.NotificationPlatform,
+				parseNotificationChannelIDs(after.NotificationChannelIDs),
+			),
 		})
 	}
 	beforeSchedule := formatScheduleDisplay(before.ScheduleType, before.ScheduleValue, before.CronExpr)
@@ -1531,8 +1560,6 @@ func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db
 			After:      formatEnabledDisplay(after.Enabled),
 		})
 	}
-	_ = ctx
-	_ = db
 	return changed
 }
 
@@ -1548,17 +1575,18 @@ func (s *ScheduledTasksService) buildDeleteChangedFields(task scheduledTaskModel
 }
 
 func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.DB, task scheduledTaskModel) ScheduledTaskOperationSnapshot {
-	_ = ctx
-	_ = db
+	// The operation-log detail dialog reads these snapshot fields directly, so we resolve
+	// human-readable names here instead of persisting raw IDs.
+	notificationChannelIDs := parseNotificationChannelIDs(task.NotificationChannelIDs)
 	return ScheduledTaskOperationSnapshot{
 		TaskID:                 task.ID,
 		Name:                   task.Name,
 		Prompt:                 task.Prompt,
 		AgentID:                task.AgentID,
-		AgentName:              formatAgentDisplay(task.AgentID),
+		AgentName:              s.resolveSnapshotAgentName(ctx, db, task.AgentID),
 		NotificationPlatform:   task.NotificationPlatform,
-		NotificationChannelIDs: parseNotificationChannelIDs(task.NotificationChannelIDs),
-		NotificationChannels:   formatNotificationChannelsDisplay(task.NotificationPlatform, parseNotificationChannelIDs(task.NotificationChannelIDs)),
+		NotificationChannelIDs: notificationChannelIDs,
+		NotificationChannels:   s.resolveSnapshotNotificationChannels(ctx, db, task.NotificationPlatform, notificationChannelIDs),
 		ScheduleType:           task.ScheduleType,
 		ScheduleValue:          task.ScheduleValue,
 		CronExpr:               task.CronExpr,
@@ -1568,6 +1596,119 @@ func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.D
 		ExpiresAt:              task.ExpiresAt,
 		IsExpired:              s.isTaskExpired(task.ExpiresAt),
 	}
+}
+
+// resolveOperationLogAgentDisplay keeps changed-field output human-readable while
+// still falling back to the numeric agent ID after the agent is deleted or missing.
+func (s *ScheduledTasksService) resolveOperationLogAgentDisplay(ctx context.Context, db *bun.DB, agentID int64) string {
+	if agentID <= 0 {
+		return snapshotDisplayEmpty
+	}
+
+	var agentName string
+	if err := db.NewSelect().
+		Table("agents").
+		Column("name").
+		Where("id = ?", agentID).
+		Limit(1).
+		Scan(ctx, &agentName); err == nil {
+		agentName = strings.TrimSpace(agentName)
+		if agentName != "" {
+			return agentName
+		}
+	}
+
+	return formatAgentDisplay(agentID)
+}
+
+// resolveOperationLogNotificationChannelsDisplay prefers channel names in changed fields,
+// but keeps individual IDs when some channels can no longer be resolved.
+func (s *ScheduledTasksService) resolveOperationLogNotificationChannelsDisplay(
+	ctx context.Context,
+	db *bun.DB,
+	platform string,
+	channelIDs []int64,
+) string {
+	normalizedPlatform := strings.TrimSpace(platform)
+	if normalizedPlatform == "" || len(channelIDs) == 0 {
+		return snapshotDisplayEmpty
+	}
+
+	channelLabels := make([]string, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		channelLabels = append(channelLabels, s.resolveSnapshotChannelName(ctx, db, channelID))
+	}
+
+	return normalizedPlatform +
+		notificationChannelsDisplayPrefixSeparator +
+		strings.Join(channelLabels, notificationChannelsDisplayNameSeparator)
+}
+
+// resolveSnapshotAgentName prefers the current agent name so operation-log details can
+// re-display the selected assistant label instead of falling back to the numeric ID.
+func (s *ScheduledTasksService) resolveSnapshotAgentName(ctx context.Context, db *bun.DB, agentID int64) string {
+	if agentID <= 0 {
+		return snapshotDisplayEmpty
+	}
+
+	var agentName string
+	if err := db.NewSelect().
+		Table("agents").
+		Column("name").
+		Where("id = ?", agentID).
+		Limit(1).
+		Scan(ctx, &agentName); err == nil {
+		agentName = strings.TrimSpace(agentName)
+		if agentName != "" {
+			return agentName
+		}
+	}
+
+	return formatAgentDisplay(agentID)
+}
+
+// resolveSnapshotNotificationChannels keeps operation-log snapshots readable by storing
+// channel names when available, while still falling back to IDs for deleted/missing channels.
+func (s *ScheduledTasksService) resolveSnapshotNotificationChannels(
+	ctx context.Context,
+	db *bun.DB,
+	platform string,
+	channelIDs []int64,
+) string {
+	normalizedPlatform := strings.TrimSpace(platform)
+	if normalizedPlatform == "" || len(channelIDs) == 0 {
+		return snapshotDisplayEmpty
+	}
+
+	channelLabels := make([]string, 0, len(channelIDs))
+	for _, channelID := range channelIDs {
+		channelLabels = append(channelLabels, s.resolveSnapshotChannelName(ctx, db, channelID))
+	}
+
+	return normalizedPlatform +
+		notificationChannelsDisplayPrefixSeparator +
+		strings.Join(channelLabels, notificationChannelsDisplayNameSeparator)
+}
+
+func (s *ScheduledTasksService) resolveSnapshotChannelName(ctx context.Context, db *bun.DB, channelID int64) string {
+	if channelID <= 0 {
+		return snapshotDisplayEmpty
+	}
+
+	var channelName string
+	if err := db.NewSelect().
+		Table("channels").
+		Column("name").
+		Where("id = ?", channelID).
+		Limit(1).
+		Scan(ctx, &channelName); err == nil {
+		channelName = strings.TrimSpace(channelName)
+		if channelName != "" {
+			return channelName
+		}
+	}
+
+	return strconv.FormatInt(channelID, 10)
 }
 
 func normalizeOperationType(operationType string) string {
@@ -1621,7 +1762,7 @@ func formatEnabledDisplay(enabled bool) string {
 
 func formatExpirationDisplay(expiresAt *time.Time) string {
 	if expiresAt == nil {
-		return "-"
+		return snapshotDisplayEmpty
 	}
 	return expiresAt.UTC().Format("2006-01-02 15:04:05")
 }
@@ -1635,20 +1776,25 @@ func timePointersEqual(left, right *time.Time) bool {
 
 func formatAgentDisplay(agentID int64) string {
 	if agentID <= 0 {
-		return "-"
+		return snapshotDisplayEmpty
 	}
 	return strconv.FormatInt(agentID, 10)
 }
 
 func formatNotificationChannelsDisplay(platform string, channelIDs []int64) string {
 	if strings.TrimSpace(platform) == "" || len(channelIDs) == 0 {
-		return "-"
+		return snapshotDisplayEmpty
 	}
 	parts := make([]string, 0, len(channelIDs))
 	for _, channelID := range channelIDs {
 		parts = append(parts, strconv.FormatInt(channelID, 10))
 	}
-	return fmt.Sprintf("%s: %s", strings.TrimSpace(platform), strings.Join(parts, ", "))
+	return fmt.Sprintf(
+		"%s%s%s",
+		strings.TrimSpace(platform),
+		notificationChannelsDisplayPrefixSeparator,
+		strings.Join(parts, notificationChannelsDisplayNameSeparator),
+	)
 }
 
 func formatScheduleDisplay(scheduleType, scheduleValue, cronExpr string) string {

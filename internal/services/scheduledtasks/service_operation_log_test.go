@@ -307,6 +307,153 @@ func TestOperationLogDetailReturnsStoredSnapshot(t *testing.T) {
 	}
 }
 
+func TestOperationLogDetailReturnsAgentAndChannelNamesInSnapshot(t *testing.T) {
+	db := newScheduledTasksTestDB(t)
+	insertScheduledTasksAgentWithName(t, db, 7, "Daily Assistant")
+	insertNotificationChannelRowWithName(t, db, 11, "feishu", "Ops Alert", true, "")
+	insertNotificationChannelRowWithName(t, db, 12, "feishu", "Daily Report", true, "")
+
+	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:                   "Morning digest",
+		Prompt:                 "Send today's digest",
+		AgentID:                7,
+		ScheduleType:           ScheduleTypePreset,
+		ScheduleValue:          "every_day_0900",
+		Enabled:                true,
+		NotificationPlatform:   "feishu",
+		NotificationChannelIDs: []int64{11, 12},
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	logs, err := svc.ListScheduledTaskOperationLogs(created.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("ListScheduledTaskOperationLogs returned error: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log in service list, got %d", len(logs))
+	}
+
+	detail, err := svc.GetScheduledTaskOperationLogDetail(logs[0].ID)
+	if err != nil {
+		t.Fatalf("GetScheduledTaskOperationLogDetail returned error: %v", err)
+	}
+	if detail.TaskSnapshot.AgentName != "Daily Assistant" {
+		t.Fatalf("expected detail snapshot agent name Daily Assistant, got %q", detail.TaskSnapshot.AgentName)
+	}
+	if detail.TaskSnapshot.NotificationChannels != "feishu: Ops Alert, Daily Report" {
+		t.Fatalf(
+			"expected detail snapshot notification channels to contain names, got %q",
+			detail.TaskSnapshot.NotificationChannels,
+		)
+	}
+}
+
+func TestUpdateScheduledTaskOperationLogPrefersAgentNamesInChangedFields(t *testing.T) {
+	db := newScheduledTasksTestDB(t)
+	insertScheduledTasksAgentWithName(t, db, 7, "旧助手")
+	insertScheduledTasksAgentWithName(t, db, 8, "新助手")
+
+	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	agentID := int64(8)
+	_, err = svc.UpdateScheduledTask(created.ID, UpdateScheduledTaskInput{
+		AgentID: &agentID,
+	})
+	if err != nil {
+		t.Fatalf("UpdateScheduledTask returned error: %v", err)
+	}
+
+	logs := readScheduledTaskOperationLogs(t, db)
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	}
+
+	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	var agentField *ScheduledTaskOperationChangedField
+	for i := range changed {
+		if changed[i].FieldKey == "agent" {
+			agentField = &changed[i]
+			break
+		}
+	}
+	if agentField == nil {
+		t.Fatalf("expected agent changed field, got %#v", changed)
+	}
+	if agentField.Before != "旧助手" {
+		t.Fatalf("expected agent before value 旧助手, got %q", agentField.Before)
+	}
+	if agentField.After != "新助手" {
+		t.Fatalf("expected agent after value 新助手, got %q", agentField.After)
+	}
+}
+
+func TestUpdateScheduledTaskOperationLogPrefersChannelNamesAndFallsBackToID(t *testing.T) {
+	db := newScheduledTasksTestDB(t)
+	insertScheduledTasksAgent(t, db, 7)
+	insertNotificationChannelRowWithName(t, db, 11, "feishu", "旧频道", true, "")
+	insertNotificationChannelRowWithName(t, db, 22, "feishu", "新频道", true, "")
+
+	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:                   "Morning digest",
+		Prompt:                 "Send today's digest",
+		AgentID:                7,
+		ScheduleType:           ScheduleTypePreset,
+		ScheduleValue:          "every_day_0900",
+		Enabled:                true,
+		NotificationPlatform:   "feishu",
+		NotificationChannelIDs: []int64{11},
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	channelIDs := []int64{22, 33}
+	_, err = svc.UpdateScheduledTask(created.ID, UpdateScheduledTaskInput{
+		NotificationChannelIDs: &channelIDs,
+	})
+	if err != nil {
+		t.Fatalf("UpdateScheduledTask returned error: %v", err)
+	}
+
+	logs := readScheduledTaskOperationLogs(t, db)
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	}
+
+	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	var channelField *ScheduledTaskOperationChangedField
+	for i := range changed {
+		if changed[i].FieldKey == "notification_channels" {
+			channelField = &changed[i]
+			break
+		}
+	}
+	if channelField == nil {
+		t.Fatalf("expected notification_channels changed field, got %#v", changed)
+	}
+	if channelField.Before != "feishu: 旧频道" {
+		t.Fatalf("expected channel before value feishu: 旧频道, got %q", channelField.Before)
+	}
+	if channelField.After != "feishu: 新频道, 33" {
+		t.Fatalf("expected channel after value feishu: 新频道, 33, got %q", channelField.After)
+	}
+}
+
 func readScheduledTaskOperationLogs(t *testing.T, db interface {
 	NewSelect() *bun.SelectQuery
 }) []scheduledTaskOperationLogModel {

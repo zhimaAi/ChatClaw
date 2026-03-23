@@ -14,6 +14,13 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { SCHEDULE_PRESETS, WEEKDAY_OPTIONS } from '../constants'
+import {
+  addExpirationMonths,
+  buildExpirationMonthOptions,
+  buildExpirationYearOptions,
+  setVisibleMonthYear,
+  startOfExpirationMonth,
+} from './taskFormExpirationCalendar'
 import type { Agent, Channel, ScheduledTaskFormState } from '../types'
 
 const props = withDefaults(
@@ -65,14 +72,6 @@ function createSafeDate(year: number, month: number, day: number) {
   return new Date(year, month, day, 12, 0, 0, 0)
 }
 
-function startOfMonth(date: Date) {
-  return createSafeDate(date.getFullYear(), date.getMonth(), 1)
-}
-
-function addMonths(date: Date, amount: number) {
-  return createSafeDate(date.getFullYear(), date.getMonth() + amount, 1)
-}
-
 function padDatePart(value: number) {
   return String(value).padStart(2, '0')
 }
@@ -98,7 +97,7 @@ function formatCalendarTitle(date: Date) {
 }
 
 function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): CalendarDay[] {
-  const monthStart = startOfMonth(monthAnchor)
+  const monthStart = startOfExpirationMonth(monthAnchor)
   const gridStart = createSafeDate(monthStart.getFullYear(), monthStart.getMonth(), 1 - monthStart.getDay())
   const todayKey = formatDateKey(new Date())
 
@@ -150,7 +149,10 @@ const expirationDateValue = computed({
 
 const expirationPickerOpen = ref(false)
 const expirationPickerRef = ref<HTMLElement | null>(null)
-const visibleExpirationMonth = ref(startOfMonth(parseDateKey(props.form.expiresAtDate) ?? new Date()))
+const visibleExpirationMonth = ref(
+  startOfExpirationMonth(parseDateKey(props.form.expiresAtDate) ?? new Date())
+)
+const expirationMonthOptions = buildExpirationMonthOptions()
 
 const expirationDisplayValue = computed(() => {
   if (!props.form.expiresAtDate) return ''
@@ -159,14 +161,16 @@ const expirationDisplayValue = computed(() => {
   return `${year} / ${month} / ${day}`
 })
 
-const expirationCalendarTitle = computed(() => formatCalendarTitle(visibleExpirationMonth.value))
+const expirationYearOptions = computed(() => buildExpirationYearOptions(visibleExpirationMonth.value))
+const visibleExpirationYear = computed(() => visibleExpirationMonth.value.getFullYear())
+const visibleExpirationMonthValue = computed(() => visibleExpirationMonth.value.getMonth() + 1)
 const expirationCalendarWeeks = computed(() => {
   const days = buildCalendarDays(visibleExpirationMonth.value, props.form.expiresAtDate)
   return Array.from({ length: 6 }, (_, index) => days.slice(index * 7, index * 7 + 7))
 })
 
 function syncVisibleExpirationMonth(value: string) {
-  visibleExpirationMonth.value = startOfMonth(parseDateKey(value) ?? new Date())
+  visibleExpirationMonth.value = startOfExpirationMonth(parseDateKey(value) ?? new Date())
 }
 
 function openExpirationPicker() {
@@ -189,11 +193,23 @@ function toggleExpirationPicker() {
 }
 
 function goToPreviousExpirationMonth() {
-  visibleExpirationMonth.value = addMonths(visibleExpirationMonth.value, -1)
+  visibleExpirationMonth.value = addExpirationMonths(visibleExpirationMonth.value, -1)
 }
 
 function goToNextExpirationMonth() {
-  visibleExpirationMonth.value = addMonths(visibleExpirationMonth.value, 1)
+  visibleExpirationMonth.value = addExpirationMonths(visibleExpirationMonth.value, 1)
+}
+
+function handleExpirationYearChange(value: string) {
+  const year = Number(value)
+  if (!Number.isInteger(year)) return
+  visibleExpirationMonth.value = setVisibleMonthYear(visibleExpirationMonth.value, year)
+}
+
+function handleExpirationMonthChange(value: string) {
+  const month = Number(value)
+  if (!Number.isInteger(month)) return
+  visibleExpirationMonth.value = setVisibleMonthYear(visibleExpirationMonth.value, undefined, month)
 }
 
 function selectExpirationDate(value: string) {
@@ -497,6 +513,40 @@ useEventListener(window, 'keydown', (event) => {
                   >
                     <ChevronRight class="size-4" />
                   </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="relative">
+                    <select
+                      :value="visibleExpirationYear"
+                      class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                      @change="handleExpirationYearChange(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="year in expirationYearOptions" :key="year" :value="year">
+                        {{ year }} 年
+                      </option>
+                    </select>
+                    <ChevronDown
+                      class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]"
+                    />
+                  </div>
+                  <div class="relative">
+                    <select
+                      :value="visibleExpirationMonthValue"
+                      class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
+                      @change="handleExpirationMonthChange(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option
+                        v-for="month in expirationMonthOptions"
+                        :key="month"
+                        :value="month"
+                      >
+                        {{ month }} 月
+                      </option>
+                    </select>
+                    <ChevronDown
+                      class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#94a3b8]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
