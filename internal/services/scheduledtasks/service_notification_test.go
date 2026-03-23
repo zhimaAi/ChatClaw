@@ -206,6 +206,7 @@ func newScheduledTasksTestDB(t *testing.T) *bun.DB {
 	schema := []string{
 		`create table agents (
 			id integer primary key,
+			name text not null default '',
 			default_llm_provider_id text not null default '',
 			default_llm_model_id text not null default ''
 		);`,
@@ -270,6 +271,7 @@ func newScheduledTasksTestDB(t *testing.T) *bun.DB {
 		`create table channels (
 			id integer primary key,
 			platform text not null,
+			name text not null default '',
 			enabled boolean not null default true,
 			last_sender_id text not null default ''
 		);`,
@@ -286,8 +288,22 @@ func newScheduledTasksTestDB(t *testing.T) *bun.DB {
 
 func insertScheduledTasksAgent(t *testing.T, db *bun.DB, agentID int64) {
 	t.Helper()
-	if _, err := db.Exec(`insert into agents(id, default_llm_provider_id, default_llm_model_id) values (?, '', '')`, agentID); err != nil {
+	if _, err := db.Exec(
+		`insert into agents(id, name, default_llm_provider_id, default_llm_model_id) values (?, '', '', '')`,
+		agentID,
+	); err != nil {
 		t.Fatalf("insert agent failed: %v", err)
+	}
+}
+
+func insertScheduledTasksAgentWithName(t *testing.T, db *bun.DB, agentID int64, name string) {
+	t.Helper()
+	if _, err := db.Exec(
+		`insert into agents(id, name, default_llm_provider_id, default_llm_model_id) values (?, ?, '', '')`,
+		agentID,
+		name,
+	); err != nil {
+		t.Fatalf("insert named agent failed: %v", err)
 	}
 }
 
@@ -327,10 +343,28 @@ func insertAssistantMessageRow(t *testing.T, db *bun.DB, messageID int64, conver
 func insertNotificationChannelRow(t *testing.T, db *bun.DB, channelID int64, platform string, enabled bool, lastSenderID string) {
 	t.Helper()
 	if _, err := db.Exec(`
-		insert into channels(id, platform, enabled, last_sender_id)
-		values (?, ?, ?, ?)
+		insert into channels(id, platform, name, enabled, last_sender_id)
+		values (?, ?, '', ?, ?)
 	`, channelID, platform, enabled, lastSenderID); err != nil {
 		t.Fatalf("insert channel failed: %v", err)
+	}
+}
+
+func insertNotificationChannelRowWithName(
+	t *testing.T,
+	db *bun.DB,
+	channelID int64,
+	platform string,
+	name string,
+	enabled bool,
+	lastSenderID string,
+) {
+	t.Helper()
+	if _, err := db.Exec(`
+		insert into channels(id, platform, name, enabled, last_sender_id)
+		values (?, ?, ?, ?, ?)
+	`, channelID, platform, name, enabled, lastSenderID); err != nil {
+		t.Fatalf("insert named channel failed: %v", err)
 	}
 }
 

@@ -52,36 +52,6 @@ function displayOperationSource(value?: string) {
       </DialogHeader>
 
       <div v-if="detail && snapshot && readonlyForm" class="flex-1 overflow-y-auto px-7">
-        <div class="space-y-6 py-6">
-          <section
-            class="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#fafafa] p-4 md:grid-cols-2"
-          >
-            <div>
-              <div class="text-xs text-[#737373]">任务</div>
-              <div class="mt-1 text-sm font-medium text-[#171717]">
-                {{ detail.log.task_name_snapshot || snapshot.name }}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs text-[#737373]">操作类型</div>
-              <div class="mt-1 text-sm font-medium text-[#171717]">
-                {{ displayOperationType(detail.log.operation_type) }}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs text-[#737373]">操作方式</div>
-              <div class="mt-1 text-sm font-medium text-[#171717]">
-                {{ displayOperationSource(detail.log.operation_source) }}
-              </div>
-            </div>
-            <div>
-              <div class="text-xs text-[#737373]">操作时间</div>
-              <div class="mt-1 text-sm font-medium text-[#171717]">
-                {{ formatTaskTime(detail.log.created_at) }}
-              </div>
-            </div>
-          </section>
-
           <TaskFormContent
             :form="readonlyForm"
             :agents="[]"
@@ -91,7 +61,6 @@ function displayOperationSource(value?: string) {
             :notification-platform-label-override="snapshot.notification_platform || ''"
             :notification-channel-label-overrides="readonlyChannelLabels"
           />
-        </div>
       </div>
     </DialogContent>
   </Dialog>
