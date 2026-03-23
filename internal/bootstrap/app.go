@@ -385,6 +385,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
 	openClawAgentsService.SetGateway(agentGWSvc)
+	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
 		go configSvc.Sync(context.Background())

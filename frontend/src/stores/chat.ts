@@ -421,6 +421,94 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // Send a message via the OpenClaw OpenResponses API
+  const sendOpenClawMessage = async (
+    conversationId: number,
+    content: string,
+    tabId: string,
+    images?: Array<{
+      id: string
+      file: File
+      mimeType: string
+      base64: string
+      dataUrl: string
+      fileName: string
+      size: number
+    }>,
+    files?: Array<{
+      id: string
+      file: File
+      mimeType: string
+      base64: string
+      fileName: string
+      size: number
+    }>
+  ) => {
+    const hasContent =
+      content.trim() !== '' || (images && images.length > 0) || (files && files.length > 0)
+    if (conversationId <= 0 || !hasContent) return null
+
+    const imagePayloads =
+      images?.map((img) => ({
+        kind: 'image',
+        source: 'inline_base64',
+        mime_type: img.mimeType,
+        base64: img.base64,
+        file_name: img.fileName,
+        size: img.size,
+      })) || []
+
+    const filePayloads =
+      files?.map((f) => ({
+        kind: 'file',
+        source: 'inline_base64',
+        mime_type: f.mimeType,
+        base64: f.base64,
+        file_name: f.fileName,
+        original_name: f.fileName,
+        size: f.size,
+      })) || []
+
+    const allPayloads = [...imagePayloads, ...filePayloads]
+
+    localMessageCounter -= 1
+    const localUserMessageId = localMessageCounter
+    appendMessage(conversationId, {
+      id: localUserMessageId,
+      conversation_id: conversationId,
+      role: MessageRole.USER,
+      content: content.trim(),
+      status: MessageStatus.SUCCESS,
+      thinking_content: '',
+      tool_calls: '[]',
+      images_json: JSON.stringify(allPayloads),
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+
+    try {
+      const result = await ChatService.SendOpenClawMessage(
+        new SendMessageInput({
+          conversation_id: conversationId,
+          content: content.trim(),
+          tab_id: tabId,
+          images: allPayloads,
+        })
+      )
+
+      if (result) {
+        activeRequestByConversation.value[conversationId] = result.request_id
+      }
+
+      return result
+    } catch (error: unknown) {
+      removeMessage(conversationId, localUserMessageId)
+      throw error
+    }
+  }
+
   // Edit and resend a message
   const editAndResend = async (
     conversationId: number,
@@ -500,6 +588,83 @@ export const useChatStore = defineStore('chat', () => {
       return result
     } catch (error: unknown) {
       // If failed, reload from backend to restore consistent state
+      void loadMessages(conversationId)
+      throw error
+    }
+  }
+
+  // Edit and resend a message via OpenClaw API
+  const editAndResendOpenClaw = async (
+    conversationId: number,
+    messageId: number,
+    newContent: string,
+    tabId: string,
+    images?: ImagePayload[]
+  ) => {
+    if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
+
+    const current = messagesByConversation.value[conversationId]
+    const msgToEdit = current?.find((m) => m.id === messageId)
+    const existingImagesJson = msgToEdit?.images_json
+
+    let existingImages: ImagePayload[] = []
+    if (existingImagesJson) {
+      try {
+        existingImages = JSON.parse(existingImagesJson) as ImagePayload[]
+      } catch (e) {
+        console.warn('Failed to parse existing images_json:', e)
+      }
+    }
+
+    const newImagePayloads: ImagePayload[] =
+      images?.map((img) => ({
+        id: img.id,
+        kind: img.kind || 'image',
+        source: img.source || 'inline_base64',
+        mime_type: img.mime_type,
+        base64: img.base64,
+        data_url: img.data_url,
+        file_name: img.file_name,
+        file_path: img.file_path,
+        original_name: img.original_name,
+        size: img.size,
+      })) || []
+
+    const imagePayloads: ImagePayload[] =
+      newImagePayloads.length > 0 ? newImagePayloads : existingImages
+
+    ensureConversationMessages(conversationId)
+    const idx = current?.findIndex((m) => m.id === messageId) ?? -1
+    if (idx >= 0 && current) {
+      const next = [...current]
+      next[idx] = {
+        ...next[idx],
+        content: newContent.trim(),
+        images_json: JSON.stringify(imagePayloads),
+      } as Message
+      messagesByConversation.value[conversationId] = next.slice(0, idx + 1)
+    }
+
+    delete streamingByConversation.value[conversationId]
+    delete activeRequestByConversation.value[conversationId]
+
+    try {
+      const result = await ChatService.EditAndResendOpenClaw(
+        new EditAndResendInput({
+          conversation_id: conversationId,
+          message_id: messageId,
+          new_content: newContent.trim(),
+          tab_id: tabId,
+          images: imagePayloads,
+        })
+      )
+
+      if (result) {
+        activeRequestByConversation.value[conversationId] = result.request_id
+      }
+
+      return result
+    } catch (error: unknown) {
       void loadMessages(conversationId)
       throw error
     }
@@ -1120,7 +1285,9 @@ export const useChatStore = defineStore('chat', () => {
     // Actions
     loadMessages,
     sendMessage,
+    sendOpenClawMessage,
     editAndResend,
+    editAndResendOpenClaw,
     stopGeneration,
     clearMessages,
     appendLocalMessage,
