@@ -12,12 +12,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -126,6 +129,110 @@ func isBundleFresh(cfg runtimeConfig, target targetSpec, outputDir string) bool 
 	return verifyRuntimeAssets(outputDir) == nil
 }
 
+// copyNpmGlobalLib copies npm global install output into the bundle layout (outputDir/lib/node_modules/...).
+// Unix npm uses prefix/lib/node_modules; Windows npm may use prefix/node_modules instead.
+func copyNpmGlobalLib(installPrefix, outputDir string) error {
+	libRoot := filepath.Join(installPrefix, "lib")
+	libNodeModules := filepath.Join(libRoot, "node_modules")
+	if _, err := os.Stat(libNodeModules); err == nil {
+		return copyNpmTreeWithProgress(libRoot, filepath.Join(outputDir, "lib"))
+	}
+	flatNodeModules := filepath.Join(installPrefix, "node_modules")
+	if _, err := os.Stat(flatNodeModules); err == nil {
+		dst := filepath.Join(outputDir, "lib", "node_modules")
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		return copyNpmTreeWithProgress(flatNodeModules, dst)
+	}
+	return fmt.Errorf("npm global install produced neither %s nor %s", libNodeModules, flatNodeModules)
+}
+
+func copyNpmTreeWithProgress(srcRoot, dstRoot string) error {
+	fmt.Printf("Scanning npm tree to count files (one-time pass)...\n")
+	total, err := countTreeFiles(srcRoot)
+	if err != nil {
+		return fmt.Errorf("count files under %s: %w", srcRoot, err)
+	}
+	prog := &copyProgress{total: total, label: "npm payload"}
+	fmt.Printf("Copying npm install into bundle (%d files). Do not interrupt; progress updates on the line below.\n", total)
+	if err := copyDirImpl(srcRoot, dstRoot, prog); err != nil {
+		return err
+	}
+	prog.finishLine()
+	return nil
+}
+
+// countTreeFiles counts regular files and symlinks (same units as copyDirImpl progress).
+func countTreeFiles(root string) (int64, error) {
+	var n int64
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		mode := info.Mode()
+		if mode.IsRegular() || mode&os.ModeSymlink != 0 {
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+type copyProgress struct {
+	total   int64
+	done    atomic.Int64
+	label   string
+	mu      sync.Mutex
+	lastLog time.Time
+}
+
+func (p *copyProgress) bump() {
+	if p == nil {
+		return
+	}
+	n := p.done.Add(1)
+	now := time.Now()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// Throttle: every 400 files, on last file, or every ~1.5s
+	if p.total > 0 {
+		pct := 100.0 * float64(n) / float64(p.total)
+		if n%400 != 0 && n != p.total && now.Sub(p.lastLog) < 1500*time.Millisecond {
+			return
+		}
+		p.lastLog = now
+		fmt.Fprintf(os.Stdout, "\r  %s: %d / %d files (%.1f%%)    ", p.label, n, p.total, pct)
+		return
+	}
+	if n%600 != 0 && now.Sub(p.lastLog) < 2*time.Second {
+		return
+	}
+	p.lastLog = now
+	fmt.Fprintf(os.Stdout, "\r  %s: copied %d files...    ", p.label, n)
+}
+
+func (p *copyProgress) finishLine() {
+	if p == nil {
+		return
+	}
+	n := p.done.Load()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.total > 0 {
+		fmt.Fprintf(os.Stdout, "\r  %s: %d / %d files (100.0%%) — copy finished\n", p.label, n, p.total)
+		return
+	}
+	fmt.Fprintf(os.Stdout, "\r  %s: copied %d files — copy finished\n", p.label, n)
+}
+
 func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error {
 	if isBundleFresh(cfg, target, outputDir) {
 		fmt.Printf("OpenClaw runtime %s (Node %s) already up-to-date at %s, skipping bundle\n",
@@ -140,10 +247,12 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 	defer os.RemoveAll(tmpDir)
 
 	installPrefix := filepath.Join(tmpDir, "prefix")
+	fmt.Printf("Installing openclaw@%s via npm (global, temp prefix)...\n", cfg.OpenClawVersion)
 	if err := installOpenClaw(cfg, target, installPrefix); err != nil {
 		return err
 	}
 
+	fmt.Printf("Downloading Node.js %s for %s...\n", cfg.NodeVersion, target.dirName())
 	nodeArchive, err := downloadNodeArchive(cfg.NodeVersion, target, tmpDir)
 	if err != nil {
 		return err
@@ -156,12 +265,14 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 		return fmt.Errorf("create output dir: %w", err)
 	}
 
+	fmt.Printf("Extracting Node.js into bundle...\n")
 	if err := extractNodeArchive(nodeArchive, filepath.Join(outputDir, "tools", "node")); err != nil {
 		return err
 	}
-	if err := copyDir(filepath.Join(installPrefix, "lib"), filepath.Join(outputDir, "lib")); err != nil {
+	if err := copyNpmGlobalLib(installPrefix, outputDir); err != nil {
 		return err
 	}
+	fmt.Printf("Writing CLI wrappers and manifest...\n")
 	if err := os.MkdirAll(filepath.Join(outputDir, "bin"), 0o755); err != nil {
 		return err
 	}
@@ -184,6 +295,7 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 		return err
 	}
 
+	fmt.Printf("Running smoke check (openclaw --version)...\n")
 	if err := smokeCheck(outputDir, target, manifest.OpenClawVersion); err != nil {
 		return err
 	}
@@ -490,6 +602,10 @@ func stripArchiveRoot(name string) (string, bool) {
 // --- Filesystem helpers ---
 
 func copyDir(src, dst string) error {
+	return copyDirImpl(src, dst, nil)
+}
+
+func copyDirImpl(src, dst string, prog *copyProgress) error {
 	entries, err := os.ReadDir(src)
 	if err != nil {
 		return fmt.Errorf("read dir %s: %w", src, err)
@@ -507,7 +623,7 @@ func copyDir(src, dst string) error {
 		}
 		switch mode := info.Mode(); {
 		case mode.IsDir():
-			if err := copyDir(srcPath, dstPath); err != nil {
+			if err := copyDirImpl(srcPath, dstPath, prog); err != nil {
 				return err
 			}
 		case mode&os.ModeSymlink != 0:
@@ -518,10 +634,12 @@ func copyDir(src, dst string) error {
 			if err := os.Symlink(linkTarget, dstPath); err != nil && !os.IsExist(err) {
 				return err
 			}
+			prog.bump()
 		case mode.IsRegular():
 			if err := copyFile(srcPath, dstPath, info.Mode()); err != nil {
 				return err
 			}
+			prog.bump()
 		}
 	}
 	return nil
