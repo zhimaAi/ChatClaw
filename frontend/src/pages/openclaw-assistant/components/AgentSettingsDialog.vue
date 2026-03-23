@@ -41,8 +41,11 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import type { Agent } from '@bindings/chatclaw/internal/services/agents'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import {
+  OpenClawAgentsService,
+  type OpenClawAgent,
+  type UpdateOpenClawAgentInput,
+} from '@bindings/chatclaw/internal/services/openclawagents'
 import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
@@ -54,19 +57,19 @@ type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 
 const props = defineProps<{
   open: boolean
-  agent: Agent | null
+  agent: OpenClawAgent | null
   initialTab?: string
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  updated: [agent: Agent]
+  updated: [agent: OpenClawAgent]
   deleted: [id: number]
 }>()
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
-const hidePrompt = ref(false)
+const hidePrompt = ref(true)
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -114,7 +117,7 @@ watch(
         ? (props.initialTab as TabKey)
         : 'model'
     void loadModels()
-    void AgentsService.GetDefaultWorkDir().then((dir) => {
+    void OpenClawAgentsService.GetDefaultWorkDir().then((dir) => {
       defaultWorkDir.value = dir
     })
     void ToolchainService.GetToolStatus('codex').then((status) => {
@@ -144,7 +147,7 @@ watch(
   (agent) => {
     if (!agent) return
     name.value = agent.name ?? ''
-    prompt.value = agent.prompt ?? ''
+    prompt.value = ''
     icon.value = agent.icon ?? ''
     iconChanged.value = false
 
@@ -284,7 +287,7 @@ const handlePickIcon = async () => {
       ],
     })
     if (!path) return
-    icon.value = await AgentsService.ReadIconFile(path)
+    icon.value = await OpenClawAgentsService.ReadIconFile(path)
     iconChanged.value = true
   } catch (error) {
     // User cancelled the file dialog — not an error
@@ -329,9 +332,8 @@ const handleSave = async () => {
     if (wantsModelUpdate && (modelProviderId.value === '') !== (modelId.value === '')) {
       throw new Error(t('assistant.errors.defaultModelIncomplete'))
     }
-    const updated = await AgentsService.UpdateAgent(props.agent.id, {
+    const updated = await OpenClawAgentsService.UpdateAgent(props.agent.id, {
       name: name.value.trim(),
-      prompt: hidePrompt.value ? null : prompt.value.trim(),
       icon: iconChanged.value ? icon.value : null,
       default_llm_provider_id: wantsModelUpdate ? modelProviderId.value : null,
       default_llm_model_id: wantsModelUpdate ? modelId.value : null,
@@ -368,7 +370,7 @@ const handleDelete = async () => {
   if (!props.agent) return
   saving.value = true
   try {
-    await AgentsService.DeleteAgent(props.agent.id)
+    await OpenClawAgentsService.DeleteAgent(props.agent.id)
     emit('deleted', props.agent.id)
     toast.success(t('assistant.toasts.deleted'))
     emit('update:open', false)

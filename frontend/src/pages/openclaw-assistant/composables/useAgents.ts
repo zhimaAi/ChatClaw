@@ -2,20 +2,23 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
+import {
+  OpenClawAgentsService,
+  type OpenClawAgent,
+} from '@bindings/chatclaw/internal/services/openclawagents'
 
 export function useAgents() {
   const { t } = useI18n()
-  const agents = ref<Agent[]>([])
+  const agents = ref<OpenClawAgent[]>([])
   const activeAgentId = ref<number | null>(null)
   const loading = ref(false)
 
-  const activeAgent = ref<Agent | null>(null)
+  const activeAgent = ref<OpenClawAgent | null>(null)
 
   const loadAgents = async () => {
     loading.value = true
     try {
-      const list = await AgentsService.ListAgents()
+      const list = await OpenClawAgentsService.ListAgents()
       agents.value = list
 
       const currentId = activeAgentId.value
@@ -34,9 +37,8 @@ export function useAgents() {
   const createAgent = async (data: { name: string; prompt: string; icon: string }) => {
     loading.value = true
     try {
-      const created = await AgentsService.CreateAgent({
+      const created = await OpenClawAgentsService.CreateAgent({
         name: data.name,
-        prompt: data.prompt,
         icon: data.icon,
       })
       if (!created) {
@@ -54,7 +56,7 @@ export function useAgents() {
     }
   }
 
-  const updateAgent = (updated: Agent) => {
+  const updateAgent = (updated: OpenClawAgent) => {
     const idx = agents.value.findIndex((a) => a.id === updated.id)
     if (idx >= 0) agents.value[idx] = updated
   }

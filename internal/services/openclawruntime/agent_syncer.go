@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/services/agents"
+	"chatclaw/internal/services/openclawagents"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -30,7 +30,7 @@ var retryAfterPattern = regexp.MustCompile(`retryAfterMs[^0-9]*(\d+)`)
 type AgentSyncer struct {
 	app       *application.App
 	manager   *Manager
-	agentsSvc *agents.AgentsService
+	agentsSvc *openclawagents.OpenClawAgentsService
 
 	wakeCh chan struct{}
 	stopCh chan struct{}
@@ -45,27 +45,27 @@ type AgentSyncer struct {
 
 // agentsListResult mirrors the Gateway agents.list response.
 type agentsListResult struct {
-	DefaultID string              `json:"defaultId"`
-	Agents    []agentsListEntry   `json:"agents"`
+	DefaultID string            `json:"defaultId"`
+	Agents    []agentsListEntry `json:"agents"`
 }
 
 type agentsListEntry struct {
-	ID       string               `json:"id"`
-	Name     string               `json:"name"`
-	Identity *agentsListIdentity  `json:"identity,omitempty"`
+	ID       string              `json:"id"`
+	Name     string              `json:"name"`
+	Identity *agentsListIdentity `json:"identity,omitempty"`
 }
 
 type agentsListIdentity struct {
 	Name string `json:"name,omitempty"`
 }
 
-// configGetResult is used only for main-agent config.patch fallback.
+// configGetResult holds the response from config.get for optimistic locking.
 type configGetResult struct {
 	Config map[string]any `json:"config"`
 	Hash   string         `json:"hash"`
 }
 
-func NewAgentSyncer(app *application.App, manager *Manager, agentsSvc *agents.AgentsService) *AgentSyncer {
+func NewAgentSyncer(app *application.App, manager *Manager, agentsSvc *openclawagents.OpenClawAgentsService) *AgentSyncer {
 	s := &AgentSyncer{
 		app:       app,
 		manager:   manager,
@@ -182,13 +182,12 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 		return fmt.Errorf("agents.list: %w", err)
 	}
 
-	// Build lookup maps (keys are lowercased to match Gateway's normalizeAgentId)
 	gatewayMap := make(map[string]agentsListEntry, len(gatewayList.Agents))
 	for _, entry := range gatewayList.Agents {
 		gatewayMap[strings.ToLower(entry.ID)] = entry
 	}
 
-	desiredMap := make(map[string]agents.Agent, len(desiredAgents))
+	desiredMap := make(map[string]openclawagents.OpenClawAgent, len(desiredAgents))
 	for _, a := range desiredAgents {
 		desiredMap[strings.ToLower(a.OpenClawAgentID)] = a
 	}
@@ -202,30 +201,25 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 
 		existing, existsInGateway := gatewayMap[normalizedID]
 		if !existsInGateway {
-			if agentID == define.OpenClawMainAgentID {
-				// "main" cannot be created via agents.create; use config.patch
-				if err := s.ensureMainAgentViaConfigPatch(ctx, agent); err != nil {
-					return fmt.Errorf("ensure main agent: %w", err)
-				}
-			} else {
-				if err := s.createAgent(ctx, agent); err != nil {
-					return fmt.Errorf("agents.create %s: %w", agentID, err)
-				}
+			// agents.create initialises workspace dirs, agentDir, sessions
+			// store, and AGENTS.md/SOUL.md scaffolding that config.patch alone
+			// does not provide.
+			if err := s.createAgentDirs(ctx, agent); err != nil {
+				return fmt.Errorf("agents.create %s: %w", agentID, err)
+			}
+			// Atomically set the correct name/identity/workspace/agentDir via
+			// config.patch (replaces the placeholder name written by
+			// agents.create with the real display name).
+			if err := s.upsertAgentConfig(ctx, agent); err != nil {
+				return fmt.Errorf("config.patch upsert %s: %w", agentID, err)
 			}
 			changed = true
 			continue
 		}
 
-		// Agent exists; check if update is needed
 		if needsUpdate(existing, agent) {
-			if agentID == define.OpenClawMainAgentID {
-				if err := s.ensureMainAgentViaConfigPatch(ctx, agent); err != nil {
-					return fmt.Errorf("update main agent: %w", err)
-				}
-			} else {
-				if err := s.updateAgent(ctx, agent); err != nil {
-					return fmt.Errorf("agents.update %s: %w", agentID, err)
-				}
+			if err := s.upsertAgentConfig(ctx, agent); err != nil {
+				return fmt.Errorf("config.patch update %s: %w", agentID, err)
 			}
 			changed = true
 		}
@@ -241,7 +235,6 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 			continue
 		}
 		if entry.ID == define.OpenClawMainAgentID {
-			// Never delete the main agent
 			continue
 		}
 		if err := s.deleteAgent(ctx, entry.ID); err != nil {
@@ -257,34 +250,16 @@ func (s *AgentSyncer) syncOnce(gen uint64) error {
 	return nil
 }
 
-// createAgent calls agents.create to set up workspace/agentDir/sessions,
-// then patchAgentIdentity to set the real display name and identity
-// (agents.create derives agentId from the name param, so we pass the
-// openclaw_agent_id as name; identity is not part of the create/update schema).
-func (s *AgentSyncer) createAgent(ctx context.Context, agent agents.Agent) error {
-	workspace := s.resolveAgentWorkspace(agent)
-
-	var createResp map[string]any
-	if err := s.manager.request(ctx, "agents.create", map[string]any{
-		"name":      agent.OpenClawAgentID,
-		"workspace": workspace,
-	}, &createResp); err != nil {
-		return err
-	}
-
-	return s.patchAgentIdentity(ctx, agent)
-}
-
 // resolveAgentWorkspace returns the workspace directory for an agent.
 // Each agent gets its own isolated workspace under the state dir, following
 // OpenClaw's convention: $STATE_DIR/workspace-{agentId}.
-func (s *AgentSyncer) resolveAgentWorkspace(agent agents.Agent) string {
+func (s *AgentSyncer) resolveAgentWorkspace(agent openclawagents.OpenClawAgent) string {
 	return filepath.Join(s.stateDir(), "workspace-"+agent.OpenClawAgentID)
 }
 
 // resolveAgentDir returns the agent config directory, following
 // OpenClaw's convention: $STATE_DIR/agents/{agentId}/agent.
-func (s *AgentSyncer) resolveAgentDir(agent agents.Agent) string {
+func (s *AgentSyncer) resolveAgentDir(agent openclawagents.OpenClawAgent) string {
 	return filepath.Join(s.stateDir(), "agents", agent.OpenClawAgentID, "agent")
 }
 
@@ -296,20 +271,43 @@ func (s *AgentSyncer) stateDir() string {
 	return dir
 }
 
-func (s *AgentSyncer) updateAgent(ctx context.Context, agent agents.Agent) error {
-	return s.patchAgentIdentity(ctx, agent)
+// createAgentDirs calls agents.create to initialise workspace dirs, agentDir,
+// session store, and scaffold files (AGENTS.md, SOUL.md, etc.).  The config
+// entry written by this call uses openclaw_agent_id as both name and agentId;
+// the caller must follow up with upsertAgentConfig to set the real name and
+// identity atomically.
+func (s *AgentSyncer) createAgentDirs(ctx context.Context, agent openclawagents.OpenClawAgent) error {
+	var resp map[string]any
+	return s.manager.request(ctx, "agents.create", map[string]any{
+		"name":      agent.OpenClawAgentID,
+		"workspace": s.resolveAgentWorkspace(agent),
+	}, &resp)
 }
 
-// patchAgentIdentity updates the name and identity.name for a non-main agent
-// via config.patch, since agents.update schema does not include identity.
-func (s *AgentSyncer) patchAgentIdentity(ctx context.Context, agent agents.Agent) error {
+// upsertAgentConfig does a single config.patch to set (or overwrite) the
+// agent's name, identity.name, workspace and agentDir in agents.list.
+// For the main agent it also sets default:true.  This is atomic — there is
+// no intermediate state where name/identity shows a random string.
+func (s *AgentSyncer) upsertAgentConfig(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	var cfg configGetResult
 	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
-		return fmt.Errorf("config.get for identity patch: %w", err)
+		return fmt.Errorf("config.get: %w", err)
 	}
 
 	existingList := extractAgentList(cfg.Config)
-	newList := make([]any, 0, len(existingList))
+
+	entry := map[string]any{
+		"id":        agent.OpenClawAgentID,
+		"name":      agent.Name,
+		"workspace": s.resolveAgentWorkspace(agent),
+		"agentDir":  s.resolveAgentDir(agent),
+		"identity":  map[string]any{"name": agent.Name},
+	}
+	if agent.OpenClawAgentID == define.OpenClawMainAgentID {
+		entry["default"] = true
+	}
+
+	newList := make([]any, 0, len(existingList)+1)
 	found := false
 	for _, item := range existingList {
 		obj, ok := item.(map[string]any)
@@ -318,24 +316,22 @@ func (s *AgentSyncer) patchAgentIdentity(ctx context.Context, agent agents.Agent
 			continue
 		}
 		id, _ := obj["id"].(string)
-		if id == agent.OpenClawAgentID {
+		if strings.EqualFold(id, agent.OpenClawAgentID) {
+			newList = append(newList, entry)
 			found = true
-			obj["name"] = agent.Name
-			obj["identity"] = map[string]any{"name": agent.Name}
-			newList = append(newList, obj)
 		} else {
 			newList = append(newList, item)
 		}
 	}
 	if !found {
-		return fmt.Errorf("agent %s not found in config after create", agent.OpenClawAgentID)
+		newList = append(newList, entry)
 	}
 
 	patchRaw, err := json.Marshal(map[string]any{
 		"agents": map[string]any{"list": newList},
 	})
 	if err != nil {
-		return fmt.Errorf("marshal identity patch: %w", err)
+		return fmt.Errorf("marshal config patch: %w", err)
 	}
 
 	return s.manager.request(ctx, "config.patch", map[string]any{
@@ -351,60 +347,8 @@ func (s *AgentSyncer) deleteAgent(ctx context.Context, agentID string) error {
 	}, nil)
 }
 
-// ensureMainAgentViaConfigPatch handles the "main" agent which cannot be
-// created/deleted via the agents.create/delete RPCs (they forbid "main").
-// Falls back to config.patch to insert it into agents.list.
-func (s *AgentSyncer) ensureMainAgentViaConfigPatch(ctx context.Context, agent agents.Agent) error {
-	var cfg configGetResult
-	if err := s.manager.request(ctx, "config.get", map[string]any{}, &cfg); err != nil {
-		return err
-	}
-
-	existingList := extractAgentList(cfg.Config)
-
-	mainEntry := map[string]any{
-		"id":        define.OpenClawMainAgentID,
-		"name":      agent.Name,
-		"default":   true,
-		"workspace": s.resolveAgentWorkspace(agent),
-		"agentDir":  s.resolveAgentDir(agent),
-		"identity": map[string]any{
-			"name": agent.Name,
-		},
-	}
-
-	// Prepend the main entry, keep everything else
-	newList := []any{mainEntry}
-	for _, item := range existingList {
-		obj, ok := item.(map[string]any)
-		if !ok {
-			newList = append(newList, item)
-			continue
-		}
-		id, _ := obj["id"].(string)
-		if id == define.OpenClawMainAgentID {
-			continue
-		}
-		newList = append(newList, item)
-	}
-
-	patchRaw, err := json.Marshal(map[string]any{
-		"agents": map[string]any{
-			"list": newList,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("marshal main agent config patch: %w", err)
-	}
-
-	return s.manager.request(ctx, "config.patch", map[string]any{
-		"raw":      string(patchRaw),
-		"baseHash": cfg.Hash,
-	}, nil)
-}
-
 // needsUpdate compares the Gateway entry against the desired ChatClaw agent state.
-func needsUpdate(existing agentsListEntry, desired agents.Agent) bool {
+func needsUpdate(existing agentsListEntry, desired openclawagents.OpenClawAgent) bool {
 	existingName := existing.Name
 	if existing.Identity != nil && existing.Identity.Name != "" {
 		existingName = existing.Identity.Name

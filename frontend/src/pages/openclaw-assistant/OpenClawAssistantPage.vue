@@ -20,7 +20,7 @@ import WorkspaceDrawer from './components/WorkspaceDrawer.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
-import { type Agent } from '@bindings/chatclaw/internal/services/agents'
+import { type OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
 import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
@@ -154,9 +154,9 @@ function goToChatwikiBindingSettings() {
 const listMode = ref<ListMode>('personal')
 const createOpen = ref(false)
 const settingsOpen = ref(false)
-const settingsAgent = ref<Agent | null>(null)
+const settingsAgent = ref<OpenClawAgent | null>(null)
 const channelsOpen = ref(false)
-const channelsAgent = ref<Agent | null>(null)
+const channelsAgent = ref<OpenClawAgent | null>(null)
 const settingsInitialTab = ref<string>('')
 const sidebarCollapsed = ref(false)
 const workspaceDrawerOpen = ref(false)
@@ -409,13 +409,13 @@ const handleCreate = async (data: { name: string; prompt: string; icon: string }
   }
 }
 
-const openSettings = (agent: Agent, initialTab?: string) => {
+const openSettings = (agent: OpenClawAgent, initialTab?: string) => {
   settingsAgent.value = agent
   settingsInitialTab.value = initialTab || ''
   settingsOpen.value = true
 }
 
-const openChannels = (agent: Agent) => {
+const openChannels = (agent: OpenClawAgent) => {
   channelsAgent.value = agent
   channelsOpen.value = true
 }
@@ -426,7 +426,7 @@ const handleOpenWorkspaceSettings = () => {
   }
 }
 
-const handleUpdated = (updated: Agent) => {
+const handleUpdated = (updated: OpenClawAgent) => {
   // Get old agent info to check if default model changed
   const oldAgent = agents.value.find((a) => a.id === updated.id)
   const hadDefaultModel = oldAgent?.default_llm_provider_id && oldAgent?.default_llm_model_id
@@ -609,8 +609,7 @@ const handleSelectConversation = async (conversation: Conversation) => {
   await nextTick()
   isRestoringConversation = false
 
-  // Set chat mode from conversation (skip if forced to task mode)
-  chatMode.value = conversation.chat_mode || 'task'
+  // OpenClaw assistant always uses task mode
 }
 
 const getTeamRobotKey = () => {
@@ -1477,9 +1476,7 @@ onMounted(() => {
         if (pendingData.enableThinking != null) {
           enableThinking.value = pendingData.enableThinking
         }
-        if (pendingData.chatMode) {
-          chatMode.value = pendingData.chatMode
-        }
+        // OpenClaw assistant always uses task mode, skip chat mode from pending data
         // Apply chat input
         if (pendingData.chatInput) {
           chatInput.value = pendingData.chatInput
@@ -1969,7 +1966,7 @@ onUnmounted(() => {
             data-snap-wake="true"
             :chat-input="chatInput"
             :chat-mode="chatMode"
-            :hide-chat-mode-selector="false"
+            :hide-chat-mode-selector="true"
             :selected-model-key="selectedModelKey"
             :selected-model-info="selectedModelInfo"
             :providers-with-models="providersWithModels"
@@ -2041,7 +2038,7 @@ onUnmounted(() => {
         data-snap-wake="true"
         :chat-input="chatInput"
         :chat-mode="chatMode"
-        :hide-chat-mode-selector="false"
+        :hide-chat-mode-selector="true"
         :selected-model-key="selectedModelKey"
         :selected-model-info="selectedModelInfo"
         :providers-with-models="providersWithModels"

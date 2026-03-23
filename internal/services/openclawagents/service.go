@@ -1,4 +1,4 @@
-package agents
+package openclawagents
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"chatclaw/internal/define"
@@ -31,26 +32,22 @@ func defaultWorkDir() string {
 	return dir
 }
 
-// GetDefaultWorkDir returns the default working directory path for agents.
-func (s *AgentsService) GetDefaultWorkDir() string {
+func (s *OpenClawAgentsService) GetDefaultWorkDir() string {
 	return defaultWorkDir()
 }
 
-// AgentsService 助手服务（暴露给前端调用）
-type AgentsService struct {
-	app    *application.App
-	testDB *bun.DB
+type OpenClawAgentsService struct {
+	app        *application.App
+	testDB     *bun.DB
+	changeMu   sync.RWMutex
+	changeHook func()
 }
 
-func NewAgentsService(app *application.App) *AgentsService {
-	return &AgentsService{app: app}
+func NewOpenClawAgentsService(app *application.App) *OpenClawAgentsService {
+	return &OpenClawAgentsService{app: app}
 }
 
-func NewAgentsServiceForTest(db *bun.DB) *AgentsService {
-	return &AgentsService{testDB: db}
-}
-
-func (s *AgentsService) db() (*bun.DB, error) {
+func (s *OpenClawAgentsService) db() (*bun.DB, error) {
 	if s.testDB != nil {
 		return s.testDB, nil
 	}
@@ -61,14 +58,28 @@ func (s *AgentsService) db() (*bun.DB, error) {
 	return db, nil
 }
 
-func newAgentModel(name, openclawAgentID, prompt, icon string) *agentModel {
-	return &agentModel{
+// SetChangeHook registers a callback invoked after successful agent mutations.
+func (s *OpenClawAgentsService) SetChangeHook(fn func()) {
+	s.changeMu.Lock()
+	defer s.changeMu.Unlock()
+	s.changeHook = fn
+}
+
+func (s *OpenClawAgentsService) notifyChange() {
+	s.changeMu.RLock()
+	fn := s.changeHook
+	s.changeMu.RUnlock()
+	if fn != nil {
+		go fn()
+	}
+}
+
+func newOpenClawAgentModel(name, openclawAgentID, icon string) *openClawAgentModel {
+	return &openClawAgentModel{
 		Name:            strings.TrimSpace(name),
 		OpenClawAgentID: strings.TrimSpace(openclawAgentID),
-		Prompt:          strings.TrimSpace(prompt),
 		Icon:            strings.TrimSpace(icon),
 
-		// 允许为空：用户可在「模型设置」里选择
 		DefaultLLMProviderID:    "",
 		DefaultLLMModelID:       "",
 		LLMTemperature:          0.5,
@@ -90,9 +101,7 @@ func newAgentModel(name, openclawAgentID, prompt, icon string) *agentModel {
 	}
 }
 
-// EnsureMainAgent guarantees that the system default agent mapped to OpenClaw "main" exists.
-// Uses INSERT ... ON CONFLICT DO NOTHING for atomic idempotent insertion.
-func (s *AgentsService) EnsureMainAgent() error {
+func (s *OpenClawAgentsService) EnsureMainAgent() error {
 	db, err := s.db()
 	if err != nil {
 		return err
@@ -101,23 +110,27 @@ func (s *AgentsService) EnsureMainAgent() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	agent := newAgentModel(
+	agent := newOpenClawAgentModel(
 		define.DefaultAgentNameForLocale(i18n.GetLocale()),
 		define.OpenClawMainAgentID,
-		define.DefaultAgentPromptForLocale(i18n.GetLocale()),
 		"",
 	)
 
-	if _, err := db.NewInsert().Model(agent).
+	result, err := db.NewInsert().Model(agent).
 		On("CONFLICT (openclaw_agent_id) DO NOTHING").
-		Exec(ctx); err != nil {
+		Exec(ctx)
+	if err != nil {
 		return errs.Wrap("error.agent_create_failed", err)
 	}
 
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		s.notifyChange()
+	}
 	return nil
 }
 
-func (s *AgentsService) ListAgentsForMatching() ([]AgentMatch, error) {
+func (s *OpenClawAgentsService) ListAgents() ([]OpenClawAgent, error) {
 	db, err := s.db()
 	if err != nil {
 		return nil, err
@@ -126,65 +139,7 @@ func (s *AgentsService) ListAgentsForMatching() ([]AgentMatch, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	matches := make([]AgentMatch, 0)
-	if err := db.NewSelect().
-		Table("agents").
-		Column("id", "name").
-		OrderExpr("updated_at DESC, id DESC").
-		Scan(ctx, &matches); err != nil {
-		return nil, errs.Wrap("error.agent_list_failed", err)
-	}
-	return matches, nil
-}
-
-func (s *AgentsService) MatchAgentsByName(query string) ([]AgentMatch, string, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return []AgentMatch{}, "none", nil
-	}
-
-	agents, err := s.ListAgentsForMatching()
-	if err != nil {
-		return nil, "", err
-	}
-
-	normalizedQuery := strings.ToLower(query)
-	exact := make([]AgentMatch, 0)
-	contains := make([]AgentMatch, 0)
-	for _, agent := range agents {
-		normalizedName := strings.ToLower(strings.TrimSpace(agent.Name))
-		switch {
-		case normalizedName == normalizedQuery:
-			exact = append(exact, agent)
-		case strings.Contains(normalizedName, normalizedQuery):
-			contains = append(contains, agent)
-		}
-	}
-
-	switch {
-	case len(exact) == 1:
-		return exact, "exact", nil
-	case len(exact) > 1:
-		return exact, "multiple", nil
-	case len(contains) == 1:
-		return contains, "single", nil
-	case len(contains) > 1:
-		return contains, "multiple", nil
-	default:
-		return []AgentMatch{}, "none", nil
-	}
-}
-
-func (s *AgentsService) ListAgents() ([]Agent, error) {
-	db, err := s.db()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	models := make([]agentModel, 0)
+	models := make([]openClawAgentModel, 0)
 	if err := db.NewSelect().
 		Model(&models).
 		OrderExpr("updated_at DESC, id DESC").
@@ -192,14 +147,39 @@ func (s *AgentsService) ListAgents() ([]Agent, error) {
 		return nil, errs.Wrap("error.agent_list_failed", err)
 	}
 
-	out := make([]Agent, 0, len(models))
+	out := make([]OpenClawAgent, 0, len(models))
 	for i := range models {
 		out = append(out, models[i].toDTO())
 	}
 	return out, nil
 }
 
-func (s *AgentsService) GetAgent(id int64) (*Agent, error) {
+// ListAgentsForOpenClawSync returns agents in a stable order for config reconciliation.
+func (s *OpenClawAgentsService) ListAgentsForOpenClawSync() ([]OpenClawAgent, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	models := make([]openClawAgentModel, 0)
+	if err := db.NewSelect().
+		Model(&models).
+		OrderExpr("CASE WHEN openclaw_agent_id = ? THEN 0 ELSE 1 END ASC, id ASC", define.OpenClawMainAgentID).
+		Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.agent_list_failed", err)
+	}
+
+	out := make([]OpenClawAgent, 0, len(models))
+	for i := range models {
+		out = append(out, models[i].toDTO())
+	}
+	return out, nil
+}
+
+func (s *OpenClawAgentsService) GetAgent(id int64) (*OpenClawAgent, error) {
 	if id <= 0 {
 		return nil, errs.New("error.agent_id_required")
 	}
@@ -212,7 +192,7 @@ func (s *AgentsService) GetAgent(id int64) (*Agent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	var m agentModel
+	var m openClawAgentModel
 	if err := db.NewSelect().
 		Model(&m).
 		Where("id = ?", id).
@@ -228,18 +208,13 @@ func (s *AgentsService) GetAgent(id int64) (*Agent, error) {
 	return &dto, nil
 }
 
-func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
+func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*OpenClawAgent, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, errs.New("error.agent_name_required")
 	}
 	if len([]rune(name)) > 100 {
 		return nil, errs.New("error.agent_name_too_long")
-	}
-
-	prompt := strings.TrimSpace(input.Prompt)
-	if len([]rune(prompt)) > 1000 {
-		return nil, errs.New("error.agent_prompt_too_long")
 	}
 
 	icon := strings.TrimSpace(input.Icon)
@@ -252,7 +227,7 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 		return nil, err
 	}
 
-	m := newAgentModel(name, define.NewOpenClawManagedAgentID(), prompt, icon)
+	m := newOpenClawAgentModel(name, define.NewOpenClawManagedAgentID(), icon)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -262,17 +237,15 @@ func (s *AgentsService) CreateAgent(input CreateAgentInput) (*Agent, error) {
 	}
 
 	dto := m.toDTO()
+	s.notifyChange()
 	return &dto, nil
 }
 
-// GetDefaultPrompt returns the default prompt based on the current i18n locale.
-func (s *AgentsService) GetDefaultPrompt() string {
-	return define.DefaultAgentPromptForLocale(i18n.GetLocale())
+func (s *OpenClawAgentsService) GetDefaultPrompt() string {
+	return ""
 }
 
-// ReadIconFile 将本地图片文件读取为 data URL（供前端预览 + 写入 DB）。
-// 约束：最大 100KB，仅允许常见图片格式（png/jpg/jpeg/gif/webp/svg）。
-func (s *AgentsService) ReadIconFile(path string) (string, error) {
+func (s *OpenClawAgentsService) ReadIconFile(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", errs.New("error.agent_icon_path_required")
@@ -292,7 +265,6 @@ func (s *AgentsService) ReadIconFile(path string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 	mime := http.DetectContentType(b)
 
-	// svg: DetectContentType 可能返回 text/xml；这里基于扩展名兜底
 	if ext == ".svg" {
 		mime = "image/svg+xml"
 	}
@@ -308,7 +280,7 @@ func (s *AgentsService) ReadIconFile(path string) (string, error) {
 	return "data:" + mime + ";base64," + encoded, nil
 }
 
-func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, error) {
+func (s *OpenClawAgentsService) UpdateAgent(id int64, input UpdateOpenClawAgentInput) (*OpenClawAgent, error) {
 	if id <= 0 {
 		return nil, errs.New("error.agent_id_required")
 	}
@@ -321,7 +293,6 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	// 读取旧值（用于 provider/model 的组合校验）
 	existing, err := s.GetAgent(id)
 	if err != nil {
 		return nil, err
@@ -337,9 +308,6 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 		newModelID = strings.TrimSpace(*input.DefaultLLMModelID)
 	}
 	if (input.DefaultLLMProviderID != nil) || (input.DefaultLLMModelID != nil) {
-		// 允许清空（删除默认模型）：
-		// - provider+model 同时为空：清空
-		// - 任意一个为空：输入不完整
 		if newProviderID == "" && newModelID == "" {
 			// ok - clear
 		} else if newProviderID == "" || newModelID == "" {
@@ -351,9 +319,8 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 		}
 	}
 
-	// BeforeUpdate hook 会自动设置 updated_at
 	q := db.NewUpdate().
-		Model((*agentModel)(nil)).
+		Model((*openClawAgentModel)(nil)).
 		Where("id = ?", id)
 
 	if input.Name != nil {
@@ -365,14 +332,6 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 			return nil, errs.New("error.agent_name_too_long")
 		}
 		q = q.Set("name = ?", name)
-	}
-
-	if input.Prompt != nil {
-		prompt := strings.TrimSpace(*input.Prompt)
-		if len([]rune(prompt)) > 1000 {
-			return nil, errs.New("error.agent_prompt_too_long")
-		}
-		q = q.Set("prompt = ?", prompt)
 	}
 
 	if input.Icon != nil {
@@ -457,10 +416,11 @@ func (s *AgentsService) UpdateAgent(id int64, input UpdateAgentInput) (*Agent, e
 	if err != nil {
 		return nil, err
 	}
+	s.notifyChange()
 	return updated, nil
 }
 
-func (s *AgentsService) DeleteAgent(id int64) error {
+func (s *OpenClawAgentsService) DeleteAgent(id int64) error {
 	if id <= 0 {
 		return errs.New("error.agent_id_required")
 	}
@@ -475,7 +435,7 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 
 	var openclawAgentID string
 	if err := db.NewSelect().
-		Table("agents").
+		Table("openclaw_agents").
 		Column("openclaw_agent_id").
 		Where("id = ?", id).
 		Limit(1).
@@ -490,7 +450,7 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 	}
 
 	result, err := db.NewDelete().
-		Model((*agentModel)(nil)).
+		Model((*openClawAgentModel)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
 	if err != nil {
@@ -502,10 +462,10 @@ func (s *AgentsService) DeleteAgent(id int64) error {
 		return errs.Newf("error.agent_not_found", map[string]any{"ID": id})
 	}
 
+	s.notifyChange()
 	return nil
 }
 
-// FileEntry represents a file or directory in the workspace tree.
 type FileEntry struct {
 	Name     string      `json:"name"`
 	Path     string      `json:"path"`
@@ -515,15 +475,12 @@ type FileEntry struct {
 
 const workspaceTreeMaxDepth = 3
 
-// idHash produces the same 12-hex-char directory name used by the agent runtime
-// (see internal/eino/agent/agent.go idHash).
 func idHash(id int64) string {
 	h := sha256.Sum256([]byte("chatclaw:" + strconv.FormatInt(id, 10)))
 	return hex.EncodeToString(h[:6])
 }
 
-// GetWorkspaceDir returns the resolved workspace directory for a given agent and conversation.
-func (s *AgentsService) GetWorkspaceDir(agentID int64, conversationID int64) (string, error) {
+func (s *OpenClawAgentsService) GetWorkspaceDir(agentID int64, conversationID int64) (string, error) {
 	agent, err := s.GetAgent(agentID)
 	if err != nil {
 		return "", err
@@ -539,8 +496,7 @@ func (s *AgentsService) GetWorkspaceDir(agentID int64, conversationID int64) (st
 	return dir, nil
 }
 
-// ListWorkspaceFiles returns the directory tree for the given agent+conversation workspace.
-func (s *AgentsService) ListWorkspaceFiles(agentID int64, conversationID int64) ([]FileEntry, error) {
+func (s *OpenClawAgentsService) ListWorkspaceFiles(agentID int64, conversationID int64) ([]FileEntry, error) {
 	dir, err := s.GetWorkspaceDir(agentID, conversationID)
 	if err != nil {
 		return nil, err
@@ -548,7 +504,6 @@ func (s *AgentsService) ListWorkspaceFiles(agentID int64, conversationID int64) 
 
 	info, statErr := os.Stat(dir)
 	if statErr != nil {
-		// A missing workspace directory is expected before any file output is generated.
 		if errors.Is(statErr, os.ErrNotExist) {
 			return []FileEntry{}, nil
 		}
@@ -565,7 +520,6 @@ func (s *AgentsService) ListWorkspaceFiles(agentID int64, conversationID int64) 
 	return entries, nil
 }
 
-// readDirTree recursively reads a directory tree up to maxDepth levels.
 func readDirTree(dir string, maxDepth int) ([]FileEntry, error) {
 	if maxDepth <= 0 {
 		return []FileEntry{}, nil
