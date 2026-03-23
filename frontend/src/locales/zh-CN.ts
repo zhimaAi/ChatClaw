@@ -1549,8 +1549,6 @@ export default {
       thinking: '思考模式',
       enabled: '启用任务',
       expiresAt: '到期时间',
-      expiresAtOptional: '非必选',
-      expiresAtHint: '选择某一天后，会在当天 23:59:59 自动关闭，过期后不能再次开启。',
       expiredHint: '该任务已过期，目前保持关闭状态。如需再次启用，请将到期时间修改到未来。',
       scheduleType: '调度方式',
       schedulePreset: '快捷设置',

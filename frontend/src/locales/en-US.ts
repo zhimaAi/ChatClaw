@@ -1579,9 +1579,6 @@ export default {
       thinking: 'Thinking',
       enabled: 'Enable Task',
       expiresAt: 'Expiration Date',
-      expiresAtOptional: 'Optional',
-      expiresAtHint:
-        'The task will auto-disable at 23:59:59 on the selected day and cannot be enabled again after expiration.',
       expiredHint:
         'This task has expired and stays disabled. Move the expiration date to the future to enable it again.',
       scheduleType: 'Schedule Type',

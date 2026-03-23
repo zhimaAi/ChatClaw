@@ -438,9 +438,6 @@ useEventListener(window, 'keydown', (event) => {
       <div class="space-y-2">
         <label class="block text-[15px] font-semibold text-[#1f2937]">
           {{ t('scheduledTasks.form.expiresAt') }}
-          <span class="ml-1 text-xs font-medium text-[#94a3b8]">{{
-            t('scheduledTasks.form.expiresAtOptional')
-          }}</span>
         </label>
         <div ref="expirationPickerRef" class="relative">
           <button
@@ -580,9 +577,6 @@ useEventListener(window, 'keydown', (event) => {
             </div>
           </div>
         </div>
-        <p class="text-xs text-[#94a3b8]">
-          {{ t('scheduledTasks.form.expiresAtHint') }}
-        </p>
         <p v-if="formExpired" class="text-xs font-medium text-[#dc2626]">
           {{ t('scheduledTasks.form.expiredHint') }}
         </p>
@@ -731,7 +725,7 @@ useEventListener(window, 'keydown', (event) => {
               @click="form.schedulePreset = item.value"
             >
               <Clock3 class="size-4 shrink-0" />
-              <span class="flex-1 font-medium">{{ item.label }}</span>
+              <span class="flex-1 font-medium">{{ t(item.labelKey) }}</span>
               <Check v-if="form.schedulePreset === item.value" class="size-4 shrink-0" />
             </button>
           </div>
@@ -780,7 +774,7 @@ useEventListener(window, 'keydown', (event) => {
                   "
                   @click="selectWeeklyDay(item.value)"
                 >
-                  <span>{{ item.label }}</span>
+                  <span>{{ t(item.labelKey) }}</span>
                   <Check
                     v-if="selectedWeeklyDay === item.value"
                     class="size-4 shrink-0 text-[#2563eb]"

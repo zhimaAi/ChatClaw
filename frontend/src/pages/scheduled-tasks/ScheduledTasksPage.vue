@@ -180,7 +180,7 @@ async function handleDeleteConfirm() {
           {{ t('scheduledTasks.subtitle') }}
         </p>
       </div>
-      <div class="flex items-center gap-2 self-start">
+      <div class="mt-5 flex items-center gap-2">
         <Button
           class="h-9 gap-1 border-none bg-[#f5f5f5] text-[#171717] shadow-none hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
           @click="operationLogOpen = true"
