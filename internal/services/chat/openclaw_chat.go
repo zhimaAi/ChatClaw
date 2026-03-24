@@ -36,6 +36,15 @@ type openClawAgentConfig struct {
 	EnableThinking  bool
 }
 
+// openClawSessionKey builds the Gateway session key for a conversation.
+// The key uses the canonical "agent:<agentId>:<rest>" format so that the
+// Gateway correctly associates the session with the specified agent.
+// Without this prefix, the Gateway defaults to the "main" agent, which
+// causes INVALID_REQUEST errors for any non-default agent.
+func openClawSessionKey(agentID string, conversationID int64) string {
+	return fmt.Sprintf("agent:%s:conv_%d", agentID, conversationID)
+}
+
 // getOpenClawAgentConfig reads the openclaw_agents table to build the chat.run config.
 func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgentConfig, error) {
 	db, err := s.db()
@@ -134,7 +143,12 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		return nil, nil
 	}
 
-	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return nil, nil
+	}
+
+	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1092,7 +1106,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		Status:    StatusStreaming,
 	})
 
-	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 

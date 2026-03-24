@@ -319,14 +319,22 @@ func (s *AgentService) createAgent(ctx context.Context, agent openclawagents.Ope
 		params["emoji"] = agent.IdentityEmoji
 	}
 	var resp map[string]any
-	return s.manager.Request(ctx, "agents.create", params, &resp)
+	if err := s.manager.Request(ctx, "agents.create", params, &resp); err != nil {
+		return err
+	}
+	// agents.create derives the agent ID from the name param, so we pass
+	// OpenClawAgentID above. Now set the human-readable display name via update.
+	if agent.Name != agent.OpenClawAgentID {
+		return s.updateAgent(ctx, agent)
+	}
+	return nil
 }
 
 func (s *AgentService) updateAgent(ctx context.Context, agent openclawagents.OpenClawAgent) error {
 	params := map[string]any{
 		"agentId": agent.OpenClawAgentID,
 	}
-	params["name"] = agent.OpenClawAgentID
+	params["name"] = agent.Name
 	params["workspace"] = s.resolveAgentWorkspace(agent)
 	if agent.DefaultLLMProviderID != "" && agent.DefaultLLMModelID != "" {
 		params["model"] = agent.DefaultLLMProviderID + "/" + agent.DefaultLLMModelID
