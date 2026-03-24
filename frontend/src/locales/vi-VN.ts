@@ -1423,6 +1423,8 @@ export default {
     refresh: "Làm mới",
     edit: "Chỉnh sửa tác vụ",
     empty: "Chưa có tác vụ định giờ",
+    emptyDescription:
+      "Tạo tác vụ định giờ để tự động hóa quy trình AI. Tác vụ có thể gửi tin nhắn, chạy truy vấn hoặc thực hiện hành động vào thời điểm chỉ định.",
     errorReason: "Xem lý do lỗi",
     actionsMenu: "Mở menu thao tác",
     total: "Tổng tác vụ",

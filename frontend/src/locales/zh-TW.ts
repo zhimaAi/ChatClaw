@@ -1424,6 +1424,8 @@ export default {
     refresh: "Refresh",
     edit: "Edit Task",
     empty: "No scheduled tasks yet",
+    emptyDescription:
+      "建立排程任務以自動化 AI 工作流程。任務可以在指定時間傳送訊息、執行查詢或執行操作。",
     errorReason: "View error reason",
     actionsMenu: "Open actions menu",
     total: "Total Tasks",
@@ -1432,6 +1434,7 @@ export default {
     failed: "Failed",
     runNow: "Run Now",
     history: "History",
+    runHistoryTitle: "Run History",
     delete: "Delete",
     enabled: "Enabled",
     disabled: "Paused",

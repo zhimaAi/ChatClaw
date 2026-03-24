@@ -1993,9 +1993,10 @@ onUnmounted(() => {
             @snap-copy="handleCopyToClipboard"
           />
 
-          <!-- Input area: hide when personal empty or team empty/unbound -->
+          <!-- Input area: hide when personal empty, team empty/unbound, or history-iframe (read-only) -->
           <ChatInputArea
             v-if="
+              !isHistoryIframeMode &&
               (!isAgentEmpty || showHistoryConversationShell) &&
               !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
               (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
@@ -2120,43 +2121,45 @@ onUnmounted(() => {
     </div>
     <!-- End main content wrapper -->
 
-    <!-- Dialogs (rendered outside main content wrapper for proper z-index) -->
-    <CreateAgentDialog v-model:open="createOpen" :loading="loading" @create="handleCreate" />
-    <AgentChannelsDialog v-model:open="channelsOpen" :agent="channelsAgent" />
-    <AgentSettingsDialog
-      v-model:open="settingsOpen"
-      :agent="settingsAgent"
-      :initial-tab="settingsInitialTab"
-      @updated="handleUpdated"
-      @deleted="handleDeleted"
-    />
+    <!-- Dialogs (rendered outside main content wrapper for proper z-index; skip in history-iframe to avoid DismissableLayer interference) -->
+    <template v-if="!isHistoryIframeMode">
+      <CreateAgentDialog v-model:open="createOpen" :loading="loading" @create="handleCreate" />
+      <AgentChannelsDialog v-model:open="channelsOpen" :agent="channelsAgent" />
+      <AgentSettingsDialog
+        v-model:open="settingsOpen"
+        :agent="settingsAgent"
+        :initial-tab="settingsInitialTab"
+        @updated="handleUpdated"
+        @deleted="handleDeleted"
+      />
 
-    <RenameConversationDialog
-      v-model:open="renameConversationOpen"
-      :conversation="actionConversation"
-      @updated="handleConversationUpdated"
-    />
+      <RenameConversationDialog
+        v-model:open="renameConversationOpen"
+        :conversation="actionConversation"
+        @updated="handleConversationUpdated"
+      />
 
-    <AlertDialog v-model:open="deleteConversationOpen">
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{{ t('assistant.conversation.delete.title') }}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ t('assistant.conversation.delete.desc', { name: actionConversation?.name }) }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>
-            {{ t('assistant.conversation.delete.cancel') }}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            class="bg-foreground text-background hover:bg-foreground/90"
-            @click.prevent="confirmDeleteConversation"
-          >
-            {{ t('assistant.conversation.delete.confirm') }}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <AlertDialog v-model:open="deleteConversationOpen">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t('assistant.conversation.delete.title') }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t('assistant.conversation.delete.desc', { name: actionConversation?.name }) }}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {{ t('assistant.conversation.delete.cancel') }}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              class="bg-foreground text-background hover:bg-foreground/90"
+              @click.prevent="confirmDeleteConversation"
+            >
+              {{ t('assistant.conversation.delete.confirm') }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </template>
   </div>
 </template>

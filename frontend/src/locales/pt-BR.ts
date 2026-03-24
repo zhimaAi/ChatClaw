@@ -1421,6 +1421,8 @@ export default {
     refresh: "Atualizar",
     edit: "Editar Tarefa",
     empty: "Sem tarefas agendadas ainda",
+    emptyDescription:
+      "Crie tarefas agendadas para automatizar fluxos de trabalho de IA. As tarefas podem enviar mensagens, executar consultas ou realizar ações em horários definidos.",
     errorReason: "Ver motivo do erro",
     actionsMenu: "Abrir menu de ações",
     total: "Total de Tarefas",

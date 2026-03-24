@@ -1422,6 +1422,8 @@ export default {
     refresh: "Aggiorna",
     edit: "Modifica task",
     empty: "Nessun task programmato",
+    emptyDescription:
+      "Crea attività pianificate per automatizzare i flussi di lavoro AI. Le attività possono inviare messaggi, eseguire query o compiere azioni in orari specifici.",
     errorReason: "Vedi motivo errore",
     actionsMenu: "Apri menu azioni",
     total: "Totale task",

@@ -1581,6 +1581,8 @@ export default {
     refresh: "새로고침",
     edit: "작업 편집",
     empty: "예약된 작업 없음",
+    emptyDescription:
+      "예약된 작업을 생성하여 AI 워크플로를 자동화하세요. 작업은 지정된 시간에 메시지를 보내고, 쿼리를 실행하고, 동작을 수행할 수 있습니다.",
     errorReason: "오류 이유 보기",
     actionsMenu: "작업 메뉴 열기",
     total: "총 작업",

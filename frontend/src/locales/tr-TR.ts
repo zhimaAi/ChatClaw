@@ -1421,6 +1421,8 @@ export default {
     refresh: "Yenile",
     edit: "Görevi düzenle",
     empty: "Henüz planlı görev yok",
+    emptyDescription:
+      "YZ iş akışlarını otomatikleştirmek için planlanmış görevler oluşturun. Görevler belirli zamanlarda mesaj gönderebilir, sorgu çalıştırabilir veya işlemler gerçekleştirebilir.",
     errorReason: "Hata nedenini görüntüle",
     actionsMenu: "Eylem menüsünü aç",
     total: "Toplam görev",
