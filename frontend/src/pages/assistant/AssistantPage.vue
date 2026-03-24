@@ -1395,9 +1395,6 @@ async function initializeEmbeddedConversation() {
 }
 
 // 监听标签页激活状态，激活时刷新模型/助手列表
-// - 模型：用户可能在设置页启用/禁用 provider/model
-// - 助手：其它标签页可能创建/更新/删除了助手
-// - 团队：若当前为团队 tab 且未绑定，重新检查绑定（例如从设置页绑定后返回）
 watch(isTabActive, (active) => {
   if (active) {
     void (async () => {

@@ -197,6 +197,14 @@ function backToTaskListPage() {
     SCHEDULED_TASKS_VIEW_ACTION_BACK_TO_TASK_LIST
   )
 }
+
+function handleHistoryDialogOpenChange(value: boolean) {
+  // Close the history dialog by clearing the source task explicitly.
+  // 通过显式清空来源任务来关闭历史弹窗，避免模板内联赋值带来的歧义。
+  if (!value) {
+    historyTask.value = null
+  }
+}
 </script>
 
 <template>
@@ -320,9 +328,10 @@ function backToTaskListPage() {
     />
 
     <TaskRunHistoryDialog
+      v-if="historyTask"
       :open="!!historyTask"
       :task="historyTask"
-      @update:open="(value) => !value && (historyTask = null)"
+      @update:open="handleHistoryDialogOpenChange"
     />
 
     <AlertDialog :open="deleteDialogOpen" @update:open="(value) => !value && handleDeleteCancel()">
