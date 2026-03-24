@@ -157,6 +157,7 @@ export default {
   nav: {
     assistant: "任务助手",
     openclaw: "OpenClaw",
+    openclawDashboard: "OpenClaw 控制台",
     knowledge: "知识库",
     scheduledTasks: "定时任务",
     skills: "技能",
@@ -252,6 +253,8 @@ export default {
         disconnected: "未连接",
       },
       notInstalled: "运行时缺失",
+      openDashboard: "打开控制台",
+      dashboardError: "无法加载 OpenClaw 控制台",
     },
     general: {
       title: "常规设置",
