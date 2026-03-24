@@ -159,7 +159,7 @@ export default {
     disableSelectionSearch: "닫기",
   },
   nav: {
-    assistant: "AI 어시스턴트",
+    assistant: "태스크 어시스턴트",
     openclawAssistant: "OpenClaw 어시스턴트",
     knowledge: "지식베이스",
     scheduledTasks: "예약된 작업",
@@ -167,8 +167,11 @@ export default {
     channels: "채널",
     multiask: "다중 질문",
     memory: "메모리",
+    tools: "도구",
     settings: "설정",
     document: "문서",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "다중 질문",

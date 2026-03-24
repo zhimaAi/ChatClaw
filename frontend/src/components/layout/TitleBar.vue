@@ -19,6 +19,7 @@ import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
 import IconSkills from '@/assets/icons/skills.svg'
 import IconChannels from '@/assets/icons/channels.svg'
+import IconTools from '@/assets/icons/tools.svg'
 import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import WindowControlButtons from './WindowControlButtons.vue'
 
@@ -40,6 +41,7 @@ const moduleTabIcons: Partial<Record<NavModule, any>> = {
   settings: IconSettings,
   skills: IconSkills,
   channels: IconChannels,
+  tools: IconTools,
 }
 import {
   ContextMenu,

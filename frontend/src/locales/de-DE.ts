@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "Schließen",
   },
   nav: {
-    assistant: "KI-Assistent",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw Assistent",
     knowledge: "Wissensdatenbank",
     scheduledTasks: "Geplante Aufgaben",
@@ -156,8 +156,11 @@ export default {
     channels: "Kanäle",
     multiask: "Mehrfachfrage",
     memory: "Erinnerung",
+    tools: "Werkzeuge",
     settings: "Einstellungen",
     document: "Dokument",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Mehrfachfrage",

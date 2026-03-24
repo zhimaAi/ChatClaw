@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "বন্ধ করুন",
   },
   nav: {
-    assistant: "AI অ্যাসিস্ট্যান্ট",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw সহকারী",
     knowledge: "নলেজ বেস",
     scheduledTasks: "নির্ধারিত টাস্ক",
@@ -156,8 +156,11 @@ export default {
     channels: "চ্যানেল",
     multiask: "মাল্টি অ্যাস্ক",
     memory: "মেমরি",
+    tools: "টুলস",
     settings: "সেটিংস",
     document: "ডকুমেন্ট",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "মাল্টি অ্যাস্ক",

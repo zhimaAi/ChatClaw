@@ -155,7 +155,7 @@ export default {
     },
   },
   nav: {
-    assistant: "AI助手",
+    assistant: "任务助手",
     openclawAssistant: "OpenClaw助手",
     knowledge: "知识库",
     scheduledTasks: "定时任务",
@@ -163,8 +163,11 @@ export default {
     channels: "频道",
     multiask: "多问",
     memory: "记忆",
+    tools: "工具",
     settings: "设置",
     document: "文档",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "一问多答",
