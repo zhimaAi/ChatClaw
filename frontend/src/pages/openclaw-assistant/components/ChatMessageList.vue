@@ -167,8 +167,8 @@ watch(
   () => props.conversationId,
   async (newId, oldId) => {
     if (newId > 0) {
+      chatStore.markOpenClawConversation(newId)
       await chatStore.loadMessages(newId)
-      // When opening a conversation, jump to bottom by default.
       shouldAutoScroll.value = true
       scrollToBottom()
     }

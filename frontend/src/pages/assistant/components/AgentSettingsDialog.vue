@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
@@ -41,14 +41,27 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import type { Agent } from '@bindings/chatclaw/internal/services/agents'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
+import {
+  AgentsService,
+  UpdateAgentInput,
+  type Agent,
+} from '@bindings/chatclaw/internal/services/agents'
 import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  isModelSelectionDisabled,
+  isSelectionAvailable,
+} from '@/lib/chatwikiModelAvailability'
 
 type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
 
@@ -67,6 +80,17 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
 const hidePrompt = ref(false)
+
+function getDisplayModelName(
+  providerId: string,
+  model: { name?: string; model_id?: string }
+): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    chatwikiAvailability.value
+  )
+}
 
 const tab = ref<TabKey>('model')
 const saving = ref(false)
@@ -98,6 +122,7 @@ const defaultWorkDir = ref('')
 const codexInstalled = ref(false)
 
 const providersWithModels = ref<ProviderWithModels[]>([])
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
 const modelProviderId = ref('')
 const modelId = ref('')
 const modelName = ref('')
@@ -124,6 +149,7 @@ watch(
 )
 
 let unsubscribeToolchain: (() => void) | null = null
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 onMounted(() => {
   unsubscribeToolchain = Events.On('toolchain:status', (event: any) => {
@@ -132,11 +158,18 @@ onMounted(() => {
       codexInstalled.value = !!data.installed
     }
   })
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void loadModels()
+    }
+  })
 })
 
 onUnmounted(() => {
   unsubscribeToolchain?.()
   unsubscribeToolchain = null
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
 })
 
 watch(
@@ -198,7 +231,11 @@ const displayContextCount = computed(() => {
 
 const loadModels = async () => {
   try {
-    const providers = await ProvidersService.ListProviders()
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabled = providers.filter((p) => p.enabled)
     const results: ProviderWithModels[] = []
     for (const p of enabled) {
@@ -212,15 +249,37 @@ const loadModels = async () => {
     }
     providersWithModels.value = results
 
-    // resolve current model name
-    if (modelProviderId.value && modelId.value) {
-      for (const pw of results) {
-        if (pw.provider.provider_id !== modelProviderId.value) continue
-        for (const group of pw.model_groups) {
-          if (group.type !== 'llm') continue
-          const m = group.models.find((x) => x.model_id === modelId.value)
-          if (m) modelName.value = m.name
-        }
+    const currentKey = clearUnavailableChatwikiSelection(
+      modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : '',
+      chatwikiAvailability.value
+    )
+    if (!currentKey) {
+      clearDefaultModel()
+      if (props.agent?.default_llm_provider_id && props.agent?.default_llm_model_id) {
+        void AgentsService.UpdateAgent(
+          props.agent.id,
+          new UpdateAgentInput({
+            default_llm_provider_id: '',
+            default_llm_model_id: '',
+          })
+        ).catch((error) => {
+          console.warn('Failed to clear unavailable Chatwiki agent model:', error)
+        })
+      }
+      return
+    }
+
+    if (!isSelectionAvailable(results, currentKey, 'llm', chatwikiAvailability.value)) {
+      clearDefaultModel()
+      return
+    }
+
+    for (const pw of results) {
+      if (pw.provider.provider_id !== modelProviderId.value) continue
+      for (const group of pw.model_groups) {
+        if (group.type !== 'llm') continue
+        const m = group.models.find((x) => x.model_id === modelId.value)
+        if (m) modelName.value = getDisplayModelName(modelProviderId.value, m)
       }
     }
   } catch (error: unknown) {
@@ -245,7 +304,7 @@ const onModelKeyChange = (val: any) => {
     for (const group of pw.model_groups) {
       if (group.type !== 'llm') continue
       const found = group.models.find((x) => x.model_id === modelId.value)
-      if (found) modelName.value = found.name
+      if (found) modelName.value = getDisplayModelName(modelProviderId.value, found)
     }
   }
   modelChanged.value = true
@@ -511,7 +570,13 @@ const handleDelete = async () => {
                             :key="pw.provider.provider_id"
                           >
                             <SelectLabel class="mt-2 flex items-center gap-1.5">
-                              <span>{{ pw.provider.name }}</span>
+                              <span>{{
+                                formatProviderDisplayLabel(
+                                  pw.provider.provider_id,
+                                  pw.provider.name,
+                                  chatwikiAvailability
+                                )
+                              }}</span>
                               <span
                                 v-if="isProviderFree(pw)"
                                 class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
@@ -525,8 +590,14 @@ const handleDelete = async () => {
                                   v-for="m in g.models"
                                   :key="pw.provider.provider_id + '::' + m.model_id"
                                   :value="pw.provider.provider_id + '::' + m.model_id"
+                                  :disabled="
+                                    isModelSelectionDisabled(
+                                      pw.provider.provider_id,
+                                      chatwikiAvailability
+                                    )
+                                  "
                                 >
-                                  {{ m.name }}
+                                  {{ getDisplayModelName(pw.provider.provider_id, m) }}
                                 </SelectItem>
                               </template>
                             </template>
@@ -943,3 +1014,5 @@ const handleDelete = async () => {
     </DialogContent>
   </Dialog>
 </template>
+
+

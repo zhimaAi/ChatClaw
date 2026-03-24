@@ -860,6 +860,7 @@ func (s *DocumentService) OpenDocument(id int64) error {
 		switch runtime.GOOS {
 		case "windows":
 			cmd = exec.Command("cmd", "/c", "start", "", m.LocalPath)
+			setCmdHideWindow(cmd)
 		case "darwin":
 			cmd = exec.Command("open", m.LocalPath)
 		case "linux":

@@ -29,8 +29,9 @@ type MemoryFile struct {
 	Path string `json:"path"`
 	// Display name
 	Name string `json:"name"`
-	// Category: "core" | "daily" | "persona"
-	Category string `json:"category"`
+	// Role of this file per OpenClaw spec: "agents" | "soul" | "identity" | "user" |
+	// "tools" | "heartbeat" | "bootstrap" | "memory" | "daily" | "unknown"
+	Role string `json:"role"`
 	// File modification time
 	ModTime time.Time `json:"mod_time"`
 	// File size in bytes
@@ -73,11 +74,11 @@ func (s *MemoryService) ListMemoryFiles(openclawAgentID string) ([]MemoryFile, e
 		rel = filepath.ToSlash(rel)
 
 		files = append(files, MemoryFile{
-			Path:     rel,
-			Name:     info.Name(),
-			Category: categorize(rel),
-			ModTime:  info.ModTime(),
-			Size:     info.Size(),
+			Path:    rel,
+			Name:    info.Name(),
+			Role:    fileRole(rel),
+			ModTime: info.ModTime(),
+			Size:    info.Size(),
 		})
 		return nil
 	})
@@ -86,9 +87,9 @@ func (s *MemoryService) ListMemoryFiles(openclawAgentID string) ([]MemoryFile, e
 	}
 
 	sort.Slice(files, func(i, j int) bool {
-		ci, cj := categoryOrder(files[i].Category), categoryOrder(files[j].Category)
-		if ci != cj {
-			return ci < cj
+		oi, oj := roleOrder(files[i].Role), roleOrder(files[j].Role)
+		if oi != oj {
+			return oi < oj
 		}
 		return files[i].ModTime.After(files[j].ModTime)
 	})
@@ -158,7 +159,7 @@ func (s *MemoryService) workspacePath(openclawAgentID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve app data dir: %w", err)
 	}
-	return filepath.Join(appDir, "workspaces", openclawAgentID), nil
+	return filepath.Join(appDir, "workspace-"+openclawAgentID), nil
 }
 
 // resolveFilePath validates and resolves a relative file path within the workspace.
@@ -183,29 +184,55 @@ func (s *MemoryService) resolveFilePath(openclawAgentID, filePath string) (strin
 	return absPath, nil
 }
 
-func categorize(relPath string) string {
+// fileRole maps a workspace file to its OpenClaw role.
+func fileRole(relPath string) string {
 	upper := strings.ToUpper(filepath.Base(relPath))
-	if upper == "MEMORY.MD" {
-		return "core"
+	switch upper {
+	case "AGENTS.MD":
+		return "agents"
+	case "SOUL.MD":
+		return "soul"
+	case "IDENTITY.MD":
+		return "identity"
+	case "USER.MD":
+		return "user"
+	case "TOOLS.MD":
+		return "tools"
+	case "HEARTBEAT.MD":
+		return "heartbeat"
+	case "BOOTSTRAP.MD":
+		return "bootstrap"
+	case "MEMORY.MD":
+		return "memory"
 	}
 	if strings.HasPrefix(relPath, "memory/") || strings.HasPrefix(relPath, "memory\\") {
 		return "daily"
 	}
-	if upper == "SOUL.MD" || upper == "USER.MD" || upper == "IDENTITY.MD" {
-		return "persona"
-	}
-	return "other"
+	return "unknown"
 }
 
-func categoryOrder(cat string) int {
-	switch cat {
-	case "core":
+// roleOrder defines display order following the OpenClaw session-startup sequence.
+func roleOrder(role string) int {
+	switch role {
+	case "agents":
 		return 0
-	case "persona":
+	case "soul":
 		return 1
-	case "daily":
+	case "identity":
 		return 2
-	default:
+	case "user":
 		return 3
+	case "memory":
+		return 4
+	case "daily":
+		return 5
+	case "tools":
+		return 6
+	case "heartbeat":
+		return 7
+	case "bootstrap":
+		return 8
+	default:
+		return 9
 	}
 }

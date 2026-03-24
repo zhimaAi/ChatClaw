@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,15 @@ import { ProvidersService } from '@bindings/chatclaw/internal/services/providers
 
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, UpdateLibraryInput } from '@bindings/chatclaw/internal/services/library'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
 
 const props = defineProps<{
   open: boolean
@@ -51,6 +60,8 @@ const { t } = useI18n()
 
 const saving = ref(false)
 const loadingProviders = ref(false)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 // 语义分段开关
 const semanticSegmentationEnabled = ref(false)
@@ -76,13 +87,23 @@ const currentRaptorLLMLabel = computed(() => {
   if (!pid || !mid) return t('knowledge.create.noRaptorLLM')
   const group = raptorLLMGroups.value.find((g) => g.provider.provider_id === pid)
   const model = group?.models.find((m) => m.model_id === mid)
-  return model?.name || t('knowledge.create.noRaptorLLM')
+  return model
+    ? formatModelDisplayLabel(
+      pid,
+      model.name?.trim() || model.model_id?.trim() || '-',
+      chatwikiAvailability.value
+    )
+    : t('knowledge.create.noRaptorLLM')
 })
 
 const loadProviders = async () => {
   loadingProviders.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
       enabledProviders.map(async (p) => {
@@ -127,13 +148,49 @@ watch(
     semanticSegmentationEnabled.value = props.library?.semantic_segmentation_enabled ?? false
 
     // 初始化 RAPTOR LLM 模型
-    if (props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id) {
-      raptorLLMKey.value = `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
+    const nextKey = clearUnavailableChatwikiSelection(
+      props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id
+        ? `${props.library.raptor_llm_provider_id}::${props.library.raptor_llm_model_id}`
+        : '',
+      chatwikiAvailability.value
+    )
+    if (nextKey) {
+      raptorLLMKey.value = nextKey
     } else {
       raptorLLMKey.value = RAPTOR_LLM_NONE
+      if (props.library?.raptor_llm_provider_id && props.library?.raptor_llm_model_id) {
+        void LibraryService.UpdateLibrary(
+          props.library.id,
+          new UpdateLibraryInput({
+            raptor_llm_provider_id: '',
+            raptor_llm_model_id: '',
+          })
+        ).catch((error) => {
+          console.error('Failed to clear unavailable Chatwiki RAPTOR model:', error)
+        })
+      }
     }
   }
 )
+
+onMounted(() => {
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void loadProviders().then(() => {
+        const nextKey = clearUnavailableChatwikiSelection(
+          raptorLLMKey.value === RAPTOR_LLM_NONE ? '' : raptorLLMKey.value,
+          chatwikiAvailability.value
+        )
+        raptorLLMKey.value = nextKey || RAPTOR_LLM_NONE
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
+})
 
 const isValid = computed(() => {
   if (!props.library) return false
@@ -237,13 +294,26 @@ const handleSave = async () => {
                 {{ t('knowledge.create.noRaptorLLM') }}
               </SelectItem>
               <SelectGroup v-for="g in raptorLLMGroups" :key="g.provider.provider_id">
-                <SelectLabel>{{ g.provider.name }}</SelectLabel>
+                <SelectLabel>{{
+                  formatProviderDisplayLabel(
+                    g.provider.provider_id,
+                    g.provider.name,
+                    chatwikiAvailability
+                  )
+                }}</SelectLabel>
                 <SelectItem
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
+                  :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)"
                 >
-                  {{ m.name }}
+                  {{
+                    formatModelDisplayLabel(
+                      g.provider.provider_id,
+                      m.name?.trim() || m.model_id?.trim() || '-',
+                      chatwikiAvailability
+                    )
+                  }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

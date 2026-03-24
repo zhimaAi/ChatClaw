@@ -164,82 +164,80 @@ async function handleDeleteConfirm() {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-auto bg-[#fafafa] px-6 py-6">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div class="space-y-1">
-        <div class="text-[28px] font-semibold tracking-[-0.02em] text-[#171717]">
+  <div class="flex h-full min-h-0 flex-col overflow-y-auto bg-white dark:bg-background">
+    <!-- Page Header -->
+    <div class="flex h-20 shrink-0 items-center justify-between px-6">
+      <div class="flex flex-col gap-1">
+        <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">
           {{ t('scheduledTasks.title') }}
-        </div>
-        <div class="text-sm text-[#737373]">
+        </h1>
+        <p class="text-sm text-[#737373] dark:text-muted-foreground">
           {{ t('scheduledTasks.subtitle') }}
-        </div>
+        </p>
       </div>
-      <div class="flex items-center gap-2 self-start">
-        <button
-          type="button"
-          class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#f5f5f5] px-4 text-sm font-medium text-[#171717] transition-colors hover:bg-[#ebebeb]"
+      <div class="flex items-center gap-2">
+        <Button
+          class="h-9 gap-1 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
           @click="reloadAll"
         >
-          <RefreshCcw class="size-4" />
+          <RefreshCcw class="h-4 w-4 shrink-0" />
           {{ t('scheduledTasks.refresh') }}
-        </button>
-        <button
-          type="button"
-          class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#171717] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0f0f0f]"
-          @click="openCreateDialog"
-        >
-          <Plus class="size-4" />
+        </Button>
+        <Button class="h-9 gap-1" variant="default" @click="openCreateDialog">
+          <Plus class="h-4 w-4 shrink-0" />
           {{ t('scheduledTasks.addTask') }}
-        </button>
+        </Button>
       </div>
     </div>
 
-    <div class="mt-6">
-      <TaskSummaryCards :summary="summary" :labels="summaryLabels" />
-    </div>
-
-    <div class="mt-4">
-      <div
-        v-if="loading"
-        class="rounded-2xl border border-[#e5e5e5] bg-white px-4 py-16 text-center text-sm text-[#737373]"
-      >
-        {{ t('common.loading', 'Loading...') }}
+    <div class="flex flex-1 flex-col min-h-0 overflow-auto px-6 pb-6">
+      <div class="mt-6">
+        <TaskSummaryCards :summary="summary" :labels="summaryLabels" />
       </div>
-      <div v-else-if="!hasTasks" class="flex min-h-[420px] items-center justify-center px-4 py-16">
-        <div class="flex w-full max-w-[356px] flex-col items-center gap-4 text-center">
-          <div
-            class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]"
-          >
-            <Clock3 class="size-5" />
-          </div>
-          <div class="space-y-1">
-            <div class="text-base font-medium leading-6 text-[#171717]">
-              {{ t('scheduledTasks.empty') }}
-            </div>
-            <div class="text-sm leading-5 text-[#737373]">
-              {{ t('scheduledTasks.emptyDescription') }}
-            </div>
-          </div>
-          <button
-            type="button"
-            class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#171717] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0f0f0f]"
-            @click="openCreateDialog"
-          >
-            <Plus class="size-4" />
-            {{ t('scheduledTasks.create') }}
-          </button>
+
+      <div class="mt-4">
+        <div
+          v-if="loading"
+          class="rounded-2xl border border-[#e5e5e5] bg-white px-4 py-16 text-center text-sm text-[#737373]"
+        >
+          {{ t('common.loading', 'Loading...') }}
         </div>
+        <div v-else-if="!hasTasks" class="flex min-h-[420px] items-center justify-center px-4 py-16">
+          <div class="flex w-full max-w-[356px] flex-col items-center gap-4 text-center">
+            <div
+              class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]"
+            >
+              <Clock3 class="size-5" />
+            </div>
+            <div class="space-y-1">
+              <div class="text-base font-medium leading-6 text-[#171717]">
+                {{ t('scheduledTasks.empty') }}
+              </div>
+              <div class="text-sm leading-5 text-[#737373]">
+                {{ t('scheduledTasks.emptyDescription') }}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-9 items-center gap-2 rounded-lg bg-[#171717] px-4 text-sm font-medium text-white transition-colors hover:bg-[#0f0f0f]"
+              @click="openCreateDialog"
+            >
+              <Plus class="size-4" />
+              {{ t('scheduledTasks.create') }}
+            </button>
+          </div>
+        </div>
+        <TaskTable
+          v-else
+          :tasks="tasks"
+          :agents="agents"
+          @edit="handleEdit"
+          @run="runTaskNow"
+          @history="(task) => (historyTask = task)"
+          @toggle="toggleTask"
+          @delete="handleDeleteRequest"
+        />
       </div>
-      <TaskTable
-        v-else
-        :tasks="tasks"
-        :agents="agents"
-        @edit="handleEdit"
-        @run="runTaskNow"
-        @history="(task) => (historyTask = task)"
-        @toggle="toggleTask"
-        @delete="handleDeleteRequest"
-      />
     </div>
 
     <CreateTaskDialog
@@ -270,7 +268,7 @@ async function handleDeleteConfirm() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="deletingTask" @click="handleDeleteCancel">
-            {{ t('common.cancel', '取消') }}
+            {{ t('common.cancel') }}
           </AlertDialogCancel>
           <Button :disabled="deletingTask" variant="default" @click.prevent="handleDeleteConfirm">
             <LoaderCircle v-if="deletingTask" class="size-4 shrink-0 animate-spin" />

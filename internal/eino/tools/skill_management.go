@@ -356,6 +356,7 @@ func openDirectory(dir string) error {
 		cmd = exec.Command("open", dir)
 	case "windows":
 		cmd = exec.Command("explorer", dir)
+		setCmdHideWindow(cmd)
 	default:
 		cmd = exec.Command("xdg-open", dir)
 	}

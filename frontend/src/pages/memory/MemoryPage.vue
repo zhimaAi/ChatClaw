@@ -2,11 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileText, FolderOpen, Save, Plus, Trash2 } from 'lucide-vue-next'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
-import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import { OpenClawAgentsService } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
 import { MemoryService } from '@bindings/chatclaw/internal/services/memory'
 import type { MemoryFile } from '@bindings/chatclaw/internal/services/memory'
 import {
@@ -23,7 +24,7 @@ import {
 const { t } = useI18n()
 
 /* ── agent list ── */
-const agents = ref<Agent[]>([])
+const agents = ref<OpenClawAgent[]>([])
 const selectedAgentId = ref<number | null>(null)
 
 const selectedAgent = computed(() =>
@@ -39,7 +40,7 @@ const workspaceId = computed(() => {
 
 async function loadAgents() {
   try {
-    agents.value = await AgentsService.ListAgents()
+    agents.value = await OpenClawAgentsService.ListAgents()
     if (agents.value.length && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id
     }
@@ -159,25 +160,6 @@ async function deleteFile() {
   }
 }
 
-/* ── category labels ── */
-function categoryLabel(cat: string): string {
-  switch (cat) {
-    case 'core': return t('memory.categoryCore')
-    case 'persona': return t('memory.categoryPersona')
-    case 'daily': return t('memory.categoryDaily')
-    default: return t('memory.categoryOther')
-  }
-}
-
-function categoryIcon(cat: string): string {
-  switch (cat) {
-    case 'core': return '📝'
-    case 'persona': return '🧠'
-    case 'daily': return '📅'
-    default: return '📄'
-  }
-}
-
 /* ── lifecycle ── */
 watch(selectedAgentId, () => {
   selectedFilePath.value = null
@@ -254,25 +236,19 @@ onMounted(() => {
               </button>
             </div>
             <div class="flex-1 overflow-y-auto">
-              <template v-for="cat in ['core', 'persona', 'daily', 'other']" :key="cat">
-                <template v-if="memoryFiles.filter(f => f.category === cat).length">
-                  <div class="px-2 pt-2 pb-1 text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider">
-                    {{ categoryLabel(cat) }}
-                  </div>
-                  <button
-                    v-for="file in memoryFiles.filter(f => f.category === cat)"
-                    :key="file.path"
-                    :class="cn(
-                      'flex w-full items-center gap-1.5 px-2 py-1.5 text-xs transition-colors hover:bg-muted/50',
-                      selectedFilePath === file.path && 'bg-muted'
-                    )"
-                    @click="selectFile(file.path)"
-                  >
-                    <span>{{ categoryIcon(file.category) }}</span>
-                    <span class="truncate">{{ file.name }}</span>
-                  </button>
-                </template>
-              </template>
+              <button
+                v-for="file in memoryFiles"
+                :key="file.path"
+                :class="cn(
+                  'flex w-full items-center gap-1.5 px-2 py-1.5 text-xs transition-colors hover:bg-muted/50',
+                  selectedFilePath === file.path && 'bg-muted'
+                )"
+                :title="file.path"
+                @click="selectFile(file.path)"
+              >
+                <FileText class="size-3.5 shrink-0 text-muted-foreground" />
+                <span class="truncate">{{ file.name }}</span>
+              </button>
               <div v-if="!memoryFiles.length && !isLoading" class="p-3 text-xs text-muted-foreground text-center">
                 {{ t('memory.noFiles') }}
               </div>
@@ -334,10 +310,9 @@ onMounted(() => {
                   class="w-full h-full p-4 text-sm font-mono bg-transparent resize-none outline-none"
                   spellcheck="false"
                 />
-                <pre
-                  v-else
-                  class="p-4 text-sm font-mono whitespace-pre-wrap break-words"
-                >{{ fileContent }}</pre>
+                <div v-else class="p-4">
+                  <MarkdownRenderer :content="fileContent" />
+                </div>
               </div>
             </template>
           </div>

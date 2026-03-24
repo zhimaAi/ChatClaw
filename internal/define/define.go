@@ -36,6 +36,15 @@ func GetChatWikiCloudURL() string {
 	return ChatWikiCloudURL
 }
 
+// GetModelChatWikiURL returns the ChatWiki model service URL.
+// Overridable via MODEL_CHATWIKI_URL environment variable.
+func GetModelChatWikiURL() string {
+	if v := os.Getenv("MODEL_CHATWIKI_URL"); v != "" {
+		return v
+	}
+	return ModelChatWikiUrl
+}
+
 // AppDataDir returns the unified app data directory: $HOME/.chatclaw
 func AppDataDir() (string, error) {
 	home, err := os.UserHomeDir()

@@ -492,7 +492,11 @@ const handleOpenExternally = async () => {
               v-if="viewerType === 'ofd' || viewerType === 'iframe'"
               class="text-xs text-muted-foreground"
             >
-              {{ viewerType === 'ofd' ? '正在加载 OFD 文件...' : '正在加载 PDF 文件...' }}
+              {{
+                viewerType === 'ofd'
+                  ? t('knowledge.viewer.loadingOfd')
+                  : t('knowledge.viewer.loadingPdf')
+              }}
             </div>
           </div>
           <!-- Progress bar (indeterminate) -->
@@ -606,7 +610,7 @@ const handleOpenExternally = async () => {
             <div class="size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
             <div class="flex flex-col items-center gap-2">
               <div class="text-sm font-medium text-foreground">{{ t('knowledge.loading') }}</div>
-              <div class="text-xs text-muted-foreground">正在加载 PDF 文件...</div>
+              <div class="text-xs text-muted-foreground">{{ t('knowledge.viewer.loadingPdf') }}</div>
             </div>
             <div class="w-64">
               <div class="h-1 w-full overflow-hidden rounded bg-muted">
@@ -652,7 +656,7 @@ const handleOpenExternally = async () => {
             <div class="size-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
             <div class="flex flex-col items-center gap-2">
               <div class="text-sm font-medium text-foreground">{{ t('knowledge.loading') }}</div>
-              <div class="text-xs text-muted-foreground">正在加载 OFD 文件...</div>
+              <div class="text-xs text-muted-foreground">{{ t('knowledge.viewer.loadingOfd') }}</div>
             </div>
             <div class="w-64">
               <div class="h-1 w-full overflow-hidden rounded bg-muted">

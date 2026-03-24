@@ -2,6 +2,7 @@ package openclawruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -15,11 +16,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// EventListener receives gateway events. Parameters are event name and raw JSON payload.
+type EventListener func(event string, payload json.RawMessage)
 
 type Manager struct {
 	app   *application.App
@@ -31,6 +34,7 @@ type Manager struct {
 	status       RuntimeStatus
 	gatewayState GatewayConnectionState
 	client       *GatewayClient
+	queryClient  *GatewayClient // separate connection for queries during agent runs
 	readyAt      time.Time
 	readyHooks   []func()
 	process      *exec.Cmd
@@ -42,22 +46,22 @@ type Manager struct {
 	shuttingDown    bool
 	reconnecting    atomic.Bool
 
-	syncer *configSyncer
+	eventListenersMu sync.RWMutex
+	eventListeners   map[string]EventListener // keyed by caller-chosen ID
 }
 
-func NewManager(app *application.App, settingsSvc *settings.SettingsService, providersSvc *providers.ProvidersService) *Manager {
+func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
 	store := newConfigStore(settingsSvc)
 	cfg := store.Get()
-	m := &Manager{
+	return &Manager{
 		app:   app,
 		store: store,
 		status: RuntimeStatus{
 			Phase:      PhaseIdle,
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		},
+		eventListeners: make(map[string]EventListener),
 	}
-	m.syncer = newConfigSyncer(m, providersSvc)
-	return m
 }
 
 func (m *Manager) Start() {
@@ -143,8 +147,8 @@ func (m *Manager) reconcile(restart bool) error {
 		return fail("verifyInstalled", err, "", 0)
 	}
 
-	if _, err := ensureBaseConfigFile(bundle); err != nil {
-		return fail("ensureBaseConfigFile", err, version, 0)
+	if err := ensureOpenResponsesEnabled(bundle); err != nil {
+		return fail("ensureOpenResponsesEnabled", err, version, 0)
 	}
 
 	// Start process if needed
@@ -189,15 +193,6 @@ func (m *Manager) reconcile(restart bool) error {
 	})
 	m.broadcastGatewayState(GatewayConnectionState{Connected: true, Authenticated: true})
 	m.notifyReadyHooks()
-
-	// Sync provider/model config to OpenClaw Gateway after connection is established
-	go func() {
-		syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer syncCancel()
-		if err := m.syncer.SyncNow(syncCtx); err != nil {
-			m.app.Logger.Warn("openclaw: initial config sync failed (non-fatal)", "error", err)
-		}
-	}()
 
 	return nil
 }
@@ -302,6 +297,10 @@ func (m *Manager) handleProcessExit(pid int, exitErr error) {
 		m.processDone = nil
 		m.processLog = nil
 		m.client = nil
+		if m.queryClient != nil {
+			_ = m.queryClient.Close()
+			m.queryClient = nil
+		}
 		m.readyAt = time.Time{}
 	}
 	shuttingDown := m.shuttingDown
@@ -364,7 +363,7 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 			DeviceIdentity:  identity,
 			StoredDeviceTok: storedTok,
 			Scopes:          []string{"operator.read", "operator.write", "operator.admin"},
-			OnEvent:         func(GatewayEventFrame) {},
+			OnEvent:         m.dispatchEvent,
 			OnDisconnect:    m.handleGatewayDisconnect,
 		})
 		hello, err := client.Connect(ctx)
@@ -372,8 +371,24 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 			if hello.Auth != nil && hello.Auth.DeviceToken != "" {
 				_ = storeDeviceToken(bundle.StateDir, hello.Auth.Role, hello.Auth.DeviceToken, hello.Auth.Scopes)
 			}
+
+			// Create a second connection for queries (sessions.get etc.)
+			// so they don't block on long-running agent RPCs.
+			qClient := NewGatewayClient(gatewayClientOptions{
+				URL:             gatewayWebSocketURL(cfg.GatewayPort),
+				Token:           cfg.GatewayToken,
+				DeviceIdentity:  identity,
+				StoredDeviceTok: storedTok,
+				Scopes:          []string{"operator.read"},
+			})
+			if _, qErr := qClient.Connect(ctx); qErr != nil {
+				m.app.Logger.Warn("openclaw: query client connect failed, will use main client", "err", qErr)
+				qClient = nil
+			}
+
 			m.mu.Lock()
 			m.client = client
+			m.queryClient = qClient
 			m.mu.Unlock()
 			return nil
 		}
@@ -392,11 +407,16 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 func (m *Manager) closeClient() {
 	m.mu.Lock()
 	client := m.client
+	qClient := m.queryClient
 	m.client = nil
+	m.queryClient = nil
 	m.readyAt = time.Time{}
 	m.mu.Unlock()
 	if client != nil {
 		_ = client.Close()
+	}
+	if qClient != nil {
+		_ = qClient.Close()
 	}
 }
 
@@ -408,6 +428,10 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 		return
 	}
 	m.client = nil
+	if m.queryClient != nil {
+		_ = m.queryClient.Close()
+		m.queryClient = nil
+	}
 	m.readyAt = time.Time{}
 	m.mu.Unlock()
 
@@ -451,19 +475,23 @@ func (m *Manager) isShuttingDown() bool {
 	return m.shuttingDown
 }
 
-func (m *Manager) isReady() bool {
+func (m *Manager) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.client != nil && !m.readyAt.IsZero()
 }
 
-func (m *Manager) readySince() time.Time {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.readyAt
+// GatewayURL returns the HTTP base URL of the running OpenClaw Gateway.
+func (m *Manager) GatewayURL() string {
+	return gatewayURL(m.store.Get().GatewayPort)
 }
 
-func (m *Manager) request(ctx context.Context, method string, params any, out any) error {
+// GatewayToken returns the auth token for the running OpenClaw Gateway.
+func (m *Manager) GatewayToken() string {
+	return m.store.Get().GatewayToken
+}
+
+func (m *Manager) Request(ctx context.Context, method string, params any, out any) error {
 	m.mu.RLock()
 	client := m.client
 	m.mu.RUnlock()
@@ -473,7 +501,52 @@ func (m *Manager) request(ctx context.Context, method string, params any, out an
 	return client.Request(ctx, method, params, out)
 }
 
-func (m *Manager) registerReadyHook(fn func()) {
+// QueryRequest sends a request over the dedicated query connection,
+// which is not blocked by long-running agent RPCs on the main connection.
+// Falls back to the main client if the query client is unavailable.
+func (m *Manager) QueryRequest(ctx context.Context, method string, params any, out any) error {
+	m.mu.RLock()
+	qc := m.queryClient
+	mc := m.client
+	m.mu.RUnlock()
+
+	if qc != nil {
+		return qc.Request(ctx, method, params, out)
+	}
+	if mc != nil {
+		return mc.Request(ctx, method, params, out)
+	}
+	return errors.New("gateway websocket is not connected")
+}
+
+// AddEventListener registers a listener for gateway events with the given key.
+// The caller is responsible for removing it when done via RemoveEventListener.
+func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
+	m.eventListenersMu.Lock()
+	defer m.eventListenersMu.Unlock()
+	m.eventListeners[key] = fn
+}
+
+// RemoveEventListener removes the listener registered under key.
+func (m *Manager) RemoveEventListener(key string) {
+	m.eventListenersMu.Lock()
+	defer m.eventListenersMu.Unlock()
+	delete(m.eventListeners, key)
+}
+
+func (m *Manager) dispatchEvent(ev GatewayEventFrame) {
+	m.eventListenersMu.RLock()
+	listeners := make([]EventListener, 0, len(m.eventListeners))
+	for _, fn := range m.eventListeners {
+		listeners = append(listeners, fn)
+	}
+	m.eventListenersMu.RUnlock()
+	for _, fn := range listeners {
+		fn(ev.Event, ev.Payload)
+	}
+}
+
+func (m *Manager) RegisterReadyHook(fn func()) {
 	if fn == nil {
 		return
 	}
@@ -512,16 +585,35 @@ func verifyInstalled(bundle *bundledRuntime) (string, error) {
 	return version, nil
 }
 
-func ensureBaseConfigFile(bundle *bundledRuntime) (created bool, err error) {
+// ensureOpenResponsesEnabled uses `openclaw config set` to enable the
+// OpenResponses HTTP endpoint via the standard CLI.
+func ensureOpenResponsesEnabled(bundle *bundledRuntime) error {
 	if err := os.MkdirAll(bundle.StateDir, 0o700); err != nil {
-		return false, fmt.Errorf("create openclaw state dir: %w", err)
+		return fmt.Errorf("create openclaw state dir: %w", err)
 	}
-	if _, err := os.Stat(bundle.ConfigPath); err == nil {
-		return false, nil
-	} else if !os.IsNotExist(err) {
-		return false, fmt.Errorf("stat openclaw config: %w", err)
+
+	env := []string{
+		"OPENCLAW_CONFIG_PATH=" + bundle.ConfigPath,
+		"OPENCLAW_STATE_DIR=" + bundle.StateDir,
 	}
-	return true, writeJSONFile(bundle.ConfigPath, map[string]any{}, 0o600)
+	for _, entry := range os.Environ() {
+		if k, _, ok := strings.Cut(entry, "="); ok {
+			if k == "OPENCLAW_CONFIG_PATH" || k == "OPENCLAW_STATE_DIR" {
+				continue
+			}
+		}
+		env = append(env, entry)
+	}
+
+	cmd := exec.Command(bundle.CLIPath, "config", "set",
+		"gateway.http.endpoints.responses.enabled", "true")
+	cmd.Env = env
+	cmd.Dir = bundle.Root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("openclaw config set responses.enabled: %w: %s", err, string(out))
+	}
+	return nil
 }
 
 func parseVersionOutput(output string) (string, error) {
@@ -616,8 +708,3 @@ func shouldRetryConnect(err error) bool {
 	return false
 }
 
-// NotifyConfigChanged triggers a debounced config sync to OpenClaw Gateway.
-// Call this when provider/model configuration changes in ChatClaw.
-func (m *Manager) NotifyConfigChanged() {
-	m.syncer.RequestSync()
-}
