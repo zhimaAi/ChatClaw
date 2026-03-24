@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,17 @@ import type {
 } from '@bindings/chatclaw/internal/services/providers'
 import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  clearUnavailableChatwikiSelection,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  getFirstSelectableModelKey,
+  isModelSelectionDisabled,
+  isSelectionAvailable,
+} from '@/lib/chatwikiModelAvailability'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
@@ -34,9 +45,30 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 
 type Group = { provider: Provider; models: Model[] }
 const embeddingGroups = ref<Group[]>([])
+
+type ChatwikiDisplayModel = Model & {
+  model_supplier?: string
+  uni_model_name?: string
+}
+
+const normalizeText = (value?: string | null) => value?.trim() || ''
+
+const getEmbeddingModelLabel = (providerId: string, model: Model) => {
+  let label = normalizeText(model.name) || normalizeText(model.model_id) || '-'
+  if (providerId === 'chatwiki') {
+    const chatwikiModel = model as ChatwikiDisplayModel
+    const supplier = normalizeText(chatwikiModel.model_supplier)
+    const uniModelName = normalizeText(chatwikiModel.uni_model_name)
+    if (supplier && uniModelName) label = `${supplier}/${uniModelName}`
+    else if (uniModelName) label = uniModelName
+  }
+  return formatModelDisplayLabel(providerId, label, chatwikiAvailability.value)
+}
 
 const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
 const embeddingDimension = ref<string>('1536')
@@ -46,7 +78,7 @@ const embeddingCurrentLabel = computed(() => {
   if (!pid || !mid) return ''
   const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
   const model = provider?.models.find((m) => m.model_id === mid)
-  return model?.name || ''
+  return model ? getEmbeddingModelLabel(pid, model) : ''
 })
 
 function isProviderFree(g: Group): boolean {
@@ -64,16 +96,25 @@ const selectedProviderIsFree = computed(() => {
 const close = () => emit('update:open', false)
 
 const isEmbeddingSelectionAvailable = computed(() => {
-  const [pid, mid] = embeddingSelectedKey.value.split('::')
-  if (!pid || !mid) return false
-  const provider = embeddingGroups.value.find((g) => g.provider.provider_id === pid)
-  return !!provider?.models.some((m) => m.model_id === mid)
+  return isSelectionAvailable(
+    embeddingGroups.value.map((group) => ({
+      provider: group.provider,
+      model_groups: [{ type: 'embedding', models: group.models }],
+    })),
+    embeddingSelectedKey.value,
+    'embedding',
+    chatwikiAvailability.value
+  )
 })
 
 const loadGroups = async () => {
   loading.value = true
   try {
-    const providers = (await ProvidersService.ListProviders()) || []
+    const [providers, binding] = await Promise.all([
+      ProvidersService.ListProviders(),
+      getChatwikiBinding().catch(() => null),
+    ])
+    chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
     // 只使用"已启用"的供应商（已启动）
     const enabledProviders = providers.filter((p) => p.enabled)
     const details = await Promise.all(
@@ -120,7 +161,16 @@ const loadCurrentSettings = async () => {
     const dim = d?.value || '1536'
     embeddingDimension.value = dim
     if (providerId && modelId) {
-      embeddingSelectedKey.value = `${providerId}::${modelId}`
+      embeddingSelectedKey.value = clearUnavailableChatwikiSelection(
+        `${providerId}::${modelId}`,
+        chatwikiAvailability.value
+      )
+      if (!embeddingSelectedKey.value) {
+        await Promise.all([
+          SettingsService.SetValue('embedding_provider_id', ''),
+          SettingsService.SetValue('embedding_model_id', ''),
+        ])
+      }
     }
   } catch (error) {
     console.error('Failed to load embedding settings:', error)
@@ -130,11 +180,14 @@ const loadCurrentSettings = async () => {
 const ensureDefaultSelection = () => {
   // 已有选择且仍可用 -> 保持
   if (embeddingSelectedKey.value && isEmbeddingSelectionAvailable.value) return
-  const first = embeddingGroups.value[0]?.models[0]
-  const pid = embeddingGroups.value[0]?.provider.provider_id
-  if (first && pid) {
-    embeddingSelectedKey.value = `${pid}::${first.model_id}`
-  }
+  embeddingSelectedKey.value = getFirstSelectableModelKey(
+    embeddingGroups.value.map((group) => ({
+      provider: group.provider,
+      model_groups: [{ type: 'embedding', models: group.models }],
+    })),
+    'embedding',
+    chatwikiAvailability.value
+  )
 }
 
 watch(
@@ -147,6 +200,21 @@ watch(
     ensureDefaultSelection()
   }
 )
+
+onMounted(() => {
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged(() => {
+    if (props.open) {
+      void Promise.all([loadGroups(), loadCurrentSettings()]).then(() => {
+        ensureDefaultSelection()
+      })
+    }
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
+})
 
 const isValid = computed(() => {
   if (!isEmbeddingSelectionAvailable.value) return false
@@ -213,7 +281,13 @@ const handleSave = async () => {
             <SelectContent>
               <SelectGroup v-for="g in embeddingGroups" :key="g.provider.provider_id">
                 <SelectLabel class="flex items-center gap-1.5">
-                  <span>{{ g.provider.name }}</span>
+                  <span>{{
+                    formatProviderDisplayLabel(
+                      g.provider.provider_id,
+                      g.provider.name,
+                      chatwikiAvailability
+                    )
+                  }}</span>
                   <span
                     v-if="isProviderFree(g)"
                     class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
@@ -225,8 +299,11 @@ const handleSave = async () => {
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
+                  :disabled="
+                    isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)
+                  "
                 >
-                  {{ m.name }}
+                  {{ getEmbeddingModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>
               </SelectGroup>
             </SelectContent>

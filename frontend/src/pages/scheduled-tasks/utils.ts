@@ -1,4 +1,5 @@
 import { formatUtcDateTime } from '@/composables/useDateTime'
+import { i18n } from '@/i18n'
 import { SCHEDULE_PRESET_LABELS, WEEKDAY_OPTIONS } from './constants'
 import type { ScheduledTask, ScheduledTaskFormState } from './types'
 
@@ -17,9 +18,12 @@ export function formatDuration(ms: number) {
 export function describeSchedule(
   task: Pick<ScheduledTask, 'schedule_type' | 'schedule_value' | 'cron_expr'>
 ) {
+  const t = (key: string, params?: Record<string, unknown>) =>
+    (i18n.global as any).t(key, params) as string
+
   if (task.schedule_type === 'preset') {
     return (
-      SCHEDULE_PRESET_LABELS[task.schedule_value as keyof typeof SCHEDULE_PRESET_LABELS] ||
+      t(SCHEDULE_PRESET_LABELS[task.schedule_value as keyof typeof SCHEDULE_PRESET_LABELS]) ||
       task.schedule_value
     )
   }
@@ -33,23 +37,25 @@ export function describeSchedule(
         day_of_month?: number
       }
       if (parsed.interval_minutes) {
-        return `每隔 ${parsed.interval_minutes} 分钟`
+        return t('scheduledTasks.describe.interval', { value: parsed.interval_minutes })
       }
       const hh = String(parsed.hour).padStart(2, '0')
       const mm = String(parsed.minute).padStart(2, '0')
       if (parsed.day_of_month) {
-        return `每月 ${parsed.day_of_month} 号 ${hh}:${mm}`
+        return t('scheduledTasks.describe.monthly', { day: parsed.day_of_month, time: `${hh}:${mm}` })
       }
       if (parsed.weekdays?.length) {
         const labels = parsed.weekdays
           .map(
             (value) =>
-              WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabel || String(value)
+              t(
+                WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabelKey || String(value)
+              )
           )
           .join(' ')
-        return `每周 ${labels} ${hh}:${mm}`
+        return t('scheduledTasks.describe.weekly', { labels, time: `${hh}:${mm}` })
       }
-      return `每天 ${hh}:${mm}`
+      return t('scheduledTasks.describe.daily', { time: `${hh}:${mm}` })
     } catch {
       return task.schedule_value
     }

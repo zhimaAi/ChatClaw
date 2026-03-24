@@ -7,14 +7,19 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, RefreshCw } from 'lucide-vue-next'
+import { Call } from '@wailsio/runtime'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { ChatWikiService, type Binding } from '@bindings/chatclaw/internal/services/chatwiki'
+import { ProvidersService } from '@bindings/chatclaw/internal/services/providers'
 import {
   getBinding as getBindingCached,
   getRobotListAll as getRobotListAllCached,
   getLibraryList as getLibraryListCached,
   clearAll as clearChatwikiCache,
 } from '@/lib/chatwikiCache'
+import { buildChatWikiLoginUrl, openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
+import { notifyChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import { useSettingsStore } from '@/stores/settings'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 
 const { t } = useI18n()
+const settingsStore = useSettingsStore()
 
 const BINDING_TIMEOUT_SEC = 120
 /** Cloud URL loaded from backend on mount (respects dev/prod build config) */
@@ -43,12 +49,16 @@ const cloudAuthUrl = ref('')
 type View = 'list' | 'choose' | 'binding' | 'success' | 'failure'
 
 interface AuthCallbackData {
+  server_url: string
   token: string
   ttl: string
   exp: string
   user_id: string
   user_name: string
+  chatwiki_version: string
 }
+
+type LoginSource = '' | 'cloud' | 'open-source'
 
 interface RobotItem {
   id: string
@@ -80,6 +90,7 @@ const isReauthFlow = ref(false)
 const remainingSeconds = ref(BINDING_TIMEOUT_SEC)
 const authUser = ref<AuthCallbackData | null>(null)
 const currentBinding = ref<Binding | null>(null)
+const pendingLoginSource = ref<LoginSource>('')
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 let unbindAuthCallback: (() => void) | null = null
 
@@ -120,14 +131,22 @@ const remainingTimeText = computed(() =>
   t('settings.chatwiki.remainingTime', { seconds: remainingSeconds.value })
 )
 
-async function loadBinding() {
+async function loadBinding(force = false) {
   try {
-    const binding = await getBindingCached()
+    const binding = force ? await ChatWikiService.GetBinding() : await getBindingCached()
     currentBinding.value = binding ?? null
   } catch (error) {
     console.error('Failed to load chatwiki binding:', error)
     currentBinding.value = null
   }
+}
+
+async function refreshBindingStateAndModelViews() {
+  clearChatwikiCache()
+  await loadBinding(true)
+  notifyChatwikiBindingChanged(currentBinding.value)
+  Events.Emit('chatwiki:model-catalog-refresh')
+  Events.Emit('models:changed')
 }
 
 async function loadRobots() {
@@ -279,21 +298,6 @@ function goToChoose() {
   showOpenSourceInput.value = false
 }
 
-/** Build login URL with os_type, os_version query params for account management redirect */
-async function buildLoginUrl(base: string): Promise<string> {
-  const path = `${base.replace(/\/+$/, '')}/#/chatclaw/login`
-  try {
-    const params = await BrowserService.GetLoginParams()
-    const q = new URLSearchParams()
-    if (params.os_type) q.set('os_type', params.os_type)
-    if (params.os_version) q.set('os_version', params.os_version)
-    const query = q.toString()
-    return query ? `${path}?${query}` : path
-  } catch {
-    return path
-  }
-}
-
 /** Re-auth: open current binding server_url login page directly (no choose step) */
 async function startReauthBinding() {
   const b = currentBinding.value
@@ -303,7 +307,8 @@ async function startReauthBinding() {
     return
   }
   isReauthFlow.value = true
-  const authUrl = await buildLoginUrl(base)
+  pendingLoginSource.value = b?.chatwiki_version === 'yun' ? 'cloud' : 'open-source'
+  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
   await startBinding(authUrl)
 }
 
@@ -322,6 +327,7 @@ async function startBinding(authUrl: string) {
     await BrowserService.OpenURL(authUrl)
   } catch (error) {
     console.error('Failed to open auth URL:', error)
+    pendingLoginSource.value = ''
     toast.error(t('settings.chatwiki.invalidUrl'))
     return
   }
@@ -357,21 +363,75 @@ function cleanupListeners() {
 
 function listenAuthCallback() {
   cleanupListeners()
-  unbindAuthCallback = Events.On('chatwiki:auth-callback', (event: any) => {
+  unbindAuthCallback = Events.On('chatwiki:auth-callback', async (event: any) => {
     stopCountdown()
     cleanupListeners()
     const data: AuthCallbackData = event?.data?.[0] ?? event?.data ?? event
-    authUser.value = data
-    void loadBinding()
-    view.value = 'success'
+    try {
+      await saveBindingFromCallback(data)
+      authUser.value = data
+      await ProvidersService.GetProviderWithModels('chatwiki')
+      await refreshBindingStateAndModelViews()
+      view.value = 'success'
+    } catch (error) {
+      console.error('Failed to save chatwiki binding from auth callback:', error)
+      toast.error(t('settings.chatwiki.authFailed'))
+      view.value = 'failure'
+    } finally {
+      pendingLoginSource.value = ''
+    }
   })
 }
 
 async function handleLoginCloud() {
   isReauthFlow.value = false
+  pendingLoginSource.value = 'cloud'
   const base = cloudAuthUrl.value.replace(/\/+$/, '')
-  const authUrl = await buildLoginUrl(base)
-  await startBinding(authUrl)
+  if (!base) {
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+  try {
+    await openChatWikiCloudLogin(base)
+  } catch (error) {
+    console.error('Failed to open auth URL:', error)
+    pendingLoginSource.value = ''
+    toast.error(t('settings.chatwiki.invalidUrl'))
+    return
+  }
+  view.value = 'binding'
+  remainingSeconds.value = BINDING_TIMEOUT_SEC
+  startCountdown()
+  listenAuthCallback()
+}
+
+async function saveBindingFromCallback(data: AuthCallbackData) {
+  const methodNames = [
+    'chatclaw/internal/services/chatwiki.ChatWikiService.SaveBindingFromCallback',
+    'ChatWikiService.SaveBindingFromCallback',
+    'SaveBindingFromCallback',
+  ]
+  let lastError: unknown = null
+
+  for (const methodName of methodNames) {
+    try {
+      await Call.ByName(
+        methodName,
+        data.server_url,
+        data.token,
+        data.ttl,
+        data.exp,
+        data.user_id,
+        data.user_name,
+        pendingLoginSource.value
+      )
+      return
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError
 }
 
 async function handleGoToAuth() {
@@ -380,14 +440,16 @@ async function handleGoToAuth() {
     return
   }
   isReauthFlow.value = false
+  pendingLoginSource.value = 'open-source'
   const base = openSourceUrl.value.trim().replace(/\/+$/, '')
-  const authUrl = await buildLoginUrl(base)
+  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
   await startBinding(authUrl)
 }
 
 function cancelBinding() {
   stopCountdown()
   cleanupListeners()
+  pendingLoginSource.value = ''
   // Re-auth flow: go back to list; new binding flow: go back to choose
   view.value = isReauthFlow.value ? 'list' : 'choose'
   isReauthFlow.value = false
@@ -395,6 +457,7 @@ function cancelBinding() {
 
 function retry() {
   isReauthFlow.value = false
+  pendingLoginSource.value = ''
   view.value = 'choose'
   openSourceUrl.value = ''
   showOpenSourceInput.value = false
@@ -405,8 +468,8 @@ async function finishSuccess() {
   try {
     // Sync apps and knowledge bases after (re-)binding so list view has fresh data
     await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
-    // Reload binding so list view shows latest auth status (bound/expired, user info)
-    await loadBinding()
+    await ProvidersService.GetProviderWithModels('chatwiki')
+    await refreshBindingStateAndModelViews()
     toast.success(t('settings.chatwiki.syncSuccess'))
     view.value = 'list'
   } catch (error) {
@@ -434,6 +497,7 @@ async function confirmUnbind() {
     authUser.value = null
     robots.value = []
     libraries.value = []
+    await refreshBindingStateAndModelViews()
   } catch (error) {
     console.error('Failed to delete chatwiki binding:', error)
   }
@@ -459,6 +523,9 @@ onMounted(() => {
   void loadBinding()
   void ChatWikiService.GetCloudURL().then((url) => {
     cloudAuthUrl.value = url ?? ''
+    if (settingsStore.consumePendingChatwikiAction() === 'cloudLogin') {
+      void handleLoginCloud()
+    }
   })
 })
 
