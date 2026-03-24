@@ -9,13 +9,13 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func TestCreateScheduledTaskDoesNotWriteOperationLog(t *testing.T) {
+func TestCreateScheduledTaskWritesOperationLogWithoutChangedFields(t *testing.T) {
 	db := newScheduledTasksTestDB(t)
 	insertScheduledTasksAgent(t, db, 7)
 
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 
-	_, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
 		Name:                   "Morning digest",
 		Prompt:                 "Send today's digest",
 		AgentID:                7,
@@ -31,8 +31,27 @@ func TestCreateScheduledTaskDoesNotWriteOperationLog(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 0 {
-		t.Fatalf("expected no operation log on create, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log on create, got %d", len(logs))
+	}
+	if logs[0].OperationType != OperationTypeCreate {
+		t.Fatalf("expected operation type %q, got %q", OperationTypeCreate, logs[0].OperationType)
+	}
+	if logs[0].OperationSource != OperationSourceManual {
+		t.Fatalf("expected operation source %q, got %q", OperationSourceManual, logs[0].OperationSource)
+	}
+
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
+	if len(changed) != 0 {
+		t.Fatalf("expected no changed fields on create log, got %d", len(changed))
+	}
+
+	snapshot := decodeOperationSnapshot(t, logs[0].TaskSnapshotJSON)
+	if snapshot.TaskID != created.ID {
+		t.Fatalf("expected snapshot task id %d, got %d", created.ID, snapshot.TaskID)
+	}
+	if snapshot.Name != created.Name {
+		t.Fatalf("expected snapshot task name %q, got %q", created.Name, snapshot.Name)
 	}
 }
 
@@ -151,6 +170,36 @@ func TestUpdateScheduledTaskWritesExpirationChangedField(t *testing.T) {
 	}
 }
 
+func TestUpdateScheduledTaskWithoutChangesDoesNotWriteExtraOperationLog(t *testing.T) {
+	db := newScheduledTasksTestDB(t)
+	insertScheduledTasksAgent(t, db, 7)
+
+	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
+	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+		Name:          "Morning digest",
+		Prompt:        "Send today's digest",
+		AgentID:       7,
+		ScheduleType:  ScheduleTypePreset,
+		ScheduleValue: "every_day_0900",
+		Enabled:       true,
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledTask returned error: %v", err)
+	}
+
+	if _, err := svc.UpdateScheduledTask(created.ID, UpdateScheduledTaskInput{}); err != nil {
+		t.Fatalf("UpdateScheduledTask returned error: %v", err)
+	}
+
+	logs := readScheduledTaskOperationLogs(t, db)
+	if len(logs) != 1 {
+		t.Fatalf("expected only create operation log after no-op update, got %d", len(logs))
+	}
+	if logs[0].OperationType != OperationTypeCreate {
+		t.Fatalf("expected remaining log to be create, got %q", logs[0].OperationType)
+	}
+}
+
 func TestSetScheduledTaskEnabledWritesStatusOperationLog(t *testing.T) {
 	db := newScheduledTasksTestDB(t)
 	insertScheduledTasksAgent(t, db, 7)
@@ -186,7 +235,6 @@ func TestSetScheduledTaskEnabledWritesStatusOperationLog(t *testing.T) {
 		t.Fatalf("expected changed field key status, got %q", changed[0].FieldKey)
 	}
 }
-
 func TestDeleteScheduledTaskWritesDeleteOperationLogWithPreDeleteSnapshot(t *testing.T) {
 	db := newScheduledTasksTestDB(t)
 	insertScheduledTasksAgent(t, db, 7)
@@ -243,8 +291,19 @@ func TestCreateScheduledTaskWithAISourceWritesAIOperationLog(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 0 {
-		t.Fatalf("expected no operation log on AI create, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log on AI create, got %d", len(logs))
+	}
+	if logs[0].OperationType != OperationTypeCreate {
+		t.Fatalf("expected operation type %q, got %q", OperationTypeCreate, logs[0].OperationType)
+	}
+	if logs[0].OperationSource != OperationSourceAI {
+		t.Fatalf("expected operation source %q, got %q", OperationSourceAI, logs[0].OperationSource)
+	}
+
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
+	if len(changed) != 0 {
+		t.Fatalf("expected no changed fields on AI create log, got %d", len(changed))
 	}
 }
 
@@ -269,8 +328,11 @@ func TestOperationLogDetailReturnsStoredSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledTaskOperationLogs returned error: %v", err)
 	}
-	if len(logs) != 0 {
-		t.Fatalf("expected no operation log in service list after create, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log in service list after create, got %d", len(logs))
+	}
+	if len(logs[0].ChangedFields) != 0 {
+		t.Fatalf("expected create log changed fields to stay empty, got %d", len(logs[0].ChangedFields))
 	}
 }
 
@@ -299,8 +361,8 @@ func TestOperationLogDetailReturnsAgentAndChannelNamesInSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledTaskOperationLogs returned error: %v", err)
 	}
-	if len(logs) != 0 {
-		t.Fatalf("expected no operation log in service list after create, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log in service list after create, got %d", len(logs))
 	}
 
 	updatedName := "Updated digest"
@@ -316,11 +378,22 @@ func TestOperationLogDetailReturnsAgentAndChannelNamesInSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledTaskOperationLogs returned error after update: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 operation log after update, got %d", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 operation logs after update, got %d", len(logs))
 	}
 
-	detail, err := svc.GetScheduledTaskOperationLogDetail(logs[0].ID)
+	var updateLogID int64
+	for _, log := range logs {
+		if log.OperationType == OperationTypeUpdate {
+			updateLogID = log.ID
+			break
+		}
+	}
+	if updateLogID == 0 {
+		t.Fatal("expected update operation log to exist")
+	}
+
+	detail, err := svc.GetScheduledTaskOperationLogDetail(updateLogID)
 	if err != nil {
 		t.Fatalf("GetScheduledTaskOperationLogDetail returned error: %v", err)
 	}
@@ -480,3 +553,4 @@ func assertChangedFieldPresent(t *testing.T, items []ScheduledTaskOperationChang
 	}
 	t.Fatalf("expected changed field %q to be present in %#v", key, items)
 }
+

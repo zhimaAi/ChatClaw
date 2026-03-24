@@ -21,6 +21,7 @@ import {
   setVisibleMonthYear,
   startOfExpirationMonth,
 } from './taskFormExpirationCalendar'
+import { isExpirationDateExpired } from '../utils'
 import type { Agent, Channel, ScheduledTaskFormState } from '../types'
 
 const props = withDefaults(
@@ -238,9 +239,7 @@ function clearExpirationDate() {
 
 const formExpired = computed(() => {
   if (!props.form.expiresAtDate) return false
-  const expiresAt = new Date(`${props.form.expiresAtDate}T23:59:59`)
-  if (Number.isNaN(expiresAt.getTime())) return props.form.isExpired
-  return expiresAt.getTime() <= Date.now()
+  return isExpirationDateExpired(props.form.expiresAtDate, props.form.timezone, new Date())
 })
 
 const availableNotificationChannels = computed(() => {

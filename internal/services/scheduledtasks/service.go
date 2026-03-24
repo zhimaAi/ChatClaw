@@ -45,6 +45,10 @@ const (
 	notificationChannelsDisplayPrefixSeparator = ": "
 	// notificationChannelsDisplayNameSeparator separates multiple channel labels in snapshot display text.
 	notificationChannelsDisplayNameSeparator = ", "
+	// scheduledTaskDefaultTimezone keeps expiration display stable when a task record does not carry a timezone.
+	scheduledTaskDefaultTimezone = "UTC"
+	// scheduledTaskExpirationDisplayLayout is the unified expiration display format used in operation logs.
+	scheduledTaskExpirationDisplayLayout = "2006-01-02 15:04:05"
 )
 
 type createCall struct {
@@ -297,6 +301,21 @@ func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateSchedu
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
 	}
+	// Create operations should still be traceable, but the operation-item list stays empty
+	// so the UI can render placeholder dashes instead of field-by-field diffs.
+	if err := s.insertOperationLog(
+		ctx,
+		db,
+		model.ID,
+		model.Name,
+		OperationTypeCreate,
+		source,
+		[]ScheduledTaskOperationChangedField{},
+		s.buildTaskSnapshot(ctx, db, *model),
+	); err != nil {
+		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
+		return nil, call.err
+	}
 	call.task = &dto
 	return &dto, nil
 }
@@ -371,7 +390,11 @@ func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input Up
 	if err := s.scheduler.register(dto, func() { s.runScheduledTask(dto.ID, RunTriggerSchedule) }); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
 	}
-	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeUpdate, source, s.buildUpdateChangedFields(ctx, db, beforeModel, model), s.buildTaskSnapshot(ctx, db, model)); err != nil {
+	changedFields := s.buildUpdateChangedFields(ctx, db, beforeModel, model)
+	if len(changedFields) == 0 {
+		return &dto, nil
+	}
+	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeUpdate, source, changedFields, s.buildTaskSnapshot(ctx, db, model)); err != nil {
 		return nil, errs.Wrap("error.scheduled_task_update_failed", err)
 	}
 	return &dto, nil
@@ -1524,7 +1547,7 @@ func (s *ScheduledTasksService) buildCreateChangedFields(ctx context.Context, db
 			FieldKey:   "expires_at",
 			FieldLabel: "到期时间",
 			Before:     "-",
-			After:      formatExpirationDisplay(task.ExpiresAt),
+			After:      formatExpirationDisplay(task.ExpiresAt, task.Timezone),
 		})
 	}
 	return changed
@@ -1596,16 +1619,8 @@ func (s *ScheduledTasksService) buildUpdateChangedFields(ctx context.Context, db
 		changed = append(changed, ScheduledTaskOperationChangedField{
 			FieldKey:   "expires_at",
 			FieldLabel: "到期时间",
-			Before:     formatExpirationDisplay(before.ExpiresAt),
-			After:      formatExpirationDisplay(after.ExpiresAt),
-		})
-	}
-	if len(changed) == 0 {
-		changed = append(changed, ScheduledTaskOperationChangedField{
-			FieldKey:   "status",
-			FieldLabel: "状态",
-			Before:     formatEnabledDisplay(before.Enabled),
-			After:      formatEnabledDisplay(after.Enabled),
+			Before:     formatExpirationDisplay(before.ExpiresAt, before.Timezone),
+			After:      formatExpirationDisplay(after.ExpiresAt, after.Timezone),
 		})
 	}
 	return changed
@@ -1645,7 +1660,6 @@ func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.D
 		IsExpired:              s.isTaskExpired(task.ExpiresAt),
 	}
 }
-
 // resolveOperationLogAgentDisplay keeps changed-field output human-readable while
 // still falling back to the numeric agent ID after the agent is deleted or missing.
 func (s *ScheduledTasksService) resolveOperationLogAgentDisplay(ctx context.Context, db *bun.DB, agentID int64) string {
@@ -1808,11 +1822,27 @@ func formatEnabledDisplay(enabled bool) string {
 	return "停用"
 }
 
-func formatExpirationDisplay(expiresAt *time.Time) string {
+func normalizeScheduledTaskTimezone(timezone string) string {
+	value := strings.TrimSpace(timezone)
+	if value == "" {
+		return scheduledTaskDefaultTimezone
+	}
+	return value
+}
+
+func loadScheduledTaskTimezoneLocation(timezone string) *time.Location {
+	location, err := time.LoadLocation(normalizeScheduledTaskTimezone(timezone))
+	if err != nil {
+		return time.UTC
+	}
+	return location
+}
+
+func formatExpirationDisplay(expiresAt *time.Time, timezone string) string {
 	if expiresAt == nil {
 		return snapshotDisplayEmpty
 	}
-	return expiresAt.UTC().Format("2006-01-02 15:04:05")
+	return expiresAt.In(loadScheduledTaskTimezoneLocation(timezone)).Format(scheduledTaskExpirationDisplayLayout)
 }
 
 func timePointersEqual(left, right *time.Time) bool {
@@ -1895,3 +1925,4 @@ func taskModelsToDTOs(models []scheduledTaskModel) []ScheduledTask {
 	}
 	return out
 }
+

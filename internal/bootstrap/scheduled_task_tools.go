@@ -99,6 +99,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 				ScheduleValue:          input.ScheduleValue,
 				CronExpr:               input.CronExpr,
 				Enabled:                input.Enabled,
+				ExpiresAt:              input.ExpiresAt,
 			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
@@ -117,6 +118,7 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 				ScheduleValue:          input.ScheduleValue,
 				CronExpr:               input.CronExpr,
 				Enabled:                input.Enabled,
+				ExpiresAt:              input.ExpiresAt,
 			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
@@ -159,6 +161,7 @@ func convertScheduledTaskRecord(item scheduledtasks.ScheduledTask) tools.Schedul
 		CronExpr:               item.CronExpr,
 		Timezone:               item.Timezone,
 		Enabled:                item.Enabled,
+		ExpiresAt:              item.ExpiresAt,
 		LastRunAt:              item.LastRunAt,
 		NextRunAt:              item.NextRunAt,
 		LastStatus:             item.LastStatus,

@@ -1459,7 +1459,7 @@ export default {
     statusFailed: "Failed",
     statusSuccess: "Success",
     statusPending: "Pending",
-    statusExpired: "Expired",
+    statusExpired: "Ended",
     expiredCannotEnable: "This task has expired and can no longer be enabled.",
     runTriggerSchedule: "Timed",
     runTriggerManual: "Manual",
