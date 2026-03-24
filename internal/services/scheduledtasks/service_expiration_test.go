@@ -123,6 +123,30 @@ func TestReloadEnabledTasksAutoDisablesExpiredTasks(t *testing.T) {
 	}
 }
 
+func TestBuildUpdateChangedFieldsFormatsExpirationInTaskTimezone(t *testing.T) {
+	svc := NewScheduledTasksServiceForTest(nil, nil, nil, nil)
+	expiresAt := time.Date(2026, 3, 23, 15, 59, 59, 0, time.UTC)
+
+	before := scheduledTaskModel{
+		Timezone: "UTC",
+	}
+	after := scheduledTaskModel{
+		Timezone:  "Asia/Shanghai",
+		ExpiresAt: &expiresAt,
+	}
+
+	changed := svc.buildUpdateChangedFields(context.Background(), nil, before, after)
+	if len(changed) != 1 {
+		t.Fatalf("expected 1 changed field, got %d", len(changed))
+	}
+	if changed[0].FieldKey != "expires_at" {
+		t.Fatalf("expected expires_at field, got %q", changed[0].FieldKey)
+	}
+	if changed[0].After != "2026-03-23 23:59:59" {
+		t.Fatalf("expected task-timezone expiration display, got %q", changed[0].After)
+	}
+}
+
 func insertScheduledTaskWithExpirationRow(t *testing.T, db *bun.DB, taskID int64, agentID int64, enabled bool, expiresAt time.Time) {
 	t.Helper()
 	enabledInt := 0

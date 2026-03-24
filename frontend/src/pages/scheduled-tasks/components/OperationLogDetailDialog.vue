@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { ScheduledTaskOperationLogDetail } from '../types'
@@ -17,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const titleRef = ref<HTMLElement | null>(null)
 const snapshot = computed(() => props.detail?.task_snapshot ?? null)
 const scheduleFormatter = computed(() => createScheduleTextFormatter(t))
 const readonlyForm = computed(() =>
@@ -39,15 +40,25 @@ const readonlyChannelLabels = computed(() => {
     .filter(Boolean)
 })
 
+function handleOpenAutoFocus(event: Event) {
+  event.preventDefault()
+  void nextTick(() => {
+    titleRef.value?.focus()
+  })
+}
+
 </script>
 
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
       class="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:!w-auto sm:min-w-[820px] sm:!max-w-[820px]"
+      @open-auto-focus="handleOpenAutoFocus"
     >
       <DialogHeader class="shrink-0 border-b border-[#eef2f6] px-7 py-6">
-        <DialogTitle>{{ t('scheduledTasks.operationLog.detailTitle') }}</DialogTitle>
+        <DialogTitle ref="titleRef" tabindex="-1">
+          {{ t('scheduledTasks.operationLog.detailTitle') }}
+        </DialogTitle>
       </DialogHeader>
 
       <div v-if="detail && snapshot && readonlyForm" class="flex-1 overflow-y-auto px-7">

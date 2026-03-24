@@ -155,6 +155,25 @@ test('buildOperationLogDisplayRows localizes changed field labels with field key
   assert.equal(rows[1].fieldLabel, 'Schedule Time')
 })
 
+test('buildOperationLogDisplayRows renders placeholders for empty changed fields', () => {
+  const rows = buildOperationLogDisplayRows([
+    {
+      id: 9,
+      task_name_snapshot: 'Create task',
+      operation_type: 'create',
+      operation_source: 'manual',
+      created_at: '2026-03-24T08:00:00Z',
+      changed_fields: [],
+    },
+  ])
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].fieldLabel, '-')
+  assert.equal(rows[0].beforeValue, '--')
+  assert.equal(rows[0].afterValue, '--')
+  assert.equal(rows[0].showSharedColumns, true)
+})
+
 test('getOperationLogFieldLabel falls back to persisted label for unknown fields', () => {
   assert.equal(getOperationLogFieldLabel('custom_field', '自定义字段'), '自定义字段')
 })

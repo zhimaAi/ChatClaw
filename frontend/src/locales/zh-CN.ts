@@ -1461,7 +1461,7 @@ export default {
     statusFailed: '失败',
     statusSuccess: '成功',
     statusPending: '待运行',
-    statusExpired: '已过期',
+    statusExpired: '已结束',
     expiredCannotEnable: '已过期，不能再开启',
     runTriggerSchedule: '定时',
     runTriggerManual: '手动',

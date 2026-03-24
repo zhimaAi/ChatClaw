@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
@@ -8,12 +8,15 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { ScheduledTaskOperationLog, ScheduledTaskOperationLogDetail } from '../types'
 import { formatTaskTime } from '../utils'
 import {
+  buildOperationLogDisplayRows,
+  OPERATION_LOG_EMPTY_FIELD_VALUE,
+} from '../operationLogTable'
+import {
   createScheduleTextFormatter,
   getOperationLogFieldLabel,
   getOperationLogOperationSourceLabel,
   getOperationLogOperationTypeLabel,
 } from '../scheduledTaskText'
-import { formatOperationLogFieldValue } from '../operationLogTable'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
 
 const props = defineProps<{
@@ -29,7 +32,14 @@ const loading = ref(false)
 const logs = ref<ScheduledTaskOperationLog[]>([])
 const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
-const scheduleFormatter = createScheduleTextFormatter(t)
+const scheduleFormatter = computed(() => createScheduleTextFormatter(t))
+const displayRows = computed(() =>
+  buildOperationLogDisplayRows(
+    logs.value as any,
+    scheduleFormatter.value,
+    (fieldKey, fieldLabel) => getOperationLogFieldLabel(fieldKey, fieldLabel, t)
+  )
+)
 
 function displayOperationType(value: string) {
   return getOperationLogOperationTypeLabel(value, t)
@@ -70,6 +80,18 @@ watch(
   },
   { immediate: true }
 )
+
+function findLogById(logId: number) {
+  return logs.value.find((item) => item.id === logId) || null
+}
+
+function handleViewDetail(logId: number) {
+  const targetLog = findLogById(logId)
+  if (!targetLog) {
+    return
+  }
+  void viewDetail(targetLog)
+}
 </script>
 
 <template>
@@ -109,40 +131,39 @@ watch(
           </thead>
           <tbody>
             <tr
-              v-for="log in logs"
-              :key="log.id"
+              v-for="row in displayRows"
+              :key="row.rowKey"
               class="border-b border-[#f1f5f9] align-top text-[#171717]"
             >
-              <td class="px-4 py-4">{{ log.task_name_snapshot || '-' }}</td>
-              <td class="px-4 py-4">{{ displayOperationType(log.operation_type) }}</td>
-              <td class="px-4 py-4">{{ displayOperationSource(log.operation_source) }}</td>
               <td class="px-4 py-4">
-                <div class="space-y-2">
-                  <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}`">
-                    {{ getOperationLogFieldLabel(item.field_key, item.field_label, t) }}
-                  </div>
+                <div v-if="row.showSharedColumns">
+                  {{ row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE }}
                 </div>
               </td>
               <td class="px-4 py-4">
-                <div class="space-y-2">
-                  <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}-before`">
-                    {{ formatOperationLogFieldValue(item.field_key, item.before, scheduleFormatter) }}
-                  </div>
+                <div v-if="row.showSharedColumns">
+                  {{ displayOperationType(row.operationType) }}
                 </div>
               </td>
               <td class="px-4 py-4">
-                <div class="space-y-2">
-                  <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}-after`">
-                    {{ formatOperationLogFieldValue(item.field_key, item.after, scheduleFormatter) }}
-                  </div>
+                <div v-if="row.showSharedColumns">
+                  {{ displayOperationSource(row.operationSource) }}
                 </div>
               </td>
-              <td class="whitespace-nowrap px-4 py-4">{{ formatTaskTime(log.created_at) }}</td>
+              <td class="px-4 py-4">{{ row.fieldLabel }}</td>
+              <td class="px-4 py-4">{{ row.beforeValue }}</td>
+              <td class="px-4 py-4">{{ row.afterValue }}</td>
+              <td class="whitespace-nowrap px-4 py-4">
+                <div v-if="row.showSharedColumns">
+                  {{ formatTaskTime(row.createdAt) }}
+                </div>
+              </td>
               <td class="px-4 py-4">
                 <button
+                  v-if="row.showSharedColumns"
                   type="button"
                   class="text-[#2563eb] transition-colors hover:text-[#1d4ed8]"
-                  @click="viewDetail(log)"
+                  @click="handleViewDetail(row.logId)"
                 >
                   {{ t('scheduledTasks.operationLog.viewDetail') }}
                 </button>

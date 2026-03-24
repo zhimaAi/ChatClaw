@@ -19,6 +19,7 @@ import TaskRunHistoryDialog from './components/TaskRunHistoryDialog.vue'
 import TaskSummaryCards from './components/TaskSummaryCards.vue'
 import TaskTable from './components/TaskTable.vue'
 import { createDeleteTaskConfirmation } from './deleteTaskConfirmation'
+import { buildScheduledTaskSummaryLabels } from './summaryLabels'
 import {
   SCHEDULED_TASKS_VIEW_ACTION_BACK_TO_TASK_LIST,
   SCHEDULED_TASKS_VIEW_ACTION_ENTER_OPERATION_LOG,
@@ -56,12 +57,7 @@ const {
   runTaskNow,
 } = useScheduledTasks()
 
-const summaryLabels = computed(() => ({
-  total: t('scheduledTasks.total'),
-  running: t('scheduledTasks.running'),
-  paused: t('scheduledTasks.paused'),
-  failed: t('scheduledTasks.failed'),
-}))
+const summaryLabels = computed(() => buildScheduledTaskSummaryLabels(t))
 
 const operationLogTitle = computed(() => t('scheduledTasks.operationLog.title'))
 
@@ -117,7 +113,7 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
-    expires_at: buildExpirationDateTime(state.expiresAtDate),
+    expires_at: buildExpirationDateTime(state.expiresAtDate, state.timezone),
     notification_platform: state.notificationPlatform,
     notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,
@@ -130,7 +126,7 @@ function buildPayload(state: ScheduledTaskFormState) {
     name: state.name,
     prompt: state.prompt,
     agent_id: state.agentId || 0,
-    expires_at: buildExpirationDateTime(state.expiresAtDate),
+    expires_at: buildExpirationDateTime(state.expiresAtDate, state.timezone),
     notification_platform: state.notificationPlatform,
     notification_channel_ids: state.notificationChannelIds,
     schedule_type: state.scheduleType,

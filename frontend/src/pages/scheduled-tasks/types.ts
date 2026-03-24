@@ -45,6 +45,7 @@ export interface ScheduledTaskFormState {
   name: string
   prompt: string
   agentId: number | null
+  timezone: string
   expiresAtDate: string
   isExpired: boolean
   notificationPlatform: string

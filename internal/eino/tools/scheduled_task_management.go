@@ -14,6 +14,16 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+const (
+	// scheduledTaskExpiresAtDescEN keeps the AI tool parameter description consistent
+	// across create/update preview and confirm schemas.
+	scheduledTaskExpiresAtDescEN = "Optional expiration time in RFC3339 format, for example '2026-04-01T23:59:59Z'."
+	// scheduledTaskExpiresAtDescZH mirrors the expiration parameter description for Chinese locales.
+	scheduledTaskExpiresAtDescZH = "鍙€夌殑鍒版湡鏃堕棿锛岃浣跨敤 RFC3339 鏍煎紡锛屼緥濡?2026-04-01T23:59:59Z'銆?"
+	// scheduledTaskExpiresAtFormatError keeps the expires_at validation message stable for tool callers.
+	scheduledTaskExpiresAtFormatError = "expires_at must use RFC3339 format, for example 2026-04-01T23:59:59Z"
+)
+
 type ScheduledTaskAgent struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
@@ -32,6 +42,7 @@ type ScheduledTaskRecord struct {
 	CronExpr               string     `json:"cron_expr"`
 	Timezone               string     `json:"timezone,omitempty"`
 	Enabled                bool       `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at,omitempty"`
 	LastRunAt              *time.Time `json:"last_run_at,omitempty"`
 	NextRunAt              *time.Time `json:"next_run_at,omitempty"`
 	LastStatus             string     `json:"last_status,omitempty"`
@@ -51,6 +62,7 @@ type ScheduledTaskCreateInput struct {
 	ScheduleValue          string  `json:"schedule_value"`
 	CronExpr               string  `json:"cron_expr"`
 	Enabled                bool    `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at"`
 }
 
 type ScheduledTaskUpdateInput struct {
@@ -63,6 +75,7 @@ type ScheduledTaskUpdateInput struct {
 	ScheduleValue          *string  `json:"schedule_value"`
 	CronExpr               *string  `json:"cron_expr"`
 	Enabled                *bool    `json:"enabled"`
+	ExpiresAt              *time.Time `json:"expires_at"`
 }
 
 type ScheduledTaskRunRecord struct {
@@ -191,6 +204,7 @@ type scheduledTaskCreatePreviewInput struct {
 	ScheduleValue string `json:"schedule_value"`
 	CronExpr      string `json:"cron_expr"`
 	Enabled       *bool  `json:"enabled"`
+	ExpiresAt     *string `json:"expires_at"`
 }
 
 type scheduledTaskCreateConfirmInput struct {
@@ -201,6 +215,7 @@ type scheduledTaskCreateConfirmInput struct {
 	ScheduleValue string `json:"schedule_value"`
 	CronExpr      string `json:"cron_expr"`
 	Enabled       *bool  `json:"enabled"`
+	ExpiresAt     *string `json:"expires_at"`
 }
 
 type scheduledTaskUpdatePreviewInput struct {
@@ -213,6 +228,7 @@ type scheduledTaskUpdatePreviewInput struct {
 	ScheduleValue string `json:"schedule_value"`
 	CronExpr      string `json:"cron_expr"`
 	Enabled       *bool  `json:"enabled"`
+	ExpiresAt     *string `json:"expires_at"`
 }
 
 type scheduledTaskUpdateConfirmInput struct {
@@ -224,6 +240,7 @@ type scheduledTaskUpdateConfirmInput struct {
 	ScheduleValue *string `json:"schedule_value"`
 	CronExpr      *string `json:"cron_expr"`
 	Enabled       *bool   `json:"enabled"`
+	ExpiresAt     *string `json:"expires_at"`
 }
 
 type scheduledTaskMutationInput struct {
@@ -291,6 +308,7 @@ func (t *scheduledTaskCreatePreviewTool) Info(_ context.Context) (*schema.ToolIn
 			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value for preset/custom. Example preset: 'every_day_0900'. Example custom interval: '{\"interval_minutes\":15}'. Empty for cron type.", "preset/custom 的调度值。preset 示例: 'every_day_0900'；分钟间隔优先写成 custom，例如 '{\"interval_minutes\":15}'。cron 类型留空。"), Required: true},
 			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression for cron type (e.g. '20 15 * * *' for 15:20 daily). Format: minute hour day month weekday.", "Cron表达式，用于cron类型(如'20 15 * * *'表示每天15:20)。格式: 分 时 日 月 周。"), Required: true},
 			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether enabled after creation", "创建后是否启用"), Required: false},
+			"expires_at":     {Type: schema.String, Desc: selectDesc(scheduledTaskExpiresAtDescEN, scheduledTaskExpiresAtDescZH), Required: false},
 		}),
 	}, nil
 }
@@ -310,6 +328,7 @@ func (t *scheduledTaskCreateConfirmTool) Info(_ context.Context) (*schema.ToolIn
 			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value for preset/custom. Example custom interval: '{\"interval_minutes\":15}'.", "preset/custom 的调度值。分钟间隔优先写成 custom，例如 '{\"interval_minutes\":15}'。"), Required: true},
 			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression for cron type", "Cron表达式(用于cron类型)"), Required: true},
 			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether enabled after creation", "创建后是否启用"), Required: false},
+			"expires_at":     {Type: schema.String, Desc: selectDesc(scheduledTaskExpiresAtDescEN, scheduledTaskExpiresAtDescZH), Required: false},
 		}),
 	}, nil
 }
@@ -331,6 +350,7 @@ func (t *scheduledTaskUpdatePreviewTool) Info(_ context.Context) (*schema.ToolIn
 			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value for preset/custom. Example custom interval: '{\"interval_minutes\":15}'.", "preset/custom 的调度值。分钟间隔优先写成 custom，例如 '{\"interval_minutes\":15}'。"), Required: false},
 			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression for cron type", "cron 类型使用的表达式"), Required: false},
 			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether the task remains enabled", "任务更新后是否启用"), Required: false},
+			"expires_at":     {Type: schema.String, Desc: selectDesc(scheduledTaskExpiresAtDescEN, scheduledTaskExpiresAtDescZH), Required: false},
 		}),
 	}, nil
 }
@@ -350,6 +370,7 @@ func (t *scheduledTaskUpdateConfirmTool) Info(_ context.Context) (*schema.ToolIn
 			"schedule_type":  {Type: schema.String, Desc: selectDesc("Schedule type: prefer 'custom' for minute intervals, otherwise use 'preset' or 'cron' as needed", "调度类型：分钟间隔优先用 'custom'，不要优先转成 cron；其他场景按需使用 'preset' 或 'cron'"), Required: false},
 			"schedule_value": {Type: schema.String, Desc: selectDesc("Schedule value for preset/custom. Example custom interval: '{\"interval_minutes\":15}'.", "preset/custom 的调度值。分钟间隔优先写成 custom，例如 '{\"interval_minutes\":15}'。"), Required: false},
 			"cron_expr":      {Type: schema.String, Desc: selectDesc("Cron expression for cron type", "cron 类型使用的表达式"), Required: false},
+			"expires_at":     {Type: schema.String, Desc: selectDesc(scheduledTaskExpiresAtDescEN, scheduledTaskExpiresAtDescZH), Required: false},
 			"enabled":        {Type: schema.Boolean, Desc: selectDesc("Whether the task remains enabled", "任务更新后是否启用"), Required: false},
 		}),
 	}, nil
@@ -528,6 +549,11 @@ func (t *scheduledTaskCreatePreviewTool) InvokableRun(_ context.Context, argumen
 	if len(issues) > 0 || schedule == nil || len(matches) != 1 || (status != "exact" && status != "single") {
 		return marshalJSON(result), nil
 	}
+	expiresAt, err := parseScheduledTaskExpirationInput(input.ExpiresAt)
+	if err != nil {
+		result["issues"] = append(issues, err.Error())
+		return marshalJSON(result), nil
+	}
 
 	enabled := true
 	if input.Enabled != nil {
@@ -544,6 +570,7 @@ func (t *scheduledTaskCreatePreviewTool) InvokableRun(_ context.Context, argumen
 		CronExpr:      schedule.CronExpr,
 		Timezone:      schedule.Timezone,
 		Enabled:       enabled,
+		ExpiresAt:     expiresAt,
 		NextRunAt:     schedule.NextRunAt,
 	}
 	result["needs_confirmation"] = true
@@ -576,6 +603,10 @@ func (t *scheduledTaskCreateConfirmTool) InvokableRun(_ context.Context, argumen
 	if err != nil {
 		return "", err
 	}
+	expiresAt, err := parseScheduledTaskExpirationInput(input.ExpiresAt)
+	if err != nil {
+		return "", err
+	}
 
 	enabled := true
 	if input.Enabled != nil {
@@ -590,6 +621,7 @@ func (t *scheduledTaskCreateConfirmTool) InvokableRun(_ context.Context, argumen
 		ScheduleValue: schedule.ScheduleValue,
 		CronExpr:      schedule.CronExpr,
 		Enabled:       enabled,
+		ExpiresAt:     expiresAt,
 	})
 	if err != nil {
 		return "", err
@@ -644,6 +676,14 @@ func (t *scheduledTaskUpdatePreviewTool) InvokableRun(_ context.Context, argumen
 	}
 	if input.Enabled != nil {
 		parsedTask.Enabled = *input.Enabled
+	}
+	if input.ExpiresAt != nil {
+		expiresAt, err := parseScheduledTaskExpirationInput(input.ExpiresAt)
+		if err != nil {
+			issues = append(issues, err.Error())
+		} else {
+			parsedTask.ExpiresAt = expiresAt
+		}
 	}
 
 	if strings.TrimSpace(input.AgentName) != "" {
@@ -709,6 +749,10 @@ func (t *scheduledTaskUpdateConfirmTool) InvokableRun(_ context.Context, argumen
 	if input.TaskID <= 0 {
 		return "", fmt.Errorf("task_id is required")
 	}
+	expiresAt, err := parseScheduledTaskExpirationInput(input.ExpiresAt)
+	if err != nil {
+		return "", err
+	}
 
 	updated, err := t.config.UpdateScheduledTaskFn(input.TaskID, ScheduledTaskUpdateInput{
 		Name:          input.Name,
@@ -718,6 +762,7 @@ func (t *scheduledTaskUpdateConfirmTool) InvokableRun(_ context.Context, argumen
 		ScheduleValue: input.ScheduleValue,
 		CronExpr:      input.CronExpr,
 		Enabled:       input.Enabled,
+		ExpiresAt:     expiresAt,
 	})
 	if err != nil {
 		return "", err
@@ -1008,4 +1053,23 @@ func scheduledTaskMutationActionLabel(action string) string {
 	default:
 		return action
 	}
+}
+
+// parseScheduledTaskExpirationInput keeps AI tool date parsing explicit so
+// the tool only accepts unambiguous RFC3339 timestamps.
+func parseScheduledTaskExpirationInput(raw *string) (*time.Time, error) {
+	if raw == nil {
+		return nil, nil
+	}
+
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		return nil, nil
+	}
+
+	expiresAt, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, fmt.Errorf(scheduledTaskExpiresAtFormatError)
+	}
+	return &expiresAt, nil
 }
