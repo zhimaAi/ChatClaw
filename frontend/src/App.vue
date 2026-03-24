@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } fr
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
-import AssistantPage from '@/pages/assistant/AssistantPage.vue'
+import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
 import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
@@ -20,9 +20,7 @@ const DocumentViewerPage = defineAsyncComponent(
   () => import('@/pages/document/DocumentViewerPage.vue')
 )
 const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
-const OpenClawAssistantPage = defineAsyncComponent(
-  () => import('@/pages/openclaw-assistant/OpenClawAssistantPage.vue')
-)
+const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawPage.vue'))
 const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue'))
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
@@ -127,7 +125,7 @@ async function handleDisableSelectionSearchFromPopup() {
  */
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
-  'openclaw-assistant': OpenClawAssistantPage,
+  openclaw: OpenClawPage,
   knowledge: KnowledgePage,
   'scheduled-tasks': ScheduledTasksPage,
   skills: SkillsPage,

@@ -149,7 +149,7 @@ export default {
   },
   nav: {
     assistant: "Task Assistant",
-    openclawAssistant: "Trợ lý OpenClaw",
+    openclaw: "Trợ lý OpenClaw",
     knowledge: "Cơ sở tri thức",
     scheduledTasks: "Tác vụ định giờ",
     skills: "Kỹ năng",

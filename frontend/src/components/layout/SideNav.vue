@@ -9,7 +9,7 @@
  *
  * Each nav item may specify a `systemModuleMap` to resolve to a different
  * NavModule per system. Example:
- *   { key: 'assistant', systemModuleMap: { openclaw: 'openclaw-assistant' } }
+ *   { key: 'assistant', systemModuleMap: { openclaw: 'openclaw' } }
  * When the user clicks the item, we look up the effective module from the map
  * (falling back to `key`) and open the tab with `systemOwner` captured.
  */
@@ -68,7 +68,7 @@ const selectSystem = (system: SystemOwner) => {
   appStore.setCurrentSystem(system)
   navigationStore.closeAllTabs()
   const assistantModule: NavModule =
-    system === 'openclaw' ? 'openclaw-assistant' : 'assistant'
+    system === 'openclaw' ? 'openclaw' : 'assistant'
   navigationStore.navigateToModule(assistantModule, system)
   switcherOpen.value = false
 }
@@ -78,8 +78,8 @@ const selectSystem = (system: SystemOwner) => {
  *
  * `systems` — if set, only show this item when currentSystem is in the list.
  * `systemModuleMap` — optional per-system NavModule override.
- *   e.g. { openclaw: 'openclaw-assistant' } means: when currentSystem is openclaw,
- *   open the 'openclaw-assistant' module instead of the default `key`.
+ *   e.g. { openclaw: 'openclaw' } means: when currentSystem is openclaw,
+ *   open the 'openclaw' module instead of the default `key`.
  *   This allows the same nav label to open completely different pages per system.
  */
 interface NavItem {
@@ -98,7 +98,7 @@ const allTopNavItems: NavItem[] = [
     icon: IconAssistant,
     // 同一导航在不同系统打开不同页面的配置方法
     systemModuleMap: {
-      openclaw: 'openclaw-assistant',  // OpenClaw 模式下打开 openclaw-assistant 模块
+      openclaw: 'openclaw', // OpenClaw 模式下打开 openclaw 模块
     },
   },
   {

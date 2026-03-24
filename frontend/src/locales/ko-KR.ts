@@ -160,7 +160,7 @@ export default {
   },
   nav: {
     assistant: "태스크 어시스턴트",
-    openclawAssistant: "OpenClaw 어시스턴트",
+    openclaw: "OpenClaw 어시스턴트",
     knowledge: "지식베이스",
     scheduledTasks: "예약된 작업",
     skills: "스킬",

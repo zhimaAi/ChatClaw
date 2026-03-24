@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail } from '../types'
 import { formatDuration, formatTaskTime } from '../utils'
 import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
-import EmbeddedAssistantPage from '@/pages/assistant/components/EmbeddedAssistantPage.vue'
+import EmbeddedAssistantPage from '@/pages/native/assistant/components/EmbeddedAssistantPage.vue'
 
 const props = defineProps<{
   open: boolean

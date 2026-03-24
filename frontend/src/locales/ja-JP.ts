@@ -149,7 +149,7 @@ export default {
   },
   nav: {
     assistant: "タスクアシスタント",
-    openclawAssistant: "OpenClawアシスタント",
+    openclaw: "OpenClawアシスタント",
     knowledge: "ナレッジベース",
     scheduledTasks: "スケジュールタスク",
     skills: "スキル",

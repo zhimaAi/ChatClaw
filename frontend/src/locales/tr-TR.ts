@@ -149,7 +149,7 @@ export default {
   },
   nav: {
     assistant: "Task Assistant",
-    openclawAssistant: "OpenClaw Asistanı",
+    openclaw: "OpenClaw Asistanı",
     knowledge: "Bilgi tabanı",
     scheduledTasks: "Planlı görevler",
     skills: "Beceriler",

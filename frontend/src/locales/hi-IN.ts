@@ -149,7 +149,7 @@ export default {
   },
   nav: {
     assistant: "Task Assistant",
-    openclawAssistant: "OpenClaw सहायक",
+    openclaw: "OpenClaw सहायक",
     knowledge: "नॉलेज बेस",
     scheduledTasks: "शेड्यूल्ड टास्क",
     skills: "स्किल्स",

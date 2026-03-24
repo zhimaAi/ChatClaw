@@ -11,7 +11,7 @@ const createTabId = () => `tab-${uuidv4()}`
  */
 export type NavModule =
   | 'assistant'
-  | 'openclaw-assistant'
+  | 'openclaw'
   | 'knowledge'
   | 'scheduled-tasks'
   | 'memory'
@@ -91,7 +91,7 @@ export interface PendingChatData {
  */
 const moduleLabels: Record<NavModule, string> = {
   assistant: 'nav.assistant',
-  'openclaw-assistant': 'nav.openclawAssistant',
+  openclaw: 'nav.openclaw',
   knowledge: 'nav.knowledge',
   'scheduled-tasks': 'nav.scheduledTasks',
   memory: 'nav.memory',
@@ -108,7 +108,7 @@ const moduleLabels: Record<NavModule, string> = {
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
 const singleTabModules: NavModule[] = [
-  'openclaw-assistant',
+  'openclaw',
   'knowledge',
   'scheduled-tasks',
   'memory',
