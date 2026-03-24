@@ -79,20 +79,23 @@ func TestDisableExpiredTasksTurnsOffEnabledExpiredTasks(t *testing.T) {
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 	svc.now = func() time.Time { return now }
 
-	disabledCount, err := svc.disableExpiredTasks(context.Background())
+	disabledCount, err := svc.markExpiredTasks(context.Background())
 	if err != nil {
-		t.Fatalf("disableExpiredTasks returned error: %v", err)
+		t.Fatalf("markExpiredTasks returned error: %v", err)
 	}
 	if disabledCount != 1 {
 		t.Fatalf("expected 1 task to be auto-disabled, got %d", disabledCount)
 	}
 
 	model := readScheduledTaskModelByID(t, db, 3002)
-	if model.Enabled {
-		t.Fatal("expected expired task to be disabled by sweeper")
+	if !model.Enabled {
+		t.Fatal("expected expired task to keep enabled switch after sweeper")
 	}
 	if model.NextRunAt != nil {
 		t.Fatalf("expected next_run_at to be cleared, got %v", model.NextRunAt)
+	}
+	if model.LastStatus != TaskStatusExpired {
+		t.Fatalf("expected last_status %q, got %q", TaskStatusExpired, model.LastStatus)
 	}
 }
 
@@ -112,8 +115,11 @@ func TestReloadEnabledTasksAutoDisablesExpiredTasks(t *testing.T) {
 	}
 
 	model := readScheduledTaskModelByID(t, db, 3003)
-	if model.Enabled {
-		t.Fatal("expected reloadEnabledTasks to auto-disable expired enabled task")
+	if !model.Enabled {
+		t.Fatal("expected reloadEnabledTasks to keep enabled switch for expired task")
+	}
+	if model.LastStatus != TaskStatusExpired {
+		t.Fatalf("expected last_status %q, got %q", TaskStatusExpired, model.LastStatus)
 	}
 }
 

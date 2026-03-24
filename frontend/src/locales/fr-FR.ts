@@ -1602,11 +1602,23 @@ export default {
       },
       detailTitle: "Détails du journal des opérations",
       empty: "Aucun journal d'opérations pour le moment",
+      fields: {
+        agent: "Assistant",
+        name: "Nom",
+        notificationChannels: "Canaux de notification",
+        prompt: "Prompt",
+        scheduleTime: "Heure d'exécution",
+        status: "Statut",
+      },
       sources: {
         ai: "Assistant IA",
         manual: "Manuel",
       },
       title: "Journal des opérations",
+      status: {
+        enabled: "Activé",
+        disabled: "Désactivé",
+      },
       types: {
         create: "Créer une tâche",
         delete: "Supprimer la tâche",

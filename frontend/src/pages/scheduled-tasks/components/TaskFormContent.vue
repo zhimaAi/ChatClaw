@@ -43,6 +43,9 @@ const props = withDefaults(
 
 const { t } = useI18n()
 
+// Unbound channels should never appear in scheduled task notifications.
+const UNBOUND_AGENT_ID = 0
+
 const scheduleTypeOptions = [
   { value: 'preset', labelKey: 'scheduledTasks.dialog.scheduleType.preset' },
   { value: 'custom', labelKey: 'scheduledTasks.dialog.scheduleType.custom' },
@@ -240,6 +243,16 @@ const formExpired = computed(() => {
   return expiresAt.getTime() <= Date.now()
 })
 
+const availableNotificationChannels = computed(() => {
+  if (!props.form.agentId || props.form.agentId <= UNBOUND_AGENT_ID) return []
+  return props.channels.filter(
+    (channel) =>
+      channel.enabled &&
+      channel.agent_id > UNBOUND_AGENT_ID &&
+      channel.agent_id === props.form.agentId
+  )
+})
+
 const notificationPlatformOptions = computed(() => {
   const labels: Record<string, string> = {
     feishu: t('channels.platforms.feishu'),
@@ -248,8 +261,7 @@ const notificationPlatformOptions = computed(() => {
     qq: t('channels.platforms.qq'),
   }
   const seen = new Set<string>()
-  return props.channels
-    .filter((channel) => channel.enabled)
+  return availableNotificationChannels.value
     .filter((channel) => {
       const platform = channel.platform || ''
       if (!platform || seen.has(platform)) return false
@@ -264,8 +276,8 @@ const notificationPlatformOptions = computed(() => {
 
 const filteredNotificationChannels = computed(() => {
   if (!props.form.notificationPlatform) return []
-  return props.channels.filter(
-    (channel) => channel.enabled && channel.platform === props.form.notificationPlatform
+  return availableNotificationChannels.value.filter(
+    (channel) => channel.platform === props.form.notificationPlatform
   )
 })
 
@@ -362,6 +374,25 @@ function handleNotificationPlatformChange(value: string) {
   props.form.notificationChannelIds = []
 }
 
+watch(
+  [() => props.form.agentId, notificationPlatformOptions],
+  ([agentId, platformOptions]) => {
+    if (props.readonly) return
+    if (!agentId || agentId <= UNBOUND_AGENT_ID) {
+      props.form.notificationPlatform = ''
+      props.form.notificationChannelIds = []
+      return
+    }
+
+    const availablePlatforms = new Set(platformOptions.map((option) => option.value))
+    if (!availablePlatforms.has(props.form.notificationPlatform)) {
+      props.form.notificationPlatform = ''
+      props.form.notificationChannelIds = []
+    }
+  },
+  { immediate: true }
+)
+
 function toggleNotificationChannel(channelId: number, checked: boolean) {
   if (props.readonly) return
   if (checked) {
@@ -377,21 +408,20 @@ function toggleNotificationChannel(channelId: number, checked: boolean) {
 }
 
 watch(
-  () => props.form.notificationPlatform,
-  (platform) => {
+  [() => props.form.notificationPlatform, filteredNotificationChannels],
+  ([platform, channels]) => {
     if (props.readonly) return
     if (!platform) {
       props.form.notificationChannelIds = []
       return
     }
 
-    const availableChannelIds = new Set(
-      filteredNotificationChannels.value.map((channel) => channel.id)
-    )
+    const availableChannelIds = new Set(channels.map((channel) => channel.id))
     props.form.notificationChannelIds = props.form.notificationChannelIds.filter((channelId) =>
       availableChannelIds.has(channelId)
     )
-  }
+  },
+  { immediate: true }
 )
 
 watch(

@@ -1459,6 +1459,7 @@ export default {
     statusFailed: "Failed",
     statusSuccess: "Success",
     statusPending: "Pending",
+    statusExpired: "Expired",
     expiredCannotEnable: "This task has expired and can no longer be enabled.",
     runTriggerSchedule: "Timed",
     runTriggerManual: "Manual",
@@ -1529,6 +1530,21 @@ export default {
       sources: {
         ai: "AI Assistant",
         manual: "Manual",
+      },
+      notification: {
+        onDemand: "On demand",
+      },
+      status: {
+        enabled: "Enabled",
+        disabled: "Disabled",
+      },
+      fields: {
+        status: "Status",
+        name: "Name",
+        prompt: "Prompt",
+        agent: "Assistant",
+        notificationChannels: "Notification Channels",
+        scheduleTime: "Schedule Time",
       },
     },
     notification: {
@@ -1615,7 +1631,7 @@ export default {
       calendarTitle: "{year} / {month}",
       yearOption: "{year}",
       monthOption: "{month}",
-      expiredHint: "This task has expired and remains disabled. To enable it again, move the expiration time to a future date.",
+      expiredHint: "This task has expired and will not run again. To resume it, move the expiration time to a future date.",
     },
     deleteConfirmDescription: "Are you sure you want to delete task \"{name}\"? This action cannot be undone.",
     copy: "Copy",

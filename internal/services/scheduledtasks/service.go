@@ -142,6 +142,9 @@ func (s *ScheduledTasksService) ListScheduledTasks() ([]ScheduledTask, error) {
 
 	out := make([]ScheduledTask, 0, len(models))
 	for i := range models {
+		if err := s.markTaskExpiredIfNeeded(ctx, db, &models[i]); err != nil {
+			return nil, err
+		}
 		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
 			return nil, err
 		}
@@ -164,6 +167,9 @@ func (s *ScheduledTasksService) GetScheduledTaskByID(id int64) (*ScheduledTask, 
 
 	model, err := s.getTaskModel(ctx, db, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.markTaskExpiredIfNeeded(ctx, db, &model); err != nil {
 		return nil, err
 	}
 	dto := s.toScheduledTaskDTO(model)
@@ -216,7 +222,9 @@ func (s *ScheduledTasksService) GetScheduledTaskSummary() (*ScheduledTaskSummary
 	}
 	summary := &ScheduledTaskSummary{Total: len(tasks)}
 	for _, task := range tasks {
-		if task.Enabled {
+		if task.LastStatus == TaskStatusExpired {
+			summary.Paused++
+		} else if task.Enabled {
 			summary.Running++
 		} else {
 			summary.Paused++
@@ -289,10 +297,6 @@ func (s *ScheduledTasksService) CreateScheduledTaskWithSource(input CreateSchedu
 		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
 		return nil, call.err
 	}
-	if err := s.insertOperationLog(ctx, db, model.ID, model.Name, OperationTypeCreate, source, s.buildCreateChangedFields(ctx, db, *model), s.buildTaskSnapshot(ctx, db, *model)); err != nil {
-		call.err = errs.Wrap("error.scheduled_task_create_failed", err)
-		return nil, call.err
-	}
 	call.task = &dto
 	return &dto, nil
 }
@@ -324,8 +328,20 @@ func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input Up
 		if shouldRejectExpiredEnable(beforeModel.Enabled, input.Enabled) {
 			return nil, errs.New("error.scheduled_task_expired")
 		}
-		model.Enabled = false
+		model.LastStatus = TaskStatusExpired
 		model.NextRunAt = nil
+	} else {
+		if beforeModel.LastStatus == TaskStatusExpired {
+			model.LastStatus = TaskStatusPending
+			model.LastError = ""
+		}
+		if model.Enabled && model.NextRunAt == nil {
+			nextRunAt, nextErr := s.scheduler.next(model.CronExpr, s.currentTime())
+			if nextErr != nil {
+				return nil, errs.Wrap("error.scheduled_task_schedule_invalid", nextErr)
+			}
+			model.NextRunAt = nextRunAt
+		}
 	}
 	if err := s.ensureAgentExists(ctx, db, model.AgentID); err != nil {
 		return nil, err
@@ -343,6 +359,8 @@ func (s *ScheduledTasksService) UpdateScheduledTaskWithSource(id int64, input Up
 		Set("timezone = ?", model.Timezone).
 		Set("enabled = ?", model.Enabled).
 		Set("expires_at = ?", model.ExpiresAt).
+		Set("last_status = ?", model.LastStatus).
+		Set("last_error = ?", model.LastError).
 		Set("next_run_at = ?", model.NextRunAt).
 		Where("id = ?", id).
 		Exec(ctx); err != nil {
@@ -424,6 +442,12 @@ func (s *ScheduledTasksService) RunScheduledTaskNow(id int64) (*ScheduledTaskRun
 	task, err := s.getTaskModel(ctx, db, id)
 	if err != nil {
 		return nil, err
+	}
+	if err := s.markTaskExpiredIfNeeded(ctx, db, &task); err != nil {
+		return nil, err
+	}
+	if task.LastStatus == TaskStatusExpired {
+		return nil, errs.New("error.scheduled_task_expired")
 	}
 	run, err := s.executeTask(ctx, task, RunTriggerManual)
 	if err != nil {
@@ -923,7 +947,7 @@ func (s *ScheduledTasksService) reloadEnabledTasks() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := s.disableExpiredTasks(ctx); err != nil {
+	if _, err := s.markExpiredTasks(ctx); err != nil {
 		return err
 	}
 
@@ -937,6 +961,12 @@ func (s *ScheduledTasksService) reloadEnabledTasks() error {
 	}
 
 	for i := range models {
+		if err := s.markTaskExpiredIfNeeded(ctx, db, &models[i]); err != nil {
+			return err
+		}
+		if models[i].LastStatus == TaskStatusExpired {
+			continue
+		}
 		if err := s.ensureTaskNextRunAt(ctx, db, &models[i]); err != nil {
 			return err
 		}
@@ -983,7 +1013,7 @@ func (s *ScheduledTasksService) runScheduledTask(taskID int64, triggerType strin
 		return
 	}
 	if triggerType == RunTriggerSchedule && s.isTaskExpired(task.ExpiresAt) {
-		_, _ = s.disableScheduledTask(ctx, db, task.ID)
+		_, _ = s.markTaskExpired(ctx, db, task.ID)
 		return
 	}
 	_, _ = s.executeTask(context.Background(), task, triggerType)
@@ -1005,7 +1035,7 @@ func (s *ScheduledTasksService) startExpirationSweeper() {
 		for {
 			select {
 			case <-ticker.C:
-				_, _ = s.disableExpiredTasks(context.Background())
+				_, _ = s.markExpiredTasks(context.Background())
 			case <-stop:
 				return
 			}
@@ -1023,7 +1053,8 @@ func (s *ScheduledTasksService) stopExpirationSweeper() {
 	s.expirationSweepDone = nil
 }
 
-func (s *ScheduledTasksService) disableExpiredTasks(ctx context.Context) (int, error) {
+// markExpiredTasks persists the expired runtime state without mutating the user's enable switch.
+func (s *ScheduledTasksService) markExpiredTasks(ctx context.Context) (int, error) {
 	db, err := s.dbOrGlobal()
 	if err != nil {
 		return 0, err
@@ -1036,28 +1067,29 @@ func (s *ScheduledTasksService) disableExpiredTasks(ctx context.Context) (int, e
 	if err := db.NewSelect().
 		Model(&models).
 		Where("deleted_at IS NULL").
-		Where("enabled = ?", true).
 		Where("expires_at IS NOT NULL").
 		Where("expires_at <= ?", s.currentTime()).
+		Where("last_status != ?", TaskStatusExpired).
 		Scan(ctx); err != nil {
 		return 0, errs.Wrap("error.scheduled_task_list_failed", err)
 	}
 	for i := range models {
-		if _, err := s.disableScheduledTask(ctx, db, models[i].ID); err != nil {
+		if _, err := s.markTaskExpired(ctx, db, models[i].ID); err != nil {
 			return 0, err
 		}
 	}
 	return len(models), nil
 }
 
-func (s *ScheduledTasksService) disableScheduledTask(ctx context.Context, db *bun.DB, taskID int64) (bool, error) {
+// markTaskExpired stores the terminal expired status and clears scheduling metadata.
+func (s *ScheduledTasksService) markTaskExpired(ctx context.Context, db *bun.DB, taskID int64) (bool, error) {
 	res, err := db.NewUpdate().
 		Model((*scheduledTaskModel)(nil)).
-		Set("enabled = ?", false).
+		Set("last_status = ?", TaskStatusExpired).
 		Set("next_run_at = NULL").
 		Where("id = ?", taskID).
 		Where("deleted_at IS NULL").
-		Where("enabled = ?", true).
+		Where("last_status != ?", TaskStatusExpired).
 		Exec(ctx)
 	if err != nil {
 		return false, errs.Wrap("error.scheduled_task_update_failed", err)
@@ -1068,6 +1100,22 @@ func (s *ScheduledTasksService) disableScheduledTask(ctx context.Context, db *bu
 		return true, nil
 	}
 	return false, nil
+}
+
+func (s *ScheduledTasksService) markTaskExpiredIfNeeded(ctx context.Context, db *bun.DB, model *scheduledTaskModel) error {
+	if model == nil || !s.isTaskExpired(model.ExpiresAt) || model.LastStatus == TaskStatusExpired {
+		return nil
+	}
+
+	updated, err := s.markTaskExpired(ctx, db, model.ID)
+	if err != nil {
+		return err
+	}
+	if updated {
+		model.LastStatus = TaskStatusExpired
+		model.NextRunAt = nil
+	}
+	return nil
 }
 
 func (s *ScheduledTasksService) createRun(ctx context.Context, task scheduledTaskModel, triggerType string) (*scheduledTaskRunModel, error) {

@@ -1616,11 +1616,23 @@ export default {
       },
       detailTitle: "ऑपरेशन लॉग विवरण",
       empty: "अभी तक कोई ऑपरेशन लॉग नहीं है",
+      fields: {
+        agent: "सहायक",
+        name: "नाम",
+        notificationChannels: "सूचना चैनल",
+        prompt: "प्रॉम्प्ट",
+        scheduleTime: "निष्पादन समय",
+        status: "स्थिति",
+      },
       sources: {
         ai: "AI सहायक",
         manual: "मैनुअल",
       },
       title: "ऑपरेशन लॉग",
+      status: {
+        enabled: "सक्षम",
+        disabled: "अक्षम",
+      },
       types: {
         create: "कार्य बनाएँ",
         delete: "कार्य हटाएँ",

@@ -13,6 +13,10 @@ import type { Agent, ScheduledTask } from '../types'
 import { buildTaskTableDisplay } from './taskTableDisplay'
 import { describeSchedule, formatDateOnly, formatTaskTime } from '../utils'
 
+const TASK_DISPLAY_STATUS_EXPIRED = 'expired'
+const TASK_DISPLAY_STATUS_RUNNING = 'running'
+const TASK_DISPLAY_STATUS_PAUSED = 'paused'
+
 const props = defineProps<{
   tasks: ScheduledTask[]
   agents: Agent[]
@@ -30,13 +34,17 @@ const emit = defineEmits<{
 }>()
 
 function displayTaskStatus(task: ScheduledTask) {
-  return task.enabled ? 'running' : 'paused'
+  if (task.last_status === TASK_DISPLAY_STATUS_EXPIRED) {
+    return TASK_DISPLAY_STATUS_EXPIRED
+  }
+  return task.enabled ? TASK_DISPLAY_STATUS_RUNNING : TASK_DISPLAY_STATUS_PAUSED
 }
 
 function displayTaskStatusLabel(task: ScheduledTask) {
   const status = displayTaskStatus(task)
-  if (status === 'paused') return t('scheduledTasks.disabled')
-  if (status === 'running') return t('scheduledTasks.statusRunning')
+  if (status === TASK_DISPLAY_STATUS_EXPIRED) return t('scheduledTasks.statusExpired')
+  if (status === TASK_DISPLAY_STATUS_PAUSED) return t('scheduledTasks.disabled')
+  if (status === TASK_DISPLAY_STATUS_RUNNING) return t('scheduledTasks.statusRunning')
   return t('scheduledTasks.statusPending')
 }
 
@@ -53,6 +61,7 @@ function lastRunIconClass(task: ScheduledTask) {
 }
 
 function statusTextClass(task: ScheduledTask) {
+  if (task.last_status === TASK_DISPLAY_STATUS_EXPIRED) return 'text-[#d97706]'
   return task.enabled ? 'text-[#404040]' : 'text-[#737373]'
 }
 </script>

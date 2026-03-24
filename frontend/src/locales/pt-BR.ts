@@ -1597,11 +1597,23 @@ export default {
       },
       detailTitle: "Detalhes do registro de operações",
       empty: "Ainda não há registros de operações",
+      fields: {
+        agent: "Assistente",
+        name: "Nome",
+        notificationChannels: "Canais de notificação",
+        prompt: "Prompt",
+        scheduleTime: "Horário de execução",
+        status: "Status",
+      },
       sources: {
         ai: "Assistente de IA",
         manual: "Manual",
       },
       title: "Registro de operações",
+      status: {
+        enabled: "Ativado",
+        disabled: "Desativado",
+      },
       types: {
         create: "Criar tarefa",
         delete: "Excluir tarefa",

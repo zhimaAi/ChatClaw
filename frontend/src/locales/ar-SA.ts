@@ -1599,11 +1599,23 @@ export default {
       },
       detailTitle: "تفاصيل سجل العمليات",
       empty: "لا توجد سجلات عمليات بعد",
+      fields: {
+        agent: "المساعد",
+        name: "الاسم",
+        notificationChannels: "قنوات الإشعارات",
+        prompt: "الموجّه",
+        scheduleTime: "وقت التنفيذ",
+        status: "الحالة",
+      },
       sources: {
         ai: "مساعد الذكاء الاصطناعي",
         manual: "يدوي",
       },
       title: "سجل العمليات",
+      status: {
+        enabled: "مفعل",
+        disabled: "معطل",
+      },
       types: {
         create: "إنشاء مهمة",
         delete: "حذف المهمة",

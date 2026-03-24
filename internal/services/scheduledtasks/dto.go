@@ -16,6 +16,7 @@ const (
 	TaskStatusRunning = "running"
 	TaskStatusSuccess = "success"
 	TaskStatusFailed  = "failed"
+	TaskStatusExpired = "expired"
 
 	RunTriggerSchedule = "schedule"
 	RunTriggerManual   = "manual"

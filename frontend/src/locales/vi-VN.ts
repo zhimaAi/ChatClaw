@@ -1599,11 +1599,23 @@ export default {
       },
       detailTitle: "Chi tiết nhật ký thao tác",
       empty: "Chưa có nhật ký thao tác",
+      fields: {
+        agent: "Trợ lý",
+        name: "Tên",
+        notificationChannels: "Kênh thông báo",
+        prompt: "Lời nhắc",
+        scheduleTime: "Thời gian thực thi",
+        status: "Trạng thái",
+      },
       sources: {
         ai: "Trợ lý AI",
         manual: "Thủ công",
       },
       title: "Nhật ký thao tác",
+      status: {
+        enabled: "Đã bật",
+        disabled: "Đã tắt",
+      },
       types: {
         create: "Tạo tác vụ",
         delete: "Xóa tác vụ",

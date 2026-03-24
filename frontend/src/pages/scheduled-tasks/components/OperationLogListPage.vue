@@ -12,6 +12,7 @@ import {
 } from '../operationLogTable'
 import {
   createScheduleTextFormatter,
+  getOperationLogFieldLabel,
   getOperationLogOperationSourceLabel,
   getOperationLogOperationTypeLabel,
 } from '../scheduledTaskText'
@@ -23,7 +24,13 @@ const logs = ref<ScheduledTaskOperationLog[]>([])
 const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
 const scheduleFormatter = computed(() => createScheduleTextFormatter(t))
-const displayRows = computed(() => buildOperationLogDisplayRows(logs.value as any, scheduleFormatter.value))
+const displayRows = computed(() =>
+  buildOperationLogDisplayRows(
+    logs.value as any,
+    scheduleFormatter.value,
+    (fieldKey, fieldLabel) => getOperationLogFieldLabel(fieldKey, fieldLabel, t)
+  )
+)
 
 function displayOperationType(value: string) {
   return getOperationLogOperationTypeLabel(value, t)

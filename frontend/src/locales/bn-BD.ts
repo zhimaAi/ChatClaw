@@ -1599,11 +1599,23 @@ export default {
       },
       detailTitle: "অপারেশন লগের বিস্তারিত",
       empty: "এখনও কোনো অপারেশন লগ নেই",
+      fields: {
+        agent: "সহকারী",
+        name: "নাম",
+        notificationChannels: "নোটিফিকেশন চ্যানেল",
+        prompt: "প্রম্পট",
+        scheduleTime: "কার্যকর সময়",
+        status: "স্থিতি",
+      },
       sources: {
         ai: "AI সহকারী",
         manual: "ম্যানুয়াল",
       },
       title: "অপারেশন লগ",
+      status: {
+        enabled: "সক্রিয়",
+        disabled: "নিষ্ক্রিয়",
+      },
       types: {
         create: "টাস্ক তৈরি",
         delete: "টাস্ক মুছুন",

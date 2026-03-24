@@ -5,6 +5,7 @@ import {
   buildOperationLogDisplayRows,
   formatOperationLogFieldValue,
 } from '../operationLogTable.ts'
+import { createScheduleTextFormatter, getOperationLogFieldLabel } from '../scheduledTaskText.ts'
 
 test('formatOperationLogFieldValue supports injected localized schedule formatter', () => {
   const result = formatOperationLogFieldValue(
@@ -38,6 +39,43 @@ test('formatOperationLogFieldValue formats weekly custom schedule JSON', () => {
   )
 
   assert.equal(result, '每周一 周三 周五 09:00')
+})
+
+test('formatOperationLogFieldValue only localizes notification channel platform', () => {
+  const zhFormatter = createScheduleTextFormatter((key) => {
+    const messages = {
+      'channels.platforms.feishu': '飞书',
+    }
+    return messages[key] ?? key
+  })
+  const enFormatter = createScheduleTextFormatter((key) => {
+    const messages = {
+      'channels.platforms.feishu': 'Feishu',
+    }
+    return messages[key] ?? key
+  })
+
+  assert.equal(
+    formatOperationLogFieldValue('notification_channels', 'feishu: 按需', zhFormatter),
+    '飞书: 按需'
+  )
+  assert.equal(
+    formatOperationLogFieldValue('notification_channels', 'feishu: 按需', enFormatter),
+    'Feishu: 按需'
+  )
+})
+
+test('formatOperationLogFieldValue localizes status values from persisted chinese labels', () => {
+  const enFormatter = createScheduleTextFormatter((key) => {
+    const messages = {
+      'scheduledTasks.operationLog.status.enabled': 'Enabled',
+      'scheduledTasks.operationLog.status.disabled': 'Disabled',
+    }
+    return messages[key] ?? key
+  })
+
+  assert.equal(formatOperationLogFieldValue('status', '启用', enFormatter), 'Enabled')
+  assert.equal(formatOperationLogFieldValue('status', '停用', enFormatter), 'Disabled')
 })
 
 test('buildOperationLogDisplayRows expands one log into one row per changed field', () => {
@@ -74,4 +112,49 @@ test('buildOperationLogDisplayRows expands one log into one row per changed fiel
   assert.equal(rows[1].afterValue, '每天 10:30')
   assert.equal(rows[0].showSharedColumns, true)
   assert.equal(rows[1].showSharedColumns, false)
+})
+
+test('buildOperationLogDisplayRows localizes changed field labels with field keys', () => {
+  const translate = (key) => {
+    const messages = {
+      'scheduledTasks.operationLog.fields.prompt': 'Prompt',
+      'scheduledTasks.operationLog.fields.scheduleTime': 'Schedule Time',
+    }
+    return messages[key] ?? key
+  }
+
+  const rows = buildOperationLogDisplayRows(
+    [
+      {
+        id: 8,
+        task_name_snapshot: 'Weather',
+        operation_type: 'update',
+        operation_source: 'manual',
+        created_at: '2026-03-24T08:00:00Z',
+        changed_fields: [
+          {
+            field_key: 'prompt',
+            field_label: '提示词',
+            before: 'old prompt',
+            after: 'new prompt',
+          },
+          {
+            field_key: 'schedule_time',
+            field_label: '执行时间',
+            before: '{"hour":9,"minute":0}',
+            after: '{"hour":10,"minute":30}',
+          },
+        ],
+      },
+    ],
+    createScheduleTextFormatter(translate),
+    (fieldKey, fieldLabel) => getOperationLogFieldLabel(fieldKey, fieldLabel, translate)
+  )
+
+  assert.equal(rows[0].fieldLabel, 'Prompt')
+  assert.equal(rows[1].fieldLabel, 'Schedule Time')
+})
+
+test('getOperationLogFieldLabel falls back to persisted label for unknown fields', () => {
+  assert.equal(getOperationLogFieldLabel('custom_field', '自定义字段'), '自定义字段')
 })

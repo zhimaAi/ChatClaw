@@ -1788,11 +1788,23 @@ export default {
       },
       detailTitle: "작업 기록 상세",
       empty: "작업 기록이 없습니다",
+      fields: {
+        agent: "도우미",
+        name: "이름",
+        notificationChannels: "알림 채널",
+        prompt: "프롬프트",
+        scheduleTime: "실행 시간",
+        status: "상태",
+      },
       sources: {
         ai: "AI 어시스턴트",
         manual: "수동",
       },
       title: "작업 기록",
+      status: {
+        enabled: "활성화",
+        disabled: "비활성화",
+      },
       types: {
         create: "작업 생성",
         delete: "작업 삭제",

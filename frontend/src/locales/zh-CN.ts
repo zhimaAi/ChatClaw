@@ -1461,6 +1461,7 @@ export default {
     statusFailed: '失败',
     statusSuccess: '成功',
     statusPending: '待运行',
+    statusExpired: '已过期',
     expiredCannotEnable: '已过期，不能再开启',
     runTriggerSchedule: '定时',
     runTriggerManual: '手动',
@@ -1532,6 +1533,21 @@ export default {
         ai: 'AI助手',
         manual: '手动',
       },
+      notification: {
+        onDemand: '按需',
+      },
+      status: {
+        enabled: '启用',
+        disabled: '停用',
+      },
+      fields: {
+        status: '状态',
+        name: '名称',
+        prompt: '提示词',
+        agent: '关联助手',
+        notificationChannels: '通知渠道',
+        scheduleTime: '执行时间',
+      },
     },
     notification: {
       label: '通知',
@@ -1591,7 +1607,7 @@ export default {
       thinking: '思考模式',
       enabled: '启用任务',
       expiresAt: '到期时间',
-      expiredHint: '该任务已过期，目前保持关闭状态。如需再次启用，请将到期时间修改到未来。',
+      expiredHint: '该任务已过期，不会再执行。如需恢复执行，请将到期时间修改到未来。',
       scheduleType: '调度方式',
       schedulePreset: '快捷设置',
       scheduleCustom: '自定义时间',

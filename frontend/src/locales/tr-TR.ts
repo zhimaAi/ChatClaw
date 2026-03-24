@@ -1597,11 +1597,23 @@ export default {
       },
       detailTitle: "İşlem kaydı ayrıntıları",
       empty: "Henüz işlem kaydı yok",
+      fields: {
+        agent: "Yardımcı",
+        name: "Ad",
+        notificationChannels: "Bildirim kanalları",
+        prompt: "İstem",
+        scheduleTime: "Çalışma zamanı",
+        status: "Durum",
+      },
       sources: {
         ai: "Yapay zeka asistanı",
         manual: "Manuel",
       },
       title: "İşlem kaydı",
+      status: {
+        enabled: "Etkin",
+        disabled: "Devre dışı",
+      },
       types: {
         create: "Görev oluştur",
         delete: "Görevi sil",

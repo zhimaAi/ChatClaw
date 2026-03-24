@@ -9,13 +9,13 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func TestCreateScheduledTaskWritesManualOperationLog(t *testing.T) {
+func TestCreateScheduledTaskDoesNotWriteOperationLog(t *testing.T) {
 	db := newScheduledTasksTestDB(t)
 	insertScheduledTasksAgent(t, db, 7)
 
 	svc := NewScheduledTasksServiceForTest(nil, db, nil, nil)
 
-	created, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
+	_, err := svc.CreateScheduledTask(CreateScheduledTaskInput{
 		Name:                   "Morning digest",
 		Prompt:                 "Send today's digest",
 		AgentID:                7,
@@ -31,30 +31,8 @@ func TestCreateScheduledTaskWritesManualOperationLog(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 operation log, got %d", len(logs))
-	}
-	if logs[0].TaskID != created.ID {
-		t.Fatalf("expected log task id %d, got %d", created.ID, logs[0].TaskID)
-	}
-	if logs[0].OperationType != OperationTypeCreate {
-		t.Fatalf("expected operation type %q, got %q", OperationTypeCreate, logs[0].OperationType)
-	}
-	if logs[0].OperationSource != OperationSourceManual {
-		t.Fatalf("expected operation source %q, got %q", OperationSourceManual, logs[0].OperationSource)
-	}
-
-	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
-	if len(changed) == 0 {
-		t.Fatal("expected create log to include changed fields")
-	}
-
-	snapshot := decodeOperationSnapshot(t, logs[0].TaskSnapshotJSON)
-	if snapshot.Name != "Morning digest" {
-		t.Fatalf("expected snapshot name to be persisted, got %q", snapshot.Name)
-	}
-	if snapshot.ScheduleType != ScheduleTypePreset {
-		t.Fatalf("expected snapshot schedule type %q, got %q", ScheduleTypePreset, snapshot.ScheduleType)
+	if len(logs) != 0 {
+		t.Fatalf("expected no operation log on create, got %d", len(logs))
 	}
 }
 
@@ -103,10 +81,10 @@ func TestUpdateScheduledTaskWritesSingleLogWithMultipleChangedFields(t *testing.
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
-	last := logs[1]
+	last := logs[0]
 	if last.OperationType != OperationTypeUpdate {
 		t.Fatalf("expected operation type %q, got %q", OperationTypeUpdate, last.OperationType)
 	}
@@ -151,11 +129,11 @@ func TestUpdateScheduledTaskWritesExpirationChangedField(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
 
-	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
 	if len(changed) != 1 {
 		t.Fatalf("expected only expiration changed field, got %d", len(changed))
 	}
@@ -196,11 +174,11 @@ func TestSetScheduledTaskEnabledWritesStatusOperationLog(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
 
-	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
 	if len(changed) != 1 {
 		t.Fatalf("expected 1 changed field for enable toggle, got %d", len(changed))
 	}
@@ -231,11 +209,11 @@ func TestDeleteScheduledTaskWritesDeleteOperationLogWithPreDeleteSnapshot(t *tes
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
 
-	last := logs[1]
+	last := logs[0]
 	if last.OperationType != OperationTypeDelete {
 		t.Fatalf("expected operation type %q, got %q", OperationTypeDelete, last.OperationType)
 	}
@@ -265,11 +243,8 @@ func TestCreateScheduledTaskWithAISourceWritesAIOperationLog(t *testing.T) {
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 operation log, got %d", len(logs))
-	}
-	if logs[0].OperationSource != OperationSourceAI {
-		t.Fatalf("expected operation source %q, got %q", OperationSourceAI, logs[0].OperationSource)
+	if len(logs) != 0 {
+		t.Fatalf("expected no operation log on AI create, got %d", len(logs))
 	}
 }
 
@@ -294,16 +269,8 @@ func TestOperationLogDetailReturnsStoredSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledTaskOperationLogs returned error: %v", err)
 	}
-	if len(logs) != 1 {
-		t.Fatalf("expected 1 operation log in service list, got %d", len(logs))
-	}
-
-	detail, err := svc.GetScheduledTaskOperationLogDetail(logs[0].ID)
-	if err != nil {
-		t.Fatalf("GetScheduledTaskOperationLogDetail returned error: %v", err)
-	}
-	if detail.TaskSnapshot.Name != "Morning digest" {
-		t.Fatalf("expected detail snapshot name to be persisted, got %q", detail.TaskSnapshot.Name)
+	if len(logs) != 0 {
+		t.Fatalf("expected no operation log in service list after create, got %d", len(logs))
 	}
 }
 
@@ -332,8 +299,25 @@ func TestOperationLogDetailReturnsAgentAndChannelNamesInSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListScheduledTaskOperationLogs returned error: %v", err)
 	}
+	if len(logs) != 0 {
+		t.Fatalf("expected no operation log in service list after create, got %d", len(logs))
+	}
+
+	updatedName := "Updated digest"
+	updated, err := svc.UpdateScheduledTask(created.ID, UpdateScheduledTaskInput{Name: &updatedName})
+	if err != nil {
+		t.Fatalf("UpdateScheduledTask returned error: %v", err)
+	}
+	if updated.Name != updatedName {
+		t.Fatalf("expected updated name %q, got %q", updatedName, updated.Name)
+	}
+
+	logs, err = svc.ListScheduledTaskOperationLogs(created.ID, 1, 20)
+	if err != nil {
+		t.Fatalf("ListScheduledTaskOperationLogs returned error after update: %v", err)
+	}
 	if len(logs) != 1 {
-		t.Fatalf("expected 1 operation log in service list, got %d", len(logs))
+		t.Fatalf("expected 1 operation log after update, got %d", len(logs))
 	}
 
 	detail, err := svc.GetScheduledTaskOperationLogDetail(logs[0].ID)
@@ -378,11 +362,11 @@ func TestUpdateScheduledTaskOperationLogPrefersAgentNamesInChangedFields(t *test
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
 
-	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
 	var agentField *ScheduledTaskOperationChangedField
 	for i := range changed {
 		if changed[i].FieldKey == "agent" {
@@ -431,11 +415,11 @@ func TestUpdateScheduledTaskOperationLogPrefersChannelNamesAndFallsBackToID(t *t
 	}
 
 	logs := readScheduledTaskOperationLogs(t, db)
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 operation logs, got %d", len(logs))
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 operation log, got %d", len(logs))
 	}
 
-	changed := decodeChangedFields(t, logs[1].ChangedFieldsJSON)
+	changed := decodeChangedFields(t, logs[0].ChangedFieldsJSON)
 	var channelField *ScheduledTaskOperationChangedField
 	for i := range changed {
 		if changed[i].FieldKey == "notification_channels" {

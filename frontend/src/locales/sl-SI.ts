@@ -1599,11 +1599,23 @@ export default {
       },
       detailTitle: "Podrobnosti dnevnika operacij",
       empty: "Dnevnik operacij je za zdaj prazen",
+      fields: {
+        agent: "Pomočnik",
+        name: "Ime",
+        notificationChannels: "Kanali obvestil",
+        prompt: "Poziv",
+        scheduleTime: "Čas izvajanja",
+        status: "Stanje",
+      },
       sources: {
         ai: "Pomočnik AI",
         manual: "Ročno",
       },
       title: "Dnevnik operacij",
+      status: {
+        enabled: "Omogočeno",
+        disabled: "Onemogočeno",
+      },
       types: {
         create: "Ustvari opravilo",
         delete: "Izbriši opravilo",

@@ -1597,11 +1597,23 @@ export default {
       },
       detailTitle: "Details zum Vorgangsprotokoll",
       empty: "Noch keine Vorgangsprotokolle",
+      fields: {
+        agent: "Assistent",
+        name: "Name",
+        notificationChannels: "Benachrichtigungskanäle",
+        prompt: "Eingabeaufforderung",
+        scheduleTime: "Ausführungszeit",
+        status: "Status",
+      },
       sources: {
         ai: "KI-Assistent",
         manual: "Manuell",
       },
       title: "Vorgangsprotokoll",
+      status: {
+        enabled: "Aktiviert",
+        disabled: "Deaktiviert",
+      },
       types: {
         create: "Aufgabe erstellen",
         delete: "Aufgabe löschen",

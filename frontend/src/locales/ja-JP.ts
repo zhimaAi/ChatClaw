@@ -1597,11 +1597,23 @@ export default {
       },
       detailTitle: "操作履歴の詳細",
       empty: "操作履歴はまだありません",
+      fields: {
+        agent: "アシスタント",
+        name: "名前",
+        notificationChannels: "通知チャンネル",
+        prompt: "プロンプト",
+        scheduleTime: "実行時間",
+        status: "状態",
+      },
       sources: {
         ai: "AIアシスタント",
         manual: "手動",
       },
       title: "操作履歴",
+      status: {
+        enabled: "有効",
+        disabled: "無効",
+      },
       types: {
         create: "タスクを作成",
         delete: "タスクを削除",

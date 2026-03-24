@@ -8,9 +8,12 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { ScheduledTaskOperationLog, ScheduledTaskOperationLogDetail } from '../types'
 import { formatTaskTime } from '../utils'
 import {
+  createScheduleTextFormatter,
+  getOperationLogFieldLabel,
   getOperationLogOperationSourceLabel,
   getOperationLogOperationTypeLabel,
 } from '../scheduledTaskText'
+import { formatOperationLogFieldValue } from '../operationLogTable'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
 
 const props = defineProps<{
@@ -26,6 +29,7 @@ const loading = ref(false)
 const logs = ref<ScheduledTaskOperationLog[]>([])
 const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
+const scheduleFormatter = createScheduleTextFormatter(t)
 
 function displayOperationType(value: string) {
   return getOperationLogOperationTypeLabel(value, t)
@@ -115,21 +119,21 @@ watch(
               <td class="px-4 py-4">
                 <div class="space-y-2">
                   <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}`">
-                    {{ item.field_label || '-' }}
+                    {{ getOperationLogFieldLabel(item.field_key, item.field_label, t) }}
                   </div>
                 </div>
               </td>
               <td class="px-4 py-4">
                 <div class="space-y-2">
                   <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}-before`">
-                    {{ item.before || '--' }}
+                    {{ formatOperationLogFieldValue(item.field_key, item.before, scheduleFormatter) }}
                   </div>
                 </div>
               </td>
               <td class="px-4 py-4">
                 <div class="space-y-2">
                   <div v-for="item in log.changed_fields" :key="`${log.id}-${item.field_key}-after`">
-                    {{ item.after || '--' }}
+                    {{ formatOperationLogFieldValue(item.field_key, item.after, scheduleFormatter) }}
                   </div>
                 </div>
               </td>

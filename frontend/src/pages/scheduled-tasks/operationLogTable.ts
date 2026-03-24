@@ -3,6 +3,9 @@ export const OPERATION_LOG_EMPTY_FIELD_VALUE = '-'
 export const OPERATION_LOG_EMPTY_CHANGE_VALUE = '--'
 
 const SCHEDULE_FIELD_KEY = 'schedule_time'
+const NOTIFICATION_CHANNELS_FIELD_KEY = 'notification_channels'
+const STATUS_FIELD_KEY = 'status'
+const NOTIFICATION_PLATFORM_SEPARATOR = ':'
 
 export interface ScheduleTextFormatter {
   interval: (params: { value: number }) => string
@@ -10,6 +13,9 @@ export interface ScheduleTextFormatter {
   weekly: (params: { labels: string; time: string }) => string
   daily: (params: { time: string }) => string
   weekdayLabel: (value: number) => string
+  notificationPlatformLabel: (value: string) => string
+  operationStatusEnabledLabel: () => string
+  operationStatusDisabledLabel: () => string
 }
 
 export interface OperationLogChangedFieldLike {
@@ -41,6 +47,11 @@ export interface OperationLogDisplayRow {
   showSharedColumns: boolean
 }
 
+export type OperationLogFieldLabelResolver = (
+  fieldKey: string,
+  fieldLabel: string
+) => string
+
 interface ParsedCustomScheduleValue {
   hour?: number
   minute?: number
@@ -49,15 +60,28 @@ interface ParsedCustomScheduleValue {
   day_of_month?: number
 }
 
-const FALLBACK_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const FALLBACK_WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
 function createDefaultScheduleTextFormatter(): ScheduleTextFormatter {
   return {
-    interval: ({ value }) => `Every ${value} minutes`,
-    monthly: ({ day, time }) => `Day ${day} ${time}`,
-    weekly: ({ labels, time }) => `Weekly ${labels} ${time}`,
-    daily: ({ time }) => `Daily ${time}`,
+    interval: ({ value }) => `每隔 ${value} 分钟`,
+    monthly: ({ day, time }) => `每月 ${day} 号 ${time}`,
+    weekly: ({ labels, time }) => `每${labels} ${time}`,
+    daily: ({ time }) => `每天 ${time}`,
     weekdayLabel: (value) => FALLBACK_WEEKDAY_LABELS[value] || String(value),
+    notificationPlatformLabel: (value) => {
+      const labels: Record<string, string> = {
+        dingtalk: '钉钉',
+        feishu: '飞书',
+        lark: '飞书',
+        qq: 'QQ',
+        wechat: '微信',
+        wecom: '企微',
+      }
+      return labels[value.trim().toLowerCase()] || value
+    },
+    operationStatusEnabledLabel: () => '启用',
+    operationStatusDisabledLabel: () => '停用',
   }
 }
 
@@ -103,6 +127,40 @@ function formatCustomScheduleValue(
   return value
 }
 
+function formatNotificationChannelsValue(
+  value: string,
+  formatter: ScheduleTextFormatter = createDefaultScheduleTextFormatter()
+) {
+  const trimmedValue = value.trim()
+  const separatorIndex = trimmedValue.indexOf(NOTIFICATION_PLATFORM_SEPARATOR)
+  if (separatorIndex < 0) {
+    return trimmedValue
+  }
+
+  const rawPlatform = trimmedValue.slice(0, separatorIndex).trim()
+  const rawChannelValue = trimmedValue.slice(separatorIndex + 1).trim()
+  const localizedPlatform = formatter.notificationPlatformLabel(rawPlatform)
+
+  return `${localizedPlatform}${NOTIFICATION_PLATFORM_SEPARATOR} ${rawChannelValue}`
+}
+
+function formatOperationStatusValue(
+  value: string,
+  formatter: Pick<
+    ScheduleTextFormatter,
+    'operationStatusEnabledLabel' | 'operationStatusDisabledLabel'
+  >
+) {
+  const normalizedValue = value.trim().toLowerCase()
+  if (normalizedValue === '启用' || normalizedValue === 'enabled') {
+    return formatter.operationStatusEnabledLabel()
+  }
+  if (normalizedValue === '停用' || normalizedValue === 'disabled') {
+    return formatter.operationStatusDisabledLabel()
+  }
+  return value
+}
+
 /**
  * Format changed-field values for the operation-log list without mutating detail data.
  */
@@ -119,6 +177,14 @@ export function formatOperationLogFieldValue(
     return formatCustomScheduleValue(value, formatter)
   }
 
+  if (fieldKey === NOTIFICATION_CHANNELS_FIELD_KEY) {
+    return formatNotificationChannelsValue(value, formatter)
+  }
+
+  if (fieldKey === STATUS_FIELD_KEY) {
+    return formatter ? formatOperationStatusValue(value, formatter) : value
+  }
+
   return value
 }
 
@@ -127,7 +193,8 @@ export function formatOperationLogFieldValue(
  */
 export function buildOperationLogDisplayRows(
   logs: OperationLogLike[],
-  formatter: ScheduleTextFormatter = createDefaultScheduleTextFormatter()
+  formatter: ScheduleTextFormatter = createDefaultScheduleTextFormatter(),
+  fieldLabelResolver?: OperationLogFieldLabelResolver
 ): OperationLogDisplayRow[] {
   return logs.flatMap((log) => {
     const changedFields = Array.isArray(log.changed_fields) ? log.changed_fields : []
@@ -149,7 +216,9 @@ export function buildOperationLogDisplayRows(
       operationType: index === 0 ? log.operation_type : '',
       operationSource: index === 0 ? log.operation_source : '',
       createdAt: index === 0 ? log.created_at : '',
-      fieldLabel: field.field_label || OPERATION_LOG_EMPTY_FIELD_VALUE,
+      fieldLabel: fieldLabelResolver
+        ? fieldLabelResolver(field.field_key, field.field_label)
+        : field.field_label || OPERATION_LOG_EMPTY_FIELD_VALUE,
       beforeValue: formatOperationLogFieldValue(field.field_key, field.before, formatter),
       afterValue: formatOperationLogFieldValue(field.field_key, field.after, formatter),
       logId: log.id,

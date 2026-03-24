@@ -1601,6 +1601,14 @@ export default {
       },
       detailTitle: "操作記錄詳情",
       empty: "暫無操作記錄",
+      fields: {
+        agent: "關聯助手",
+        name: "名稱",
+        notificationChannels: "通知頻道",
+        prompt: "提示詞",
+        scheduleTime: "執行時間",
+        status: "狀態",
+      },
       sources: {
         ai: "AI助手",
         manual: "手動",
@@ -1612,6 +1620,10 @@ export default {
         update: "修改任務",
       },
       viewDetail: "查看詳情",
+      status: {
+        enabled: "啟用",
+        disabled: "停用",
+      },
     },
   },
   floatingball: {
