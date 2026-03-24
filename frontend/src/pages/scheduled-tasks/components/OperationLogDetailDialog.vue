@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { ScheduledTaskOperationLogDetail } from '../types'
-import { formatTaskTime, operationSnapshotToForm } from '../utils'
+import { operationSnapshotToForm } from '../utils'
 import TaskFormContent from './TaskFormContent.vue'
 
 const props = defineProps<{
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
+const { t } = useI18n()
 const snapshot = computed(() => props.detail?.task_snapshot ?? null)
 const readonlyForm = computed(() =>
   snapshot.value ? operationSnapshotToForm(snapshot.value) : null
@@ -30,16 +32,6 @@ const readonlyChannelLabels = computed(() => {
     .filter(Boolean)
 })
 
-function displayOperationType(value?: string) {
-  if (value === 'create') return '创建任务'
-  if (value === 'delete') return '删除任务'
-  return '修改任务'
-}
-
-function displayOperationSource(value?: string) {
-  if (value === 'ai') return 'AI助手'
-  return '手动'
-}
 </script>
 
 <template>
@@ -48,7 +40,7 @@ function displayOperationSource(value?: string) {
       class="flex max-h-[90vh] flex-col overflow-hidden p-0 sm:!w-auto sm:min-w-[820px] sm:!max-w-[820px]"
     >
       <DialogHeader class="shrink-0 border-b border-[#eef2f6] px-7 py-6">
-        <DialogTitle>操作记录详情</DialogTitle>
+        <DialogTitle>{{ t('scheduledTasks.operationLog.detailTitle') }}</DialogTitle>
       </DialogHeader>
 
       <div v-if="detail && snapshot && readonlyForm" class="flex-1 overflow-y-auto px-7">

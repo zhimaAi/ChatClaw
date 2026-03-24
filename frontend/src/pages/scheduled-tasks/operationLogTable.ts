@@ -2,18 +2,15 @@
 export const OPERATION_LOG_EMPTY_FIELD_VALUE = '-'
 export const OPERATION_LOG_EMPTY_CHANGE_VALUE = '--'
 
-// Weekday labels are fixed here because the operation-log page currently uses Chinese copy.
-const WEEKDAY_LABELS: Record<number, string> = {
-  0: '周日',
-  1: '周一',
-  2: '周二',
-  3: '周三',
-  4: '周四',
-  5: '周五',
-  6: '周六',
-}
-
 const SCHEDULE_FIELD_KEY = 'schedule_time'
+
+export interface ScheduleTextFormatter {
+  interval: (params: { value: number }) => string
+  monthly: (params: { day: number; time: string }) => string
+  weekly: (params: { labels: string; time: string }) => string
+  daily: (params: { time: string }) => string
+  weekdayLabel: (value: number) => string
+}
 
 export interface OperationLogChangedFieldLike {
   field_key: string
@@ -52,18 +49,33 @@ interface ParsedCustomScheduleValue {
   day_of_month?: number
 }
 
+const FALLBACK_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function createDefaultScheduleTextFormatter(): ScheduleTextFormatter {
+  return {
+    interval: ({ value }) => `Every ${value} minutes`,
+    monthly: ({ day, time }) => `Day ${day} ${time}`,
+    weekly: ({ labels, time }) => `Weekly ${labels} ${time}`,
+    daily: ({ time }) => `Daily ${time}`,
+    weekdayLabel: (value) => FALLBACK_WEEKDAY_LABELS[value] || String(value),
+  }
+}
+
 function formatHourMinute(hour: number, minute: number) {
   const normalizedHour = String(hour).padStart(2, '0')
   const normalizedMinute = String(minute).padStart(2, '0')
   return `${normalizedHour}:${normalizedMinute}`
 }
 
-function formatCustomScheduleValue(value: string) {
+function formatCustomScheduleValue(
+  value: string,
+  formatter: ScheduleTextFormatter = createDefaultScheduleTextFormatter()
+) {
   try {
     const parsed = JSON.parse(value) as ParsedCustomScheduleValue
 
     if (parsed.interval_minutes) {
-      return `每 ${parsed.interval_minutes} 分钟`
+      return formatter.interval({ value: parsed.interval_minutes })
     }
 
     const hour = parsed.hour ?? 0
@@ -71,18 +83,18 @@ function formatCustomScheduleValue(value: string) {
     const timeLabel = formatHourMinute(hour, minute)
 
     if (parsed.day_of_month) {
-      return `每月 ${parsed.day_of_month} 号 ${timeLabel}`
+      return formatter.monthly({ day: parsed.day_of_month, time: timeLabel })
     }
 
     if (Array.isArray(parsed.weekdays) && parsed.weekdays.length > 0) {
       const weekdayLabels = parsed.weekdays
-        .map((weekday) => WEEKDAY_LABELS[weekday] || String(weekday))
+        .map((weekday) => formatter.weekdayLabel(weekday))
         .join(' ')
-      return `每${weekdayLabels} ${timeLabel}`
+      return formatter.weekly({ labels: weekdayLabels, time: timeLabel })
     }
 
     if (typeof parsed.hour === 'number' || typeof parsed.minute === 'number') {
-      return `每天 ${timeLabel}`
+      return formatter.daily({ time: timeLabel })
     }
   } catch {
     // Keep the original value when it is not a custom schedule JSON string.
@@ -94,13 +106,17 @@ function formatCustomScheduleValue(value: string) {
 /**
  * Format changed-field values for the operation-log list without mutating detail data.
  */
-export function formatOperationLogFieldValue(fieldKey: string, value: string) {
+export function formatOperationLogFieldValue(
+  fieldKey: string,
+  value: string,
+  formatter?: ScheduleTextFormatter
+) {
   if (!value) {
     return OPERATION_LOG_EMPTY_CHANGE_VALUE
   }
 
   if (fieldKey === SCHEDULE_FIELD_KEY) {
-    return formatCustomScheduleValue(value)
+    return formatCustomScheduleValue(value, formatter)
   }
 
   return value
@@ -109,7 +125,10 @@ export function formatOperationLogFieldValue(fieldKey: string, value: string) {
 /**
  * Expand each operation log into display rows so every changed field stays aligned.
  */
-export function buildOperationLogDisplayRows(logs: OperationLogLike[]): OperationLogDisplayRow[] {
+export function buildOperationLogDisplayRows(
+  logs: OperationLogLike[],
+  formatter: ScheduleTextFormatter = createDefaultScheduleTextFormatter()
+): OperationLogDisplayRow[] {
   return logs.flatMap((log) => {
     const changedFields = Array.isArray(log.changed_fields) ? log.changed_fields : []
     const normalizedFields =
@@ -131,8 +150,8 @@ export function buildOperationLogDisplayRows(logs: OperationLogLike[]): Operatio
       operationSource: index === 0 ? log.operation_source : '',
       createdAt: index === 0 ? log.created_at : '',
       fieldLabel: field.field_label || OPERATION_LOG_EMPTY_FIELD_VALUE,
-      beforeValue: formatOperationLogFieldValue(field.field_key, field.before),
-      afterValue: formatOperationLogFieldValue(field.field_key, field.after),
+      beforeValue: formatOperationLogFieldValue(field.field_key, field.before, formatter),
+      afterValue: formatOperationLogFieldValue(field.field_key, field.after, formatter),
       logId: log.id,
       showSharedColumns: index === 0,
     }))

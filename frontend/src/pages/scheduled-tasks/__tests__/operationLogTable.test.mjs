@@ -6,6 +6,22 @@ import {
   formatOperationLogFieldValue,
 } from '../operationLogTable.ts'
 
+test('formatOperationLogFieldValue supports injected localized schedule formatter', () => {
+  const result = formatOperationLogFieldValue(
+    'schedule_time',
+    '{"hour":9,"minute":0,"day_of_month":4}',
+    {
+      monthly: ({ day, time }) => `Day ${day} ${time}`,
+      weekly: ({ labels, time }) => `Weekly ${labels} ${time}`,
+      daily: ({ time }) => `Daily ${time}`,
+      interval: ({ value }) => `Every ${value} minutes`,
+      weekdayLabel: (value) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][value] ?? String(value),
+    }
+  )
+
+  assert.equal(result, 'Day 4 09:00')
+})
+
 test('formatOperationLogFieldValue formats monthly custom schedule JSON', () => {
   const result = formatOperationLogFieldValue(
     'schedule_time',

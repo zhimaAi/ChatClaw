@@ -27,6 +27,7 @@ import {
   transitionScheduledTasksView,
   type ScheduledTasksPageView,
 } from './scheduledTasksView'
+import { getScheduledTaskCopySuffix } from './scheduledTaskText'
 import type { ScheduledTask, ScheduledTaskFormState } from './types'
 import { buildExpirationDateTime, taskToCopyForm, taskToForm } from './utils'
 
@@ -62,8 +63,7 @@ const summaryLabels = computed(() => ({
   failed: t('scheduledTasks.failed'),
 }))
 
-// Keep the operation-log entry copy stable while the page is not localized yet.
-const OPERATION_LOG_TITLE = '操作记录'
+const operationLogTitle = computed(() => t('scheduledTasks.operationLog.title'))
 
 const hasTasks = computed(() => tasks.value.length > 0)
 const currentView = ref<ScheduledTasksPageView>(SCHEDULED_TASKS_VIEW_TASK_LIST)
@@ -153,7 +153,7 @@ async function handleEdit(task: ScheduledTask) {
 
 function handleCopy(task: ScheduledTask) {
   editingTask.value = null
-  form.value = taskToCopyForm(task)
+  form.value = taskToCopyForm(task, getScheduledTaskCopySuffix(t))
   createDialogOpen.value = true
 }
 
@@ -200,7 +200,6 @@ function backToTaskListPage() {
 
 function handleHistoryDialogOpenChange(value: boolean) {
   // Close the history dialog by clearing the source task explicitly.
-  // 通过显式清空来源任务来关闭历史弹窗，避免模板内联赋值带来的歧义。
   if (!value) {
     historyTask.value = null
   }
@@ -227,7 +226,7 @@ function handleHistoryDialogOpenChange(value: boolean) {
           @click="openOperationLogPage"
         >
           <FileText class="h-4 w-4 shrink-0" />
-          {{ OPERATION_LOG_TITLE }}
+          {{ operationLogTitle }}
         </Button>
         <Button
           class="h-9 gap-1 border-none bg-[#f5f5f5] text-[#171717] shadow-none hover:bg-[#e5e5e5] dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
@@ -255,7 +254,7 @@ function handleHistoryDialogOpenChange(value: boolean) {
         <ChevronLeft class="h-5 w-5" />
       </button>
       <h1 class="ml-3 text-base font-semibold text-[#262626] dark:text-foreground">
-        {{ OPERATION_LOG_TITLE }}
+        {{ operationLogTitle }}
       </h1>
     </div>
 

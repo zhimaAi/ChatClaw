@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -9,41 +10,27 @@ import {
   buildOperationLogDisplayRows,
   OPERATION_LOG_EMPTY_FIELD_VALUE,
 } from '../operationLogTable'
+import {
+  createScheduleTextFormatter,
+  getOperationLogOperationSourceLabel,
+  getOperationLogOperationTypeLabel,
+} from '../scheduledTaskText'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
 
-// Keep the operation-log page copy centralized so the table stays consistent.
-const OPERATION_LOG_LOADING_TEXT = '加载中...'
-const OPERATION_LOG_EMPTY_TEXT = '暂无操作记录'
-const OPERATION_LOG_ACTION_VIEW_DETAIL = '查看详情'
-const OPERATION_LOG_OPERATION_TYPE_CREATE = '创建任务'
-const OPERATION_LOG_OPERATION_TYPE_DELETE = '删除任务'
-const OPERATION_LOG_OPERATION_TYPE_UPDATE = '修改任务'
-const OPERATION_LOG_OPERATION_SOURCE_AI = 'AI助手'
-const OPERATION_LOG_OPERATION_SOURCE_MANUAL = '手动'
-const TABLE_COLUMN_TASK = '任务'
-const TABLE_COLUMN_OPERATION_TYPE = '操作类型'
-const TABLE_COLUMN_OPERATION_SOURCE = '操作方式'
-const TABLE_COLUMN_CHANGED_FIELD = '操作项'
-const TABLE_COLUMN_BEFORE = '修改前'
-const TABLE_COLUMN_AFTER = '修改后'
-const TABLE_COLUMN_TIME = '操作时间'
-const TABLE_COLUMN_ACTION = '操作'
-
+const { t } = useI18n()
 const loading = ref(false)
 const logs = ref<ScheduledTaskOperationLog[]>([])
 const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
-const displayRows = computed(() => buildOperationLogDisplayRows(logs.value as any))
+const scheduleFormatter = computed(() => createScheduleTextFormatter(t))
+const displayRows = computed(() => buildOperationLogDisplayRows(logs.value as any, scheduleFormatter.value))
 
 function displayOperationType(value: string) {
-  if (value === 'create') return OPERATION_LOG_OPERATION_TYPE_CREATE
-  if (value === 'delete') return OPERATION_LOG_OPERATION_TYPE_DELETE
-  return OPERATION_LOG_OPERATION_TYPE_UPDATE
+  return getOperationLogOperationTypeLabel(value, t)
 }
 
 function displayOperationSource(value: string) {
-  if (value === 'ai') return OPERATION_LOG_OPERATION_SOURCE_AI
-  return OPERATION_LOG_OPERATION_SOURCE_MANUAL
+  return getOperationLogOperationSourceLabel(value, t)
 }
 
 async function loadLogs() {
@@ -90,14 +77,14 @@ function handleViewDetail(logId: number) {
         v-if="loading"
         class="rounded-xl bg-[#fafafa] px-4 py-10 text-center text-sm text-[#737373]"
       >
-        {{ OPERATION_LOG_LOADING_TEXT }}
+        {{ t('common.loading') }}
       </div>
 
       <div
         v-else-if="logs.length === 0"
         class="rounded-xl bg-[#fafafa] px-4 py-10 text-center text-sm text-[#737373]"
       >
-        {{ OPERATION_LOG_EMPTY_TEXT }}
+        {{ t('scheduledTasks.operationLog.empty') }}
       </div>
 
       <table v-else class="min-w-full table-fixed border-collapse text-sm">
@@ -113,14 +100,14 @@ function handleViewDetail(logId: number) {
         </colgroup>
         <thead>
           <tr class="border-b border-[#e5e7eb] text-left text-[#171717]">
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_TASK }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_OPERATION_TYPE }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_OPERATION_SOURCE }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_CHANGED_FIELD }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_BEFORE }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_AFTER }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_TIME }}</th>
-            <th class="px-4 py-3 font-semibold">{{ TABLE_COLUMN_ACTION }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.task') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationType') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationSource') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.changedField') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.before') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.after') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.time') }}</th>
+            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.action') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -175,7 +162,7 @@ function handleViewDetail(logId: number) {
                 class="truncate whitespace-nowrap text-[#2563eb] transition-colors hover:text-[#1d4ed8]"
                 @click="handleViewDetail(row.logId)"
               >
-                {{ OPERATION_LOG_ACTION_VIEW_DETAIL }}
+                {{ t('scheduledTasks.operationLog.viewDetail') }}
               </button>
             </td>
           </tr>

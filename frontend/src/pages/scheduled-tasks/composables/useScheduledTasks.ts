@@ -117,7 +117,7 @@ export function useScheduledTasks() {
       const translate = (i18n?.global as any)?.t
       const message = translate
         ? translate('scheduledTasks.expiredCannotEnable')
-        : '已过期，不能再开启'
+        : 'scheduledTasks.expiredCannotEnable'
       toast.error(String(message))
       return
     }

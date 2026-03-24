@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { ScheduledTaskOperationLog, ScheduledTaskOperationLogDetail } from '../types'
 import { formatTaskTime } from '../utils'
+import {
+  getOperationLogOperationSourceLabel,
+  getOperationLogOperationTypeLabel,
+} from '../scheduledTaskText'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
 
 const props = defineProps<{
@@ -16,20 +21,18 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
+const { t } = useI18n()
 const loading = ref(false)
 const logs = ref<ScheduledTaskOperationLog[]>([])
 const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
 
 function displayOperationType(value: string) {
-  if (value === 'create') return '创建任务'
-  if (value === 'delete') return '删除任务'
-  return '修改任务'
+  return getOperationLogOperationTypeLabel(value, t)
 }
 
 function displayOperationSource(value: string) {
-  if (value === 'ai') return 'AI助手'
-  return '手动'
+  return getOperationLogOperationSourceLabel(value, t)
 }
 
 async function loadLogs() {
@@ -69,7 +72,7 @@ watch(
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1080px] sm:!max-w-[1180px]">
       <DialogHeader>
-        <DialogTitle>操作记录</DialogTitle>
+        <DialogTitle>{{ t('scheduledTasks.operationLog.title') }}</DialogTitle>
       </DialogHeader>
 
       <div class="overflow-auto">
@@ -77,27 +80,27 @@ watch(
           v-if="loading"
           class="rounded-xl border border-[#e5e7eb] bg-[#fafafa] px-4 py-10 text-center text-sm text-[#737373]"
         >
-          加载中...
+          {{ t('common.loading') }}
         </div>
 
         <div
           v-else-if="logs.length === 0"
           class="rounded-xl border border-[#e5e7eb] bg-[#fafafa] px-4 py-10 text-center text-sm text-[#737373]"
         >
-          暂无操作记录
+          {{ t('scheduledTasks.operationLog.empty') }}
         </div>
 
         <table v-else class="min-w-full border-collapse text-sm">
           <thead>
             <tr class="border-b border-[#e5e7eb] text-left text-[#171717]">
-              <th class="px-4 py-3 font-semibold">任务</th>
-              <th class="px-4 py-3 font-semibold">操作类型</th>
-              <th class="px-4 py-3 font-semibold">操作方式</th>
-              <th class="px-4 py-3 font-semibold">操作项</th>
-              <th class="px-4 py-3 font-semibold">修改前</th>
-              <th class="px-4 py-3 font-semibold">修改后</th>
-              <th class="px-4 py-3 font-semibold">操作时间</th>
-              <th class="px-4 py-3 font-semibold">操作</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.task') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationType') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationSource') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.changedField') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.before') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.after') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.time') }}</th>
+              <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.action') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -137,7 +140,7 @@ watch(
                   class="text-[#2563eb] transition-colors hover:text-[#1d4ed8]"
                   @click="viewDetail(log)"
                 >
-                  查看详情
+                  {{ t('scheduledTasks.operationLog.viewDetail') }}
                 </button>
               </td>
             </tr>

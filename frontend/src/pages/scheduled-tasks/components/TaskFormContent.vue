@@ -44,20 +44,22 @@ const props = withDefaults(
 const { t } = useI18n()
 
 const scheduleTypeOptions = [
-  { value: 'preset', label: '快捷设置' },
-  { value: 'custom', label: '自定义时间' },
-  { value: 'cron', label: 'Linux Crontab 代码' },
+  { value: 'preset', labelKey: 'scheduledTasks.dialog.scheduleType.preset' },
+  { value: 'custom', labelKey: 'scheduledTasks.dialog.scheduleType.custom' },
+  { value: 'cron', labelKey: 'scheduledTasks.dialog.scheduleType.cron' },
 ] as const
 
 const customModeOptions = [
-  { value: 'interval', label: '每隔' },
-  { value: 'daily', label: '每天执行' },
-  { value: 'weekly', label: '每周执行' },
-  { value: 'monthly', label: '每月执行' },
+  { value: 'interval', labelKey: 'scheduledTasks.dialog.customMode.interval' },
+  { value: 'daily', labelKey: 'scheduledTasks.dialog.customMode.daily' },
+  { value: 'weekly', labelKey: 'scheduledTasks.dialog.customMode.weekly' },
+  { value: 'monthly', labelKey: 'scheduledTasks.dialog.customMode.monthly' },
 ] as const
 
 const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
-const calendarWeekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
+const calendarWeekdayLabels = computed(() =>
+  WEEKDAY_OPTIONS.map((item) => t(item.shortLabelKey))
+)
 
 type CalendarDay = {
   key: string
@@ -93,7 +95,10 @@ function parseDateKey(value: string) {
 }
 
 function formatCalendarTitle(date: Date) {
-  return `${date.getFullYear()}年 ${padDatePart(date.getMonth() + 1)}月`
+  return t('scheduledTasks.form.calendarTitle', {
+    year: date.getFullYear(),
+    month: padDatePart(date.getMonth() + 1),
+  })
 }
 
 function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): CalendarDay[] {
@@ -237,10 +242,10 @@ const formExpired = computed(() => {
 
 const notificationPlatformOptions = computed(() => {
   const labels: Record<string, string> = {
-    feishu: '飞书',
-    dingtalk: '钉钉',
-    wecom: '企微',
-    qq: 'QQ',
+    feishu: t('channels.platforms.feishu'),
+    dingtalk: t('channels.platforms.dingtalk'),
+    wecom: t('channels.platforms.wecom'),
+    qq: t('channels.platforms.qq'),
   }
   const seen = new Set<string>()
   return props.channels
@@ -279,7 +284,7 @@ const selectedNotificationChannels = computed(() => {
 
   return props.form.notificationChannelIds.map((channelId) => ({
     id: channelId,
-    label: `频道 ${channelId}`,
+    label: t('scheduledTasks.notification.channelFallback', { id: channelId }),
   }))
 })
 
@@ -288,8 +293,8 @@ const selectedNotificationChannelValue = computed(() =>
 )
 
 const notificationChannelTriggerLabel = computed(() => {
-  if (!props.form.notificationPlatform) return '请先选择通知类型'
-  if (!selectedNotificationChannels.value.length) return '请选择频道'
+  if (!props.form.notificationPlatform) return t('scheduledTasks.notification.selectTypeFirst')
+  if (!selectedNotificationChannels.value.length) return t('scheduledTasks.notification.selectChannel')
   return ''
 })
 
@@ -413,34 +418,40 @@ useEventListener(window, 'keydown', (event) => {
   <div class="space-y-6 py-6">
     <section class="space-y-5">
       <div class="space-y-2">
-        <label class="block text-[15px] font-semibold text-[#1f2937]">任务名称</label>
+        <label class="block text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.dialog.nameLabel') }}
+        </label>
         <Input
           v-model="form.name"
           :readonly="readonly"
-          placeholder="例如：早间简报"
+          :placeholder="t('scheduledTasks.dialog.namePlaceholder')"
           class="h-11 rounded-xl border-[#dbe3ec] bg-white px-4 text-sm text-[#111827] placeholder:text-[#a0aec0] focus-visible:border-[#2563eb] focus-visible:ring-[#bfdbfe] read-only:bg-[#f8fafc] read-only:text-[#475569]"
         />
       </div>
 
       <div class="space-y-2">
-        <label class="block text-[15px] font-semibold text-[#1f2937]">消息提示词</label>
+        <label class="block text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.dialog.promptLabel') }}
+        </label>
         <textarea
           v-model="form.prompt"
           :readonly="readonly"
           class="min-h-[118px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] read-only:bg-[#f8fafc] read-only:text-[#475569]"
-          placeholder="AI 应该做什么？例如：给我一份今天的新闻和天气摘要"
+          :placeholder="t('scheduledTasks.dialog.promptPlaceholder')"
         />
       </div>
 
       <div class="space-y-2">
-        <label class="block text-[15px] font-semibold text-[#1f2937]">关联 AI 助手</label>
+        <label class="block text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.dialog.agentLabel') }}
+        </label>
         <div class="relative">
           <select
             v-model.number="form.agentId"
             :disabled="readonly"
             class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] disabled:bg-[#f8fafc] disabled:text-[#475569]"
           >
-            <option :value="null">请选择助手</option>
+            <option :value="null">{{ t('scheduledTasks.dialog.selectAgent') }}</option>
             <option v-for="agent in agentOptions" :key="agent.id" :value="agent.id">
               {{ agent.name }}
             </option>
@@ -482,7 +493,7 @@ useEventListener(window, 'keydown', (event) => {
               </div>
               <div class="min-w-0">
                 <p class="truncate font-medium">
-                  {{ expirationDisplayValue || '选择到期日期' }}
+                  {{ expirationDisplayValue || t('scheduledTasks.form.selectExpirationDate') }}
                 </p>
               </div>
             </div>
@@ -522,7 +533,7 @@ useEventListener(window, 'keydown', (event) => {
                       @change="handleExpirationYearChange(($event.target as HTMLSelectElement).value)"
                     >
                       <option v-for="year in expirationYearOptions" :key="year" :value="year">
-                        {{ year }} 年
+                        {{ t('scheduledTasks.form.yearOption', { year }) }}
                       </option>
                     </select>
                     <ChevronDown
@@ -540,7 +551,7 @@ useEventListener(window, 'keydown', (event) => {
                         :key="month"
                         :value="month"
                       >
-                        {{ month }} 月
+                        {{ t('scheduledTasks.form.monthOption', { month }) }}
                       </option>
                     </select>
                     <ChevronDown
@@ -598,14 +609,14 @@ useEventListener(window, 'keydown', (event) => {
                 class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#2563eb] transition-colors hover:bg-[#eff6ff]"
                 @click="selectTodayExpirationDate"
               >
-                今天
+                {{ t('scheduledTasks.form.today') }}
               </button>
               <button
                 type="button"
                 class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#64748b] transition-colors hover:bg-[#f1f5f9]"
                 @click="clearExpirationDate"
               >
-                清空
+                {{ t('scheduledTasks.form.clear') }}
               </button>
             </div>
           </div>
@@ -614,8 +625,10 @@ useEventListener(window, 'keydown', (event) => {
 
       <div class="space-y-2">
         <label class="block text-[15px] font-semibold text-[#1f2937]">
-          通知
-          <span class="ml-1 text-xs font-medium text-[#94a3b8]">可选</span>
+          {{ t('scheduledTasks.notification.label') }}
+          <span class="ml-1 text-xs font-medium text-[#94a3b8]">
+            {{ t('scheduledTasks.notification.optional') }}
+          </span>
         </label>
         <div class="relative">
           <select
@@ -624,7 +637,7 @@ useEventListener(window, 'keydown', (event) => {
             class="h-11 w-full appearance-none rounded-xl border border-[#dbe3ec] bg-white px-4 pr-11 text-sm text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] disabled:bg-[#f8fafc] disabled:text-[#475569]"
             @change="handleNotificationPlatformChange(($event.target as HTMLSelectElement).value)"
           >
-            <option value="">不发送通知</option>
+            <option value="">{{ t('scheduledTasks.notification.none') }}</option>
             <option
               v-for="option in notificationPlatformDisplayOptions"
               :key="option.value"
@@ -640,7 +653,9 @@ useEventListener(window, 'keydown', (event) => {
       </div>
 
       <div class="space-y-2">
-        <label class="block text-[15px] font-semibold text-[#1f2937]">选择频道</label>
+        <label class="block text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.notification.channelsLabel') }}
+        </label>
         <template v-if="readonly">
           <div
             class="flex min-h-[44px] w-full flex-wrap items-center gap-2 rounded-xl border border-[#dbe3ec] bg-[#f8fafc] px-4 py-2 text-sm text-[#475569]"
@@ -700,14 +715,16 @@ useEventListener(window, 'keydown', (event) => {
                 {{ channel.name }}
               </DropdownMenuCheckboxItem>
             </div>
-            <p v-else class="px-3 py-2 text-sm text-[#94a3b8]">当前通知类型下暂无可用频道</p>
+            <p v-else class="px-3 py-2 text-sm text-[#94a3b8]">
+              {{ t('scheduledTasks.notification.emptyChannels') }}
+            </p>
           </DropdownMenuContent>
         </DropdownMenu>
         <p class="text-xs text-[#94a3b8]">
           {{
             form.notificationPlatform
-              ? '可多选，任务完成后会通过这些频道发送结果。'
-              : '先选择通知类型，再从对应主菜单频道中多选具体频道。'
+              ? t('scheduledTasks.notification.hintSelected')
+              : t('scheduledTasks.notification.hintUnselected')
           }}
         </p>
       </div>
@@ -715,8 +732,10 @@ useEventListener(window, 'keydown', (event) => {
 
     <section class="space-y-4">
       <div class="space-y-1">
-        <h3 class="text-[15px] font-semibold text-[#1f2937]">设置定时时间</h3>
-        <p class="text-sm text-[#94a3b8]">选择快捷方案，或按你的节奏自定义执行时间。</p>
+        <h3 class="text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.dialog.scheduleTitle') }}
+        </h3>
+        <p class="text-sm text-[#94a3b8]">{{ t('scheduledTasks.dialog.scheduleHint') }}</p>
       </div>
 
       <div class="flex flex-wrap gap-2">
@@ -733,13 +752,15 @@ useEventListener(window, 'keydown', (event) => {
           "
           @click="selectScheduleType(option.value)"
         >
-          {{ option.label }}
+          {{ t(option.labelKey) }}
         </button>
       </div>
 
       <div class="rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
         <div v-if="form.scheduleType === 'preset'" class="space-y-2">
-          <label class="block text-sm font-semibold text-[#334155]">快捷设置</label>
+          <label class="block text-sm font-semibold text-[#334155]">
+            {{ t('scheduledTasks.dialog.presetLabel') }}
+          </label>
           <div class="grid gap-3 md:grid-cols-2">
             <button
               v-for="item in SCHEDULE_PRESETS"
@@ -778,7 +799,7 @@ useEventListener(window, 'keydown', (event) => {
                   "
                   @click="selectCustomMode(item.value)"
                 >
-                  <span>{{ item.label }}</span>
+                  <span>{{ t(item.labelKey) }}</span>
                   <ChevronDown
                     v-if="item.value !== 'daily' && item.value !== 'interval'"
                     class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
@@ -829,7 +850,7 @@ useEventListener(window, 'keydown', (event) => {
                   "
                   @click="selectMonthlyDay(day)"
                 >
-                  {{ day }}号
+                  {{ t('scheduledTasks.dialog.monthlyDay', { day }) }}
                 </button>
               </div>
             </div>
@@ -844,7 +865,9 @@ useEventListener(window, 'keydown', (event) => {
                 step="1"
                 class="h-9 w-[120px] rounded-md border-[#dbe3ec] bg-white text-sm shadow-none read-only:bg-[#f8fafc] read-only:text-[#475569]"
               />
-              <span class="ml-3 text-sm text-[#64748b]">分钟</span>
+              <span class="ml-3 text-sm text-[#64748b]">
+                {{ t('scheduledTasks.dialog.minutes') }}
+              </span>
             </div>
 
             <Input
@@ -866,12 +889,14 @@ useEventListener(window, 'keydown', (event) => {
         </div>
 
         <div v-else class="space-y-2">
-          <label class="block text-sm font-semibold text-[#334155]">Linux Crontab 代码</label>
+          <label class="block text-sm font-semibold text-[#334155]">
+            {{ t('scheduledTasks.dialog.cronLabel') }}
+          </label>
           <textarea
             v-model="form.cronExpr"
             :readonly="readonly"
             class="min-h-[108px] w-full rounded-xl border border-[#dbe3ec] bg-white px-4 py-3 font-mono text-sm leading-6 text-[#111827] outline-none transition-[border-color,box-shadow] placeholder:text-[#a0aec0] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe] read-only:bg-[#f8fafc] read-only:text-[#475569]"
-            placeholder="例如 0 9 * * *"
+            :placeholder="t('scheduledTasks.dialog.cronPlaceholder')"
           />
         </div>
       </div>
@@ -881,8 +906,10 @@ useEventListener(window, 'keydown', (event) => {
       class="flex items-center justify-between rounded-2xl border border-[#e5e7eb] bg-white px-4 py-4"
     >
       <div class="space-y-1">
-        <h3 class="text-[15px] font-semibold text-[#1f2937]">立即启用</h3>
-        <p class="text-sm text-[#94a3b8]">创建后立即开始运行此任务</p>
+        <h3 class="text-[15px] font-semibold text-[#1f2937]">
+          {{ t('scheduledTasks.dialog.enableNowTitle') }}
+        </h3>
+        <p class="text-sm text-[#94a3b8]">{{ t('scheduledTasks.dialog.enableNowHint') }}</p>
       </div>
       <Switch
         :model-value="form.enabled"
