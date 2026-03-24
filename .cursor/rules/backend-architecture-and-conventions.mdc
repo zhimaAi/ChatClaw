@@ -16,11 +16,23 @@ alwaysApply: false
 - `internal/services/windows/` — 窗口管理服务
 - `internal/errs/` — 业务错误类型
 - `internal/sqlite/` — 数据库连接和迁移
-- `internal/define/` — 环境配置
+- `internal/define/` — 环境配置、内置常量、**数据目录布局**（见下）
+- `internal/native/` — **ChatClaw 原生**边界：包 `native` 提供 `DataRootDir()`，对应当前活跃的原生数据根 `define.NativeDataRootDir()`（`$HOME/.chatclaw/native`）。与 OpenClaw 无关的业务逻辑仍主要在 `internal/services/*`；新增「仅原生、且适合单独成包」的辅助代码可放在此目录下，避免与 OpenClaw 混放。
+- `internal/openclaw/` — **OpenClaw 集成**边界：与本地 OpenClaw Gateway 通讯、Agent 同步、运行时进程等代码放在此处，例如：
+  - `internal/openclaw/agents/` — 包 `openclawagents`，OpenClaw 侧 Agent 的 DB 与 Wails 暴露
+  - `internal/openclaw/runtime/` — 包 `openclawruntime`，Gateway 生命周期、RPC/WebSocket、bundle 解析、配置片段同步  
+  包 `openclaw` 根下的 `paths.go` 提供 `DataRootDir()`，对应 `define.OpenClawDataRootDir()`（`$HOME/.chatclaw/openclaw`）。**不要**再把新的 OpenClaw 专用服务放到 `internal/services/openclaw*`（历史路径已迁入 `internal/openclaw/`）。
+
+**用户数据目录（与前端 native/openclaw 划分一致）**
+
+- `define.LegacyDataRootDir()` — `$HOME/.chatclaw`：旧版布局，**仅迁移与兼容读取**；启动时由 `define.EnsureDataLayout()` 将文件迁往子目录。
+- `define.NativeDataRootDir()` — `$HOME/.chatclaw/native`：原生 SQLite、应用日志、`skills/`、`mcp/` 等。
+- `define.OpenClawDataRootDir()` — `$HOME/.chatclaw/openclaw`：`openclaw.json`、Gateway 日志、`OPENCLAW_STATE_DIR` 内容、`workspace-*`、`agents/` 等与 Gateway 强相关的落盘数据。
+- `define.AppDataDir()` — 等同于 **原生数据根**（`NativeDataRootDir`）；新代码若语义是「OpenClaw 落盘」应显式使用 `OpenClawDataRootDir()`。
 
 ## 必须遵守
 
-1. **新建服务时**：放在 `internal/services/[服务名]/`，用 `NewXxxService()` 构造函数
+1. **新建业务服务时**：默认放在 `internal/services/[服务名]/`，用 `NewXxxService()` 构造函数。**若服务仅服务于 OpenClaw Gateway 集成**，应放在 `internal/openclaw/` 下合适子包，而不是 `internal/services/`。
 2. **返回错误给前端时**：必须用 `errs.New()` / `errs.Newf()` / `errs.Wrap()`，不要直接返回 `error`
 3. **需要翻译的文本**：用 `i18n.T("key")` 或 `i18n.Tf("key", data)`，翻译 key 加到 `internal/services/i18n/locales/*.json`
 4. **新建数据库迁移**：放在 `internal/sqlite/migrations/`，文件名格式 `YYYYMMDDHHMM_描述.go`
