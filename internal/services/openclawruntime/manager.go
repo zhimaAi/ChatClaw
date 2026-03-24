@@ -34,6 +34,7 @@ type Manager struct {
 	status       RuntimeStatus
 	gatewayState GatewayConnectionState
 	client       *GatewayClient
+	queryClient  *GatewayClient // separate connection for queries during agent runs
 	readyAt      time.Time
 	readyHooks   []func()
 	process      *exec.Cmd
@@ -296,6 +297,10 @@ func (m *Manager) handleProcessExit(pid int, exitErr error) {
 		m.processDone = nil
 		m.processLog = nil
 		m.client = nil
+		if m.queryClient != nil {
+			_ = m.queryClient.Close()
+			m.queryClient = nil
+		}
 		m.readyAt = time.Time{}
 	}
 	shuttingDown := m.shuttingDown
@@ -366,8 +371,24 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 			if hello.Auth != nil && hello.Auth.DeviceToken != "" {
 				_ = storeDeviceToken(bundle.StateDir, hello.Auth.Role, hello.Auth.DeviceToken, hello.Auth.Scopes)
 			}
+
+			// Create a second connection for queries (sessions.get etc.)
+			// so they don't block on long-running agent RPCs.
+			qClient := NewGatewayClient(gatewayClientOptions{
+				URL:             gatewayWebSocketURL(cfg.GatewayPort),
+				Token:           cfg.GatewayToken,
+				DeviceIdentity:  identity,
+				StoredDeviceTok: storedTok,
+				Scopes:          []string{"operator.read"},
+			})
+			if _, qErr := qClient.Connect(ctx); qErr != nil {
+				m.app.Logger.Warn("openclaw: query client connect failed, will use main client", "err", qErr)
+				qClient = nil
+			}
+
 			m.mu.Lock()
 			m.client = client
+			m.queryClient = qClient
 			m.mu.Unlock()
 			return nil
 		}
@@ -386,11 +407,16 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 func (m *Manager) closeClient() {
 	m.mu.Lock()
 	client := m.client
+	qClient := m.queryClient
 	m.client = nil
+	m.queryClient = nil
 	m.readyAt = time.Time{}
 	m.mu.Unlock()
 	if client != nil {
 		_ = client.Close()
+	}
+	if qClient != nil {
+		_ = qClient.Close()
 	}
 }
 
@@ -402,6 +428,10 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 		return
 	}
 	m.client = nil
+	if m.queryClient != nil {
+		_ = m.queryClient.Close()
+		m.queryClient = nil
+	}
 	m.readyAt = time.Time{}
 	m.mu.Unlock()
 
@@ -469,6 +499,24 @@ func (m *Manager) Request(ctx context.Context, method string, params any, out an
 		return errors.New("gateway websocket is not connected")
 	}
 	return client.Request(ctx, method, params, out)
+}
+
+// QueryRequest sends a request over the dedicated query connection,
+// which is not blocked by long-running agent RPCs on the main connection.
+// Falls back to the main client if the query client is unavailable.
+func (m *Manager) QueryRequest(ctx context.Context, method string, params any, out any) error {
+	m.mu.RLock()
+	qc := m.queryClient
+	mc := m.client
+	m.mu.RUnlock()
+
+	if qc != nil {
+		return qc.Request(ctx, method, params, out)
+	}
+	if mc != nil {
+		return mc.Request(ctx, method, params, out)
+	}
+	return errors.New("gateway websocket is not connected")
 }
 
 // AddEventListener registers a listener for gateway events with the given key.

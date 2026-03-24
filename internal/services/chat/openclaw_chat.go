@@ -19,6 +19,7 @@ type OpenClawGatewayInfo interface {
 	GatewayToken() string
 	IsReady() bool
 	Request(ctx context.Context, method string, params any, out any) error
+	QueryRequest(ctx context.Context, method string, params any, out any) error
 	AddEventListener(key string, fn func(event string, payload json.RawMessage))
 	RemoveEventListener(key string)
 }
@@ -95,6 +96,33 @@ func extractTextFromContent(content any) string {
 	return ""
 }
 
+// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block
+// and the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
+// automatically prepends to user messages sent via chat.send.
+func cleanOpenClawUserMessage(s string) string {
+	s = strings.TrimLeft(s, " \t\n")
+
+	// Strip "Sender (untrusted metadata):\n```json\n...\n```\n" block
+	if strings.HasPrefix(s, "Sender (untrusted metadata)") {
+		// Find the closing ``` and skip past it
+		if idx := strings.Index(s, "```\n"); idx != -1 {
+			rest := s[idx+4:]
+			if idx2 := strings.Index(rest, "```"); idx2 != -1 {
+				s = strings.TrimLeft(rest[idx2+3:], " \t\n")
+			}
+		}
+	}
+
+	// Strip "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix
+	if strings.HasPrefix(s, "[") {
+		if idx := strings.Index(s, "] "); idx != -1 && idx < 60 {
+			s = strings.TrimLeft(s[idx+2:], " \t\n")
+		}
+	}
+
+	return s
+}
+
 // GetOpenClawMessages fetches conversation history from the OpenClaw Gateway
 // via the sessions.get WebSocket RPC method.
 func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, error) {
@@ -115,7 +143,7 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 			Content any    `json:"content"`
 		} `json:"messages"`
 	}
-	if err := s.openclawGateway.Request(ctx, "sessions.get", map[string]any{
+	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
 		"key":   sessionKey,
 		"limit": 200,
 	}, &result); err != nil {
@@ -286,10 +314,7 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		msgIDCounter--
 		contentStr := extractTextFromContent(m.Content)
 		if m.Role == "user" {
-			contentStr = strings.TrimLeft(contentStr, " \t\n")
-			if idx := strings.Index(contentStr, "] "); idx != -1 && strings.HasPrefix(contentStr, "[") {
-				contentStr = strings.TrimLeft(contentStr[idx+2:], " \t\n")
-			}
+			contentStr = cleanOpenClawUserMessage(contentStr)
 		}
 
 		messages = append(messages, Message{
@@ -410,7 +435,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	return &SendMessageResult{RequestID: requestID, MessageID: input.MessageID}, nil
 }
 
-// openClawChatRunState tracks the streaming state for a single chat.run invocation.
+// openClawChatRunState tracks the streaming state for a single chat.send invocation.
 type openClawChatRunState struct {
 	contentBuilder  strings.Builder
 	thinkingBuilder strings.Builder
@@ -418,6 +443,12 @@ type openClawChatRunState struct {
 	inputTokens     int
 	outputTokens    int
 	seq             int32
+	// Cumulative content already emitted, used to compute deltas from
+	// the cumulative message object in chat events.
+	emittedThinking string
+	emittedContent  string
+	seenToolCalls   map[string]bool
+	seenToolResults map[string]bool
 }
 
 func (st *openClawChatRunState) nextSeq() int {
@@ -439,13 +470,393 @@ func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID
 	}
 }
 
-// runOpenClawChatRun executes a chat.run WebSocket RPC and translates
-// gateway events into chat:* Wails events for the frontend.
+// handleOpenClawAgentEvent processes "agent" events from the Gateway.
+// These carry streaming deltas for text, tool phases, and lifecycle signals.
+func (s *ChatService) handleOpenClawAgentEvent(
+	conversationID int64,
+	sessionKey string,
+	activeRunID *atomic.Value,
+	st *openClawChatRunState,
+	done chan struct{},
+	ce func() ChatEvent,
+	emit func(string, any),
+	emitError func(string, any),
+	payload json.RawMessage,
+) {
+	var frame struct {
+		RunID      string          `json:"runId"`
+		SessionKey string          `json:"sessionKey"`
+		Stream     string          `json:"stream"`
+		Data       json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(payload, &frame) != nil {
+		return
+	}
+
+	// Route by runId
+	if rid, _ := activeRunID.Load().(string); rid != "" {
+		if frame.RunID != "" && frame.RunID != rid {
+			return
+		}
+	}
+	if frame.RunID != "" {
+		activeRunID.CompareAndSwap(nil, frame.RunID)
+		activeRunID.CompareAndSwap("", frame.RunID)
+	}
+
+	switch frame.Stream {
+	case "assistant":
+		var d struct {
+			Delta string `json:"delta"`
+		}
+		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
+			return
+		}
+		st.contentBuilder.WriteString(d.Delta)
+		st.emittedContent = st.contentBuilder.String()
+		s.appendGenerationContent(conversationID, "", d.Delta)
+		emit(EventChatChunk, ChatChunkEvent{
+			ChatEvent: ce(),
+			Delta:     d.Delta,
+		})
+		if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
+			cb.(ChunkCallback)(st.contentBuilder.String())
+		}
+
+	case "thinking":
+		var d struct {
+			Delta string `json:"delta"`
+		}
+		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
+			return
+		}
+		st.thinkingBuilder.WriteString(d.Delta)
+		st.emittedThinking = st.thinkingBuilder.String()
+		emit(EventChatThinking, ChatThinkingEvent{
+			ChatEvent: ce(),
+			Delta:     d.Delta,
+		})
+
+	case "tool":
+		var d struct {
+			Phase      string          `json:"phase"`
+			Name       string          `json:"name"`
+			ToolCallID string          `json:"toolCallId"`
+			Args       json.RawMessage `json:"args"`
+			Result     json.RawMessage `json:"result"`
+			Meta       string          `json:"meta"`
+			IsError    bool            `json:"isError"`
+		}
+		if json.Unmarshal(frame.Data, &d) != nil {
+			return
+		}
+		switch d.Phase {
+		case "start":
+			argsJSON := ""
+			if len(d.Args) > 0 {
+				argsJSON = string(d.Args)
+			}
+			if st.seenToolCalls == nil {
+				st.seenToolCalls = make(map[string]bool)
+			}
+			st.seenToolCalls[d.ToolCallID] = true
+			emit(EventChatTool, ChatToolEvent{
+				ChatEvent:  ce(),
+				Type:       "call",
+				ToolCallID: d.ToolCallID,
+				ToolName:   d.Name,
+				ArgsJSON:   argsJSON,
+			})
+		case "result":
+			resultJSON := ""
+			if len(d.Result) > 0 {
+				resultJSON = string(d.Result)
+			} else if d.Meta != "" {
+				resultJSON = fmt.Sprintf(`{"summary":%q}`, d.Meta)
+			}
+			if st.seenToolResults == nil {
+				st.seenToolResults = make(map[string]bool)
+			}
+			st.seenToolResults[d.ToolCallID] = true
+			emit(EventChatTool, ChatToolEvent{
+				ChatEvent:  ce(),
+				Type:       "result",
+				ToolCallID: d.ToolCallID,
+				ToolName:   d.Name,
+				ResultJSON: resultJSON,
+			})
+		}
+
+	case "lifecycle":
+		var d struct {
+			Phase string `json:"phase"`
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(frame.Data, &d) != nil {
+			return
+		}
+		s.app.Logger.Info("[openclaw-chat] agent lifecycle",
+			"conv", conversationID, "phase", d.Phase)
+		switch d.Phase {
+		case "end":
+			st.finishReason = "stop"
+			select {
+			case <-done:
+			default:
+				close(done)
+			}
+		case "error":
+			emitError("error.chat_generation_failed", map[string]any{"Error": d.Error})
+			select {
+			case <-done:
+			default:
+				close(done)
+			}
+		}
+	}
+}
+
+// handleOpenClawChatEvent processes "chat" events from the Gateway.
+// Chat events carry the full cumulative message object with content blocks
+// (thinking, text, toolCall, toolResult). We diff against previously emitted
+// state and emit the appropriate frontend events.
+func (s *ChatService) handleOpenClawChatEvent(
+	conversationID int64,
+	sessionKey string,
+	activeRunID *atomic.Value,
+	st *openClawChatRunState,
+	done chan struct{},
+	ce func() ChatEvent,
+	emit func(string, any),
+	emitError func(string, any),
+	payload json.RawMessage,
+) {
+	var chatEvt struct {
+		State        string `json:"state"`
+		SessionKey   string `json:"sessionKey"`
+		RunID        string `json:"runId"`
+		ErrorMessage string `json:"errorMessage"`
+		Message      struct {
+			Role       string          `json:"role"`
+			Content    json.RawMessage `json:"content"`
+			StopReason string          `json:"stopReason"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(payload, &chatEvt) != nil {
+		s.app.Logger.Warn("[openclaw-chat] chat event: unmarshal failed", "conv", conversationID)
+		return
+	}
+
+	s.app.Logger.Debug("[openclaw-chat] chat event parsed",
+		"conv", conversationID,
+		"state", chatEvt.State,
+		"sessionKey", chatEvt.SessionKey,
+		"wantSession", sessionKey,
+		"runId", chatEvt.RunID,
+		"role", chatEvt.Message.Role,
+		"contentLen", len(chatEvt.Message.Content),
+		"stopReason", chatEvt.Message.StopReason)
+
+	// Filter by session
+	if chatEvt.SessionKey != "" && chatEvt.SessionKey != sessionKey &&
+		!strings.HasSuffix(chatEvt.SessionKey, ":"+sessionKey) {
+		s.app.Logger.Debug("[openclaw-chat] chat event: session mismatch, skipping",
+			"conv", conversationID, "got", chatEvt.SessionKey, "want", sessionKey)
+		return
+	}
+
+	// Capture runId
+	if chatEvt.RunID != "" {
+		activeRunID.CompareAndSwap(nil, chatEvt.RunID)
+		activeRunID.CompareAndSwap("", chatEvt.RunID)
+	}
+
+	// Filter by runId
+	if rid, _ := activeRunID.Load().(string); rid != "" {
+		if chatEvt.RunID != "" && chatEvt.RunID != rid {
+			return
+		}
+	}
+
+	switch chatEvt.State {
+	case "error":
+		emitError("error.chat_generation_failed", map[string]any{"Error": chatEvt.ErrorMessage})
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+		return
+
+	case "aborted":
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+		return
+
+	case "delta", "final":
+		// Process message content below
+
+	default:
+		return
+	}
+
+	// Skip non-assistant messages (e.g., tool_result role)
+	if chatEvt.Message.Role != "assistant" && chatEvt.Message.Role != "" {
+		return
+	}
+
+	if len(chatEvt.Message.Content) > 0 {
+		var blocks []struct {
+			Type       string          `json:"type"`
+			Text       string          `json:"text"`
+			Thinking   string          `json:"thinking"`
+			ToolCallID string          `json:"toolCallId"`
+			Name       string          `json:"name"`
+			Args       json.RawMessage `json:"args"`
+			Content    json.RawMessage `json:"content"`
+		}
+		if json.Unmarshal(chatEvt.Message.Content, &blocks) == nil {
+			blockTypes := make([]string, len(blocks))
+			for i, b := range blocks {
+				blockTypes[i] = b.Type
+			}
+			s.app.Logger.Debug("[openclaw-chat] chat event content blocks",
+				"conv", conversationID,
+				"blockCount", len(blocks),
+				"types", blockTypes)
+			s.processOpenClawContentBlocks(conversationID, blocks, st, ce, emit)
+		} else {
+			s.app.Logger.Warn("[openclaw-chat] chat event: content parse failed",
+				"conv", conversationID,
+				"rawContent", string(chatEvt.Message.Content[:min(200, len(chatEvt.Message.Content))]))
+		}
+	}
+
+	// On "final" state, signal completion
+	if chatEvt.State == "final" {
+		st.finishReason = "stop"
+		if chatEvt.Message.StopReason != "" {
+			st.finishReason = chatEvt.Message.StopReason
+		}
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+	}
+}
+
+// processOpenClawContentBlocks extracts thinking, text, and tool content
+// from the cumulative message content blocks, computing deltas against
+// what has been previously emitted.
+func (s *ChatService) processOpenClawContentBlocks(
+	conversationID int64,
+	blocks []struct {
+		Type       string          `json:"type"`
+		Text       string          `json:"text"`
+		Thinking   string          `json:"thinking"`
+		ToolCallID string          `json:"toolCallId"`
+		Name       string          `json:"name"`
+		Args       json.RawMessage `json:"args"`
+		Content    json.RawMessage `json:"content"`
+	},
+	st *openClawChatRunState,
+	ce func() ChatEvent,
+	emit func(string, any),
+) {
+	// Collect cumulative thinking and text from all blocks
+	var allThinking strings.Builder
+	var allText strings.Builder
+	for _, b := range blocks {
+		switch b.Type {
+		case "thinking":
+			if b.Thinking != "" {
+				if allThinking.Len() > 0 {
+					allThinking.WriteString("\n\n")
+				}
+				allThinking.WriteString(b.Thinking)
+			}
+		case "text":
+			allText.WriteString(b.Text)
+		case "toolCall":
+			// Track seen tool calls and emit new ones
+			if b.ToolCallID != "" && !st.seenToolCalls[b.ToolCallID] {
+				if st.seenToolCalls == nil {
+					st.seenToolCalls = make(map[string]bool)
+				}
+				st.seenToolCalls[b.ToolCallID] = true
+				argsJSON := ""
+				if len(b.Args) > 0 {
+					argsJSON = string(b.Args)
+				}
+				emit(EventChatTool, ChatToolEvent{
+					ChatEvent:  ce(),
+					Type:       "call",
+					ToolCallID: b.ToolCallID,
+					ToolName:   b.Name,
+					ArgsJSON:   argsJSON,
+				})
+			}
+		case "toolResult":
+			if b.ToolCallID != "" && !st.seenToolResults[b.ToolCallID] {
+				if st.seenToolResults == nil {
+					st.seenToolResults = make(map[string]bool)
+				}
+				st.seenToolResults[b.ToolCallID] = true
+				resultJSON := ""
+				if len(b.Content) > 0 {
+					resultJSON = string(b.Content)
+				}
+				emit(EventChatTool, ChatToolEvent{
+					ChatEvent:  ce(),
+					Type:       "result",
+					ToolCallID: b.ToolCallID,
+					ResultJSON: resultJSON,
+				})
+			}
+		}
+	}
+
+	// Emit thinking delta
+	newThinking := allThinking.String()
+	if newThinking != "" && len(newThinking) > len(st.emittedThinking) {
+		delta := newThinking[len(st.emittedThinking):]
+		st.emittedThinking = newThinking
+		st.thinkingBuilder.Reset()
+		st.thinkingBuilder.WriteString(newThinking)
+		emit(EventChatThinking, ChatThinkingEvent{
+			ChatEvent: ce(),
+			Delta:     delta,
+		})
+	}
+
+	// Emit text delta
+	newText := allText.String()
+	if newText != "" && len(newText) > len(st.emittedContent) {
+		delta := newText[len(st.emittedContent):]
+		st.emittedContent = newText
+		st.contentBuilder.Reset()
+		st.contentBuilder.WriteString(newText)
+		s.appendGenerationContent(conversationID, "", delta)
+		emit(EventChatChunk, ChatChunkEvent{
+			ChatEvent: ce(),
+			Delta:     delta,
+		})
+		if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
+			cb.(ChunkCallback)(newText)
+		}
+	}
+}
+
+// runOpenClawChatRun sends an "agent" RPC (blocking) and processes
+// concurrent "agent" and "chat" events for real-time streaming output.
+// Agent events provide text/tool deltas; chat events provide thinking blocks.
 func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, cfg openClawAgentConfig) {
 	st := &openClawChatRunState{}
 
-	// Use a unique negative ID for the assistant message placeholder so it doesn't
-	// collide with other messages (OpenClaw messages are not persisted in DB).
 	assistantMsgID := -conversationID*1000 - int64(time.Now().UnixMilli()%100000)
 
 	emit := func(eventName string, payload any) {
@@ -468,10 +879,6 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		})
 	}
 
-	// No need to emit chat:user-message — the frontend already has the optimistic
-	// user message inserted in sendOpenClawMessage before calling the backend.
-
-	// Emit start event
 	emit(EventChatStart, ChatStartEvent{
 		ChatEvent: ce(),
 		Status:    StatusStreaming,
@@ -482,164 +889,28 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 
 	done := make(chan struct{})
-
-	// The actual runId is returned by the server; we'll capture it from
-	// the first event or the RPC response and use sessionKey for initial routing.
 	var activeRunID atomic.Value
 
-	// All streaming events arrive as event="agent" with payload fields for routing.
+	// Listen for all gateway events and route accordingly.
 	s.openclawGateway.AddEventListener(listenerKey, func(event string, payload json.RawMessage) {
-		if event != "agent" {
+		s.app.Logger.Debug("[openclaw-chat] event received",
+			"conv", conversationID, "event", event,
+			"payloadLen", len(payload))
+
+		if event == "chat" {
+			s.handleOpenClawChatEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
 			return
 		}
-
-		var frame struct {
-			RunID      string          `json:"runId"`
-			SessionKey string          `json:"sessionKey"`
-			Stream     string          `json:"stream"`
-			Data       json.RawMessage `json:"data"`
-		}
-		if json.Unmarshal(payload, &frame) != nil {
-			return
-		}
-
-		s.app.Logger.Debug("[openclaw-chat] agent event",
-			"conv", conversationID,
-			"stream", frame.Stream,
-			"runId", frame.RunID)
-
-		// Route by runId if known, otherwise accept all events
-		// (sessionKey may not be present in all event payloads)
-		if rid, _ := activeRunID.Load().(string); rid != "" {
-			if frame.RunID != "" && frame.RunID != rid {
-				return
-			}
-		}
-
-		// Capture runId from the first matching event
-		if frame.RunID != "" {
-			activeRunID.CompareAndSwap(nil, frame.RunID)
-			activeRunID.CompareAndSwap("", frame.RunID)
-		}
-
-		switch frame.Stream {
-		case "assistant":
-			var d struct {
-				Text  string `json:"text"`
-				Delta string `json:"delta"`
-			}
-			if json.Unmarshal(frame.Data, &d) != nil {
-				return
-			}
-			delta := d.Delta
-			if delta != "" {
-				st.contentBuilder.WriteString(delta)
-				s.appendGenerationContent(conversationID, requestID, delta)
-				emit(EventChatChunk, ChatChunkEvent{
-					ChatEvent: ce(),
-					Delta:     delta,
-				})
-				if cb, ok := s.chunkCallbacks.Load(conversationID); ok {
-					cb.(ChunkCallback)(st.contentBuilder.String())
-				}
-			}
-
-		case "thinking":
-			var d struct {
-				Text  string `json:"text"`
-				Delta string `json:"delta"`
-			}
-			if json.Unmarshal(frame.Data, &d) != nil {
-				return
-			}
-			delta := d.Delta
-			if delta != "" {
-				st.thinkingBuilder.WriteString(delta)
-				emit(EventChatThinking, ChatThinkingEvent{
-					ChatEvent: ce(),
-					Delta:     delta,
-				})
-			}
-
-		case "tool":
-			var d struct {
-				Phase      string          `json:"phase"`
-				Name       string          `json:"name"`
-				ToolCallID string          `json:"toolCallId"`
-				Args       json.RawMessage `json:"args"`
-				Result     json.RawMessage `json:"result"`
-				Meta       string          `json:"meta"`
-				IsError    bool            `json:"isError"`
-			}
-			if json.Unmarshal(frame.Data, &d) != nil {
-				return
-			}
-			s.app.Logger.Debug("[openclaw-chat] tool event",
-				"conv", conversationID,
-				"phase", d.Phase, "name", d.Name,
-				"toolCallId", d.ToolCallID)
-			switch d.Phase {
-			case "start":
-				argsJSON := ""
-				if len(d.Args) > 0 {
-					argsJSON = string(d.Args)
-				}
-				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  ce(),
-					Type:       "call",
-					ToolCallID: d.ToolCallID,
-					ToolName:   d.Name,
-					ArgsJSON:   argsJSON,
-				})
-			case "result":
-				resultJSON := ""
-				if len(d.Result) > 0 {
-					resultJSON = string(d.Result)
-				} else if d.Meta != "" {
-					resultJSON = fmt.Sprintf(`{"summary":%q}`, d.Meta)
-				}
-				toolType := "result"
-				if d.IsError {
-					toolType = "result"
-				}
-				emit(EventChatTool, ChatToolEvent{
-					ChatEvent:  ce(),
-					Type:       toolType,
-					ToolCallID: d.ToolCallID,
-					ToolName:   d.Name,
-					ResultJSON: resultJSON,
-				})
-			}
-
-		case "lifecycle":
-			var d struct {
-				Phase string `json:"phase"`
-				Error string `json:"error"`
-			}
-			if json.Unmarshal(frame.Data, &d) != nil {
-				return
-			}
-			switch d.Phase {
-			case "end":
-				st.finishReason = "stop"
-				select {
-				case <-done:
-				default:
-					close(done)
-				}
-			case "error":
-				emitError("error.chat_generation_failed", map[string]any{"Error": d.Error})
-				select {
-				case <-done:
-				default:
-					close(done)
-				}
-			}
+		// Handle "agent" events for streaming text, tools, and lifecycle.
+		if event == "agent" {
+			s.handleOpenClawAgentEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
 		}
 	})
 
 	defer s.openclawGateway.RemoveEventListener(listenerKey)
 
+	// Use the "agent" RPC (blocking: returns when the run completes).
+	// While it blocks, chat/agent events arrive via readLoop for real-time streaming.
 	params := map[string]any{
 		"message":        userContent,
 		"sessionKey":     sessionKey,
@@ -666,31 +937,22 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		return
 	}
 
-	// Store the server-assigned runId for precise event routing
 	if runResult.RunID != "" {
 		activeRunID.Store(runResult.RunID)
 	}
 
-	s.app.Logger.Info("[openclaw-chat] agent RPC accepted",
+	s.app.Logger.Info("[openclaw-chat] agent RPC completed",
 		"conv", conversationID, "runId", runResult.RunID)
 
-	// Wait for lifecycle "end" event or context cancellation
+	// The agent RPC blocks until completion, so no need to wait on `done`.
+	// However, if lifecycle events already closed it, that's fine too.
 	select {
 	case <-done:
-	case <-ctx.Done():
-		// Attempt to abort the run
-		rid, _ := activeRunID.Load().(string)
-		if rid != "" {
-			abortCtx, abortCancel := context.WithTimeout(context.Background(), 3*time.Second)
-			_ = s.openclawGateway.Request(abortCtx, "chat.abort", map[string]any{"runId": rid}, nil)
-			abortCancel()
-		}
+	default:
+	}
 
-		emit(EventChatStopped, ChatStoppedEvent{
-			ChatEvent: ce(),
-			Status:    StatusCancelled,
-		})
-		return
+	if st.finishReason == "" {
+		st.finishReason = "stop"
 	}
 
 	emit(EventChatComplete, ChatCompleteEvent{

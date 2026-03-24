@@ -170,9 +170,27 @@ export const useChatStore = defineStore('chat', () => {
 
       if (isOpenClaw) {
         // OpenClaw messages are not in local DB; IDs are ephemeral.
-        // If actively streaming, keep current state; otherwise replace.
+        // If actively streaming, keep current state.
+        // If fetched is empty but we have local optimistic messages, keep them.
         if (!streaming) {
-          messagesByConversation.value[conversationId] = fetched
+          if (fetched.length === 0 && current.length > 0) {
+            // Keep current messages to avoid wiping optimistic user messages
+          } else if (fetched.length > 0) {
+            // Merge: keep local optimistic messages (negative IDs) not yet in history
+            const merged: Message[] = [...fetched]
+            for (const msg of current) {
+              if (msg.id >= 0) continue
+              const existsOnServer = fetched.some(
+                (fm) =>
+                  fm.role === msg.role &&
+                  String(fm.content ?? '').trim() === String(msg.content ?? '').trim()
+              )
+              if (!existsOnServer) {
+                merged.push(msg)
+              }
+            }
+            messagesByConversation.value[conversationId] = merged
+          }
         }
       } else {
       const normalizeContent = (v: unknown) => String(v ?? '').trim()
@@ -817,6 +835,7 @@ export const useChatStore = defineStore('chat', () => {
       created_at: null as any,
       updated_at: null as any,
     } as any)
+
   }
 
   const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
@@ -919,10 +938,16 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.thinkingContent += chunk
 
-      // Track segments: append to last thinking segment or start a new one
+      // Track segments: append to last thinking segment or start a new one.
+      // If the last segment is tools/content (thinking arrived slightly after
+      // a tool event due to transcript write delay), insert thinking before it
+      // so the rendered order is: thinking → tools → content.
       const lastSeg = streaming.segments[streaming.segments.length - 1]
       if (lastSeg && lastSeg.type === 'thinking') {
         lastSeg.content += chunk
+      } else if (lastSeg && lastSeg.type === 'tools') {
+        const insertIdx = streaming.segments.length - 1
+        streaming.segments.splice(insertIdx, 0, { type: 'thinking', content: chunk })
       } else {
         streaming.segments.push({ type: 'thinking', content: chunk })
       }
@@ -1120,6 +1145,11 @@ export const useChatStore = defineStore('chat', () => {
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
         }, 0)
+        // Reload history from Gateway to get authoritative record including
+        // thinking content, tool details, and all intermediate turns.
+        setTimeout(() => {
+          void loadMessages(conversation_id)
+        }, 300)
       } else {
         // Clear streaming state first
         delete streamingByConversation.value[conversation_id]
