@@ -61,23 +61,15 @@ const handleMenuClick = (menuId: SettingsMenuItem) => {
       :key="item.id"
       :class="
         cn(
-          'group mx-2 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm transition-colors',
+          'group mx-2 flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground transition-colors',
           settingsStore.activeMenu === item.id
-            ? 'bg-accent font-medium text-foreground'
-            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+            ? 'bg-accent font-medium'
+            : 'font-normal hover:bg-accent/50'
         )
       "
       @click="handleMenuClick(item.id)"
     >
-      <component
-        :is="item.icon"
-        class="size-4 transition-opacity"
-        :class="
-          settingsStore.activeMenu === item.id
-            ? 'opacity-100'
-            : 'opacity-70 group-hover:opacity-100'
-        "
-      />
+      <component :is="item.icon" class="size-4 shrink-0" />
       <span>{{ t(item.labelKey) }}</span>
     </button>
   </nav>

@@ -1,16 +1,23 @@
 <script setup lang="ts">
 /**
- * 左侧导航菜单组件
- * 包含 AI助手、知识库、多问、设置 四个导航项
- * 点击导航项会切换/打开对应模块的标签页：
- * - AI助手：总是新建标签页
- * - 知识库、多问、设置：已有则切换，否则新建
+ * Left-side navigation with system switcher (ChatClaw / OpenClaw).
+ *
+ * Menu items are fully computed from `currentSystem`:
+ *  - Both: assistant, knowledge, scheduled-tasks, skills, channels, tools, multiask
+ *  - chatclaw only: hides memory
+ *  - openclaw only: shows memory
+ *
+ * Each nav item may specify a `systemModuleMap` to resolve to a different
+ * NavModule per system. Example:
+ *   { key: 'assistant', systemModuleMap: { openclaw: 'openclaw-assistant' } }
+ * When the user clicks the item, we look up the effective module from the map
+ * (falling back to `key`) and open the tab with `systemOwner` captured.
  */
 
 type SvgComponent = any
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
+import { useNavigationStore, useAppStore, type NavModule, type SystemOwner } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -21,35 +28,78 @@ import IconMemory from '@/assets/icons/memory.svg'
 import IconMultiask from '@/assets/icons/multiask.svg'
 import IconChannels from '@/assets/icons/channels.svg'
 import IconSettings from '@/assets/icons/settings.svg'
+import chatclawIconPng from '@/assets/icons/chatclaw-icon.png'
+import openclawIconPng from '@/assets/icons/openclaw-icon.png'
+import IconSwitch from '@/assets/icons/switch-icon.svg'
+import { Check } from 'lucide-vue-next'
+import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
 
+const switcherOpen = ref(false)
+
+interface SystemOption {
+  value: SystemOwner
+  labelKey: string
+  /** Raster icon URL from Vite `import` */
+  iconUrl: string
+}
+
+const systemOptions: SystemOption[] = [
+  { value: 'chatclaw', labelKey: 'nav.systemChatClaw', iconUrl: chatclawIconPng },
+  { value: 'openclaw', labelKey: 'nav.systemOpenClaw', iconUrl: openclawIconPng },
+]
+
+const currentOption = computed(() =>
+  systemOptions.find((o) => o.value === appStore.currentSystem) ?? systemOptions[0]
+)
+
+const toggleSwitcher = () => {
+  switcherOpen.value = !switcherOpen.value
+}
+
+const selectSystem = (system: SystemOwner) => {
+  if (system === appStore.currentSystem) {
+    switcherOpen.value = false
+    return
+  }
+  appStore.setCurrentSystem(system)
+  navigationStore.closeAllTabs()
+  const assistantModule: NavModule =
+    system === 'openclaw' ? 'openclaw-assistant' : 'assistant'
+  navigationStore.navigateToModule(assistantModule, system)
+  switcherOpen.value = false
+}
+
 /**
- * 导航项配置
+ * Nav item config.
+ *
+ * `systems` — if set, only show this item when currentSystem is in the list.
+ * `systemModuleMap` — optional per-system NavModule override.
+ *   e.g. { openclaw: 'openclaw-assistant' } means: when currentSystem is openclaw,
+ *   open the 'openclaw-assistant' module instead of the default `key`.
+ *   This allows the same nav label to open completely different pages per system.
  */
 interface NavItem {
   key: NavModule
   labelKey: string
   icon: SvgComponent
-  /** If true, this item is only shown in GUI (desktop) mode */
   guiOnly?: boolean
+  systems?: SystemOwner[]
+  systemModuleMap?: Partial<Record<SystemOwner, NavModule>>
 }
 
-/**
- * 顶部导航项（AI助手、知识库、多问）
- */
 const allTopNavItems: NavItem[] = [
   {
     key: 'assistant',
     labelKey: 'nav.assistant',
     icon: IconAssistant,
-  },
-  {
-    key: 'openclaw-assistant',
-    labelKey: 'nav.openclawAssistant',
-    icon: IconAssistant,
+    // 同一导航在不同系统打开不同页面的配置方法
+    systemModuleMap: {
+      openclaw: 'openclaw-assistant',  // OpenClaw 模式下打开 openclaw-assistant 模块
+    },
   },
   {
     key: 'knowledge',
@@ -75,6 +125,12 @@ const allTopNavItems: NavItem[] = [
     key: 'memory',
     labelKey: 'nav.memory',
     icon: IconMemory,
+    systems: ['openclaw'],
+  },
+  {
+    key: 'tools',
+    labelKey: 'nav.tools',
+    icon: IconTools,
   },
   {
     key: 'multiask',
@@ -84,14 +140,14 @@ const allTopNavItems: NavItem[] = [
   },
 ]
 
-// Filter out GUI-only items when running in server mode
 const topNavItems = computed(() =>
-  allTopNavItems.filter((item) => !item.guiOnly || appStore.isGUIMode)
+  allTopNavItems.filter((item) => {
+    if (item.guiOnly && !appStore.isGUIMode) return false
+    if (item.systems && !item.systems.includes(appStore.currentSystem)) return false
+    return true
+  })
 )
 
-/**
- * 底部导航项（设置）
- */
 const bottomNavItems: NavItem[] = [
   {
     key: 'settings',
@@ -101,12 +157,47 @@ const bottomNavItems: NavItem[] = [
 ]
 
 /**
- * 处理导航项点击
- * 点击时自动创建对应模块的新标签页
+ * Resolve the effective NavModule for a nav item given the current system.
  */
-const handleNavClick = (module: NavModule) => {
-  navigationStore.navigateToModule(module)
+const resolveModule = (item: NavItem): NavModule => {
+  if (item.systemModuleMap) {
+    const mapped = item.systemModuleMap[appStore.currentSystem]
+    if (mapped) return mapped
+  }
+  return item.key
 }
+
+/**
+ * Check if a nav item is active by comparing the resolved module.
+ */
+const isActive = (item: NavItem): boolean => {
+  const mod = resolveModule(item)
+  return navigationStore.activeModule === mod
+}
+
+const handleNavClick = (item: NavItem) => {
+  const mod = resolveModule(item)
+  navigationStore.navigateToModule(mod, appStore.currentSystem)
+}
+
+/** Side nav row: OpenClaw active uses #FFE2E2 background; icon color applied separately. */
+const navButtonClass = (item: NavItem) =>
+  cn(
+    'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+    navigationStore.sidebarCollapsed && 'justify-center',
+    isActive(item)
+      ? cn(
+          'font-medium text-accent-foreground',
+          appStore.currentSystem === 'openclaw' ? 'bg-[#FFE2E2]' : 'bg-accent'
+        )
+      : 'text-accent-foreground hover:bg-accent/50'
+  )
+
+const navIconClass = (item: NavItem) =>
+  cn(
+    'size-4 shrink-0 opacity-100',
+    isActive(item) && appStore.currentSystem === 'openclaw' && 'text-[#DC2626]'
+  )
 </script>
 
 <template>
@@ -118,69 +209,124 @@ const handleNavClick = (module: NavModule) => {
       )
     "
   >
-    <!-- 顶部导航区域 -->
+    <!-- Top navigation area -->
     <div class="flex w-full flex-col gap-1">
+      <!-- System Switcher (Figma: #F0F0F0 pill, 20px logo, swap icon) -->
+      <div class="relative mx-2 mb-1">
+        <button
+          type="button"
+          :class="
+            cn(
+              'flex w-full items-center justify-between rounded-md bg-[#f0f0f0] px-2 py-1.5 text-sm transition-colors hover:bg-[#e8e8e8] dark:bg-muted dark:hover:bg-muted/80',
+              navigationStore.sidebarCollapsed && 'justify-center px-1.5'
+            )
+          "
+          :title="navigationStore.sidebarCollapsed ? t(currentOption.labelKey) : undefined"
+          @click="toggleSwitcher"
+        >
+          <div :class="cn('flex min-w-0 items-center gap-1.5', navigationStore.sidebarCollapsed && 'justify-center')">
+            <img
+              :src="currentOption.iconUrl"
+              alt=""
+              class="size-5 shrink-0 rounded-[3.75px] object-cover"
+            />
+            <span
+              v-if="!navigationStore.sidebarCollapsed"
+              class="truncate text-left text-sm font-medium leading-5 tracking-normal text-foreground"
+            >
+              {{ t(currentOption.labelKey) }}
+            </span>
+          </div>
+          <span
+            v-if="!navigationStore.sidebarCollapsed"
+            class="flex size-5 shrink-0 items-center justify-center p-0.5 text-muted-foreground"
+          >
+            <IconSwitch width="14" height="14" class="size-3.5" />
+          </span>
+        </button>
+
+        <!-- Dropdown -->
+        <Transition
+          enter-active-class="transition duration-150 ease-out"
+          enter-from-class="scale-95 opacity-0"
+          enter-to-class="scale-100 opacity-100"
+          leave-active-class="transition duration-100 ease-in"
+          leave-from-class="scale-100 opacity-100"
+          leave-to-class="scale-95 opacity-0"
+        >
+          <div
+            v-if="switcherOpen"
+            :class="
+              cn(
+                'absolute left-0 right-0 top-full z-50 mt-1 flex flex-col gap-0.5 overflow-hidden rounded-md bg-popover p-0.5 shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)] dark:shadow-none dark:ring-1 dark:ring-white/10',
+                navigationStore.sidebarCollapsed && 'left-0 min-w-32'
+              )
+            "
+          >
+            <button
+              v-for="opt in systemOptions"
+              :key="opt.value"
+              type="button"
+              class="flex w-full min-w-0 items-center gap-2 rounded-md px-4 py-[5px] text-left text-sm font-normal leading-[22px] text-[#262626] transition-colors hover:bg-accent dark:text-popover-foreground"
+              @click="selectSystem(opt.value)"
+            >
+              <img
+                :src="opt.iconUrl"
+                alt=""
+                class="size-5 shrink-0 rounded-[3.75px] object-cover"
+              />
+              <span class="min-w-0 flex-1 truncate">{{ t(opt.labelKey) }}</span>
+              <Check
+                v-if="appStore.currentSystem === opt.value"
+                class="size-4 shrink-0 text-foreground"
+              />
+            </button>
+          </div>
+        </Transition>
+      </div>
+
+      <!-- Click-away overlay -->
+      <Teleport to="body">
+        <div
+          v-if="switcherOpen"
+          class="fixed inset-0 z-40"
+          @click="switcherOpen = false"
+        />
+      </Teleport>
+
+      <!-- Nav items -->
       <button
         v-for="item in topNavItems"
         :key="item.key"
-        :class="
-          cn(
-            'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-            navigationStore.sidebarCollapsed && 'justify-center',
-            navigationStore.activeModule === item.key
-              ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
-          )
-        "
+        :class="navButtonClass(item)"
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
-        @click="handleNavClick(item.key)"
+        @click="handleNavClick(item)"
       >
         <component
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          :class="navIconClass(item)"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
     </div>
 
-    <!-- 底部导航区域 -->
+    <!-- Bottom navigation area -->
     <div class="flex w-full flex-col gap-1">
+      <ChatWikiSidebarAccountCard v-if="!navigationStore.sidebarCollapsed" />
       <button
         v-for="item in bottomNavItems"
         :key="item.key"
-        :class="
-          cn(
-            'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-            navigationStore.sidebarCollapsed && 'justify-center',
-            navigationStore.activeModule === item.key
-              ? 'bg-accent text-accent-foreground font-medium'
-              : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground'
-          )
-        "
+        :class="navButtonClass(item)"
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
-        @click="handleNavClick(item.key)"
+        @click="handleNavClick(item)"
       >
         <component
           :is="item.icon"
           width="16"
           height="16"
-          :class="
-            cn(
-              'size-4 shrink-0 transition-opacity',
-              navigationStore.activeModule === item.key
-                ? 'opacity-100'
-                : 'opacity-70 group-hover:opacity-100'
-            )
-          "
+          :class="navIconClass(item)"
         />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>

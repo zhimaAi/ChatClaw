@@ -23,6 +23,7 @@ const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/Channel
 const OpenClawAssistantPage = defineAsyncComponent(
   () => import('@/pages/openclaw-assistant/OpenClawAssistantPage.vue')
 )
+const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue'))
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
@@ -135,6 +136,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   multiask: MultiaskPage,
   document: DocumentViewerPage,
   channels: ChannelsPage,
+  tools: ToolsPage,
 }
 
 /**
@@ -151,7 +153,7 @@ watch(
   () => navigationStore.tabs.length,
   (len) => {
     if (len === 0) {
-      navigationStore.navigateToModule('assistant')
+      navigationStore.navigateToModule('assistant', appStore.currentSystem)
     }
   },
   { immediate: true }
@@ -512,6 +514,7 @@ onUnmounted(() => {
         v-if="moduleComponents[tab.module]"
         v-show="navigationStore.activeTabId === tab.id"
         :tab-id="tab.id"
+        :system-owner="tab.systemOwner"
         class="h-full w-full"
       />
     </template>

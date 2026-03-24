@@ -359,9 +359,9 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 	if hasAttachments {
 		const maxImages = 4
 		const maxImageSize int64 = 2 * 1024 * 1024  // 2MB per image
-		const maxImageTotal int64 = 8 * 1024 * 1024  // 8MB total images
+		const maxImageTotal int64 = 8 * 1024 * 1024 // 8MB total images
 		const maxFiles = 4
-		const maxFileSize int64 = 20 * 1024 * 1024   // 20MB per file
+		const maxFileSize int64 = 20 * 1024 * 1024 // 20MB per file
 
 		var imageCount, fileCount int
 		var imageTotalSize int64
@@ -369,19 +369,19 @@ func (s *ChatService) SendMessage(input SendMessageInput) (*SendMessageResult, e
 		allowedFileMIME := map[string]bool{
 			"application/pdf":    true,
 			"application/msword": true,
-			"application/vnd.openxmlformats-officedocument.wordprocessingml.document":   true,
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
 			"application/vnd.ms-excel": true,
 			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":         true,
-			"application/vnd.ms-powerpoint": true,
+			"application/vnd.ms-powerpoint":                                             true,
 			"application/vnd.openxmlformats-officedocument.presentationml.presentation": true,
-			"text/plain":           true,
-			"text/csv":             true,
-			"text/markdown":        true,
-			"text/html":            true,
-			"text/xml":             true,
-			"application/json":     true,
-			"application/xml":      true,
-			"application/rtf":      true,
+			"text/plain":               true,
+			"text/csv":                 true,
+			"text/markdown":            true,
+			"text/html":                true,
+			"text/xml":                 true,
+			"application/json":         true,
+			"application/xml":          true,
+			"application/rtf":          true,
 			"application/octet-stream": true, // fallback for .log etc.
 		}
 
@@ -711,7 +711,7 @@ func (s *ChatService) appendGenerationContent(conversationID int64, requestID st
 }
 
 // startGeneration creates a new generation context and launches the goroutine.
-func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, _ einoagent.Config, _ einoagent.ProviderConfig, _ AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
+func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
 	requestID := uuid.New().String()
 	genCtx, cancel := context.WithCancel(context.Background())
 
