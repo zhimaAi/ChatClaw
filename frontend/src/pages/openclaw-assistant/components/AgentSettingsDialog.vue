@@ -1,24 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Events } from '@wailsio/runtime'
-import {
-  Trash2,
-  ShieldCheck,
-  Monitor,
-  Globe,
-  FolderOpen,
-  RotateCcw,
-  AlertTriangle,
-} from 'lucide-vue-next'
+import { Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useThemeLogo } from '@/composables/useLogo'
-import { Dialogs } from '@wailsio/runtime'
+import { EmojiPicker } from '@/components/ui/emoji-picker'
 import { ProviderIcon } from '@/components/ui/provider-icon'
-import { defaultAvatars } from '@/assets/avatars'
-import SliderWithTicks from './SliderWithTicks.vue'
-import SliderWithMarks from '@/pages/knowledge/components/SliderWithMarks.vue'
 import {
   Select,
   SelectContent,
@@ -44,16 +31,13 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import {
   OpenClawAgentsService,
   type OpenClawAgent,
-  type UpdateOpenClawAgentInput,
 } from '@bindings/chatclaw/internal/services/openclawagents'
-import { Switch } from '@/components/ui/switch'
 import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
-import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 
-type TabKey = 'model' | 'prompt' | 'workspace' | 'retrieval' | 'delete'
+type TabKey = 'general' | 'advanced' | 'delete'
 
 const props = defineProps<{
   open: boolean
@@ -68,37 +52,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
-const hidePrompt = ref(true)
 
-const tab = ref<TabKey>('model')
+const tab = ref<TabKey>('general')
 const saving = ref(false)
 const deleteConfirmOpen = ref(false)
 
-// prompt tab fields
 const name = ref('')
-const prompt = ref('')
-const icon = ref<string>('') // data URL
-const iconChanged = ref(false)
-
-// model tab fields
-const temperature = ref(0.5)
-const topP = ref(1.0)
-const contextCount = ref(50)
-const maxTokens = ref(1000)
-const retrievalMatchThreshold = ref(0.5)
-const retrievalTopK = ref<number[]>([20])
-
-const enableTemperature = ref(false)
-const enableTopP = ref(false)
-const enableMaxTokens = ref(false)
-
-// workspace tab fields
-const sandboxMode = ref('codex')
-const sandboxNetwork = ref(true)
-const workDir = ref('')
-const defaultWorkDir = ref('')
-const codexInstalled = ref(false)
+const identityEmoji = ref('')
+const identityTheme = ref('')
 
 const providersWithModels = ref<ProviderWithModels[]>([])
 const modelProviderId = ref('')
@@ -107,60 +68,43 @@ const modelName = ref('')
 const modelChanged = ref(false)
 const modelKey = ref('')
 
+const TOOLS_PROFILE_DEFAULT = '__default__'
+const TOOLS_PROFILES = [TOOLS_PROFILE_DEFAULT, 'minimal', 'coding', 'messaging', 'full'] as const
+const SANDBOX_MODES = ['off', 'non-main', 'all'] as const
+const HEARTBEAT_OFF = '__off__'
+const HEARTBEAT_PRESETS = [HEARTBEAT_OFF, '5m', '15m', '30m', '1h', '6h'] as const
+
+const sandboxMode = ref('off')
+const groupChatMentionPatterns = ref('')
+const toolsProfile = ref(TOOLS_PROFILE_DEFAULT)
+const toolsAllowTags = ref<string[]>([])
+const toolsAllowInput = ref('')
+const toolsDenyTags = ref<string[]>([])
+const toolsDenyInput = ref('')
+const heartbeatEvery = ref(HEARTBEAT_OFF)
+const paramsTemperature = ref('')
+const paramsMaxTokens = ref('')
+
 watch(
   () => props.open,
   (open) => {
     if (!open) return
-    const validTabs: TabKey[] = ['model', 'prompt', 'workspace', 'retrieval', 'delete']
+    const validTabs: TabKey[] = ['general', 'advanced', 'delete']
     tab.value =
       props.initialTab && validTabs.includes(props.initialTab as TabKey)
         ? (props.initialTab as TabKey)
-        : 'model'
+        : 'general'
     void loadModels()
-    void OpenClawAgentsService.GetDefaultWorkDir().then((dir) => {
-      defaultWorkDir.value = dir
-    })
-    void ToolchainService.GetToolStatus('codex').then((status) => {
-      codexInstalled.value = status?.installed ?? false
-    })
   }
 )
-
-let unsubscribeToolchain: (() => void) | null = null
-
-onMounted(() => {
-  unsubscribeToolchain = Events.On('toolchain:status', (event: any) => {
-    const data = event?.data?.[0] ?? event?.data ?? event
-    if (data && data.name === 'codex') {
-      codexInstalled.value = !!data.installed
-    }
-  })
-})
-
-onUnmounted(() => {
-  unsubscribeToolchain?.()
-  unsubscribeToolchain = null
-})
 
 watch(
   () => props.agent,
   (agent) => {
     if (!agent) return
     name.value = agent.name ?? ''
-    prompt.value = ''
-    icon.value = agent.icon ?? ''
-    iconChanged.value = false
-
-    temperature.value = agent.llm_temperature ?? 0.5
-    topP.value = agent.llm_top_p ?? 1.0
-    contextCount.value = agent.llm_max_context_count ?? 50
-    maxTokens.value = agent.llm_max_tokens ?? 1000
-    retrievalMatchThreshold.value = agent.retrieval_match_threshold ?? 0.5
-    retrievalTopK.value = [agent.retrieval_top_k ?? 20]
-
-    enableTemperature.value = agent.enable_llm_temperature ?? false
-    enableTopP.value = agent.enable_llm_top_p ?? false
-    enableMaxTokens.value = agent.enable_llm_max_tokens ?? false
+    identityEmoji.value = agent.identity_emoji ?? ''
+    identityTheme.value = agent.identity_theme ?? ''
 
     modelProviderId.value = agent.default_llm_provider_id ?? ''
     modelId.value = agent.default_llm_model_id ?? ''
@@ -169,9 +113,26 @@ watch(
     modelKey.value =
       modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : ''
 
-    sandboxMode.value = agent.sandbox_mode || 'codex'
-    sandboxNetwork.value = agent.sandbox_network ?? true
-    workDir.value = agent.work_dir ?? ''
+    sandboxMode.value = agent.sandbox_mode || 'off'
+
+    const parseJsonArray = (v: string | undefined): string => {
+      if (!v || v === '[]') return ''
+      try {
+        const arr = JSON.parse(v)
+        return Array.isArray(arr) ? arr.join(', ') : ''
+      } catch {
+        return ''
+      }
+    }
+    groupChatMentionPatterns.value = parseJsonArray(agent.group_chat_mention_patterns)
+    toolsProfile.value = agent.tools_profile || TOOLS_PROFILE_DEFAULT
+    toolsAllowTags.value = parseJsonArrayToList(agent.tools_allow)
+    toolsAllowInput.value = ''
+    toolsDenyTags.value = parseJsonArrayToList(agent.tools_deny)
+    toolsDenyInput.value = ''
+    heartbeatEvery.value = agent.heartbeat_every || HEARTBEAT_OFF
+    paramsTemperature.value = agent.params_temperature ?? ''
+    paramsMaxTokens.value = agent.params_max_tokens ?? ''
   },
   { immediate: true }
 )
@@ -193,12 +154,6 @@ function isProviderFree(pw: ProviderWithModels | undefined): boolean {
   return Boolean(p.is_free)
 }
 
-const displayContextCount = computed(() => {
-  return contextCount.value >= 200
-    ? t('assistant.settings.model.unlimited')
-    : String(contextCount.value)
-})
-
 const loadModels = async () => {
   try {
     const providers = await ProvidersService.ListProviders()
@@ -209,13 +164,11 @@ const loadModels = async () => {
         const withModels = await ProvidersService.GetProviderWithModels(p.provider_id)
         if (withModels) results.push(withModels)
       } catch (error: unknown) {
-        // Keep dialog usable even if one provider is down.
         console.warn(`Failed to load provider models (${p.provider_id}) in dialog:`, error)
       }
     }
     providersWithModels.value = results
 
-    // resolve current model name
     if (modelProviderId.value && modelId.value) {
       for (const pw of results) {
         if (pw.provider.provider_id !== modelProviderId.value) continue
@@ -227,7 +180,6 @@ const loadModels = async () => {
       }
     }
   } catch (error: unknown) {
-    // 弹窗内加载失败不阻塞用户操作，仅记录警告
     console.warn('Failed to load models in dialog:', error)
   }
 }
@@ -266,66 +218,107 @@ const isValid = computed(() => name.value.trim() !== '')
 
 const handleClose = () => emit('update:open', false)
 
-const handleSelectDefaultAvatar = (src: string) => {
-  icon.value = src
-  iconChanged.value = true
+const toJsonArray = (csv: string): string => {
+  const items = csv
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return JSON.stringify(items)
 }
 
-const handlePickIcon = async () => {
-  if (saving.value) return
+const parseJsonArrayToList = (v: string | undefined): string[] => {
+  if (!v || v === '[]') return []
   try {
-    const path = await Dialogs.OpenFile({
-      CanChooseFiles: true,
-      CanChooseDirectories: false,
-      AllowsMultipleSelection: false,
-      Title: t('assistant.icon.pickTitle'),
-      Filters: [
-        {
-          DisplayName: t('assistant.icon.filterImages'),
-          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
-        },
-      ],
-    })
-    if (!path) return
-    icon.value = await OpenClawAgentsService.ReadIconFile(path)
-    iconChanged.value = true
-  } catch (error) {
-    // User cancelled the file dialog — not an error
-    if (String(error).includes('cancelled by user')) return
-    console.error('Failed to pick icon:', error)
+    const arr = JSON.parse(v)
+    return Array.isArray(arr) ? arr.filter((s: any) => typeof s === 'string' && s.trim()) : []
+  } catch {
+    return []
   }
 }
 
-const isWindows = navigator.platform.toLowerCase().includes('win')
-const pathSep = isWindows ? '\\' : '/'
+const addToolsAllowTag = () => {
+  const val = toolsAllowInput.value.trim()
+  if (val && !toolsAllowTags.value.includes(val)) {
+    toolsAllowTags.value.push(val)
+  }
+  toolsAllowInput.value = ''
+}
 
-const workDirHint = computed(() => {
-  const base = workDir.value || defaultWorkDir.value
-  if (!base) return ''
-  return t('assistant.settings.workspace.workDirHint', { basePath: base, sep: pathSep })
+const removeToolsAllowTag = (i: number) => {
+  toolsAllowTags.value.splice(i, 1)
+}
+
+const addToolsDenyTag = () => {
+  const val = toolsDenyInput.value.trim()
+  if (val && !toolsDenyTags.value.includes(val)) {
+    toolsDenyTags.value.push(val)
+  }
+  toolsDenyInput.value = ''
+}
+
+const removeToolsDenyTag = (i: number) => {
+  toolsDenyTags.value.splice(i, 1)
+}
+
+const isHeartbeatCustom = computed(
+  () => heartbeatEvery.value !== HEARTBEAT_OFF && !(HEARTBEAT_PRESETS as readonly string[]).includes(heartbeatEvery.value)
+)
+
+const heartbeatSelectValue = computed(() =>
+  isHeartbeatCustom.value ? '__custom__' : heartbeatEvery.value
+)
+
+const customHeartbeat = ref('')
+
+watch(
+  () => heartbeatEvery.value,
+  (v) => {
+    if (isHeartbeatCustom.value) customHeartbeat.value = v
+  },
+  { immediate: true }
+)
+
+const onHeartbeatSelectChange = (val: any) => {
+  if (val === '__custom__') {
+    heartbeatEvery.value = customHeartbeat.value || '10m'
+  } else {
+    heartbeatEvery.value = val ?? HEARTBEAT_OFF
+  }
+}
+
+const HEARTBEAT_PATTERN = /^\d+(ms|s|m|h)$/
+const heartbeatError = computed(() => {
+  if (!isHeartbeatCustom.value) return ''
+  return HEARTBEAT_PATTERN.test(heartbeatEvery.value) ? '' : t('assistant.settings.advanced.heartbeatFormatError')
 })
 
-const handleSelectWorkDir = async () => {
-  try {
-    const result = await Dialogs.OpenFile({
-      Title: t('assistant.settings.workspace.selectDir'),
-      CanChooseFiles: false,
-      CanChooseDirectories: true,
-      AllowsMultipleSelection: false,
-    })
-    if (result && typeof result === 'string') {
-      workDir.value = result
-    } else if (Array.isArray(result) && result.length > 0) {
-      workDir.value = result[0]
-    }
-  } catch (error) {
-    if (String(error).includes('cancelled by user')) return
-    console.error('Failed to select directory:', error)
-  }
+const onHeartbeatInput = (e: Event) => {
+  const raw = (e.target as HTMLInputElement).value
+  heartbeatEvery.value = raw.replace(/[^0-9a-z]/gi, '')
+}
+
+const clampTemperature = () => {
+  if (paramsTemperature.value === '') return
+  const n = parseFloat(paramsTemperature.value)
+  if (isNaN(n)) { paramsTemperature.value = ''; return }
+  paramsTemperature.value = String(Math.round(Math.min(2, Math.max(0, n)) * 10) / 10)
+}
+
+const clampMaxTokens = () => {
+  if (paramsMaxTokens.value === '') return
+  const n = parseInt(paramsMaxTokens.value, 10)
+  if (isNaN(n)) { paramsMaxTokens.value = ''; return }
+  paramsMaxTokens.value = String(Math.max(1, n))
 }
 
 const handleSave = async () => {
   if (!props.agent || !isValid.value || saving.value) return
+  if (heartbeatError.value) {
+    toast.error(heartbeatError.value)
+    return
+  }
+  clampTemperature()
+  clampMaxTokens()
   saving.value = true
   try {
     const wantsModelUpdate = modelChanged.value
@@ -334,31 +327,40 @@ const handleSave = async () => {
     }
     const updated = await OpenClawAgentsService.UpdateAgent(props.agent.id, {
       name: name.value.trim(),
-      icon: iconChanged.value ? icon.value : null,
+      icon: null,
       default_llm_provider_id: wantsModelUpdate ? modelProviderId.value : null,
       default_llm_model_id: wantsModelUpdate ? modelId.value : null,
-      enable_llm_temperature: enableTemperature.value,
-      enable_llm_top_p: enableTopP.value,
-      enable_llm_max_tokens: enableMaxTokens.value,
-      llm_temperature: temperature.value,
-      llm_top_p: topP.value,
-      llm_max_context_count: contextCount.value,
-      llm_max_tokens: maxTokens.value,
-      retrieval_match_threshold: retrievalMatchThreshold.value,
-      retrieval_top_k: retrievalTopK.value[0] ?? 20,
+      enable_llm_temperature: null,
+      enable_llm_top_p: null,
+      enable_llm_max_tokens: null,
+      llm_temperature: null,
+      llm_top_p: null,
+      llm_max_context_count: null,
+      llm_max_tokens: null,
+      retrieval_match_threshold: null,
+      retrieval_top_k: null,
       sandbox_mode: sandboxMode.value,
-      sandbox_network: sandboxNetwork.value,
-      work_dir: workDir.value,
+      sandbox_network: null,
+      work_dir: null,
       mcp_enabled: null,
       mcp_server_ids: null,
       mcp_server_enabled_ids: null,
+      identity_emoji: identityEmoji.value,
+      identity_theme: identityTheme.value,
+      group_chat_mention_patterns: toJsonArray(groupChatMentionPatterns.value),
+      tools_profile: toolsProfile.value === TOOLS_PROFILE_DEFAULT ? '' : toolsProfile.value,
+      tools_allow: JSON.stringify(toolsAllowTags.value),
+      tools_deny: JSON.stringify(toolsDenyTags.value),
+      heartbeat_every: heartbeatEvery.value === HEARTBEAT_OFF ? '' : heartbeatEvery.value,
+      params_temperature: paramsTemperature.value,
+      params_max_tokens: paramsMaxTokens.value,
     })
     if (!updated) {
       throw new Error(t('assistant.errors.updateFailed'))
     }
     emit('updated', updated)
     toast.success(t('assistant.toasts.updated'))
-    emit('update:open', false)
+    modelChanged.value = false
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.updateFailed'))
   } finally {
@@ -386,102 +388,78 @@ const handleDelete = async () => {
 <template>
   <Dialog :open="open" @update:open="handleClose">
     <DialogContent size="xl" class="gap-0 p-0">
-      <!-- 头部：标题（关闭按钮由 DialogContent 自带） -->
       <div class="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
         <div class="text-base font-semibold text-foreground">
           {{ t('assistant.settings.title') }}
         </div>
       </div>
 
-      <!-- 内容区：固定高度，内部不随 tab 抖动 -->
-      <div class="h-[480px] overflow-hidden px-4 py-2">
+      <div class="h-[520px] overflow-hidden px-4 py-2">
         <div class="flex h-full">
-          <!-- 左侧 tabs（独立区域） -->
           <div class="w-[140px] shrink-0 border-r border-border pr-4">
             <div class="flex flex-col gap-2">
               <button
+                v-for="key in (['general', 'advanced', 'delete'] as const)"
+                :key="key"
                 :class="
                   cn(
                     'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
-                    tab === 'model'
+                    tab === key
                       ? 'bg-muted text-foreground'
                       : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
                   )
                 "
-                @click="tab = 'model'"
+                @click="tab = key"
               >
-                {{ t('assistant.settings.tabs.model') }}
-              </button>
-              <button
-                :class="
-                  cn(
-                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
-                    tab === 'prompt'
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                  )
-                "
-                @click="tab = 'prompt'"
-              >
-                {{ t('assistant.settings.tabs.prompt') }}
-              </button>
-              <button
-                :class="
-                  cn(
-                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
-                    tab === 'workspace'
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                  )
-                "
-                @click="tab = 'workspace'"
-              >
-                {{ t('assistant.settings.tabs.workspace') }}
-              </button>
-              <button
-                :class="
-                  cn(
-                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
-                    tab === 'retrieval'
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                  )
-                "
-                @click="tab = 'retrieval'"
-              >
-                {{ t('assistant.settings.tabs.retrieval') }}
-              </button>
-              <button
-                :class="
-                  cn(
-                    'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
-                    tab === 'delete'
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                  )
-                "
-                @click="tab = 'delete'"
-              >
-                {{ t('assistant.settings.tabs.delete') }}
+                {{ t(`assistant.settings.tabs.${key}`) }}
               </button>
             </div>
           </div>
 
-          <!-- 右侧卡片（明显边框，固定高度，不随 tab 抖动） -->
           <div class="min-w-0 flex-1 pl-4">
             <div
               class="h-full overflow-y-auto overflow-x-hidden rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
             >
-              <!-- 模型设置 -->
-              <div v-if="tab === 'model'" class="flex flex-col gap-5">
-                <div class="flex items-center justify-between gap-4">
-                  <div class="text-sm font-medium text-foreground">
+              <!-- General: identity + model -->
+              <div v-if="tab === 'general'" class="flex flex-col gap-5">
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.fields.name') }}
+                    <span class="text-destructive">*</span>
+                  </label>
+                  <Input
+                    v-model="name"
+                    :placeholder="t('assistant.fields.namePlaceholder')"
+                    maxlength="100"
+                  />
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.fields.identityEmoji') }}
+                  </label>
+                  <EmojiPicker v-model="identityEmoji" />
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.fields.identityTheme') }}
+                  </label>
+                  <Input
+                    v-model="identityTheme"
+                    :placeholder="t('assistant.fields.identityThemePlaceholder')"
+                    maxlength="200"
+                  />
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
                     {{ t('assistant.settings.model.defaultModel') }}
-                  </div>
+                  </label>
                   <div class="flex min-w-0 items-center gap-2">
                     <Select :model-value="modelKey" @update:model-value="onModelKeyChange">
                       <SelectTrigger
-                        class="h-9 w-[240px] rounded-md border border-border bg-background"
+                        class="h-9 w-full rounded-md border border-border bg-background"
                       >
                         <div v-if="hasDefaultModel" class="flex min-w-0 items-center gap-2">
                           <ProviderIcon
@@ -536,343 +514,218 @@ const handleDelete = async () => {
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-
                     <Button
+                      v-if="hasDefaultModel"
                       size="icon"
                       variant="ghost"
-                      :disabled="saving || !hasDefaultModel"
+                      :disabled="saving"
                       :title="t('assistant.settings.model.clear')"
                       @click="clearDefaultModel"
                     >
                       <Trash2 class="size-4" />
                     </Button>
                   </div>
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="text-sm font-medium text-foreground">
-                        {{ t('assistant.settings.model.temperature') }}
-                      </div>
-                      <div class="text-xs text-muted-foreground">
-                        {{ t('assistant.settings.model.temperatureHint') }}
-                      </div>
-                    </div>
-                    <Switch v-model="enableTemperature" />
-                  </div>
-                  <SliderWithTicks
-                    v-if="enableTemperature"
-                    v-model="temperature"
-                    :min="0"
-                    :max="2"
-                    :step="0.05"
-                    :ticks="[
-                      { value: 0, label: '0' },
-                      { value: 0.5, label: '0.5' },
-                      { value: 1, label: '1' },
-                      { value: 1.5, label: '1.5' },
-                      { value: 2, label: '2' },
-                    ]"
-                    :format-value="(v) => v.toFixed(2)"
-                  />
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="text-sm font-medium text-foreground">
-                        {{ t('assistant.settings.model.topP') }}
-                      </div>
-                      <div class="text-xs text-muted-foreground">
-                        {{ t('assistant.settings.model.topPHint') }}
-                      </div>
-                    </div>
-                    <Switch v-model="enableTopP" />
-                  </div>
-                  <SliderWithTicks
-                    v-if="enableTopP"
-                    v-model="topP"
-                    :min="0"
-                    :max="1"
-                    :step="0.01"
-                    :ticks="[
-                      { value: 0, label: '0' },
-                      { value: 0.25, label: '0.25' },
-                      { value: 0.5, label: '0.5' },
-                      { value: 0.75, label: '0.75' },
-                      { value: 1, label: '1' },
-                    ]"
-                    :format-value="(v) => v.toFixed(2)"
-                  />
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between">
-                    <div class="text-sm font-medium text-foreground">
-                      {{ t('assistant.settings.model.contextCount') }}
-                    </div>
-                    <div class="text-sm text-muted-foreground">
-                      {{ displayContextCount }}
-                    </div>
-                  </div>
-                  <SliderWithTicks
-                    v-model="contextCount"
-                    :min="0"
-                    :max="200"
-                    :step="1"
-                    :ticks="[
-                      { value: 0, label: '0' },
-                      { value: 50, label: '50' },
-                      { value: 100, label: '100' },
-                      { value: 150, label: '150' },
-                      { value: 200, label: t('assistant.settings.model.unlimited') },
-                    ]"
-                    :format-value="() => ''"
-                  />
-                </div>
-
-                <div class="flex items-center justify-between gap-4">
-                  <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.model.maxTokens') }}
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <Input
-                      v-if="enableMaxTokens"
-                      v-model.number="maxTokens"
-                      type="number"
-                      min="1"
-                      max="200000"
-                      class="h-9 w-[160px]"
-                    />
-                    <Switch v-model="enableMaxTokens" />
-                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.model.defaultModelHint') }}
+                  </p>
                 </div>
               </div>
 
-              <!-- 提示词设置 -->
-              <div v-else-if="tab === 'prompt'" class="flex flex-col gap-4">
-                <div class="flex flex-col items-center gap-2">
-                  <button
-                    class="flex size-icon-box items-center justify-center rounded-icon-box border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
-                    type="button"
-                    @click="handlePickIcon"
-                  >
-                    <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-                    <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
-                  </button>
-                  <div class="text-xs text-muted-foreground">
-                    {{ t('assistant.icon.hint') }}
-                  </div>
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="text-xs text-muted-foreground">
-                    {{ t('assistant.icon.defaultAvatars') }}
-                  </div>
-                  <div class="flex flex-wrap gap-3">
-                    <button
-                      v-for="avatar in defaultAvatars"
-                      :key="avatar.id"
-                      type="button"
-                      class="relative flex size-12 items-center justify-center rounded-xl border transition-colors"
-                      :class="
-                        icon === avatar.src
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border bg-background hover:border-foreground/40 hover:bg-muted/60 dark:border-white/10'
-                      "
-                      @click="handleSelectDefaultAvatar(avatar.src)"
-                    >
-                      <img :src="avatar.src" class="size-10 rounded-lg object-cover" />
-                      <div
-                        v-if="icon === avatar.src"
-                        class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"
-                      >
-                        <span
-                          class="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
-                        >
-                          ✓
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
+              <!-- Advanced -->
+              <div v-else-if="tab === 'advanced'" class="flex flex-col gap-5">
+                <!-- Sandbox mode -->
                 <div class="flex flex-col gap-1.5">
                   <label class="text-sm font-medium text-foreground">
-                    {{ t('assistant.fields.name') }}
-                    <span class="text-destructive">*</span>
+                    {{ t('assistant.settings.advanced.sandboxMode') }}
                   </label>
-                  <Input
-                    v-model="name"
-                    :placeholder="t('assistant.fields.namePlaceholder')"
-                    maxlength="100"
-                  />
+                  <Select v-model="sandboxMode">
+                    <SelectTrigger class="h-9 w-full">
+                      <span class="text-sm">{{ t(`assistant.settings.advanced.sandbox_${sandboxMode}`) }}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="mode in SANDBOX_MODES" :key="mode" :value="mode">
+                        {{ t(`assistant.settings.advanced.sandbox_${mode}`) }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.advanced.sandboxModeHint') }}
+                  </p>
                 </div>
 
-                <div v-if="!hidePrompt" class="flex flex-col gap-1.5">
-                  <label class="text-sm font-medium text-foreground">
-                    {{ t('assistant.fields.prompt') }}
-                  </label>
-                  <textarea
-                    v-model="prompt"
-                    :placeholder="t('assistant.fields.promptPlaceholder')"
-                    maxlength="1000"
-                    class="min-h-[200px] w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-              </div>
-
-              <!-- 工作区设置 -->
-              <div v-else-if="tab === 'workspace'" class="flex min-w-0 flex-col gap-4">
+                <!-- Tools -->
                 <div class="flex flex-col gap-3">
                   <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.workspace.sandboxMode') }}
+                    {{ t('assistant.settings.advanced.tools') }}
                   </div>
-                  <div class="flex gap-2">
-                    <button
-                      class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
-                      :class="
-                        sandboxMode === 'codex'
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
-                      "
-                      @click="sandboxMode = 'codex'"
-                    >
-                      <ShieldCheck class="size-4" />
-                      {{ t('assistant.settings.workspace.modeCodex') }}
-                    </button>
-                    <button
-                      class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
-                      :class="
-                        sandboxMode === 'native'
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground'
-                      "
-                      @click="sandboxMode = 'native'"
-                    >
-                      <Monitor class="size-4" />
-                      {{ t('assistant.settings.workspace.modeNative') }}
-                    </button>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-muted-foreground">
+                      {{ t('assistant.settings.advanced.toolsProfile') }}
+                    </label>
+                    <Select v-model="toolsProfile">
+                      <SelectTrigger class="h-9 w-full">
+                        <span class="text-sm">
+                          {{ toolsProfile === TOOLS_PROFILE_DEFAULT ? t('assistant.settings.advanced.toolsProfile_default') : t(`assistant.settings.advanced.toolsProfile_${toolsProfile}`) }}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="p in TOOLS_PROFILES" :key="p" :value="p">
+                          {{ p === TOOLS_PROFILE_DEFAULT ? t('assistant.settings.advanced.toolsProfile_default') : t(`assistant.settings.advanced.toolsProfile_${p}`) }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <p class="text-xs text-muted-foreground">
-                    {{
-                      sandboxMode === 'codex'
-                        ? t('assistant.settings.workspace.codexDesc')
-                        : t('assistant.settings.workspace.nativeDesc')
-                    }}
-                  </p>
-                  <div
-                    v-if="sandboxMode === 'codex' && !codexInstalled"
-                    class="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5 dark:border-white/10 dark:bg-white/5"
-                  >
-                    <AlertTriangle class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-                    <p class="text-xs text-muted-foreground">
-                      {{ t('assistant.settings.workspace.codexNotInstalled') }}
-                    </p>
-                  </div>
-                </div>
-
-                <div v-if="sandboxMode === 'codex'" class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <Globe class="size-4 text-muted-foreground" />
-                      <span class="text-sm font-medium text-foreground">
-                        {{ t('assistant.settings.workspace.networkAccess') }}
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-muted-foreground">
+                      {{ t('assistant.settings.advanced.toolsAllow') }}
+                    </label>
+                    <div class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9">
+                      <span
+                        v-for="(tag, i) in toolsAllowTags"
+                        :key="i"
+                        class="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-foreground"
+                      >
+                        {{ tag }}
+                        <button class="text-muted-foreground hover:text-foreground" @click="removeToolsAllowTag(i)">&times;</button>
                       </span>
+                      <input
+                        v-model="toolsAllowInput"
+                        class="min-w-[80px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        :placeholder="toolsAllowTags.length ? '' : t('assistant.settings.advanced.toolsAllowPlaceholder')"
+                        @keydown.enter.prevent="addToolsAllowTag"
+                        @keydown.,.prevent="addToolsAllowTag"
+                        @blur="addToolsAllowTag"
+                      />
                     </div>
-                    <Switch v-model="sandboxNetwork" />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-muted-foreground">
+                      {{ t('assistant.settings.advanced.toolsDeny') }}
+                    </label>
+                    <div class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9">
+                      <span
+                        v-for="(tag, i) in toolsDenyTags"
+                        :key="i"
+                        class="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-foreground"
+                      >
+                        {{ tag }}
+                        <button class="text-muted-foreground hover:text-foreground" @click="removeToolsDenyTag(i)">&times;</button>
+                      </span>
+                      <input
+                        v-model="toolsDenyInput"
+                        class="min-w-[80px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        :placeholder="toolsDenyTags.length ? '' : t('assistant.settings.advanced.toolsDenyPlaceholder')"
+                        @keydown.enter.prevent="addToolsDenyTag"
+                        @keydown.,.prevent="addToolsDenyTag"
+                        @blur="addToolsDenyTag"
+                      />
+                    </div>
                   </div>
                   <p class="text-xs text-muted-foreground">
-                    {{ t('assistant.settings.workspace.networkAccessDesc') }}
+                    {{ t('assistant.settings.advanced.toolsHint') }}
                   </p>
                 </div>
 
-                <div class="flex flex-col gap-2">
-                  <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.workspace.workDir') }}
-                  </div>
-                  <p class="text-xs text-muted-foreground">
-                    {{ t('assistant.settings.workspace.workDirDesc') }}
-                  </p>
-                  <div class="flex min-w-0 items-center gap-2">
-                    <span
-                      class="min-w-0 flex-1 truncate rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
-                      :title="workDir || defaultWorkDir"
-                    >
-                      {{ workDir || defaultWorkDir }}
-                    </span>
+                <!-- Group chat -->
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.advanced.groupChatMentionPatterns') }}
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <Input
+                      v-model="groupChatMentionPatterns"
+                      class="flex-1"
+                      :placeholder="t('assistant.settings.advanced.groupChatMentionPatternsPlaceholder')"
+                    />
                     <Button
+                      v-if="!groupChatMentionPatterns"
                       variant="outline"
                       size="sm"
-                      class="shrink-0 gap-1.5"
-                      @click="handleSelectWorkDir"
+                      class="shrink-0 text-xs"
+                      @click="groupChatMentionPatterns = '@' + (name || 'assistant')"
                     >
-                      <FolderOpen class="size-3.5 shrink-0" />
-                      {{ t('assistant.settings.workspace.changeDir') }}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      class="-ml-1 -mr-1.5 shrink-0 text-muted-foreground"
-                      :title="t('assistant.settings.workspace.resetDir')"
-                      @click="workDir = defaultWorkDir"
-                    >
-                      <RotateCcw class="size-3.5" />
+                      {{ t('assistant.settings.advanced.groupChatInsertPreset') }}
                     </Button>
                   </div>
-                  <p class="overflow-hidden break-all text-xs font-mono text-muted-foreground/70">
-                    {{ workDirHint }}
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.advanced.groupChatMentionPatternsHint') }}
+                  </p>
+                </div>
+
+                <!-- Heartbeat -->
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.advanced.heartbeat') }}
+                  </label>
+                  <Select :model-value="heartbeatSelectValue" @update:model-value="onHeartbeatSelectChange">
+                    <SelectTrigger class="h-9 w-full">
+                      <span class="text-sm">
+                        {{ heartbeatEvery === HEARTBEAT_OFF ? t('assistant.settings.advanced.heartbeat_off') : (isHeartbeatCustom ? t('assistant.settings.advanced.heartbeat_custom') : heartbeatEvery) }}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="p in HEARTBEAT_PRESETS" :key="p" :value="p">
+                        {{ p === HEARTBEAT_OFF ? t('assistant.settings.advanced.heartbeat_off') : p }}
+                      </SelectItem>
+                      <SelectItem value="__custom__">{{ t('assistant.settings.advanced.heartbeat_custom') }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div v-if="isHeartbeatCustom" class="flex flex-col gap-1">
+                    <Input
+                      :model-value="heartbeatEvery"
+                      class="h-9"
+                      :class="heartbeatError ? 'border-destructive' : ''"
+                      :placeholder="t('assistant.settings.advanced.heartbeatPlaceholder')"
+                      @input="onHeartbeatInput"
+                    />
+                    <p v-if="heartbeatError" class="text-xs text-destructive">
+                      {{ heartbeatError }}
+                    </p>
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.advanced.heartbeatHint') }}
+                  </p>
+                </div>
+
+                <!-- Model params -->
+                <div class="flex flex-col gap-3">
+                  <div class="text-sm font-medium text-foreground">
+                    {{ t('assistant.settings.advanced.params') }}
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-muted-foreground">
+                      {{ t('assistant.settings.advanced.paramsTemperature') }}
+                    </label>
+                    <Input
+                      v-model="paramsTemperature"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      :placeholder="t('assistant.settings.advanced.paramsTemperaturePlaceholder')"
+                      @blur="clampTemperature"
+                    />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-medium text-muted-foreground">
+                      {{ t('assistant.settings.advanced.paramsMaxTokens') }}
+                    </label>
+                    <Input
+                      v-model="paramsMaxTokens"
+                      type="number"
+                      step="1"
+                      min="1"
+                      :placeholder="t('assistant.settings.advanced.paramsMaxTokensPlaceholder')"
+                      @blur="clampMaxTokens"
+                    />
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ t('assistant.settings.advanced.paramsHint') }}
                   </p>
                 </div>
               </div>
 
-              <!-- 知识库检索设置 -->
-              <div v-else-if="tab === 'retrieval'" class="flex flex-col gap-5">
-                <div class="flex items-center justify-between gap-4">
-                  <div class="text-sm font-medium text-foreground">
-                    {{ t('assistant.settings.retrieval.matchThreshold') }}
-                  </div>
-                  <Input
-                    v-model.number="retrievalMatchThreshold"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    class="h-9 w-[160px]"
-                  />
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between">
-                    <div class="text-sm font-medium text-foreground">
-                      {{ t('assistant.settings.retrieval.topK') }}
-                    </div>
-                    <div class="text-sm text-muted-foreground tabular-nums">
-                      {{ retrievalTopK[0] ?? 20 }}
-                    </div>
-                  </div>
-                  <SliderWithMarks
-                    v-model="retrievalTopK"
-                    :min="1"
-                    :max="50"
-                    :step="1"
-                    :disabled="saving"
-                    :marks="[
-                      { value: 1, label: '1' },
-                      {
-                        value: 20,
-                        label: t('assistant.settings.retrieval.default'),
-                        emphasize: true,
-                      },
-                      { value: 30, label: '30' },
-                      { value: 50, label: '50' },
-                    ]"
-                  />
-                </div>
-              </div>
-
-              <!-- 删除助手 -->
+              <!-- Delete agent -->
               <div v-else class="flex h-full flex-col items-center justify-center gap-4">
                 <div class="text-base font-semibold text-foreground">
                   {{ t('assistant.settings.delete.title') }}
@@ -931,7 +784,6 @@ const handleDelete = async () => {
         </div>
       </div>
 
-      <!-- 底部：操作按钮 -->
       <div
         class="flex items-center justify-end gap-2 border-t border-border bg-background px-4 py-3"
       >

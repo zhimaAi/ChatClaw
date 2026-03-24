@@ -76,10 +76,38 @@ export interface StreamingMessageState {
   toolCalls: ToolCallInfo[]
   segments: MessageSegment[] // Ordered segments for interleaved rendering
   status: string
+  isOpenClaw?: boolean // OpenClaw messages are not persisted in local DB
 }
 
 // Auto-decrementing counter for local optimistic message IDs (always negative to avoid collision with backend IDs)
 let localMessageCounter = 0
+
+function deepCloneToolCall(tc: ToolCallInfo): ToolCallInfo {
+  return {
+    ...tc,
+    childToolCalls: tc.childToolCalls?.map((c) => ({ ...c })),
+    childContent: tc.childContent,
+    childThinkingContent: tc.childThinkingContent,
+  }
+}
+
+function persistStreamingSegments(
+  segmentsByMessage: Record<number, MessageSegment[]>,
+  messageId: number,
+  segments: MessageSegment[]
+) {
+  segmentsByMessage[messageId] = segments.map((seg) => {
+    if (seg.type === 'thinking') {
+      return { type: 'thinking' as const, content: seg.content }
+    } else if (seg.type === 'content') {
+      return { type: 'content' as const, content: seg.content }
+    } else if (seg.type === 'retrieval') {
+      return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
+    } else {
+      return { type: 'tools' as const, toolCalls: seg.toolCalls.map(deepCloneToolCall) }
+    }
+  })
+}
 
 export const useChatStore = defineStore('chat', () => {
   // Messages by conversation ID
@@ -90,6 +118,9 @@ export const useChatStore = defineStore('chat', () => {
 
   // Active request ID by conversation (to match events)
   const activeRequestByConversation = ref<Record<number, string>>({})
+
+  // Track which conversations are OpenClaw (messages not persisted in local DB)
+  const openClawConversations = ref<Set<number>>(new Set())
 
   // Loading state by conversation
   const loadingByConversation = ref<Record<number, boolean>>({})
@@ -129,11 +160,39 @@ export const useChatStore = defineStore('chat', () => {
     errorByConversation.value[conversationId] = null
 
     try {
-      const messages = await ChatService.GetMessages(conversationId)
+      const isOpenClaw = openClawConversations.value.has(conversationId)
+      const messages = isOpenClaw
+        ? await ChatService.GetOpenClawMessages(conversationId)
+        : await ChatService.GetMessages(conversationId)
       const fetched = messages ?? []
       const current = messagesByConversation.value[conversationId] ?? []
       const streaming = streamingByConversation.value[conversationId]
 
+      if (isOpenClaw) {
+        // OpenClaw messages are not in local DB; IDs are ephemeral.
+        // If actively streaming, keep current state.
+        // If fetched is empty but we have local optimistic messages, keep them.
+        if (!streaming) {
+          if (fetched.length === 0 && current.length > 0) {
+            // Keep current messages to avoid wiping optimistic user messages
+          } else if (fetched.length > 0) {
+            // Merge: keep local optimistic messages (negative IDs) not yet in history
+            const merged: Message[] = [...fetched]
+            for (const msg of current) {
+              if (msg.id >= 0) continue
+              const existsOnServer = fetched.some(
+                (fm) =>
+                  fm.role === msg.role &&
+                  String(fm.content ?? '').trim() === String(msg.content ?? '').trim()
+              )
+              if (!existsOnServer) {
+                merged.push(msg)
+              }
+            }
+            messagesByConversation.value[conversationId] = merged
+          }
+        }
+      } else {
       const normalizeContent = (v: unknown) => String(v ?? '').trim()
 
       // IMPORTANT:
@@ -177,6 +236,7 @@ export const useChatStore = defineStore('chat', () => {
         }
 
         messagesByConversation.value[conversationId] = merged
+      }
       }
 
       // Build a map of tool results from tool-role messages (tool_call_id → content)
@@ -421,6 +481,96 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // Send a message via the OpenClaw OpenResponses API
+  const sendOpenClawMessage = async (
+    conversationId: number,
+    content: string,
+    tabId: string,
+    images?: Array<{
+      id: string
+      file: File
+      mimeType: string
+      base64: string
+      dataUrl: string
+      fileName: string
+      size: number
+    }>,
+    files?: Array<{
+      id: string
+      file: File
+      mimeType: string
+      base64: string
+      fileName: string
+      size: number
+    }>
+  ) => {
+    const hasContent =
+      content.trim() !== '' || (images && images.length > 0) || (files && files.length > 0)
+    if (conversationId <= 0 || !hasContent) return null
+
+    const imagePayloads =
+      images?.map((img) => ({
+        kind: 'image',
+        source: 'inline_base64',
+        mime_type: img.mimeType,
+        base64: img.base64,
+        file_name: img.fileName,
+        size: img.size,
+      })) || []
+
+    const filePayloads =
+      files?.map((f) => ({
+        kind: 'file',
+        source: 'inline_base64',
+        mime_type: f.mimeType,
+        base64: f.base64,
+        file_name: f.fileName,
+        original_name: f.fileName,
+        size: f.size,
+      })) || []
+
+    const allPayloads = [...imagePayloads, ...filePayloads]
+
+    localMessageCounter -= 1
+    const localUserMessageId = localMessageCounter
+    appendMessage(conversationId, {
+      id: localUserMessageId,
+      conversation_id: conversationId,
+      role: MessageRole.USER,
+      content: content.trim(),
+      status: MessageStatus.SUCCESS,
+      thinking_content: '',
+      tool_calls: '[]',
+      images_json: JSON.stringify(allPayloads),
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+
+    openClawConversations.value.add(conversationId)
+
+    try {
+      const result = await ChatService.SendOpenClawMessage(
+        new SendMessageInput({
+          conversation_id: conversationId,
+          content: content.trim(),
+          tab_id: tabId,
+          images: allPayloads,
+        })
+      )
+
+      if (result) {
+        activeRequestByConversation.value[conversationId] = result.request_id
+      }
+
+      return result
+    } catch (error: unknown) {
+      removeMessage(conversationId, localUserMessageId)
+      throw error
+    }
+  }
+
   // Edit and resend a message
   const editAndResend = async (
     conversationId: number,
@@ -505,6 +655,85 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // Edit and resend a message via OpenClaw API
+  const editAndResendOpenClaw = async (
+    conversationId: number,
+    messageId: number,
+    newContent: string,
+    tabId: string,
+    images?: ImagePayload[]
+  ) => {
+    if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
+
+    const current = messagesByConversation.value[conversationId]
+    const msgToEdit = current?.find((m) => m.id === messageId)
+    const existingImagesJson = msgToEdit?.images_json
+
+    let existingImages: ImagePayload[] = []
+    if (existingImagesJson) {
+      try {
+        existingImages = JSON.parse(existingImagesJson) as ImagePayload[]
+      } catch (e) {
+        console.warn('Failed to parse existing images_json:', e)
+      }
+    }
+
+    const newImagePayloads: ImagePayload[] =
+      images?.map((img) => ({
+        id: img.id,
+        kind: img.kind || 'image',
+        source: img.source || 'inline_base64',
+        mime_type: img.mime_type,
+        base64: img.base64,
+        data_url: img.data_url,
+        file_name: img.file_name,
+        file_path: img.file_path,
+        original_name: img.original_name,
+        size: img.size,
+      })) || []
+
+    const imagePayloads: ImagePayload[] =
+      newImagePayloads.length > 0 ? newImagePayloads : existingImages
+
+    ensureConversationMessages(conversationId)
+    const idx = current?.findIndex((m) => m.id === messageId) ?? -1
+    if (idx >= 0 && current) {
+      const next = [...current]
+      next[idx] = {
+        ...next[idx],
+        content: newContent.trim(),
+        images_json: JSON.stringify(imagePayloads),
+      } as Message
+      messagesByConversation.value[conversationId] = next.slice(0, idx + 1)
+    }
+
+    delete streamingByConversation.value[conversationId]
+    delete activeRequestByConversation.value[conversationId]
+
+    openClawConversations.value.add(conversationId)
+
+    try {
+      const result = await ChatService.EditAndResendOpenClaw(
+        new EditAndResendInput({
+          conversation_id: conversationId,
+          message_id: messageId,
+          new_content: newContent.trim(),
+          tab_id: tabId,
+          images: imagePayloads,
+        })
+      )
+
+      if (result) {
+        activeRequestByConversation.value[conversationId] = result.request_id
+      }
+
+      return result
+    } catch (error: unknown) {
+      void loadMessages(conversationId)
+      throw error
+    }
+  }
+
   // Stop generation
   const stopGeneration = async (conversationId: number) => {
     if (conversationId <= 0) return
@@ -515,6 +744,10 @@ export const useChatStore = defineStore('chat', () => {
       // Ignore errors when stopping (might already be stopped)
       console.warn('Stop generation error:', error)
     }
+  }
+
+  const markOpenClawConversation = (conversationId: number) => {
+    openClawConversations.value.add(conversationId)
   }
 
   // Clear messages for a conversation
@@ -602,6 +835,7 @@ export const useChatStore = defineStore('chat', () => {
       created_at: null as any,
       updated_at: null as any,
     } as any)
+
   }
 
   const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
@@ -704,10 +938,16 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.thinkingContent += chunk
 
-      // Track segments: append to last thinking segment or start a new one
+      // Track segments: append to last thinking segment or start a new one.
+      // If the last segment is tools/content (thinking arrived slightly after
+      // a tool event due to transcript write delay), insert thinking before it
+      // so the rendered order is: thinking → tools → content.
       const lastSeg = streaming.segments[streaming.segments.length - 1]
       if (lastSeg && lastSeg.type === 'thinking') {
         lastSeg.content += chunk
+      } else if (lastSeg && lastSeg.type === 'tools') {
+        const insertIdx = streaming.segments.length - 1
+        streaming.segments.splice(insertIdx, 0, { type: 'thinking', content: chunk })
       } else {
         streaming.segments.push({ type: 'thinking', content: chunk })
       }
@@ -899,12 +1139,25 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.SUCCESS,
       } as any)
 
-      // Clear streaming state first
-      delete streamingByConversation.value[conversation_id]
-      delete activeRequestByConversation.value[conversation_id]
+      if (openClawConversations.value.has(conversation_id)) {
+        persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
+        setTimeout(() => {
+          delete streamingByConversation.value[conversation_id]
+          delete activeRequestByConversation.value[conversation_id]
+        }, 0)
+        // Reload history from Gateway to get authoritative record including
+        // thinking content, tool details, and all intermediate turns.
+        setTimeout(() => {
+          void loadMessages(conversation_id)
+        }, 300)
+      } else {
+        // Clear streaming state first
+        delete streamingByConversation.value[conversation_id]
+        delete activeRequestByConversation.value[conversation_id]
 
-      // Refresh messages from backend - segments will be loaded from backend
-      void loadMessages(conversation_id)
+        // Refresh messages from backend - segments will be loaded from backend
+        void loadMessages(conversation_id)
+      }
     }
   }
 
@@ -923,12 +1176,20 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.CANCELLED,
       } as any)
 
-      // Clear streaming state first
-      delete streamingByConversation.value[conversation_id]
-      delete activeRequestByConversation.value[conversation_id]
+      if (openClawConversations.value.has(conversation_id)) {
+        persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
+        setTimeout(() => {
+          delete streamingByConversation.value[conversation_id]
+          delete activeRequestByConversation.value[conversation_id]
+        }, 0)
+      } else {
+        // Clear streaming state first
+        delete streamingByConversation.value[conversation_id]
+        delete activeRequestByConversation.value[conversation_id]
 
-      // Refresh messages from backend - segments will be loaded from backend
-      void loadMessages(conversation_id)
+        // Refresh messages from backend - segments will be loaded from backend
+        void loadMessages(conversation_id)
+      }
     }
   }
 
@@ -977,25 +1238,8 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.ERROR,
       } as any)
 
-      // For errors, persist streaming segments locally since we don't call loadMessages.
-      // Deep-clone to detach from reactive streaming state.
-      const deepCloneToolCall = (tc: ToolCallInfo): ToolCallInfo => ({
-        ...tc,
-        childToolCalls: tc.childToolCalls?.map((c) => ({ ...c })),
-        childContent: tc.childContent,
-        childThinkingContent: tc.childThinkingContent,
-      })
-      segmentsByMessage.value[streaming.messageId] = streaming.segments.map((seg) => {
-        if (seg.type === 'thinking') {
-          return { type: 'thinking' as const, content: seg.content }
-        } else if (seg.type === 'content') {
-          return { type: 'content' as const, content: seg.content }
-        } else if (seg.type === 'retrieval') {
-          return { type: 'retrieval' as const, items: seg.items.map((item) => ({ ...item })) }
-        } else {
-          return { type: 'tools' as const, toolCalls: seg.toolCalls.map(deepCloneToolCall) }
-        }
-      })
+      // Persist streaming segments locally since we don't call loadMessages for errors.
+      persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
 
       // Clear streaming state after a tick to let the UI read from segments first
       setTimeout(() => {
@@ -1120,10 +1364,13 @@ export const useChatStore = defineStore('chat', () => {
     // Actions
     loadMessages,
     sendMessage,
+    sendOpenClawMessage,
     editAndResend,
+    editAndResendOpenClaw,
     stopGeneration,
     clearMessages,
     appendLocalMessage,
+    markOpenClawConversation,
 
     // Event subscription
     subscribe,

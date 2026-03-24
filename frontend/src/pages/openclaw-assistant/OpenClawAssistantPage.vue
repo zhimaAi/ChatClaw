@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PanelRight } from 'lucide-vue-next'
+// PanelRight removed — workspace drawer not used in OpenClaw mode
 import IconAssistant from '@/assets/icons/assistant.svg'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { getLogoDataUrl } from '@/composables/useLogo'
-import CreateAgentDialog from './components/CreateAgentDialog.vue'
+import CreateAgentDialog, { type CreateAgentData } from './components/CreateAgentDialog.vue'
 import AgentSettingsDialog from './components/AgentSettingsDialog.vue'
 import AgentChannelsDialog from './components/AgentChannelsDialog.vue'
 import RenameConversationDialog from './components/RenameConversationDialog.vue'
 import ChatMessageList from './components/ChatMessageList.vue'
 import AgentSidebar from './components/AgentSidebar.vue'
 import ChatInputArea from './components/ChatInputArea.vue'
-import WorkspaceDrawer from './components/WorkspaceDrawer.vue'
+// WorkspaceDrawer removed — not used in OpenClaw mode
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
@@ -159,7 +159,6 @@ const channelsOpen = ref(false)
 const channelsAgent = ref<OpenClawAgent | null>(null)
 const settingsInitialTab = ref<string>('')
 const sidebarCollapsed = ref(false)
-const workspaceDrawerOpen = ref(false)
 /** dialogue_id from SSE per team conversation id, for next request */
 const teamDialogueIdByConversation = ref<Record<number, string>>({})
 let teamAssistantMessageCounter = -1000000
@@ -391,7 +390,7 @@ const loadLibrariesFn = async () => {
   }
 }
 
-const handleCreate = async (data: { name: string; prompt: string; icon: string }) => {
+const handleCreate = async (data: CreateAgentData) => {
   try {
     await createAgent(data)
     createOpen.value = false
@@ -418,12 +417,6 @@ const openSettings = (agent: OpenClawAgent, initialTab?: string) => {
 const openChannels = (agent: OpenClawAgent) => {
   channelsAgent.value = agent
   channelsOpen.value = true
-}
-
-const handleOpenWorkspaceSettings = () => {
-  if (activeAgent.value) {
-    openSettings(activeAgent.value, 'workspace')
-  }
 }
 
 const handleUpdated = (updated: OpenClawAgent) => {
@@ -591,8 +584,7 @@ const handleSelectConversationForTeamRobot = (robotId: string, conversation: Con
 
 const handleSelectConversation = async (conversation: Conversation) => {
   activeConversationId.value = conversation.id
-  // Load messages from backend via chatStore
-  chatStore.loadMessages(conversation.id)
+  chatStore.markOpenClawConversation(conversation.id)
 
   // Set model selection from conversation's saved model
   if (conversation.llm_provider_id && conversation.llm_model_id) {
@@ -784,6 +776,9 @@ const handleSend = async () => {
     try {
       await sendTeamMessage(messageContent)
     } catch (error: unknown) {
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       toast.error(getErrorMessage(error) || t('assistant.errors.sendFailed'))
     }
     return
@@ -800,6 +795,7 @@ const handleSend = async () => {
       await createConversation(
         new CreateConversationInput({
           agent_id: activeAgentId.value,
+          agent_type: 'openclaw',
           name:
             messageContent.slice(0, 50) ||
             (imagesToSend.length > 0
@@ -826,7 +822,9 @@ const handleSend = async () => {
       )
       pendingTeamLibraryId.value = null
     } catch {
-      // Error already handled in composable
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       return
     }
   }
@@ -845,7 +843,7 @@ const handleSend = async () => {
         handleConversationUpdated(updated)
       }
 
-      await chatStore.sendMessage(
+      await chatStore.sendOpenClawMessage(
         activeConversationId.value,
         messageContent,
         props.tabId,
@@ -874,6 +872,9 @@ const handleSend = async () => {
         // Non-critical error
       }
     } catch (error: unknown) {
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       toast.error(getErrorMessage(error) || t('assistant.errors.sendFailed'))
     }
   }
@@ -1174,7 +1175,7 @@ const handleEditMessage = async (messageId: number, newContent: string, images: 
   if (!activeConversationId.value) return
 
   try {
-    await chatStore.editAndResend(
+    await chatStore.editAndResendOpenClaw(
       activeConversationId.value,
       messageId,
       newContent,
@@ -1856,27 +1857,6 @@ onUnmounted(() => {
 
         <!-- Right side: Chat area -->
         <section class="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <!-- Top toolbar: workspace drawer toggle (task mode + active conversation only; hidden in team mode).
-           Always render to avoid layout shift when switching chat mode; hide button via invisible. -->
-          <div
-            v-if="!isAgentEmpty && !isSnapMode && listMode !== 'team'"
-            class="flex shrink-0 items-center justify-end px-2 pt-1"
-          >
-            <Button
-              size="icon"
-              variant="ghost"
-              :class="cn('size-7', chatMode !== 'task' && 'invisible')"
-              :title="t('assistant.workspaceDrawer.title')"
-              @click="workspaceDrawerOpen = !workspaceDrawerOpen"
-            >
-              <PanelRight
-                :class="
-                  cn('size-4', workspaceDrawerOpen ? 'text-foreground' : 'text-muted-foreground')
-                "
-              />
-            </Button>
-          </div>
-
           <!-- Agent list empty state (personal tab, no agents) -->
           <div v-if="isAgentEmpty" class="flex h-full items-center justify-center px-8">
             <div class="flex flex-col items-center gap-4">
@@ -2014,16 +1994,6 @@ onUnmounted(() => {
           />
         </section>
 
-        <!-- Workspace drawer panel (task mode only; hidden in team mode).
-         Always rendered to avoid layout shift; auto-closed when not in task mode. -->
-        <WorkspaceDrawer
-          v-if="!isSnapMode && listMode !== 'team'"
-          :open="workspaceDrawerOpen && chatMode === 'task'"
-          :agent="activeAgent"
-          :conversation-id="activeConversationId"
-          @update:open="workspaceDrawerOpen = $event"
-          @open-workspace-settings="handleOpenWorkspaceSettings"
-        />
       </div>
       <!-- End upper row -->
 
