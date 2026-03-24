@@ -7,4 +7,5 @@ var (
 	Env              = "production"
 	ServerURL        = "https://chatclaw.chatwiki.com/openapi"
 	ChatWikiCloudURL = "https://cloud.chatwiki.com"
+	ModelChatWikiUrl = "https://models.chatwiki.com"
 )

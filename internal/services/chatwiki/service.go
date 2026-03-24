@@ -26,15 +26,16 @@ import (
 
 // Binding represents a ChatWiki binding record exposed to the frontend.
 type Binding struct {
-	ID        int64  `json:"id"`
-	ServerURL string `json:"server_url"`
-	Token     string `json:"token"`
-	TTL       int64  `json:"ttl"`
-	Exp       int64  `json:"exp"`
-	UserID    string `json:"user_id"`
-	UserName  string `json:"user_name"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID              int64  `json:"id"`
+	ServerURL       string `json:"server_url"`
+	Token           string `json:"token"`
+	TTL             int64  `json:"ttl"`
+	Exp             int64  `json:"exp"`
+	UserID          string `json:"user_id"`
+	UserName        string `json:"user_name"`
+	ChatWikiVersion string `json:"chatwiki_version"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 // Robot represents a ChatWiki robot/application item returned to the frontend.
@@ -144,15 +145,16 @@ type chatWikiLibraryRaw struct {
 type bindingModel struct {
 	bun.BaseModel `bun:"table:chatwiki_bindings"`
 
-	ID        int64     `bun:"id,pk,autoincrement"`
-	ServerURL string    `bun:"server_url,notnull"`
-	Token     string    `bun:"token,notnull"`
-	TTL       int64     `bun:"ttl,notnull"`
-	Exp       int64     `bun:"exp,notnull"`
-	UserID    string    `bun:"user_id,notnull"`
-	UserName  string    `bun:"user_name,notnull"`
-	CreatedAt time.Time `bun:"created_at,notnull"`
-	UpdatedAt time.Time `bun:"updated_at,notnull"`
+	ID              int64     `bun:"id,pk,autoincrement"`
+	ServerURL       string    `bun:"server_url,notnull"`
+	Token           string    `bun:"token,notnull"`
+	TTL             int64     `bun:"ttl,notnull"`
+	Exp             int64     `bun:"exp,notnull"`
+	UserID          string    `bun:"user_id,notnull"`
+	UserName        string    `bun:"user_name,notnull"`
+	ChatWikiVersion string    `bun:"chatwiki_version,notnull"`
+	CreatedAt       time.Time `bun:"created_at,notnull"`
+	UpdatedAt       time.Time `bun:"updated_at,notnull"`
 }
 
 // ChatWikiService exposes ChatWiki binding operations to the frontend via Wails.
@@ -165,6 +167,8 @@ type ChatWikiService struct {
 
 	refreshMu sync.Mutex // serializes token refresh inside GetBinding
 }
+
+var bindingWriteMu sync.Mutex
 
 // NewChatWikiService creates a new ChatWikiService instance (used by bootstrap and Wails bindings).
 func NewChatWikiService(app *application.App) *ChatWikiService {
@@ -187,6 +191,9 @@ func (s *ChatWikiService) getBindingFromDB() (*bindingModel, error) {
 	if db == nil {
 		return nil, nil
 	}
+	if err := ensureChatWikiBindingVersionColumn(db); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -204,19 +211,33 @@ func (s *ChatWikiService) getBindingFromDB() (*bindingModel, error) {
 // GetBinding returns the current binding, or nil if none exists.
 // If the token expires within 24 hours, it is refreshed first and the updated binding is returned.
 func (s *ChatWikiService) GetBinding() (*Binding, error) {
+	s.app.Logger.Info("[chatwiki] GetBinding start")
 	m, err := s.getBindingFromDB()
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GetBinding db read failed", "error", err)
 		return nil, err
 	}
 	if m == nil {
+		s.app.Logger.Warn("[chatwiki] GetBinding no binding found")
 		return nil, nil
 	}
 	b := toBinding(m)
 	if b.Exp <= 0 {
+		s.app.Logger.Info("[chatwiki] GetBinding returning binding without exp",
+			"user_id", b.UserID,
+			"server_url", strings.TrimSpace(b.ServerURL),
+			"token_len", len(strings.TrimSpace(b.Token)),
+		)
 		return b, nil
 	}
 	now := time.Now().Unix()
 	if b.Exp-now >= refreshTokenExpireThreshold {
+		s.app.Logger.Info("[chatwiki] GetBinding using cached binding",
+			"user_id", b.UserID,
+			"server_url", strings.TrimSpace(b.ServerURL),
+			"token_len", len(strings.TrimSpace(b.Token)),
+			"remaining_sec", b.Exp-now,
+		)
 		return b, nil
 	}
 
@@ -255,40 +276,88 @@ func (s *ChatWikiService) GetBinding() (*Binding, error) {
 }
 
 // SaveBinding creates or replaces the binding. Called from deeplink handler.
-func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userName string) error {
+func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userName, chatWikiVersion string) error {
 	db := sqlite.DB()
 	if db == nil {
 		return nil
 	}
+	if err := ensureChatWikiBindingVersionColumn(db); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	err := saveBindingWithDB(ctx, db, serverURL, token, ttl, exp, userID, userName, chatWikiVersion)
+	if err != nil {
+		if app != nil {
+			app.Logger.Error("Failed to save chatwiki binding", "error", err)
+		}
+		return err
+	}
+	if app != nil {
+		app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
+	}
+	return nil
+}
+
+func saveBindingWithDB(ctx context.Context, db bun.IDB, serverURL, token, ttl, exp, userID, userName, chatWikiVersion string) error {
 	ttlInt, _ := strconv.ParseInt(ttl, 10, 64)
 	expInt, _ := strconv.ParseInt(exp, 10, 64)
 	now := time.Now().UTC()
+	chatWikiVersion = normalizeChatWikiVersion(chatWikiVersion)
 
-	// Delete old bindings, keep only latest
-	if _, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
-		app.Logger.Warn("Failed to delete old chatwiki bindings", "error", err)
-	}
+	bindingWriteMu.Lock()
+	defer bindingWriteMu.Unlock()
 
-	m := &bindingModel{
-		ServerURL: serverURL,
-		Token:     token,
-		TTL:       ttlInt,
-		Exp:       expInt,
-		UserID:    userID,
-		UserName:  userName,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-	_, err := db.NewInsert().Model(m).Exec(ctx)
-	if err != nil {
-		app.Logger.Error("Failed to save chatwiki binding", "error", err)
+	return db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
+			return err
+		}
+
+		m := &bindingModel{
+			ServerURL:       serverURL,
+			Token:           token,
+			TTL:             ttlInt,
+			Exp:             expInt,
+			UserID:          userID,
+			UserName:        userName,
+			ChatWikiVersion: chatWikiVersion,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		_, err := tx.NewInsert().Model(m).Exec(ctx)
 		return err
+	})
+}
+
+func resolveChatWikiVersionFromLoginSource(loginSource string) string {
+	switch strings.TrimSpace(loginSource) {
+	case "cloud":
+		return "yun"
+	case "open-source":
+		return "dev"
+	default:
+		return "dev"
 	}
-	app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
-	return nil
+}
+
+// SaveBindingFromCallback persists a ChatWiki auth callback using the frontend login source
+// instead of trusting any upstream version field.
+func (s *ChatWikiService) SaveBindingFromCallback(serverURL, token, ttl, exp, userID, userName, loginSource string) error {
+	var app *application.App
+	if s != nil {
+		app = s.app
+	}
+	return SaveBinding(
+		app,
+		serverURL,
+		token,
+		ttl,
+		exp,
+		userID,
+		userName,
+		resolveChatWikiVersionFromLoginSource(loginSource),
+	)
 }
 
 // TokenForceOffline calls POST /manage/chatclaw/tokenForceOffline with reason "logout"
@@ -349,8 +418,10 @@ func (s *ChatWikiService) DeleteBinding() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx)
-	return err
+	if _, err := db.NewDelete().Model((*bindingModel)(nil)).Where("1=1").Exec(ctx); err != nil {
+		return err
+	}
+	return clearSyncedModelCatalogFromDB(ctx, db, "chatwiki")
 }
 
 // errChatWikiAuthExpired is returned when the server returns 401 (e.g. "账号未获取登录信息").
@@ -721,8 +792,7 @@ func (s *ChatWikiService) runTeamChatStream(
 	startPayload["status"] = "streaming"
 	s.app.Event.Emit("chat:start", startPayload)
 
-	baseURL := strings.TrimRight(binding.ServerURL, "/")
-	candidates := []string{baseURL + "/manage/chatclaw/chat/completions"}
+	candidates := []string{chatWikiChatCompletionsURL(binding.ServerURL)}
 
 	reqBody := map[string]any{
 		"robot_key": robotKey,
@@ -1747,16 +1817,63 @@ func (s *ChatWikiService) UpdateLibrarySwitchStatus(id string, switchStatus int)
 
 func toBinding(m *bindingModel) *Binding {
 	return &Binding{
-		ID:        m.ID,
-		ServerURL: m.ServerURL,
-		Token:     m.Token,
-		TTL:       m.TTL,
-		Exp:       m.Exp,
-		UserID:    m.UserID,
-		UserName:  m.UserName,
-		CreatedAt: m.CreatedAt.Format(sqlite.DateTimeFormat),
-		UpdatedAt: m.UpdatedAt.Format(sqlite.DateTimeFormat),
+		ID:              m.ID,
+		ServerURL:       m.ServerURL,
+		Token:           m.Token,
+		TTL:             m.TTL,
+		Exp:             m.Exp,
+		UserID:          m.UserID,
+		UserName:        m.UserName,
+		ChatWikiVersion: normalizeChatWikiVersion(m.ChatWikiVersion),
+		CreatedAt:       m.CreatedAt.Format(sqlite.DateTimeFormat),
+		UpdatedAt:       m.UpdatedAt.Format(sqlite.DateTimeFormat),
 	}
+}
+
+func normalizeChatWikiVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "dev"
+	}
+	return version
+}
+
+func isChatWikiCloudBinding(binding *Binding) bool {
+	if binding == nil {
+		return false
+	}
+	return normalizeChatWikiVersion(binding.ChatWikiVersion) == "yun"
+}
+
+func ensureChatWikiBindingVersionColumn(db *bun.DB) error {
+	if db == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var columns []struct {
+		CID        int            `bun:"cid"`
+		Name       string         `bun:"name"`
+		Type       string         `bun:"type"`
+		NotNull    int            `bun:"notnull"`
+		Default    sql.NullString `bun:"dflt_value"`
+		PrimaryKey int            `bun:"pk"`
+	}
+	if err := db.NewRaw("PRAGMA table_info(chatwiki_bindings)").Scan(ctx, &columns); err != nil {
+		return err
+	}
+	for _, column := range columns {
+		if column.Name == "chatwiki_version" {
+			return nil
+		}
+	}
+	_, err := db.ExecContext(ctx, `
+ALTER TABLE chatwiki_bindings
+ADD COLUMN chatwiki_version TEXT NOT NULL DEFAULT 'dev';
+`)
+	return err
 }
 
 func normalizeAssetURL(serverURL, assetPath string) string {
@@ -1849,6 +1966,7 @@ func (s *ChatWikiService) chatWikiGET(token string, apiURL string) ([]byte, erro
 func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	s.app.Logger.Info("[chatwiki] GET start", "url", apiURL, "token_len", len(strings.TrimSpace(token)))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -1858,14 +1976,22 @@ func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.Ra
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GET request failed", "url", apiURL, "error", err)
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.app.Logger.Error("[chatwiki] GET read response failed", "url", apiURL, "error", err)
 		return nil, fmt.Errorf("read response body: %w", err)
 	}
+	s.app.Logger.Info("[chatwiki] GET response",
+		"url", apiURL,
+		"status", resp.StatusCode,
+		"body_len", len(body),
+		"body_preview", previewChatWikiLogBody(body),
+	)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
@@ -1887,21 +2013,34 @@ func (s *ChatWikiService) chatWikiGETLoose(token string, apiURL string) (json.Ra
 			resultCode = apiResp.Code
 		}
 		if resultCode != 0 {
+			s.app.Logger.Warn("[chatwiki] GET API envelope error",
+				"url", apiURL,
+				"result_code", resultCode,
+				"msg", apiResp.Msg,
+			)
 			return nil, fmt.Errorf("API error code=%d msg=%s", resultCode, apiResp.Msg)
 		}
 		dataTrimmed := strings.TrimSpace(string(apiResp.Data))
 		if dataTrimmed == "" || strings.EqualFold(dataTrimmed, "null") {
+			s.app.Logger.Info("[chatwiki] GET API envelope empty data", "url", apiURL)
 			return json.RawMessage("[]"), nil
 		}
+		s.app.Logger.Info("[chatwiki] GET API envelope ok",
+			"url", apiURL,
+			"data_len", len(apiResp.Data),
+			"data_preview", previewChatWikiLogBody(apiResp.Data),
+		)
 		return apiResp.Data, nil
 	}
 
 	if json.Valid([]byte(trimmed)) {
+		s.app.Logger.Info("[chatwiki] GET raw JSON payload", "url", apiURL)
 		return json.RawMessage(trimmed), nil
 	}
 
 	// Some deployments may return plain "NULL" as empty payload.
 	if strings.EqualFold(trimmed, "NULL") {
+		s.app.Logger.Info("[chatwiki] GET payload NULL treated as empty", "url", apiURL)
 		return json.RawMessage("[]"), nil
 	}
 

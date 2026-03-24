@@ -3,6 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings, FileText, Folder as FolderIcon } from 'lucide-vue-next'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
+import IconKnowledgeIcon from '@/assets/icons/knowledge-icon.svg'
+import { Events } from '@wailsio/runtime'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -28,14 +30,9 @@ import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
+import IconDown from '@/assets/icons/down-icon.svg'
+import IconRight from '@/assets/icons/right-icon.svg'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -68,7 +65,7 @@ import {
   getLibraryListOnlyOpen as getLibraryListOnlyOpenCached,
 } from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
-import { Book, BookOpen, FileStack } from 'lucide-vue-next'
+import { FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
@@ -202,6 +199,7 @@ const teamNormalPage = ref<'groups' | 'files'>('groups')
 const teamScrollContainerRef = ref<HTMLElement | null>(null)
 let teamNormalRequestID = 0
 let teamScrollRafID: number | null = null
+let unsubscribeModelsChanged: (() => void) | null = null
 const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
@@ -245,33 +243,8 @@ const getTeamFileExtension = (file: ChatWikiLibraryFile) => {
     .toLowerCase()
 }
 
-const getTeamFileIcon = (file: ChatWikiLibraryFile) => {
-  const ext = getTeamFileExtension(file)
-  switch (ext) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-}
+const getTeamFileIconUrl = (file: ChatWikiLibraryFile) =>
+  getFileTypeIconUrl(getTeamFileExtension(file))
 
 const formatTeamFileDate = (dateStr: string) => {
   const date = new Date(dateStr)
@@ -998,6 +971,10 @@ onMounted(async () => {
   await loadModels()
   selectDefaultModel(activeAgent.value, null)
   isInitialMount = false
+
+  unsubscribeModelsChanged = Events.On('models:changed', () => {
+    void loadModels()
+  })
 })
 
 onUnmounted(() => {
@@ -1005,6 +982,8 @@ onUnmounted(() => {
     window.cancelAnimationFrame(teamScrollRafID)
     teamScrollRafID = null
   }
+  unsubscribeModelsChanged?.()
+  unsubscribeModelsChanged = null
 })
 
 // When switching to team tab, always re-check binding and load
@@ -1017,6 +996,9 @@ watch(activeTab, (tab) => {
 // When this module tab becomes active and we're on team tab but unbound, re-check (e.g. after binding in settings)
 const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 watch(isTabActive, (active) => {
+  if (active) {
+    void loadModels()
+  }
   if (active && activeTab.value === 'team' && !teamBound.value) {
     void checkTeamBindingAndLoad()
   }
@@ -1143,17 +1125,17 @@ const handleRemoveImage = (id: string) => {
         )
       "
     >
-      <div class="flex items-center gap-2 border-b border-border px-2 py-2">
+      <div class="flex w-full items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2">
         <template v-if="!sidebarCollapsed">
-          <div class="inline-flex min-w-0 flex-1 rounded-md bg-muted p-1">
+          <div class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]">
             <button
               type="button"
               :class="
                 cn(
-                  'rounded px-3 py-1 text-sm transition-colors',
+                  'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'personal'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground shadow-sm font-medium'
+                    : 'text-foreground'
                 )
               "
               @click="activeTab = 'personal'"
@@ -1164,10 +1146,10 @@ const handleRemoveImage = (id: string) => {
               type="button"
               :class="
                 cn(
-                  'rounded px-3 py-1 text-sm transition-colors',
+                  'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'team'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-background text-foreground shadow-sm font-medium'
+                    : 'text-foreground'
                 )
               "
               @click="activeTab = 'team'"
@@ -1201,7 +1183,7 @@ const handleRemoveImage = (id: string) => {
       <!-- Sidebar collapse/expand handle (AI assistant style) -->
       <button
         type="button"
-        class="group/handle absolute -right-3 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
+        class="group/handle absolute -right-8 top-1/2 z-[5] flex h-16 w-6 -translate-y-1/2 items-center justify-center"
         :aria-label="
           sidebarCollapsed ? t('knowledge.sidebar.expand') : t('knowledge.sidebar.collapse')
         "
@@ -1230,7 +1212,7 @@ const handleRemoveImage = (id: string) => {
         </span>
       </button>
 
-      <div class="flex-1 overflow-auto px-2 pb-2 pt-2">
+      <div class="flex-1 overflow-auto">
         <div v-if="loading" class="px-2 py-6 text-sm text-muted-foreground">
           {{ sidebarCollapsed ? '' : t('knowledge.loading') }}
         </div>
@@ -1292,13 +1274,11 @@ const handleRemoveImage = (id: string) => {
           </div>
           <div
             v-else-if="!teamBound"
-            class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+            class="flex h-12 w-full shrink-0 items-center justify-center border-b border-[#F5F5F5] bg-card text-sm font-normal text-muted-foreground"
           >
-            <div class="text-center text-sm text-muted-foreground">
-              {{ t('knowledge.team.notBoundTitle') }}
-            </div>
+            {{ t('knowledge.team.notBoundTitle') }}
           </div>
-          <div v-else class="flex flex-col gap-1">
+          <div v-else class="flex flex-col">
             <!-- Always show the three category tabs when team is bound -->
             <div class="mx-1 mb-1 inline-flex rounded-md bg-muted p-1">
               <button
@@ -1307,7 +1287,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 0
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 0"
               >
@@ -1319,7 +1299,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 2
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 2"
               >
@@ -1331,7 +1311,7 @@ const handleRemoveImage = (id: string) => {
                 :class="
                   teamLibraryTab === 3
                     ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-foreground'
                 "
                 @click="teamLibraryTab = 3"
               >
@@ -1340,7 +1320,7 @@ const handleRemoveImage = (id: string) => {
             </div>
             <div
               v-if="teamLibraries.length === 0"
-              class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
+              class="mx-2 mt-2 flex items-center justify-center rounded-lg border border-[#F5F5F5] bg-card p-4 text-sm text-muted-foreground"
             >
               {{ t('knowledge.team.empty') }}
             </div>
@@ -1349,20 +1329,15 @@ const handleRemoveImage = (id: string) => {
               <div
                 v-for="lib in teamLibraries"
                 :key="lib.id"
-                class="group/teamlib mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow"
-                :class="
-                  selectedTeamLibraryId === lib.id
-                    ? 'border-primary/60'
-                    : 'hover:border-muted-foreground/60'
-                "
+                class="group/library flex flex-col border-b border-[#F5F5F5] text-sm transition-colors"
               >
-                <!-- Team library row: click to expand/collapse -->
+                <!-- Team library row: click to expand/collapse (aligned with personal library row) -->
                 <div class="flex items-center gap-1.5">
                   <div
                     role="button"
                     :class="
                       cn(
-                        'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
+                        'group flex h-11 flex-1 cursor-pointer items-center gap-2 px-2 text-left font-normal transition-colors',
                         selectedTeamLibraryId === lib.id
                           ? 'bg-accent/60 text-accent-foreground'
                           : 'text-foreground hover:bg-accent/40'
@@ -1370,45 +1345,42 @@ const handleRemoveImage = (id: string) => {
                     "
                     @click="handleTeamLibraryClick(lib.id)"
                   >
-                    <component
-                      :is="expandedTeamLibraries.has(lib.id) ? BookOpen : Book"
-                      :class="
-                        cn(
-                          'size-4 shrink-0',
-                          expandedTeamLibraries.has(lib.id)
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
-                        )
-                      "
-                    />
+                    <span
+                      class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                      aria-hidden
+                    >
+                      <IconDown v-if="expandedTeamLibraries.has(lib.id)" class="size-4" />
+                      <IconRight v-else class="size-4" />
+                    </span>
+                    <IconKnowledgeIcon class="size-5 shrink-0 text-muted-foreground" />
                     <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                       {{ lib.name }}
                     </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+                        :title="t('knowledge.item.menu')"
+                        @click.stop
+                      >
+                        <MoreHorizontal class="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" class="w-40">
+                        <DropdownMenuItem class="gap-2">
+                          <IconLibSettings class="size-4 text-muted-foreground" />
+                          {{ t('knowledge.item.settings') }}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
-                      :title="t('knowledge.item.menu')"
-                      @click.stop
-                    >
-                      <MoreHorizontal class="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-40">
-                      <DropdownMenuItem class="gap-2">
-                        <IconLibSettings class="size-4 text-muted-foreground" />
-                        {{ t('knowledge.item.settings') }}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
                 <!-- Team groups (sidebar): shown when expanded -->
                 <div
                   v-if="expandedTeamLibraries.has(lib.id)"
-                  class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
+                  class="flex w-full flex-col overflow-hidden px-1.5 pt-1 pb-1.5"
                 >
-                  <!-- All groups -->
+                  <!-- All groups: same row chrome as personal "uncategorized" -->
                   <div
-                    class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                    class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                     :class="
                       selectedTeamLibraryId === lib.id && selectedTeamGroupId === TEAM_ALL_GROUP_ID
                         ? 'bg-accent text-accent-foreground'
@@ -1416,8 +1388,16 @@ const handleRemoveImage = (id: string) => {
                     "
                     @click.stop="handleTeamGroupSelect(TEAM_ALL_GROUP_ID)"
                   >
-                    <FolderIcon class="size-4 shrink-0" />
-                    <span class="min-w-0 flex-1 truncate text-xs">
+                    <span class="flex size-4 shrink-0" aria-hidden />
+                    <span
+                      class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                    >
+                      <FolderIcon class="size-4 shrink-0" />
+                    </span>
+                    <span
+                      class="min-w-0 flex-1 truncate text-xs"
+                      :title="t('knowledge.team.allGroups')"
+                    >
                       {{ t('knowledge.team.allGroups') }}
                     </span>
                   </div>
@@ -1434,7 +1414,7 @@ const handleRemoveImage = (id: string) => {
                         (g) => g.id !== TEAM_ALL_GROUP_ID
                       )"
                       :key="`team-sidebar-group-${lib.id}-${group.id}`"
-                      class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                      class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                       :class="
                         selectedTeamLibraryId === lib.id && selectedTeamGroupId === group.id
                           ? 'bg-accent text-accent-foreground'
@@ -1442,7 +1422,12 @@ const handleRemoveImage = (id: string) => {
                       "
                       @click.stop="handleTeamGroupSelect(group.id)"
                     >
-                      <FolderIcon class="size-4 shrink-0" />
+                      <span class="flex size-4 shrink-0" aria-hidden />
+                      <span
+                        class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                      >
+                        <FolderIcon class="size-4 shrink-0" />
+                      </span>
                       <span class="min-w-0 flex-1 truncate text-xs" :title="group.name">
                         {{ group.name }}
                       </span>
@@ -1457,11 +1442,11 @@ const handleRemoveImage = (id: string) => {
           </div>
         </div>
 
-        <div v-else class="flex flex-col gap-1">
+        <div v-else class="flex flex-col">
           <div
             v-for="lib in libraries"
             :key="lib.id"
-            class="group/library mb-1 flex flex-col gap-0.5 rounded-xl border border-border bg-card px-2 pt-1.5 pb-1.5 text-sm shadow-sm transition-colors transition-shadow hover:border-muted-foreground/60"
+            class="group/library flex flex-col border-b border-[#F5F5F5] text-sm transition-colors"
           >
             <!-- 知识库行：点击整行即可展开/收起 -->
             <div class="flex items-center gap-1.5">
@@ -1469,7 +1454,7 @@ const handleRemoveImage = (id: string) => {
                 role="button"
                 :class="
                   cn(
-                    'group flex h-9 flex-1 cursor-pointer items-center gap-2 rounded-lg px-2 text-left font-normal transition-colors',
+                    'group flex h-11 flex-1 cursor-pointer items-center gap-2 px-2 text-left font-normal transition-colors',
                     selectedLibraryId === lib.id
                       ? 'bg-accent/60 text-accent-foreground'
                       : 'text-foreground hover:bg-accent/40'
@@ -1477,11 +1462,14 @@ const handleRemoveImage = (id: string) => {
                 "
                 @click="handleLibraryClick(lib.id)"
               >
-                <BookOpen
-                  v-if="expandedLibraries.has(lib.id)"
-                  class="size-4 shrink-0 text-primary"
-                />
-                <Book v-else class="size-4 shrink-0 text-muted-foreground" />
+                <span
+                  class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                  aria-hidden
+                >
+                  <IconDown v-if="expandedLibraries.has(lib.id)" class="size-4" />
+                  <IconRight v-else class="size-4" />
+                </span>
+                <IconKnowledgeIcon class="size-5 shrink-0 text-muted-foreground" />
                 <span class="min-w-0 flex-1 truncate text-sm" :title="lib.name">
                   {{ lib.name }}
                 </span>
@@ -1517,11 +1505,11 @@ const handleRemoveImage = (id: string) => {
             <!-- Folder tree -->
             <div
               v-if="expandedLibraries.has(lib.id)"
-              class="mt-1.5 flex w-full flex-col overflow-hidden border-t border-border/60 px-1.5 pb-1.5 pt-1"
+              class="flex w-full flex-col overflow-hidden px-1.5 pt-1 pb-1.5"
             >
-              <!-- Uncategorized option: full-width clickable row -->
+              <!-- Uncategorized: same style as first-level folder -->
               <div
-                class="flex min-h-8 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
+                class="group flex min-h-10 w-full cursor-pointer items-center gap-1 rounded-lg transition-colors"
                 :class="
                   selectedFolderId === -1 && selectedLibraryId === lib.id
                     ? 'bg-accent text-accent-foreground'
@@ -1529,7 +1517,12 @@ const handleRemoveImage = (id: string) => {
                 "
                 @click.stop="handleFolderClick(-1, lib.id)"
               >
-                <FileStack class="size-4 shrink-0 text-muted-foreground" />
+                <span class="flex size-4 shrink-0" aria-hidden />
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground"
+                >
+                  <FolderIcon class="size-4 shrink-0" />
+                </span>
                 <span
                   class="min-w-0 flex-1 truncate text-xs"
                   :title="t('knowledge.folder.uncategorized')"
@@ -1558,7 +1551,7 @@ const handleRemoveImage = (id: string) => {
     </aside>
 
     <!-- 右侧：内容区 -->
-    <main class="flex flex-1 flex-col overflow-hidden bg-background">
+    <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <!-- 团队知识库 -->
       <div
         v-if="activeTab === 'team' && !teamBindingChecked"
@@ -1609,7 +1602,7 @@ const handleRemoveImage = (id: string) => {
         class="flex h-full items-center justify-center px-8"
       >
         <div
-          class="rounded-2xl border border-border bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+          class="rounded-2xl border border-[#F5F5F5] bg-card p-8 text-muted-foreground shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
           {{ t('knowledge.team.empty') }}
         </div>
@@ -1619,7 +1612,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 0"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1736,7 +1729,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 3"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1798,7 +1791,7 @@ const handleRemoveImage = (id: string) => {
         v-else-if="activeTab === 'team' && teamLibraryTab === 2"
         class="flex min-h-0 flex-1 flex-col"
       >
-        <div class="border-b border-border px-4 py-3">
+        <div class="border-b border-[#F5F5F5] px-4 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
@@ -1876,7 +1869,7 @@ const handleRemoveImage = (id: string) => {
         <div
           class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
         >
-          <div class="space-y-1 border-b border-border pb-4">
+          <div class="space-y-1 border-b border-[#F5F5F5] pb-4">
             <h3 class="text-base font-medium text-foreground">
               {{ selectedTeamLibrary?.name ?? '' }}
             </h3>
@@ -1956,7 +1949,7 @@ const handleRemoveImage = (id: string) => {
       />
 
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->
-      <div v-if="showChatInputArea" class="bg-background pt-3">
+      <div v-if="showChatInputArea" class="mt-auto shrink-0 bg-background pt-1 pb-1">
         <ChatInputArea
           v-model:chat-input="chatInput"
           v-model:chat-mode="chatMode"

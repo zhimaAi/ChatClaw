@@ -19,16 +19,8 @@ import IconMultiask from '@/assets/icons/multiask.svg'
 import IconSettings from '@/assets/icons/settings.svg'
 import IconSkills from '@/assets/icons/skills.svg'
 import IconChannels from '@/assets/icons/channels.svg'
-// File-type icons for document viewer tabs
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
-import { FileText } from 'lucide-vue-next'
+import IconTools from '@/assets/icons/tools.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import WindowControlButtons from './WindowControlButtons.vue'
 
 /**
@@ -49,6 +41,7 @@ const moduleTabIcons: Partial<Record<NavModule, any>> = {
   settings: IconSettings,
   skills: IconSkills,
   channels: IconChannels,
+  tools: IconTools,
 }
 import {
   ContextMenu,
@@ -80,40 +73,11 @@ const shouldUseModuleIcon = (tab: { module: NavModule; icon?: string }) => {
   return true
 }
 
-/**
- * Resolve document viewer tab icon component based on file extension.
- * Falls back to a generic file icon when no specific match is found.
- */
-const getDocumentTabIconComponent = (tab: { module: NavModule; data?: any; title?: string }) => {
-  if (tab.module !== 'document') return null
-
+/** Document tab only (caller must guard tab.module === 'document'). */
+const getDocumentTabIconUrl = (tab: { data?: any; title?: string }) => {
   const name: string = tab.data?.documentName || tab.title || ''
   const ext = name.toLowerCase().split('.').pop() || ''
-
-  switch (ext) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
+  return getFileTypeIconUrl(ext)
 }
 
 /**
@@ -240,10 +204,7 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
                 v-else-if="tab.module === 'document'"
                 class="flex size-5 shrink-0 items-center justify-center"
               >
-                <component
-                  :is="getDocumentTabIconComponent(tab)"
-                  class="size-3.5 overflow-visible text-muted-foreground"
-                />
+                <img :src="getDocumentTabIconUrl(tab)" alt="" class="size-3.5 object-contain" />
               </div>
               <div
                 v-else

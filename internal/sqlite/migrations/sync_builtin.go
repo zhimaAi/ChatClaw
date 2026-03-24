@@ -84,13 +84,12 @@ func syncProviders(ctx context.Context, db *bun.DB, now string) error {
 				return fmt.Errorf("update provider %s: %w", p.ProviderID, err)
 			}
 		} else {
-			enabled := p.ProviderID == "chatclaw"
 			if _, err := db.ExecContext(ctx, `
 				INSERT INTO providers
 					(provider_id, name, type, icon, is_builtin, enabled, sort_order,
 					 api_endpoint, api_key, extra_config, created_at, updated_at)
 				VALUES (?, ?, ?, ?, 1, ?, ?, ?, '', '{}', ?, ?)
-			`, p.ProviderID, p.Name, p.Type, p.Icon, enabled, p.SortOrder,
+			`, p.ProviderID, p.Name, p.Type, p.Icon, false, p.SortOrder,
 				p.APIEndpoint, now, now); err != nil {
 				return fmt.Errorf("insert provider %s: %w", p.ProviderID, err)
 			}
