@@ -15,7 +15,7 @@ import {
 import {
   OpenClawAgentsService,
   type OpenClawAgent,
-} from '@bindings/chatclaw/internal/services/openclawagents'
+} from '@bindings/chatclaw/internal/openclaw/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { Button } from '@/components/ui/button'

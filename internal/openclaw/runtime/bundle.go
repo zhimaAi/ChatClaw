@@ -29,9 +29,9 @@ type bundledRuntime struct {
 
 func resolveBundledRuntime() (*bundledRuntime, error) {
 	target := runtime.GOOS + "-" + runtime.GOARCH
-	stateDir, err := define.AppDataDir()
+	stateDir, err := define.OpenClawDataRootDir()
 	if err != nil {
-		return nil, fmt.Errorf("resolve app data directory: %w", err)
+		return nil, fmt.Errorf("resolve openclaw data directory: %w", err)
 	}
 
 	candidates := bundledRuntimeCandidates(target)

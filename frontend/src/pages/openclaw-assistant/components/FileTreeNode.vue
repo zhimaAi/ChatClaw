@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ChevronRight, ChevronDown, File, Folder } from 'lucide-vue-next'
-import type { FileEntry } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { FileEntry } from '@bindings/chatclaw/internal/openclaw/agents'
 
 const props = defineProps<{
   entry: FileEntry

@@ -347,7 +347,7 @@ func (s *Service) handleSearchKnowledge(_ context.Context, request mcpgo.CallToo
 }
 
 // BridgeScriptPath returns the path to the generated stdio-to-HTTP bridge
-// script. Returns "" if AppDataDir cannot be resolved.
+// script. Returns "" if native data root cannot be resolved.
 func (s *Service) BridgeScriptPath() string {
 	dir, err := define.AppDataDir()
 	if err != nil {

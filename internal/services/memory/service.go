@@ -155,11 +155,11 @@ func (s *MemoryService) DeleteMemoryFile(openclawAgentID, filePath string) error
 
 // workspacePath returns the absolute path to an agent's OpenClaw workspace.
 func (s *MemoryService) workspacePath(openclawAgentID string) (string, error) {
-	appDir, err := define.AppDataDir()
+	root, err := define.OpenClawDataRootDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve app data dir: %w", err)
+		return "", fmt.Errorf("resolve openclaw data dir: %w", err)
 	}
-	return filepath.Join(appDir, "workspace-"+openclawAgentID), nil
+	return filepath.Join(root, "workspace-"+openclawAgentID), nil
 }
 
 // resolveFilePath validates and resolves a relative file path within the workspace.

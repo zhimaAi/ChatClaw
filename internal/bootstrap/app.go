@@ -34,8 +34,8 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
-	"chatclaw/internal/services/openclawagents"
-	"chatclaw/internal/services/openclawruntime"
+	"chatclaw/internal/openclaw/agents"
+	"chatclaw/internal/openclaw/runtime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
@@ -151,6 +151,11 @@ type Options struct {
 // NewApp 创建并初始化应用
 // 返回 app 实例和 cleanup 函数（用于关闭数据库等资源）
 func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
+	// Migrate $HOME/.chatclaw legacy layout into native/ and openclaw/ before logs and sqlite.
+	if err := define.EnsureDataLayout(); err != nil {
+		return nil, nil, fmt.Errorf("data layout: %w", err)
+	}
+
 	// 初始化日志（文件 + 控制台双写；生产模式仅写文件）
 	appLogger, logCleanup, err := logger.New()
 	if err != nil {

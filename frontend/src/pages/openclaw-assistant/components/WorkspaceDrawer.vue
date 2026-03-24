@@ -28,12 +28,12 @@ import {
   OpenClawAgentsService,
   type FileEntry,
   UpdateOpenClawAgentInput,
-} from '@bindings/chatclaw/internal/services/openclawagents'
+} from '@bindings/chatclaw/internal/openclaw/agents'
 import { MCPService } from '@bindings/chatclaw/internal/services/mcp'
 import type { MCPServer } from '@bindings/chatclaw/internal/services/mcp'
 import { SettingsService, Category } from '@bindings/chatclaw/internal/services/settings'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
-import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 import { Events } from '@wailsio/runtime'
 import { useNavigationStore } from '@/stores/navigation'
 import { useSettingsStore } from '@/stores/settings'
