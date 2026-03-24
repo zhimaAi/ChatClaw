@@ -906,6 +906,18 @@ export const useChatStore = defineStore('chat', () => {
       data
     const streaming = streamingByConversation.value[conversation_id]
 
+    console.log('[chat-thinking] received', {
+      conversation_id,
+      request_id,
+      deltaLen: delta?.length,
+      deltaPreview: delta?.slice(0, 80),
+      new_block,
+      hasStreaming: !!streaming,
+      streamingRequestId: streaming?.requestId,
+      requestMatch: streaming?.requestId === request_id,
+      currentSegments: streaming?.segments?.map((s: any) => s.type),
+    })
+
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
       if (!chunk) return
@@ -931,9 +943,19 @@ export const useChatStore = defineStore('chat', () => {
 
       const lastSeg = streaming.segments[streaming.segments.length - 1]
 
+      console.log('[chat-thinking] appending to segments', {
+        new_block,
+        lastSegType: lastSeg?.type,
+        action: new_block
+          ? 'push new thinking segment'
+          : lastSeg?.type === 'thinking'
+            ? 'append to existing'
+            : 'push new thinking segment',
+        totalSegments: streaming.segments.length,
+        thinkingContentLen: streaming.thinkingContent.length,
+      })
+
       if (new_block) {
-        // New thinking round: always push after current segments.
-        // This ensures thinking appears after the preceding tools, not before them.
         streaming.segments.push({ type: 'thinking', content: chunk })
       } else if (lastSeg && lastSeg.type === 'thinking') {
         lastSeg.content += chunk
@@ -944,6 +966,13 @@ export const useChatStore = defineStore('chat', () => {
       upsertMessage(conversation_id, streaming.messageId, {
         thinking_content: streaming.thinkingContent,
       } as any)
+    } else {
+      console.warn('[chat-thinking] DROPPED - no matching streaming state', {
+        conversation_id,
+        request_id,
+        hasStreaming: !!streaming,
+        streamingRequestId: streaming?.requestId,
+      })
     }
   }
 
@@ -1274,12 +1303,14 @@ export const useChatStore = defineStore('chat', () => {
     )
     unsubscribers.push(
       Events.On(ChatEventType.CHUNK, (e: any) => {
+        console.log('[chat] >>> CHUNK event arrived at frontend')
         debug(ChatEventType.CHUNK, extractEventData(e))
         handleChatChunk(e)
       })
     )
     unsubscribers.push(
       Events.On(ChatEventType.THINKING, (e: any) => {
+        console.log('[chat] >>> THINKING event arrived at frontend', extractEventData(e))
         debug(ChatEventType.THINKING, extractEventData(e))
         handleChatThinking(e)
       })

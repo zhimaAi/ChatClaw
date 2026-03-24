@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -524,10 +523,6 @@ type openClawChatRunState struct {
 	emittedContent  string
 	seenToolCalls   map[string]bool
 	seenToolResults map[string]bool
-	// Per-block thinking tracking for pollThinkingFromHistory
-	thinkingBlockCount int
-	lastBlockEmitted   string
-	thinkingMu         sync.Mutex
 }
 
 func (st *openClawChatRunState) nextSeq() int {
@@ -546,145 +541,6 @@ func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID
 		Seq:            st.nextSeq(),
 		MessageID:      mid,
 		Ts:             time.Now().UnixMilli(),
-	}
-}
-
-// pollThinkingFromHistory runs in a background goroutine during an active
-// agent run. It periodically fetches the session transcript via sessions.get
-// and extracts thinking content that is not available in streaming events.
-func (s *ChatService) pollThinkingFromHistory(
-	ctx context.Context,
-	conversationID int64,
-	sessionKey string,
-	st *openClawChatRunState,
-	ce func() ChatEvent,
-	emit func(string, any),
-) {
-	ticker := time.NewTicker(800 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.fetchAndEmitThinking(ctx, conversationID, sessionKey, st, ce, emit)
-		}
-	}
-}
-
-func (s *ChatService) fetchAndEmitThinking(
-	ctx context.Context,
-	conversationID int64,
-	sessionKey string,
-	st *openClawChatRunState,
-	ce func() ChatEvent,
-	emit func(string, any),
-) {
-	var result struct {
-		Messages []struct {
-			Role    string `json:"role"`
-			Content any    `json:"content"`
-		} `json:"messages"`
-	}
-	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	if err := s.openclawGateway.QueryRequest(reqCtx, "sessions.get", map[string]any{
-		"key":   sessionKey,
-		"limit": 200,
-	}, &result); err != nil {
-		return
-	}
-
-	// Collect individual thinking blocks in order across all assistant messages.
-	var thinkingBlocks []string
-	for _, msg := range result.Messages {
-		if msg.Role != "assistant" {
-			continue
-		}
-		blocks, ok := msg.Content.([]any)
-		if !ok {
-			continue
-		}
-		for _, block := range blocks {
-			bm, ok := block.(map[string]any)
-			if !ok {
-				continue
-			}
-			if t, _ := bm["type"].(string); t == "thinking" {
-				if thinking, _ := bm["thinking"].(string); thinking != "" {
-					thinkingBlocks = append(thinkingBlocks, thinking)
-				}
-			}
-		}
-	}
-
-	if len(thinkingBlocks) == 0 {
-		return
-	}
-
-	st.thinkingMu.Lock()
-	defer st.thinkingMu.Unlock()
-
-	s.app.Logger.Debug("[openclaw-chat] fetchThinking",
-		"conv", conversationID,
-		"totalBlocks", len(thinkingBlocks),
-		"emittedBlocks", st.thinkingBlockCount,
-		"lastBlockLen", len(st.lastBlockEmitted))
-
-	// Emit each thinking block separately so the frontend creates distinct
-	// thinking segments that interleave correctly with tools/content.
-	for i, block := range thinkingBlocks {
-		if i < st.thinkingBlockCount {
-			continue // already fully emitted
-		}
-
-		if i == st.thinkingBlockCount {
-			// Current (possibly still growing) block — compute delta
-			if st.lastBlockEmitted == block {
-				continue // no change
-			}
-			delta := block
-			isNew := st.lastBlockEmitted == ""
-			if !isNew && strings.HasPrefix(block, st.lastBlockEmitted) {
-				delta = block[len(st.lastBlockEmitted):]
-			}
-			st.lastBlockEmitted = block
-			if delta != "" {
-				s.app.Logger.Debug("[openclaw-chat] emit thinking",
-					"conv", conversationID, "blockIdx", i, "deltaLen", len(delta), "newBlock", isNew && st.thinkingBlockCount > 0)
-				emit(EventChatThinking, ChatThinkingEvent{
-					ChatEvent: ce(),
-					Delta:     delta,
-					NewBlock:  isNew && st.thinkingBlockCount > 0,
-				})
-			}
-		} else {
-			// i > st.thinkingBlockCount: new block(s) appeared.
-			// First, finalize the previous block if needed.
-			if i == st.thinkingBlockCount+1 && st.lastBlockEmitted != "" {
-				prevBlock := thinkingBlocks[st.thinkingBlockCount]
-				if len(prevBlock) > len(st.lastBlockEmitted) {
-					prevDelta := prevBlock[len(st.lastBlockEmitted):]
-					s.app.Logger.Debug("[openclaw-chat] emit thinking finalize",
-						"conv", conversationID, "blockIdx", st.thinkingBlockCount, "deltaLen", len(prevDelta))
-					emit(EventChatThinking, ChatThinkingEvent{
-						ChatEvent: ce(),
-						Delta:     prevDelta,
-					})
-				}
-			}
-			// Emit the new block with NewBlock marker
-			s.app.Logger.Debug("[openclaw-chat] emit thinking NEW",
-				"conv", conversationID, "blockIdx", i, "blockLen", len(block))
-			st.thinkingBlockCount = i
-			st.lastBlockEmitted = block
-			emit(EventChatThinking, ChatThinkingEvent{
-				ChatEvent: ce(),
-				Delta:     block,
-				NewBlock:  true,
-			})
-		}
 	}
 }
 
@@ -722,9 +578,10 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		activeRunID.CompareAndSwap("", frame.RunID)
 	}
 
-	s.app.Logger.Debug("[openclaw-chat] agent event",
+	s.app.Logger.Info("[openclaw-chat] agent event",
 		"conv", conversationID, "stream", frame.Stream,
-		"dataLen", len(frame.Data))
+		"dataLen", len(frame.Data),
+		"rawData", string(frame.Data))
 
 	switch frame.Stream {
 	case "assistant":
@@ -734,7 +591,6 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
 			return
 		}
-		s.fetchAndEmitThinking(context.Background(), conversationID, sessionKey, st, ce, emit)
 
 		st.contentBuilder.WriteString(d.Delta)
 		st.emittedContent = st.contentBuilder.String()
@@ -754,6 +610,9 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
 			return
 		}
+		s.app.Logger.Info("[openclaw-chat] >>> THINKING stream event received",
+			"conv", conversationID, "deltaLen", len(d.Delta),
+			"deltaPreview", d.Delta[:min(100, len(d.Delta))])
 		st.thinkingBuilder.WriteString(d.Delta)
 		st.emittedThinking = st.thinkingBuilder.String()
 		emit(EventChatThinking, ChatThinkingEvent{
@@ -776,8 +635,6 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		}
 		switch d.Phase {
 		case "start":
-			s.fetchAndEmitThinking(context.Background(), conversationID, sessionKey, st, ce, emit)
-
 			argsJSON := ""
 			if len(d.Args) > 0 {
 				argsJSON = string(d.Args)
@@ -1044,6 +901,13 @@ func (s *ChatService) processOpenClawContentBlocks(
 
 	// Emit thinking delta
 	newThinking := allThinking.String()
+	if newThinking != "" {
+		s.app.Logger.Info("[openclaw-chat] >>> THINKING from chat event content blocks",
+			"conv", conversationID,
+			"newThinkingLen", len(newThinking),
+			"emittedThinkingLen", len(st.emittedThinking),
+			"thinkingPreview", newThinking[:min(100, len(newThinking))])
+	}
 	if newThinking != "" && len(newThinking) > len(st.emittedThinking) {
 		delta := newThinking[len(st.emittedThinking):]
 		st.emittedThinking = newThinking
@@ -1110,6 +974,12 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 
+	s.app.Logger.Info("[openclaw-chat] runOpenClawChatRun config",
+		"conv", conversationID,
+		"sessionKey", sessionKey,
+		"agentId", cfg.OpenClawAgentID,
+		"enableThinking", cfg.EnableThinking)
+
 	done := make(chan struct{})
 	var activeRunID atomic.Value
 
@@ -1130,12 +1000,6 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	})
 
 	defer s.openclawGateway.RemoveEventListener(listenerKey)
-
-	// Background goroutine polls sessions.get to extract thinking content,
-	// since neither "agent" nor "chat" events include thinking blocks.
-	thinkCtx, thinkCancel := context.WithCancel(ctx)
-	defer thinkCancel()
-	go s.pollThinkingFromHistory(thinkCtx, conversationID, sessionKey, st, ce, emit)
 
 	// Use the "agent" RPC (blocking: returns when the run completes).
 	// While it blocks, chat/agent events arrive via readLoop for real-time streaming.
