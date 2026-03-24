@@ -31,17 +31,20 @@ func NewConfigService(manager *Manager) *ConfigService {
 	return &ConfigService{manager: manager}
 }
 
-// EmbeddedGatewaySection returns a SectionBuilder that sets gateway.reload.mode=off.
-// The OpenClaw Gateway watches openclaw.json; when ChatClaw applies config via RPC the
-// gateway persists to disk and the default hybrid reload can mis-detect auth/tailscale
-// changes and loop on SIGUSR1 restarts. Embedded ChatClaw drives config through config.patch only.
-func EmbeddedGatewaySection() SectionBuilder {
+// ResponsesEndpointSection enables gateway HTTP OpenResponses via config.patch only.
+// Do not use `openclaw config set` before gateway start: that writes openclaw.json once,
+// then the process applies --auth/--token and persists again, then ChatClaw sends config.patch —
+// multiple competing writes make the file watcher see gateway.auth/tailscale/meta churn and
+// hybrid reload restarts the gateway in a loop.
+func ResponsesEndpointSection() SectionBuilder {
 	return func(ctx context.Context) (map[string]any, error) {
 		_ = ctx
 		return map[string]any{
 			"gateway": map[string]any{
-				"reload": map[string]any{
-					"mode": "off",
+				"http": map[string]any{
+					"endpoints": map[string]any{
+						"responses": map[string]any{"enabled": true},
+					},
 				},
 			},
 		}, nil
