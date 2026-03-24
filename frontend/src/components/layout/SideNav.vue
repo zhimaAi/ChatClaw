@@ -144,6 +144,7 @@ const topNavItems = computed(() =>
   allTopNavItems.filter((item) => {
     if (item.guiOnly && !appStore.isGUIMode) return false
     if (item.systems && !item.systems.includes(appStore.currentSystem)) return false
+    if (item.key === 'multiask' && !appStore.showMultiaskInNav) return false
     return true
   })
 )
