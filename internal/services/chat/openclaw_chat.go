@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -137,19 +138,33 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var result struct {
-		Messages []struct {
-			Role    string `json:"role"`
-			Content any    `json:"content"`
-		} `json:"messages"`
+	var rawResult struct {
+		Messages []json.RawMessage `json:"messages"`
 	}
 	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
 		"key":   sessionKey,
 		"limit": 200,
-	}, &result); err != nil {
+	}, &rawResult); err != nil {
 		s.app.Logger.Warn("[openclaw-chat] sessions.get failed",
 			"conv", conversationID, "err", err)
 		return nil, nil
+	}
+
+	type transcriptMsg struct {
+		Role       string `json:"role"`
+		Content    any    `json:"content"`
+		ToolUseID  string `json:"tool_use_id,omitempty"`
+		ToolCallID string `json:"toolCallId,omitempty"`
+		ToolName   string `json:"toolName,omitempty"`
+	}
+	var result struct {
+		Messages []transcriptMsg
+	}
+	for _, raw := range rawResult.Messages {
+		var msg transcriptMsg
+		if err := json.Unmarshal(raw, &msg); err == nil {
+			result.Messages = append(result.Messages, msg)
+		}
 	}
 
 	// OpenClaw transcripts break a single agent turn into multiple
@@ -218,10 +233,24 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		if len(group.segments) > 0 {
 			seg, _ := json.Marshal(group.segments)
 			msg.Segments = string(seg)
+			var segTypes []string
+			for _, s := range group.segments {
+				segTypes = append(segTypes, s.Type)
+			}
+			s.app.Logger.Debug("[openclaw-chat] flushGroup segments",
+				"conv", conversationID, "segTypes", segTypes)
 		}
 		messages = append(messages, msg)
 		messages = append(messages, group.toolResults...)
 		group = nil
+	}
+
+	// Dump transcript structure for debugging
+	for i, m := range result.Messages {
+		contentJSON, _ := json.Marshal(m.Content)
+		s.app.Logger.Info("[openclaw-chat] transcript msg",
+			"conv", conversationID, "idx", i, "role", m.Role,
+			"content", string(contentJSON))
 	}
 
 	for _, m := range result.Messages {
@@ -231,7 +260,10 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 
 		if m.Role == "toolResult" {
 			resultContent := extractTextFromContent(m.Content)
-			if group != nil && len(group.pending) > 0 {
+			if group == nil {
+				group = &assistantGroup{}
+			}
+			if len(group.pending) > 0 {
 				tc := group.pending[0]
 				group.pending = group.pending[1:]
 				msgIDCounter--
@@ -242,6 +274,35 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 					Content:        resultContent,
 					ToolCallID:     tc.id,
 					ToolCallName:   tc.name,
+					Status:         StatusSuccess,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+				})
+			} else {
+				// No pending toolCall blocks — extract tool info from
+				// the toolResult message fields.
+				toolCallID := m.ToolCallID
+				if toolCallID == "" {
+					toolCallID = m.ToolUseID
+				}
+				toolName := m.ToolName
+				if toolCallID == "" {
+					toolCallID = fmt.Sprintf("tool_%d", -msgIDCounter)
+				}
+				group.allToolCalls = append(group.allToolCalls, map[string]any{
+					"id":       toolCallID,
+					"type":     "function",
+					"function": map[string]any{"name": toolName, "arguments": "{}"},
+				})
+				appendToolCallSeg(group, toolCallID)
+				msgIDCounter--
+				group.toolResults = append(group.toolResults, Message{
+					ID:             msgIDCounter,
+					ConversationID: conversationID,
+					Role:           "tool",
+					Content:        resultContent,
+					ToolCallID:     toolCallID,
+					ToolCallName:   toolName,
 					Status:         StatusSuccess,
 					CreatedAt:      now,
 					UpdatedAt:      now,
@@ -449,6 +510,10 @@ type openClawChatRunState struct {
 	emittedContent  string
 	seenToolCalls   map[string]bool
 	seenToolResults map[string]bool
+	// Per-block thinking tracking for pollThinkingFromHistory
+	thinkingBlockCount int
+	lastBlockEmitted   string
+	thinkingMu         sync.Mutex
 }
 
 func (st *openClawChatRunState) nextSeq() int {
@@ -467,6 +532,145 @@ func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID
 		Seq:            st.nextSeq(),
 		MessageID:      mid,
 		Ts:             time.Now().UnixMilli(),
+	}
+}
+
+// pollThinkingFromHistory runs in a background goroutine during an active
+// agent run. It periodically fetches the session transcript via sessions.get
+// and extracts thinking content that is not available in streaming events.
+func (s *ChatService) pollThinkingFromHistory(
+	ctx context.Context,
+	conversationID int64,
+	sessionKey string,
+	st *openClawChatRunState,
+	ce func() ChatEvent,
+	emit func(string, any),
+) {
+	ticker := time.NewTicker(800 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.fetchAndEmitThinking(ctx, conversationID, sessionKey, st, ce, emit)
+		}
+	}
+}
+
+func (s *ChatService) fetchAndEmitThinking(
+	ctx context.Context,
+	conversationID int64,
+	sessionKey string,
+	st *openClawChatRunState,
+	ce func() ChatEvent,
+	emit func(string, any),
+) {
+	var result struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content any    `json:"content"`
+		} `json:"messages"`
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := s.openclawGateway.QueryRequest(reqCtx, "sessions.get", map[string]any{
+		"key":   sessionKey,
+		"limit": 200,
+	}, &result); err != nil {
+		return
+	}
+
+	// Collect individual thinking blocks in order across all assistant messages.
+	var thinkingBlocks []string
+	for _, msg := range result.Messages {
+		if msg.Role != "assistant" {
+			continue
+		}
+		blocks, ok := msg.Content.([]any)
+		if !ok {
+			continue
+		}
+		for _, block := range blocks {
+			bm, ok := block.(map[string]any)
+			if !ok {
+				continue
+			}
+			if t, _ := bm["type"].(string); t == "thinking" {
+				if thinking, _ := bm["thinking"].(string); thinking != "" {
+					thinkingBlocks = append(thinkingBlocks, thinking)
+				}
+			}
+		}
+	}
+
+	if len(thinkingBlocks) == 0 {
+		return
+	}
+
+	st.thinkingMu.Lock()
+	defer st.thinkingMu.Unlock()
+
+	s.app.Logger.Debug("[openclaw-chat] fetchThinking",
+		"conv", conversationID,
+		"totalBlocks", len(thinkingBlocks),
+		"emittedBlocks", st.thinkingBlockCount,
+		"lastBlockLen", len(st.lastBlockEmitted))
+
+	// Emit each thinking block separately so the frontend creates distinct
+	// thinking segments that interleave correctly with tools/content.
+	for i, block := range thinkingBlocks {
+		if i < st.thinkingBlockCount {
+			continue // already fully emitted
+		}
+
+		if i == st.thinkingBlockCount {
+			// Current (possibly still growing) block — compute delta
+			if st.lastBlockEmitted == block {
+				continue // no change
+			}
+			delta := block
+			isNew := st.lastBlockEmitted == ""
+			if !isNew && strings.HasPrefix(block, st.lastBlockEmitted) {
+				delta = block[len(st.lastBlockEmitted):]
+			}
+			st.lastBlockEmitted = block
+			if delta != "" {
+				s.app.Logger.Debug("[openclaw-chat] emit thinking",
+					"conv", conversationID, "blockIdx", i, "deltaLen", len(delta), "newBlock", isNew && st.thinkingBlockCount > 0)
+				emit(EventChatThinking, ChatThinkingEvent{
+					ChatEvent: ce(),
+					Delta:     delta,
+					NewBlock:  isNew && st.thinkingBlockCount > 0,
+				})
+			}
+		} else {
+			// i > st.thinkingBlockCount: new block(s) appeared.
+			// First, finalize the previous block if needed.
+			if i == st.thinkingBlockCount+1 && st.lastBlockEmitted != "" {
+				prevBlock := thinkingBlocks[st.thinkingBlockCount]
+				if len(prevBlock) > len(st.lastBlockEmitted) {
+					prevDelta := prevBlock[len(st.lastBlockEmitted):]
+					s.app.Logger.Debug("[openclaw-chat] emit thinking finalize",
+						"conv", conversationID, "blockIdx", st.thinkingBlockCount, "deltaLen", len(prevDelta))
+					emit(EventChatThinking, ChatThinkingEvent{
+						ChatEvent: ce(),
+						Delta:     prevDelta,
+					})
+				}
+			}
+			// Emit the new block with NewBlock marker
+			s.app.Logger.Debug("[openclaw-chat] emit thinking NEW",
+				"conv", conversationID, "blockIdx", i, "blockLen", len(block))
+			st.thinkingBlockCount = i
+			st.lastBlockEmitted = block
+			emit(EventChatThinking, ChatThinkingEvent{
+				ChatEvent: ce(),
+				Delta:     block,
+				NewBlock:  true,
+			})
+		}
 	}
 }
 
@@ -504,6 +708,10 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		activeRunID.CompareAndSwap("", frame.RunID)
 	}
 
+	s.app.Logger.Debug("[openclaw-chat] agent event",
+		"conv", conversationID, "stream", frame.Stream,
+		"dataLen", len(frame.Data))
+
 	switch frame.Stream {
 	case "assistant":
 		var d struct {
@@ -512,6 +720,8 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
 			return
 		}
+		s.fetchAndEmitThinking(context.Background(), conversationID, sessionKey, st, ce, emit)
+
 		st.contentBuilder.WriteString(d.Delta)
 		st.emittedContent = st.contentBuilder.String()
 		s.appendGenerationContent(conversationID, "", d.Delta)
@@ -552,6 +762,8 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		}
 		switch d.Phase {
 		case "start":
+			s.fetchAndEmitThinking(context.Background(), conversationID, sessionKey, st, ce, emit)
+
 			argsJSON := ""
 			if len(d.Args) > 0 {
 				argsJSON = string(d.Args)
@@ -647,15 +859,11 @@ func (s *ChatService) handleOpenClawChatEvent(
 		return
 	}
 
-	s.app.Logger.Debug("[openclaw-chat] chat event parsed",
+	s.app.Logger.Debug("[openclaw-chat] chat event",
 		"conv", conversationID,
 		"state", chatEvt.State,
-		"sessionKey", chatEvt.SessionKey,
-		"wantSession", sessionKey,
-		"runId", chatEvt.RunID,
 		"role", chatEvt.Message.Role,
-		"contentLen", len(chatEvt.Message.Content),
-		"stopReason", chatEvt.Message.StopReason)
+		"contentLen", len(chatEvt.Message.Content))
 
 	// Filter by session
 	if chatEvt.SessionKey != "" && chatEvt.SessionKey != sessionKey &&
@@ -909,6 +1117,12 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 
 	defer s.openclawGateway.RemoveEventListener(listenerKey)
 
+	// Background goroutine polls sessions.get to extract thinking content,
+	// since neither "agent" nor "chat" events include thinking blocks.
+	thinkCtx, thinkCancel := context.WithCancel(ctx)
+	defer thinkCancel()
+	go s.pollThinkingFromHistory(thinkCtx, conversationID, sessionKey, st, ce, emit)
+
 	// Use the "agent" RPC (blocking: returns when the run completes).
 	// While it blocks, chat/agent events arrive via readLoop for real-time streaming.
 	params := map[string]any{
@@ -941,16 +1155,29 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		activeRunID.Store(runResult.RunID)
 	}
 
-	s.app.Logger.Info("[openclaw-chat] agent RPC completed",
+	s.app.Logger.Info("[openclaw-chat] agent RPC returned",
 		"conv", conversationID, "runId", runResult.RunID)
 
-	// The agent RPC blocks until completion, so no need to wait on `done`.
-	// However, if lifecycle events already closed it, that's fine too.
+	// Wait for the run to finish via lifecycle "end" event or context cancel.
 	select {
 	case <-done:
-	default:
+		s.app.Logger.Info("[openclaw-chat] run finished via lifecycle event",
+			"conv", conversationID)
+	case <-ctx.Done():
+		rid, _ := activeRunID.Load().(string)
+		if rid != "" {
+			abortCtx, abortCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = s.openclawGateway.Request(abortCtx, "chat.abort", map[string]any{
+				"sessionKey": sessionKey,
+			}, nil)
+			abortCancel()
+		}
+		emit(EventChatStopped, ChatStoppedEvent{
+			ChatEvent: ce(),
+			Status:    StatusCancelled,
+		})
+		return
 	}
-
 	if st.finishReason == "" {
 		st.finishReason = "stop"
 	}

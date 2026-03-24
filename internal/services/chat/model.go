@@ -183,6 +183,7 @@ type ChatChunkEvent struct {
 type ChatThinkingEvent struct {
 	ChatEvent
 	Delta            string   `json:"delta"`
+	NewBlock         bool     `json:"new_block,omitempty"`
 	RunPath          []string `json:"run_path,omitempty"`
 	ParentToolCallID string   `json:"parent_tool_call_id,omitempty"`
 }
