@@ -273,7 +273,7 @@ func (s *SettingsService) GetWorkspaceSettings() (*UpdateWorkspaceSettingsInput,
 	}, nil
 }
 
-// GetSkillsDir returns the fixed skills directory path ($HOME/.chatclaw/skills).
+// GetSkillsDir returns the fixed skills directory path ($HOME/.chatclaw/native/skills).
 func (s *SettingsService) GetSkillsDir() (string, error) {
 	appDir, err := define.AppDataDir()
 	if err != nil {
@@ -282,7 +282,7 @@ func (s *SettingsService) GetSkillsDir() (string, error) {
 	return filepath.Join(appDir, "skills"), nil
 }
 
-// GetMCPDir returns the fixed MCP servers directory path ($HOME/.chatclaw/mcp).
+// GetMCPDir returns the fixed MCP servers directory path ($HOME/.chatclaw/native/mcp).
 func (s *SettingsService) GetMCPDir() (string, error) {
 	appDir, err := define.AppDataDir()
 	if err != nil {

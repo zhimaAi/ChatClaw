@@ -4,11 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Loader2, Circle } from 'lucide-vue-next'
-import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/services/openclawruntime/openclawruntimeservice'
+import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import {
   RuntimeStatus,
   GatewayConnectionState,
-} from '@bindings/chatclaw/internal/services/openclawruntime/models'
+} from '@bindings/chatclaw/internal/openclaw/runtime/models'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 

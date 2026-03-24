@@ -2,7 +2,6 @@ package define
 
 import (
 	"os"
-	"path/filepath"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
@@ -45,13 +44,10 @@ func GetModelChatWikiURL() string {
 	return ModelChatWikiUrl
 }
 
-// AppDataDir returns the unified app data directory: $HOME/.chatclaw
+// AppDataDir returns the native ChatClaw data directory: $HOME/.chatclaw/native
+// Call EnsureDataLayout before first use so legacy files under $HOME/.chatclaw are migrated.
 func AppDataDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "."+AppID), nil
+	return NativeDataRootDir()
 }
 
 // IsDev 是否为开发环境

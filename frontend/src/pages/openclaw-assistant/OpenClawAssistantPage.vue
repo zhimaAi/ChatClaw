@@ -20,7 +20,7 @@ import ChatInputArea from './components/ChatInputArea.vue'
 import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
-import { type OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
+import { type OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {

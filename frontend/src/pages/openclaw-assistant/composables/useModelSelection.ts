@@ -11,7 +11,7 @@ import {
   type Conversation,
   UpdateConversationInput,
 } from '@bindings/chatclaw/internal/services/conversations'
-import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 
 export function useModelSelection() {
   const { t } = useI18n()

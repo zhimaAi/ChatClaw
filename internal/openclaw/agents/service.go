@@ -25,7 +25,7 @@ import (
 )
 
 func defaultWorkDir() string {
-	dir, err := define.AppDataDir()
+	dir, err := define.OpenClawDataRootDir()
 	if err != nil {
 		return ""
 	}

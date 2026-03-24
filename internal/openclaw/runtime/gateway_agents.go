@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/services/openclawagents"
+	"chatclaw/internal/openclaw/agents"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )

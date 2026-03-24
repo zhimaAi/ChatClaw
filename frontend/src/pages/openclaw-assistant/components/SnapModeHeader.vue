@@ -14,7 +14,7 @@ import {
 import { useThemeLogo } from '@/composables/useLogo'
 import IconSnapAttached from '@/assets/icons/snap-attached.svg'
 import IconSnapDetached from '@/assets/icons/snap-detached.svg'
-import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 import type { Robot } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { Window } from '@wailsio/runtime'

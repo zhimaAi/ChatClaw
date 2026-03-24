@@ -31,7 +31,7 @@ import { getErrorMessage } from '@/composables/useErrorMessage'
 import {
   OpenClawAgentsService,
   type OpenClawAgent,
-} from '@bindings/chatclaw/internal/services/openclawagents'
+} from '@bindings/chatclaw/internal/openclaw/agents'
 import {
   ProvidersService,
   type ProviderWithModels,
