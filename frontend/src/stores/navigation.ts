@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { v4 as uuidv4 } from 'uuid'
 import { getLogoDataUrl } from '@/composables/useLogo'
+import type { SystemOwner } from './app'
 
 const createTabId = () => `tab-${uuidv4()}`
 
@@ -19,6 +20,7 @@ export type NavModule =
   | 'document'
   | 'skills'
   | 'channels'
+  | 'tools'
 
 /**
  * 标签页类型
@@ -43,6 +45,8 @@ export interface Tab {
   iconIsDefault?: boolean
   /** 关联的模块 */
   module: NavModule
+  /** 创建此 Tab 时的系统标识，页面组件应读取此字段而非全局 currentSystem */
+  systemOwner?: SystemOwner
   /** 模块特定的数据（例如文档查看器的文档ID） */
   data?: DocumentViewerData
 }
@@ -96,6 +100,7 @@ const moduleLabels: Record<NavModule, string> = {
   document: 'nav.document',
   skills: 'nav.skills',
   channels: 'nav.channels',
+  tools: 'nav.tools',
 }
 
 /**
@@ -111,6 +116,7 @@ const singleTabModules: NavModule[] = [
   'settings',
   'skills',
   'channels',
+  'tools',
 ]
 
 /**
@@ -181,12 +187,13 @@ export const useNavigationStore = defineStore('navigation', () => {
    * 点击左侧导航菜单时调用
    * - AI助手：如果已有标签页则切换到最右侧的，否则创建新标签页
    * - 知识库、多问、设置：如果已存在则切换，否则创建
+   *
+   * @param systemOwner - The system context captured at the time of navigation
    */
-  const navigateToModule = (module: NavModule) => {
+  const navigateToModule = (module: NavModule, systemOwner?: SystemOwner) => {
     activeModule.value = module
 
     if (module === 'assistant') {
-      // If the current tab is already an assistant tab, stay on it.
       const currentTab = tabs.value.find((t) => t.id === activeTabId.value)
       if (currentTab?.module === 'assistant') return
 
@@ -198,24 +205,21 @@ export const useNavigationStore = defineStore('navigation', () => {
       }
     }
 
-    // 检查是否为单标签模块
     if (singleTabModules.includes(module)) {
-      // 查找该模块是否已有标签页
       const existingTab = tabs.value.find((tab) => tab.module === module)
       if (existingTab) {
-        // 已存在，切换到该标签页
         activeTabId.value = existingTab.id
         return
       }
     }
 
-    // 创建新标签页
     const id = createTabId()
     const { icon, iconIsDefault } = resolveTabIcon(module)
     const newTab: Tab = {
       id,
       titleKey: moduleLabels[module],
       module,
+      systemOwner,
       icon,
       iconIsDefault,
     }
@@ -226,7 +230,7 @@ export const useNavigationStore = defineStore('navigation', () => {
   /**
    * 添加新标签页
    */
-  const addTab = (tab: Omit<Tab, 'id'>) => {
+  const addTab = (tab: Omit<Tab, 'id'>, systemOwner?: SystemOwner) => {
     const id = createTabId()
     const resolved = resolveTabIcon(tab.module, tab.icon, {
       isDefault: tab.iconIsDefault,
@@ -235,6 +239,7 @@ export const useNavigationStore = defineStore('navigation', () => {
       ...tab,
       icon: resolved.icon,
       iconIsDefault: resolved.iconIsDefault,
+      systemOwner: tab.systemOwner ?? systemOwner,
       id,
     }
     tabs.value.push(newTab)
@@ -299,6 +304,7 @@ export const useNavigationStore = defineStore('navigation', () => {
   const closeAllTabs = () => {
     tabs.value = []
     activeTabId.value = null
+    pendingChatData.value = null
   }
 
   /**

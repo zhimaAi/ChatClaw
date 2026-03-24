@@ -5,23 +5,25 @@ import (
 	"strings"
 
 	"chatclaw/internal/define"
-	"chatclaw/internal/services/chatwiki"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // AuthCallbackData is emitted to the frontend when a chatclaw://auth/callback URL is received.
 type AuthCallbackData struct {
-	Token    string `json:"token"`
-	TTL      string `json:"ttl"`
-	Exp      string `json:"exp"`
-	UserID   string `json:"user_id"`
-	UserName string `json:"user_name"`
+	ServerURL       string `json:"server_url"`
+	Token           string `json:"token"`
+	TTL             string `json:"ttl"`
+	Exp             string `json:"exp"`
+	UserID          string `json:"user_id"`
+	UserName        string `json:"user_name"`
+	ChatWikiVersion string `json:"chatwiki_version"`
 }
 
 // HandleURL processes a single chatclaw:// URL (e.g. from macOS Apple Event or
 // Windows/Linux command-line argument). If the URL matches the auth callback
-// pattern, it saves the binding to DB and emits "chatwiki:auth-callback" to the frontend.
+// pattern, it emits "chatwiki:auth-callback" to the frontend, which then saves
+// the binding using the locally selected login source.
 func HandleURL(app *application.App, rawURL string) {
 	if !strings.HasPrefix(rawURL, "chatclaw://") {
 		return
@@ -46,17 +48,16 @@ func HandleURL(app *application.App, rawURL string) {
 	exp := q.Get("exp")
 	userID := q.Get("user_id")
 	userName := q.Get("user_name")
-
-	if err := chatwiki.SaveBinding(app, serverURL, token, ttl, exp, userID, userName); err != nil {
-		app.Logger.Error("Failed to save chatwiki binding from deeplink", "error", err)
-	}
+	chatWikiVersion := q.Get("chatwiki_version")
 
 	payload := AuthCallbackData{
-		Token:    token,
-		TTL:      ttl,
-		Exp:      exp,
-		UserID:   userID,
-		UserName: userName,
+		ServerURL:       serverURL,
+		Token:           token,
+		TTL:             ttl,
+		Exp:             exp,
+		UserID:          userID,
+		UserName:        userName,
+		ChatWikiVersion: chatWikiVersion,
 	}
 	app.Logger.Info("Deep link auth callback received", "user_id", userID, "user_name", userName)
 	app.Event.Emit("chatwiki:auth-callback", payload)

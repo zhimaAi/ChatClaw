@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"chatclaw/internal/errs"
 
@@ -15,6 +16,10 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"google.golang.org/genai"
 )
+
+func chatModelLogger() *slog.Logger {
+	return slog.Default()
+}
 
 func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
 	if config.EnableTemp && config.Temperature != nil {
@@ -32,6 +37,15 @@ func applyOpenAIModelParams(cfg *openai.ChatModelConfig, config Config) {
 
 // CreateChatModel creates a ToolCallingChatModel based on the provider type.
 func CreateChatModel(ctx context.Context, config Config) (model.ToolCallingChatModel, error) {
+	chatModelLogger().Info("[chatmodel] CreateChatModel start",
+		"provider_id", config.Provider.ProviderID,
+		"provider_type", config.Provider.Type,
+		"model_id", config.ModelID,
+		"api_endpoint", config.Provider.APIEndpoint,
+		"api_key_len", len(config.Provider.APIKey),
+		"enable_thinking", config.EnableThinking,
+	)
+
 	switch config.Provider.Type {
 	case "openai":
 		return createOpenAIChatModel(ctx, config)
@@ -56,6 +70,12 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		Model:   config.ModelID,
 		BaseURL: config.Provider.APIEndpoint,
 	}
+	chatModelLogger().Info("[chatmodel] create openai config",
+		"provider_id", config.Provider.ProviderID,
+		"model_id", config.ModelID,
+		"base_url", config.Provider.APIEndpoint,
+		"api_key_len", len(config.Provider.APIKey),
+	)
 	applyOpenAIModelParams(cfg, config)
 
 	if config.EnableThinking {
@@ -65,7 +85,11 @@ func createOpenAIChatModel(ctx context.Context, config Config) (model.ToolCallin
 		cfg.ExtraFields["enable_thinking"] = true
 	}
 
-	return openai.NewChatModel(ctx, cfg)
+	chatModel, err := openai.NewChatModel(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return chatModel, nil
 }
 
 func createAzureChatModel(ctx context.Context, config Config) (model.ToolCallingChatModel, error) {

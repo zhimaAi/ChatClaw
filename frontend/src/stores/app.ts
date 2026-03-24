@@ -6,6 +6,7 @@ import { Events } from '@wailsio/runtime'
 
 export type Theme = 'light' | 'dark' | 'system'
 export type RunMode = 'gui' | 'server'
+export type SystemOwner = 'chatclaw' | 'openclaw'
 
 export const useAppStore = defineStore('app', () => {
   // 主题设置
@@ -20,6 +21,15 @@ export const useAppStore = defineStore('app', () => {
 
   // Whether a new version is available (used to show badge on "Check for Update" button)
   const hasAvailableUpdate = ref(false)
+
+  const currentSystem = ref<SystemOwner>(
+    (localStorage.getItem('currentSystem') as SystemOwner) || 'chatclaw'
+  )
+
+  const setCurrentSystem = (system: SystemOwner) => {
+    currentSystem.value = system
+    localStorage.setItem('currentSystem', system)
+  }
 
   // 获取系统主题
   const getSystemTheme = (): 'light' | 'dark' => {
@@ -120,5 +130,7 @@ export const useAppStore = defineStore('app', () => {
     isServerMode,
     isGUIMode,
     initRunMode,
+    currentSystem,
+    setCurrentSystem,
   }
 })

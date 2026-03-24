@@ -382,7 +382,7 @@ onUnmounted(() => {
     <!-- Message content container -->
     <div
       :class="
-        cn('flex min-w-0 max-w-[85%] w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
+        cn('flex min-w-0 w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
       "
     >
       <!-- Assistant messages: interleaved segments (thinking → content ↔ tool calls) -->

@@ -439,10 +439,7 @@ onMounted(loadData)
           {{ t('channels.subtitle') }}
         </p>
       </div>
-      <Button
-        class="h-9 gap-1 bg-[#f5f5f5] text-[#171717] hover:bg-[#e5e5e5] border-none shadow-none dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
-        @click="handleAddChannel"
-      >
+      <Button class="h-9 gap-1" variant="default" @click="handleAddChannel">
         <Plus class="h-4 w-4 shrink-0" />
         {{ t('channels.addChannel') }}
       </Button>
@@ -754,7 +751,7 @@ onMounted(loadData)
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
-              <span>*</span>
+              <span class="text-destructive" aria-hidden="true">*</span>
               <span>{{ t('channels.inline.avatarName') }}</span>
             </label>
             <div class="flex min-w-0 gap-2">
@@ -789,7 +786,7 @@ onMounted(loadData)
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
-              <span>*</span>
+              <span class="text-destructive" aria-hidden="true">*</span>
               <span>{{ inlineAppIdLabel }}</span>
             </label>
             <Input
@@ -805,7 +802,7 @@ onMounted(loadData)
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
-              <span>*</span>
+              <span class="text-destructive" aria-hidden="true">*</span>
               <span>{{ inlineAppSecretLabel }}</span>
             </label>
             <Input

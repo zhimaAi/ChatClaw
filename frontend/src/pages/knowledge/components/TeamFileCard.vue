@@ -9,14 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import IconPdf from '@/assets/icons/file-pdf.svg'
-import IconWord from '@/assets/icons/file-word.svg'
-import IconExcel from '@/assets/icons/file-excel.svg'
-import IconText from '@/assets/icons/file-text.svg'
-import IconMarkdown from '@/assets/icons/file-markdown.svg'
-import IconHtml from '@/assets/icons/file-html.svg'
-import IconCsv from '@/assets/icons/file-csv.svg'
-import IconOfd from '@/assets/icons/file-ofd.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 
 const { t } = useI18n()
 
@@ -81,33 +74,7 @@ const getFileExtension = (file: TeamFile) => {
     .toLowerCase()
 }
 
-const getFileIcon = (file: TeamFile) => {
-  const ext = getFileExtension(file)
-  switch (ext) {
-    case 'pdf':
-      return IconPdf
-    case 'doc':
-    case 'docx':
-      return IconWord
-    case 'xls':
-    case 'xlsx':
-      return IconExcel
-    case 'txt':
-      return IconText
-    case 'md':
-    case 'markdown':
-      return IconMarkdown
-    case 'html':
-    case 'htm':
-      return IconHtml
-    case 'csv':
-      return IconCsv
-    case 'ofd':
-      return IconOfd
-    default:
-      return FileText
-  }
-}
+const getFileIconUrl = (file: TeamFile) => getFileTypeIconUrl(getFileExtension(file))
 
 const getFileStatusLabel = (status: number) => {
   if (status === 3) return t('knowledge.content.status.failed')
@@ -178,23 +145,23 @@ const handleCardClick = () => {
 
 <template>
   <div
-    class="group relative flex h-[182px] w-[166px] cursor-pointer flex-col rounded-xl border border-border bg-card transition-shadow hover:shadow-md dark:hover:shadow-none dark:hover:ring-1 dark:hover:ring-white/10"
+    class="group relative flex h-[182px] w-[166px] cursor-pointer flex-col border border-border bg-card shadow-sm transition-[box-shadow] hover:shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5 dark:hover:ring-white/10"
     @click="handleCardClick"
   >
-    <!-- 缩略图区域 -->
+    <!-- Thumbnail area: 6px radius, muted bg per design -->
     <div
-      class="relative mx-[7px] mt-[7px] h-[86px] w-[150px] overflow-hidden rounded-md border border-border bg-muted"
+      class="relative mx-2 mt-2 h-[86px] w-[150px] overflow-hidden border border-border bg-[#f2f4f7] dark:bg-muted"
     >
       <img v-if="canShowThumb" :src="fileThumbUrl" class="size-full object-contain" alt="" />
       <div v-else class="absolute inset-0 flex items-center justify-center">
-        <component :is="getFileIcon(file)" class="size-10 text-muted-foreground/40" />
+        <img :src="getFileIconUrl(file)" alt="" class="size-10 object-contain opacity-40" />
       </div>
     </div>
 
-    <!-- 状态徽章 -->
+    <!-- Status badge -->
     <div
       v-if="statusConfig.show && statusConfig.iconOnly"
-      class="absolute left-[11px] top-[11px] flex items-center justify-center text-xs"
+      class="absolute left-3 top-3 flex items-center justify-center text-xs"
       :class="statusConfig.class"
     >
       <component
@@ -206,16 +173,16 @@ const handleCardClick = () => {
     </div>
     <div
       v-else-if="statusConfig.show"
-      class="absolute left-[11px] top-[11px] flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium"
+      class="absolute left-3 top-3 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs font-medium"
       :class="statusConfig.class"
     >
       {{ statusConfig.label }}
     </div>
 
-    <!-- 悬停菜单按钮 -->
+    <!-- Hover menu -->
     <DropdownMenu>
       <DropdownMenuTrigger
-        class="absolute right-[9px] top-[9px] flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
+        class="absolute right-2 top-2 flex size-6 items-center justify-center bg-background/80 text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100"
         @click.stop
       >
         <MoreHorizontal class="size-4" />
@@ -228,18 +195,18 @@ const handleCardClick = () => {
       </DropdownMenuContent>
     </DropdownMenu>
 
-    <!-- 标题 -->
+    <!-- Title -->
     <p
-      class="mx-[7px] mt-[8px] line-clamp-2 h-[44px] text-left text-sm leading-[22px] text-foreground"
+      class="mx-2 mt-2 line-clamp-2 h-[44px] text-left text-sm font-medium leading-[22px] text-foreground"
       :title="file.name"
     >
       {{ file.name }}
     </p>
 
-    <!-- 底部信息 -->
-    <div class="mx-[7px] mt-auto flex items-center justify-between pb-[7px]">
+    <!-- Footer -->
+    <div class="mx-2 mt-auto flex items-center justify-between pb-2">
       <div class="flex items-center gap-1">
-        <component :is="getFileIcon(file)" class="size-[14px]" />
+        <img :src="getFileIconUrl(file)" alt="" class="size-[14px] object-contain" />
         <span class="text-xs text-muted-foreground/70">{{ getFileExtension(file) || '-' }}</span>
       </div>
       <span class="text-xs text-muted-foreground/60">{{ formatDate(getDate()) }}</span>

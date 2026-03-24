@@ -1224,42 +1224,59 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 			}
 
 			// If there are images, use multi-content form
-		if len(images) > 0 {
-			var parts []schema.MessageInputPart
+			if len(images) > 0 {
+				var parts []schema.MessageInputPart
 
-			var imageRefs []string
-			var fileRefs []string
+				var imageRefs []string
+				var fileRefs []string
 
-			if hasText {
-				parts = append(parts, schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeText,
-					Text: m.Content,
-				})
-			}
-
-			for _, img := range images {
-				// File attachments: not sent as multimodal content, only as text references
-				if img.Kind == "file" {
-					displayName := img.OriginalName
-					if displayName == "" {
-						displayName = img.FileName
-					}
-					ref := fmt.Sprintf("%s (original: %s, type: %s)", img.FilePath, displayName, img.MimeType)
-					fileRefs = append(fileRefs, ref)
-					continue
+				if hasText {
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: m.Content,
+					})
 				}
 
-				// Handle local file images
-				if img.Source == "local_file" && img.FilePath != "" {
-					imageRefs = append(imageRefs, img.FilePath)
-
-					data, err := os.ReadFile(img.FilePath)
-					if err != nil {
-						s.app.Logger.Warn("[chat] failed to read image file", "path", img.FilePath, "error", err)
+				for _, img := range images {
+					// File attachments: not sent as multimodal content, only as text references
+					if img.Kind == "file" {
+						displayName := img.OriginalName
+						if displayName == "" {
+							displayName = img.FileName
+						}
+						ref := fmt.Sprintf("%s (original: %s, type: %s)", img.FilePath, displayName, img.MimeType)
+						fileRefs = append(fileRefs, ref)
 						continue
 					}
-					base64Data := base64.StdEncoding.EncodeToString(data)
 
+					// Handle local file images
+					if img.Source == "local_file" && img.FilePath != "" {
+						imageRefs = append(imageRefs, img.FilePath)
+
+						data, err := os.ReadFile(img.FilePath)
+						if err != nil {
+							s.app.Logger.Warn("[chat] failed to read image file", "path", img.FilePath, "error", err)
+							continue
+						}
+						base64Data := base64.StdEncoding.EncodeToString(data)
+
+						parts = append(parts, schema.MessageInputPart{
+							Type: schema.ChatMessagePartTypeImageURL,
+							Image: &schema.MessageInputImage{
+								MessagePartCommon: schema.MessagePartCommon{
+									Base64Data: &base64Data,
+									MIMEType:   img.MimeType,
+								},
+							},
+						})
+						continue
+					}
+
+					// Handle inline base64 images
+					if img.Source != "inline_base64" || img.Base64 == "" || img.MimeType == "" {
+						continue
+					}
+					base64Data := img.Base64
 					parts = append(parts, schema.MessageInputPart{
 						Type: schema.ChatMessagePartTypeImageURL,
 						Image: &schema.MessageInputImage{
@@ -1269,49 +1286,32 @@ func (s *ChatService) loadMessagesForContext(ctx context.Context, db *bun.DB, co
 							},
 						},
 					})
-					continue
 				}
 
-				// Handle inline base64 images
-				if img.Source != "inline_base64" || img.Base64 == "" || img.MimeType == "" {
-					continue
+				// Add image file path references as a text part for skills
+				if len(imageRefs) > 0 {
+					refText := "\n\n[Attached Images]\n" + strings.Join(imageRefs, "\n")
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: refText,
+					})
 				}
-				base64Data := img.Base64
-				parts = append(parts, schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeImageURL,
-					Image: &schema.MessageInputImage{
-						MessagePartCommon: schema.MessagePartCommon{
-							Base64Data: &base64Data,
-							MIMEType:   img.MimeType,
-						},
-					},
-				})
-			}
 
-			// Add image file path references as a text part for skills
-			if len(imageRefs) > 0 {
-				refText := "\n\n[Attached Images]\n" + strings.Join(imageRefs, "\n")
-				parts = append(parts, schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeText,
-					Text: refText,
-				})
-			}
+				// Add file path references as a text part so skills can locate and open files
+				if len(fileRefs) > 0 {
+					refText := "\n\n[Attached Files]\n" + strings.Join(fileRefs, "\n")
+					parts = append(parts, schema.MessageInputPart{
+						Type: schema.ChatMessagePartTypeText,
+						Text: refText,
+					})
+				}
 
-			// Add file path references as a text part so skills can locate and open files
-			if len(fileRefs) > 0 {
-				refText := "\n\n[Attached Files]\n" + strings.Join(fileRefs, "\n")
-				parts = append(parts, schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeText,
-					Text: refText,
-				})
-			}
-
-			if len(parts) > 0 {
-				msg.UserInputMultiContent = parts
+				if len(parts) > 0 {
+					msg.UserInputMultiContent = parts
+				} else {
+					msg.Content = m.Content
+				}
 			} else {
-				msg.Content = m.Content
-			}
-		} else {
 				// No images, use simple content
 				msg.Content = m.Content
 			}

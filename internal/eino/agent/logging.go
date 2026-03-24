@@ -12,8 +12,8 @@ import (
 
 type loggingHandler struct {
 	*adk.BaseChatModelAgentMiddleware
-	logger       *slog.Logger
-	logPrompt    bool
+	logger    *slog.Logger
+	logPrompt bool
 }
 
 func newLoggingHandler(logger *slog.Logger, logPrompt bool) adk.ChatModelAgentMiddleware {
@@ -30,7 +30,7 @@ func (h *loggingHandler) BeforeAgent(ctx context.Context, runCtx *adk.ChatModelA
 	}
 	h.logger.Info("[agent] run started", "tools", toolNames)
 	if h.logPrompt {
-		h.logger.Info("[agent] system_prompt", "instruction", runCtx.Instruction)
+		//h.logger.Info("[agent] system_prompt", "instruction", runCtx.Instruction)
 	}
 	ctx = context.WithValue(ctx, ctxKeyAgentStart{}, time.Now())
 	return ctx, runCtx, nil
