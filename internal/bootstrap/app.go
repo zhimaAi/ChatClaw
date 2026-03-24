@@ -30,6 +30,7 @@ import (
 	"chatclaw/internal/services/greet"
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/library"
+	"chatclaw/internal/services/librarymcp"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
@@ -290,6 +291,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册助手 MCP 服务
 	assistantMCPService := assistantmcp.NewAssistantMCPService(app)
 	app.RegisterService(application.NewService(assistantMCPService))
+	// 注册知识库 MCP 服务（全局，自动启动，对外暴露知识库检索能力）
+	libraryMCPService := librarymcp.NewService(app)
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	chatService.SetChatWikiService(chatWikiService)
@@ -347,6 +350,36 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	configSvc := openclawruntime.NewConfigService(openclawManager)
 	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
+	configSvc.Register("mcp", func(ctx context.Context) (map[string]any, error) {
+		if !libraryMCPService.IsRunning() {
+			return nil, nil
+		}
+		mcpURL, token := libraryMCPService.ConnectionInfo()
+		if mcpURL == "" {
+			return nil, nil
+		}
+		scriptPath := libraryMCPService.BridgeScriptPath()
+		if scriptPath == "" {
+			return nil, nil
+		}
+		if err := libraryMCPService.EnsureBridgeScript(); err != nil {
+			return nil, fmt.Errorf("write mcp bridge script: %w", err)
+		}
+		return map[string]any{
+			"mcp": map[string]any{
+				"servers": map[string]any{
+					"chatclaw-knowledge": map[string]any{
+						"command": "node",
+						"args":    []string{scriptPath},
+						"env": map[string]string{
+							"CHATCLAW_MCP_URL":   mcpURL,
+							"CHATCLAW_MCP_TOKEN": token,
+						},
+					},
+				},
+			},
+		}, nil
+	})
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
 	openClawAgentsService.SetGateway(agentGWSvc)
@@ -544,6 +577,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		}()
 		// Start all enabled assistant MCP servers in background.
 		go assistantMCPService.StartEnabledServers()
+		// Start global library MCP server and sync its config to OpenClaw Gateway.
+		libraryMCPService.OnStarted(func() {
+			go configSvc.Sync(context.Background())
+		})
+		go libraryMCPService.Start()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -597,6 +635,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	return app, func() {
 		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
+		libraryMCPService.Stop()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()
 		chatService.Shutdown()
