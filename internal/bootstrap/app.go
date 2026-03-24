@@ -255,48 +255,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("init task manager: %w", err)
 	}
 
-	// ========== ChatClaw embedding 全局设置对齐 ==========
-	// 约束：
-	// - embedding provider/model 来自 ChatClaw 的模型列表（已在启动时 SyncChatClawModels 刷新到本地 models 表）
-	// - embedding dimension 固定为 1024
-	// - 通过 SettingsService.UpdateEmbeddingConfig 更新 settings +（必要时）重建 doc_vec + 提交全量重嵌入任务
-	{
-		db := sqlite.DB()
-		if db != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-
-			var embeddingModelID sql.NullString
-			err := db.NewSelect().
-				Table("models").
-				Column("model_id").
-				Where("provider_id = ?", "chatclaw").
-				Where("type = ?", "embedding").
-				Where("enabled = ?", true).
-				OrderExpr("sort_order ASC").
-				Limit(1).
-				Scan(ctx, &embeddingModelID)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				app.Logger.Warn("query chatclaw embedding model failed (non-fatal)", "error", err)
-			} else if embeddingModelID.Valid && strings.TrimSpace(embeddingModelID.String) != "" {
-				if err := settings.NewSettingsService(app).UpdateEmbeddingConfig(settings.UpdateEmbeddingConfigInput{
-					ProviderID: "chatclaw",
-					ModelID:    embeddingModelID.String,
-					Dimension:  1024,
-				}); err != nil {
-					app.Logger.Warn("sync chatclaw embedding settings failed (non-fatal)", "error", err)
-				}
-			} else {
-				// No embedding models available from ChatClaw cache; keep existing settings.
-				app.Logger.Warn("no chatclaw embedding model found; keep existing embedding settings")
-			}
-		}
-	}
-
 	// ========== 注册应用服务 ==========
 
 	// 注册设置服务
 	app.RegisterService(application.NewService(settings.NewSettingsService(app)))
+	chatWikiService := chatwiki.NewChatWikiService(app)
 	// 注册供应商服务
 	providersSvc := providers.NewProvidersService(app)
 	app.RegisterService(application.NewService(providersSvc))
@@ -329,12 +292,13 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(assistantMCPService))
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
-	chatWikiService := chatwiki.NewChatWikiService(app)
 	chatService.SetChatWikiService(chatWikiService)
 	app.RegisterService(application.NewService(chatService))
 	// Wire chat bridge for assistant MCP (avoids cyclic import)
 	assistantMCPService.SetChatBridge(assistantmcp.NewChatBridge(
-		conversationsService.FindOrCreateByExternalID,
+		func(agentID int64, externalID, name string) (int64, error) {
+			return conversationsService.FindOrCreateByExternalID(agentID, externalID, name, "")
+		},
 		func(convID int64, content, tabID string) (string, int64, error) {
 			res, err := chatService.SendMessage(chat.SendMessageInput{
 				ConversationID: convID,
@@ -379,13 +343,16 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
-	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app), providersSvc)
-	agentSyncer := openclawruntime.NewAgentSyncer(app, openclawManager, openClawAgentsService)
-	openClawAgentsService.SetChangeHook(agentSyncer.MarkDirty)
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
+	configSvc := openclawruntime.NewConfigService(openclawManager)
+	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
+	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
+	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
+	openClawAgentsService.SetGateway(agentGWSvc)
+	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
-	// Listen for provider config changes and sync to OpenClaw Gateway
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
-		openclawManager.NotifyConfigChanged()
+		go configSvc.Sync(context.Background())
 	})
 	// 注册 ChatWiki 绑定服务
 	app.RegisterService(application.NewService(chatWikiService))
@@ -561,6 +528,12 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		openclawManager.Start()
 		// Ensure builtin skills are installed in background.
 		go skillsService.EnsureBuiltinSkills()
+		// Warm Chatwiki model cache when account is already bound.
+		go func() {
+			if _, err := chatWikiService.RefreshModelCatalog(); err != nil {
+				app.Logger.Warn("RefreshModelCatalog failed (non-fatal)", "error", err)
+			}
+		}()
 		// Start all enabled channel gateway connections in background.
 		go channelGateway.StartAll(context.Background())
 		go func() {
@@ -621,7 +594,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 
 	return app, func() {
-		agentSyncer.Close()
 		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
 		channelGateway.StopAll(context.Background())

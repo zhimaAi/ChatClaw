@@ -814,7 +814,7 @@ onUnmounted(() => {
               'rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
               activeTopTab === tab.key
                 ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-foreground'
             )
           "
           @click="activeTopTab = tab.key"

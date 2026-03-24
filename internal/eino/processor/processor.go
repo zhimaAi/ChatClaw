@@ -92,6 +92,7 @@ type EmbeddingConfig struct {
 
 // ProviderInfo 包含供应商信息
 type ProviderInfo struct {
+	ProviderID   string
 	ProviderType string
 	APIKey       string
 	APIEndpoint  string
@@ -447,6 +448,7 @@ func (p *Processor) storeNodes(ctx context.Context, docID, libraryID int64, chun
 // createEmbedder 根据配置创建 embedding.Embedder
 func (p *Processor) createEmbedder(ctx context.Context, config *EmbeddingConfig) (embedding.Embedder, error) {
 	return einoembed.NewEmbedder(ctx, &einoembed.ProviderConfig{
+		ProviderID:   config.ProviderID,
 		ProviderType: config.ProviderType,
 		APIKey:       config.APIKey,
 		APIEndpoint:  config.APIEndpoint,
@@ -572,6 +574,7 @@ func (p *Processor) buildRaptorTree(
 
 	// 创建 LLM 聊天模型
 	llm, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
+		ProviderID:   libraryConfig.RaptorLLMProviderID,
 		ProviderType: providerInfo.ProviderType,
 		APIKey:       providerInfo.APIKey,
 		APIEndpoint:  providerInfo.APIEndpoint,
@@ -723,6 +726,7 @@ func (p *Processor) buildRaptorPlan(
 
 	// 创建 LLM 聊天模型
 	llm, err := chatmodel.NewChatModel(ctx, &chatmodel.ProviderConfig{
+		ProviderID:   libraryConfig.RaptorLLMProviderID,
 		ProviderType: providerInfo.ProviderType,
 		APIKey:       providerInfo.APIKey,
 		APIEndpoint:  providerInfo.APIEndpoint,

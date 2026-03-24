@@ -12,6 +12,12 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// AgentType constants
+const (
+	AgentTypeEino    = "eino"
+	AgentTypeOpenClaw = "openclaw"
+)
+
 // ChatMode constants
 const (
 	ChatModeChat = "chat" // Direct LLM conversation with knowledge/memory retrieval
@@ -59,6 +65,7 @@ type Conversation struct {
 	ID int64 `json:"id"`
 
 	AgentID        int64   `json:"agent_id"`
+	AgentType      string  `json:"agent_type"`
 	Name           string  `json:"name"`
 	ExternalID     string  `json:"external_id"` // External unique identifier (e.g., channel conversation key)
 	LastMessage    string  `json:"last_message"`
@@ -79,6 +86,7 @@ type Conversation struct {
 // CreateConversationInput 创建会话的输入参数
 type CreateConversationInput struct {
 	AgentID        int64   `json:"agent_id"`
+	AgentType      string  `json:"agent_type"`
 	Name           string  `json:"name"`
 	ExternalID     string  `json:"external_id"` // Optional external unique identifier
 	LastMessage    string  `json:"last_message"`
@@ -116,6 +124,7 @@ type conversationModel struct {
 	UpdatedAt time.Time `bun:"updated_at,notnull"`
 
 	AgentID        int64  `bun:"agent_id,notnull"`
+	AgentType      string `bun:"agent_type,notnull"`
 	Name           string `bun:"name,notnull"`
 	ExternalID     string `bun:"external_id,notnull"`
 	LastMessage    string `bun:"last_message,notnull"`
@@ -171,10 +180,16 @@ func (m *conversationModel) toDTO() Conversation {
 		teamType = TeamTypePerson
 	}
 
+	agentType := m.AgentType
+	if agentType == "" {
+		agentType = AgentTypeEino
+	}
+
 	return Conversation{
 		ID: m.ID,
 
 		AgentID:        m.AgentID,
+		AgentType:      agentType,
 		Name:           m.Name,
 		ExternalID:     m.ExternalID,
 		LastMessage:    m.LastMessage,
