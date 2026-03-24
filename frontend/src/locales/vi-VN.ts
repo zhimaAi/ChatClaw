@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "Đóng",
   },
   nav: {
-    assistant: "Trợ lý AI",
+    assistant: "Task Assistant",
     openclawAssistant: "Trợ lý OpenClaw",
     knowledge: "Cơ sở tri thức",
     scheduledTasks: "Tác vụ định giờ",
@@ -156,8 +156,11 @@ export default {
     channels: "Kênh",
     multiask: "Hỏi nhiều",
     memory: "Bộ nhớ",
+    tools: "Công cụ",
     settings: "Cài đặt",
     document: "Tài liệu",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Hỏi nhiều",

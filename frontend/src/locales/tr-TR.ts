@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "Kapat",
   },
   nav: {
-    assistant: "AI asistanı",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw Asistanı",
     knowledge: "Bilgi tabanı",
     scheduledTasks: "Planlı görevler",
@@ -156,8 +156,11 @@ export default {
     channels: "Kanallar",
     multiask: "Çoklu soru",
     memory: "Bellek",
+    tools: "Araçlar",
     settings: "Ayarlar",
     document: "Belge",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Çoklu soru",

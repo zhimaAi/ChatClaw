@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "Zapri",
   },
   nav: {
-    assistant: "AI pomočnik",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw pomočnik",
     knowledge: "Baza znanja",
     scheduledTasks: "Načrtovana opravila",
@@ -156,8 +156,11 @@ export default {
     channels: "Kanali",
     multiask: "Večkratno vprašanje",
     memory: "Spomin",
+    tools: "Orodja",
     settings: "Nastavitve",
     document: "Dokument",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Večkratno vprašanje",

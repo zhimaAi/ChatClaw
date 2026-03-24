@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "बंद करें",
   },
   nav: {
-    assistant: "AI असिस्टेंट",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw सहायक",
     knowledge: "नॉलेज बेस",
     scheduledTasks: "शेड्यूल्ड टास्क",
@@ -156,8 +156,11 @@ export default {
     channels: "चैनल",
     multiask: "मल्टी आस्क",
     memory: "मेमोरी",
+    tools: "उपकरण",
     settings: "सेटिंग्स",
     document: "डॉक्यूमेंट",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "मल्टी आस्क",

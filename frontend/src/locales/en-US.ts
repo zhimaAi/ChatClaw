@@ -155,7 +155,7 @@ export default {
     },
   },
   nav: {
-    assistant: "AI Assistant",
+    assistant: "Task Assistant",
     openclawAssistant: "OpenClaw Assistant",
     knowledge: "Knowledge Base",
     scheduledTasks: "Scheduled Tasks",
@@ -163,8 +163,11 @@ export default {
     channels: "Channels",
     multiask: "Multi Ask",
     memory: "Memory",
+    tools: "Tools",
     settings: "Settings",
     document: "Document",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Multi Ask",

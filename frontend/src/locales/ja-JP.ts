@@ -148,7 +148,7 @@ export default {
     disableSelectionSearch: "Close",
   },
   nav: {
-    assistant: "AIアシスタント",
+    assistant: "タスクアシスタント",
     openclawAssistant: "OpenClawアシスタント",
     knowledge: "ナレッジベース",
     scheduledTasks: "スケジュールタスク",
@@ -156,8 +156,11 @@ export default {
     channels: "チャンネル",
     multiask: "Multi Ask",
     memory: "メモリ",
+    tools: "ツール",
     settings: "Settings",
     document: "ドキュメント",
+    systemChatClaw: "ChatClaw",
+    systemOpenClaw: "OpenClaw",
   },
   multiask: {
     title: "Multi Ask",
