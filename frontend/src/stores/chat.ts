@@ -1134,11 +1134,6 @@ export const useChatStore = defineStore('chat', () => {
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
         }, 0)
-        // Reload history from Gateway to get authoritative record including
-        // thinking content, tool details, and all intermediate turns.
-        setTimeout(() => {
-          void loadMessages(conversation_id)
-        }, 300)
       } else {
         // Clear streaming state first
         delete streamingByConversation.value[conversation_id]
