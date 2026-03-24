@@ -157,6 +157,7 @@ export default {
   nav: {
     assistant: "Task Assistant",
     openclaw: "OpenClaw",
+    openclawDashboard: "OpenClaw Dashboard",
     knowledge: "Knowledge Base",
     scheduledTasks: "Scheduled Tasks",
     skills: "Skills",
@@ -252,6 +253,8 @@ export default {
         disconnected: "Disconnected",
       },
       notInstalled: "Runtime not found",
+      openDashboard: "Open Dashboard",
+      dashboardError: "Failed to load OpenClaw Dashboard",
     },
     general: {
       title: "General Settings",
