@@ -3,8 +3,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2, Circle } from 'lucide-vue-next'
+import { RefreshCw, Loader2, Circle, ExternalLink } from 'lucide-vue-next'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
+import { useNavigationStore } from '@/stores'
 import {
   RuntimeStatus,
   GatewayConnectionState,
@@ -13,6 +14,7 @@ import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 
 const { t } = useI18n()
+const navigationStore = useNavigationStore()
 
 const status = ref<RuntimeStatus>(new RuntimeStatus({ phase: 'idle' }))
 const gatewayState = ref<GatewayConnectionState>(new GatewayConnectionState())
@@ -70,6 +72,10 @@ const handleRestart = async () => {
   } finally {
     restarting.value = false
   }
+}
+
+const handleOpenDashboard = () => {
+  navigationStore.navigateToModule('openclaw-dashboard')
 }
 
 let unsubscribeStatus: (() => void) | null = null
@@ -154,9 +160,9 @@ onUnmounted(() => {
         <p class="text-xs text-muted-foreground">{{ status.message }}</p>
       </div>
 
-      <!-- Restart Button -->
+      <!-- Actions -->
       <div
-        class="flex items-center justify-end border-t border-border px-4 py-3 dark:border-white/10"
+        class="flex items-center justify-end gap-2 border-t border-border px-4 py-3 dark:border-white/10"
       >
         <Button size="sm" variant="outline" :disabled="restarting" @click="handleRestart">
           <RefreshCw v-if="!restarting" class="mr-1.5 size-3.5" />
@@ -166,6 +172,10 @@ onUnmounted(() => {
               ? t('settings.openclawRuntime.restarting')
               : t('settings.openclawRuntime.restartButton')
           }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="!isActive" @click="handleOpenDashboard">
+          <ExternalLink class="mr-1.5 size-3.5" />
+          {{ t('settings.openclawRuntime.openDashboard') }}
         </Button>
       </div>
     </SettingsCard>
