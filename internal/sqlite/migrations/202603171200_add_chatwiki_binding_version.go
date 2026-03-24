@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/uptrace/bun"
 )
@@ -10,7 +11,12 @@ func init() {
 	Migrations.MustRegister(
 		func(ctx context.Context, db *bun.DB) error {
 			var columns []struct {
-				Name string `bun:"name"`
+				CID        int            `bun:"cid"`
+				Name       string         `bun:"name"`
+				Type       string         `bun:"type"`
+				NotNull    int            `bun:"notnull"`
+				Default    sql.NullString `bun:"dflt_value"`
+				PrimaryKey int            `bun:"pk"`
 			}
 			if err := db.NewRaw("PRAGMA table_info(chatwiki_bindings)").Scan(ctx, &columns); err != nil {
 				return err
