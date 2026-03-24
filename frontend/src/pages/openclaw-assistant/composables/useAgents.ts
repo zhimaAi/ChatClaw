@@ -34,12 +34,17 @@ export function useAgents() {
     }
   }
 
-  const createAgent = async (data: { name: string; prompt: string; icon: string }) => {
+  const createAgent = async (data: {
+    name: string
+    icon: string
+    identityEmoji?: string
+  }) => {
     loading.value = true
     try {
       const created = await OpenClawAgentsService.CreateAgent({
         name: data.name,
         icon: data.icon,
+        identity_emoji: data.identityEmoji ?? '',
       })
       if (!created) {
         throw new Error(t('assistant.errors.createFailed'))

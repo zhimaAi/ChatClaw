@@ -45,4 +45,3 @@ func (s *AppService) ShowMainWindow() {
 		}
 	})
 }
-

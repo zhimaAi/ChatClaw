@@ -224,6 +224,7 @@ func (c *GatewayClient) buildConnectParams(nonce string) (*gatewayConnectParams,
 		MaxProtocol: protocolVersion,
 		Role:        clientRole,
 		Scopes:      append([]string(nil), c.opts.Scopes...),
+		Caps:        []string{"tool-events", "thinking-events"},
 	}
 	params.Client.ID = clientID
 	params.Client.DisplayName = define.AppDisplayName
@@ -450,6 +451,7 @@ type gatewayConnectParams struct {
 	} `json:"client"`
 	Role   string         `json:"role,omitempty"`
 	Scopes []string       `json:"scopes,omitempty"`
+	Caps   []string       `json:"caps"`
 	Auth   *connectAuth   `json:"auth,omitempty"`
 	Device *connectDevice `json:"device,omitempty"`
 }
