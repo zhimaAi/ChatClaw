@@ -114,6 +114,14 @@ func (m *Manager) reconcile(restart bool) error {
 			InstalledVersion: version, GatewayPID: pid,
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		})
+		// Disconnect path sets reconnecting=true; if reconcile then fails, clear it so UI does not
+		// spin forever on "reconnecting" while phase is error.
+		m.broadcastGatewayState(GatewayConnectionState{
+			Connected:     false,
+			Authenticated: false,
+			Reconnecting:  false,
+			LastError:     err.Error(),
+		})
 		return err
 	}
 
@@ -132,11 +140,6 @@ func (m *Manager) reconcile(restart bool) error {
 		return fail("resolveBundledRuntime", err, "", 0)
 	}
 
-	m.broadcastStatus(RuntimeStatus{
-		Phase: PhaseStarting, Message: "Checking bundled OpenClaw runtime",
-		GatewayURL: gatewayURL(cfg.GatewayPort),
-	})
-
 	if restart {
 		m.closeClient()
 		m.stopProcess()
@@ -146,6 +149,12 @@ func (m *Manager) reconcile(restart bool) error {
 	if err != nil {
 		return fail("verifyInstalled", err, "", 0)
 	}
+
+	m.broadcastStatus(RuntimeStatus{
+		Phase: PhaseStarting, Message: "Preparing OpenClaw Gateway",
+		InstalledVersion: version,
+		GatewayURL: gatewayURL(cfg.GatewayPort),
+	})
 
 	if err := ensureOpenResponsesEnabled(bundle); err != nil {
 		return fail("ensureOpenResponsesEnabled", err, version, 0)
@@ -158,7 +167,7 @@ func (m *Manager) reconcile(restart bool) error {
 	m.mu.RUnlock()
 
 	if needProcess {
-		if err := m.startProcess(cfg, bundle); err != nil {
+		if err := m.startProcess(cfg, bundle, version); err != nil {
 			return fail("startProcess", err, version, 0)
 		}
 		m.mu.RLock()
@@ -199,7 +208,7 @@ func (m *Manager) reconcile(restart bool) error {
 
 // --- Process management ---
 
-func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime) error {
+func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string) error {
 	logFile, err := openGatewayLogFile(bundle.LogsDir)
 	if err != nil {
 		return err
@@ -218,6 +227,7 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime) error
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
@@ -242,7 +252,9 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime) error
 
 	m.broadcastStatus(RuntimeStatus{
 		Phase: PhaseStarting, Message: "Starting OpenClaw Gateway",
-		GatewayPID: pid, GatewayURL: gatewayURL(cfg.GatewayPort),
+		InstalledVersion: installedVersion,
+		GatewayPID:       pid,
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	})
 	return nil
 }
@@ -315,10 +327,7 @@ func (m *Manager) handleProcessExit(pid int, exitErr error) {
 		return
 	}
 
-	m.broadcastStatus(RuntimeStatus{
-		Phase: PhaseRestarting, Message: "OpenClaw Gateway exited, restarting",
-		GatewayURL: gatewayURL(m.store.Get().GatewayPort),
-	})
+	m.broadcastStatus(m.runtimeStatusRestarting())
 	go func() {
 		defer m.reconnecting.Store(false)
 		time.Sleep(1500 * time.Millisecond)
@@ -453,10 +462,34 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 
 func (m *Manager) broadcastStatus(s RuntimeStatus) {
 	m.mu.Lock()
+	// Intermediate broadcasts often omit installedVersion; keep last known so UI does not flip to "not installed".
+	if s.InstalledVersion == "" && m.status.InstalledVersion != "" {
+		switch s.Phase {
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected:
+			s.InstalledVersion = m.status.InstalledVersion
+		}
+	}
+	if s.GatewayURL == "" && m.status.GatewayURL != "" {
+		s.GatewayURL = m.status.GatewayURL
+	}
 	m.status = s
 	m.mu.Unlock()
 	if m.app != nil {
 		m.app.Event.Emit(EventStatus, s)
+	}
+}
+
+// runtimeStatusRestarting builds a restarting status while preserving the last known CLI version label.
+func (m *Manager) runtimeStatusRestarting() RuntimeStatus {
+	m.mu.RLock()
+	prev := m.status
+	m.mu.RUnlock()
+	cfg := m.store.Get()
+	return RuntimeStatus{
+		Phase:            PhaseRestarting,
+		Message:          "OpenClaw Gateway exited, restarting",
+		InstalledVersion: prev.InstalledVersion,
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	}
 }
 
@@ -570,7 +603,9 @@ func verifyInstalled(bundle *bundledRuntime) (string, error) {
 	if _, err := os.Stat(bundle.CLIPath); err != nil {
 		return "", fmt.Errorf("verify bundled OpenClaw runtime: %w", err)
 	}
-	out, err := exec.Command(bundle.CLIPath, "--version").CombinedOutput()
+	verCmd := exec.Command(bundle.CLIPath, "--version")
+	setCmdHideWindow(verCmd)
+	out, err := verCmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("check openclaw version: %w", err)
 	}
@@ -609,6 +644,7 @@ func ensureOpenResponsesEnabled(bundle *bundledRuntime) error {
 		"gateway.http.endpoints.responses.enabled", "true")
 	cmd.Env = env
 	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("openclaw config set responses.enabled: %w: %s", err, string(out))
