@@ -11,6 +11,7 @@ import (
 	"chatclaw/internal/errs"
 
 	"github.com/google/uuid"
+	"github.com/uptrace/bun"
 )
 
 // OpenClawGatewayInfo provides the connection details and RPC access for the local OpenClaw Gateway.
@@ -33,6 +34,8 @@ func (s *ChatService) SetOpenClawGateway(gw OpenClawGatewayInfo) {
 type openClawAgentConfig struct {
 	OpenClawAgentID string
 	EnableThinking  bool
+	LibraryIDs      []int64
+	LibraryNames    map[int64]string
 }
 
 // openClawSessionKey builds the Gateway session key for a conversation.
@@ -55,13 +58,14 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	defer cancel()
 
 	type conversationRow struct {
-		AgentID        int64 `bun:"agent_id"`
-		EnableThinking bool  `bun:"enable_thinking"`
+		AgentID        int64  `bun:"agent_id"`
+		EnableThinking bool   `bun:"enable_thinking"`
+		LibraryIDs     string `bun:"library_ids"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "enable_thinking").
+		Column("agent_id", "enable_thinking", "library_ids").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_conversation_not_found")
@@ -79,10 +83,64 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 		return openClawAgentConfig{}, errs.New("error.chat_agent_not_found")
 	}
 
-	return openClawAgentConfig{
+	cfg := openClawAgentConfig{
 		OpenClawAgentID: agent.OpenClawAgentID,
 		EnableThinking:  conv.EnableThinking,
-	}, nil
+	}
+
+	if conv.LibraryIDs != "" {
+		var ids []int64
+		if json.Unmarshal([]byte(conv.LibraryIDs), &ids) == nil && len(ids) > 0 {
+			cfg.LibraryIDs = ids
+
+			type libRow struct {
+				ID   int64  `bun:"id"`
+				Name string `bun:"name"`
+			}
+			var libs []libRow
+			if err := db.NewSelect().
+				Table("library").
+				Column("id", "name").
+				Where("id IN (?)", bun.In(ids)).
+				Scan(ctx, &libs); err == nil && len(libs) > 0 {
+				cfg.LibraryNames = make(map[int64]string, len(libs))
+				for _, lib := range libs {
+					cfg.LibraryNames[lib.ID] = lib.Name
+				}
+			}
+		}
+	}
+
+	return cfg, nil
+}
+
+// buildKnowledgeContextMessage wraps the user's message with a system instruction
+// about knowledge-base usage. When libraries are selected it tells the agent
+// which IDs to search; when none are selected it tells the agent NOT to use
+// the search_knowledge tool.
+func buildKnowledgeContextMessage(userContent string, libraryIDs []int64, libraryNames map[int64]string) string {
+	if len(libraryIDs) == 0 {
+		return userContent + "\n\n<chatclaw_context hidden=\"true\">\n" +
+			"No knowledge bases are selected for this conversation. " +
+			"Do NOT use the search_knowledge or list_libraries tools.\n" +
+			"</chatclaw_context>"
+	}
+
+	var sb strings.Builder
+	sb.WriteString(userContent)
+	sb.WriteString("\n\n<chatclaw_context hidden=\"true\">\n")
+	sb.WriteString("The user has selected the following knowledge bases for this conversation. ")
+	sb.WriteString("When answering, use the search_knowledge tool with the library_ids parameter ")
+	sb.WriteString("set to these IDs to search ONLY the selected knowledge bases:\n")
+	for _, id := range libraryIDs {
+		name := libraryNames[id]
+		if name == "" {
+			name = "unknown"
+		}
+		sb.WriteString(fmt.Sprintf("- library_id: %d, name: %q\n", id, name))
+	}
+	sb.WriteString("</chatclaw_context>")
+	return sb.String()
 }
 
 func extractTextFromContent(content any) string {
@@ -1001,10 +1059,14 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 
 	defer s.openclawGateway.RemoveEventListener(listenerKey)
 
+	// Inject knowledge-base context: tell the agent which libraries to use,
+	// or explicitly instruct it not to use knowledge search when none are selected.
+	messageToSend := buildKnowledgeContextMessage(userContent, cfg.LibraryIDs, cfg.LibraryNames)
+
 	// Use the "agent" RPC (blocking: returns when the run completes).
 	// While it blocks, chat/agent events arrive via readLoop for real-time streaming.
 	params := map[string]any{
-		"message":        userContent,
+		"message":        messageToSend,
 		"sessionKey":     sessionKey,
 		"idempotencyKey": idempotencyKey,
 		"agentId":        cfg.OpenClawAgentID,
