@@ -1421,6 +1421,8 @@ export default {
     refresh: "Refresh",
     edit: "Edit Task",
     empty: "スケジュールタスクがありません",
+    emptyDescription:
+      "スケジュールタスクを作成して AI ワークフローを自動化します。タスクは指定した時刻にメッセージ送信、クエリ実行、または操作の実行ができます。",
     errorReason: "View error reason",
     actionsMenu: "Open actions menu",
     total: "Total Tasks",

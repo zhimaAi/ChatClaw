@@ -1421,6 +1421,8 @@ export default {
     refresh: "Aktualisieren",
     edit: "Aufgabe bearbeiten",
     empty: "Noch keine geplanten Aufgaben",
+    emptyDescription:
+      "Erstellen Sie geplante Aufgaben, um KI-Workflows zu automatisieren. Aufgaben können zu festgelegten Zeiten Nachrichten senden, Abfragen ausführen oder Aktionen durchführen.",
     errorReason: "Fehlergrund anzeigen",
     actionsMenu: "Aktionsmenü öffnen",
     total: "Gesamtaufgaben",

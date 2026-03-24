@@ -1426,6 +1426,8 @@ export default {
     refresh: "Actualiser",
     edit: "Modifier la tâche",
     empty: "Pas encore de tâches planifiées",
+    emptyDescription:
+      "Créez des tâches planifiées pour automatiser les flux de travail IA. Les tâches peuvent envoyer des messages, exécuter des requêtes ou effectuer des actions à des heures définies.",
     errorReason: "Voir la raison de l",
     actionsMenu: "Ouvrir le menu des actions",
     total: "Total des tâches",

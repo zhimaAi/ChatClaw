@@ -1421,6 +1421,8 @@ export default {
     refresh: "Actualizar",
     edit: "Editar tarea",
     empty: "Sin tareas programadas aún",
+    emptyDescription:
+      "Crea tareas programadas para automatizar flujos de trabajo de IA. Las tareas pueden enviar mensajes, ejecutar consultas o realizar acciones en horarios definidos.",
     errorReason: "Ver razón del error",
     actionsMenu: "Abrir menú de acciones",
     total: "Total de tareas",

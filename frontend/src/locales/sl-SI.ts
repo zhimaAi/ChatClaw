@@ -1423,6 +1423,8 @@ export default {
     refresh: "Osveži",
     edit: "Uredi opravilo",
     empty: "Ni še načrtovanih opravil",
+    emptyDescription:
+      "Ustvarite načrtovana opravila za avtomatizacijo delovnih tokov UI. Opravila lahko ob določenem času pošiljajo sporočila, izvajajo poizvedbe ali sprožajo dejanja.",
     errorReason: "Poglej razlog napake",
     actionsMenu: "Odpri meni dejanj",
     total: "Skupaj opravil",
