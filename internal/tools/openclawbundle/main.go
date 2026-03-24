@@ -12,15 +12,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -129,108 +126,23 @@ func isBundleFresh(cfg runtimeConfig, target targetSpec, outputDir string) bool 
 	return verifyRuntimeAssets(outputDir) == nil
 }
 
-// copyNpmGlobalLib copies npm global install output into the bundle layout (outputDir/lib/node_modules/...).
-// Unix npm uses prefix/lib/node_modules; Windows npm may use prefix/node_modules instead.
-func copyNpmGlobalLib(installPrefix, outputDir string) error {
-	libRoot := filepath.Join(installPrefix, "lib")
-	libNodeModules := filepath.Join(libRoot, "node_modules")
-	if _, err := os.Stat(libNodeModules); err == nil {
-		return copyNpmTreeWithProgress(libRoot, filepath.Join(outputDir, "lib"))
+// npmGlobalInstallPrefix is the directory passed to `npm install -g --prefix`.
+// Bundled layout always expects packages under outputDir/lib/node_modules/... (see writeCLIWrappers).
+// - Unix npm: prefix/lib/node_modules → use outputDir as prefix.
+// - Windows npm: prefix/node_modules (flat) → use outputDir/lib as prefix.
+func npmGlobalInstallPrefix(outputDir string, goos string) string {
+	if goos == "windows" {
+		return filepath.Join(outputDir, "lib")
 	}
-	flatNodeModules := filepath.Join(installPrefix, "node_modules")
-	if _, err := os.Stat(flatNodeModules); err == nil {
-		dst := filepath.Join(outputDir, "lib", "node_modules")
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return copyNpmTreeWithProgress(flatNodeModules, dst)
-	}
-	return fmt.Errorf("npm global install produced neither %s nor %s", libNodeModules, flatNodeModules)
+	return outputDir
 }
 
-func copyNpmTreeWithProgress(srcRoot, dstRoot string) error {
-	fmt.Printf("Scanning npm tree to count files (one-time pass)...\n")
-	total, err := countTreeFiles(srcRoot)
-	if err != nil {
-		return fmt.Errorf("count files under %s: %w", srcRoot, err)
+func verifyOpenClawLibLayout(outputDir string) error {
+	pkg := filepath.Join(outputDir, "lib", "node_modules", "openclaw", "package.json")
+	if _, err := os.Stat(pkg); err != nil {
+		return fmt.Errorf("openclaw package missing at %s after npm install (check npm --prefix layout)", pkg)
 	}
-	prog := &copyProgress{total: total, label: "npm payload"}
-	fmt.Printf("Copying npm install into bundle (%d files). Do not interrupt; progress updates on the line below.\n", total)
-	if err := copyDirImpl(srcRoot, dstRoot, prog); err != nil {
-		return err
-	}
-	prog.finishLine()
 	return nil
-}
-
-// countTreeFiles counts regular files and symlinks (same units as copyDirImpl progress).
-func countTreeFiles(root string) (int64, error) {
-	var n int64
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		mode := info.Mode()
-		if mode.IsRegular() || mode&os.ModeSymlink != 0 {
-			n++
-		}
-		return nil
-	})
-	return n, err
-}
-
-type copyProgress struct {
-	total   int64
-	done    atomic.Int64
-	label   string
-	mu      sync.Mutex
-	lastLog time.Time
-}
-
-func (p *copyProgress) bump() {
-	if p == nil {
-		return
-	}
-	n := p.done.Add(1)
-	now := time.Now()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	// Throttle: every 400 files, on last file, or every ~1.5s
-	if p.total > 0 {
-		pct := 100.0 * float64(n) / float64(p.total)
-		if n%400 != 0 && n != p.total && now.Sub(p.lastLog) < 1500*time.Millisecond {
-			return
-		}
-		p.lastLog = now
-		fmt.Fprintf(os.Stdout, "\r  %s: %d / %d files (%.1f%%)    ", p.label, n, p.total, pct)
-		return
-	}
-	if n%600 != 0 && now.Sub(p.lastLog) < 2*time.Second {
-		return
-	}
-	p.lastLog = now
-	fmt.Fprintf(os.Stdout, "\r  %s: copied %d files...    ", p.label, n)
-}
-
-func (p *copyProgress) finishLine() {
-	if p == nil {
-		return
-	}
-	n := p.done.Load()
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.total > 0 {
-		fmt.Fprintf(os.Stdout, "\r  %s: %d / %d files (100.0%%) — copy finished\n", p.label, n, p.total)
-		return
-	}
-	fmt.Fprintf(os.Stdout, "\r  %s: copied %d files — copy finished\n", p.label, n)
 }
 
 func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error {
@@ -246,10 +158,11 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 	}
 	defer os.RemoveAll(tmpDir)
 
-	installPrefix := filepath.Join(tmpDir, "prefix")
-	fmt.Printf("Installing openclaw@%s via npm (global, temp prefix)...\n", cfg.OpenClawVersion)
-	if err := installOpenClaw(cfg, target, installPrefix); err != nil {
-		return err
+	if err := os.RemoveAll(outputDir); err != nil {
+		return fmt.Errorf("remove old bundle: %w", err)
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
 	}
 
 	fmt.Printf("Downloading Node.js %s for %s...\n", cfg.NodeVersion, target.dirName())
@@ -258,18 +171,23 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 		return err
 	}
 
-	if err := os.RemoveAll(outputDir); err != nil {
-		return fmt.Errorf("remove old bundle: %w", err)
-	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		return fmt.Errorf("create output dir: %w", err)
-	}
-
 	fmt.Printf("Extracting Node.js into bundle...\n")
 	if err := extractNodeArchive(nodeArchive, filepath.Join(outputDir, "tools", "node")); err != nil {
 		return err
 	}
-	if err := copyNpmGlobalLib(installPrefix, outputDir); err != nil {
+
+	npmPrefix := npmGlobalInstallPrefix(outputDir, target.goos)
+	if target.goos == "windows" {
+		if err := os.MkdirAll(npmPrefix, 0o755); err != nil {
+			return fmt.Errorf("create npm prefix dir: %w", err)
+		}
+	}
+
+	fmt.Printf("Installing openclaw@%s via npm (global install into bundle, --prefix %s)...\n", cfg.OpenClawVersion, npmPrefix)
+	if err := installOpenClaw(cfg, target, npmPrefix); err != nil {
+		return err
+	}
+	if err := verifyOpenClawLibLayout(outputDir); err != nil {
 		return err
 	}
 	fmt.Printf("Writing CLI wrappers and manifest...\n")
@@ -304,14 +222,14 @@ func bundleRuntime(cfg runtimeConfig, target targetSpec, outputDir string) error
 	return nil
 }
 
-func installOpenClaw(cfg runtimeConfig, target targetSpec, installPrefix string) error {
+func installOpenClaw(cfg runtimeConfig, target targetSpec, npmPrefix string) error {
 	if _, err := exec.LookPath("npm"); err != nil {
 		return fmt.Errorf("npm is required to bundle OpenClaw runtime: %w", err)
 	}
 
 	args := []string{
 		"install", "-g",
-		"--prefix", installPrefix,
+		"--prefix", npmPrefix,
 		"--loglevel", "error",
 		"--no-fund", "--no-audit",
 		"openclaw@" + cfg.OpenClawVersion,
@@ -597,73 +515,6 @@ func stripArchiveRoot(name string) (string, bool) {
 		return "", false
 	}
 	return filepath.FromSlash(parts[1]), true
-}
-
-// --- Filesystem helpers ---
-
-func copyDir(src, dst string) error {
-	return copyDirImpl(src, dst, nil)
-}
-
-func copyDirImpl(src, dst string, prog *copyProgress) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return fmt.Errorf("read dir %s: %w", src, err)
-	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		switch mode := info.Mode(); {
-		case mode.IsDir():
-			if err := copyDirImpl(srcPath, dstPath, prog); err != nil {
-				return err
-			}
-		case mode&os.ModeSymlink != 0:
-			linkTarget, err := os.Readlink(srcPath)
-			if err != nil {
-				return err
-			}
-			if err := os.Symlink(linkTarget, dstPath); err != nil && !os.IsExist(err) {
-				return err
-			}
-			prog.bump()
-		case mode.IsRegular():
-			if err := copyFile(srcPath, dstPath, info.Mode()); err != nil {
-				return err
-			}
-			prog.bump()
-		}
-	}
-	return nil
-}
-
-func copyFile(src, dst string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
 }
 
 // --- Config / download helpers ---
