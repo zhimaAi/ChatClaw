@@ -31,6 +31,26 @@ func NewConfigService(manager *Manager) *ConfigService {
 	return &ConfigService{manager: manager}
 }
 
+// ResponsesEndpointSection enables gateway HTTP OpenResponses via config.patch only.
+// Do not use `openclaw config set` before gateway start: that writes openclaw.json once,
+// then the process applies --auth/--token and persists again, then ChatClaw sends config.patch —
+// multiple competing writes make the file watcher see gateway.auth/tailscale/meta churn and
+// hybrid reload restarts the gateway in a loop.
+func ResponsesEndpointSection() SectionBuilder {
+	return func(ctx context.Context) (map[string]any, error) {
+		_ = ctx
+		return map[string]any{
+			"gateway": map[string]any{
+				"http": map[string]any{
+					"endpoints": map[string]any{
+						"responses": map[string]any{"enabled": true},
+					},
+				},
+			},
+		}, nil
+	}
+}
+
 // Register adds a named section builder. The name is for logging only;
 // the builder's returned map keys determine the actual config sections.
 func (s *ConfigService) Register(name string, builder SectionBuilder) {

@@ -345,6 +345,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
 	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	configSvc := openclawruntime.NewConfigService(openclawManager)
+	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
