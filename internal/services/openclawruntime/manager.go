@@ -156,8 +156,8 @@ func (m *Manager) reconcile(restart bool) error {
 		GatewayURL: gatewayURL(cfg.GatewayPort),
 	})
 
-	if err := ensureEmbeddedOpenClawConfig(bundle); err != nil {
-		return fail("ensureEmbeddedOpenClawConfig", err, version, 0)
+	if err := ensureOpenClawStateDir(bundle); err != nil {
+		return fail("ensureOpenClawStateDir", err, version, 0)
 	}
 
 	// Start process if needed
@@ -628,46 +628,13 @@ func verifyInstalled(bundle *bundledRuntime) (string, error) {
 	return version, nil
 }
 
-// ensureEmbeddedOpenClawConfig applies defaults for ChatClaw-embedded runs via `openclaw config set`
-// before the gateway process starts: OpenResponses endpoint and gateway.reload.mode=off (stops
-// config-file watch from looping SIGUSR1 restarts when the gateway persists RPC-driven patches).
-func ensureEmbeddedOpenClawConfig(bundle *bundledRuntime) error {
+// ensureOpenClawStateDir creates OPENCLAW_STATE_DIR. We intentionally do not run
+// `openclaw config set` before gateway start — that pre-writes openclaw.json and races with
+// the gateway's own persistence of --auth/--token, causing repeated reload restarts; see
+// ResponsesEndpointSection + ConfigService.Sync instead.
+func ensureOpenClawStateDir(bundle *bundledRuntime) error {
 	if err := os.MkdirAll(bundle.StateDir, 0o700); err != nil {
 		return fmt.Errorf("create openclaw state dir: %w", err)
-	}
-
-	for _, kv := range []struct{ key, val string }{
-		{"gateway.http.endpoints.responses.enabled", "true"},
-		{"gateway.reload.mode", "off"},
-	} {
-		if err := openclawConfigSet(bundle, kv.key, kv.val); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func openclawConfigSet(bundle *bundledRuntime, key, value string) error {
-	env := []string{
-		"OPENCLAW_CONFIG_PATH=" + bundle.ConfigPath,
-		"OPENCLAW_STATE_DIR=" + bundle.StateDir,
-	}
-	for _, entry := range os.Environ() {
-		if k, _, ok := strings.Cut(entry, "="); ok {
-			if k == "OPENCLAW_CONFIG_PATH" || k == "OPENCLAW_STATE_DIR" {
-				continue
-			}
-		}
-		env = append(env, entry)
-	}
-
-	cmd := exec.Command(bundle.CLIPath, "config", "set", key, value)
-	cmd.Env = env
-	cmd.Dir = bundle.Root
-	setCmdHideWindow(cmd)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("openclaw config set %s: %w: %s", key, err, string(out))
 	}
 	return nil
 }
