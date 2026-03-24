@@ -238,7 +238,10 @@ func (s *Service) searchKnowledgeTool() mcpgo.Tool {
 			mcpgo.Required(),
 		),
 		mcpgo.WithNumber("library_id",
-			mcpgo.Description("Optional: restrict search to a specific library ID. If omitted, searches all libraries."),
+			mcpgo.Description("Optional: restrict search to a specific library ID. If omitted, searches all libraries. Use library_ids for multiple libraries."),
+		),
+		mcpgo.WithObject("library_ids",
+			mcpgo.Description("Optional: an array of library IDs to restrict search to multiple specific libraries. Takes precedence over library_id."),
 		),
 		mcpgo.WithNumber("top_k",
 			mcpgo.Description("Maximum number of results to return (default: 10, max: 50)"),
@@ -262,11 +265,22 @@ func (s *Service) handleSearchKnowledge(_ context.Context, request mcpgo.CallToo
 
 	args := request.GetArguments()
 
-	// Determine library IDs
+	// Determine library IDs: library_ids (array) takes precedence over library_id (single).
 	var libraryIDs []int64
-	if libIDRaw, ok := args["library_id"]; ok {
-		if libIDFloat, ok := libIDRaw.(float64); ok && libIDFloat > 0 {
-			libraryIDs = []int64{int64(libIDFloat)}
+	if idsRaw, ok := args["library_ids"]; ok {
+		if idsArr, ok := idsRaw.([]any); ok {
+			for _, v := range idsArr {
+				if f, ok := v.(float64); ok && f > 0 {
+					libraryIDs = append(libraryIDs, int64(f))
+				}
+			}
+		}
+	}
+	if len(libraryIDs) == 0 {
+		if libIDRaw, ok := args["library_id"]; ok {
+			if libIDFloat, ok := libIDRaw.(float64); ok && libIDFloat > 0 {
+				libraryIDs = []int64{int64(libIDFloat)}
+			}
 		}
 	}
 
