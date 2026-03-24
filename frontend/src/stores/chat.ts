@@ -169,28 +169,19 @@ export const useChatStore = defineStore('chat', () => {
       const streaming = streamingByConversation.value[conversationId]
 
       if (isOpenClaw) {
-        // OpenClaw messages are not in local DB; IDs are ephemeral.
-        // If actively streaming, keep current state.
-        // If fetched is empty but we have local optimistic messages, keep them.
-        if (!streaming) {
-          if (fetched.length === 0 && current.length > 0) {
-            // Keep current messages to avoid wiping optimistic user messages
-          } else if (fetched.length > 0) {
-            // Merge: keep local optimistic messages (negative IDs) not yet in history
-            const merged: Message[] = [...fetched]
-            for (const msg of current) {
-              if (msg.id >= 0) continue
-              const existsOnServer = fetched.some(
-                (fm) =>
-                  fm.role === msg.role &&
-                  String(fm.content ?? '').trim() === String(msg.content ?? '').trim()
-              )
-              if (!existsOnServer) {
-                merged.push(msg)
-              }
-            }
-            messagesByConversation.value[conversationId] = merged
+        // OpenClaw messages come from Gateway (authoritative source).
+        if (streaming) {
+          // While streaming, don't touch messages — streaming events manage state.
+        } else if (fetched.length > 0) {
+          // Not streaming: Gateway history is authoritative — replace entirely.
+          // Clean up old segment data for messages that will be replaced.
+          for (const msg of current) {
+            delete segmentsByMessage.value[msg.id]
           }
+          messagesByConversation.value[conversationId] = fetched
+        } else if (fetched.length === 0 && current.length > 0) {
+          // Gateway returned empty but we have local messages (e.g. optimistic
+          // user message just sent). Keep them until Gateway catches up.
         }
       } else {
       const normalizeContent = (v: unknown) => String(v ?? '').trim()
@@ -894,7 +885,6 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.content += chunk
 
-      // Track segments: append to last content segment or start a new one
       const lastSeg = streaming.segments[streaming.segments.length - 1]
       if (lastSeg && lastSeg.type === 'content') {
         lastSeg.content += chunk
@@ -912,7 +902,8 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
+    const { conversation_id, request_id, delta, new_block, run_path, parent_tool_call_id } =
+      data
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
@@ -927,7 +918,7 @@ export const useChatStore = defineStore('chat', () => {
           parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
           if (!parent.childSegments) parent.childSegments = []
           const lastChild = parent.childSegments[parent.childSegments.length - 1]
-          if (lastChild && lastChild.type === 'thinking') {
+          if (lastChild && lastChild.type === 'thinking' && !new_block) {
             lastChild.content += chunk
           } else {
             parent.childSegments.push({ type: 'thinking', content: chunk })
@@ -938,16 +929,14 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.thinkingContent += chunk
 
-      // Track segments: append to last thinking segment or start a new one.
-      // If the last segment is tools/content (thinking arrived slightly after
-      // a tool event due to transcript write delay), insert thinking before it
-      // so the rendered order is: thinking → tools → content.
       const lastSeg = streaming.segments[streaming.segments.length - 1]
-      if (lastSeg && lastSeg.type === 'thinking') {
+
+      if (new_block) {
+        // New thinking round: always push after current segments.
+        // This ensures thinking appears after the preceding tools, not before them.
+        streaming.segments.push({ type: 'thinking', content: chunk })
+      } else if (lastSeg && lastSeg.type === 'thinking') {
         lastSeg.content += chunk
-      } else if (lastSeg && lastSeg.type === 'tools') {
-        const insertIdx = streaming.segments.length - 1
-        streaming.segments.splice(insertIdx, 0, { type: 'thinking', content: chunk })
       } else {
         streaming.segments.push({ type: 'thinking', content: chunk })
       }
