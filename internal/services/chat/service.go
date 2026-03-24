@@ -71,6 +71,7 @@ type ChatService struct {
 	activeGenerations  sync.Map // map[int64]*activeGeneration
 	gateway            *channels.Gateway
 	chunkCallbacks     sync.Map // map[int64]ChunkCallback — per-conversation streaming sinks
+	openclawGateway    OpenClawGatewayInfo
 }
 
 // NewChatService creates a new ChatService

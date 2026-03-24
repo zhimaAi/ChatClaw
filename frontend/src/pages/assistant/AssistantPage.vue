@@ -811,6 +811,9 @@ const handleSend = async () => {
     try {
       await sendTeamMessage(messageContent)
     } catch (error: unknown) {
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       toast.error(getErrorMessage(error) || t('assistant.errors.sendFailed'))
     }
     return
@@ -853,7 +856,9 @@ const handleSend = async () => {
       )
       pendingTeamLibraryId.value = null
     } catch {
-      // Error already handled in composable
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       return
     }
   }
@@ -901,6 +906,9 @@ const handleSend = async () => {
         // Non-critical error
       }
     } catch (error: unknown) {
+      chatInput.value = messageContent
+      pendingImages.value = imagesToSend
+      pendingFiles.value = filesToSend
       toast.error(getErrorMessage(error) || t('assistant.errors.sendFailed'))
     }
   }
