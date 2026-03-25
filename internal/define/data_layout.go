@@ -70,6 +70,9 @@ func ensureDataLayout() error {
 	if err := os.MkdirAll(oc, 0o700); err != nil {
 		return fmt.Errorf("openclaw data root: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(oc, "runtime"), 0o700); err != nil {
+		return fmt.Errorf("openclaw runtime root: %w", err)
+	}
 
 	if err := migrateFileIfMissing(filepath.Join(native, DefaultSQLiteFileName), filepath.Join(legacy, DefaultSQLiteFileName)); err != nil {
 		return fmt.Errorf("migrate sqlite: %w", err)

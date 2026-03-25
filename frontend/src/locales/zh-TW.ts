@@ -236,7 +236,11 @@ export default {
       "runtimeStatus": "Runtime Status",
       "gatewayEndpoint": "Gateway Endpoint",
       "version": "Installed Version",
+      "runtimeSource": "运行来源",
+      "runtimePath": "运行目录",
+      "upgradeButton": "升级 OpenClaw",
       "restartButton": "Restart Service",
+      "upgrading": "升级中...",
       "restarting": "Restarting...",
       "phase": {
         "idle": "Idle",
@@ -244,6 +248,7 @@ export default {
         "connecting": "Connecting",
         "connected": "Connected",
         "restarting": "Restarting",
+        "upgrading": "升级中",
         "error": "Error"
       },
       "gateway": {
@@ -252,9 +257,17 @@ export default {
         "reconnecting": "Reconnecting",
         "disconnected": "Disconnected"
       },
+      "source": {
+        "user": "用户目录覆盖",
+        "embedded": "应用内置",
+        "development": "开发目录"
+      },
       "notInstalled": "Runtime not found",
       "openDashboard": "開啟控制台",
-      "dashboardError": "無法載入 OpenClaw 控制台"
+      "dashboardError": "無法載入 OpenClaw 控制台",
+      "alreadyLatest": "已经是最新版本",
+      "upgradeSuccess": "OpenClaw 已升级到 {version}",
+      "upgradeFailed": "OpenClaw 升级失败"
     },
     "general": {
       "title": "General Settings",

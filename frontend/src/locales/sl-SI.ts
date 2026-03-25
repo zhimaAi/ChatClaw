@@ -236,7 +236,11 @@ export default {
       "runtimeStatus": "Runtime Status",
       "gatewayEndpoint": "Gateway Endpoint",
       "version": "Installed Version",
+      "runtimeSource": "Runtime Source",
+      "runtimePath": "Runtime Path",
+      "upgradeButton": "Upgrade OpenClaw",
       "restartButton": "Restart Service",
+      "upgrading": "Upgrading...",
       "restarting": "Restarting...",
       "phase": {
         "idle": "Idle",
@@ -244,6 +248,7 @@ export default {
         "connecting": "Connecting",
         "connected": "Connected",
         "restarting": "Restarting",
+        "upgrading": "Upgrading",
         "error": "Error"
       },
       "gateway": {
@@ -252,9 +257,17 @@ export default {
         "reconnecting": "Reconnecting",
         "disconnected": "Disconnected"
       },
+      "source": {
+        "user": "User Override",
+        "embedded": "Embedded Bundle",
+        "development": "Development Bundle"
+      },
       "notInstalled": "Runtime not found",
       "openDashboard": "Odpri nadzorno ploščo",
-      "dashboardError": "Nadzorne plošče OpenClaw ni mogoče naložiti"
+      "dashboardError": "Nadzorne plošče OpenClaw ni mogoče naložiti",
+      "alreadyLatest": "Already on the latest version",
+      "upgradeSuccess": "OpenClaw upgraded to {version}",
+      "upgradeFailed": "Failed to upgrade OpenClaw"
     },
     "general": {
       "title": "Splošne nastavitve",
