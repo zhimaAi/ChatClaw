@@ -203,6 +203,7 @@
   "error.channel_agent_create_not_available": "auto-create agent is not available",
   "error.channel_ai_reply_failed": "AI reply failed: {{.Error}}",
   "error.channel_ai_reply_empty": "AI reply failed: generated empty response",
+  "error.openclaw_gateway_not_ready_channel": "OpenClaw runtime is not running. Please start OpenClaw on your desktop before sending messages.",
   "error.dingtalk_network_dns_failed": "DingTalk connection failed: DNS resolution error, please check network or DNS settings",
   "channel.feishu_streaming_generating": "Generating a streaming reply, please wait...",
   "channel.feishu_stream_output_enabled": "Streaming output is enabled. Future replies will be sent progressively.",

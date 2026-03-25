@@ -20,6 +20,9 @@ const DocumentViewerPage = defineAsyncComponent(
   () => import('@/pages/document/DocumentViewerPage.vue')
 )
 const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
+const OpenClawChannelsPage = defineAsyncComponent(
+  () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
+)
 const OpenClawAssistantPage = defineAsyncComponent(
   () => import('@/pages/openclaw-assistant/OpenClawAssistantPage.vue')
 )
@@ -136,6 +139,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   multiask: MultiaskPage,
   document: DocumentViewerPage,
   channels: ChannelsPage,
+  'openclaw-channels': OpenClawChannelsPage,
   tools: ToolsPage,
 }
 
@@ -153,7 +157,9 @@ watch(
   () => navigationStore.tabs.length,
   (len) => {
     if (len === 0) {
-      navigationStore.navigateToModule('assistant', appStore.currentSystem)
+      const module: NavModule =
+        appStore.currentSystem === 'openclaw' ? 'openclaw-assistant' : 'assistant'
+      navigationStore.navigateToModule(module, appStore.currentSystem)
     }
   },
   { immediate: true }

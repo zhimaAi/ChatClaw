@@ -1398,6 +1398,7 @@ let unsubscribeConversationsChanged: (() => void) | null = null
 let unsubscribeAgentsChanged: (() => void) | null = null
 let unsubscribeModelsChanged: (() => void) | null = null
 let unsubscribeMessagesChanged: (() => void) | null = null
+let unsubscribeChannelConversationActivated: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -1662,6 +1663,59 @@ onMounted(() => {
     }
   })
 
+  // Listen for channel-originated conversations to auto-navigate
+  unsubscribeChannelConversationActivated = Events.On(
+    'channel:conversation-activated',
+    async (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+      const eventAgentType = String(payload?.agent_type ?? '')
+      if (eventAgentType !== 'openclaw') return
+
+      const agentId = Number(payload?.agent_id)
+      const conversationId = Number(payload?.conversation_id)
+      if (!agentId || !conversationId) return
+
+      // Refresh conversations for this agent to include the new/updated one
+      await loadConversations(agentId, {
+        preserveSelection: true,
+        force: true,
+        activeAgentId: activeAgentId.value,
+        affectActiveSelection: false,
+      })
+
+      // Navigate to the openclaw-assistant module if not already active
+      if (!isTabActive.value) {
+        navigationStore.navigateToModule('openclaw-assistant')
+      }
+
+      // Select the agent if not already selected
+      if (activeAgentId.value !== agentId) {
+        activeAgentId.value = agentId
+        listMode.value = 'personal'
+      }
+
+      // Wait a tick for the UI to update after agent switch
+      await nextTick()
+
+      // Find the conversation and select it
+      const allConvs = getAllAgentConversations(agentId)
+      const conv = allConvs.find((c) => c.id === conversationId)
+      if (conv) {
+        handleSelectConversation(conv)
+      } else {
+        // Conversation may not be in the truncated list; load it directly
+        try {
+          const fetched = await ConversationsService.GetConversation(conversationId)
+          if (fetched) {
+            handleSelectConversation(fetched)
+          }
+        } catch {
+          // Silently ignore — conversation may have been deleted
+        }
+      }
+    }
+  )
+
   // Listen for model/provider changes from settings page (e.g., add/delete model, enable/disable provider)
   unsubscribeModelsChanged = Events.On('models:changed', () => {
     void loadModels()
@@ -1702,6 +1756,8 @@ onUnmounted(() => {
   unsubscribeModelsChanged = null
   unsubscribeChatCompleteTeamDialogue?.()
   unsubscribeChatCompleteTeamDialogue = null
+  unsubscribeChannelConversationActivated?.()
+  unsubscribeChannelConversationActivated = null
 
   // Snap mode cleanup
   unsubscribeSnapSettings?.()

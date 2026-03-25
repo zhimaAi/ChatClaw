@@ -120,6 +120,9 @@ const allTopNavItems: NavItem[] = [
     key: 'channels',
     labelKey: 'nav.channels',
     icon: IconChannels,
+    systemModuleMap: {
+      openclaw: 'openclaw-channels',
+    },
   },
   {
     key: 'memory',

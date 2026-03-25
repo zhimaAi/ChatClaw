@@ -34,6 +34,7 @@ import (
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	"chatclaw/internal/services/openclawagents"
+	openclawchannels "chatclaw/internal/services/openclaw/channels"
 	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
@@ -337,6 +338,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return ensureChannelAgent(agentsService, channelName)
 	})
 	app.RegisterService(application.NewService(channelService))
+	// 注册 OpenClaw 频道服务（Feishu-focused channel management for OpenClaw）
+	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService)
+	app.RegisterService(application.NewService(openClawChannelService))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
@@ -756,6 +760,17 @@ func handleChannelMessage(
 		return
 	}
 
+	// Determine if this agent belongs to openclaw_agents table.
+	agentType := ""
+	var openClawCount int
+	if countErr := db.NewSelect().
+		Table("openclaw_agents").
+		ColumnExpr("COUNT(1)").
+		Where("id = ?", agentID).
+		Scan(ctx, &openClawCount); countErr == nil && openClawCount > 0 {
+		agentType = conversations.AgentTypeOpenClaw
+	}
+
 	// Use ChatID as conversation key so different platform chats get separate conversations.
 	// Fall back to SenderID for direct messages (where ChatID may be empty).
 	convKey := msg.ChatID
@@ -777,7 +792,7 @@ func handleChannelMessage(
 		displayName = channelDisplayName(msg.Platform, false, textContent)
 	}
 
-	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName)
+	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName, agentType)
 	if err != nil {
 		app.Logger.Error("channel message: find/create conversation failed", "error", err)
 		return
@@ -786,6 +801,16 @@ func handleChannelMessage(
 	// Notify frontend that conversation list has changed (e.g. new conversation created)
 	app.Event.Emit("conversations:changed", map[string]any{
 		"agent_id": agentID,
+	})
+
+	// Notify frontend to navigate to the conversation in the assistant
+	app.Event.Emit("channel:conversation-activated", map[string]any{
+		"agent_id":        agentID,
+		"agent_type":      agentType,
+		"conversation_id": conv.ID,
+		"channel_id":      msg.ChannelID,
+		"platform":        msg.Platform,
+		"sender_name":     msg.SenderName,
 	})
 
 	// Check for quick-mode prefix: "/q " or "/quick " forces non-streaming reply for this message.
@@ -803,6 +828,13 @@ func handleChannelMessage(
 	aiContent := textContent
 	if msg.SenderName != "" {
 		aiContent = fmt.Sprintf("%s：%s", msg.SenderName, textContent)
+	}
+
+	// OpenClaw agents: route through the OpenClaw Gateway when available,
+	// fall back to standard eino pipeline only if the gateway is down.
+	if agentType == conversations.AgentTypeOpenClaw {
+		runOpenClawChannelReply(app, chatService, convService, gateway, db, conv.ID, agentID, aiContent, msg, replyTarget, channelRow.ExtraConfig, useQuickMode, sendReply)
+		return
 	}
 
 	// DingTalk: use real-time streaming interactive card by default.
@@ -918,6 +950,186 @@ func handleChannelMessage(
 	if !streamReplyHandled {
 		sendReply(finalResponse)
 	}
+}
+
+// runOpenClawChannelReply handles channel messages for OpenClaw agents.
+// It requires the OpenClaw Gateway to be running.
+// When the Feishu channel has streaming enabled, it creates a streaming card
+// and pushes incremental updates as the agent generates tokens.
+func runOpenClawChannelReply(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	gateway *channels.Gateway,
+	db *bun.DB,
+	conversationID int64,
+	agentID int64,
+	content string,
+	msg channels.IncomingMessage,
+	replyTarget string,
+	extraConfig string,
+	useQuickMode bool,
+	sendReply func(string),
+) {
+	res, err := chatService.SendOpenClawMessage(chat.SendMessageInput{
+		ConversationID: conversationID,
+		Content:        content,
+		TabID:          "channel_backend",
+	})
+	if err != nil {
+		app.Logger.Warn("openclaw channel: gateway not ready", "conv", conversationID, "error", err)
+		sendReply(i18n.T("error.openclaw_gateway_not_ready_channel"))
+		return
+	}
+
+	app.Logger.Info("openclaw channel: SendOpenClawMessage ok, waiting for generation",
+		"conv", conversationID, "requestID", res.RequestID)
+
+	// Try streaming output for Feishu when enabled and not in quick mode.
+	if !useQuickMode && msg.Platform == channels.PlatformFeishu && replyTarget != "" {
+		streamEnabled, _ := getChannelStreamOutputEnabled(msg.Platform, extraConfig)
+		if streamEnabled {
+			if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
+				if feishuAdapter, ok := adapter.(feishuStreamingReplyAdapter); ok {
+					streamOpenClawFeishuReply(app, chatService, convService, conversationID, agentID, res.RequestID, feishuAdapter, msg, replyTarget)
+					return
+				}
+			}
+		}
+	}
+
+	// Non-streaming fallback: wait for full completion, then send one reply.
+	if err := chatService.WaitForGeneration(conversationID, res.RequestID); err != nil {
+		app.Logger.Error("openclaw channel: generation wait failed", "conv", conversationID, "error", err)
+		sendReply(i18n.Tf("error.channel_ai_reply_failed", map[string]any{"Error": err}))
+		return
+	}
+
+	finalResponse := openClawFinalResponse(chatService, conversationID, res.RequestID)
+
+	app.Logger.Info("openclaw channel: after WaitForGeneration",
+		"conv", conversationID, "response_len", len(finalResponse))
+
+	updateOpenClawConversationMeta(app, convService, conversationID, agentID, finalResponse)
+
+	if finalResponse == "" {
+		app.Logger.Warn("openclaw channel: empty AI response", "conv", conversationID)
+		sendReply(i18n.T("error.channel_ai_reply_empty"))
+		return
+	}
+
+	sendReply(finalResponse)
+}
+
+// streamOpenClawFeishuReply creates a Feishu streaming card and pushes
+// incremental content updates as the OpenClaw agent generates tokens.
+func streamOpenClawFeishuReply(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	conversationID int64,
+	agentID int64,
+	requestID string,
+	adapter feishuStreamingReplyAdapter,
+	msg channels.IncomingMessage,
+	replyTarget string,
+) {
+	createCtx, createCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer createCancel()
+
+	placeholder := i18n.T("channel.feishu_streaming_generating")
+	handle, err := adapter.CreateStreamCardMessage(createCtx, replyTarget, msg.MessageID, placeholder)
+	if err != nil {
+		app.Logger.Warn("openclaw channel: create stream card failed, falling back to plain reply",
+			"conv", conversationID, "error", err)
+		// Fall back: wait for completion then update card placeholder with final text
+		_ = chatService.WaitForGeneration(conversationID, requestID)
+		finalResponse := openClawFinalResponse(chatService, conversationID, requestID)
+		updateOpenClawConversationMeta(app, convService, conversationID, agentID, finalResponse)
+		return
+	}
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- chatService.WaitForGeneration(conversationID, requestID)
+	}()
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastSent := placeholder
+
+	for {
+		select {
+		case waitErr := <-waitCh:
+			if waitErr != nil {
+				app.Logger.Error("openclaw channel: generation wait failed", "conv", conversationID, "error", waitErr)
+			}
+
+			finalResponse := openClawFinalResponse(chatService, conversationID, requestID)
+			if strings.TrimSpace(finalResponse) == "" {
+				finalResponse = i18n.T("error.channel_ai_reply_empty")
+			}
+
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if updateErr := adapter.UpdateStreamCardMessage(updateCtx, handle, finalResponse, true); updateErr != nil {
+				app.Logger.Error("openclaw channel: final stream update failed",
+					"conv", conversationID, "error", updateErr)
+			}
+			updateCancel()
+
+			updateOpenClawConversationMeta(app, convService, conversationID, agentID, finalResponse)
+			return
+
+		case <-ticker.C:
+			current, ok := chatService.GetGenerationContent(conversationID, requestID)
+			if !ok || strings.TrimSpace(current) == "" || current == lastSent {
+				continue
+			}
+
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if updateErr := adapter.UpdateStreamCardMessage(updateCtx, handle, current, false); updateErr != nil {
+				app.Logger.Warn("openclaw channel: stream update failed",
+					"conv", conversationID, "error", updateErr)
+				updateCancel()
+				continue
+			}
+			updateCancel()
+
+			lastSent = current
+		}
+	}
+}
+
+// openClawFinalResponse retrieves the final response text for an OpenClaw generation.
+// It first checks the in-memory generation content, then falls back to sessions.get.
+func openClawFinalResponse(chatService *chat.ChatService, conversationID int64, requestID string) string {
+	if content, ok := chatService.GetGenerationContent(conversationID, requestID); ok && strings.TrimSpace(content) != "" {
+		return strings.TrimSpace(content)
+	}
+	if reply := chatService.GetOpenClawLastAssistantReply(conversationID); reply != "" {
+		return strings.TrimSpace(reply)
+	}
+	return ""
+}
+
+// updateOpenClawConversationMeta updates conversation metadata and notifies the frontend.
+func updateOpenClawConversationMeta(
+	app *application.App,
+	convService *conversations.ConversationsService,
+	conversationID int64,
+	agentID int64,
+	lastMessage string,
+) {
+	_, _ = convService.UpdateConversation(conversationID, conversations.UpdateConversationInput{
+		LastMessage: &lastMessage,
+	})
+	app.Event.Emit("conversations:changed", map[string]any{
+		"agent_id": agentID,
+	})
+	app.Event.Emit("chat:messages-changed", map[string]any{
+		"conversation_id": conversationID,
+	})
 }
 
 type feishuStreamingReplyAdapter interface {
@@ -1542,6 +1754,7 @@ func extractTextContent(msg channels.IncomingMessage) string {
 // or creates a new one if it doesn't exist.
 // externalID is a stable key (e.g., "ch:1:oc_xxx") for lookup.
 // displayName is a human-readable name (e.g., group/user name) for display.
+// agentType should be "openclaw" for OpenClaw agents, or "" for default (eino).
 func findOrCreateConversation(
 	ctx context.Context,
 	db *bun.DB,
@@ -1549,6 +1762,7 @@ func findOrCreateConversation(
 	agentID int64,
 	externalID string,
 	displayName string,
+	agentType string,
 ) (*conversations.Conversation, error) {
 	// Try to find existing conversation by external_id
 	type convRow struct {
@@ -1565,6 +1779,7 @@ func findOrCreateConversation(
 	if err == nil && existing.ID > 0 {
 		conv, err := convService.GetConversation(existing.ID)
 		if err == nil {
+			ensureConversationAgentType(ctx, db, conv, agentType)
 			return conv, nil
 		}
 	}
@@ -1580,6 +1795,7 @@ func findOrCreateConversation(
 	if err == nil && existing.ID > 0 {
 		conv, err := convService.GetConversation(existing.ID)
 		if err == nil {
+			ensureConversationAgentType(ctx, db, conv, agentType)
 			return conv, nil
 		}
 	}
@@ -1590,12 +1806,30 @@ func findOrCreateConversation(
 		Name:       displayName,
 		ExternalID: externalID,
 		ChatMode:   "chat",
+		AgentType:  agentType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create conversation: %w", err)
 	}
 
 	return conv, nil
+}
+
+// ensureConversationAgentType patches an existing conversation's agent_type
+// if it was created before the type-aware logic was added.
+func ensureConversationAgentType(ctx context.Context, db *bun.DB, conv *conversations.Conversation, agentType string) {
+	if agentType == "" {
+		agentType = conversations.AgentTypeEino
+	}
+	if conv.AgentType == agentType {
+		return
+	}
+	_, _ = db.NewUpdate().
+		Table("conversations").
+		Set("agent_type = ?", agentType).
+		Where("id = ?", conv.ID).
+		Exec(ctx)
+	conv.AgentType = agentType
 }
 
 var platformLabel = map[string]string{
