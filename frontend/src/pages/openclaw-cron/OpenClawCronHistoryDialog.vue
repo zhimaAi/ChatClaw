@@ -17,8 +17,7 @@ import { formatDurationMs, formatOpenClawCronTime } from './utils'
 const props = defineProps<{
   open: boolean
   job: OpenClawCronJob | null
-  initialConversationId?: number | null
-  initialConversationAgentId?: number | null
+  triggerAtMs?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -31,7 +30,6 @@ const runs = ref<OpenClawCronRunEntry[]>([])
 const selectedRun = ref<OpenClawCronRunEntry | null>(null)
 const selectedDetail = ref<OpenClawCronRunDetail | null>(null)
 const liveFinished = ref(false)
-const preferInitialConversation = ref(false)
 type LiveToolState = {
   id: string
   name: string
@@ -53,33 +51,22 @@ type LivePreviewSegment =
 const liveSegments = ref<LivePreviewSegment[]>([])
 const liveToolMap = new Map<string, LiveToolState>()
 let detailRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let pendingRunDiscoveryTimer: ReturnType<typeof setTimeout> | null = null
 let eventUnsubscribe: (() => void) | null = null
 let currentWatchId: string | null = null
 
 const hasRuns = computed(() => runs.value.length > 0)
-
-function initialManualSessionId() {
-  if (!props.initialConversationId) return ''
-  return `manual:${props.initialConversationId}`
-}
+const waitingForTriggeredRun = computed(() => !!pendingRunDiscoveryTimer)
 
 async function loadRuns() {
   if (!props.job?.id) return
   loading.value = true
   try {
     runs.value = await OpenClawCronService.ListRuns(props.job.id, 50)
-    const manualSessionId = initialManualSessionId()
-    if (manualSessionId) {
-      const matchedManualRun = runs.value.find((item) => item.session_id === manualSessionId)
-      if (matchedManualRun) {
-        selectedRun.value = matchedManualRun
-        preferInitialConversation.value = false
-      }
-    }
     if (!selectedRun.value && runs.value[0]) {
       selectedRun.value = runs.value[0]
     }
-    if (selectedRun.value && !preferInitialConversation.value) {
+    if (selectedRun.value) {
       const latest = runs.value.find((item) => item.session_id === selectedRun.value?.session_id)
       if (latest) selectedRun.value = latest
       await loadDetail(!currentWatchId)
@@ -87,6 +74,42 @@ async function loadRuns() {
   } finally {
     loading.value = false
   }
+}
+
+function runTimestampMs(run: OpenClawCronRunEntry) {
+  return Number(run.run_at_ms || run.ts || 0)
+}
+
+function findTriggeredRun() {
+  const triggerAtMs = Number(props.triggerAtMs || 0)
+  if (!triggerAtMs) return null
+  const thresholdMs = triggerAtMs - 5000
+  return runs.value.find((item) => runTimestampMs(item) >= thresholdMs) ?? null
+}
+
+function stopPendingRunDiscovery() {
+  if (pendingRunDiscoveryTimer) {
+    clearTimeout(pendingRunDiscoveryTimer)
+    pendingRunDiscoveryTimer = null
+  }
+}
+
+async function discoverTriggeredRun(deadlineMs: number) {
+  stopPendingRunDiscovery()
+  const matched = findTriggeredRun()
+  if (matched) {
+    selectedRun.value = matched
+    await loadDetail(true)
+    return
+  }
+  if (!props.open || Date.now() >= deadlineMs) {
+    return
+  }
+  pendingRunDiscoveryTimer = setTimeout(async () => {
+    pendingRunDiscoveryTimer = null
+    await loadRuns()
+    await discoverTriggeredRun(deadlineMs)
+  }, 1000)
 }
 
 async function loadDetail(reconnect = false) {
@@ -328,21 +351,20 @@ watch(
   () => props.open,
   async (open) => {
     if (!open) {
-      preferInitialConversation.value = false
+      selectedRun.value = null
+      selectedDetail.value = null
+      stopPendingRunDiscovery()
       await cleanupGatewayStream()
       return
     }
-    preferInitialConversation.value = !!props.initialConversationId
+    selectedRun.value = null
+    selectedDetail.value = null
     await loadRuns()
+    if (props.triggerAtMs) {
+      await discoverTriggeredRun(Date.now() + 20000)
+    }
   },
   { immediate: true }
-)
-
-watch(
-  () => props.initialConversationId,
-  (conversationId) => {
-    preferInitialConversation.value = !!conversationId
-  }
 )
 
 watch(
@@ -359,6 +381,7 @@ onBeforeUnmount(() => {
     clearTimeout(detailRefreshTimer)
     detailRefreshTimer = null
   }
+  stopPendingRunDiscovery()
   void cleanupGatewayStream()
 })
 </script>
@@ -383,6 +406,12 @@ onBeforeUnmount(() => {
           <div v-if="loading" class="p-4 text-sm text-muted-foreground">
             {{ t('common.loading', '加载中...') }}
           </div>
+          <div
+            v-else-if="waitingForTriggeredRun && !hasRuns"
+            class="p-4 text-sm text-muted-foreground"
+          >
+            {{ t('openclawCron.history.waitingTriggeredRun', '任务已触发，正在等待 OpenClaw 写入新的运行记录...') }}
+          </div>
           <div v-else-if="!hasRuns" class="p-4 text-sm text-muted-foreground">
             {{ t('openclawCron.history.empty', '暂无运行历史') }}
           </div>
@@ -391,12 +420,7 @@ onBeforeUnmount(() => {
             :key="`${run.session_id}-${run.run_at_ms}`"
             class="w-full border-b border-border px-3 py-3 text-left transition-colors hover:bg-accent/40"
             :class="selectedRun?.session_id === run.session_id ? 'bg-accent/50' : ''"
-            @click="
-              () => {
-                preferInitialConversation = false
-                selectedRun = run
-              }
-            "
+            @click="selectedRun = run"
           >
             <div class="space-y-1">
               <div class="flex items-center justify-between gap-2">
@@ -419,13 +443,13 @@ onBeforeUnmount(() => {
 
         <div class="min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
           <div
-            v-if="!selectedDetail && !preferInitialConversation"
+            v-if="!selectedDetail"
             class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
             {{ t('openclawCron.history.selectRun', '请选择一次运行记录') }}
           </div>
           <div v-else class="flex h-full min-h-0 flex-col">
-            <div v-if="selectedDetail && !preferInitialConversation" class="border-b border-border px-4 py-3">
+            <div class="border-b border-border px-4 py-3">
               <div class="flex flex-wrap items-center gap-3">
                 <span class="text-sm font-medium text-foreground">{{ selectedDetail.run.status }}</span>
                 <span class="text-xs text-muted-foreground">
@@ -446,17 +470,9 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div v-else class="border-b border-border px-4 py-3">
-              <div class="flex flex-wrap items-center gap-3">
-                <span class="text-sm font-medium text-foreground">
-                  {{ t('openclawCron.history.manualConversation', '手动运行会话') }}
-                </span>
-              </div>
-            </div>
-
             <div class="min-h-0 flex-1 overflow-auto px-4 py-3">
               <div
-                v-if="selectedDetail && !preferInitialConversation && selectedDetail.is_live && liveSegments.length > 0"
+                v-if="selectedDetail && selectedDetail.is_live && liveSegments.length > 0"
                 class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4"
               >
                 <div class="mb-2 flex items-center justify-between gap-3">
@@ -522,12 +538,12 @@ onBeforeUnmount(() => {
               </div>
 
               <div
-                v-if="preferInitialConversation ? initialConversationId : selectedDetail?.conversation_id"
+                v-if="selectedDetail?.conversation_id"
                 class="h-full min-h-0 overflow-hidden"
               >
                 <EmbeddedAssistantPage
-                  :conversation-id="preferInitialConversation ? initialConversationId || 0 : selectedDetail?.conversation_id || 0"
-                  :agent-id="preferInitialConversation ? initialConversationAgentId || 0 : selectedDetail?.conversation_agent_id || 0"
+                  :conversation-id="selectedDetail?.conversation_id || 0"
+                  :agent-id="selectedDetail?.conversation_agent_id || 0"
                   :read-only="true"
                 />
               </div>

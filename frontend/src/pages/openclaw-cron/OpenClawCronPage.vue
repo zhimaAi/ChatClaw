@@ -48,8 +48,7 @@ const agents = ref<OpenClawCronAgentOption[]>([])
 const createDialogOpen = ref(false)
 const editingJob = ref<OpenClawCronJob | null>(null)
 const historyJob = ref<OpenClawCronJob | null>(null)
-const historyConversationId = ref<number | null>(null)
-const historyConversationAgentId = ref<number | null>(null)
+const historyTriggerAtMs = ref<number | null>(null)
 const form = ref<OpenClawCronFormState>(createEmptyOpenClawCronForm())
 const deleteDialogOpen = ref(false)
 const deleting = ref(false)
@@ -128,10 +127,9 @@ async function handleToggle(job: OpenClawCronJob, enabled: boolean) {
 
 async function handleRun(job: OpenClawCronJob) {
   try {
-    const result = await OpenClawCronService.RunJobNow(job.id)
+    await OpenClawCronService.RunJobNow(job.id)
     historyJob.value = job
-    historyConversationId.value = result?.conversation_id ?? null
-    historyConversationAgentId.value = result?.agent_id ?? null
+    historyTriggerAtMs.value = Date.now()
   } catch (error) {
     toast.error(getErrorMessage(error))
   }
@@ -338,21 +336,19 @@ async function confirmDelete() {
       @submit="handleSubmit"
     />
 
-    <OpenClawCronHistoryDialog
-      :open="!!historyJob"
-      :job="historyJob"
-      :initial-conversation-id="historyConversationId"
-      :initial-conversation-agent-id="historyConversationAgentId"
-      @update:open="
-        (value) => {
-          if (!value) {
-            historyJob = null
-            historyConversationId = null
-            historyConversationAgentId = null
-          }
+  <OpenClawCronHistoryDialog
+    :open="!!historyJob"
+    :job="historyJob"
+    :trigger-at-ms="historyTriggerAtMs"
+    @update:open="
+      (value) => {
+        if (!value) {
+          historyJob = null
+          historyTriggerAtMs = null
         }
-      "
-    />
+      }
+    "
+  />
 
     <AlertDialog :open="deleteDialogOpen" @update:open="(value) => !value && (deleteDialogOpen = false)">
       <AlertDialogContent>
