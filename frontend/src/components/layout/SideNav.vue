@@ -120,6 +120,9 @@ const allTopNavItems: NavItem[] = [
     key: 'scheduled-tasks',
     labelKey: 'nav.scheduledTasks',
     icon: IconCorn,
+    systemModuleMap: {
+      openclaw: 'openclaw-cron',
+    },
   },
   {
     key: 'skills',

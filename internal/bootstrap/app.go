@@ -18,6 +18,7 @@ import (
 	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
 	"chatclaw/internal/openclaw/agents"
+	"chatclaw/internal/openclaw/cron"
 	"chatclaw/internal/openclaw/runtime"
 	openclawskills "chatclaw/internal/openclaw/skills"
 	"chatclaw/internal/services/agents"
@@ -391,6 +392,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
+	app.RegisterService(application.NewService(openclawcron.NewOpenClawCronService(app, openclawManager, openClawAgentsService)))
 	app.RegisterService(application.NewService(openclawskills.NewOpenClawSkillsService(openClawAgentsService, openclawManager)))
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
 		go configSvc.Sync(context.Background())
