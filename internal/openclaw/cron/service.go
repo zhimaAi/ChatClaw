@@ -470,6 +470,7 @@ func (s *OpenClawCronService) runCLIJSON(args []string, out any) error {
 	// 在 Windows 下固定 UTF-8 输出，并显式指向内嵌 Gateway，避免误连用户全局 OpenClaw。
 	cmd := exec.CommandContext(ctx, openClawCommandName, fullArgs...)
 	cmd.Env = append(os.Environ(), "PYTHONUTF8=1")
+	setCmdHideWindow(cmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("openclaw %s failed: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
