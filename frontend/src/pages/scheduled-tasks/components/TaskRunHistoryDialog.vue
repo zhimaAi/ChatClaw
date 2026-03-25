@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail } from '../types'
 import { formatDuration, formatTaskTime } from '../utils'
 import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
-import EmbeddedAssistantPage from '@/pages/assistant/components/EmbeddedAssistantPage.vue'
+import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 
 const props = defineProps<{
   open: boolean
@@ -23,6 +23,13 @@ const runs = ref<ScheduledTaskRun[]>([])
 const selectedRunId = ref<number | null>(null)
 const selectedDetail = ref<ScheduledTaskRunDetail | null>(null)
 const { t } = useI18n()
+
+const historyAssistantTabId = computed(() => {
+  const runId = selectedRunId.value
+  const conversationId = selectedDetail.value?.conversation?.id
+  if (!runId || !conversationId) return 'scheduled-task-history-empty'
+  return `scheduled-task-history-${runId}-${conversationId}`
+})
 
 function displayRunStatusLabel(status: string) {
   if (status === 'running') return t('scheduledTasks.statusRunning')
@@ -61,7 +68,11 @@ watch(
 
 async function selectRun(run: ScheduledTaskRun) {
   selectedRunId.value = run.id
-  selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(run.id)
+  try {
+    selectedDetail.value = await ScheduledTasksService.GetScheduledTaskRunDetail(run.id)
+  } catch (error) {
+    console.error('Failed to load run detail:', error)
+  }
 }
 </script>
 
@@ -127,10 +138,13 @@ async function selectRun(run: ScheduledTaskRun) {
           >
             {{ t('scheduledTasks.conversationEmpty') }}
           </div>
-          <EmbeddedAssistantPage
+          <AssistantPage
             v-else
-            :conversation-id="selectedDetail.conversation.id"
-            :agent-id="selectedDetail.conversation.agent_id"
+            :key="historyAssistantTabId"
+            :tab-id="historyAssistantTabId"
+            mode="history-iframe"
+            :initial-conversation-id="selectedDetail.conversation.id"
+            :initial-agent-id="selectedDetail.conversation.agent_id"
           />
         </div>
       </div>

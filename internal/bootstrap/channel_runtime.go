@@ -136,6 +136,16 @@ func handleChannelMessage(
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	if err := channels.UpdateChannelLastReplyTarget(ctx, db, msg.ChannelID, msg.ChatID, msg.SenderID); err != nil {
+		app.Logger.Warn(
+			"channel message: failed to update last reply target",
+			"channel_id", msg.ChannelID,
+			"chat_id", msg.ChatID,
+			"sender_id", msg.SenderID,
+			"error", err,
+		)
+	}
+
 	var channelRow struct {
 		AgentID     int64  `bun:"agent_id"`
 		ExtraConfig string `bun:"extra_config"`

@@ -41,7 +41,7 @@ func (s *scheduler) register(task ScheduledTask, fn func()) error {
 		s.cron.Remove(oldID)
 		delete(s.entries, task.ID)
 	}
-	if !task.Enabled {
+	if !task.Enabled || task.LastStatus == TaskStatusExpired {
 		return nil
 	}
 

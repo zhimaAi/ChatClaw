@@ -305,7 +305,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		handleChannelMessage(app, chatService, conversationsService, channelGW, msg)
 	})
 	channelGW = channelGateway
-	chatService.SetGateway(channelGateway)
+	wireChannelGateway(chatService, scheduledTasksService, channelGateway)
 	channelService := channels.NewChannelService(app, channelGateway, func(channelName string) (int64, error) {
 		return ensureChannelAgent(agentsService, channelName)
 	})
