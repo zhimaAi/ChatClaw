@@ -145,6 +145,7 @@
   "error.chat_agent_read_failed": "读取助手信息失败",
   "error.chat_agent_create_failed": "创建 Agent 失败",
   "error.chat_model_not_configured": "模型未配置",
+  "error.chat_model_not_support_image": "模型「{{.ProviderID}}/{{.ModelID}}」不支持图片输入",
   "error.chat_provider_not_found": "供应商「{{.ProviderID}}」不存在",
   "error.chat_provider_read_failed": "读取供应商信息失败",
   "error.chat_provider_not_enabled": "供应商未启用",

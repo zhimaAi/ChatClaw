@@ -9,7 +9,9 @@
     "build": "vue-tsc && vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint src --ext .vue,.js,.ts,.tsx --fix",
-    "format": "prettier --write src/**/*.{vue,js,ts,tsx,css}"
+    "format": "prettier --write src/**/*.{vue,js,ts,tsx,css}",
+    "check:locales": "node ./scripts/check-locales.mjs",
+    "fix:locales": "node ./scripts/check-locales.mjs --write-missing"
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",

@@ -145,6 +145,7 @@
   "error.chat_agent_read_failed": "failed to read agent",
   "error.chat_agent_create_failed": "failed to create agent",
   "error.chat_model_not_configured": "model not configured",
+  "error.chat_model_not_support_image": "model '{{.ProviderID}}/{{.ModelID}}' does not support image input",
   "error.chat_provider_not_found": "provider '{{.ProviderID}}' not found",
   "error.chat_provider_read_failed": "failed to read provider",
   "error.chat_provider_not_enabled": "provider is not enabled",
