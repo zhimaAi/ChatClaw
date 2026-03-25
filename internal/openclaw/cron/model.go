@@ -207,3 +207,11 @@ type OpenClawCronRunDetail struct {
 	Messages            []OpenClawCronTranscriptMessage `json:"messages"`
 	IsLive              bool                            `json:"is_live"`
 }
+
+// OpenClawCronManualRunResult is returned when the user manually triggers a job as a chat conversation.
+// OpenClawCronManualRunResult 表示“立即运行”改走任务助手对话后返回的本地会话信息。
+type OpenClawCronManualRunResult struct {
+	ConversationID int64  `json:"conversation_id"`
+	AgentID        int64  `json:"agent_id"`
+	RequestID      string `json:"request_id"`
+}

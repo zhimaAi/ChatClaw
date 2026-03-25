@@ -392,7 +392,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
-	app.RegisterService(application.NewService(openclawcron.NewOpenClawCronService(app, openclawManager, openClawAgentsService)))
+	app.RegisterService(application.NewService(openclawcron.NewOpenClawCronService(app, openclawManager, openClawAgentsService, conversationsService, chatService)))
 	app.RegisterService(application.NewService(openclawskills.NewOpenClawSkillsService(openClawAgentsService, openclawManager)))
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
 		go configSvc.Sync(context.Background())
