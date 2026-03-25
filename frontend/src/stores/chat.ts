@@ -472,7 +472,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // Send a message via the OpenClaw OpenResponses API
+  // Send a message via the OpenClaw Gateway chat agent
   const sendOpenClawMessage = async (
     conversationId: number,
     content: string,
@@ -654,7 +654,8 @@ export const useChatStore = defineStore('chat', () => {
     tabId: string,
     images?: ImagePayload[]
   ) => {
-    if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
+    const hasContent = newContent.trim() !== '' || (images && images.length > 0)
+    if (conversationId <= 0 || messageId <= 0 || !hasContent) return null
 
     const current = messagesByConversation.value[conversationId]
     const msgToEdit = current?.find((m) => m.id === messageId)

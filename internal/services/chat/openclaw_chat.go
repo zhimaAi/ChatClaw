@@ -2,8 +2,11 @@ package chat
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -32,7 +35,11 @@ func (s *ChatService) SetOpenClawGateway(gw OpenClawGatewayInfo) {
 
 // openClawAgentConfig holds the config needed for an OpenClaw chat.run call.
 type openClawAgentConfig struct {
+	AgentID         int64
 	OpenClawAgentID string
+	ProviderID      string
+	ModelID         string
+	Capabilities    []string
 	EnableThinking  bool
 	LibraryIDs      []int64
 	LibraryNames    map[int64]string
@@ -59,33 +66,52 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 
 	type conversationRow struct {
 		AgentID        int64  `bun:"agent_id"`
+		LLMProviderID  string `bun:"llm_provider_id"`
+		LLMModelID     string `bun:"llm_model_id"`
 		EnableThinking bool   `bun:"enable_thinking"`
 		LibraryIDs     string `bun:"library_ids"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "enable_thinking", "library_ids").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_conversation_not_found")
 	}
 
 	type agentRow struct {
-		OpenClawAgentID string `bun:"openclaw_agent_id"`
+		OpenClawAgentID      string `bun:"openclaw_agent_id"`
+		DefaultLLMProviderID string `bun:"default_llm_provider_id"`
+		DefaultLLMModelID    string `bun:"default_llm_model_id"`
 	}
 	var agent agentRow
 	if err := db.NewSelect().
 		Table("openclaw_agents").
-		Column("openclaw_agent_id").
+		Column("openclaw_agent_id", "default_llm_provider_id", "default_llm_model_id").
 		Where("id = ?", conv.AgentID).
 		Scan(ctx, &agent); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_agent_not_found")
 	}
 
+	providerID := strings.TrimSpace(conv.LLMProviderID)
+	modelID := strings.TrimSpace(conv.LLMModelID)
+	if providerID == "" {
+		providerID = strings.TrimSpace(agent.DefaultLLMProviderID)
+	}
+	if modelID == "" {
+		modelID = strings.TrimSpace(agent.DefaultLLMModelID)
+	}
+
 	cfg := openClawAgentConfig{
+		AgentID:         conv.AgentID,
 		OpenClawAgentID: agent.OpenClawAgentID,
+		ProviderID:      providerID,
+		ModelID:         modelID,
 		EnableThinking:  conv.EnableThinking,
+	}
+	if providerID != "" && modelID != "" {
+		cfg.Capabilities = getModelCapabilities(providerID, modelID)
 	}
 
 	if conv.LibraryIDs != "" {
@@ -163,9 +189,311 @@ func extractTextFromContent(content any) string {
 	return ""
 }
 
-// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block
-// and the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
-// automatically prepends to user messages sent via chat.send.
+func extractChatClawHiddenBlock(input, tag string) (inner string, cleaned string, found bool) {
+	start := strings.Index(input, "<"+tag)
+	if start == -1 {
+		return "", input, false
+	}
+
+	openEndRel := strings.Index(input[start:], ">")
+	if openEndRel == -1 {
+		return "", input, false
+	}
+	openEnd := start + openEndRel
+
+	closeTag := "</" + tag + ">"
+	closeStartRel := strings.Index(input[openEnd+1:], closeTag)
+	if closeStartRel == -1 {
+		return "", input, false
+	}
+	closeStart := openEnd + 1 + closeStartRel
+	closeEnd := closeStart + len(closeTag)
+
+	inner = input[openEnd+1 : closeStart]
+	cleaned = strings.TrimSpace(input[:start] + input[closeEnd:])
+	return inner, cleaned, true
+}
+
+func stripChatClawHiddenBlocks(input string, tags ...string) string {
+	out := input
+	for _, tag := range tags {
+		for {
+			_, cleaned, found := extractChatClawHiddenBlock(out, tag)
+			if !found {
+				break
+			}
+			out = cleaned
+		}
+	}
+	return out
+}
+
+func buildOpenClawAttachmentContextMessage(userContent string, attachments []ImagePayload) string {
+	type attachmentContext struct {
+		Instruction string         `json:"instruction"`
+		Files       []ImagePayload `json:"files"`
+	}
+
+	var files []ImagePayload
+	for _, att := range attachments {
+		if att.Kind != "file" || strings.TrimSpace(att.FilePath) == "" {
+			continue
+		}
+		files = append(files, ImagePayload{
+			ID:           att.ID,
+			Kind:         "file",
+			Source:       "local_file",
+			MimeType:     att.MimeType,
+			FileName:     att.FileName,
+			FilePath:     att.FilePath,
+			Size:         att.Size,
+			OriginalName: att.OriginalName,
+		})
+	}
+	if len(files) == 0 {
+		return userContent
+	}
+
+	payload, err := json.Marshal(attachmentContext{
+		Instruction: "The user attached files that are already saved on local disk. Use the read/search tools with the exact file_path values below when you need to inspect them.",
+		Files:       files,
+	})
+	if err != nil {
+		return userContent
+	}
+
+	block := "<chatclaw_attachments hidden=\"true\">\n" + string(payload) + "\n</chatclaw_attachments>"
+	if strings.TrimSpace(userContent) == "" {
+		return block
+	}
+	return userContent + "\n\n" + block
+}
+
+func extractOpenClawAttachmentContext(content string) ([]ImagePayload, string) {
+	inner, cleaned, found := extractChatClawHiddenBlock(content, "chatclaw_attachments")
+	if !found {
+		return nil, content
+	}
+
+	start := strings.Index(inner, "{")
+	end := strings.LastIndex(inner, "}")
+	if start == -1 || end < start {
+		return nil, cleaned
+	}
+
+	var payload struct {
+		Files []ImagePayload `json:"files"`
+	}
+	if err := json.Unmarshal([]byte(inner[start:end+1]), &payload); err != nil {
+		return nil, cleaned
+	}
+	return payload.Files, cleaned
+}
+
+func guessOpenClawAttachmentMime(filePath, fallback string) string {
+	mimeType := strings.TrimSpace(strings.ToLower(fallback))
+	if mimeType != "" {
+		return mimeType
+	}
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".pdf":
+		return "application/pdf"
+	case ".md":
+		return "text/markdown"
+	case ".csv":
+		return "text/csv"
+	case ".json":
+		return "application/json"
+	case ".xml":
+		return "application/xml"
+	case ".html":
+		return "text/html"
+	case ".txt", ".log":
+		return "text/plain"
+	default:
+		return ""
+	}
+}
+
+func loadOpenClawTranscriptImagePayload(filePath, mimeType string) *ImagePayload {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil
+	}
+	resolvedMime := guessOpenClawAttachmentMime(filePath, mimeType)
+	if resolvedMime == "" || !strings.HasPrefix(resolvedMime, "image/") {
+		return nil
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return &ImagePayload{
+		Kind:     "image",
+		Source:   "local_file",
+		MimeType: resolvedMime,
+		Base64:   encoded,
+		DataURL:  "data:" + resolvedMime + ";base64," + encoded,
+		FilePath: filePath,
+		FileName: filepath.Base(filePath),
+		Size:     int64(len(data)),
+	}
+}
+
+func firstNonEmptyOpenClawString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func openClawStringValue(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func extractOpenClawTranscriptContentAttachments(content any) []ImagePayload {
+	blocks, ok := content.([]any)
+	if !ok {
+		return nil
+	}
+
+	var attachments []ImagePayload
+	for _, block := range blocks {
+		bm, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		blockType := strings.ToLower(strings.TrimSpace(openClawStringValue(bm["type"])))
+		if blockType != "image" {
+			continue
+		}
+
+		base64Data := strings.TrimSpace(firstNonEmptyOpenClawString(
+			openClawStringValue(bm["data"]),
+			openClawStringValue(bm["base64"]),
+			openClawStringValue(bm["content"]),
+		))
+		mimeType := guessOpenClawAttachmentMime(
+			firstNonEmptyOpenClawString(
+				openClawStringValue(bm["filePath"]),
+				openClawStringValue(bm["file_path"]),
+				openClawStringValue(bm["path"]),
+				openClawStringValue(bm["fileName"]),
+				openClawStringValue(bm["file_name"]),
+				openClawStringValue(bm["name"]),
+			),
+			firstNonEmptyOpenClawString(
+				openClawStringValue(bm["mimeType"]),
+				openClawStringValue(bm["mime_type"]),
+				openClawStringValue(bm["mediaType"]),
+				openClawStringValue(bm["media_type"]),
+			),
+		)
+		if base64Data == "" || !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+			continue
+		}
+
+		fileName := firstNonEmptyOpenClawString(
+			openClawStringValue(bm["fileName"]),
+			openClawStringValue(bm["file_name"]),
+			openClawStringValue(bm["name"]),
+		)
+		attachments = append(attachments, ImagePayload{
+			Kind:         "image",
+			Source:       "inline_base64",
+			MimeType:     mimeType,
+			Base64:       base64Data,
+			DataURL:      "data:" + mimeType + ";base64," + base64Data,
+			FileName:     fileName,
+			OriginalName: fileName,
+		})
+	}
+
+	return attachments
+}
+
+func buildOpenClawTranscriptAttachments(
+	contentBlocks any,
+	content string,
+	mediaPath string,
+	mediaPaths []string,
+	mediaType string,
+	mediaTypes []string,
+) []ImagePayload {
+	filesFromContext, _ := extractOpenClawAttachmentContext(content)
+	var attachments []ImagePayload
+	if inlineAttachments := extractOpenClawTranscriptContentAttachments(contentBlocks); len(inlineAttachments) > 0 {
+		attachments = append(attachments, inlineAttachments...)
+	}
+	if len(filesFromContext) > 0 {
+		attachments = append(attachments, filesFromContext...)
+	}
+
+	paths := make([]string, 0, 1+len(mediaPaths))
+	if strings.TrimSpace(mediaPath) != "" {
+		paths = append(paths, strings.TrimSpace(mediaPath))
+	}
+	for _, p := range mediaPaths {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			paths = append(paths, trimmed)
+		}
+	}
+
+	if len(paths) == 0 {
+		return attachments
+	}
+
+	var resolvedTypes []string
+	if len(mediaTypes) > 0 {
+		resolvedTypes = mediaTypes
+	} else if strings.TrimSpace(mediaType) != "" {
+		resolvedTypes = []string{mediaType}
+	}
+
+	for i, p := range paths {
+		currentType := ""
+		if i < len(resolvedTypes) {
+			currentType = resolvedTypes[i]
+		} else if len(resolvedTypes) == 1 {
+			currentType = resolvedTypes[0]
+		}
+
+		if img := loadOpenClawTranscriptImagePayload(p, currentType); img != nil {
+			attachments = append(attachments, *img)
+			continue
+		}
+
+		fileName := filepath.Base(p)
+		attachments = append(attachments, ImagePayload{
+			Kind:         "file",
+			Source:       "local_file",
+			MimeType:     guessOpenClawAttachmentMime(p, currentType),
+			FilePath:     p,
+			FileName:     fileName,
+			OriginalName: fileName,
+		})
+	}
+
+	return attachments
+}
+
+// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block,
+// the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
+// automatically prepends to user messages sent via chat.send, and
+// the <chatclaw_context> block injected by buildKnowledgeContextMessage.
 func cleanOpenClawUserMessage(s string) string {
 	s = strings.TrimLeft(s, " \t\n")
 
@@ -187,7 +515,72 @@ func cleanOpenClawUserMessage(s string) string {
 		}
 	}
 
-	return s
+	return stripChatClawHiddenBlocks(s, "chatclaw_context", "chatclaw_attachments")
+}
+
+func (s *ChatService) buildOpenClawRPCAttachments(attachments []ImagePayload) []map[string]any {
+	if len(attachments) == 0 {
+		return nil
+	}
+
+	rpcAttachments := make([]map[string]any, 0, len(attachments))
+	for _, att := range attachments {
+		if att.Kind == "file" {
+			continue
+		}
+
+		mimeType := guessOpenClawAttachmentMime(att.FilePath, att.MimeType)
+		if !strings.HasPrefix(mimeType, "image/") {
+			continue
+		}
+
+		base64Data := strings.TrimSpace(att.Base64)
+		if base64Data == "" && att.FilePath != "" {
+			data, err := os.ReadFile(att.FilePath)
+			if err != nil {
+				s.app.Logger.Warn("[openclaw-chat] failed to read image attachment",
+					"path", att.FilePath, "error", err)
+				continue
+			}
+			base64Data = base64.StdEncoding.EncodeToString(data)
+		}
+		if base64Data == "" {
+			continue
+		}
+
+		fileName := strings.TrimSpace(att.FileName)
+		if fileName == "" && att.FilePath != "" {
+			fileName = filepath.Base(att.FilePath)
+		}
+
+		rpcAttachments = append(rpcAttachments, map[string]any{
+			"type":     "image",
+			"mimeType": mimeType,
+			"fileName": fileName,
+			"content":  base64Data,
+		})
+	}
+
+	return rpcAttachments
+}
+
+func hasOpenClawImageAttachment(attachments []ImagePayload) bool {
+	for _, att := range attachments {
+		if att.Kind != "" && att.Kind != "image" {
+			continue
+		}
+		mimeType := strings.ToLower(strings.TrimSpace(att.MimeType))
+		if strings.HasPrefix(mimeType, "image/") {
+			return true
+		}
+		if att.FilePath != "" {
+			resolved := strings.ToLower(guessOpenClawAttachmentMime(att.FilePath, att.MimeType))
+			if strings.HasPrefix(resolved, "image/") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetOpenClawMessages fetches conversation history from the OpenClaw Gateway
@@ -222,11 +615,15 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	}
 
 	type transcriptMsg struct {
-		Role       string `json:"role"`
-		Content    any    `json:"content"`
-		ToolUseID  string `json:"tool_use_id,omitempty"`
-		ToolCallID string `json:"toolCallId,omitempty"`
-		ToolName   string `json:"toolName,omitempty"`
+		Role       string   `json:"role"`
+		Content    any      `json:"content"`
+		ToolUseID  string   `json:"tool_use_id,omitempty"`
+		ToolCallID string   `json:"toolCallId,omitempty"`
+		ToolName   string   `json:"toolName,omitempty"`
+		MediaPath  string   `json:"MediaPath,omitempty"`
+		MediaPaths []string `json:"MediaPaths,omitempty"`
+		MediaType  string   `json:"MediaType,omitempty"`
+		MediaTypes []string `json:"MediaTypes,omitempty"`
 	}
 	var result struct {
 		Messages []transcriptMsg
@@ -250,17 +647,17 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	}
 
 	type segment struct {
-		Type        string           `json:"type"`
-		Content     string           `json:"content,omitempty"`
-		ToolCallIDs []string         `json:"tool_call_ids,omitempty"`
+		Type        string   `json:"type"`
+		Content     string   `json:"content,omitempty"`
+		ToolCallIDs []string `json:"tool_call_ids,omitempty"`
 	}
 
 	type assistantGroup struct {
-		segments      []segment
-		allToolCalls  []map[string]any
-		toolResults   []Message
-		contentAll    strings.Builder
-		thinkingAll   strings.Builder
+		segments     []segment
+		allToolCalls []map[string]any
+		toolResults  []Message
+		contentAll   strings.Builder
+		thinkingAll  strings.Builder
 		// pending tracks toolCall ids from the most recent assistant message,
 		// consumed in order by subsequent toolResult messages.
 		pending []toolCallEntry
@@ -445,11 +842,19 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 
 		msgIDCounter--
 		contentStr := extractTextFromContent(m.Content)
+		attachments := buildOpenClawTranscriptAttachments(
+			m.Content,
+			contentStr,
+			m.MediaPath,
+			m.MediaPaths,
+			m.MediaType,
+			m.MediaTypes,
+		)
 		if m.Role == "user" {
 			contentStr = cleanOpenClawUserMessage(contentStr)
 		}
 
-		messages = append(messages, Message{
+		msg := Message{
 			ID:             msgIDCounter,
 			ConversationID: conversationID,
 			Role:           m.Role,
@@ -457,7 +862,13 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 			Status:         StatusSuccess,
 			CreatedAt:      now,
 			UpdatedAt:      now,
-		})
+		}
+		if len(attachments) > 0 {
+			if b, err := json.Marshal(attachments); err == nil {
+				msg.ImagesJSON = string(b)
+			}
+		}
+		messages = append(messages, msg)
 	}
 	flushGroup()
 
@@ -492,9 +903,34 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 		return nil, err
 	}
 
+	attachments := input.Images
+	if len(attachments) > 0 && hasOpenClawImageAttachment(attachments) &&
+		agentConfig.ProviderID != "" && agentConfig.ModelID != "" &&
+		!hasCapability(agentConfig.Capabilities, "image") {
+		return nil, errs.Newf("error.chat_model_not_support_image", map[string]any{
+			"ProviderID": agentConfig.ProviderID,
+			"ModelID":    agentConfig.ModelID,
+		})
+	}
+	if len(attachments) > 0 {
+		db, dbErr := s.db()
+		if dbErr != nil {
+			return nil, dbErr
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		updated, saveErr := s.saveImagesToWorkDir(ctx, db, agentConfig.AgentID, input.ConversationID, attachments)
+		cancel()
+		if saveErr != nil {
+			s.app.Logger.Warn("[openclaw-chat] failed to save attachments to workdir, using original payloads",
+				"conv", input.ConversationID, "error", saveErr)
+		} else {
+			attachments = updated
+		}
+	}
+
 	s.app.Logger.Info("[openclaw-chat] SendOpenClawMessage",
 		"conv", input.ConversationID, "tab", input.TabID,
-		"content_len", len(content), "attachments", len(input.Images))
+		"content_len", len(content), "attachments", len(attachments))
 
 	requestID := uuid.New().String()
 	genCtx, cancel := context.WithCancel(context.Background())
@@ -510,7 +946,7 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 	go func() {
 		defer close(gen.done)
 		defer s.tryDeleteGeneration(input.ConversationID, gen)
-		s.runOpenClawChatRun(genCtx, input.ConversationID, input.TabID, requestID, content, agentConfig)
+		s.runOpenClawChatRun(genCtx, input.ConversationID, input.TabID, requestID, content, attachments, agentConfig)
 	}()
 
 	return &SendMessageResult{RequestID: requestID}, nil
@@ -523,7 +959,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 		return nil, errs.New("error.chat_conversation_id_required")
 	}
 	content := strings.TrimSpace(input.NewContent)
-	if content == "" {
+	if content == "" && len(input.Images) == 0 {
 		return nil, errs.New("error.chat_content_required")
 	}
 
@@ -547,6 +983,31 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 		return nil, err
 	}
 
+	attachments := input.Images
+	if len(attachments) > 0 && hasOpenClawImageAttachment(attachments) &&
+		agentConfig.ProviderID != "" && agentConfig.ModelID != "" &&
+		!hasCapability(agentConfig.Capabilities, "image") {
+		return nil, errs.Newf("error.chat_model_not_support_image", map[string]any{
+			"ProviderID": agentConfig.ProviderID,
+			"ModelID":    agentConfig.ModelID,
+		})
+	}
+	if len(attachments) > 0 {
+		db, dbErr := s.db()
+		if dbErr != nil {
+			return nil, dbErr
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		updated, saveErr := s.saveImagesToWorkDir(ctx, db, agentConfig.AgentID, input.ConversationID, attachments)
+		cancel()
+		if saveErr != nil {
+			s.app.Logger.Warn("[openclaw-chat] failed to save edit attachments to workdir, using original payloads",
+				"conv", input.ConversationID, "error", saveErr)
+		} else {
+			attachments = updated
+		}
+	}
+
 	requestID := uuid.New().String()
 	genCtx, cancel := context.WithCancel(context.Background())
 
@@ -561,7 +1022,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	go func() {
 		defer close(gen.done)
 		defer s.tryDeleteGeneration(input.ConversationID, gen)
-		s.runOpenClawChatRun(genCtx, input.ConversationID, input.TabID, requestID, content, agentConfig)
+		s.runOpenClawChatRun(genCtx, input.ConversationID, input.TabID, requestID, content, attachments, agentConfig)
 	}()
 
 	return &SendMessageResult{RequestID: requestID, MessageID: input.MessageID}, nil
@@ -998,7 +1459,7 @@ func (s *ChatService) processOpenClawContentBlocks(
 // runOpenClawChatRun sends an "agent" RPC (blocking) and processes
 // concurrent "agent" and "chat" events for real-time streaming output.
 // Agent events provide text/tool deltas; chat events provide thinking blocks.
-func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, cfg openClawAgentConfig) {
+func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, attachments []ImagePayload, cfg openClawAgentConfig) {
 	st := &openClawChatRunState{}
 
 	assistantMsgID := -conversationID*1000 - int64(time.Now().UnixMilli()%100000)
@@ -1036,6 +1497,9 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		"conv", conversationID,
 		"sessionKey", sessionKey,
 		"agentId", cfg.OpenClawAgentID,
+		"provider", cfg.ProviderID,
+		"model", cfg.ModelID,
+		"caps", cfg.Capabilities,
 		"enableThinking", cfg.EnableThinking)
 
 	done := make(chan struct{})
@@ -1061,7 +1525,12 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 
 	// Inject knowledge-base context: tell the agent which libraries to use,
 	// or explicitly instruct it not to use knowledge search when none are selected.
-	messageToSend := buildKnowledgeContextMessage(userContent, cfg.LibraryIDs, cfg.LibraryNames)
+	messageToSend := buildKnowledgeContextMessage(
+		buildOpenClawAttachmentContextMessage(userContent, attachments),
+		cfg.LibraryIDs,
+		cfg.LibraryNames,
+	)
+	rpcAttachments := s.buildOpenClawRPCAttachments(attachments)
 
 	// Use the "agent" RPC (blocking: returns when the run completes).
 	// While it blocks, chat/agent events arrive via readLoop for real-time streaming.
@@ -1070,6 +1539,15 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		"sessionKey":     sessionKey,
 		"idempotencyKey": idempotencyKey,
 		"agentId":        cfg.OpenClawAgentID,
+	}
+	if cfg.ProviderID != "" {
+		params["provider"] = cfg.ProviderID
+	}
+	if cfg.ModelID != "" {
+		params["model"] = cfg.ModelID
+	}
+	if len(rpcAttachments) > 0 {
+		params["attachments"] = rpcAttachments
 	}
 	if cfg.EnableThinking {
 		params["thinking"] = "medium"

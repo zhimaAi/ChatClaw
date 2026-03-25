@@ -3,6 +3,7 @@ module chatclaw
 go 1.26.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
@@ -61,7 +62,6 @@ require (
 	code.gitea.io/sdk/gitea v0.22.1 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/42wim/httpsig v1.2.3 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/PuerkitoBio/goquery v1.10.3 // indirect
