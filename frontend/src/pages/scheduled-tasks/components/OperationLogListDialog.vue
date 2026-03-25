@@ -18,6 +18,7 @@ import {
   getOperationLogOperationTypeLabel,
 } from '../scheduledTaskText'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
+import OperationLogTooltipCell from './OperationLogTooltipCell.vue'
 
 const props = defineProps<{
   open: boolean
@@ -136,9 +137,10 @@ function handleViewDetail(logId: number) {
               class="border-b border-[#f1f5f9] align-top text-[#171717]"
             >
               <td class="px-4 py-4">
-                <div v-if="row.showSharedColumns">
-                  {{ row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE }}
-                </div>
+                <OperationLogTooltipCell
+                  v-if="row.showSharedColumns"
+                  :value="row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE"
+                />
               </td>
               <td class="px-4 py-4">
                 <div v-if="row.showSharedColumns">
@@ -150,9 +152,15 @@ function handleViewDetail(logId: number) {
                   {{ displayOperationSource(row.operationSource) }}
                 </div>
               </td>
-              <td class="px-4 py-4">{{ row.fieldLabel }}</td>
-              <td class="px-4 py-4">{{ row.beforeValue }}</td>
-              <td class="px-4 py-4">{{ row.afterValue }}</td>
+              <td class="max-w-0 px-4 py-4">
+                <OperationLogTooltipCell :value="row.fieldLabel" />
+              </td>
+              <td class="max-w-0 px-4 py-4">
+                <OperationLogTooltipCell :value="row.beforeValue" />
+              </td>
+              <td class="max-w-0 px-4 py-4">
+                <OperationLogTooltipCell :value="row.afterValue" />
+              </td>
               <td class="whitespace-nowrap px-4 py-4">
                 <div v-if="row.showSharedColumns">
                   {{ formatTaskTime(row.createdAt) }}

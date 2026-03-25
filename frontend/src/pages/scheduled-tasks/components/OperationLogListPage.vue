@@ -97,7 +97,7 @@ function handleViewDetail(logId: number) {
 
       <table v-else class="min-w-full table-fixed border-collapse text-sm">
         <colgroup>
-          <col class="w-[220px]" />
+          <col class="w-[200px]" />
           <col class="w-[132px]" />
           <col class="w-[132px]" />
           <col class="w-[220px]" />
@@ -108,7 +108,9 @@ function handleViewDetail(logId: number) {
         </colgroup>
         <thead>
           <tr class="border-b border-[#e5e7eb] text-left text-[#171717]">
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.task') }}</th>
+            <th class="min-w-[100px] max-w-[200px] px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.task') }}
+            </th>
             <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationType') }}</th>
             <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationSource') }}</th>
             <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.changedField') }}</th>
@@ -124,10 +126,11 @@ function handleViewDetail(logId: number) {
             :key="row.rowKey"
             class="border-b border-[#f1f5f9] align-top text-[#171717]"
           >
-            <td class="px-4 py-4">
+            <td class="min-w-[100px] max-w-[200px] px-4 py-4">
               <OperationLogTooltipCell
                 v-if="row.showSharedColumns"
                 :value="row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE"
+                trigger-class="block w-full min-w-0 max-w-[168px] overflow-hidden text-ellipsis whitespace-nowrap"
               />
             </td>
             <td class="px-4 py-4">

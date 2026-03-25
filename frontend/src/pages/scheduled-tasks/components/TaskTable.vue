@@ -12,10 +12,14 @@ import { Switch } from '@/components/ui/switch'
 import type { Agent, ScheduledTask } from '../types'
 import { buildTaskTableDisplay } from './taskTableDisplay'
 import { describeSchedule, formatDateOnly, formatTaskTime } from '../utils'
+import OperationLogTooltipCell from './OperationLogTooltipCell.vue'
 
 const TASK_DISPLAY_STATUS_EXPIRED = 'expired'
 const TASK_DISPLAY_STATUS_RUNNING = 'running'
 const TASK_DISPLAY_STATUS_PAUSED = 'paused'
+// Match the operation-log cells so long task names stay single-line and reveal full text on hover.
+const TASK_NAME_TOOLTIP_TRIGGER_CLASS =
+  'text-[15px] font-medium leading-6 text-[#171717] block w-full max-w-full overflow-hidden text-ellipsis whitespace-nowrap'
 
 const props = defineProps<{
   tasks: ScheduledTask[]
@@ -91,9 +95,10 @@ function statusTextClass(task: ScheduledTask) {
           >
             <td class="px-5 py-3.5">
               <div class="min-w-0 max-w-md space-y-1">
-                <div class="truncate text-[15px] font-medium leading-6 text-[#171717]">
-                  {{ task.name }}
-                </div>
+                <OperationLogTooltipCell
+                  :value="task.name"
+                  :trigger-class="TASK_NAME_TOOLTIP_TRIGGER_CLASS"
+                />
                 <div class="truncate text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
               </div>
             </td>
