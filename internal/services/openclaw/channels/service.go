@@ -66,10 +66,6 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(agentIDs) == 0 {
-		return []channels.Channel{}, nil
-	}
-
 	db, err := s.db()
 	if err != nil {
 		return nil, err
@@ -79,12 +75,21 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 	defer cancel()
 
 	var models []channelModel
-	if err := db.NewSelect().
+	q := db.NewSelect().
 		Model(&models).
-		Where("agent_id IN (?)", bun.In(agentIDs)).
 		Where("platform = ?", channels.PlatformFeishu).
-		OrderExpr("id DESC").
-		Scan(ctx); err != nil {
+		OrderExpr("id DESC")
+	if len(agentIDs) == 0 {
+		q = q.Where("openclaw_scope = ?", true)
+	} else {
+		q = q.WhereGroup(" AND ", func(sq *bun.SelectQuery) *bun.SelectQuery {
+			return sq.WhereGroup(" OR ", func(sq2 *bun.SelectQuery) *bun.SelectQuery {
+				return sq2.Where("openclaw_scope = ?", true).
+					WhereOr("agent_id IN (?)", bun.In(agentIDs))
+			})
+		})
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.channel_list_failed", err)
 	}
 
@@ -102,6 +107,11 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 // ListAllFeishuChannels returns all Feishu channels (including unbound ones)
 // for the "add existing bot" workflow.
 func (s *OpenClawChannelService) ListAllFeishuChannels() ([]channels.Channel, error) {
+	agentIDs, err := s.openClawAgentIDs()
+	if err != nil {
+		return nil, err
+	}
+
 	db, err := s.db()
 	if err != nil {
 		return nil, err
@@ -111,11 +121,21 @@ func (s *OpenClawChannelService) ListAllFeishuChannels() ([]channels.Channel, er
 	defer cancel()
 
 	var models []channelModel
-	if err := db.NewSelect().
+	q := db.NewSelect().
 		Model(&models).
 		Where("platform = ?", channels.PlatformFeishu).
-		OrderExpr("id DESC").
-		Scan(ctx); err != nil {
+		OrderExpr("id DESC")
+	if len(agentIDs) == 0 {
+		q = q.Where("openclaw_scope = ?", true)
+	} else {
+		q = q.WhereGroup(" AND ", func(sq *bun.SelectQuery) *bun.SelectQuery {
+			return sq.WhereGroup(" OR ", func(sq2 *bun.SelectQuery) *bun.SelectQuery {
+				return sq2.Where("openclaw_scope = ?", true).
+					WhereOr("agent_id IN (?)", bun.In(agentIDs))
+			})
+		})
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.channel_list_failed", err)
 	}
 
@@ -148,10 +168,15 @@ func (s *OpenClawChannelService) GetChannelStats() (*channels.ChannelStats, erro
 	return stats, nil
 }
 
-// GetSupportedPlatforms returns Feishu as the only supported platform for OpenClaw.
+// GetSupportedPlatforms returns the same platform list as ChatClaw for UI parity (tabs + add dialog).
+// Only Feishu is actually createable; the frontend shows others as disabled with "coming soon".
 func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta {
 	return []channels.PlatformMeta{
+		{ID: channels.PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
 		{ID: channels.PlatformFeishu, Name: "Feishu", AuthType: "token"},
+		{ID: channels.PlatformWeCom, Name: "WeCom", AuthType: "token"},
+		{ID: channels.PlatformQQ, Name: "QQ", AuthType: "token"},
+		{ID: channels.PlatformTwitter, Name: "X (Twitter)", AuthType: "token"},
 	}
 }
 
@@ -166,11 +191,12 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	}
 
 	ch, err := s.channelSvc.CreateChannel(channels.CreateChannelInput{
-		Platform:       channels.PlatformFeishu,
-		Name:           name,
-		Avatar:         input.Avatar,
-		ConnectionType: channels.ConnTypeGateway,
-		ExtraConfig:    input.ExtraConfig,
+		Platform:        channels.PlatformFeishu,
+		Name:            name,
+		Avatar:          input.Avatar,
+		ConnectionType:  channels.ConnTypeGateway,
+		ExtraConfig:     input.ExtraConfig,
+		OpenClawScope:   true,
 	})
 	if err != nil {
 		return nil, err

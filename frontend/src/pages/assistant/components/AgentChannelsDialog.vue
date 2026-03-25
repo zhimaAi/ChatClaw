@@ -295,6 +295,7 @@ async function handleCreateChannel() {
       avatar: inlineFormAvatar.value,
       connection_type: 'gateway',
       extra_config: extraConfig,
+      openclaw_scope: false,
     })
 
     if (channel) {

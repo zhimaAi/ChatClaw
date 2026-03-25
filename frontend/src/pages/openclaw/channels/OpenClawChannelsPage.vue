@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -44,7 +45,7 @@ import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
-import { getPlatformIcon, getAppIdFromConfig } from '@/pages/common/channelUtils'
+import { getPlatformIcon } from '@/pages/common/channelUtils'
 import {
   OpenClawChannelService,
 } from '@bindings/chatclaw/internal/services/openclaw/channels'
@@ -59,6 +60,11 @@ import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/opencla
 defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
+
+/** OpenClaw: only Feishu is available; other platforms show coming soon (same as Twitter on ChatClaw). */
+function isChannelPlatformSelectable(platformId: string) {
+  return platformId === 'feishu'
+}
 
 const channels = ref<Channel[]>([])
 const stats = ref<ChannelStats>({ total: 0, connected: 0, disconnected: 0 })
@@ -83,6 +89,8 @@ watch(unbindDialogOpen, (open) => {
   if (!open) channelToUnbind.value = null
 })
 
+const selectedFilter = ref<string>('all')
+
 // Inline add form state
 const inlineFormName = ref('')
 const inlineFormAvatar = ref('')
@@ -91,8 +99,15 @@ const inlineFormAppSecret = ref('')
 const inlineFormSaving = ref(false)
 const inlineFormVerifying = ref(false)
 
-const showInlineForm = computed(() => channels.value.length === 0 || inlineFormExpanded.value)
-const inlineFormExpanded = ref(false)
+const filteredChannels = computed(() => {
+  if (selectedFilter.value === 'all') return channels.value
+  return channels.value.filter((ch) => ch.platform === selectedFilter.value)
+})
+
+const selectedPlatformMeta = computed(() => {
+  if (selectedFilter.value === 'all') return null
+  return platforms.value.find((p) => p.id === selectedFilter.value) || null
+})
 
 const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
@@ -126,13 +141,7 @@ function getAgentName(agentId: number): string {
 }
 
 function handleAddChannel() {
-  if (platforms.value.length === 1) {
-    selectedPlatform.value = platforms.value[0]
-    channelToEdit.value = null
-    configDialogOpen.value = true
-  } else {
-    addDialogOpen.value = true
-  }
+  addDialogOpen.value = true
 }
 
 function handleSelectPlatform(platform: PlatformMeta) {
@@ -325,6 +334,7 @@ async function handleInlinePickAvatar() {
 }
 
 async function handleInlineSave() {
+  if (!selectedPlatformMeta.value) return
   if (!isInlineFormValid.value) return
 
   inlineFormSaving.value = true
@@ -349,7 +359,6 @@ async function handleInlineSave() {
 
     toast.success(t('channels.config.success'))
     resetInlineForm()
-    inlineFormExpanded.value = false
     await loadData()
     if (channel) {
       channelToBind.value = channel
@@ -364,8 +373,17 @@ async function handleInlineSave() {
 }
 
 function openPlatformDocs() {
-  const url = getPlatformDocsUrl('feishu')
+  const url = getPlatformDocsUrl(selectedPlatformMeta.value?.id)
   void openExternalLink(url)
+}
+
+function getAppId(extraConfig: string): string {
+  try {
+    const config = JSON.parse(extraConfig)
+    return config.app_id || config.token || t('common.na')
+  } catch {
+    return t('common.na')
+  }
 }
 
 async function handleInlineVerify() {
@@ -373,6 +391,7 @@ async function handleInlineVerify() {
     toast.error(t('channels.inline.fillRequired'))
     return
   }
+  if (!selectedPlatformMeta.value) return
   const extraConfig = JSON.stringify({
     app_id: inlineFormAppId.value.trim(),
     app_secret: inlineFormAppSecret.value.trim(),
@@ -476,10 +495,45 @@ onMounted(loadData)
         {{ t('channels.available.title') }}
       </h2>
 
+      <!-- Platform Filter Tabs -->
+      <div
+        class="mb-4 inline-flex overflow-x-auto rounded-lg border border-[#e5e5e5] bg-[rgba(0,0,0,0.05)] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:bg-muted/50"
+      >
+        <button
+          class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg"
+          :class="
+            selectedFilter === 'all'
+              ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground'
+              : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50'
+          "
+          @click="selectedFilter = 'all'"
+        >
+          {{ t('common.all') }}
+        </button>
+        <button
+          v-for="platform in platforms"
+          :key="platform.id"
+          class="px-3 py-[7.5px] text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg border-l border-[#e5e5e5] dark:border-border"
+          :class="[
+            selectedFilter === platform.id
+              ? 'bg-white text-[#0a0a0a] dark:bg-background dark:text-foreground'
+              : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
+            !isChannelPlatformSelectable(platform.id) ? 'opacity-50 cursor-not-allowed' : '',
+          ]"
+          @click="
+            isChannelPlatformSelectable(platform.id)
+              ? (selectedFilter = platform.id)
+              : toast.default(t('channels.comingSoon'))
+          "
+        >
+          {{ getPlatformName(platform.id) }}
+        </button>
+      </div>
+
       <!-- Channels Grid -->
-      <div v-if="channels.length > 0" class="flex flex-wrap gap-4">
+      <div v-if="filteredChannels.length > 0" class="flex flex-wrap gap-4">
         <div
-          v-for="channel in channels"
+          v-for="channel in filteredChannels"
           :key="channel.id"
           class="flex w-[300px] min-w-0 flex-col gap-2 rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm transition-all hover:border-[#171717] dark:shadow-none dark:ring-1 dark:ring-white/10 dark:border-border dark:bg-card dark:hover:border-primary/50"
         >
@@ -509,6 +563,7 @@ onMounted(loadData)
             </div>
 
             <div class="flex items-center gap-2 shrink-0">
+              <!-- Enable switch: turning on enables the channel and then auto-connects it. -->
               <Switch
                 :model-value="channel.enabled"
                 :disabled="channel.agent_id === 0"
@@ -548,8 +603,8 @@ onMounted(loadData)
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     class="gap-2 rounded px-4 py-[5px]"
-                    :disabled="channel.agent_id === 0"
                     @click="openUnbindConfirm(channel)"
+                    :disabled="channel.agent_id === 0"
                   >
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
@@ -569,10 +624,10 @@ onMounted(loadData)
 
           <!-- Appid -->
           <p class="text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
-            {{ t('channels.card.appId') }}: {{ getAppIdFromConfig(channel.extra_config, t('common.na')) }}
+            {{ t('channels.card.appId') }}: {{ getAppId(channel.extra_config) }}
           </p>
 
-          <!-- Status tags -->
+          <!-- Status tags: wrap on narrow card / long EN copy; pills truncate with title for full text -->
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <!-- Connection Status -->
             <div
@@ -628,12 +683,10 @@ onMounted(loadData)
                   channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound')
                 "
               >
-                {{
-                  channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound')
-                }}
+                {{ channel.agent_id !== 0 ? t('channels.card.bound') : t('channels.card.unbound') }}
               </span>
             </div>
-            <!-- Agent name -->
+            <!-- Agent name: background wraps text only; long names truncate with max-width -->
             <div
               v-if="channel.agent_id !== 0"
               class="inline-flex min-w-0 max-w-[12rem] w-fit items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
@@ -649,9 +702,9 @@ onMounted(loadData)
         </div>
       </div>
 
-      <!-- Empty State -->
+      <!-- Empty State - All platforms -->
       <div
-        v-else
+        v-else-if="selectedFilter === 'all'"
         class="flex flex-col items-center justify-center py-12 text-center"
       >
         <div
@@ -674,8 +727,8 @@ onMounted(loadData)
         </Button>
       </div>
 
-      <!-- Inline Add Form (visible when no channels or expanded) -->
-      <div v-if="showInlineForm && channels.length > 0" class="mt-6 space-y-6">
+      <!-- Inline Add Form - Feishu platform selected (no channels in this filter) -->
+      <div v-else class="space-y-6">
         <div class="flex items-end gap-4">
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
             <label
@@ -696,8 +749,8 @@ onMounted(loadData)
                   class="h-full w-full object-cover"
                 />
                 <img
-                  v-else-if="getPlatformIcon('feishu')"
-                  :src="getPlatformIcon('feishu')!"
+                  v-else-if="getPlatformIcon(selectedFilter)"
+                  :src="getPlatformIcon(selectedFilter)!"
                   class="h-5 w-5 object-contain"
                 />
                 <span v-else class="text-lg text-[#737373] dark:text-muted-foreground">🤖</span>

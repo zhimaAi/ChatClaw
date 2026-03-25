@@ -52,6 +52,7 @@ func (s *ChannelService) ListChannels() ([]Channel, error) {
 	var models []channelModel
 	if err := db.NewSelect().
 		Model(&models).
+		Where("openclaw_scope = ?", false).
 		OrderExpr("id DESC").
 		Scan(ctx); err != nil {
 		return nil, errs.Wrap("error.channel_list_failed", err)
@@ -178,13 +179,14 @@ func (s *ChannelService) CreateChannel(input CreateChannelInput) (*Channel, erro
 	}
 
 	m := &channelModel{
-		Platform:       platform,
-		Name:           name,
-		Avatar:         input.Avatar,
-		Enabled:        false,
-		ConnectionType: connType,
-		ExtraConfig:    input.ExtraConfig,
-		Status:         StatusOffline,
+		Platform:        platform,
+		Name:            name,
+		Avatar:          input.Avatar,
+		Enabled:         false,
+		ConnectionType:  connType,
+		ExtraConfig:     input.ExtraConfig,
+		OpenClawScope:   input.OpenClawScope,
+		Status:          StatusOffline,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {

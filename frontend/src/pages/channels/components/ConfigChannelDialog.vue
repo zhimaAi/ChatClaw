@@ -204,6 +204,7 @@ async function handleSave() {
         avatar: avatar.value,
         connection_type: 'gateway',
         extra_config: extraConfig,
+        openclaw_scope: false,
       })
       toast.success(t('channels.config.success'))
     }

@@ -167,9 +167,11 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	msg := event.Event.Message
 	sender := event.Event.Sender
 
-	// Guard: skip non-user messages (e.g. bot's own replies echoed back).
-	if sender != nil && deref(sender.SenderType) != "user" {
-		slog.Info("[feishu] skipping non-user message", "sender_type", deref(sender.SenderType))
+	// Skip only app-originated messages (bot self / echoed replies). Feishu may omit
+	// sender_type or send values like "unknown" in some group payloads; requiring
+	// exactly "user" would drop those legitimate messages.
+	if sender != nil && deref(sender.SenderType) == "app" {
+		slog.Info("[feishu] skipping app-originated message")
 		return nil
 	}
 

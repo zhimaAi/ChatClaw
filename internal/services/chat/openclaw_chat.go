@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 
 	"github.com/google/uuid"
@@ -76,6 +77,19 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	}, nil
 }
 
+// openClawSessionKeyForAgent builds the Gateway session key for a conversation.
+// OpenClaw expects agent-scoped keys like "agent:<agentId>:..." (see session docs).
+// A bare "conv_<id>" is interpreted as the default agent ("main"), which breaks
+// runs when agentId is not "main". The previous "agentId:conv_<id>" form was
+// also rejected by the gateway; the canonical prefix is "agent:".
+func openClawSessionKeyForAgent(agentID string, conversationID int64) string {
+	id := strings.TrimSpace(agentID)
+	if id == "" {
+		id = define.OpenClawMainAgentID
+	}
+	return fmt.Sprintf("agent:%s:conv_%d", id, conversationID)
+}
+
 // GetOpenClawLastAssistantReply fetches the last assistant message text from
 // the OpenClaw Gateway session. Returns empty string if unavailable.
 func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string {
@@ -83,7 +97,11 @@ func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string
 		return ""
 	}
 
-	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return ""
+	}
+	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -176,7 +194,11 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		return nil, nil
 	}
 
-	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return nil, err
+	}
+	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -928,7 +950,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		Status:    StatusStreaming,
 	})
 
-	sessionKey := fmt.Sprintf("conv_%d", conversationID)
+	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 
