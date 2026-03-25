@@ -64,11 +64,13 @@ const props = withDefaults(
   defineProps<{
     tabId: string
     mode?: 'main' | 'snap' | 'embedded'
+    readonly?: boolean
     initialConversationId?: number | null
     initialAgentId?: number | null
   }>(),
   {
     mode: 'main',
+    readonly: false,
     initialConversationId: null,
     initialAgentId: null,
   }
@@ -77,6 +79,7 @@ const props = withDefaults(
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')
 const isEmbeddedMode = computed(() => props.mode === 'embedded')
+const isReadOnlyMode = computed(() => props.readonly)
 
 type ListMode = 'personal' | 'team'
 
@@ -1926,8 +1929,9 @@ onUnmounted(() => {
             :agent-icon="isTeamMode ? activeTeamRobot?.icon : activeAgent?.icon"
             :sandbox-mode="activeAgent?.sandbox_mode"
             :has-attached-target="hasAttachedTarget"
-            :show-ai-send-button="showAiSendButton"
-            :show-ai-edit-button="showAiEditButton"
+            :show-ai-send-button="isReadOnlyMode ? false : showAiSendButton"
+            :show-ai-edit-button="isReadOnlyMode ? false : showAiEditButton"
+            :read-only="isReadOnlyMode"
             class="min-w-0 flex-1 overflow-hidden"
             @pointerdown.capture="handleWakeAttachedPointerDown"
             @edit-message="handleEditMessage"
@@ -1941,6 +1945,7 @@ onUnmounted(() => {
             v-if="
               !isAgentEmpty &&
               !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+              !isReadOnlyMode &&
               (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
             "
             data-snap-wake="true"
@@ -2001,6 +2006,7 @@ onUnmounted(() => {
         v-if="
           !isAgentEmpty &&
           !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+          !isReadOnlyMode &&
           isSnapMode &&
           (chatMessages.length > 0 || isGenerating)
         "
