@@ -24,6 +24,10 @@ func (s *OpenClawRuntimeService) RestartGateway() (RuntimeStatus, error) {
 	return s.manager.RestartGateway()
 }
 
+func (s *OpenClawRuntimeService) UpgradeRuntime() (*RuntimeUpgradeResult, error) {
+	return s.manager.UpgradeRuntime()
+}
+
 func (s *OpenClawRuntimeService) GetDashboardURL() string {
 	cfg := s.manager.store.Get()
 	return fmt.Sprintf("http://127.0.0.1:%d?token=%s", cfg.GatewayPort, cfg.GatewayToken)

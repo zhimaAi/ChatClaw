@@ -95,12 +95,21 @@ func (m *Manager) RestartGateway() (RuntimeStatus, error) {
 	return m.GetStatus(), err
 }
 
+func (m *Manager) UpgradeRuntime() (*RuntimeUpgradeResult, error) {
+	m.opMu.Lock()
+	defer m.opMu.Unlock()
+	return m.upgradeRuntimeLocked()
+}
+
 // reconcile is the single entry point for lifecycle management:
 // resolve bundle → verify install → start process → connect WebSocket.
 func (m *Manager) reconcile(restart bool) error {
 	m.opMu.Lock()
 	defer m.opMu.Unlock()
+	return m.reconcileLocked(restart)
+}
 
+func (m *Manager) reconcileLocked(restart bool) error {
 	if m.isShuttingDown() {
 		return fmt.Errorf("runtime is shutting down")
 	}
@@ -110,9 +119,11 @@ func (m *Manager) reconcile(restart bool) error {
 	fail := func(msg string, err error, version string, pid int) error {
 		m.app.Logger.Error("openclaw: "+msg, "error", err)
 		m.broadcastStatus(RuntimeStatus{
-			Phase: PhaseError, Message: err.Error(),
-			InstalledVersion: version, GatewayPID: pid,
-			GatewayURL: gatewayURL(cfg.GatewayPort),
+			Phase:            PhaseError,
+			Message:          err.Error(),
+			InstalledVersion: version,
+			GatewayPID:       pid,
+			GatewayURL:       gatewayURL(cfg.GatewayPort),
 		})
 		// Disconnect path sets reconnecting=true; if reconcile then fails, clear it so UI does not
 		// spin forever on "reconnecting" while phase is error.
@@ -151,9 +162,12 @@ func (m *Manager) reconcile(restart bool) error {
 	}
 
 	m.broadcastStatus(RuntimeStatus{
-		Phase: PhaseStarting, Message: "Preparing OpenClaw Gateway",
+		Phase:            PhaseStarting,
+		Message:          "Preparing OpenClaw Gateway",
 		InstalledVersion: version,
-		GatewayURL: gatewayURL(cfg.GatewayPort),
+		RuntimeSource:    bundle.Source,
+		RuntimePath:      bundle.Root,
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	})
 
 	if err := ensureOpenClawStateDir(bundle); err != nil {
@@ -182,9 +196,13 @@ func (m *Manager) reconcile(restart bool) error {
 
 	if needClient {
 		m.broadcastStatus(RuntimeStatus{
-			Phase: PhaseConnecting, Message: "Connecting to OpenClaw Gateway",
-			InstalledVersion: version, GatewayPID: pid,
-			GatewayURL: gatewayURL(cfg.GatewayPort),
+			Phase:            PhaseConnecting,
+			Message:          "Connecting to OpenClaw Gateway",
+			InstalledVersion: version,
+			RuntimeSource:    bundle.Source,
+			RuntimePath:      bundle.Root,
+			GatewayPID:       pid,
+			GatewayURL:       gatewayURL(cfg.GatewayPort),
 		})
 		if err := m.connectClient(cfg, bundle); err != nil {
 			return fail("connectClient", err, version, pid)
@@ -196,9 +214,13 @@ func (m *Manager) reconcile(restart bool) error {
 	m.mu.Unlock()
 
 	m.broadcastStatus(RuntimeStatus{
-		Phase: PhaseConnected, Message: "OpenClaw Gateway connected",
-		InstalledVersion: version, GatewayPID: pid,
-		GatewayURL: gatewayURL(cfg.GatewayPort),
+		Phase:            PhaseConnected,
+		Message:          "OpenClaw Gateway connected",
+		InstalledVersion: version,
+		RuntimeSource:    bundle.Source,
+		RuntimePath:      bundle.Root,
+		GatewayPID:       pid,
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	})
 	m.broadcastGatewayState(GatewayConnectionState{Connected: true, Authenticated: true})
 	m.notifyReadyHooks()
@@ -251,8 +273,11 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, insta
 	}()
 
 	m.broadcastStatus(RuntimeStatus{
-		Phase: PhaseStarting, Message: "Starting OpenClaw Gateway",
+		Phase:            PhaseStarting,
+		Message:          "Starting OpenClaw Gateway",
 		InstalledVersion: installedVersion,
+		RuntimeSource:    bundle.Source,
+		RuntimePath:      bundle.Root,
 		GatewayPID:       pid,
 		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	})
@@ -462,11 +487,24 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 
 func (m *Manager) broadcastStatus(s RuntimeStatus) {
 	m.mu.Lock()
-	// Intermediate broadcasts often omit installedVersion; keep last known so UI does not flip to "not installed".
+	// Intermediate broadcasts often omit runtime metadata; keep last known values so
+	// UI state stays stable during reconnects and errors.
 	if s.InstalledVersion == "" && m.status.InstalledVersion != "" {
 		switch s.Phase {
-		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected:
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
 			s.InstalledVersion = m.status.InstalledVersion
+		}
+	}
+	if s.RuntimeSource == "" && m.status.RuntimeSource != "" {
+		switch s.Phase {
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
+			s.RuntimeSource = m.status.RuntimeSource
+		}
+	}
+	if s.RuntimePath == "" && m.status.RuntimePath != "" {
+		switch s.Phase {
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
+			s.RuntimePath = m.status.RuntimePath
 		}
 	}
 	if s.GatewayURL == "" && m.status.GatewayURL != "" {
@@ -489,6 +527,8 @@ func (m *Manager) runtimeStatusRestarting() RuntimeStatus {
 		Phase:            PhaseRestarting,
 		Message:          "OpenClaw Gateway exited, restarting",
 		InstalledVersion: prev.InstalledVersion,
+		RuntimeSource:    prev.RuntimeSource,
+		RuntimePath:      prev.RuntimePath,
 		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	}
 }
@@ -730,4 +770,3 @@ func shouldRetryConnect(err error) bool {
 	}
 	return false
 }
-

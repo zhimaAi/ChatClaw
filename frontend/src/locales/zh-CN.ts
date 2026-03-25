@@ -236,7 +236,11 @@ export default {
       runtimeStatus: '运行状态',
       gatewayEndpoint: 'Gateway 地址',
       version: '已安装版本',
+      runtimeSource: '运行来源',
+      runtimePath: '运行目录',
+      upgradeButton: '升级 OpenClaw',
       restartButton: '重启服务',
+      upgrading: '升级中...',
       restarting: '重启中...',
       phase: {
         idle: '空闲',
@@ -244,6 +248,7 @@ export default {
         connecting: '连接中',
         connected: '已连接',
         restarting: '重启中',
+        upgrading: '升级中',
         error: '错误',
       },
       gateway: {
@@ -252,9 +257,17 @@ export default {
         reconnecting: '重连中',
         disconnected: '未连接',
       },
+      source: {
+        user: '用户目录覆盖',
+        embedded: '应用内置',
+        development: '开发目录',
+      },
       notInstalled: '运行时缺失',
       openDashboard: '打开控制台',
       dashboardError: '无法加载 OpenClaw 控制台',
+      alreadyLatest: '已经是最新版本',
+      upgradeSuccess: 'OpenClaw 已升级到 {version}',
+      upgradeFailed: 'OpenClaw 升级失败',
     },
     general: {
       title: '常规设置',
