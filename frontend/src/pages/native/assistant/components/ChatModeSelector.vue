@@ -60,9 +60,7 @@ const modes = [
           <p v-if="modelValue === 'task'">
             {{ t('assistant.chatMode.task') }}：{{ t('assistant.chatMode.taskDesc') }}
           </p>
-          <p v-else>
-            {{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}
-          </p>
+          <p v-else>{{ t('assistant.chatMode.chat') }}：{{ t('assistant.chatMode.chatDesc') }}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

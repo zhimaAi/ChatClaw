@@ -202,7 +202,10 @@ async function handleDeleteConfirm() {
         >
           {{ t('common.loading', 'Loading...') }}
         </div>
-        <div v-else-if="!hasTasks" class="flex min-h-[420px] items-center justify-center px-4 py-16">
+        <div
+          v-else-if="!hasTasks"
+          class="flex min-h-[420px] items-center justify-center px-4 py-16"
+        >
           <div class="flex w-full max-w-[356px] flex-col items-center gap-4 text-center">
             <div
               class="flex size-10 items-center justify-center rounded-lg bg-[#f5f5f5] text-[#171717]"

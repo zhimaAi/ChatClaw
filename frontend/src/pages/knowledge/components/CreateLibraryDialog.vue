@@ -97,10 +97,10 @@ const currentRaptorLLMLabel = computed(() => {
   const model = group?.models.find((m) => m.model_id === mid)
   return model
     ? formatModelDisplayLabel(
-      pid,
-      model.name?.trim() || model.model_id?.trim() || '-',
-      chatwikiAvailability.value
-    )
+        pid,
+        model.name?.trim() || model.model_id?.trim() || '-',
+        chatwikiAvailability.value
+      )
     : t('knowledge.create.noRaptorLLM')
 })
 
@@ -350,7 +350,9 @@ const handleSubmit = async () => {
                     v-for="m in g.models"
                     :key="`${g.provider.provider_id}::${m.model_id}`"
                     :value="`${g.provider.provider_id}::${m.model_id}`"
-                    :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)"
+                    :disabled="
+                      isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)
+                    "
                   >
                     {{
                       formatModelDisplayLabel(

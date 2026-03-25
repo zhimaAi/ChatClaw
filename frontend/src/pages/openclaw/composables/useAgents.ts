@@ -34,11 +34,7 @@ export function useAgents() {
     }
   }
 
-  const createAgent = async (data: {
-    name: string
-    icon: string
-    identityEmoji?: string
-  }) => {
+  const createAgent = async (data: { name: string; icon: string; identityEmoji?: string }) => {
     loading.value = true
     try {
       const created = await OpenClawAgentsService.CreateAgent({

@@ -67,7 +67,7 @@ const createPanel = async () => {
       PANEL_ID,
       'OpenClaw Dashboard',
       url,
-      new PanelBounds(bounds),
+      new PanelBounds(bounds)
     )
     panelCreated.value = true
 
@@ -131,11 +131,17 @@ onUnmounted(() => {
     <div ref="containerRef" class="relative flex-1" />
 
     <!-- Loading / error overlays -->
-    <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-background">
+    <div
+      v-if="loading"
+      class="absolute inset-0 z-10 flex items-center justify-center bg-background"
+    >
       <Loader2 class="size-6 animate-spin text-muted-foreground" />
     </div>
 
-    <div v-else-if="error" class="absolute inset-0 z-10 flex items-center justify-center bg-background px-8">
+    <div
+      v-else-if="error"
+      class="absolute inset-0 z-10 flex items-center justify-center bg-background px-8"
+    >
       <p class="text-sm text-muted-foreground">
         {{ t('settings.openclawRuntime.dashboardError') }}
       </p>

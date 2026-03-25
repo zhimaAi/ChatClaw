@@ -261,7 +261,9 @@ const removeToolsDenyTag = (i: number) => {
 }
 
 const isHeartbeatCustom = computed(
-  () => heartbeatEvery.value !== HEARTBEAT_OFF && !(HEARTBEAT_PRESETS as readonly string[]).includes(heartbeatEvery.value)
+  () =>
+    heartbeatEvery.value !== HEARTBEAT_OFF &&
+    !(HEARTBEAT_PRESETS as readonly string[]).includes(heartbeatEvery.value)
 )
 
 const heartbeatSelectValue = computed(() =>
@@ -289,7 +291,9 @@ const onHeartbeatSelectChange = (val: any) => {
 const HEARTBEAT_PATTERN = /^\d+(ms|s|m|h)$/
 const heartbeatError = computed(() => {
   if (!isHeartbeatCustom.value) return ''
-  return HEARTBEAT_PATTERN.test(heartbeatEvery.value) ? '' : t('assistant.settings.advanced.heartbeatFormatError')
+  return HEARTBEAT_PATTERN.test(heartbeatEvery.value)
+    ? ''
+    : t('assistant.settings.advanced.heartbeatFormatError')
 })
 
 const onHeartbeatInput = (e: Event) => {
@@ -300,14 +304,20 @@ const onHeartbeatInput = (e: Event) => {
 const clampTemperature = () => {
   if (paramsTemperature.value === '') return
   const n = parseFloat(paramsTemperature.value)
-  if (isNaN(n)) { paramsTemperature.value = ''; return }
+  if (isNaN(n)) {
+    paramsTemperature.value = ''
+    return
+  }
   paramsTemperature.value = String(Math.round(Math.min(2, Math.max(0, n)) * 10) / 10)
 }
 
 const clampMaxTokens = () => {
   if (paramsMaxTokens.value === '') return
   const n = parseInt(paramsMaxTokens.value, 10)
-  if (isNaN(n)) { paramsMaxTokens.value = ''; return }
+  if (isNaN(n)) {
+    paramsMaxTokens.value = ''
+    return
+  }
   paramsMaxTokens.value = String(Math.max(1, n))
 }
 
@@ -399,7 +409,7 @@ const handleDelete = async () => {
           <div class="w-[140px] shrink-0 border-r border-border pr-4">
             <div class="flex flex-col gap-2">
               <button
-                v-for="key in (['general', 'advanced', 'delete'] as const)"
+                v-for="key in ['general', 'advanced', 'delete'] as const"
                 :key="key"
                 :class="
                   cn(
@@ -540,7 +550,9 @@ const handleDelete = async () => {
                   </label>
                   <Select v-model="sandboxMode">
                     <SelectTrigger class="h-9 w-full">
-                      <span class="text-sm">{{ t(`assistant.settings.advanced.sandbox_${sandboxMode}`) }}</span>
+                      <span class="text-sm">{{
+                        t(`assistant.settings.advanced.sandbox_${sandboxMode}`)
+                      }}</span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem v-for="mode in SANDBOX_MODES" :key="mode" :value="mode">
@@ -565,12 +577,20 @@ const handleDelete = async () => {
                     <Select v-model="toolsProfile">
                       <SelectTrigger class="h-9 w-full">
                         <span class="text-sm">
-                          {{ toolsProfile === TOOLS_PROFILE_DEFAULT ? t('assistant.settings.advanced.toolsProfile_default') : t(`assistant.settings.advanced.toolsProfile_${toolsProfile}`) }}
+                          {{
+                            toolsProfile === TOOLS_PROFILE_DEFAULT
+                              ? t('assistant.settings.advanced.toolsProfile_default')
+                              : t(`assistant.settings.advanced.toolsProfile_${toolsProfile}`)
+                          }}
                         </span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="p in TOOLS_PROFILES" :key="p" :value="p">
-                          {{ p === TOOLS_PROFILE_DEFAULT ? t('assistant.settings.advanced.toolsProfile_default') : t(`assistant.settings.advanced.toolsProfile_${p}`) }}
+                          {{
+                            p === TOOLS_PROFILE_DEFAULT
+                              ? t('assistant.settings.advanced.toolsProfile_default')
+                              : t(`assistant.settings.advanced.toolsProfile_${p}`)
+                          }}
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -579,19 +599,30 @@ const handleDelete = async () => {
                     <label class="text-xs font-medium text-muted-foreground">
                       {{ t('assistant.settings.advanced.toolsAllow') }}
                     </label>
-                    <div class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9">
+                    <div
+                      class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9"
+                    >
                       <span
                         v-for="(tag, i) in toolsAllowTags"
                         :key="i"
                         class="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-foreground"
                       >
                         {{ tag }}
-                        <button class="text-muted-foreground hover:text-foreground" @click="removeToolsAllowTag(i)">&times;</button>
+                        <button
+                          class="text-muted-foreground hover:text-foreground"
+                          @click="removeToolsAllowTag(i)"
+                        >
+                          &times;
+                        </button>
                       </span>
                       <input
                         v-model="toolsAllowInput"
                         class="min-w-[80px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        :placeholder="toolsAllowTags.length ? '' : t('assistant.settings.advanced.toolsAllowPlaceholder')"
+                        :placeholder="
+                          toolsAllowTags.length
+                            ? ''
+                            : t('assistant.settings.advanced.toolsAllowPlaceholder')
+                        "
                         @keydown.enter.prevent="addToolsAllowTag"
                         @keydown.,.prevent="addToolsAllowTag"
                         @blur="addToolsAllowTag"
@@ -602,19 +633,30 @@ const handleDelete = async () => {
                     <label class="text-xs font-medium text-muted-foreground">
                       {{ t('assistant.settings.advanced.toolsDeny') }}
                     </label>
-                    <div class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9">
+                    <div
+                      class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 min-h-9"
+                    >
                       <span
                         v-for="(tag, i) in toolsDenyTags"
                         :key="i"
                         class="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-foreground"
                       >
                         {{ tag }}
-                        <button class="text-muted-foreground hover:text-foreground" @click="removeToolsDenyTag(i)">&times;</button>
+                        <button
+                          class="text-muted-foreground hover:text-foreground"
+                          @click="removeToolsDenyTag(i)"
+                        >
+                          &times;
+                        </button>
                       </span>
                       <input
                         v-model="toolsDenyInput"
                         class="min-w-[80px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        :placeholder="toolsDenyTags.length ? '' : t('assistant.settings.advanced.toolsDenyPlaceholder')"
+                        :placeholder="
+                          toolsDenyTags.length
+                            ? ''
+                            : t('assistant.settings.advanced.toolsDenyPlaceholder')
+                        "
                         @keydown.enter.prevent="addToolsDenyTag"
                         @keydown.,.prevent="addToolsDenyTag"
                         @blur="addToolsDenyTag"
@@ -635,7 +677,9 @@ const handleDelete = async () => {
                     <Input
                       v-model="groupChatMentionPatterns"
                       class="flex-1"
-                      :placeholder="t('assistant.settings.advanced.groupChatMentionPatternsPlaceholder')"
+                      :placeholder="
+                        t('assistant.settings.advanced.groupChatMentionPatternsPlaceholder')
+                      "
                     />
                     <Button
                       v-if="!groupChatMentionPatterns"
@@ -657,17 +701,30 @@ const handleDelete = async () => {
                   <label class="text-sm font-medium text-foreground">
                     {{ t('assistant.settings.advanced.heartbeat') }}
                   </label>
-                  <Select :model-value="heartbeatSelectValue" @update:model-value="onHeartbeatSelectChange">
+                  <Select
+                    :model-value="heartbeatSelectValue"
+                    @update:model-value="onHeartbeatSelectChange"
+                  >
                     <SelectTrigger class="h-9 w-full">
                       <span class="text-sm">
-                        {{ heartbeatEvery === HEARTBEAT_OFF ? t('assistant.settings.advanced.heartbeat_off') : (isHeartbeatCustom ? t('assistant.settings.advanced.heartbeat_custom') : heartbeatEvery) }}
+                        {{
+                          heartbeatEvery === HEARTBEAT_OFF
+                            ? t('assistant.settings.advanced.heartbeat_off')
+                            : isHeartbeatCustom
+                              ? t('assistant.settings.advanced.heartbeat_custom')
+                              : heartbeatEvery
+                        }}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem v-for="p in HEARTBEAT_PRESETS" :key="p" :value="p">
-                        {{ p === HEARTBEAT_OFF ? t('assistant.settings.advanced.heartbeat_off') : p }}
+                        {{
+                          p === HEARTBEAT_OFF ? t('assistant.settings.advanced.heartbeat_off') : p
+                        }}
                       </SelectItem>
-                      <SelectItem value="__custom__">{{ t('assistant.settings.advanced.heartbeat_custom') }}</SelectItem>
+                      <SelectItem value="__custom__">{{
+                        t('assistant.settings.advanced.heartbeat_custom')
+                      }}</SelectItem>
                     </SelectContent>
                   </Select>
                   <div v-if="isHeartbeatCustom" class="flex flex-col gap-1">

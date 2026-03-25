@@ -114,7 +114,10 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
     "
   >
     <!-- Snap mode: close button at top -->
-    <div v-if="isSnapMode" class="flex items-center justify-end border-b border-[#F5F5F5] px-2 py-1.5">
+    <div
+      v-if="isSnapMode"
+      class="flex items-center justify-end border-b border-[#F5F5F5] px-2 py-1.5"
+    >
       <Button
         size="icon"
         variant="ghost"
@@ -234,10 +237,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
               aria-hidden="true"
             >
-              <IconChevronDown
-                v-if="a.id === activeAgentId"
-                class="size-4"
-              />
+              <IconChevronDown v-if="a.id === activeAgentId" class="size-4" />
               <IconChevronRight v-else class="size-4" />
             </span>
             <div
@@ -379,7 +379,8 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                       : 'text-muted-foreground group-hover:text-foreground/90'
                   )
                 "
-              >{{ conv.name }}</span>
+                >{{ conv.name }}</span
+              >
               <!-- Conversation menu -->
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -439,10 +440,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
               aria-hidden="true"
             >
-              <IconChevronDown
-                v-if="r.id === activeTeamRobotId"
-                class="size-4"
-              />
+              <IconChevronDown v-if="r.id === activeTeamRobotId" class="size-4" />
               <IconChevronRight v-else class="size-4" />
             </span>
             <div
@@ -573,7 +571,8 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
                       : 'text-muted-foreground group-hover:text-foreground/90'
                   )
                 "
-              >{{ conv.name }}</span>
+                >{{ conv.name }}</span
+              >
               <DropdownMenu>
                 <DropdownMenuTrigger
                   class="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground active:bg-background/80 group-hover:opacity-100"

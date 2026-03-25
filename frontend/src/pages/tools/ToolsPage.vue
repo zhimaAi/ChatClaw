@@ -14,7 +14,6 @@ const appStore = useAppStore()
 const { currentSystem } = storeToRefs(appStore)
 
 function logSystemContext() {
-  // eslint-disable-next-line no-console
   console.log('[ToolsPage] currentSystem:', currentSystem.value, 'systemOwner:', props.systemOwner)
 }
 
@@ -23,9 +22,7 @@ watch([currentSystem, () => props.systemOwner], logSystemContext)
 </script>
 
 <template>
-  <div
-    class="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground"
-  >
+  <div class="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
     <span>{{ t('nav.tools') }}</span>
     <div class="font-mono text-xs text-foreground/80">
       currentSystem: {{ currentSystem }} · systemOwner: {{ props.systemOwner ?? '—' }}

@@ -184,50 +184,51 @@ export const useChatStore = defineStore('chat', () => {
           // user message just sent). Keep them until Gateway catches up.
         }
       } else {
-      const normalizeContent = (v: unknown) => String(v ?? '').trim()
+        const normalizeContent = (v: unknown) => String(v ?? '').trim()
 
-      // IMPORTANT:
-      // On first app launch / first message, there are multiple async flows running:
-      // - ChatMessageList watches conversationId and calls loadMessages()
-      // - sendMessage() optimistically appends a local user message (negative ID)
-      // - backend emits streaming events to upsert the assistant placeholder
-      //
-      // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
-      // user message and/or streaming assistant placeholder, making the UI look empty until
-      // a later reload (often when streaming completes).
-      //
-      // Strategy:
-      // - If backend returns empty but we already have local messages, do not overwrite.
-      // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
-      if (fetched.length === 0 && current.length > 0) {
-        // Keep current messages; avoid clobbering optimistic/streaming state.
-      } else {
-        const fetchedIds = new Set(fetched.map((m) => m.id))
-        const merged: Message[] = [...fetched]
+        // IMPORTANT:
+        // On first app launch / first message, there are multiple async flows running:
+        // - ChatMessageList watches conversationId and calls loadMessages()
+        // - sendMessage() optimistically appends a local user message (negative ID)
+        // - backend emits streaming events to upsert the assistant placeholder
+        //
+        // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
+        // user message and/or streaming assistant placeholder, making the UI look empty until
+        // a later reload (often when streaming completes).
+        //
+        // Strategy:
+        // - If backend returns empty but we already have local messages, do not overwrite.
+        // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
+        if (fetched.length === 0 && current.length > 0) {
+          // Keep current messages; avoid clobbering optimistic/streaming state.
+        } else {
+          const fetchedIds = new Set(fetched.map((m) => m.id))
+          const merged: Message[] = [...fetched]
 
-        // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
-        // This avoids duplicates after a later reload.
-        for (const msg of current) {
-          if (msg.id >= 0) continue
-          const existsOnServer = fetched.some(
-            (fm) =>
-              fm.role === msg.role && normalizeContent(fm.content) === normalizeContent(msg.content)
-          )
-          if (!existsOnServer) {
-            merged.push(msg)
+          // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
+          // This avoids duplicates after a later reload.
+          for (const msg of current) {
+            if (msg.id >= 0) continue
+            const existsOnServer = fetched.some(
+              (fm) =>
+                fm.role === msg.role &&
+                normalizeContent(fm.content) === normalizeContent(msg.content)
+            )
+            if (!existsOnServer) {
+              merged.push(msg)
+            }
           }
-        }
 
-        // Keep streaming assistant placeholder/message if it's not in fetched yet.
-        if (streaming && !fetchedIds.has(streaming.messageId)) {
-          const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
-          if (localStreamingMsg) {
-            merged.push(localStreamingMsg)
+          // Keep streaming assistant placeholder/message if it's not in fetched yet.
+          if (streaming && !fetchedIds.has(streaming.messageId)) {
+            const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
+            if (localStreamingMsg) {
+              merged.push(localStreamingMsg)
+            }
           }
-        }
 
-        messagesByConversation.value[conversationId] = merged
-      }
+          messagesByConversation.value[conversationId] = merged
+        }
       }
 
       // Build a map of tool results from tool-role messages (tool_call_id → content)
@@ -827,7 +828,6 @@ export const useChatStore = defineStore('chat', () => {
       created_at: null as any,
       updated_at: null as any,
     } as any)
-
   }
 
   const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
@@ -903,8 +903,7 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta, new_block, run_path, parent_tool_call_id } =
-      data
+    const { conversation_id, request_id, delta, new_block, run_path, parent_tool_call_id } = data
     const streaming = streamingByConversation.value[conversation_id]
 
     console.log('[chat-thinking] received', {

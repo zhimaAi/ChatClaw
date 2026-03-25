@@ -27,8 +27,8 @@ const { t } = useI18n()
 const agents = ref<OpenClawAgent[]>([])
 const selectedAgentId = ref<number | null>(null)
 
-const selectedAgent = computed(() =>
-  agents.value.find((a) => a.id === selectedAgentId.value) ?? null
+const selectedAgent = computed(
+  () => agents.value.find((a) => a.id === selectedAgentId.value) ?? null
 )
 
 // Get openclaw_workspace_id from the selected agent
@@ -59,8 +59,8 @@ const isLoading = ref(false)
 
 const hasChanges = computed(() => fileContent.value !== originalContent.value)
 
-const selectedFile = computed(() =>
-  memoryFiles.value.find((f) => f.path === selectedFilePath.value) ?? null
+const selectedFile = computed(
+  () => memoryFiles.value.find((f) => f.path === selectedFilePath.value) ?? null
 )
 
 // Whether the agent has OpenClaw workspace configured
@@ -107,7 +107,11 @@ async function selectFile(path: string) {
 async function saveFile() {
   if (!selectedFilePath.value) return
   try {
-    await MemoryService.WriteMemoryFile(workspaceId.value, selectedFilePath.value, fileContent.value)
+    await MemoryService.WriteMemoryFile(
+      workspaceId.value,
+      selectedFilePath.value,
+      fileContent.value
+    )
     originalContent.value = fileContent.value
     isEditing.value = false
     toast.success(t('memory.saveSuccess'))
@@ -185,19 +189,19 @@ onMounted(() => {
         <button
           v-for="agent in agents"
           :key="agent.id"
-          :class="cn(
-            'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted/50',
-            selectedAgentId === agent.id && 'bg-muted'
-          )"
+          :class="
+            cn(
+              'flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted/50',
+              selectedAgentId === agent.id && 'bg-muted'
+            )
+          "
           @click="selectedAgentId = agent.id"
         >
-          <img
-            v-if="agent.icon"
-            :src="agent.icon"
-            class="size-6 shrink-0 rounded"
-            alt=""
-          />
-          <div v-else class="size-6 shrink-0 rounded bg-muted flex items-center justify-center text-xs text-muted-foreground">
+          <img v-if="agent.icon" :src="agent.icon" class="size-6 shrink-0 rounded" alt="" />
+          <div
+            v-else
+            class="size-6 shrink-0 rounded bg-muted flex items-center justify-center text-xs text-muted-foreground"
+          >
             {{ agent.name.charAt(0) }}
           </div>
           <span class="truncate">{{ agent.name }}</span>
@@ -208,12 +212,18 @@ onMounted(() => {
     <!-- Right: Memory content -->
     <div class="flex-1 flex flex-col min-w-0">
       <!-- No agent selected -->
-      <div v-if="!selectedAgent" class="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+      <div
+        v-if="!selectedAgent"
+        class="flex-1 flex items-center justify-center text-muted-foreground text-sm"
+      >
         {{ t('memory.selectAgent') }}
       </div>
 
       <!-- Agent has no OpenClaw workspace -->
-      <div v-else-if="!hasWorkspace" class="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+      <div
+        v-else-if="!hasWorkspace"
+        class="flex-1 flex items-center justify-center text-muted-foreground text-sm"
+      >
         <div class="text-center space-y-2">
           <FolderOpen class="size-10 mx-auto opacity-40" />
           <p>{{ t('memory.noWorkspace') }}</p>
@@ -239,17 +249,22 @@ onMounted(() => {
               <button
                 v-for="file in memoryFiles"
                 :key="file.path"
-                :class="cn(
-                  'flex w-full items-center gap-1.5 px-2 py-1.5 text-xs transition-colors hover:bg-muted/50',
-                  selectedFilePath === file.path && 'bg-muted'
-                )"
+                :class="
+                  cn(
+                    'flex w-full items-center gap-1.5 px-2 py-1.5 text-xs transition-colors hover:bg-muted/50',
+                    selectedFilePath === file.path && 'bg-muted'
+                  )
+                "
                 :title="file.path"
                 @click="selectFile(file.path)"
               >
                 <FileText class="size-3.5 shrink-0 text-muted-foreground" />
                 <span class="truncate">{{ file.name }}</span>
               </button>
-              <div v-if="!memoryFiles.length && !isLoading" class="p-3 text-xs text-muted-foreground text-center">
+              <div
+                v-if="!memoryFiles.length && !isLoading"
+                class="p-3 text-xs text-muted-foreground text-center"
+              >
                 {{ t('memory.noFiles') }}
               </div>
             </div>
@@ -257,7 +272,10 @@ onMounted(() => {
 
           <!-- Editor -->
           <div class="flex-1 flex flex-col min-w-0">
-            <div v-if="!selectedFile" class="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+            <div
+              v-if="!selectedFile"
+              class="flex-1 flex items-center justify-center text-muted-foreground text-sm"
+            >
               <div class="text-center space-y-2">
                 <FileText class="size-8 mx-auto opacity-40" />
                 <p>{{ t('memory.selectFile') }}</p>
@@ -337,10 +355,7 @@ onMounted(() => {
         />
         <AlertDialogFooter>
           <AlertDialogCancel>{{ t('memory.cancel') }}</AlertDialogCancel>
-          <AlertDialogAction
-            :disabled="!newFileName.trim()"
-            @click.prevent="createNewFile"
-          >
+          <AlertDialogAction :disabled="!newFileName.trim()" @click.prevent="createNewFile">
             {{ t('memory.create') }}
           </AlertDialogAction>
         </AlertDialogFooter>

@@ -67,11 +67,7 @@ const handleFolderClick = (folderId: number, event?: Event) => {
         <IconDown v-if="isExpanded" class="size-4" />
         <IconRight v-else class="size-4" />
       </span>
-      <span
-        v-else
-        class="flex size-4 shrink-0"
-        aria-hidden
-      />
+      <span v-else class="flex size-4 shrink-0" aria-hidden />
       <!-- Folder state icon (display only) -->
       <span class="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground">
         <component

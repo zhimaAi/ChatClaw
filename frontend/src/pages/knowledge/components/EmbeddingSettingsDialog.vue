@@ -299,9 +299,7 @@ const handleSave = async () => {
                   v-for="m in g.models"
                   :key="`${g.provider.provider_id}::${m.model_id}`"
                   :value="`${g.provider.provider_id}::${m.model_id}`"
-                  :disabled="
-                    isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)
-                  "
+                  :disabled="isModelSelectionDisabled(g.provider.provider_id, chatwikiAvailability)"
                 >
                   {{ getEmbeddingModelLabel(g.provider.provider_id, m) }}
                 </SelectItem>

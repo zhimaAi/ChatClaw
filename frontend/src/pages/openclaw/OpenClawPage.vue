@@ -1993,7 +1993,6 @@ onUnmounted(() => {
             @new-conversation="handleNewConversation"
           />
         </section>
-
       </div>
       <!-- End upper row -->
 

@@ -74,7 +74,8 @@ export function isModelSelectionDisabled(
   statusOrBinding: ChatwikiAvailabilityStatus | boolean | ChatwikiBindingLike
 ): boolean {
   return (
-    providerId === CHATWIKI_PROVIDER_ID && normalizeAvailabilityStatus(statusOrBinding) !== 'available'
+    providerId === CHATWIKI_PROVIDER_ID &&
+    normalizeAvailabilityStatus(statusOrBinding) !== 'available'
   )
 }
 

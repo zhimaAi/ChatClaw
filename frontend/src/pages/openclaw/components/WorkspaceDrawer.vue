@@ -78,7 +78,10 @@ const displayWorkDir = computed(() => props.agent?.work_dir || defaultWorkDir.va
 const refreshFileTree = async () => {
   if (!props.agent || !props.conversationId) return
   try {
-    const files = await OpenClawAgentsService.ListWorkspaceFiles(props.agent.id, props.conversationId)
+    const files = await OpenClawAgentsService.ListWorkspaceFiles(
+      props.agent.id,
+      props.conversationId
+    )
     fileTree.value = files || []
   } catch {
     // Silently ignore refresh errors
@@ -102,7 +105,10 @@ const loadWorkspaceData = async () => {
   try {
     const dir = await OpenClawAgentsService.GetWorkspaceDir(props.agent.id, props.conversationId)
     workspaceDir.value = dir
-    const files = await OpenClawAgentsService.ListWorkspaceFiles(props.agent.id, props.conversationId)
+    const files = await OpenClawAgentsService.ListWorkspaceFiles(
+      props.agent.id,
+      props.conversationId
+    )
     fileTree.value = files || []
   } catch (error) {
     console.error('Failed to load workspace data:', error)
@@ -216,7 +222,10 @@ async function loadMCPServers() {
 async function handleMCPEnabledChange(val: boolean) {
   if (!props.agent) return
   try {
-    await OpenClawAgentsService.UpdateAgent(props.agent.id, new UpdateOpenClawAgentInput({ mcp_enabled: val }))
+    await OpenClawAgentsService.UpdateAgent(
+      props.agent.id,
+      new UpdateOpenClawAgentInput({ mcp_enabled: val })
+    )
     props.agent.mcp_enabled = val
   } catch (error) {
     console.error('Failed to update mcp_enabled:', error)

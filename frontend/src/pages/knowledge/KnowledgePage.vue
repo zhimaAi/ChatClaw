@@ -1125,7 +1125,9 @@ const handleRemoveImage = (id: string) => {
         )
       "
     >
-      <div class="flex w-full items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2">
+      <div
+        class="flex w-full items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2"
+      >
         <template v-if="!sidebarCollapsed">
           <div class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]">
             <button

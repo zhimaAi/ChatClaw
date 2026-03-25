@@ -22,7 +22,10 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { useSettingsStore } from '@/stores/settings'
 import type { Provider, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
-import { ProvidersService, UpdateProviderInput } from '@bindings/chatclaw/internal/services/providers'
+import {
+  ProvidersService,
+  UpdateProviderInput,
+} from '@bindings/chatclaw/internal/services/providers'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import {
   ChatWikiService,
@@ -90,7 +93,9 @@ const showDevLoginButton = computed(() => {
 const todayUse = computed(() => extractStatValue(modelCatalog.value, 'today_use'))
 const allSurplus = computed(() => extractStatValue(modelCatalog.value, 'all_surplus'))
 const bindingDisplayName = computed(() => {
-  return currentBinding.value?.user_name?.trim() || currentBinding.value?.user_id?.trim() || 'ChatWiki'
+  return (
+    currentBinding.value?.user_name?.trim() || currentBinding.value?.user_id?.trim() || 'ChatWiki'
+  )
 })
 
 const modelGroups = computed<CatalogGroup[]>(() => {
@@ -350,9 +355,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="mx-auto w-full max-w-settings-card">
     <div class="flex flex-col gap-6">
-      <div
-        class="flex items-center justify-between bg-background px-4 py-4"
-      >
+      <div class="flex items-center justify-between bg-background px-4 py-4">
         <div>
           <p class="text-base font-semibold text-foreground">
             {{ providerWithModels.provider.name }}
@@ -373,10 +376,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="flex flex-col gap-6">
-        <div
-          v-if="showAccountCard"
-          class="rounded-[28px] bg-card p-6 shadow-sm dark:shadow-none"
-        >
+        <div v-if="showAccountCard" class="rounded-[28px] bg-card p-6 shadow-sm dark:shadow-none">
           <div class="flex items-start justify-between gap-4">
             <div class="flex min-w-0 items-center gap-4">
               <div
@@ -411,9 +411,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="showCreditsCard" class="mt-6 grid gap-4 md:grid-cols-2">
-            <div
-              class="bg-background/80 px-6 py-5"
-            >
+            <div class="bg-background/80 px-6 py-5">
               <p class="text-sm text-muted-foreground">{{ t('settings.chatwiki.todayUse') }}</p>
               <div class="mt-4 flex items-baseline gap-2">
                 <span class="text-[2rem] font-semibold leading-none tracking-tight text-orange-600">
@@ -424,9 +422,7 @@ onBeforeUnmount(() => {
                 </span>
               </div>
             </div>
-            <div
-              class="bg-background/80 px-6 py-5"
-            >
+            <div class="bg-background/80 px-6 py-5">
               <p class="text-sm text-muted-foreground">
                 {{ t('settings.chatwiki.remainingCredits') }}
               </p>
@@ -452,6 +448,7 @@ onBeforeUnmount(() => {
                 class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50"
               >
                 <svg
+                  id="account-icon"
                   xmlns="http://www.w3.org/2000/svg"
                   width="24"
                   height="24"
@@ -462,7 +459,6 @@ onBeforeUnmount(() => {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   aria-hidden="true"
-                  id="account-icon"
                   class="h-5 w-5 text-blue-500"
                 >
                   <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
@@ -542,17 +538,16 @@ onBeforeUnmount(() => {
               >
                 <ModelIcon class="size-5 shrink-0 text-muted-foreground" />
                 <div class="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
-                  <p class="truncate whitespace-nowrap text-sm font-normal text-foreground no-underline">
+                  <p
+                    class="truncate whitespace-nowrap text-sm font-normal text-foreground no-underline"
+                  >
                     {{ getModelPrimaryName(model) }}
                   </p>
                   <div
                     v-if="getModelMetaText(model) || getRegionScopeLabel(model.region_scope)"
                     class="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-xs text-muted-foreground"
                   >
-                    <span
-                      v-if="getModelMetaText(model)"
-                      class="truncate whitespace-nowrap"
-                    >
+                    <span v-if="getModelMetaText(model)" class="truncate whitespace-nowrap">
                       {{ getModelMetaText(model) }}
                     </span>
                     <span
