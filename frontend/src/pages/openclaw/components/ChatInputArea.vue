@@ -838,8 +838,8 @@ onUnmounted(() => {
               </TooltipProvider>
             </div>
 
-            <!-- Thinking mode toggle: hidden in team mode -->
-            <TooltipProvider v-if="!isTeamMode">
+            <!-- Thinking mode toggle: hidden until streaming thinking is supported -->
+            <!-- <TooltipProvider v-if="!isTeamMode">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button
@@ -869,7 +869,7 @@ onUnmounted(() => {
                   </p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
+            </TooltipProvider> -->
 
             <input
               ref="fileInputRef"
