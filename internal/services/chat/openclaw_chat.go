@@ -163,9 +163,10 @@ func extractTextFromContent(content any) string {
 	return ""
 }
 
-// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block
-// and the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
-// automatically prepends to user messages sent via chat.send.
+// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block,
+// the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
+// automatically prepends to user messages sent via chat.send, and
+// the <chatclaw_context> block injected by buildKnowledgeContextMessage.
 func cleanOpenClawUserMessage(s string) string {
 	s = strings.TrimLeft(s, " \t\n")
 
@@ -184,6 +185,13 @@ func cleanOpenClawUserMessage(s string) string {
 	if strings.HasPrefix(s, "[") {
 		if idx := strings.Index(s, "] "); idx != -1 && idx < 60 {
 			s = strings.TrimLeft(s[idx+2:], " \t\n")
+		}
+	}
+
+	// Strip <chatclaw_context ...>...</chatclaw_context> block
+	if idx := strings.Index(s, "<chatclaw_context"); idx != -1 {
+		if end := strings.Index(s[idx:], "</chatclaw_context>"); end != -1 {
+			s = strings.TrimRight(s[:idx], " \t\n")
 		}
 	}
 
