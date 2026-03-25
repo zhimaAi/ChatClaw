@@ -14,6 +14,9 @@ const ScheduledTasksPage = defineAsyncComponent(
   () => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue')
 )
 const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
+const OpenClawSkillsPage = defineAsyncComponent(
+  () => import('@/pages/openclaw-skills/OpenClawSkillsPage.vue')
+)
 const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
 const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
 const DocumentViewerPage = defineAsyncComponent(
@@ -129,6 +132,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   knowledge: KnowledgePage,
   'scheduled-tasks': ScheduledTasksPage,
   skills: SkillsPage,
+  'openclaw-skills': OpenClawSkillsPage,
   memory: MemoryPage,
   settings: SettingsPage,
   multiask: MultiaskPage,

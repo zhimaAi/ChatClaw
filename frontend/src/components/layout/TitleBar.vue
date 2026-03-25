@@ -40,6 +40,7 @@ const moduleTabIcons: Partial<Record<NavModule, any>> = {
   multiask: IconMultiask,
   settings: IconSettings,
   skills: IconSkills,
+  'openclaw-skills': IconSkills,
   channels: IconChannels,
   tools: IconTools,
 }
