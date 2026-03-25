@@ -199,9 +199,11 @@ type OpenClawCronTranscriptMessage struct {
 // OpenClawCronRunDetail aggregates run metadata with transcript messages.
 // 运行详情同时包含 run 汇总信息和 session transcript。
 type OpenClawCronRunDetail struct {
-	Run             OpenClawCronRunEntry            `json:"run"`
-	SessionFilePath string                          `json:"session_file_path"`
-	RunFilePath     string                          `json:"run_file_path"`
-	Messages        []OpenClawCronTranscriptMessage `json:"messages"`
-	IsLive          bool                            `json:"is_live"`
+	Run                 OpenClawCronRunEntry            `json:"run"`
+	SessionFilePath     string                          `json:"session_file_path"`
+	RunFilePath         string                          `json:"run_file_path"`
+	ConversationID      int64                           `json:"conversation_id"`
+	ConversationAgentID int64                           `json:"conversation_agent_id"`
+	Messages            []OpenClawCronTranscriptMessage `json:"messages"`
+	IsLive              bool                            `json:"is_live"`
 }

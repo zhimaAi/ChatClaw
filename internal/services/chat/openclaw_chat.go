@@ -37,6 +37,7 @@ func (s *ChatService) SetOpenClawGateway(gw OpenClawGatewayInfo) {
 type openClawAgentConfig struct {
 	AgentID         int64
 	OpenClawAgentID string
+	SessionKey      string
 	ProviderID      string
 	ModelID         string
 	Capabilities    []string
@@ -65,16 +66,17 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	defer cancel()
 
 	type conversationRow struct {
-		AgentID        int64  `bun:"agent_id"`
-		LLMProviderID  string `bun:"llm_provider_id"`
-		LLMModelID     string `bun:"llm_model_id"`
-		EnableThinking bool   `bun:"enable_thinking"`
-		LibraryIDs     string `bun:"library_ids"`
+		AgentID            int64  `bun:"agent_id"`
+		LLMProviderID      string `bun:"llm_provider_id"`
+		LLMModelID         string `bun:"llm_model_id"`
+		EnableThinking     bool   `bun:"enable_thinking"`
+		LibraryIDs         string `bun:"library_ids"`
+		OpenClawSessionKey string `bun:"openclaw_session_key"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids", "openclaw_session_key").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_conversation_not_found")
@@ -106,6 +108,7 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	cfg := openClawAgentConfig{
 		AgentID:         conv.AgentID,
 		OpenClawAgentID: agent.OpenClawAgentID,
+		SessionKey:      strings.TrimSpace(conv.OpenClawSessionKey),
 		ProviderID:      providerID,
 		ModelID:         modelID,
 		EnableThinking:  conv.EnableThinking,
@@ -138,6 +141,15 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	}
 
 	return cfg, nil
+}
+
+// resolveOpenClawSessionKey prefers the session key persisted on the conversation record.
+// resolveOpenClawSessionKey 优先使用会话表中保存的真实 session_key，缺失时再回退到旧的 conv_<id> 规则。
+func resolveOpenClawSessionKey(cfg openClawAgentConfig, conversationID int64) string {
+	if strings.TrimSpace(cfg.SessionKey) != "" {
+		return strings.TrimSpace(cfg.SessionKey)
+	}
+	return openClawSessionKey(cfg.OpenClawAgentID, conversationID)
 }
 
 // buildKnowledgeContextMessage wraps the user's message with a system instruction
@@ -598,7 +610,7 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		return nil, nil
 	}
 
-	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1489,7 +1501,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		Status:    StatusStreaming,
 	})
 
-	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 

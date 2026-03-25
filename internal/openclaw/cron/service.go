@@ -3,6 +3,7 @@ package openclawcron
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +19,9 @@ import (
 	openclawroot "chatclaw/internal/openclaw"
 	openclawagents "chatclaw/internal/openclaw/agents"
 	openclawruntime "chatclaw/internal/openclaw/runtime"
+	"chatclaw/internal/sqlite"
 
+	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -40,6 +43,12 @@ type OpenClawCronService struct {
 	watchMu   sync.Mutex
 	watchSeq  atomic.Int64
 	watches   map[string]string
+}
+
+type cronConversationRecord struct {
+	ID                 int64  `bun:"id"`
+	AgentID            int64  `bun:"agent_id"`
+	OpenClawSessionKey string `bun:"openclaw_session_key"`
 }
 
 func NewOpenClawCronService(
@@ -250,12 +259,19 @@ func (s *OpenClawCronService) GetRunDetail(jobID string, sessionID string) (*Ope
 		return nil, err
 	}
 
+	conversationID, conversationAgentID, err := s.ensureRunConversation(jobID, *target)
+	if err != nil {
+		return nil, err
+	}
+
 	return &OpenClawCronRunDetail{
-		Run:             *target,
-		SessionFilePath: sessionPath,
-		RunFilePath:     s.runFilePath(jobID),
-		Messages:        messages,
-		IsLive:          strings.EqualFold(target.Status, "running"),
+		Run:                 *target,
+		SessionFilePath:     sessionPath,
+		RunFilePath:         s.runFilePath(jobID),
+		ConversationID:      conversationID,
+		ConversationAgentID: conversationAgentID,
+		Messages:            messages,
+		IsLive:              strings.EqualFold(target.Status, "running"),
 	}, nil
 }
 
@@ -344,6 +360,14 @@ func (s *OpenClawCronService) jobsStorePath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(root, "cron", "jobs.json"), nil
+}
+
+func (s *OpenClawCronService) db() (*bun.DB, error) {
+	db := sqlite.DB()
+	if db == nil {
+		return nil, fmt.Errorf("sqlite not initialized")
+	}
+	return db, nil
 }
 
 func (s *OpenClawCronService) readJobsFromStore(storePath string) ([]openClawJobStoreItem, error) {
@@ -449,6 +473,157 @@ func (s *OpenClawCronService) agentNameMap() (map[string]string, error) {
 		out[item.OpenClawAgentID] = item.Name
 	}
 	return out, nil
+}
+
+// ensureRunConversation finds or creates a local OpenClaw conversation for a cron run session.
+// ensureRunConversation 为 Cron run 的真实 session_key 建立本地 conversations 映射，供嵌入聊天页复用。
+func (s *OpenClawCronService) ensureRunConversation(jobID string, run OpenClawCronRunEntry) (int64, int64, error) {
+	sessionKey := strings.TrimSpace(run.SessionKey)
+	if sessionKey == "" {
+		return 0, 0, nil
+	}
+
+	existing, err := s.findConversationBySessionKey(sessionKey)
+	if err != nil {
+		return 0, 0, err
+	}
+	if existing != nil {
+		return existing.ID, existing.AgentID, nil
+	}
+
+	openClawAgentID := parseAgentIDFromSessionKey(sessionKey)
+	if openClawAgentID == "" {
+		return 0, 0, nil
+	}
+
+	localAgentID, err := s.findLocalOpenClawAgentID(openClawAgentID)
+	if err != nil || localAgentID <= 0 {
+		return 0, 0, err
+	}
+
+	jobName := strings.TrimSpace(jobID)
+	if job, findErr := s.findJobByID(jobID); findErr == nil && strings.TrimSpace(job.Name) != "" {
+		jobName = strings.TrimSpace(job.Name)
+	}
+	if jobName == "" {
+		jobName = "OpenClaw Cron"
+	}
+
+	runTime := run.RunAtMs
+	if runTime <= 0 {
+		runTime = run.TimestampMs
+	}
+	name := fmt.Sprintf("%s / %s", jobName, time.UnixMilli(runTime).Local().Format("2006-01-02 15:04:05"))
+	externalID := fmt.Sprintf("openclaw-cron:%s:%s", strings.TrimSpace(jobID), strings.TrimSpace(run.SessionID))
+
+	createdID, err := s.insertConversationRecord(localAgentID, sessionKey, externalID, name)
+	if err != nil {
+		return 0, 0, err
+	}
+	return createdID, localAgentID, nil
+}
+
+// findConversationBySessionKey looks up the local conversation mapped to an OpenClaw session key.
+// findConversationBySessionKey 按 openclaw_session_key 查找本地会话，避免重复创建历史映射。
+func (s *OpenClawCronService) findConversationBySessionKey(sessionKey string) (*cronConversationRecord, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var record cronConversationRecord
+	err = db.NewSelect().
+		Table("conversations").
+		Column("id", "agent_id", "openclaw_session_key").
+		Where("openclaw_session_key = ?", strings.TrimSpace(sessionKey)).
+		OrderExpr("id DESC").
+		Limit(1).
+		Scan(ctx, &record)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &record, nil
+}
+
+// findLocalOpenClawAgentID maps an OpenClaw runtime agent id back to the local openclaw_agents row id.
+// findLocalOpenClawAgentID 把 runtime 的 openclaw_agent_id 映射回本地 openclaw_agents 主键。
+func (s *OpenClawCronService) findLocalOpenClawAgentID(openClawAgentID string) (int64, error) {
+	items, err := s.agentsSvc.ListAgents()
+	if err != nil {
+		return 0, err
+	}
+	for _, item := range items {
+		if strings.TrimSpace(item.OpenClawAgentID) == strings.TrimSpace(openClawAgentID) {
+			return item.ID, nil
+		}
+	}
+	return 0, nil
+}
+
+// insertConversationRecord creates a read-only history conversation record for a cron run session.
+// insertConversationRecord 为 Cron 历史创建本地会话记录，供只读嵌入页读取完整 OpenClaw 消息。
+func (s *OpenClawCronService) insertConversationRecord(agentID int64, sessionKey, externalID, name string) (int64, error) {
+	db, err := s.db()
+	if err != nil {
+		return 0, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC()
+	res, err := db.ExecContext(ctx, `
+INSERT INTO conversations (
+	created_at,
+	updated_at,
+	agent_id,
+	agent_type,
+	name,
+	external_id,
+	last_message,
+	is_pinned,
+	llm_provider_id,
+	llm_model_id,
+	library_ids,
+	enable_thinking,
+	openclaw_session_key,
+	chat_mode,
+	team_type,
+	dialogue_id,
+	team_library_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		now,
+		now,
+		agentID,
+		"openclaw",
+		strings.TrimSpace(name),
+		strings.TrimSpace(externalID),
+		"",
+		false,
+		"",
+		"",
+		"[]",
+		false,
+		strings.TrimSpace(sessionKey),
+		"task",
+		"person",
+		0,
+		"",
+	)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func (s *OpenClawCronService) runCLIJSON(args []string, out any) error {

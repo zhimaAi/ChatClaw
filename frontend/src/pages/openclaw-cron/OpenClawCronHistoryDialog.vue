@@ -5,6 +5,7 @@ import { Events } from '@wailsio/runtime'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { RefreshCcw } from 'lucide-vue-next'
+import EmbeddedAssistantPage from '@/pages/openclaw/components/EmbeddedAssistantPage.vue'
 import {
   OpenClawCronService,
   type OpenClawCronJob,
@@ -48,7 +49,6 @@ type LivePreviewSegment =
 
 const liveSegments = ref<LivePreviewSegment[]>([])
 const liveToolMap = new Map<string, LiveToolState>()
-let pollTimer: ReturnType<typeof setInterval> | null = null
 let detailRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let eventUnsubscribe: (() => void) | null = null
 let currentWatchId: string | null = null
@@ -95,23 +95,6 @@ function scheduleDetailRefresh() {
     detailRefreshTimer = null
     await loadDetail(false)
   }, 500)
-}
-
-function startPolling() {
-  stopPolling()
-  // Poll file-backed run/session logs while the dialog is open.
-  // 弹窗打开时轮询 OpenClaw 日志文件，保证运行中详情近实时刷新。
-  pollTimer = setInterval(async () => {
-    if (!props.open || !props.job?.id) return
-    await loadRuns()
-  }, 1500)
-}
-
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
 }
 
 async function reconnectGatewayStream() {
@@ -329,12 +312,10 @@ watch(
   () => props.open,
   async (open) => {
     if (!open) {
-      stopPolling()
       await cleanupGatewayStream()
       return
     }
     await loadRuns()
-    startPolling()
   },
   { immediate: true }
 )
@@ -349,7 +330,6 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  stopPolling()
   if (detailRefreshTimer) {
     clearTimeout(detailRefreshTimer)
     detailRefreshTimer = null
@@ -503,64 +483,19 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
+              <div v-if="selectedDetail.conversation_id" class="h-full min-h-0 overflow-hidden">
+                <EmbeddedAssistantPage
+                  :conversation-id="selectedDetail.conversation_id"
+                  :agent-id="selectedDetail.conversation_agent_id"
+                  :read-only="true"
+                />
+              </div>
+
               <div
-                v-if="selectedDetail.messages.length === 0"
+                v-else
                 class="flex h-full items-center justify-center text-sm text-muted-foreground"
               >
-                {{ t('openclawCron.history.noMessages', '尚未读取到 transcript 消息') }}
-              </div>
-              <div
-                v-for="message in selectedDetail.messages"
-                :key="message.id"
-                class="mb-4 rounded-lg border border-border bg-card p-4"
-              >
-                <div class="mb-2 flex items-center justify-between gap-3">
-                  <div class="text-xs uppercase tracking-wide text-muted-foreground">
-                    {{ message.role }}
-                  </div>
-                  <div class="text-xs text-muted-foreground">
-                    {{ formatOpenClawCronTime(new Date(message.timestamp as any).getTime()) }}
-                  </div>
-                </div>
-                <div class="space-y-3">
-                  <div
-                    v-for="(block, index) in message.blocks"
-                    :key="`${message.id}-${index}`"
-                    class="rounded-md border border-border/70 px-3 py-2"
-                  >
-                    <div class="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {{ block.type }}
-                    </div>
-                    <pre
-                      v-if="block.type === 'thinking'"
-                      class="whitespace-pre-wrap break-words text-sm text-muted-foreground"
-                    >{{ block.thinking }}</pre>
-                    <pre
-                      v-else-if="block.type === 'text'"
-                      class="whitespace-pre-wrap break-words text-sm text-foreground"
-                    >{{ block.text }}</pre>
-                    <div
-                      v-else-if="block.type === 'toolCall' || block.type === 'toolResult'"
-                      class="space-y-2"
-                    >
-                      <div class="text-sm text-foreground">
-                        {{ block.name || block.tool_call_id }}
-                      </div>
-                      <pre
-                        v-if="block.args_json"
-                        class="whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs text-foreground"
-                      >{{ block.args_json }}</pre>
-                      <pre
-                        v-if="block.result_json"
-                        class="whitespace-pre-wrap break-words rounded bg-muted p-2 text-xs text-foreground"
-                      >{{ block.result_json }}</pre>
-                    </div>
-                    <pre
-                      v-else
-                      class="whitespace-pre-wrap break-words text-xs text-foreground"
-                    >{{ JSON.stringify(block.raw, null, 2) }}</pre>
-                  </div>
-                </div>
+                {{ t('openclawCron.history.conversationPreparing', '正在准备历史会话，请稍候...') }}
               </div>
             </div>
           </div>
