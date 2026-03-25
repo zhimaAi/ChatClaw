@@ -66,6 +66,10 @@ type taskNotificationSender interface {
 	SendTaskResult(ctx context.Context, task ScheduledTask, content string) error
 }
 
+type dingtalkTaskResultSender interface {
+	SendStreamingCard(ctx context.Context, conversationID, content string) error
+}
+
 func NewScheduledTasksService(app *application.App, convSvc *conversations.ConversationsService, chatSvc *chat.ChatService) *ScheduledTasksService {
 	svc := &ScheduledTasksService{
 		app:                  app,
@@ -1404,12 +1408,28 @@ func (s *ScheduledTasksService) sendTaskResultToChannels(ctx context.Context, ta
 		if adapter == nil {
 			return fmt.Errorf("channel %d is not connected", channelID)
 		}
-		if err := adapter.SendMessage(ctx, targetID, content); err != nil {
+		if err := s.sendTaskResultToAdapter(ctx, channel.Platform, adapter, targetID, content); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (s *ScheduledTasksService) sendTaskResultToAdapter(
+	ctx context.Context,
+	platform string,
+	adapter channels.PlatformAdapter,
+	targetID string,
+	content string,
+) error {
+	normalizedPlatform := normalizeNotificationPlatform(platform)
+	if normalizedPlatform == channels.PlatformDingTalk {
+		if sender, ok := adapter.(dingtalkTaskResultSender); ok {
+			return sender.SendStreamingCard(ctx, targetID, content)
+		}
+	}
+	return adapter.SendMessage(ctx, targetID, content)
 }
 
 type scheduledTaskNotificationChannelRow struct {
@@ -1660,6 +1680,7 @@ func (s *ScheduledTasksService) buildTaskSnapshot(ctx context.Context, db *bun.D
 		IsExpired:              s.isTaskExpired(task.ExpiresAt),
 	}
 }
+
 // resolveOperationLogAgentDisplay keeps changed-field output human-readable while
 // still falling back to the numeric agent ID after the agent is deleted or missing.
 func (s *ScheduledTasksService) resolveOperationLogAgentDisplay(ctx context.Context, db *bun.DB, agentID int64) string {
@@ -1925,4 +1946,3 @@ func taskModelsToDTOs(models []scheduledTaskModel) []ScheduledTask {
 	}
 	return out
 }
-

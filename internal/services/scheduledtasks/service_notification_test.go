@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"chatclaw/internal/services/channels"
+
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
@@ -23,9 +25,46 @@ type fakeNotificationCall struct {
 	content string
 }
 
+type fakeTaskResultAdapter struct {
+	streamingTargets []string
+	streamingContent []string
+	messageTargets   []string
+	messageContent   []string
+	streamingErr     error
+	messageErr       error
+}
+
 func (f *fakeNotificationSender) SendTaskResult(_ context.Context, task ScheduledTask, content string) error {
 	f.calls = append(f.calls, fakeNotificationCall{task: task, content: content})
 	return f.err
+}
+
+func (f *fakeTaskResultAdapter) Connect(_ context.Context, _ int64, _ string, _ channels.MessageHandler) error {
+	return nil
+}
+
+func (f *fakeTaskResultAdapter) Disconnect(_ context.Context) error {
+	return nil
+}
+
+func (f *fakeTaskResultAdapter) IsConnected() bool {
+	return true
+}
+
+func (f *fakeTaskResultAdapter) Platform() string {
+	return "fake"
+}
+
+func (f *fakeTaskResultAdapter) SendMessage(_ context.Context, targetID string, content string) error {
+	f.messageTargets = append(f.messageTargets, targetID)
+	f.messageContent = append(f.messageContent, content)
+	return f.messageErr
+}
+
+func (f *fakeTaskResultAdapter) SendStreamingCard(_ context.Context, conversationID, content string) error {
+	f.streamingTargets = append(f.streamingTargets, conversationID)
+	f.streamingContent = append(f.streamingContent, content)
+	return f.streamingErr
 }
 
 func TestCreateAndUpdateScheduledTaskPersistsNotificationFields(t *testing.T) {
@@ -184,6 +223,38 @@ func TestGetLatestChannelTargetRejectsEmptyChannelLastSenderID(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "last sender") {
 		t.Fatalf("expected error to mention last sender, got %v", err)
+	}
+}
+
+func TestSendTaskResultUsesDingTalkStreamingCard(t *testing.T) {
+	svc := NewScheduledTasksServiceForTest(nil, nil, nil, nil)
+	adapter := &fakeTaskResultAdapter{}
+
+	if err := svc.sendTaskResultToAdapter(context.Background(), channels.PlatformDingTalk, adapter, "cidDingTalk", "task done"); err != nil {
+		t.Fatalf("sendTaskResultToAdapter returned error: %v", err)
+	}
+
+	if len(adapter.streamingTargets) != 1 || adapter.streamingTargets[0] != "cidDingTalk" {
+		t.Fatalf("expected dingtalk streaming target cidDingTalk, got %#v", adapter.streamingTargets)
+	}
+	if len(adapter.messageTargets) != 0 {
+		t.Fatalf("expected SendMessage not to be used for dingtalk, got %#v", adapter.messageTargets)
+	}
+}
+
+func TestSendTaskResultUsesGenericAdapterSendMessage(t *testing.T) {
+	svc := NewScheduledTasksServiceForTest(nil, nil, nil, nil)
+	adapter := &fakeTaskResultAdapter{}
+
+	if err := svc.sendTaskResultToAdapter(context.Background(), channels.PlatformFeishu, adapter, "ou_feishu", "task done"); err != nil {
+		t.Fatalf("sendTaskResultToAdapter returned error: %v", err)
+	}
+
+	if len(adapter.messageTargets) != 1 || adapter.messageTargets[0] != "ou_feishu" {
+		t.Fatalf("expected generic target ou_feishu, got %#v", adapter.messageTargets)
+	}
+	if len(adapter.streamingTargets) != 0 {
+		t.Fatalf("expected SendStreamingCard not to be used for feishu, got %#v", adapter.streamingTargets)
 	}
 }
 

@@ -688,8 +688,14 @@ func handleChannelMessage(
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	if err := channels.UpdateChannelLastSenderID(ctx, db, msg.ChannelID, msg.SenderID); err != nil {
-		app.Logger.Warn("channel message: failed to update last sender id", "channel_id", msg.ChannelID, "sender_id", msg.SenderID, "error", err)
+	if err := channels.UpdateChannelLastReplyTarget(ctx, db, msg.ChannelID, msg.ChatID, msg.SenderID); err != nil {
+		app.Logger.Warn(
+			"channel message: failed to update last reply target",
+			"channel_id", msg.ChannelID,
+			"chat_id", msg.ChatID,
+			"sender_id", msg.SenderID,
+			"error", err,
+		)
 	}
 
 	var channelRow struct {

@@ -10,29 +10,42 @@ import (
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
 
-func TestUpdateChannelLastSenderIDPersistsSender(t *testing.T) {
+func TestUpdateChannelLastReplyTargetPrefersChatID(t *testing.T) {
 	db := newChannelsLastSenderTestDB(t)
 	insertChannelLastSenderTestRow(t, db, 88, "")
 
-	if err := UpdateChannelLastSenderID(context.Background(), db, 88, "ou_sender_1"); err != nil {
-		t.Fatalf("UpdateChannelLastSenderID returned error: %v", err)
+	if err := UpdateChannelLastReplyTarget(context.Background(), db, 88, "cid_conversation_1", "ou_sender_1"); err != nil {
+		t.Fatalf("UpdateChannelLastReplyTarget returned error: %v", err)
 	}
 
-	if got := readChannelLastSenderID(t, db, 88); got != "ou_sender_1" {
-		t.Fatalf("expected last_sender_id ou_sender_1, got %q", got)
+	if got := readChannelLastSenderID(t, db, 88); got != "cid_conversation_1" {
+		t.Fatalf("expected last_sender_id cid_conversation_1, got %q", got)
 	}
 }
 
-func TestUpdateChannelLastSenderIDSkipsEmptySender(t *testing.T) {
+func TestUpdateChannelLastReplyTargetFallsBackToSenderID(t *testing.T) {
 	db := newChannelsLastSenderTestDB(t)
-	insertChannelLastSenderTestRow(t, db, 89, "existing_sender")
+	insertChannelLastSenderTestRow(t, db, 89, "")
 
-	if err := UpdateChannelLastSenderID(context.Background(), db, 89, "   "); err != nil {
-		t.Fatalf("UpdateChannelLastSenderID returned error: %v", err)
+	if err := UpdateChannelLastReplyTarget(context.Background(), db, 89, "   ", "existing_sender"); err != nil {
+		t.Fatalf("UpdateChannelLastReplyTarget returned error: %v", err)
 	}
 
 	if got := readChannelLastSenderID(t, db, 89); got != "existing_sender" {
 		t.Fatalf("expected last_sender_id to remain existing_sender, got %q", got)
+	}
+}
+
+func TestUpdateChannelLastReplyTargetSkipsEmptyReplyTarget(t *testing.T) {
+	db := newChannelsLastSenderTestDB(t)
+	insertChannelLastSenderTestRow(t, db, 90, "existing_target")
+
+	if err := UpdateChannelLastReplyTarget(context.Background(), db, 90, "   ", "   "); err != nil {
+		t.Fatalf("UpdateChannelLastReplyTarget returned error: %v", err)
+	}
+
+	if got := readChannelLastSenderID(t, db, 90); got != "existing_target" {
+		t.Fatalf("expected last_sender_id to remain existing_target, got %q", got)
 	}
 }
 
