@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
-import { ChatWikiService, type Binding, type ModelCatalog } from '@bindings/chatclaw/internal/services/chatwiki'
+import {
+  ChatWikiService,
+  type Binding,
+  type ModelCatalog,
+} from '@bindings/chatclaw/internal/services/chatwiki'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import { useNavigationStore } from '@/stores'
@@ -50,8 +54,9 @@ async function loadState(mode: 'initial' | 'polling' = 'initial') {
   }
 
   modelCatalog.value =
-    (await ChatWikiService.GetModelCatalog(getChatwikiCreditsRefreshMode(mode)).catch(() => null)) ??
-    null
+    (await ChatWikiService.GetModelCatalog(getChatwikiCreditsRefreshMode(mode)).catch(
+      () => null
+    )) ?? null
   startAutoRefresh()
 }
 

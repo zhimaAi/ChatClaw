@@ -203,3 +203,18 @@ func cliName() string {
 	}
 	return "openclaw"
 }
+
+// BundledSkillsDir returns the skills directory shipped inside the bundled OpenClaw npm package
+// (node_modules/openclaw/skills), if present. Matches OpenClaw docs: bundled install skills.
+func BundledSkillsDir() (string, error) {
+	b, err := resolveBundledRuntime()
+	if err != nil {
+		return "", err
+	}
+	p := filepath.Join(b.Root, "node_modules", "openclaw", "skills")
+	st, err := os.Stat(p)
+	if err != nil || !st.IsDir() {
+		return "", fmt.Errorf("bundled openclaw skills directory not found")
+	}
+	return p, nil
+}

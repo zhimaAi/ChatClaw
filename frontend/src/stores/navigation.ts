@@ -20,6 +20,7 @@ export type NavModule =
   | 'settings'
   | 'document'
   | 'skills'
+  | 'openclaw-skills'
   | 'channels'
   | 'tools'
 
@@ -101,6 +102,7 @@ const moduleLabels: Record<NavModule, string> = {
   settings: 'nav.settings',
   document: 'nav.document',
   skills: 'nav.skills',
+  'openclaw-skills': 'nav.openclawSkills',
   channels: 'nav.channels',
   tools: 'nav.tools',
 }
@@ -118,6 +120,7 @@ const singleTabModules: NavModule[] = [
   'multiask',
   'settings',
   'skills',
+  'openclaw-skills',
   'channels',
   'tools',
 ]

@@ -83,7 +83,7 @@ const channelToBind = ref<Channel | null>(null)
 /** True when bind dialog was opened right after creating a channel (show auto-generate option) */
 const bindFromCreate = ref(false)
 const toggleDialogOpen = ref(false)
-const channelToToggle = ref<{ channel: Channel, val: boolean } | null>(null)
+const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
 const unbindDialogOpen = ref(false)
 const channelToUnbind = ref<Channel | null>(null)
 
@@ -618,9 +618,11 @@ onMounted(loadData)
                         : t('channels.card.switchBind')
                     }}
                   </DropdownMenuItem>
-                  <DropdownMenuItem class="gap-2 rounded px-4 py-[5px]" 
-                      @click="openUnbindConfirm(channel)" 
-                      :disabled="channel.agent_id === 0">
+                  <DropdownMenuItem
+                    class="gap-2 rounded px-4 py-[5px]"
+                    :disabled="channel.agent_id === 0"
+                    @click="openUnbindConfirm(channel)"
+                  >
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
                   </DropdownMenuItem>

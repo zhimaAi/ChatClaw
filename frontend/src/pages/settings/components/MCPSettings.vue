@@ -1049,10 +1049,14 @@ onUnmounted(() => {
               {{ t('settings.mcp.tabAssistantMcp') }}
             </button>
           </div>
-          <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+          <div
+            class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3"
+          >
             <div class="min-w-0 flex-1">
               <span class="text-base font-semibold text-foreground">{{ amcpDetail.name }}</span>
-              <p class="mt-1 text-xs leading-relaxed text-muted-foreground">{{ amcpDetail.description }}</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ amcpDetail.description }}
+              </p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <button
@@ -1076,17 +1080,30 @@ onUnmounted(() => {
               <div class="flex flex-col gap-3 text-xs">
                 <div class="flex flex-col gap-1">
                   <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                  <code class="rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.url || `http://127.0.0.1:${amcpDetail.port}/mcp` }}</code>
+                  <code
+                    class="rounded bg-background px-2 py-1 font-mono text-foreground select-text"
+                    >{{ connectionInfo?.url || `http://127.0.0.1:${amcpDetail.port}/mcp` }}</code
+                  >
                 </div>
                 <div class="flex flex-col gap-1">
-                  <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
-                  <code class="break-all rounded bg-background px-2 py-1 font-mono text-foreground select-text">{{ connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}` }}</code>
+                  <span class="text-muted-foreground">{{
+                    t('settings.mcp.assistantMcpAuth')
+                  }}</span>
+                  <code
+                    class="break-all rounded bg-background px-2 py-1 font-mono text-foreground select-text"
+                    >{{
+                      connectionInfo?.authorization || `Authorization: Bearer ${amcpDetail.token}`
+                    }}</code
+                  >
                 </div>
               </div>
             </div>
           </div>
           <div class="flex-1 overflow-auto px-4 py-3">
-            <div v-if="parseTools(amcpDetail).length === 0" class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+            <div
+              v-if="parseTools(amcpDetail).length === 0"
+              class="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground"
+            >
               <Wrench class="size-8 opacity-40" />
               <span class="text-sm">{{ t('settings.mcp.noTools') }}</span>
             </div>
@@ -1108,7 +1125,9 @@ onUnmounted(() => {
                     </div>
                     <div class="flex flex-col gap-1">
                       <Label class="text-xs">{{ t('settings.mcp.assistantMcpToolDesc') }}</Label>
-                      <p class="rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                      <p
+                        class="rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+                      >
                         {{ editToolForm.toolDescription || '—' }}
                       </p>
                     </div>
@@ -1133,11 +1152,19 @@ onUnmounted(() => {
                 <template v-else>
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
-                      <div class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5">
-                        <img v-if="agentMap.get(tool.agentId)?.icon" :src="agentMap.get(tool.agentId)!.icon" class="size-4 object-contain" />
+                      <div
+                        class="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-white dark:border-white/15 dark:bg-white/5"
+                      >
+                        <img
+                          v-if="agentMap.get(tool.agentId)?.icon"
+                          :src="agentMap.get(tool.agentId)!.icon"
+                          class="size-4 object-contain"
+                        />
                         <img v-else :src="logoSrc" class="size-4 opacity-90" alt="ChatClaw logo" />
                       </div>
-                      <span class="font-mono text-sm font-medium text-foreground">{{ tool.toolName }}</span>
+                      <span class="font-mono text-sm font-medium text-foreground">{{
+                        tool.toolName
+                      }}</span>
                     </div>
                     <div class="flex items-center gap-1">
                       <button
@@ -1151,12 +1178,18 @@ onUnmounted(() => {
                         class="inline-flex cursor-pointer items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         @click="handleRemoveTool(tool)"
                       >
-                        <Loader2 v-if="removingToolAgentId === tool.agentId" class="size-3 animate-spin" />
+                        <Loader2
+                          v-if="removingToolAgentId === tool.agentId"
+                          class="size-3 animate-spin"
+                        />
                         <Trash2 v-else class="size-3" />
                       </button>
                     </div>
                   </div>
-                  <p v-if="tool.toolDescription" class="mt-1 pl-7 text-xs leading-relaxed text-muted-foreground">
+                  <p
+                    v-if="tool.toolDescription"
+                    class="mt-1 pl-7 text-xs leading-relaxed text-muted-foreground"
+                  >
                     {{ tool.toolDescription }}
                   </p>
                 </template>
@@ -1683,8 +1716,14 @@ onUnmounted(() => {
             <div class="flex flex-col gap-2 text-xs">
               <div class="flex flex-col gap-1">
                 <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpUrl') }}</span>
-                <code v-if="amcpDialogMode === 'edit'" class="rounded bg-background px-2 py-1 font-mono text-foreground">http://127.0.0.1:{{ amcpDialogForm.port }}/mcp</code>
-                <span v-else class="text-muted-foreground/70">{{ t('settings.mcp.assistantMcpAutoPort') }}</span>
+                <code
+                  v-if="amcpDialogMode === 'edit'"
+                  class="rounded bg-background px-2 py-1 font-mono text-foreground"
+                  >http://127.0.0.1:{{ amcpDialogForm.port }}/mcp</code
+                >
+                <span v-else class="text-muted-foreground/70">{{
+                  t('settings.mcp.assistantMcpAutoPort')
+                }}</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-muted-foreground">{{ t('settings.mcp.assistantMcpAuth') }}</span>
@@ -1760,7 +1799,12 @@ onUnmounted(() => {
               <div
                 class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white dark:border-white/15 dark:bg-white/5"
               >
-                <img v-if="agent.icon" :src="agent.icon" :alt="agent.name" class="size-6 object-contain" />
+                <img
+                  v-if="agent.icon"
+                  :src="agent.icon"
+                  :alt="agent.name"
+                  class="size-6 object-contain"
+                />
                 <img v-else :src="logoSrc" class="size-6 opacity-90" alt="ChatClaw logo" />
               </div>
               <span class="flex-1 truncate text-sm text-foreground">{{ agent.name }}</span>

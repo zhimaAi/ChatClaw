@@ -1014,5 +1014,3 @@ const handleDelete = async () => {
     </DialogContent>
   </Dialog>
 </template>
-
-

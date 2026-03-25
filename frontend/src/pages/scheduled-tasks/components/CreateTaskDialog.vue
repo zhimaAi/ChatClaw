@@ -77,9 +77,7 @@ const canSubmit = computed(() => {
   return true
 })
 
-const submitActionDisabled = computed(
-  () => !canSubmit.value || props.saving || submitLocked.value
-)
+const submitActionDisabled = computed(() => !canSubmit.value || props.saving || submitLocked.value)
 
 const customTimeValue = computed({
   get() {
@@ -279,7 +277,7 @@ watch(
             >
               <div v-if="form.scheduleType === 'preset'" class="space-y-2">
                 <span class="block text-sm font-medium text-foreground">
-                   {{ t('scheduledTasks.dialog.presetLabel') }}
+                  {{ t('scheduledTasks.dialog.presetLabel') }}
                 </span>
                 <div class="grid gap-3 md:grid-cols-2">
                   <button
@@ -385,7 +383,9 @@ watch(
                       step="1"
                       class="h-9 w-[120px]"
                     />
-                    <span class="ml-3 text-sm text-muted-foreground"> {{ t('scheduledTasks.dialog.minutes') }}</span>
+                    <span class="ml-3 text-sm text-muted-foreground">
+                      {{ t('scheduledTasks.dialog.minutes') }}</span
+                    >
                   </div>
 
                   <Input
@@ -426,8 +426,12 @@ watch(
             class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10"
           >
             <div class="space-y-1">
-              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">{{ t('scheduledTasks.dialog.enableNowTitle') }}</h3>
-              <p class="text-sm text-muted-foreground"> {{ t('scheduledTasks.dialog.enableNowHint') }}</p>
+              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">
+                {{ t('scheduledTasks.dialog.enableNowTitle') }}
+              </h3>
+              <p class="text-sm text-muted-foreground">
+                {{ t('scheduledTasks.dialog.enableNowHint') }}
+              </p>
             </div>
             <Switch
               :model-value="form.enabled"
@@ -437,9 +441,7 @@ watch(
         </div>
       </div>
 
-      <DialogFooter
-        class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end"
-      >
+      <DialogFooter class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end">
         <Button type="button" variant="outline" @click="closeDialog">
           {{ t('common.cancel') }}
         </Button>

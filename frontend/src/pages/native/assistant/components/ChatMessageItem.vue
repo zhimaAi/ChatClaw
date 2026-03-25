@@ -380,11 +380,7 @@ onUnmounted(() => {
     "
   >
     <!-- Message content container -->
-    <div
-      :class="
-        cn('flex min-w-0 w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')
-      "
-    >
+    <div :class="cn('flex min-w-0 w-full flex-col gap-1.5', isUser ? 'items-end' : 'items-start')">
       <!-- Assistant messages: interleaved segments (thinking → content ↔ tool calls) -->
       <template v-if="isAssistant">
         <!-- Agent avatar and name header -->
