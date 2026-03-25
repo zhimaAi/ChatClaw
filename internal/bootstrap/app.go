@@ -33,8 +33,8 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
-	"chatclaw/internal/services/openclawagents"
 	openclawchannels "chatclaw/internal/services/openclaw/channels"
+	"chatclaw/internal/services/openclawagents"
 	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
@@ -280,6 +280,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("ensure openclaw main agent: %w", err)
 	}
 	app.RegisterService(application.NewService(openClawAgentsService))
+	// 注册 OpenClaw Runtime 管理器（供 OpenClaw Agent/Channel 与聊天桥接复用）
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
 	app.RegisterService(application.NewService(conversationsService))
@@ -339,7 +341,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 	app.RegisterService(application.NewService(channelService))
 	// 注册 OpenClaw 频道服务（Feishu-focused channel management for OpenClaw）
-	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService)
+	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService, openclawManager)
 	app.RegisterService(application.NewService(openClawChannelService))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
@@ -347,7 +349,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
-	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	configSvc := openclawruntime.NewConfigService(openclawManager)
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)

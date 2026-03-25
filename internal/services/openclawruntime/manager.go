@@ -686,7 +686,6 @@ func buildGatewayEnv(cfg OpenClawConfig, bundle *bundledRuntime) []string {
 	}
 	envMap["OPENCLAW_STATE_DIR"] = bundle.StateDir
 	envMap["OPENCLAW_CONFIG_PATH"] = bundle.ConfigPath
-	envMap["OPENCLAW_SKIP_CHANNELS"] = "1"
 	envMap["OPENCLAW_SKIP_CANVAS_HOST"] = "1"
 	envMap["OPENCLAW_EMBEDDED_IN"] = "ChatClaw"
 
