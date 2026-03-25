@@ -17,6 +17,9 @@ import (
 	"chatclaw/internal/deeplink"
 	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
+	"chatclaw/internal/openclaw/agents"
+	"chatclaw/internal/openclaw/runtime"
+	openclawskills "chatclaw/internal/openclaw/skills"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
 	"chatclaw/internal/services/assistantmcp"
@@ -34,8 +37,6 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
-	"chatclaw/internal/openclaw/agents"
-	"chatclaw/internal/openclaw/runtime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
@@ -390,6 +391,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
+	app.RegisterService(application.NewService(openclawskills.NewOpenClawSkillsService(openClawAgentsService, openclawManager)))
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
 		go configSvc.Sync(context.Background())
 	})

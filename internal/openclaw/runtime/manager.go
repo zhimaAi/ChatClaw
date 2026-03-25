@@ -153,7 +153,7 @@ func (m *Manager) reconcile(restart bool) error {
 	m.broadcastStatus(RuntimeStatus{
 		Phase: PhaseStarting, Message: "Preparing OpenClaw Gateway",
 		InstalledVersion: version,
-		GatewayURL: gatewayURL(cfg.GatewayPort),
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
 	})
 
 	if err := ensureOpenClawStateDir(bundle); err != nil {
@@ -552,6 +552,20 @@ func (m *Manager) QueryRequest(ctx context.Context, method string, params any, o
 	return errors.New("gateway websocket is not connected")
 }
 
+// SkillsStatus calls the OpenClaw Gateway RPC "skills.status" (protocol schema: SkillsStatusParams).
+// Pass empty agentID for the default scope; pass an OpenClaw agent id for that agent's workspace view.
+func (m *Manager) SkillsStatus(ctx context.Context, agentID string) (json.RawMessage, error) {
+	params := map[string]any{}
+	if strings.TrimSpace(agentID) != "" {
+		params["agentId"] = strings.TrimSpace(agentID)
+	}
+	var raw json.RawMessage
+	if err := m.QueryRequest(ctx, "skills.status", params, &raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 // AddEventListener registers a listener for gateway events with the given key.
 // The caller is responsible for removing it when done via RemoveEventListener.
 func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
@@ -730,4 +744,3 @@ func shouldRetryConnect(err error) bool {
 	}
 	return false
 }
-

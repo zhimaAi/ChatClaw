@@ -3,7 +3,7 @@
  * Left-side navigation with system switcher (ChatClaw / OpenClaw).
  *
  * Menu items are fully computed from `currentSystem`:
- *  - Both: assistant, knowledge, scheduled-tasks, skills, channels, tools, multiask
+ *  - Both: assistant, knowledge, scheduled-tasks, skills (native vs openclaw-skills), channels, tools, multiask
  *  - chatclaw only: hides memory
  *  - openclaw only: shows memory
  *
@@ -115,6 +115,9 @@ const allTopNavItems: NavItem[] = [
     key: 'skills',
     labelKey: 'nav.skills',
     icon: IconSkills,
+    systemModuleMap: {
+      openclaw: 'openclaw-skills',
+    },
   },
   {
     key: 'channels',
