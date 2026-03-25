@@ -17,6 +17,7 @@ import {
   getOperationLogOperationTypeLabel,
 } from '../scheduledTaskText'
 import OperationLogDetailDialog from './OperationLogDetailDialog.vue'
+import OperationLogTooltipCell from './OperationLogTooltipCell.vue'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -124,13 +125,10 @@ function handleViewDetail(logId: number) {
             class="border-b border-[#f1f5f9] align-top text-[#171717]"
           >
             <td class="px-4 py-4">
-              <div
+              <OperationLogTooltipCell
                 v-if="row.showSharedColumns"
-                class="truncate whitespace-nowrap"
-                :title="row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE"
-              >
-                {{ row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE }}
-              </div>
+                :value="row.taskName || OPERATION_LOG_EMPTY_FIELD_VALUE"
+              />
             </td>
             <td class="px-4 py-4">
               <div v-if="row.showSharedColumns" class="truncate whitespace-nowrap">
@@ -143,19 +141,13 @@ function handleViewDetail(logId: number) {
               </div>
             </td>
             <td class="px-4 py-4">
-              <div class="truncate whitespace-nowrap" :title="row.fieldLabel">
-                {{ row.fieldLabel }}
-              </div>
+              <OperationLogTooltipCell :value="row.fieldLabel" />
             </td>
-            <td class="px-4 py-4">
-              <div class="truncate whitespace-nowrap" :title="row.beforeValue">
-                {{ row.beforeValue }}
-              </div>
+            <td class="max-w-0 px-4 py-4">
+              <OperationLogTooltipCell :value="row.beforeValue" />
             </td>
-            <td class="px-4 py-4">
-              <div class="truncate whitespace-nowrap" :title="row.afterValue">
-                {{ row.afterValue }}
-              </div>
+            <td class="max-w-0 px-4 py-4">
+              <OperationLogTooltipCell :value="row.afterValue" />
             </td>
             <td class="px-4 py-4">
               <div v-if="row.showSharedColumns" class="truncate whitespace-nowrap">
