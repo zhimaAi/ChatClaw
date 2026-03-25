@@ -35,9 +35,6 @@ const (
 	// defaultOpenClawCronListLimit keeps UI list pagination stable with OpenClaw defaults.
 	// defaultOpenClawCronListLimit 与 OpenClaw 默认分页保持一致，避免前后端理解不一致。
 	defaultOpenClawCronListLimit = 50
-	// manualRunExternalIDPrefix tags conversations created by the "Run now" action.
-	// manualRunExternalIDPrefix 标记“立即运行”创建的本地会话，便于在历史列表中合并展示。
-	manualRunExternalIDPrefix = "openclaw-cron-manual:"
 )
 
 // OpenClawCronService wraps OpenClaw-native cron management for the Wails frontend.
@@ -183,14 +180,10 @@ func (s *OpenClawCronService) UpdateJob(jobID string, input UpdateOpenClawCronJo
 	if len(args) == 3 {
 		return s.findJobByID(jobID)
 	}
-	var raw openClawJobStoreItem
-	if err := s.runCLIJSON(args, &raw); err != nil {
+	if err := s.runCLI(args, false, nil); err != nil {
 		return nil, err
 	}
-	job := flattenJob(raw)
-	agentNameMap, _ := s.agentNameMap()
-	job.AgentName = agentNameMap[job.AgentID]
-	return &job, nil
+	return s.findJobByID(jobID)
 }
 
 func (s *OpenClawCronService) DeleteJob(jobID string) error {
@@ -220,60 +213,21 @@ func (s *OpenClawCronService) DisableJob(jobID string) (*OpenClawCronJob, error)
 	return &job, nil
 }
 
-// RunJobNow manually starts a new OpenClaw assistant conversation for the job instead of invoking cron run.
-// RunJobNow 点击“立即运行”时创建一条 OpenClaw 会话并发送消息，语义上等价于手动找任务助手发起一次对话。
-func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronManualRunResult, error) {
-	job, err := s.findJobByID(jobID)
+// RunJobNow triggers OpenClaw-native cron execution for the target job.
+// RunJobNow 点击“立即运行”时直接触发 OpenClaw 原生 cron run，保持与自动调度同一执行链路。
+func (s *OpenClawCronService) RunJobNow(jobID string) error {
+	args, err := buildRunNowArgs(jobID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if s.convSvc == nil || s.chatSvc == nil {
-		return nil, fmt.Errorf("openclaw cron manual run dependencies are not ready")
+	output, runErr := s.runCLIOutput(args, false)
+	if runErr != nil {
+		if isBenignCronRunOutput(output) {
+			return nil
+		}
+		return fmt.Errorf("openclaw %s failed: %w: %s", strings.Join(args, " "), runErr, strings.TrimSpace(string(output)))
 	}
-
-	localAgentID, err := s.resolveManualRunAgentID(job.AgentID)
-	if err != nil {
-		return nil, err
-	}
-	if localAgentID <= 0 {
-		return nil, fmt.Errorf("openclaw cron manual run agent not found")
-	}
-
-	content := strings.TrimSpace(job.Message)
-	if content == "" {
-		return nil, fmt.Errorf("openclaw cron manual run requires a message payload")
-	}
-
-	conv, err := s.convSvc.CreateConversation(conversations.CreateConversationInput{
-		AgentID:            localAgentID,
-		AgentType:          conversations.AgentTypeOpenClaw,
-		Name:               strings.TrimSpace(job.Name),
-		ExternalID:         fmt.Sprintf("%s%s:%d", manualRunExternalIDPrefix, strings.TrimSpace(jobID), time.Now().UnixMilli()),
-		LastMessage:        content,
-		LLMModelID:         strings.TrimSpace(job.Model),
-		EnableThinking:     strings.TrimSpace(job.Thinking) != "",
-		ChatMode:           conversations.ChatModeTask,
-		TeamType:           conversations.TeamTypePerson,
-		OpenClawSessionKey: "",
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := s.chatSvc.SendOpenClawMessage(chatservice.SendMessageInput{
-		ConversationID: conv.ID,
-		Content:        content,
-		TabID:          fmt.Sprintf("openclaw-cron-manual-%d", conv.ID),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &OpenClawCronManualRunResult{
-		ConversationID: conv.ID,
-		AgentID:        conv.AgentID,
-		RequestID:      strings.TrimSpace(result.RequestID),
-	}, nil
+	return nil
 }
 
 // ListRuns reads job run history via OpenClaw CLI first, then falls back to the JSONL log.
@@ -302,10 +256,6 @@ func (s *OpenClawCronService) ListRuns(jobID string, limit int) ([]OpenClawCronR
 		}
 		merged = append(merged, fileEntries...)
 	}
-	manualEntries, manualErr := s.listManualRunEntries(jobID, limit)
-	if manualErr == nil && len(manualEntries) > 0 {
-		merged = append(merged, manualEntries...)
-	}
 	sortOpenClawRunsDesc(merged)
 	if len(merged) > limit {
 		merged = merged[:limit]
@@ -316,25 +266,6 @@ func (s *OpenClawCronService) ListRuns(jobID string, limit int) ([]OpenClawCronR
 // GetRunDetail loads both the run record and the transcript file for a cron execution.
 // 运行详情同时读取 run JSONL 和 session transcript JSONL，供右侧详情面板展示。
 func (s *OpenClawCronService) GetRunDetail(jobID string, sessionID string) (*OpenClawCronRunDetail, error) {
-	if conversationID, ok := parseManualConversationID(sessionID); ok {
-		agentID, err := s.findConversationAgentID(conversationID)
-		if err != nil {
-			return nil, err
-		}
-		return &OpenClawCronRunDetail{
-			Run: OpenClawCronRunEntry{
-				JobID:     strings.TrimSpace(jobID),
-				Action:    "manual",
-				Status:    "manual",
-				SessionID: sessionID,
-			},
-			ConversationID:      conversationID,
-			ConversationAgentID: agentID,
-			Messages:            []OpenClawCronTranscriptMessage{},
-			IsLive:              false,
-		}, nil
-	}
-
 	runs, err := s.readRunEntriesFromFile(jobID, defaultOpenClawCronListLimit)
 	if err != nil {
 		return nil, err
@@ -548,91 +479,6 @@ func (s *OpenClawCronService) readRunEntriesFromFile(jobID string, limit int) ([
 	return items, nil
 }
 
-// listManualRunEntries loads manual-run conversations and projects them into the left-side history list.
-// listManualRunEntries 读取“立即运行”生成的本地会话，并投影成左侧历史列表项。
-func (s *OpenClawCronService) listManualRunEntries(jobID string, limit int) ([]OpenClawCronRunEntry, error) {
-	db, err := s.db()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	prefix := manualRunExternalIDPrefix + strings.TrimSpace(jobID) + ":"
-	rows := make([]manualRunConversationRow, 0)
-	if err := db.NewSelect().
-		TableExpr("conversations AS c").
-		Join("LEFT JOIN openclaw_agents AS oa ON oa.id = c.agent_id").
-		ColumnExpr("c.id, c.agent_id, c.external_id, c.last_message, c.openclaw_session_key, c.created_at, c.updated_at, oa.openclaw_agent_id").
-		Where("c.agent_type = ?", conversations.AgentTypeOpenClaw).
-		Where("c.external_id LIKE ?", prefix+"%").
-		OrderExpr("c.updated_at DESC, c.id DESC").
-		Limit(limit).
-		Scan(ctx, &rows); err != nil {
-		return nil, err
-	}
-
-	out := make([]OpenClawCronRunEntry, 0, len(rows))
-	for _, row := range rows {
-		sessionKey := strings.TrimSpace(row.OpenClawSessionKey)
-		if sessionKey == "" && strings.TrimSpace(row.OpenClawAgentID) != "" {
-			sessionKey = buildConversationSessionKey(row.OpenClawAgentID, row.ID)
-		}
-		runAtMs := row.UpdatedAt.UnixMilli()
-		if runAtMs <= 0 {
-			runAtMs = row.CreatedAt.UnixMilli()
-		}
-		out = append(out, OpenClawCronRunEntry{
-			TimestampMs: runAtMs,
-			JobID:       strings.TrimSpace(jobID),
-			Action:      "manual",
-			Status:      "manual",
-			Summary:     strings.TrimSpace(row.LastMessage),
-			RunAtMs:     runAtMs,
-			SessionID:   fmt.Sprintf("manual:%d", row.ID),
-			SessionKey:  sessionKey,
-		})
-	}
-	return out, nil
-}
-
-func (s *OpenClawCronService) findConversationAgentID(conversationID int64) (int64, error) {
-	db, err := s.db()
-	if err != nil {
-		return 0, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	var agentID int64
-	if err := db.NewSelect().
-		Table("conversations").
-		Column("agent_id").
-		Where("id = ?", conversationID).
-		Limit(1).
-		Scan(ctx, &agentID); err != nil {
-		return 0, err
-	}
-	return agentID, nil
-}
-
-func buildConversationSessionKey(openClawAgentID string, conversationID int64) string {
-	return fmt.Sprintf("agent:%s:conv_%d", strings.TrimSpace(openClawAgentID), conversationID)
-}
-
-func parseManualConversationID(sessionID string) (int64, bool) {
-	raw := strings.TrimPrefix(strings.TrimSpace(sessionID), "manual:")
-	if raw == strings.TrimSpace(sessionID) || raw == "" {
-		return 0, false
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
-		return 0, false
-	}
-	return value, true
-}
-
 func sortOpenClawRunsDesc(items []OpenClawCronRunEntry) {
 	slices.SortFunc(items, func(left, right OpenClawCronRunEntry) int {
 		leftTs := left.RunAtMs
@@ -843,26 +689,13 @@ INSERT INTO conversations (
 }
 
 func (s *OpenClawCronService) runCLIJSON(args []string, out any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+	return s.runCLI(args, true, out)
+}
 
-	fullArgs := append([]string{}, args...)
-	fullArgs = append(fullArgs, "--json")
-	gatewayURL := strings.TrimSpace(strings.Replace(s.manager.GatewayURL(), "http://", "ws://", 1)) + "/ws"
-	token := strings.TrimSpace(s.manager.GatewayToken())
-	if gatewayURL != "" {
-		fullArgs = append(fullArgs, "--url", gatewayURL)
-	}
-	if token != "" {
-		fullArgs = append(fullArgs, "--token", token)
-	}
-
-	// Force UTF-8 safe output decoding on Windows and keep the command pinned to the embedded gateway.
-	// 在 Windows 下固定 UTF-8 输出，并显式指向内嵌 Gateway，避免误连用户全局 OpenClaw。
-	cmd := exec.CommandContext(ctx, openClawCommandName, fullArgs...)
-	cmd.Env = append(os.Environ(), "PYTHONUTF8=1")
-	setCmdHideWindow(cmd)
-	output, err := cmd.CombinedOutput()
+// runCLI executes an OpenClaw CLI command against the embedded gateway.
+// runCLI 统一处理 OpenClaw CLI 调用，并按需决定是否追加 JSON 输出参数。
+func (s *OpenClawCronService) runCLI(args []string, jsonOutput bool, out any) error {
+	output, err := s.runCLIOutput(args, jsonOutput)
 	if err != nil {
 		return fmt.Errorf("openclaw %s failed: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}
@@ -873,6 +706,64 @@ func (s *OpenClawCronService) runCLIJSON(args []string, out any) error {
 		return fmt.Errorf("decode openclaw response: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+// runCLIOutput executes an OpenClaw CLI command and returns raw combined output.
+// runCLIOutput 负责执行 OpenClaw CLI，并返回原始输出供调用方做细粒度判断。
+func (s *OpenClawCronService) runCLIOutput(args []string, jsonOutput bool) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	gatewayURL := strings.TrimSpace(strings.Replace(s.manager.GatewayURL(), "http://", "ws://", 1)) + "/ws"
+	token := strings.TrimSpace(s.manager.GatewayToken())
+	fullArgs := buildCLIArgs(args, gatewayURL, token, jsonOutput)
+
+	// Force UTF-8 safe output decoding on Windows and keep the command pinned to the embedded gateway.
+	// 在 Windows 下固定 UTF-8 输出，并显式指向内嵌 Gateway，避免误连用户全局 OpenClaw。
+	cmd := exec.CommandContext(ctx, openClawCommandName, fullArgs...)
+	cmd.Env = append(os.Environ(), "PYTHONUTF8=1")
+	setCmdHideWindow(cmd)
+	return cmd.CombinedOutput()
+}
+
+// buildCLIArgs appends gateway routing and optional JSON output flags.
+// buildCLIArgs 负责为 OpenClaw CLI 追加网关路由参数，并按需附加 JSON 标志。
+func buildCLIArgs(args []string, gatewayURL string, token string, jsonOutput bool) []string {
+	fullArgs := append([]string{}, args...)
+	if jsonOutput {
+		fullArgs = append(fullArgs, "--json")
+	}
+	if strings.TrimSpace(gatewayURL) != "" {
+		fullArgs = append(fullArgs, "--url", strings.TrimSpace(gatewayURL))
+	}
+	if strings.TrimSpace(token) != "" {
+		fullArgs = append(fullArgs, "--token", strings.TrimSpace(token))
+	}
+	return fullArgs
+}
+
+// buildRunNowArgs keeps manual trigger semantics aligned with OpenClaw-native cron execution.
+// buildRunNowArgs 保证“立即运行”走 OpenClaw 原生 cron run，而不是本地拼装手动会话。
+func buildRunNowArgs(jobID string) ([]string, error) {
+	jobID = strings.TrimSpace(jobID)
+	if jobID == "" {
+		return nil, fmt.Errorf("openclaw cron id is required")
+	}
+	return []string{"cron", "run", jobID}, nil
+}
+
+// isBenignCronRunOutput treats "already-running" as a non-fatal result for manual triggers.
+// isBenignCronRunOutput 将 already-running 识别为“已在运行”的可接受结果，避免前端误报失败。
+func isBenignCronRunOutput(output []byte) bool {
+	var payload struct {
+		OK     bool   `json:"ok"`
+		Ran    bool   `json:"ran"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(output, &payload); err != nil {
+		return false
+	}
+	return payload.OK && !payload.Ran && strings.EqualFold(strings.TrimSpace(payload.Reason), "already-running")
 }
 
 func buildCreateArgs(input CreateOpenClawCronJobInput) ([]string, error) {
