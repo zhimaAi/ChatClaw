@@ -349,7 +349,84 @@ func loadOpenClawTranscriptImagePayload(filePath, mimeType string) *ImagePayload
 	}
 }
 
+func firstNonEmptyOpenClawString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func openClawStringValue(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func extractOpenClawTranscriptContentAttachments(content any) []ImagePayload {
+	blocks, ok := content.([]any)
+	if !ok {
+		return nil
+	}
+
+	var attachments []ImagePayload
+	for _, block := range blocks {
+		bm, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		blockType := strings.ToLower(strings.TrimSpace(openClawStringValue(bm["type"])))
+		if blockType != "image" {
+			continue
+		}
+
+		base64Data := strings.TrimSpace(firstNonEmptyOpenClawString(
+			openClawStringValue(bm["data"]),
+			openClawStringValue(bm["base64"]),
+			openClawStringValue(bm["content"]),
+		))
+		mimeType := guessOpenClawAttachmentMime(
+			firstNonEmptyOpenClawString(
+				openClawStringValue(bm["filePath"]),
+				openClawStringValue(bm["file_path"]),
+				openClawStringValue(bm["path"]),
+				openClawStringValue(bm["fileName"]),
+				openClawStringValue(bm["file_name"]),
+				openClawStringValue(bm["name"]),
+			),
+			firstNonEmptyOpenClawString(
+				openClawStringValue(bm["mimeType"]),
+				openClawStringValue(bm["mime_type"]),
+				openClawStringValue(bm["mediaType"]),
+				openClawStringValue(bm["media_type"]),
+			),
+		)
+		if base64Data == "" || !strings.HasPrefix(strings.ToLower(mimeType), "image/") {
+			continue
+		}
+
+		fileName := firstNonEmptyOpenClawString(
+			openClawStringValue(bm["fileName"]),
+			openClawStringValue(bm["file_name"]),
+			openClawStringValue(bm["name"]),
+		)
+		attachments = append(attachments, ImagePayload{
+			Kind:         "image",
+			Source:       "inline_base64",
+			MimeType:     mimeType,
+			Base64:       base64Data,
+			DataURL:      "data:" + mimeType + ";base64," + base64Data,
+			FileName:     fileName,
+			OriginalName: fileName,
+		})
+	}
+
+	return attachments
+}
+
 func buildOpenClawTranscriptAttachments(
+	contentBlocks any,
 	content string,
 	mediaPath string,
 	mediaPaths []string,
@@ -358,6 +435,9 @@ func buildOpenClawTranscriptAttachments(
 ) []ImagePayload {
 	filesFromContext, _ := extractOpenClawAttachmentContext(content)
 	var attachments []ImagePayload
+	if inlineAttachments := extractOpenClawTranscriptContentAttachments(contentBlocks); len(inlineAttachments) > 0 {
+		attachments = append(attachments, inlineAttachments...)
+	}
 	if len(filesFromContext) > 0 {
 		attachments = append(attachments, filesFromContext...)
 	}
@@ -763,6 +843,7 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		msgIDCounter--
 		contentStr := extractTextFromContent(m.Content)
 		attachments := buildOpenClawTranscriptAttachments(
+			m.Content,
 			contentStr,
 			m.MediaPath,
 			m.MediaPaths,
