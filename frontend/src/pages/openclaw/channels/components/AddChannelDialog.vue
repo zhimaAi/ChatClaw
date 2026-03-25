@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/toast'
 import type { PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { getPlatformIcon, getPlatformIconBg } from '@/pages/common/channelUtils'
 
@@ -48,6 +49,11 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
   if (te(key)) return t(key)
   return fallbackName || platformId
 }
+
+/** OpenClaw: only Feishu is available; others show coming soon (same pattern as Twitter on ChatClaw). */
+function isChannelPlatformSelectable(platformId: string) {
+  return platformId === 'feishu'
+}
 </script>
 
 <template>
@@ -69,13 +75,19 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
           <div
             v-for="platform in platforms"
             :key="platform.id"
-            class="flex min-w-0 items-center justify-between gap-2 rounded-2xl border p-3 transition-all shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:bg-card sm:p-4 cursor-pointer"
+            class="flex min-w-0 items-center justify-between gap-2 rounded-2xl border p-3 transition-all shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10 dark:bg-card sm:p-4"
             :class="
-              localSelected?.id === platform.id
-                ? 'border-[#171717] bg-white dark:border-primary'
-                : 'border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
+              isChannelPlatformSelectable(platform.id)
+                ? localSelected?.id === platform.id
+                  ? 'cursor-pointer border-[#171717] bg-white dark:border-primary'
+                  : 'cursor-pointer border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
+                : 'cursor-not-allowed border-border bg-muted/25 opacity-50 dark:bg-muted/20'
             "
-            @click="handleSelect(platform)"
+            @click="
+              isChannelPlatformSelectable(platform.id)
+                ? handleSelect(platform)
+                : toast.default(t('channels.comingSoon'))
+            "
           >
             <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-[11px]">
               <div
