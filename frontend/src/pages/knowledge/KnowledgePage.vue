@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { useNavigationStore, useSettingsStore } from '@/stores'
+import { useNavigationStore, useSettingsStore, useAppStore } from '@/stores'
 import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
@@ -75,6 +75,7 @@ type LibraryTab = 'personal' | 'team'
 
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
+const appStore = useAppStore()
 const settingsStore = useSettingsStore()
 
 const activeTab = ref<LibraryTab>('personal')
@@ -1053,6 +1054,7 @@ const handleSendMessage = () => {
 
   // Set pending chat data and open a new assistant tab
   navigationStore.setPendingChatAndOpenAssistant({
+    module: appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant',
     chatInput: messageContent,
     libraryIds,
     ...(teamLibraryId && { teamLibraryId }),
