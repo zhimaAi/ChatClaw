@@ -156,6 +156,7 @@
   "error.chat_generation_failed": "生成失败：{{.Error}}",
   "error.chat_stream_failed": "流式输出失败：{{.Error}}",
   "error.chat_tool_execution_failed": "工具执行失败：{{.Tool}} - {{.Error}}",
+  "error.scheduled_task_expired": "任务已过期，不能再启用",
   "scheduled_task.issue.name_required": "任务名称不能为空",
   "scheduled_task.issue.prompt_required": "任务提示词不能为空",
   "scheduled_task.issue.agent_not_found": "未匹配到对应的助手",
