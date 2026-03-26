@@ -219,9 +219,10 @@ const (
 
 // OpenClawCronRunNowResult is returned when a job is manually enqueued.
 type OpenClawCronRunNowResult struct {
-	RunID       string `json:"run_id"`
-	TriggerAtMs int64  `json:"trigger_at_ms"`
-	Enqueued    bool   `json:"enqueued"`
+	RunID          string `json:"run_id"`
+	TriggerAtMs    int64  `json:"trigger_at_ms"`
+	Enqueued       bool   `json:"enqueued"`
+	ConversationID int64  `json:"conversation_id,omitempty"`
 }
 
 // OpenClawCronHistoryListItem is the merged history item shown in the cron history dialog.

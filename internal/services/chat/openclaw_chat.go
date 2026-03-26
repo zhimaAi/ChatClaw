@@ -945,6 +945,7 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 		"content_len", len(content), "attachments", len(attachments))
 
 	requestID := uuid.New().String()
+	s.emitOpenClawUserMessage(input.ConversationID, input.TabID, requestID, content, attachments)
 	genCtx, cancel := context.WithCancel(context.Background())
 
 	gen := &activeGeneration{
@@ -1021,6 +1022,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	}
 
 	requestID := uuid.New().String()
+	s.emitOpenClawUserMessage(input.ConversationID, input.TabID, requestID, content, attachments)
 	genCtx, cancel := context.WithCancel(context.Background())
 
 	gen := &activeGeneration{
@@ -1038,6 +1040,33 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	}()
 
 	return &SendMessageResult{RequestID: requestID, MessageID: input.MessageID}, nil
+}
+
+// emitOpenClawUserMessage mirrors the standard chat pipeline by sending a local
+// user-message event before the OpenClaw gateway starts streaming.
+func (s *ChatService) emitOpenClawUserMessage(conversationID int64, tabID, requestID, content string, attachments []ImagePayload) {
+	imagesJSON := "[]"
+	if len(attachments) > 0 {
+		if data, err := json.Marshal(attachments); err == nil {
+			imagesJSON = string(data)
+		}
+	}
+
+	// Use a synthetic negative message id so the frontend can render the user
+	// bubble immediately without requiring a local DB insert for OpenClaw chats.
+	messageID := -conversationID*1000000 - time.Now().UnixMilli()%1000000
+	s.app.Event.Emit(EventChatUserMessage, ChatUserMessageEvent{
+		ChatEvent: ChatEvent{
+			ConversationID: conversationID,
+			TabID:          tabID,
+			RequestID:      requestID,
+			Seq:            0,
+			MessageID:      messageID,
+			Ts:             time.Now().UnixMilli(),
+		},
+		Content:    content,
+		ImagesJSON: imagesJSON,
+	})
 }
 
 // openClawChatRunState tracks the streaming state for a single chat.send invocation.

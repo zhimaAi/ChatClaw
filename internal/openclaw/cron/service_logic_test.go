@@ -118,6 +118,66 @@ func TestIsPendingRunAwaitingBinding(t *testing.T) {
 	}
 }
 
+func TestShouldRunManualCronViaChat(t *testing.T) {
+	tests := []struct {
+		name string
+		job  OpenClawCronJob
+		want bool
+	}{
+		{
+			name: "message agent turn uses chat pipeline",
+			job: OpenClawCronJob{
+				PayloadKind: openClawCronPayloadAgentTurn,
+				Message:     "hello",
+			},
+			want: true,
+		},
+		{
+			name: "system event keeps native cron path",
+			job: OpenClawCronJob{
+				PayloadKind: openClawCronPayloadSystemEvent,
+				Message:     "hello",
+			},
+			want: false,
+		},
+		{
+			name: "empty message keeps native cron path",
+			job: OpenClawCronJob{
+				PayloadKind: openClawCronPayloadAgentTurn,
+				Message:     "",
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		if got := shouldRunManualCronViaChat(tc.job); got != tc.want {
+			t.Fatalf("%s: expected %v, got %v", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestSplitCronModelSelection(t *testing.T) {
+	providerID, modelID := splitCronModelSelection("openai/gpt-5")
+	if providerID != "openai" || modelID != "gpt-5" {
+		t.Fatalf("expected openai/gpt-5, got %q / %q", providerID, modelID)
+	}
+
+	providerID, modelID = splitCronModelSelection("gpt-5")
+	if providerID != "" || modelID != "gpt-5" {
+		t.Fatalf("expected alias-only model, got %q / %q", providerID, modelID)
+	}
+}
+
+func TestNormalizeCronThinking(t *testing.T) {
+	if normalizeCronThinking("off") {
+		t.Fatalf("expected off to disable thinking")
+	}
+	if !normalizeCronThinking("medium") {
+		t.Fatalf("expected medium to enable thinking")
+	}
+}
+
 func TestHasMatchingRunHistory_MatchesNearbyRunLogTimestamp(t *testing.T) {
 	pending := &pendingCronRun{
 		RunID:       "manual:job-1:1",

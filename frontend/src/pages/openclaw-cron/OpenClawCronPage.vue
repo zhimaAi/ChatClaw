@@ -50,6 +50,7 @@ const editingJob = ref<OpenClawCronJob | null>(null)
 const historyJob = ref<OpenClawCronJob | null>(null)
 const historyTriggerAtMs = ref<number | null>(null)
 const historyRunId = ref<string | null>(null)
+const historyConversationId = ref<number | null>(null)
 const form = ref<OpenClawCronFormState>(createEmptyOpenClawCronForm())
 const deleteDialogOpen = ref(false)
 const deleting = ref(false)
@@ -130,6 +131,7 @@ async function handleRun(job: OpenClawCronJob) {
   try {
     const result = await OpenClawCronService.RunJobNow(job.id)
     historyJob.value = job
+    historyConversationId.value = Number(result?.conversation_id || 0) || null
     historyTriggerAtMs.value = Number(result?.trigger_at_ms || Date.now())
     historyRunId.value = result?.run_id || null
   } catch (error) {
@@ -341,12 +343,14 @@ async function confirmDelete() {
   <OpenClawCronHistoryDialog
     :open="!!historyJob"
     :job="historyJob"
+    :conversation-id="historyConversationId"
     :trigger-at-ms="historyTriggerAtMs"
     :run-id="historyRunId"
     @update:open="
       (value) => {
         if (!value) {
           historyJob = null
+          historyConversationId = null
           historyTriggerAtMs = null
           historyRunId = null
         }

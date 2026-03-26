@@ -17,6 +17,7 @@ import { formatDurationMs, formatOpenClawCronTime } from './utils'
 const props = defineProps<{
   open: boolean
   job: OpenClawCronJob | null
+  conversationId?: number | null
   triggerAtMs?: number | null
   runId?: string | null
 }>()
@@ -86,6 +87,10 @@ function runTimestampMs(run: OpenClawCronHistoryListItem) {
 }
 
 function findTriggeredRun() {
+  const conversationId = Number(props.conversationId || 0)
+  if (conversationId > 0) {
+    return runs.value.find((item) => Number(item.conversation_id || 0) === conversationId) ?? null
+  }
   const runId = String(props.runId || '').trim()
   if (runId) {
     return runs.value.find((item) => String(item.run_id || '').trim() === runId) ?? null
