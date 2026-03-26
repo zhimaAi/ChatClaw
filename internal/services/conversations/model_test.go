@@ -15,3 +15,10 @@ func TestNormalizeConversationSource_RecognizesOpenClawCron(t *testing.T) {
 		t.Fatalf("expected %q, got %q", ConversationSourceOpenClawCron, got)
 	}
 }
+
+func TestNormalizeConversationSource_RecognizesOpenClawCronJobScopedSource(t *testing.T) {
+	got := NormalizeConversationSource(" openclaw_cron:job-123 ")
+	if got != "openclaw_cron:job-123" {
+		t.Fatalf("expected scoped cron source to be preserved, got %q", got)
+	}
+}

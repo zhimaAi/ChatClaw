@@ -71,9 +71,12 @@ func NormalizeTeamType(raw string) (string, bool) {
 // NormalizeConversationSource canonicalizes conversation source values.
 // Unknown values fall back to the default manual source.
 func NormalizeConversationSource(raw string) string {
-	switch strings.TrimSpace(raw) {
-	case ConversationSourceOpenClawCron:
+	trimmed := strings.TrimSpace(raw)
+	switch {
+	case trimmed == ConversationSourceOpenClawCron:
 		return ConversationSourceOpenClawCron
+	case strings.HasPrefix(trimmed, ConversationSourceOpenClawCron+":"):
+		return trimmed
 	default:
 		return ConversationSourceManual
 	}

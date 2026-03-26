@@ -71,10 +71,6 @@ const (
 	// openClawCronChannelPlatformFeishu keeps OpenClaw account-key mapping explicit.
 	openClawCronChannelPlatformFeishu = "feishu"
 
-	// openClawCronManualRunTabID scopes manual cron-triggered chat runs so the
-	// frontend can reuse the standard OpenClaw chat event pipeline.
-	openClawCronManualRunTabID = "openclaw-cron-manual-run"
-
 	// openClawCronHistoryStatusRunning is the temporary UI state before a durable
 	// run log or local manual-run completion proves a terminal result.
 	openClawCronHistoryStatusRunning = "running"
@@ -219,7 +215,7 @@ func (s *OpenClawCronService) ListDeliveryPlatforms() ([]OpenClawCronDeliveryPla
 // GetLatestDeliveryTarget returns the most recent target id for the given OpenClaw agent and platform.
 // 返回指定 OpenClaw 助手与频道类型对应的最近投递目标 ID。
 func (s *OpenClawCronService) GetLatestDeliveryTarget(openClawAgentID string, platform string) (string, error) {
-	targetID, _, _, err := s.resolveDeliverySelection(cronDeliverySelectionInput{
+	channel, targetID, accountID, err := s.resolveDeliverySelection(cronDeliverySelectionInput{
 		OpenClawAgentID: openClawAgentID,
 		Platform:        platform,
 		TargetID:        "",
@@ -227,7 +223,7 @@ func (s *OpenClawCronService) GetLatestDeliveryTarget(openClawAgentID string, pl
 	if err != nil {
 		return "", err
 	}
-	return targetID, nil
+	return extractLatestDeliveryTarget(channel, targetID, accountID), nil
 }
 
 // ListJobs reads the OpenClaw jobs store directly.
@@ -367,10 +363,6 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 	if err != nil {
 		return nil, err
 	}
-	if shouldRunManualCronViaChat(*job) {
-		return s.runJobNowViaChat(*job)
-	}
-
 	triggeredAt := time.Now()
 	var payload struct {
 		Enqueued bool   `json:"enqueued"`
@@ -808,7 +800,7 @@ func (s *OpenClawCronService) listConversationHistoryItems(jobID string) ([]Open
 	conversationList, err := s.convSvc.ListConversationsBySource(
 		localAgentID,
 		conversations.AgentTypeOpenClaw,
-		conversations.ConversationSourceOpenClawCron,
+		buildCronConversationSource(jobID),
 	)
 	if err != nil {
 		return nil, err
@@ -817,9 +809,6 @@ func (s *OpenClawCronService) listConversationHistoryItems(jobID string) ([]Open
 	items := make([]OpenClawCronHistoryListItem, 0, len(conversationList))
 	for _, conversation := range conversationList {
 		sessionKey := strings.TrimSpace(conversation.OpenClawSessionKey)
-		if !matchesCronExternalID(conversation.ExternalID, jobID) {
-			continue
-		}
 		runAtMs := conversation.UpdatedAt.UnixMilli()
 		triggerType := normalizeHistoryTriggerType("", OpenClawCronHistorySourceConversation)
 		if triggerAtMs := parseManualTriggerAtMs(conversation.ExternalID); triggerAtMs > 0 {
@@ -1025,6 +1014,7 @@ func (s *OpenClawCronService) ensureRunConversation(jobID string, run OpenClawCr
 
 	return s.ensureConversationRecord(
 		localAgentID,
+		buildCronConversationSource(jobID),
 		sessionKey,
 		buildCronExternalID(jobID, run.SessionID),
 		buildCronConversationName(jobName, run.RunAtMs, run.TimestampMs),
@@ -1074,77 +1064,6 @@ func (s *OpenClawCronService) findLocalOpenClawAgentID(openClawAgentID string) (
 	return 0, nil
 }
 
-// runJobNowViaChat reuses the existing OpenClaw chat pipeline for manual
-// message-based runs so the frontend gets a normal conversation immediately.
-func (s *OpenClawCronService) runJobNowViaChat(job OpenClawCronJob) (*OpenClawCronRunNowResult, error) {
-	conversation, err := s.createManualRunConversation(job)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.app != nil {
-		s.app.Event.Emit("conversations:changed", map[string]any{
-			"agent_id": conversation.AgentID,
-		})
-	}
-
-	result, err := s.chatSvc.SendOpenClawMessage(chatservice.SendMessageInput{
-		ConversationID: conversation.ID,
-		Content:        strings.TrimSpace(job.Message),
-		TabID:          openClawCronManualRunTabID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &OpenClawCronRunNowResult{
-		RunID:          strings.TrimSpace(result.RequestID),
-		TriggerAtMs:    time.Now().UnixMilli(),
-		Enqueued:       true,
-		ConversationID: conversation.ID,
-	}, nil
-}
-
-// createManualRunConversation materializes a local conversation row before a
-// manual cron run enters the OpenClaw chat pipeline.
-func (s *OpenClawCronService) createManualRunConversation(job OpenClawCronJob) (*conversations.Conversation, error) {
-	localAgentID, err := s.resolveManualRunAgentID(job.AgentID)
-	if err != nil {
-		return nil, err
-	}
-	if localAgentID <= 0 {
-		return nil, fmt.Errorf("openclaw cron manual run agent is not available")
-	}
-
-	providerID, modelID := splitCronModelSelection(strings.TrimSpace(job.Model))
-	enableThinking := normalizeCronThinking(strings.TrimSpace(job.Thinking))
-	triggerAtMs := time.Now().UnixMilli()
-	externalID := fmt.Sprintf("%s:manual:%d", buildCronExternalID(job.ID, ""), triggerAtMs)
-
-	return s.convSvc.CreateConversation(conversations.CreateConversationInput{
-		AgentID:            localAgentID,
-		AgentType:          conversations.AgentTypeOpenClaw,
-		ConversationSource: conversations.ConversationSourceOpenClawCron,
-		Name:               buildCronConversationName(strings.TrimSpace(job.Name), triggerAtMs, triggerAtMs),
-		ExternalID:         externalID,
-		LLMProviderID:      providerID,
-		LLMModelID:         modelID,
-		EnableThinking:     enableThinking,
-		OpenClawSessionKey: "",
-		ChatMode:           conversations.ChatModeTask,
-		TeamType:           conversations.TeamTypePerson,
-	})
-}
-
-// shouldRunManualCronViaChat limits the new manual path to message-based agent
-// turns so auto-scheduled semantics remain unchanged for other payload types.
-func shouldRunManualCronViaChat(job OpenClawCronJob) bool {
-	if strings.TrimSpace(job.PayloadKind) != openClawCronPayloadAgentTurn {
-		return false
-	}
-	return strings.TrimSpace(job.Message) != ""
-}
-
 // splitCronModelSelection converts the form's "provider/model" shorthand into
 // conversation model fields. Bare aliases fall back to the agent's default provider.
 func splitCronModelSelection(raw string) (string, string) {
@@ -1185,11 +1104,11 @@ func (s *OpenClawCronService) resolveManualRunAgentID(openClawAgentID string) (i
 
 // insertConversationRecord creates a read-only history conversation record for a cron run session.
 // insertConversationRecord 为 Cron 历史创建本地会话记录，供只读嵌入页读取完整 OpenClaw 消息。
-func (s *OpenClawCronService) insertConversationRecord(agentID int64, sessionKey, externalID, name string) (int64, error) {
+func (s *OpenClawCronService) insertConversationRecord(agentID int64, conversationSource, sessionKey, externalID, name string) (int64, error) {
 	created, err := s.convSvc.CreateConversation(conversations.CreateConversationInput{
 		AgentID:            agentID,
 		AgentType:          conversations.AgentTypeOpenClaw,
-		ConversationSource: conversations.ConversationSourceOpenClawCron,
+		ConversationSource: strings.TrimSpace(conversationSource),
 		Name:               strings.TrimSpace(name),
 		ExternalID:         strings.TrimSpace(externalID),
 		OpenClawSessionKey: strings.TrimSpace(sessionKey),
@@ -1204,7 +1123,7 @@ func (s *OpenClawCronService) insertConversationRecord(agentID int64, sessionKey
 
 // ensureConversationRecord serializes session-key based history inserts so background binding
 // and detail reads cannot create duplicate local conversations for the same cron session.
-func (s *OpenClawCronService) ensureConversationRecord(agentID int64, sessionKey, externalID, name string) (int64, int64, error) {
+func (s *OpenClawCronService) ensureConversationRecord(agentID int64, conversationSource, sessionKey, externalID, name string) (int64, int64, error) {
 	s.convMu.Lock()
 	defer s.convMu.Unlock()
 
@@ -1216,7 +1135,7 @@ func (s *OpenClawCronService) ensureConversationRecord(agentID int64, sessionKey
 		return existing.ID, existing.AgentID, nil
 	}
 
-	createdID, err := s.insertConversationRecord(agentID, sessionKey, externalID, name)
+	createdID, err := s.insertConversationRecord(agentID, conversationSource, sessionKey, externalID, name)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1278,6 +1197,7 @@ func (s *OpenClawCronService) ensureConversationForSession(jobID string, job Ope
 
 	return s.ensureConversationRecord(
 		localAgentID,
+		buildCronConversationSource(jobID),
 		sessionKey,
 		buildCronExternalID(jobID, runID),
 		buildCronConversationName(jobName, runAtMs, runAtMs),
@@ -1502,6 +1422,12 @@ func resolveCronDeliveryTargetID(explicitTargetID string, channel cronDeliveryCh
 		return "", fmt.Errorf("openclaw channel platform %s has no last active target", strings.TrimSpace(channel.Platform))
 	}
 	return resolvedTargetID, nil
+}
+
+// extractLatestDeliveryTarget prefers the resolved target id chosen for delivery.
+// extractLatestDeliveryTarget 优先返回已经解析出的发送目标，保持历史展示与发送行为一致。
+func extractLatestDeliveryTarget(channel string, targetID string, accountID string) string {
+	return strings.TrimSpace(targetID)
 }
 
 func deriveCronDeliveryAccountID(option cronDeliveryChannelOption) string {
@@ -1786,12 +1712,15 @@ func buildCreateDeliveryPayload(input CreateOpenClawCronJobInput, sessionTarget 
 
 func buildUpdateDeliveryPatch(input UpdateOpenClawCronJobInput) map[string]any {
 	delivery := make(map[string]any)
+	hasExplicitDeliveryMode := false
 	if input.DeliveryMode != nil {
 		if mode := normalizeDeliveryModeValue(*input.DeliveryMode); mode != "" {
 			delivery["mode"] = mode
+			hasExplicitDeliveryMode = true
 		}
 	}
-	if input.Announce != nil {
+	// Explicit mode wins / 显式模式优先：when delivery_mode is provided, do not let the legacy announce bool overwrite it.
+	if input.Announce != nil && !hasExplicitDeliveryMode {
 		if *input.Announce {
 			delivery["mode"] = openClawCronDeliveryModeAnnounce
 		} else {
@@ -2261,10 +2190,12 @@ func buildCronExternalID(jobID string, runPart string) string {
 	return fmt.Sprintf("openclaw-cron:%s:%s", trimmedJobID, trimmedRunPart)
 }
 
-func matchesCronExternalID(externalID string, jobID string) bool {
-	trimmedExternalID := strings.TrimSpace(externalID)
-	baseID := buildCronExternalID(jobID, "")
-	return trimmedExternalID == baseID || strings.HasPrefix(trimmedExternalID, baseID+":")
+func buildCronConversationSource(jobID string) string {
+	trimmedJobID := strings.TrimSpace(jobID)
+	if trimmedJobID == "" {
+		return conversations.ConversationSourceOpenClawCron
+	}
+	return conversations.ConversationSourceOpenClawCron + ":" + trimmedJobID
 }
 
 func parseManualTriggerAtMs(externalID string) int64 {
@@ -2648,6 +2579,11 @@ type openClawJobStoreItem struct {
 		To                string `json:"to"`
 		AccountID         string `json:"accountId"`
 		Announce          bool   `json:"announce"`
+		// BestEffort reads the native OpenClaw persisted key.
+		// BestEffort 读取 OpenClaw jobs.json 的原生字段 bestEffort。
+		BestEffort        bool   `json:"bestEffort"`
+		// BestEffortDeliver keeps backward compatibility with earlier bridge payloads.
+		// BestEffortDeliver 兼容旧桥接层可能使用的 bestEffortDeliver 字段。
 		BestEffortDeliver bool   `json:"bestEffortDeliver"`
 		DeleteAfterRun    bool   `json:"deleteAfterRun"`
 		KeepAfterRun      bool   `json:"keepAfterRun"`
@@ -2696,7 +2632,9 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 		Announce:           item.Delivery.Mode == "announce" || item.Delivery.Announce,
 		DeliveryTargetMode: inferCronDeliveryTargetMode(item.Delivery.To),
 		DeliveryTargetID:   item.Delivery.To,
-		BestEffortDeliver:  item.Delivery.BestEffortDeliver,
+		// Prefer the native persisted key, but keep old snapshots readable as well.
+		// 优先读取原生持久化字段，同时兼容旧快照中的历史字段。
+		BestEffortDeliver:  item.Delivery.BestEffort || item.Delivery.BestEffortDeliver,
 		DeleteAfterRun:     item.Delivery.DeleteAfterRun,
 		KeepAfterRun:       item.Delivery.KeepAfterRun,
 		NextRunAtMs:        item.State.NextRunAtMs,

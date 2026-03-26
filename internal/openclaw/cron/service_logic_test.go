@@ -258,45 +258,6 @@ func TestIsPendingRunAwaitingBinding(t *testing.T) {
 	}
 }
 
-func TestShouldRunManualCronViaChat(t *testing.T) {
-	tests := []struct {
-		name string
-		job  OpenClawCronJob
-		want bool
-	}{
-		{
-			name: "message agent turn uses chat pipeline",
-			job: OpenClawCronJob{
-				PayloadKind: openClawCronPayloadAgentTurn,
-				Message:     "hello",
-			},
-			want: true,
-		},
-		{
-			name: "system event keeps native cron path",
-			job: OpenClawCronJob{
-				PayloadKind: openClawCronPayloadSystemEvent,
-				Message:     "hello",
-			},
-			want: false,
-		},
-		{
-			name: "empty message keeps native cron path",
-			job: OpenClawCronJob{
-				PayloadKind: openClawCronPayloadAgentTurn,
-				Message:     "",
-			},
-			want: false,
-		},
-	}
-
-	for _, tc := range tests {
-		if got := shouldRunManualCronViaChat(tc.job); got != tc.want {
-			t.Fatalf("%s: expected %v, got %v", tc.name, tc.want, got)
-		}
-	}
-}
-
 func TestSplitCronModelSelection(t *testing.T) {
 	providerID, modelID := splitCronModelSelection("openai/gpt-5")
 	if providerID != "openai" || modelID != "gpt-5" {
@@ -315,6 +276,13 @@ func TestNormalizeCronThinking(t *testing.T) {
 	}
 	if !normalizeCronThinking("medium") {
 		t.Fatalf("expected medium to enable thinking")
+	}
+}
+
+func TestBuildCronConversationSource(t *testing.T) {
+	got := buildCronConversationSource(" job-123 ")
+	if got != "openclaw_cron:job-123" {
+		t.Fatalf("expected scoped cron conversation source, got %q", got)
 	}
 }
 
@@ -432,6 +400,28 @@ func TestBuildUpdateJobPatch_MapsDisableAndClearFlags(t *testing.T) {
 	}
 	if patch["deleteAfterRun"] != false {
 		t.Fatalf("expected keep-after-run to map deleteAfterRun=false, got %#v", patch["deleteAfterRun"])
+	}
+}
+
+func TestFlattenJob_ReadsBestEffortFromPersistedDelivery(t *testing.T) {
+	raw := []byte(`{
+		"id":"job-1",
+		"name":"job",
+		"delivery":{
+			"mode":"announce",
+			"channel":"feishu",
+			"to":"oc_xxx",
+			"bestEffort":true
+		}
+	}`)
+	var item openClawJobStoreItem
+	if err := json.Unmarshal(raw, &item); err != nil {
+		t.Fatalf("expected store item json to unmarshal: %v", err)
+	}
+
+	job := flattenJob(item)
+	if !job.BestEffortDeliver {
+		t.Fatalf("expected persisted delivery.bestEffort to map back to BestEffortDeliver")
 	}
 }
 
@@ -579,5 +569,39 @@ func TestResolveCronDeliveryTargetID(t *testing.T) {
 		if got != tc.wantTargetID {
 			t.Fatalf("%s: expected %q, got %q", tc.name, tc.wantTargetID, got)
 		}
+	}
+}
+
+func TestBuildUpdateJobPatch_PrefersExplicitDeliveryModeOverLegacyAnnounceFlag(t *testing.T) {
+	deliveryMode := "announce"
+	announce := false
+	channel := "feishu"
+	targetID := "oc_target_1"
+	patch, err := buildUpdateJobPatch(UpdateOpenClawCronJobInput{
+		DeliveryMode:    &deliveryMode,
+		Announce:        &announce,
+		DeliveryChannel: &channel,
+		DeliveryTo:      &targetID,
+	})
+	if err != nil {
+		t.Fatalf("buildUpdateJobPatch returned error: %v", err)
+	}
+
+	delivery := patch["delivery"].(map[string]any)
+	if delivery["mode"] != "announce" {
+		t.Fatalf("expected explicit delivery mode announce to win, got %#v", delivery["mode"])
+	}
+	if delivery["channel"] != "feishu" {
+		t.Fatalf("expected delivery channel feishu, got %#v", delivery["channel"])
+	}
+	if delivery["to"] != "oc_target_1" {
+		t.Fatalf("expected delivery target preserved, got %#v", delivery["to"])
+	}
+}
+
+func TestExtractLatestDeliveryTarget_ReturnsResolvedTargetID(t *testing.T) {
+	channel, targetID, accountID := "feishu", "ou_latest_sender", "channel_7"
+	if got := extractLatestDeliveryTarget(channel, targetID, accountID); got != targetID {
+		t.Fatalf("expected latest delivery target %q, got %q", targetID, got)
 	}
 }
