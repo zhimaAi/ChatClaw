@@ -156,6 +156,7 @@
   "error.chat_generation_failed": "generation failed: {{.Error}}",
   "error.chat_stream_failed": "stream failed: {{.Error}}",
   "error.chat_tool_execution_failed": "tool execution failed: {{.Tool}} - {{.Error}}",
+  "error.scheduled_task_expired": "task has expired and cannot be enabled again",
   "scheduled_task.issue.name_required": "Task name is required",
   "scheduled_task.issue.prompt_required": "Task prompt is required",
   "scheduled_task.issue.agent_not_found": "No matching assistant was found",

@@ -1,13 +1,18 @@
 import { onMounted, ref } from 'vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { i18n } from '@/i18n'
 import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
-import {
-  CreateScheduledTaskInput,
-  ScheduledTasksService,
-  UpdateScheduledTaskInput,
-} from '@bindings/chatclaw/internal/services/scheduledtasks'
-import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskSummary, Agent } from '../types'
+import { ChannelService } from '@bindings/chatclaw/internal/services/channels'
+import { ScheduledTasksService } from '@bindings/chatclaw/internal/services/scheduledtasks'
+import type {
+  ScheduledTask,
+  ScheduledTaskFormState,
+  ScheduledTaskSummary,
+  Agent,
+  Channel,
+} from '../types'
+import { prepareCreateTaskDialogState, prepareEditTaskDialogState } from '../createTaskDialogState'
 import { createEmptyForm } from '../utils'
 
 export function useScheduledTasks() {
@@ -16,6 +21,7 @@ export function useScheduledTasks() {
   const tasks = ref<ScheduledTask[]>([])
   const summary = ref<ScheduledTaskSummary | null>(null)
   const agents = ref<Agent[]>([])
+  const channels = ref<Channel[]>([])
 
   const createDialogOpen = ref(false)
   const historyTask = ref<ScheduledTask | null>(null)
@@ -23,8 +29,12 @@ export function useScheduledTasks() {
   const form = ref<ScheduledTaskFormState>(createEmptyForm())
 
   async function loadBaseOptions() {
-    const agentList = await AgentsService.ListAgents()
+    const [agentList, channelList] = await Promise.all([
+      AgentsService.ListAgents(),
+      ChannelService.ListChannels(),
+    ])
     agents.value = agentList || []
+    channels.value = channelList || []
   }
 
   async function loadTasks() {
@@ -47,35 +57,46 @@ export function useScheduledTasks() {
     await Promise.all([loadTasks(), loadBaseOptions()])
   }
 
-  function openCreateDialog() {
-    editingTask.value = null
-    form.value = createEmptyForm()
-    createDialogOpen.value = true
+  async function openCreateDialog() {
+    try {
+      const nextState = await prepareCreateTaskDialogState(loadBaseOptions, createEmptyForm)
+      editingTask.value = nextState.editingTask
+      form.value = nextState.form
+      createDialogOpen.value = nextState.createDialogOpen
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
   }
 
   async function openEditDialog(
     task: ScheduledTask,
     toForm: (task: ScheduledTask) => ScheduledTaskFormState
   ) {
-    editingTask.value = task
-    form.value = toForm(task)
-    createDialogOpen.value = true
+    try {
+      const nextState = await prepareEditTaskDialogState(loadBaseOptions, task, toForm)
+      editingTask.value = nextState.editingTask
+      form.value = nextState.form
+      createDialogOpen.value = nextState.createDialogOpen
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+    }
   }
 
   async function submitForm(
-    buildPayload: (form: ScheduledTaskFormState) => {
-      create: CreateScheduledTaskInput
-      update: UpdateScheduledTaskInput
-    }
+    buildPayload: (form: ScheduledTaskFormState) => { create: any; update: any }
   ) {
     if (saving.value) return
     saving.value = true
     try {
       const payload = buildPayload(form.value)
       if (editingTask.value?.id) {
-        await ScheduledTasksService.UpdateScheduledTask(editingTask.value.id, payload.update)
+        await ScheduledTasksService.UpdateScheduledTaskWithSource(
+          editingTask.value.id,
+          payload.update,
+          'manual'
+        )
       } else {
-        await ScheduledTasksService.CreateScheduledTask(payload.create)
+        await ScheduledTasksService.CreateScheduledTaskWithSource(payload.create, 'manual')
       }
       createDialogOpen.value = false
       await loadTasks()
@@ -89,7 +110,7 @@ export function useScheduledTasks() {
 
   async function deleteTask(task: ScheduledTask) {
     try {
-      await ScheduledTasksService.DeleteScheduledTask(task.id)
+      await ScheduledTasksService.DeleteScheduledTaskWithSource(task.id, 'manual')
       await loadTasks()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -97,8 +118,16 @@ export function useScheduledTasks() {
   }
 
   async function toggleTask(task: ScheduledTask, enabled: boolean) {
+    if (enabled && (task as any).is_expired) {
+      const translate = (i18n?.global as any)?.t
+      const message = translate
+        ? translate('scheduledTasks.expiredCannotEnable')
+        : 'scheduledTasks.expiredCannotEnable'
+      toast.error(String(message))
+      return
+    }
     try {
-      await ScheduledTasksService.SetScheduledTaskEnabled(task.id, enabled)
+      await ScheduledTasksService.SetScheduledTaskEnabledWithSource(task.id, enabled, 'manual')
       await loadTasks()
     } catch (error) {
       toast.error(getErrorMessage(error))
@@ -125,6 +154,7 @@ export function useScheduledTasks() {
     tasks,
     summary,
     agents,
+    channels,
     createDialogOpen,
     historyTask,
     editingTask,
