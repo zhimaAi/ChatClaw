@@ -1,11 +1,33 @@
-import { formatUtcDateTime } from '@/composables/useDateTime'
-import { i18n } from '@/i18n'
-import { SCHEDULE_PRESET_LABELS, WEEKDAY_OPTIONS } from './constants'
-import type { ScheduledTask, ScheduledTaskFormState } from './types'
+import { formatUtcDateTime } from '../../composables/useDateTime'
+import { i18n } from '../../i18n/index'
+import { SCHEDULE_PRESET_LABELS, TASK_COPY_NAME_SUFFIX, WEEKDAY_OPTIONS } from './constants'
+import {
+  buildExpirationDateTime,
+  DEFAULT_SCHEDULED_TASK_TIMEZONE,
+  formatDateOnly,
+  isExpirationDateExpired,
+  toDateInputValue,
+} from './expirationDate'
+import { buildScheduledTaskCopyName } from './scheduledTaskText'
+import type { ScheduledTask, ScheduledTaskFormState, ScheduledTaskOperationSnapshot } from './types'
 
-export function formatTaskTime(value?: string | Date | null) {
+export {
+  buildExpirationDateTime,
+  DEFAULT_SCHEDULED_TASK_TIMEZONE,
+  formatDateOnly,
+  isExpirationDateExpired,
+  toDateInputValue,
+} from './expirationDate'
+
+function normalizeScheduledTaskTimezone(timezone?: string | null) {
+  const value = String(timezone || '').trim()
+  return value || DEFAULT_SCHEDULED_TASK_TIMEZONE
+}
+
+export function formatTaskTime(value?: string | Date | null, timezone?: string | null) {
   if (!value) return '-'
-  return formatUtcDateTime(value)
+  if (!timezone) return formatUtcDateTime(value)
+  return formatUtcDateTime(value, { timeZone: normalizeScheduledTaskTimezone(timezone) })
 }
 
 export function formatDuration(ms: number) {
@@ -69,6 +91,11 @@ export function createEmptyForm(): ScheduledTaskFormState {
     name: '',
     prompt: '',
     agentId: null,
+    timezone: DEFAULT_SCHEDULED_TASK_TIMEZONE,
+    expiresAtDate: '',
+    isExpired: false,
+    notificationPlatform: '',
+    notificationChannelIds: [],
     enabled: true,
     scheduleType: 'preset',
     schedulePreset: 'every_day_0900',
@@ -88,6 +115,13 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   form.name = task.name
   form.prompt = task.prompt
   form.agentId = task.agent_id
+  form.timezone = normalizeScheduledTaskTimezone((task as any).timezone)
+  form.expiresAtDate = toDateInputValue((task as any).expires_at, form.timezone)
+  form.isExpired = !!(task as any).is_expired
+  form.notificationPlatform = (task as any).notification_platform || ''
+  form.notificationChannelIds = Array.isArray((task as any).notification_channel_ids)
+    ? [...(task as any).notification_channel_ids]
+    : []
   form.enabled = task.enabled
   form.scheduleType = task.schedule_type as ScheduledTaskFormState['scheduleType']
   form.cronExpr = task.cron_expr
@@ -127,6 +161,75 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
 
   if (task.schedule_type === 'cron') {
     form.cronExpr = task.cron_expr
+  }
+
+  return form
+}
+
+export function taskToCopyForm(task: ScheduledTask, copySuffix: string = TASK_COPY_NAME_SUFFIX): ScheduledTaskFormState {
+  const form = taskToForm(task)
+
+  // A copied task must be created as a brand-new record instead of overwriting the source task.
+  form.id = null
+  form.name = buildScheduledTaskCopyName(form.name, copySuffix)
+
+  return form
+}
+
+export function operationSnapshotToForm(
+  snapshot: ScheduledTaskOperationSnapshot
+): ScheduledTaskFormState {
+  const form = createEmptyForm()
+  form.id = snapshot.task_id
+  form.name = snapshot.name
+  form.prompt = snapshot.prompt
+  form.agentId = snapshot.agent_id
+  form.timezone = normalizeScheduledTaskTimezone((snapshot as any).timezone)
+  form.expiresAtDate = toDateInputValue((snapshot as any).expires_at, form.timezone)
+  form.isExpired = !!(snapshot as any).is_expired
+  form.notificationPlatform = snapshot.notification_platform || ''
+  form.notificationChannelIds = Array.isArray(snapshot.notification_channel_ids)
+    ? [...snapshot.notification_channel_ids]
+    : []
+  form.enabled = snapshot.enabled
+  form.scheduleType = (snapshot.schedule_type || 'preset') as ScheduledTaskFormState['scheduleType']
+  form.cronExpr = snapshot.cron_expr || ''
+
+  if (snapshot.schedule_type === 'preset') {
+    form.schedulePreset = (snapshot.schedule_value ||
+      'every_day_0900') as ScheduledTaskFormState['schedulePreset']
+  }
+
+  if (snapshot.schedule_type === 'custom') {
+    try {
+      const parsed = JSON.parse(snapshot.schedule_value) as {
+        hour: number
+        minute: number
+        interval_minutes?: number
+        weekdays?: number[]
+        day_of_month?: number
+      }
+      if (parsed.interval_minutes) {
+        form.customMode = 'interval'
+        form.customIntervalMinutes = parsed.interval_minutes
+        return form
+      }
+      form.customHour = parsed.hour ?? 9
+      form.customMinute = parsed.minute ?? 0
+      if (parsed.day_of_month) {
+        form.customMode = 'monthly'
+        form.customDayOfMonth = parsed.day_of_month
+      } else if (parsed.weekdays?.length) {
+        form.customMode = 'weekly'
+        form.customWeekdays = parsed.weekdays
+      }
+    } catch {
+      //
+    }
+  }
+
+  if (snapshot.schedule_type === 'cron') {
+    form.cronExpr = snapshot.cron_expr || snapshot.schedule_value
   }
 
   return form

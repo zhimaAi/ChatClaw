@@ -17,19 +17,22 @@ type scheduledTaskModel struct {
 	UpdatedAt time.Time  `bun:"updated_at,notnull"`
 	DeletedAt *time.Time `bun:"deleted_at"`
 
-	Name          string     `bun:"name,notnull"`
-	Prompt        string     `bun:"prompt,notnull"`
-	AgentID       int64      `bun:"agent_id,notnull"`
-	ScheduleType  string     `bun:"schedule_type,notnull"`
-	ScheduleValue string     `bun:"schedule_value,notnull"`
-	CronExpr      string     `bun:"cron_expr,notnull"`
-	Timezone      string     `bun:"timezone,notnull"`
-	Enabled       bool       `bun:"enabled,notnull"`
-	LastRunAt     *time.Time `bun:"last_run_at"`
-	NextRunAt     *time.Time `bun:"next_run_at"`
-	LastStatus    string     `bun:"last_status,notnull"`
-	LastError     string     `bun:"last_error,notnull"`
-	LastRunID     *int64     `bun:"last_run_id"`
+	Name                   string     `bun:"name,notnull"`
+	Prompt                 string     `bun:"prompt,notnull"`
+	AgentID                int64      `bun:"agent_id,notnull"`
+	NotificationPlatform   string     `bun:"notification_platform,notnull"`
+	NotificationChannelIDs string     `bun:"notification_channel_ids,notnull"`
+	ScheduleType           string     `bun:"schedule_type,notnull"`
+	ScheduleValue          string     `bun:"schedule_value,notnull"`
+	CronExpr               string     `bun:"cron_expr,notnull"`
+	Timezone               string     `bun:"timezone,notnull"`
+	Enabled                bool       `bun:"enabled,notnull"`
+	ExpiresAt              *time.Time `bun:"expires_at"`
+	LastRunAt              *time.Time `bun:"last_run_at"`
+	NextRunAt              *time.Time `bun:"next_run_at"`
+	LastStatus             string     `bun:"last_status,notnull"`
+	LastError              string     `bun:"last_error,notnull"`
+	LastRunID              *int64     `bun:"last_run_id"`
 }
 
 type scheduledTaskRunModel struct {
@@ -54,6 +57,19 @@ type scheduledTaskRunModel struct {
 	SnapshotAgentID    int64      `bun:"snapshot_agent_id,notnull"`
 }
 
+type scheduledTaskOperationLogModel struct {
+	bun.BaseModel `bun:"table:scheduled_task_operation_logs,alias:stol"`
+
+	ID                int64     `bun:"id,pk,autoincrement"`
+	CreatedAt         time.Time `bun:"created_at,notnull"`
+	TaskID            int64     `bun:"task_id,notnull"`
+	TaskNameSnapshot  string    `bun:"task_name_snapshot,notnull"`
+	OperationType     string    `bun:"operation_type,notnull"`
+	OperationSource   string    `bun:"operation_source,notnull"`
+	ChangedFieldsJSON string    `bun:"changed_fields_json,notnull"`
+	TaskSnapshotJSON  string    `bun:"task_snapshot_json,notnull"`
+}
+
 type scheduledTaskAgentRow struct {
 	ID                   int64  `bun:"id"`
 	DefaultLLMProviderID string `bun:"default_llm_provider_id"`
@@ -69,6 +85,7 @@ var _ bun.BeforeInsertHook = (*scheduledTaskModel)(nil)
 var _ bun.BeforeUpdateHook = (*scheduledTaskModel)(nil)
 var _ bun.BeforeInsertHook = (*scheduledTaskRunModel)(nil)
 var _ bun.BeforeUpdateHook = (*scheduledTaskRunModel)(nil)
+var _ bun.BeforeInsertHook = (*scheduledTaskOperationLogModel)(nil)
 
 func (*scheduledTaskModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
 	now := sqlite.NowUTC()
@@ -94,24 +111,33 @@ func (*scheduledTaskRunModel) BeforeUpdate(ctx context.Context, query *bun.Updat
 	return nil
 }
 
+func (*scheduledTaskOperationLogModel) BeforeInsert(ctx context.Context, query *bun.InsertQuery) error {
+	query.Value("created_at", "?", sqlite.NowUTC())
+	return nil
+}
+
 func (m *scheduledTaskModel) toDTO() ScheduledTask {
 	return ScheduledTask{
-		ID:            m.ID,
-		Name:          m.Name,
-		Prompt:        m.Prompt,
-		AgentID:       m.AgentID,
-		ScheduleType:  m.ScheduleType,
-		ScheduleValue: m.ScheduleValue,
-		CronExpr:      m.CronExpr,
-		Timezone:      m.Timezone,
-		Enabled:       m.Enabled,
-		LastRunAt:     m.LastRunAt,
-		NextRunAt:     m.NextRunAt,
-		LastStatus:    m.LastStatus,
-		LastError:     m.LastError,
-		LastRunID:     m.LastRunID,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
+		ID:                     m.ID,
+		Name:                   m.Name,
+		Prompt:                 m.Prompt,
+		AgentID:                m.AgentID,
+		NotificationPlatform:   m.NotificationPlatform,
+		NotificationChannelIDs: parseNotificationChannelIDs(m.NotificationChannelIDs),
+		ScheduleType:           m.ScheduleType,
+		ScheduleValue:          m.ScheduleValue,
+		CronExpr:               m.CronExpr,
+		Timezone:               m.Timezone,
+		Enabled:                m.Enabled,
+		ExpiresAt:              m.ExpiresAt,
+		IsExpired:              isScheduledTaskExpired(m.ExpiresAt, time.Now().UTC()),
+		LastRunAt:              m.LastRunAt,
+		NextRunAt:              m.NextRunAt,
+		LastStatus:             m.LastStatus,
+		LastError:              m.LastError,
+		LastRunID:              m.LastRunID,
+		CreatedAt:              m.CreatedAt,
+		UpdatedAt:              m.UpdatedAt,
 	}
 }
 
@@ -133,5 +159,17 @@ func (m *scheduledTaskRunModel) toDTO() ScheduledTaskRun {
 		DurationMS:         m.DurationMS,
 		CreatedAt:          m.CreatedAt,
 		UpdatedAt:          m.UpdatedAt,
+	}
+}
+
+func (m *scheduledTaskOperationLogModel) toDTO(changedFields []ScheduledTaskOperationChangedField) ScheduledTaskOperationLog {
+	return ScheduledTaskOperationLog{
+		ID:               m.ID,
+		TaskID:           m.TaskID,
+		TaskNameSnapshot: m.TaskNameSnapshot,
+		OperationType:    m.OperationType,
+		OperationSource:  m.OperationSource,
+		ChangedFields:    changedFields,
+		CreatedAt:        m.CreatedAt,
 	}
 }

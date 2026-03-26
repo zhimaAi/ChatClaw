@@ -21,6 +21,7 @@ export default defineConfig({
         winsnap: "winsnap.html",
         floatingball: "floatingball.html",
         selection: "selection.html",
+        historyRun: "history-run.html",
       },
       output: {
         manualChunks(id) {
