@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Clock3, LoaderCircle, MoreHorizontal, Plus, RefreshCcw } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, Clock3, LoaderCircle, MoreHorizontal, Plus, RefreshCcw } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import {
   DropdownMenu,
@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -29,7 +30,6 @@ import {
   buildUpdateInput,
   createEmptyOpenClawCronForm,
   describeOpenClawSchedule,
-  formatDurationMs,
   formatOpenClawCronTime,
   jobToForm,
   type OpenClawCronFormState,
@@ -55,6 +55,11 @@ const form = ref<OpenClawCronFormState>(createEmptyOpenClawCronForm())
 const deleteDialogOpen = ref(false)
 const deleting = ref(false)
 const deletingJob = ref<OpenClawCronJob | null>(null)
+
+const JOB_DISPLAY_STATUS_RUNNING = 'running'
+const JOB_DISPLAY_STATUS_PAUSED = 'paused'
+const JOB_LAST_STATUS_FAILED = 'failed'
+const JOB_LAST_STATUS_SUCCESS = 'success'
 
 const summaryCards = computed(() => [
   { key: 'total', label: t('openclawCron.summary.total', '任务总数'), value: summary.value?.total ?? 0 },
@@ -116,6 +121,31 @@ function displayAgentName(job: OpenClawCronJob) {
   if (!agentID) return t('openclawCron.dialog.defaultAgent', '默认助手')
 
   return agentNameMap.value.get(agentID) || agentID
+}
+
+function displayJobStatusLabel(job: OpenClawCronJob) {
+  if (job.enabled) return t('openclawCron.statusRunning', '运行中')
+  return t('openclawCron.disabled', '已暂停')
+}
+
+function statusTextClass(job: OpenClawCronJob) {
+  return job.enabled ? 'text-[#404040]' : 'text-[#737373]'
+}
+
+function lastRunIcon(job: OpenClawCronJob) {
+  if (job.last_status === JOB_LAST_STATUS_FAILED) return CircleAlert
+  if (job.last_status === JOB_LAST_STATUS_SUCCESS) return CircleCheck
+  return Clock3
+}
+
+function lastRunIconClass(job: OpenClawCronJob) {
+  if (job.last_status === JOB_LAST_STATUS_FAILED) return 'text-[#ef4444]'
+  if (job.last_status === JOB_LAST_STATUS_SUCCESS) return 'text-[#22c55e]'
+  return 'text-[#a3a3a3]'
+}
+
+function showLastRun(job: OpenClawCronJob) {
+  return Boolean(job.last_run_at_ms)
 }
 
 async function handleSubmit() {
@@ -263,15 +293,14 @@ async function confirmDelete() {
 
         <div v-else class="overflow-hidden rounded-lg border border-[#e5e5e5] bg-white">
           <div class="overflow-x-auto">
-            <table class="min-w-[1060px] w-full table-fixed text-sm">
+            <table class="min-w-[920px] w-full table-fixed text-sm">
               <thead class="text-left text-sm text-[#0a0a0a]">
                 <tr>
-                  <th class="w-[26%] px-5 py-3 font-medium">{{ t('openclawCron.columns.title', '任务') }}</th>
-                  <th class="w-[18%] px-5 py-3 font-medium">{{ t('openclawCron.columns.schedule', '执行时间') }}</th>
-                  <th class="w-[16%] px-5 py-3 font-medium">{{ t('openclawCron.columns.agent', '关联助手') }}</th>
-                  <th class="w-[18%] px-5 py-3 font-medium">{{ t('openclawCron.columns.runtime', '最近运行') }}</th>
+                  <th class="w-[34%] px-5 py-3 font-medium">{{ t('openclawCron.columns.title', '任务') }}</th>
+                  <th class="w-[24%] px-5 py-3 font-medium">{{ t('openclawCron.columns.schedule', '执行时间') }}</th>
+                  <th class="w-[24%] px-5 py-3 font-medium">{{ t('openclawCron.columns.agent', '关联助手') }}</th>
                   <th class="w-[12%] px-5 py-3 font-medium">{{ t('openclawCron.columns.status', '状态') }}</th>
-                  <th class="w-[88px] min-w-[88px] px-5 py-3 text-right font-medium">{{ t('openclawCron.columns.actions', '操作') }}</th>
+                  <th class="w-[88px] min-w-[88px] whitespace-nowrap px-5 py-3 text-right font-medium">{{ t('openclawCron.columns.actions', '操作') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -287,27 +316,49 @@ async function confirmDelete() {
                     </div>
                   </td>
                   <td class="px-5 py-3.5">
-                    <div class="space-y-1 text-sm">
-                      <div class="font-medium leading-6 text-[#171717]">{{ describeOpenClawSchedule(job) }}</div>
-                      <div class="text-[#8c8c8c]">
-                        {{ t('openclawCron.nextRun', '下次运行') }}{{ formatOpenClawCronTime(job.next_run_at_ms) }}
+                    <template v-if="showLastRun(job)">
+                      <div class="space-y-1 text-sm">
+                        <div class="font-medium leading-6 text-[#171717]">{{ describeOpenClawSchedule(job) }}</div>
+                        <div class="flex items-center gap-1.5 text-[#8c8c8c]">
+                          <TooltipProvider v-if="job.last_status === JOB_LAST_STATUS_FAILED && job.last_error">
+                            <Tooltip>
+                              <TooltipTrigger as-child>
+                                <button
+                                  type="button"
+                                  class="inline-flex shrink-0 items-center justify-center rounded-full"
+                                  :aria-label="t('openclawCron.errorReason', '查看错误原因')"
+                                >
+                                  <component
+                                    :is="lastRunIcon(job)"
+                                    class="size-4"
+                                    :class="lastRunIconClass(job)"
+                                  />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p class="max-w-sm whitespace-pre-wrap text-xs">{{ job.last_error }}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <component
+                            :is="lastRunIcon(job)"
+                            v-else
+                            class="size-4 shrink-0"
+                            :class="lastRunIconClass(job)"
+                          />
+                          <span class="truncate">
+                            {{ t('openclawCron.lastRunPrefix', '上次: ') }}{{ formatOpenClawCronTime(job.last_run_at_ms) }}
+                          </span>
+                        </div>
                       </div>
+                    </template>
+                    <div v-else class="space-y-1 text-sm">
+                      <div class="font-medium leading-6 text-[#171717]">{{ describeOpenClawSchedule(job) }}</div>
                     </div>
                   </td>
                   <td class="px-5 py-3.5">
                     <div class="space-y-1">
                       <div class="text-[15px] leading-6 text-[#171717]">{{ displayAgentName(job) }}</div>
-                    </div>
-                  </td>
-                  <td class="px-5 py-3.5">
-                    <div class="space-y-1 text-sm">
-                      <div class="text-[#171717]">{{ formatOpenClawCronTime(job.last_run_at_ms) }}</div>
-                      <div class="text-[#8c8c8c]">
-                        {{ job.last_status || '-' }} · {{ formatDurationMs(job.last_duration_ms) }}
-                      </div>
-                      <div v-if="job.last_error" class="line-clamp-2 text-xs text-red-600">
-                        {{ job.last_error }}
-                      </div>
                     </div>
                   </td>
                   <td class="px-5 py-3.5">
@@ -317,8 +368,8 @@ async function confirmDelete() {
                         class="h-[18px] w-[33px] border-transparent data-[state=checked]:bg-[#171717] data-[state=unchecked]:bg-[#e5e5e5]"
                         @update:model-value="(value) => handleToggle(job, !!value)"
                       />
-                      <span class="text-sm" :class="job.enabled ? 'text-[#404040]' : 'text-[#737373]'">
-                        {{ job.enabled ? t('openclawCron.enabled', '启用') : t('openclawCron.disabled', '停用') }}
+                      <span class="text-sm" :class="statusTextClass(job)">
+                        {{ displayJobStatusLabel(job) }}
                       </span>
                     </div>
                   </td>

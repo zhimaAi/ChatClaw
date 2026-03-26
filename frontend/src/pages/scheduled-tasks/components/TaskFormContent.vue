@@ -4,6 +4,7 @@ import { onClickOutside, useEventListener } from '@vueuse/core'
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { Badge } from '@/components/ui/badge'
+import CustomScheduleBuilder from '@/components/schedule/CustomScheduleBuilder.vue'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -53,14 +54,6 @@ const scheduleTypeOptions = [
   { value: 'cron', labelKey: 'scheduledTasks.dialog.scheduleType.cron' },
 ] as const
 
-const customModeOptions = [
-  { value: 'interval', labelKey: 'scheduledTasks.dialog.customMode.interval' },
-  { value: 'daily', labelKey: 'scheduledTasks.dialog.customMode.daily' },
-  { value: 'weekly', labelKey: 'scheduledTasks.dialog.customMode.weekly' },
-  { value: 'monthly', labelKey: 'scheduledTasks.dialog.customMode.monthly' },
-] as const
-
-const monthlyOptions = Array.from({ length: 31 }, (_, index) => index + 1)
 const calendarWeekdayLabels = computed(() =>
   WEEKDAY_OPTIONS.map((item) => t(item.shortLabelKey))
 )
@@ -123,28 +116,6 @@ function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): Calendar
     }
   })
 }
-
-const customTimeValue = computed({
-  get() {
-    return `${String(props.form.customHour).padStart(2, '0')}:${String(props.form.customMinute).padStart(2, '0')}`
-  },
-  set(value: string) {
-    if (props.readonly) return
-    const [hour, minute] = value.split(':')
-    props.form.customHour = Number(hour || 0)
-    props.form.customMinute = Number(minute || 0)
-  },
-})
-
-const selectedWeeklyDay = computed({
-  get() {
-    return props.form.customWeekdays[0] ?? 1
-  },
-  set(value: number) {
-    if (props.readonly) return
-    props.form.customWeekdays = [value]
-  },
-})
 
 const expirationDateValue = computed({
   get() {
@@ -347,24 +318,6 @@ function selectScheduleType(value: ScheduledTaskFormState['scheduleType']) {
   ) {
     props.form.customWeekdays = [1]
   }
-}
-
-function selectCustomMode(value: ScheduledTaskFormState['customMode']) {
-  if (props.readonly) return
-  props.form.customMode = value
-  if (value === 'weekly') {
-    selectedWeeklyDay.value = props.form.customWeekdays[0] ?? 1
-  }
-}
-
-function selectWeeklyDay(value: number) {
-  if (props.readonly) return
-  selectedWeeklyDay.value = value
-}
-
-function selectMonthlyDay(value: number) {
-  if (props.readonly) return
-  props.form.customDayOfMonth = value
 }
 
 function handleNotificationPlatformChange(value: string) {
@@ -812,109 +765,7 @@ useEventListener(window, 'keydown', (event) => {
         </div>
 
         <div v-else-if="form.scheduleType === 'custom'" class="space-y-4">
-          <div class="flex items-start gap-5">
-            <div class="inline-flex overflow-hidden rounded-2xl border border-[#dbe3ec] bg-white">
-              <div class="w-[140px] shrink-0">
-                <button
-                  v-for="item in customModeOptions"
-                  :key="item.value"
-                  type="button"
-                  :disabled="readonly"
-                  class="flex h-12 w-full items-center justify-between px-4 text-sm font-medium transition-colors disabled:cursor-default"
-                  :class="
-                    form.customMode === item.value
-                      ? 'bg-[#f3f4f6] text-[#111827]'
-                      : 'text-[#475569]'
-                  "
-                  @click="selectCustomMode(item.value)"
-                >
-                  <span>{{ t(item.labelKey) }}</span>
-                  <ChevronDown
-                    v-if="item.value !== 'daily' && item.value !== 'interval'"
-                    class="size-4 shrink-0 rotate-[-90deg] text-[#94a3b8]"
-                    :class="form.customMode === item.value ? 'opacity-100' : 'opacity-40'"
-                  />
-                </button>
-              </div>
-
-              <div
-                v-if="form.customMode === 'weekly'"
-                class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
-              >
-                <button
-                  v-for="item in WEEKDAY_OPTIONS"
-                  :key="item.value"
-                  type="button"
-                  :disabled="readonly"
-                  class="flex h-12 w-full items-center justify-between px-4 text-sm transition-colors disabled:cursor-default"
-                  :class="
-                    selectedWeeklyDay === item.value
-                      ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                      : 'text-[#475569]'
-                  "
-                  @click="selectWeeklyDay(item.value)"
-                >
-                  <span>{{ t(item.labelKey) }}</span>
-                  <Check
-                    v-if="selectedWeeklyDay === item.value"
-                    class="size-4 shrink-0 text-[#2563eb]"
-                  />
-                </button>
-              </div>
-
-              <div
-                v-else-if="form.customMode === 'monthly'"
-                class="max-h-[336px] w-[140px] shrink-0 overflow-y-auto border-l border-[#dbe3ec]"
-              >
-                <button
-                  v-for="day in monthlyOptions"
-                  :key="day"
-                  type="button"
-                  :disabled="readonly"
-                  class="flex h-12 w-full items-center px-4 text-sm transition-colors disabled:cursor-default"
-                  :class="
-                    form.customDayOfMonth === day
-                      ? 'bg-[#f3f4f6] font-medium text-[#111827]'
-                      : 'text-[#475569]'
-                  "
-                  @click="selectMonthlyDay(day)"
-                >
-                  {{ t('scheduledTasks.dialog.monthlyDay', { day }) }}
-                </button>
-              </div>
-            </div>
-
-            <div v-if="form.customMode === 'interval'" class="flex min-h-12 items-center">
-              <Input
-                v-model.number="form.customIntervalMinutes"
-                :readonly="readonly"
-                type="number"
-                min="1"
-                max="59"
-                step="1"
-                class="h-9 w-[120px] rounded-md border-[#dbe3ec] bg-white text-sm shadow-none read-only:bg-[#f8fafc] read-only:text-[#475569]"
-              />
-              <span class="ml-3 text-sm text-[#64748b]">
-                {{ t('scheduledTasks.dialog.minutes') }}
-              </span>
-            </div>
-
-            <Input
-              v-else-if="form.customMode === 'daily'"
-              v-model="customTimeValue"
-              :readonly="readonly"
-              type="time"
-              class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm read-only:bg-[#f8fafc] read-only:text-[#475569]"
-            />
-          </div>
-
-          <Input
-            v-if="form.customMode === 'weekly' || form.customMode === 'monthly'"
-            v-model="customTimeValue"
-            :readonly="readonly"
-            type="time"
-            class="h-11 w-[156px] rounded-xl border-[#dbe3ec] bg-white px-4 text-sm read-only:bg-[#f8fafc] read-only:text-[#475569]"
-          />
+          <CustomScheduleBuilder :form="form" :readonly="readonly" />
         </div>
 
         <div v-else class="space-y-2">
