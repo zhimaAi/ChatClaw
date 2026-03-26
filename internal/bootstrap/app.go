@@ -355,7 +355,6 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	configSvc := openclawruntime.NewConfigService(openclawManager)
 	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
-	configSvc.Register("hooks", openclawruntime.SessionMemoryHookSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
 	configSvc.Register("mcp", func(ctx context.Context) (map[string]any, error) {
 		if !libraryMCPService.IsRunning() {

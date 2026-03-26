@@ -51,27 +51,6 @@ func ResponsesEndpointSection() SectionBuilder {
 	}
 }
 
-// SessionMemoryHookSection enables OpenClaw's bundled session-memory hook
-// globally so `/new` and `/reset` flows can persist recent chat context into
-// workspace memory files without requiring a separate CLI onboarding step.
-func SessionMemoryHookSection() SectionBuilder {
-	return func(ctx context.Context) (map[string]any, error) {
-		_ = ctx
-		return map[string]any{
-			"hooks": map[string]any{
-				"internal": map[string]any{
-					"enabled": true,
-					"entries": map[string]any{
-						"session-memory": map[string]any{
-							"enabled": true,
-						},
-					},
-				},
-			},
-		}, nil
-	}
-}
-
 // Register adds a named section builder. The name is for logging only;
 // the builder's returned map keys determine the actual config sections.
 func (s *ConfigService) Register(name string, builder SectionBuilder) {
