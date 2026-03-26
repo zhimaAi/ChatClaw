@@ -97,11 +97,12 @@ type channelModel struct {
 	ConnectionType string     `bun:"connection_type,notnull"`
 	ExtraConfig    string     `bun:"extra_config,notnull"`
 	AgentID        int64      `bun:"agent_id,notnull"`
-	OpenClawScope bool       `bun:"openclaw_scope,notnull"`
+	LastSenderID   string     `bun:"last_sender_id,notnull"`
+	OpenClawScope  bool       `bun:"openclaw_scope,notnull"`
 	Status         string     `bun:"status,notnull"`
 	LastConnectedAt *time.Time `bun:"last_connected_at"`
-	CreatedAt      time.Time  `bun:"created_at,notnull"`
-	UpdatedAt      time.Time  `bun:"updated_at,notnull"`
+	CreatedAt       time.Time  `bun:"created_at,notnull"`
+	UpdatedAt       time.Time  `bun:"updated_at,notnull"`
 }
 
 var _ bun.BeforeInsertHook = (*channelModel)(nil)
