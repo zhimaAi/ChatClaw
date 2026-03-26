@@ -126,7 +126,7 @@ export function buildCreateInput(form: OpenClawCronFormState) {
     exact: form.exact,
     message: form.message,
     system_event: form.systemEvent,
-    model: form.model,
+    model: '',
     thinking: form.thinking,
     expect_final: form.expectFinal,
     light_context: form.lightContext,
@@ -146,6 +146,7 @@ export function buildCreateInput(form: OpenClawCronFormState) {
 }
 
 export function buildUpdateInput(form: OpenClawCronFormState) {
+  const clearedModel = ''
   return new UpdateOpenClawCronJobInput({
     name: form.name,
     description: form.description,
@@ -158,7 +159,7 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
     exact: form.exact,
     message: form.message,
     system_event: form.systemEvent,
-    model: form.model || undefined,
+    model: clearedModel,
     thinking: form.thinking || undefined,
     expect_final: form.expectFinal,
     light_context: form.lightContext,

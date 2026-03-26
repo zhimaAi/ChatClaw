@@ -3,16 +3,15 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { RefreshCcw } from 'lucide-vue-next'
 import EmbeddedAssistantPage from '@/pages/openclaw/components/EmbeddedAssistantPage.vue'
+import TaskRunStatusBadge from '@/pages/scheduled-tasks/components/TaskRunStatusBadge.vue'
 import {
   OpenClawCronService,
   type OpenClawCronHistoryListItem,
   type OpenClawCronJob,
   type OpenClawCronRunDetail,
 } from '@bindings/chatclaw/internal/openclaw/cron'
-import { formatDurationMs, formatOpenClawCronTime } from './utils'
+import { formatOpenClawCronTime } from './utils'
 
 const props = defineProps<{
   open: boolean
@@ -32,6 +31,7 @@ const runs = ref<OpenClawCronHistoryListItem[]>([])
 const selectedRun = ref<OpenClawCronHistoryListItem | null>(null)
 const selectedDetail = ref<OpenClawCronRunDetail | null>(null)
 const liveFinished = ref(false)
+
 type LiveToolState = {
   id: string
   name: string
@@ -39,11 +39,13 @@ type LiveToolState = {
   detail: string
   agentLabel?: string
 }
+
 type LiveRetrievalItem = {
   source: string
   content: string
   score?: number
 }
+
 type LivePreviewSegment =
   | { type: 'thinking'; content: string; label?: string }
   | { type: 'content'; content: string; label?: string }
@@ -63,6 +65,19 @@ const TRIGGERED_RUN_DISCOVERY_WINDOW_MS = 20000
 
 const hasRuns = computed(() => runs.value.length > 0)
 const waitingForTriggeredRun = computed(() => !!pendingRunDiscoveryTimer)
+
+function displayRunStatusLabel(status: string) {
+  if (status === 'running') return t('scheduledTasks.statusRunning')
+  if (status === 'failed') return t('scheduledTasks.statusFailed')
+  if (status === 'success') return t('scheduledTasks.statusSuccess')
+  return t('scheduledTasks.statusPending')
+}
+
+function displayRunTriggerLabel(triggerType: string) {
+  if (triggerType === 'schedule') return t('scheduledTasks.runTriggerSchedule')
+  if (triggerType === 'manual') return t('scheduledTasks.runTriggerManual')
+  return triggerType || t('scheduledTasks.statusPending')
+}
 
 async function loadRuns() {
   if (!props.job?.id) return
@@ -151,7 +166,10 @@ async function loadDetail(reconnect = false) {
     }
     return
   }
-  selectedDetail.value = await OpenClawCronService.GetRunDetail(props.job.id, selectedRun.value.session_id)
+  selectedDetail.value = await OpenClawCronService.GetRunDetail(
+    props.job.id,
+    selectedRun.value.session_id
+  )
   if (reconnect) {
     await reconnectGatewayStream()
   }
@@ -184,16 +202,20 @@ function buildSyntheticDetail(run: OpenClawCronHistoryListItem): OpenClawCronRun
   } as OpenClawCronRunDetail
 }
 
-function isSameHistoryItem(left: OpenClawCronHistoryListItem, right: OpenClawCronHistoryListItem | null) {
+function isSameHistoryItem(
+  left: OpenClawCronHistoryListItem,
+  right: OpenClawCronHistoryListItem | null
+) {
   if (!right) return false
   if (left.session_key && right.session_key) return left.session_key === right.session_key
   if (left.run_id && right.run_id) return left.run_id === right.run_id
-  if (left.conversation_id && right.conversation_id) return left.conversation_id === right.conversation_id
+  if (left.conversation_id && right.conversation_id) {
+    return left.conversation_id === right.conversation_id
+  }
   return false
 }
 
 // scheduleDetailRefresh batches transcript reloads after gateway events.
-// scheduleDetailRefresh 对 gateway 高频事件做节流刷新，避免每个 chunk 都触发一次详情读取。
 function scheduleDetailRefresh() {
   if (detailRefreshTimer) return
   detailRefreshTimer = window.setTimeout(async () => {
@@ -206,11 +228,7 @@ async function reconnectGatewayStream() {
   await cleanupGatewayStream()
   resetLivePreview()
 
-  if (
-    !props.open ||
-    !props.job?.id ||
-    !selectedRun.value?.session_key
-  ) {
+  if (!props.open || !props.job?.id || !selectedRun.value?.session_key) {
     return
   }
 
@@ -245,7 +263,6 @@ function resetLivePreview() {
 }
 
 // appendTextSegment keeps live preview in transcript order by merging adjacent same-type text blocks.
-// appendTextSegment 按消息顺序维护实时片段，并合并相邻同类型文本块。
 function appendTextSegment(
   type: 'thinking' | 'content',
   chunk: string,
@@ -266,7 +283,6 @@ function appendTextSegment(
 }
 
 // upsertLiveTool updates tool state in place so the UI stays stable across start/update/end events.
-// upsertLiveTool 原地更新工具调用状态，保证 start/update/end 过程不会在 UI 中抖动。
 function upsertLiveTool(tool: LiveToolState) {
   const existing = liveToolMap.get(tool.id)
   if (existing) {
@@ -310,7 +326,9 @@ function extractAgentLabel(payload: any, data: any) {
     normalizeRunPath(data?.run_path) ||
     normalizeRunPath(payload?.run_path)
   if (runPath) return runPath
-  const agentName = String(data?.agentName || payload?.agentName || data?.agent || payload?.agent || '')
+  const agentName = String(
+    data?.agentName || payload?.agentName || data?.agent || payload?.agent || ''
+  )
   return agentName.trim()
 }
 
@@ -433,7 +451,12 @@ watch(
 )
 
 watch(
-  () => [selectedRun.value?.session_id, selectedRun.value?.session_key, selectedRun.value?.conversation_id, selectedRun.value?.run_id],
+  () => [
+    selectedRun.value?.session_id,
+    selectedRun.value?.session_key,
+    selectedRun.value?.conversation_id,
+    selectedRun.value?.run_id,
+  ],
   async () => {
     if (props.open) {
       await loadDetail(true)
@@ -454,19 +477,15 @@ onBeforeUnmount(() => {
 <template>
   <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
     <DialogContent
-      class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1100px] sm:!max-w-[1760px]"
+      class="max-h-[90vh] overflow-hidden sm:!w-auto sm:min-w-[1000px] sm:!max-w-[1760px]"
     >
-      <DialogHeader class="flex flex-row items-center justify-between gap-4">
+      <DialogHeader>
         <DialogTitle>{{ job?.name }} / {{ t('openclawCron.history.title', '运行历史') }}</DialogTitle>
-        <Button variant="outline" size="sm" class="gap-1" @click="loadRuns">
-          <RefreshCcw class="size-4" />
-          {{ t('openclawCron.refresh', '刷新') }}
-        </Button>
       </DialogHeader>
 
       <div class="flex h-[70vh] min-h-0 gap-4">
         <div
-          class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[280px]"
+          class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]"
         >
           <div v-if="loading" class="p-4 text-sm text-muted-foreground">
             {{ t('common.loading', '加载中...') }}
@@ -487,20 +506,25 @@ onBeforeUnmount(() => {
             :class="isSameHistoryItem(run, selectedRun) ? 'bg-accent/50' : ''"
             @click="selectedRun = run"
           >
-            <div class="space-y-1">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {{ run.status || run.source }}
+            <div class="flex items-start gap-2 overflow-hidden">
+              <TaskRunStatusBadge
+                class="mt-0.5 shrink-0"
+                :status="run.status"
+                :label="displayRunStatusLabel(run.status)"
+              />
+              <div class="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
+                <div class="w-full text-[11px] leading-4 text-foreground">
+                  {{ formatOpenClawCronTime(run.run_at_ms) }}
                 </div>
-                <div class="text-xs text-muted-foreground">
-                  {{ isRunWaitingForAssociation(run) ? t('openclawCron.history.pending', '等待关联') : formatDurationMs(0) }}
+                <div class="flex w-full items-center gap-1 text-[11px] text-muted-foreground">
+                  <span class="truncate">{{ displayRunTriggerLabel(run.source) }}</span>
+                  <span
+                    v-if="isRunWaitingForAssociation(run)"
+                    class="shrink-0 text-muted-foreground/70"
+                  >
+                    · {{ t('openclawCron.history.pending', '等待关联') }}
+                  </span>
                 </div>
-              </div>
-              <div class="text-sm text-foreground">
-                {{ run.name || formatOpenClawCronTime(run.run_at_ms) }}
-              </div>
-              <div v-if="run.session_key" class="line-clamp-2 text-xs text-muted-foreground">
-                {{ run.session_key }}
               </div>
             </div>
           </button>
@@ -508,119 +532,21 @@ onBeforeUnmount(() => {
 
         <div class="min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
           <div
-            v-if="!selectedDetail && !selectedRun?.conversation_id"
+            v-if="!selectedDetail?.conversation_id && !selectedRun?.conversation_id"
             class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
-            {{ t('openclawCron.history.selectRun', '请选择一次运行记录') }}
+            {{
+              selectedRun
+                ? t('openclawCron.history.conversationPreparing', '正在准备历史会话，请稍候...')
+                : t('openclawCron.history.selectRun', '请选择一次运行记录')
+            }}
           </div>
-          <div v-else class="flex h-full min-h-0 flex-col">
-            <div class="border-b border-border px-4 py-3">
-              <div class="flex flex-wrap items-center gap-3">
-                <span class="text-sm font-medium text-foreground">{{ selectedDetail?.run?.status || selectedRun?.status }}</span>
-                <span class="text-xs text-muted-foreground">
-                  {{ formatOpenClawCronTime(selectedDetail?.run?.run_at_ms || selectedDetail?.run?.ts || selectedRun?.run_at_ms) }}
-                </span>
-                <span v-if="selectedDetail?.is_live" class="text-xs font-medium text-emerald-600">
-                  {{ t('openclawCron.history.live', '运行中，实时刷新') }}
-                </span>
-              </div>
-              <div class="mt-1 text-xs text-muted-foreground">
-                {{ selectedDetail?.run?.session_key || selectedDetail?.run?.session_id || selectedRun?.session_key || selectedRun?.session_id }}
-              </div>
-              <div
-                v-if="selectedDetail?.run?.error"
-                class="mt-2 whitespace-pre-wrap text-xs text-red-600"
-              >
-                {{ selectedDetail?.run?.error }}
-              </div>
-            </div>
-
-            <div class="min-h-0 flex-1 overflow-auto px-4 py-3">
-              <div
-                v-if="selectedDetail && selectedDetail.is_live && liveSegments.length > 0"
-                class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4"
-              >
-                <div class="mb-2 flex items-center justify-between gap-3">
-                  <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    {{ t('openclawCron.history.livePreview', '实时预览') }}
-                  </div>
-                  <div class="text-xs text-emerald-700">
-                    {{ liveFinished ? t('openclawCron.history.liveFinished', '等待落盘完成') : t('openclawCron.history.liveStreaming', 'Gateway 推流中') }}
-                  </div>
-                </div>
-                <div class="space-y-3">
-                  <div
-                    v-for="(segment, segmentIndex) in liveSegments"
-                    :key="`live-segment-${segmentIndex}`"
-                    class="rounded-md border border-emerald-200 bg-white px-3 py-2"
-                  >
-                    <template v-if="segment.type === 'thinking'">
-                      <div class="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                        <span>thinking</span>
-                        <span v-if="segment.label" class="normal-case tracking-normal">{{ segment.label }}</span>
-                      </div>
-                      <pre class="whitespace-pre-wrap break-words text-sm text-muted-foreground">{{ segment.content }}</pre>
-                    </template>
-                    <template v-else-if="segment.type === 'content'">
-                      <div class="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                        <span>assistant</span>
-                        <span v-if="segment.label" class="normal-case tracking-normal">{{ segment.label }}</span>
-                      </div>
-                      <pre class="whitespace-pre-wrap break-words text-sm text-foreground">{{ segment.content }}</pre>
-                    </template>
-                    <template v-else-if="segment.type === 'retrieval'">
-                      <div class="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                        <span>retrieval</span>
-                        <span v-if="segment.label" class="normal-case tracking-normal">{{ segment.label }}</span>
-                      </div>
-                      <div
-                        v-for="(item, itemIndex) in segment.items"
-                        :key="`retrieval-${segmentIndex}-${itemIndex}`"
-                        class="rounded-md border border-emerald-100 bg-emerald-50/30 px-3 py-2 not-first:mt-2"
-                      >
-                        <div class="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                          <span>{{ item.source }}</span>
-                          <span v-if="item.score != null">{{ item.score }}</span>
-                        </div>
-                        <pre class="whitespace-pre-wrap break-words text-xs text-foreground">{{ item.content }}</pre>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div
-                        v-for="tool in segment.toolCalls"
-                        :key="tool.id"
-                        class="rounded-md border border-emerald-100 bg-emerald-50/30 px-3 py-2 not-first:mt-2"
-                      >
-                        <div class="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                          <span>{{ tool.agentLabel ? `${tool.name} · ${tool.agentLabel}` : tool.name }}</span>
-                          <span>{{ tool.status }}</span>
-                        </div>
-                        <pre class="whitespace-pre-wrap break-words text-xs text-foreground">{{ tool.detail }}</pre>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                v-if="selectedDetail?.conversation_id || selectedRun?.conversation_id"
-                class="h-full min-h-0 overflow-hidden"
-              >
-                <EmbeddedAssistantPage
-                  :conversation-id="selectedDetail?.conversation_id || selectedRun?.conversation_id || 0"
-                  :agent-id="selectedDetail?.conversation_agent_id || null"
-                  :read-only="true"
-                />
-              </div>
-
-              <div
-                v-else
-                class="flex h-full items-center justify-center text-sm text-muted-foreground"
-              >
-                {{ t('openclawCron.history.conversationPreparing', '正在准备历史会话，请稍候...') }}
-              </div>
-            </div>
-          </div>
+          <EmbeddedAssistantPage
+            v-else
+            :conversation-id="selectedDetail?.conversation_id || selectedRun?.conversation_id || 0"
+            :agent-id="selectedDetail?.conversation_agent_id || null"
+            :read-only="true"
+          />
         </div>
       </div>
     </DialogContent>

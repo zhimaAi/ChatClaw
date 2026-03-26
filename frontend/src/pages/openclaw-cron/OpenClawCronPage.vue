@@ -63,6 +63,17 @@ const summaryCards = computed(() => [
   { key: 'failed', label: t('openclawCron.summary.failed', '失败'), value: summary.value?.failed ?? 0 },
 ])
 
+const agentNameMap = computed(() => {
+  const entries = new Map<string, string>()
+  for (const agent of agents.value) {
+    const agentID = String(agent.openclaw_agent_id || '').trim()
+    const agentName = String(agent.name || '').trim()
+    if (!agentID || !agentName || entries.has(agentID)) continue
+    entries.set(agentID, agentName)
+  }
+  return entries
+})
+
 async function reloadAll() {
   loading.value = true
   try {
@@ -95,6 +106,16 @@ function openEditDialog(job: OpenClawCronJob) {
   editingJob.value = job
   form.value = jobToForm(job)
   createDialogOpen.value = true
+}
+
+function displayAgentName(job: OpenClawCronJob) {
+  const explicitName = String(job.agent_name || '').trim()
+  if (explicitName) return explicitName
+
+  const agentID = String(job.agent_id || '').trim()
+  if (!agentID) return t('openclawCron.dialog.defaultAgent', '默认助手')
+
+  return agentNameMap.value.get(agentID) || agentID
 }
 
 async function handleSubmit() {
@@ -275,7 +296,7 @@ async function confirmDelete() {
                   </td>
                   <td class="px-5 py-3.5">
                     <div class="space-y-1">
-                      <div class="text-[15px] leading-6 text-[#171717]">{{ job.agent_name || job.agent_id || '-' }}</div>
+                      <div class="text-[15px] leading-6 text-[#171717]">{{ displayAgentName(job) }}</div>
                     </div>
                   </td>
                   <td class="px-5 py-3.5">

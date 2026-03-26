@@ -1546,8 +1546,13 @@ func appendAgentTurnCommonPayload(payload map[string]any, model, thinking string
 }
 
 func appendAgentTurnCommonPatch(payload map[string]any, input UpdateOpenClawCronJobInput) {
-	if input.Model != nil && strings.TrimSpace(*input.Model) != "" {
-		payload["model"] = strings.TrimSpace(*input.Model)
+	if input.Model != nil {
+		trimmedModel := strings.TrimSpace(*input.Model)
+		if trimmedModel == "" {
+			payload["model"] = nil
+		} else {
+			payload["model"] = trimmedModel
+		}
 	}
 	if input.Thinking != nil && strings.TrimSpace(*input.Thinking) != "" {
 		payload["thinking"] = strings.TrimSpace(*input.Thinking)

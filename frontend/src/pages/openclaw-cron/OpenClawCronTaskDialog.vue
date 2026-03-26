@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -24,7 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const advancedOpen = ref(false)
+const SHOW_ADVANCED_SETTINGS = false
 
 // Keep schedule option keys centralized so UI labels always come from i18n.
 const SCHEDULE_KIND_OPTIONS = [
@@ -32,6 +32,16 @@ const SCHEDULE_KIND_OPTIONS = [
   { value: 'every', labelKey: 'openclawCron.dialog.scheduleKinds.every' },
   { value: 'at', labelKey: 'openclawCron.dialog.scheduleKinds.at' },
 ] as const
+
+const agentOptions = computed(() => {
+  const seen = new Set<string>()
+  return props.agents.filter((agent) => {
+    const agentID = String(agent.openclaw_agent_id || '').trim()
+    if (!agentID || seen.has(agentID)) return false
+    seen.add(agentID)
+    return true
+  })
+})
 
 const canSubmit = computed(() => {
   if (!props.form.name.trim()) return false
@@ -94,8 +104,12 @@ function selectScheduleKind(value: OpenClawCronFormState['scheduleKind']) {
                   v-model="form.agentId"
                   class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                 >
-                  <option value="">{{ t('openclawCron.dialog.defaultAgent', '默认助手') }}</option>
-                  <option v-for="agent in agents" :key="agent.openclaw_agent_id" :value="agent.openclaw_agent_id">
+                  <option value="">{{ t('openclawCron.dialog.useDefaultAgent', '未指定（使用默认助手）') }}</option>
+                  <option
+                    v-for="agent in agentOptions"
+                    :key="agent.openclaw_agent_id"
+                    :value="agent.openclaw_agent_id"
+                  >
                     {{ agent.name }}
                   </option>
                 </select>
@@ -211,11 +225,27 @@ function selectScheduleKind(value: OpenClawCronFormState['scheduleKind']) {
             </div>
           </section>
 
-          <section class="rounded-lg border border-border bg-card dark:border-white/10">
+          <section
+            class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10"
+          >
+            <div class="space-y-1">
+              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">
+                {{ t('openclawCron.dialog.enableNowTitle', '立即启用') }}
+              </h3>
+              <p class="text-sm text-muted-foreground">
+                {{ t('openclawCron.dialog.enableNowHint', '创建后立即开始运行此任务') }}
+              </p>
+            </div>
+            <Switch :model-value="form.enabled" @update:model-value="(value) => (form.enabled = !!value)" />
+          </section>
+
+          <section
+            v-if="SHOW_ADVANCED_SETTINGS"
+            class="rounded-lg border border-border bg-card dark:border-white/10"
+          >
             <button
               type="button"
               class="flex w-full items-center justify-between px-4 py-3 text-left"
-              @click="advancedOpen = !advancedOpen"
             >
               <div>
                 <div class="text-sm font-semibold text-foreground">
@@ -225,20 +255,10 @@ function selectScheduleKind(value: OpenClawCronFormState['scheduleKind']) {
                   {{ t('openclawCron.dialog.advancedHint', '模型、投递、会话、超时等额外配置') }}
                 </div>
               </div>
-              <ChevronDown class="size-4 text-muted-foreground transition-transform" :class="advancedOpen ? 'rotate-180' : ''" />
+              <ChevronDown class="size-4 text-muted-foreground" />
             </button>
 
-            <div v-if="advancedOpen" class="grid gap-4 border-t border-border px-4 py-4 md:grid-cols-2 dark:border-white/10">
-              <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-                  {{ t('openclawCron.dialog.model', '模型') }}
-                </Label>
-                <Input
-                  v-model="form.model"
-                  :placeholder="t('openclawCron.dialog.modelPlaceholder', '例如：provider/model 或 alias')"
-                  class="h-10"
-                />
-              </div>
+            <div class="grid gap-4 border-t border-border px-4 py-4 md:grid-cols-2 dark:border-white/10">
               <div class="space-y-1.5">
                 <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
                   {{ t('openclawCron.dialog.thinking', '思考强度') }}
@@ -351,10 +371,6 @@ function selectScheduleKind(value: OpenClawCronFormState['scheduleKind']) {
                   <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
                     <span class="text-sm text-foreground">{{ t('openclawCron.dialog.keepAfterRun', '运行后保留') }}</span>
                     <Switch :model-value="form.keepAfterRun" @update:model-value="(value) => (form.keepAfterRun = !!value)" />
-                  </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.enabled', '启用任务') }}</span>
-                    <Switch :model-value="form.enabled" @update:model-value="(value) => (form.enabled = !!value)" />
                   </label>
                 </div>
               </div>
