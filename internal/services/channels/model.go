@@ -85,18 +85,19 @@ type PlatformMeta struct {
 type channelModel struct {
 	bun.BaseModel `bun:"table:channels,alias:ch"`
 
-	ID             int64      `bun:"id,pk,autoincrement"`
-	Platform       string     `bun:"platform,notnull"`
-	Name           string     `bun:"name,notnull"`
-	Avatar         string     `bun:"avatar,notnull"`
-	Enabled        bool       `bun:"enabled,notnull"`
-	ConnectionType string     `bun:"connection_type,notnull"`
-	ExtraConfig    string     `bun:"extra_config,notnull"`
-	AgentID        int64      `bun:"agent_id,notnull"`
-	Status         string     `bun:"status,notnull"`
+	ID              int64      `bun:"id,pk,autoincrement"`
+	Platform        string     `bun:"platform,notnull"`
+	Name            string     `bun:"name,notnull"`
+	Avatar          string     `bun:"avatar,notnull"`
+	Enabled         bool       `bun:"enabled,notnull"`
+	ConnectionType  string     `bun:"connection_type,notnull"`
+	ExtraConfig     string     `bun:"extra_config,notnull"`
+	AgentID         int64      `bun:"agent_id,notnull"`
+	LastSenderID    string     `bun:"last_sender_id,notnull"`
+	Status          string     `bun:"status,notnull"`
 	LastConnectedAt *time.Time `bun:"last_connected_at"`
-	CreatedAt      time.Time  `bun:"created_at,notnull"`
-	UpdatedAt      time.Time  `bun:"updated_at,notnull"`
+	CreatedAt       time.Time  `bun:"created_at,notnull"`
+	UpdatedAt       time.Time  `bun:"updated_at,notnull"`
 }
 
 var _ bun.BeforeInsertHook = (*channelModel)(nil)
