@@ -16,6 +16,7 @@ import (
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
 	"chatclaw/internal/services/i18n"
+	openclawchannels "chatclaw/internal/services/openclaw/channels"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
@@ -179,6 +180,17 @@ func handleChannelMessage(
 		return
 	}
 
+	// Determine if this agent belongs to openclaw_agents table.
+	agentType := ""
+	var openClawCount int
+	if countErr := db.NewSelect().
+		Table("openclaw_agents").
+		ColumnExpr("COUNT(1)").
+		Where("id = ?", agentID).
+		Scan(ctx, &openClawCount); countErr == nil && openClawCount > 0 {
+		agentType = conversations.AgentTypeOpenClaw
+	}
+
 	// Use ChatID as conversation key so different platform chats get separate conversations.
 	// Fall back to SenderID for direct messages (where ChatID may be empty).
 	convKey := msg.ChatID
@@ -200,7 +212,7 @@ func handleChannelMessage(
 		displayName = channelDisplayName(msg.Platform, false, textContent)
 	}
 
-	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName)
+	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName, agentType)
 	if err != nil {
 		app.Logger.Error("channel message: find/create conversation failed", "error", err)
 		return
@@ -209,6 +221,16 @@ func handleChannelMessage(
 	// Notify frontend that conversation list has changed (e.g. new conversation created)
 	app.Event.Emit("conversations:changed", map[string]any{
 		"agent_id": agentID,
+	})
+
+	// Notify frontend to navigate to the conversation in the assistant
+	app.Event.Emit("channel:conversation-activated", map[string]any{
+		"agent_id":        agentID,
+		"agent_type":      agentType,
+		"conversation_id": conv.ID,
+		"channel_id":      msg.ChannelID,
+		"platform":        msg.Platform,
+		"sender_name":     msg.SenderName,
 	})
 
 	// Check for quick-mode prefix: "/q " or "/quick " forces non-streaming reply for this message.
@@ -226,6 +248,13 @@ func handleChannelMessage(
 	aiContent := textContent
 	if msg.SenderName != "" {
 		aiContent = fmt.Sprintf("%s：%s", msg.SenderName, textContent)
+	}
+
+	// OpenClaw agents: route through the OpenClaw Gateway when available,
+	// fall back to standard eino pipeline only if the gateway is down.
+	if agentType == conversations.AgentTypeOpenClaw {
+		openclawchannels.RunChannelReply(app, chatService, convService, gateway, conv.ID, agentID, aiContent, msg, replyTarget, channelRow.ExtraConfig, useQuickMode, sendReply)
+		return
 	}
 
 	// DingTalk: use real-time streaming interactive card by default.
@@ -911,8 +940,8 @@ func extractTextContent(msg channels.IncomingMessage) string {
 	}
 
 	// DingTalk: content is already extracted/described by the adapter.
-	// - text/audio(ASR) -> plain string, pass directly
-	// - picture/file/video/audio-no-ASR -> descriptive string like "[图片]", "[文件: xxx.pdf]"
+	// - text/audio(ASR) → plain string, pass directly
+	// - picture/file/video/audio-no-ASR → descriptive string like "[图片]", "[文件: xxx.pdf]"
 	// Non-text media types (picture/file/video) are described but not useful as AI input;
 	// we pass the description so the AI can at least acknowledge the message.
 	if msg.Platform == channels.PlatformDingTalk {
@@ -965,6 +994,7 @@ func extractTextContent(msg channels.IncomingMessage) string {
 // or creates a new one if it doesn't exist.
 // externalID is a stable key (e.g., "ch:1:oc_xxx") for lookup.
 // displayName is a human-readable name (e.g., group/user name) for display.
+// agentType should be "openclaw" for OpenClaw agents, or "" for default (eino).
 func findOrCreateConversation(
 	ctx context.Context,
 	db *bun.DB,
@@ -972,6 +1002,7 @@ func findOrCreateConversation(
 	agentID int64,
 	externalID string,
 	displayName string,
+	agentType string,
 ) (*conversations.Conversation, error) {
 	// Try to find existing conversation by external_id
 	type convRow struct {
@@ -988,6 +1019,7 @@ func findOrCreateConversation(
 	if err == nil && existing.ID > 0 {
 		conv, err := convService.GetConversation(existing.ID)
 		if err == nil {
+			ensureConversationAgentType(ctx, db, conv, agentType)
 			return conv, nil
 		}
 	}
@@ -1003,6 +1035,7 @@ func findOrCreateConversation(
 	if err == nil && existing.ID > 0 {
 		conv, err := convService.GetConversation(existing.ID)
 		if err == nil {
+			ensureConversationAgentType(ctx, db, conv, agentType)
 			return conv, nil
 		}
 	}
@@ -1013,12 +1046,30 @@ func findOrCreateConversation(
 		Name:       displayName,
 		ExternalID: externalID,
 		ChatMode:   "chat",
+		AgentType:  agentType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create conversation: %w", err)
 	}
 
 	return conv, nil
+}
+
+// ensureConversationAgentType patches an existing conversation's agent_type
+// if it was created before the type-aware logic was added.
+func ensureConversationAgentType(ctx context.Context, db *bun.DB, conv *conversations.Conversation, agentType string) {
+	if agentType == "" {
+		agentType = conversations.AgentTypeEino
+	}
+	if conv.AgentType == agentType {
+		return
+	}
+	_, _ = db.NewUpdate().
+		Table("conversations").
+		Set("agent_type = ?", agentType).
+		Where("id = ?", conv.ID).
+		Exec(ctx)
+	conv.AgentType = agentType
 }
 
 var platformLabel = map[string]string{

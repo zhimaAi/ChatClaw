@@ -36,7 +36,7 @@ import IconChannels from '@/assets/icons/channels.svg'
 import IconSettings from '@/assets/icons/settings.svg'
 import chatclawIconPng from '@/assets/icons/chatclaw-icon.png'
 import openclawIconPng from '@/assets/icons/openclaw-icon.png'
-import IconSwitch from '@/assets/icons/switch-icon.svg'
+import IconDown from '@/assets/icons/down-icon.svg'
 import { Check } from 'lucide-vue-next'
 import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 
@@ -133,6 +133,9 @@ const allTopNavItems: NavItem[] = [
     key: 'channels',
     labelKey: 'nav.channels',
     icon: IconChannels,
+    systemModuleMap: {
+      openclaw: 'openclaw-channels',
+    },
   },
   {
     key: 'memory',
@@ -170,6 +173,7 @@ const topNavItems = computed(() =>
   allTopNavItems.filter((item) => {
     if (item.guiOnly && !appStore.isGUIMode) return false
     if (item.systems && !item.systems.includes(appStore.currentSystem)) return false
+    if (item.key === 'multiask' && !appStore.showMultiaskInNav) return false
     return true
   })
 )
@@ -242,13 +246,13 @@ const navIconClass = (item: NavItem) =>
   >
     <!-- Top navigation area -->
     <div class="flex w-full flex-col gap-1">
-      <!-- System Switcher (Figma: #F0F0F0 pill, 20px logo, swap icon) -->
+      <!-- System Switcher (Figma: pill 100px, #F5F5F5 border; hover #F0F0F0 + #D4D4D4 border) -->
       <div class="relative mx-2 mb-1">
         <button
           type="button"
           :class="
             cn(
-              'flex w-full items-center justify-between rounded-md bg-[#f0f0f0] px-2 py-1.5 text-sm transition-colors hover:bg-[#e8e8e8] dark:bg-muted dark:hover:bg-muted/80',
+              'flex w-full items-center justify-between rounded-[100px] border border-solid border-[#F5F5F5] bg-background px-2 py-1.5 text-sm transition-colors hover:border-[#d4d4d4] hover:bg-[#f0f0f0] dark:border-border dark:bg-muted/30 dark:hover:border-neutral-500 dark:hover:bg-muted/80',
               navigationStore.sidebarCollapsed && 'justify-center px-1.5'
             )
           "
@@ -277,9 +281,9 @@ const navIconClass = (item: NavItem) =>
           </div>
           <span
             v-if="!navigationStore.sidebarCollapsed"
-            class="flex size-5 shrink-0 items-center justify-center p-0.5 text-muted-foreground"
+            class="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground"
           >
-            <IconSwitch width="14" height="14" class="size-3.5" />
+            <IconDown class="size-3.5" />
           </span>
         </button>
 

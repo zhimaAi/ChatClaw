@@ -9,7 +9,6 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialogs } from '@wailsio/runtime'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
-import { AgentsService } from '@bindings/chatclaw/internal/services/agents'
 import {
   Dialog,
   DialogContent,
@@ -17,10 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
+import {
+  OpenClawChannelService,
+} from '@bindings/chatclaw/internal/services/openclaw/channels'
+import { UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
-import { platformIconMap } from '@/assets/icons/snap/platformIcons'
-import { getPlatformDocsUrl } from '@/pages/channels/platformDocs'
+import { getPlatformIcon } from '@/pages/common/channelUtils'
+import { getPlatformDocsUrl } from '@/pages/common/platformDocs'
 
 const props = defineProps<{
   platform?: PlatformMeta | null
@@ -36,7 +38,6 @@ const name = ref('')
 const avatar = ref('')
 const appId = ref('')
 const appSecret = ref('')
-const token = ref('')
 const saving = ref(false)
 const verifying = ref(false)
 
@@ -47,7 +48,7 @@ watch(open, (val) => {
       avatar.value = props.channel.avatar
       try {
         const config = JSON.parse(props.channel.extra_config)
-        appId.value = config.app_id || config.token || ''
+        appId.value = config.app_id || ''
         appSecret.value = config.app_secret || ''
       } catch {
         appId.value = ''
@@ -58,56 +59,26 @@ watch(open, (val) => {
       avatar.value = ''
       appId.value = ''
       appSecret.value = ''
-      token.value = ''
     }
   }
 })
 
-const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform)
-
-const isWeCom = computed(() => currentPlatformId.value === 'wecom')
-
-const PLATFORM_TIP_ENTRIES: Record<string, { platformUrl: string }> = {
-  feishu: { platformUrl: 'https://open.feishu.cn/' },
-  dingtalk: { platformUrl: 'https://open.dingtalk.com/' },
-  qq: { platformUrl: 'https://q.qq.com/#/' },
-  wecom: { platformUrl: 'https://work.weixin.qq.com/' },
-}
+const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform || 'feishu')
 
 const platformTipConfig = computed(() => {
-  const pid = currentPlatformId.value
-  if (!pid) return null
-  const entry = PLATFORM_TIP_ENTRIES[pid]
-  if (!entry) return null
   return {
-    platformUrl: entry.platformUrl,
-    docsUrl: getPlatformDocsUrl(pid),
-    prefix: t(`channels.config.${pid}TipPrefix`),
-    platformLink: t(`channels.config.${pid}PlatformLink`),
-    middle: t(`channels.config.${pid}TipMiddle`),
-    guideLink: t(`channels.config.${pid}GuideLink`),
-    suffix: t(`channels.config.${pid}TipSuffix`),
+    platformUrl: 'https://open.feishu.cn/',
+    docsUrl: getPlatformDocsUrl('feishu'),
+    prefix: t('channels.config.feishuTipPrefix'),
+    platformLink: t('channels.config.feishuPlatformLink'),
+    middle: t('channels.config.feishuTipMiddle'),
+    guideLink: t('channels.config.feishuGuideLink'),
+    suffix: t('channels.config.feishuTipSuffix'),
   }
 })
-const appIdLabel = computed(() =>
-  isWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId')
-)
-const appSecretLabel = computed(() =>
-  isWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret')
-)
-const appIdPlaceholder = computed(() =>
-  isWeCom.value ? t('channels.config.wecomAppIdPlaceholder') : t('channels.config.appIdPlaceholder')
-)
-const appSecretPlaceholder = computed(() =>
-  isWeCom.value
-    ? t('channels.config.wecomAppSecretPlaceholder')
-    : t('channels.config.appSecretPlaceholder')
-)
 
 const dialogTitle = computed(() => {
-  const pid = currentPlatformId.value
-  if (!pid) return ''
-  const botName = t(`channels.meta.${pid}.botName`, pid)
+  const botName = t('channels.meta.feishu.botName', 'feishu')
   if (props.channel) {
     return t('channels.config.editTitle', { platform: botName })
   }
@@ -120,9 +91,7 @@ const isFormValid = computed(() => {
 })
 
 const defaultAvatarSrc = computed(() => {
-  const pid = currentPlatformId.value
-  if (!pid) return null
-  return platformIconMap[pid] || null
+  return getPlatformIcon(currentPlatformId.value) || null
 })
 
 const handlePickIcon = async () => {
@@ -141,7 +110,10 @@ const handlePickIcon = async () => {
       ],
     })
     if (!path) return
-    avatar.value = await AgentsService.ReadIconFile(path)
+    const { OpenClawAgentsService } = await import(
+      '@bindings/chatclaw/internal/openclaw/agents'
+    )
+    avatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to pick icon:', error)
@@ -149,8 +121,6 @@ const handlePickIcon = async () => {
 }
 
 async function handleVerify() {
-  const pid = currentPlatformId.value
-  if (!pid) return
   if (!isFormValid.value) {
     toast.error(t('channels.inline.fillRequired'))
     return
@@ -161,7 +131,7 @@ async function handleVerify() {
   })
   verifying.value = true
   try {
-    await ChannelService.VerifyChannelConfig(pid, extraConfig)
+    await OpenClawChannelService.VerifyChannelConfig(extraConfig)
     toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
@@ -171,13 +141,11 @@ async function handleVerify() {
 }
 
 async function handleSave() {
-  const pid = currentPlatformId.value
-  if (!pid) return
   if (!name.value.trim()) return
 
   saving.value = true
   try {
-    let extraConfig = JSON.stringify({
+    const extraConfig = JSON.stringify({
       app_id: appId.value.trim(),
       app_secret: appSecret.value.trim(),
     })
@@ -185,7 +153,7 @@ async function handleSave() {
     let channel: Channel | null = null
     const isEdit = !!props.channel
     if (isEdit) {
-      channel = await ChannelService.UpdateChannel(
+      channel = await OpenClawChannelService.UpdateChannel(
         props.channel!.id,
         new UpdateChannelInput({
           name: name.value.trim(),
@@ -195,13 +163,11 @@ async function handleSave() {
       )
       toast.success(t('channels.config.editSuccess'))
     } else {
-      channel = await ChannelService.CreateChannel({
-        platform: pid,
+      channel = await OpenClawChannelService.CreateChannel({
         name: name.value.trim(),
         avatar: avatar.value,
-        connection_type: 'gateway',
         extra_config: extraConfig,
-        openclaw_scope: false,
+        agent_id: 0,
       })
       toast.success(t('channels.config.success'))
     }
@@ -234,11 +200,8 @@ async function handleOpenExternalLink(url: string) {
       </DialogHeader>
 
       <form class="px-6 pb-4" @submit.prevent="handleSave">
-        <!-- Platform tip card (Feishu / DingTalk / QQ / WeCom) -->
-        <div
-          v-if="platformTipConfig"
-          class="mt-4 rounded-lg border border-border bg-card px-4 py-3"
-        >
+        <!-- Platform tip card -->
+        <div class="mt-4 rounded-lg border border-border bg-card px-4 py-3">
           <p class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
             {{ platformTipConfig.prefix }}
             <a
@@ -307,9 +270,14 @@ async function handleOpenExternalLink(url: string) {
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
             <span class="text-destructive" aria-hidden="true">*</span>
-            {{ appIdLabel }}
+            {{ t('channels.config.appId') }}
           </Label>
-          <Input id="app-id" v-model="appId" :placeholder="appIdPlaceholder" maxlength="60" />
+          <Input
+            id="app-id"
+            v-model="appId"
+            :placeholder="t('channels.config.appIdPlaceholder')"
+            maxlength="60"
+          />
         </div>
         <div class="mt-4 space-y-1">
           <Label
@@ -317,13 +285,13 @@ async function handleOpenExternalLink(url: string) {
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
             <span class="text-destructive" aria-hidden="true">*</span>
-            {{ appSecretLabel }}
+            {{ t('channels.config.appSecret') }}
           </Label>
           <Input
             id="app-secret"
             v-model="appSecret"
             type="password"
-            :placeholder="appSecretPlaceholder"
+            :placeholder="t('channels.config.appSecretPlaceholder')"
             maxlength="200"
           />
         </div>

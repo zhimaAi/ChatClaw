@@ -31,6 +31,21 @@ export const useAppStore = defineStore('app', () => {
     localStorage.setItem('currentSystem', system)
   }
 
+  /** Whether "多问" appears in the left sidebar (default: visible). */
+  const NAV_SHOW_MULTIASK_KEY = 'navShowMultiask'
+  const showMultiaskInNav = ref(
+    typeof localStorage !== 'undefined' && localStorage.getItem(NAV_SHOW_MULTIASK_KEY) !== 'false'
+  )
+
+  const setShowMultiaskInNav = (visible: boolean) => {
+    showMultiaskInNav.value = visible
+    try {
+      localStorage.setItem(NAV_SHOW_MULTIASK_KEY, visible ? 'true' : 'false')
+    } catch {
+      // ignore
+    }
+  }
+
   // 获取系统主题
   const getSystemTheme = (): 'light' | 'dark' => {
     if (typeof window !== 'undefined') {
@@ -132,5 +147,7 @@ export const useAppStore = defineStore('app', () => {
     initRunMode,
     currentSystem,
     setCurrentSystem,
+    showMultiaskInNav,
+    setShowMultiaskInNav,
   }
 })

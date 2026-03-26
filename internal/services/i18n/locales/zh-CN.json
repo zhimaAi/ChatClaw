@@ -205,6 +205,7 @@
   "error.channel_agent_create_not_available": "自动创建助手功能不可用",
   "error.channel_ai_reply_failed": "AI回复失败: {{.Error}}",
   "error.channel_ai_reply_empty": "AI回复失败: 生成了空回复",
+  "error.openclaw_gateway_not_ready_channel": "OpenClaw 运行时未启动，请先在桌面端启动 OpenClaw 后再发送消息。",
   "error.dingtalk_network_dns_failed": "钉钉连接失败：DNS 解析异常，请检查网络或 DNS 设置",
   "channel.feishu_streaming_generating": "正在流式生成回复，请稍候...",
   "channel.feishu_stream_output_enabled": "已开启流式输出，后续回复将边生成边发送。",
