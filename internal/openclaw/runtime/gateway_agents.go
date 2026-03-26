@@ -17,6 +17,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+const longTermMemoryFileName = "MEMORY.md"
+
 // AgentService handles agent CRUD via Gateway RPC (agents.*) and registers
 // an "agents" config section with ConfigService so that agent list entries
 // are included in the unified config.patch.
@@ -57,6 +59,9 @@ func (s *AgentService) OnAgentCreated(agent openclawagents.OpenClawAgent) {
 
 	if err := s.createAgent(ctx, agent); err != nil {
 		s.app.Logger.Warn("openclaw: agents.create failed", "error", err)
+	}
+	if err := ensureLongTermMemoryFile(s.resolveAgentWorkspace(agent)); err != nil {
+		s.app.Logger.Warn("openclaw: ensure MEMORY.md after create failed", "error", err)
 	}
 }
 
@@ -167,6 +172,9 @@ func (s *AgentService) syncOnce() error {
 			if err := s.createAgent(ctx, agent); err != nil {
 				return fmt.Errorf("agents.create %s: %w", agentID, err)
 			}
+		}
+		if err := ensureLongTermMemoryFile(wsDir); err != nil {
+			return fmt.Errorf("ensure %s for %s: %w", longTermMemoryFileName, agentID, err)
 		}
 	}
 
@@ -372,4 +380,22 @@ func isManagedAgentID(id string) bool {
 		return true
 	}
 	return id == define.OpenClawMainAgentID || strings.HasPrefix(id, define.OpenClawManagedAgentIDPrefix)
+}
+
+func ensureLongTermMemoryFile(workspaceDir string) error {
+	if strings.TrimSpace(workspaceDir) == "" {
+		return fmt.Errorf("workspace path is empty")
+	}
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		return err
+	}
+
+	path := filepath.Join(workspaceDir, longTermMemoryFileName)
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	return os.WriteFile(path, nil, 0o644)
 }
