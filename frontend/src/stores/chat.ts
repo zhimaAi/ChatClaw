@@ -8,6 +8,7 @@ import {
   SendMessageInput,
   EditAndResendInput,
 } from '@bindings/chatclaw/internal/services/chat'
+import { buildRecoveredStreamingState } from './chatStreamRecovery'
 
 // Message status constants
 export const MessageStatus = {
@@ -532,6 +533,41 @@ export const useChatStore = defineStore('chat', () => {
     delete activeRequestByConversation.value[conversationId]
   }
 
+  const restoreStreamingSnapshot = (
+    conversationId: number,
+    requestId: string,
+    messageId: number,
+    content: string
+  ) => {
+    if (conversationId <= 0 || messageId <= 0 || !String(requestId).trim()) {
+      return
+    }
+
+    streamingByConversation.value[conversationId] = {
+      messageId,
+      requestId: String(requestId).trim(),
+      content,
+      thinkingContent: '',
+      toolCalls: [],
+      segments: content ? [{ type: 'content', content }] : [],
+      status: MessageStatus.STREAMING,
+    }
+
+    upsertMessage(conversationId, messageId, {
+      id: messageId,
+      conversation_id: conversationId,
+      role: MessageRole.ASSISTANT,
+      content,
+      status: MessageStatus.STREAMING,
+      thinking_content: '',
+      tool_calls: '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+  }
+
   // Handle user message event (emitted by backend after inserting user message).
   // When the user sends from the UI, an optimistic message with a negative ID
   // already exists — replace it with the real backend ID instead of duplicating.
@@ -604,6 +640,34 @@ export const useChatStore = defineStore('chat', () => {
     } as any)
   }
 
+  const ensureStreamingState = (conversationId: number, payload: any) => {
+    const current = streamingByConversation.value[conversationId]
+    if (current) {
+      return current
+    }
+
+    const recovered = buildRecoveredStreamingState(payload ?? {})
+    if (!recovered) {
+      return null
+    }
+
+    streamingByConversation.value[conversationId] = recovered as StreamingMessageState
+    upsertMessage(conversationId, recovered.messageId, {
+      id: recovered.messageId,
+      conversation_id: conversationId,
+      role: MessageRole.ASSISTANT,
+      content: '',
+      status: MessageStatus.STREAMING,
+      thinking_content: '',
+      tool_calls: '[]',
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: null as any,
+      updated_at: null as any,
+    } as any)
+    return streamingByConversation.value[conversationId]
+  }
+
   const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
 
   const extractSubAgentName = (runPath?: string[]): string | undefined => {
@@ -635,7 +699,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!data) return
 
     const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
-    const streaming = streamingByConversation.value[conversation_id]
+    const streaming = ensureStreamingState(conversation_id, data)
 
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
@@ -679,7 +743,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!data) return
 
     const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
-    const streaming = streamingByConversation.value[conversation_id]
+    const streaming = ensureStreamingState(conversation_id, data)
 
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
@@ -733,7 +797,7 @@ export const useChatStore = defineStore('chat', () => {
       run_path,
       parent_tool_call_id,
     } = data
-    const streaming = streamingByConversation.value[conversation_id]
+    const streaming = ensureStreamingState(conversation_id, data)
 
     // Guard: ignore empty tool_call_id events (some providers stream partial tool deltas)
     if (!tool_call_id) {
@@ -869,7 +933,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!data) return
 
     const { conversation_id, request_id, items } = data
-    const streaming = streamingByConversation.value[conversation_id]
+    const streaming = ensureStreamingState(conversation_id, data)
 
     if (!streaming || streaming.requestId !== request_id) return
     if (!Array.isArray(items) || items.length === 0) return
@@ -1012,6 +1076,45 @@ export const useChatStore = defineStore('chat', () => {
     return Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
   }
 
+  const handleForwardedEvent = (eventName: string, payload: any) => {
+    const wrappedEvent = { data: payload }
+    if (eventName === ChatEventType.USER_MESSAGE) {
+      handleChatUserMessage(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.START) {
+      handleChatStart(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.CHUNK) {
+      handleChatChunk(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.THINKING) {
+      handleChatThinking(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.TOOL) {
+      handleChatTool(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.RETRIEVAL) {
+      handleChatRetrieval(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.COMPLETE) {
+      handleChatComplete(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.STOPPED) {
+      handleChatStopped(wrappedEvent)
+      return
+    }
+    if (eventName === ChatEventType.ERROR) {
+      handleChatError(wrappedEvent)
+    }
+  }
+
   // Subscribe to chat events
   let unsubscribers: Array<() => void> = []
   let subscriptionRefCount = 0
@@ -1124,9 +1227,11 @@ export const useChatStore = defineStore('chat', () => {
     stopGeneration,
     clearMessages,
     appendLocalMessage,
+    restoreStreamingSnapshot,
 
     // Event subscription
     subscribe,
     unsubscribe,
+    handleForwardedEvent,
   }
 })
