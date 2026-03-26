@@ -14,7 +14,7 @@ import (
 
 // AgentType constants
 const (
-	AgentTypeEino    = "eino"
+	AgentTypeEino     = "eino"
 	AgentTypeOpenClaw = "openclaw"
 )
 
