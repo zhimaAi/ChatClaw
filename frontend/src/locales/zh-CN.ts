@@ -400,6 +400,8 @@ export default {
       pageDesc:
         '优先通过已连接的 OpenClaw Gateway 调用 skills.status；离线时按 OpenClaw 文档扫描状态目录（managed / workspace / bundled / extraDirs）。',
       filterAll: '全部',
+      filterBuiltin: '内置',
+      filterInstalled: '安装的',
       filterShared: '共享目录',
       filterWorkspace: '工作区',
       locationShared: '共享',
@@ -433,6 +435,15 @@ export default {
       gateHintLabel: '网关提示',
       previewNoLocalPath:
         '当前项仅来自 Gateway，本地无对应目录时无法预览文件；连接正常且磁盘存在同名技能包时可自动关联路径。',
+      add: {
+        title: '新增',
+        createViaChatTitle: '通过对话创建',
+        createViaChatDesc: '直接跳转到 OpenClaw 对话，描述你的需求并开始创建',
+        choosePackageTitle: '选择技能包',
+        choosePackageDesc: '打开 ClawHub 搜索下载，并打开本地目录完成安装',
+        createViaChatPrompt:
+          '请帮我创建一个 OpenClaw skill。先问我需要什么功能，然后根据需求给出 SKILL.md（含 frontmatter）和必要的文件结构与示例代码。最后告诉我把技能目录放到 workspace-main/skills 下即可生效。',
+      },
     },
     mcp: {
       title: 'MCP',
