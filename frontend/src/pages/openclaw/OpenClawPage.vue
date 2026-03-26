@@ -21,7 +21,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
-import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
+import { ChatService, type ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -456,7 +456,21 @@ const handleDeleted = (id: number) => {
   })
 }
 
-const handleNewConversation = () => {
+const handleNewConversation = async () => {
+  const currentConversationId = activeConversationId.value
+  const shouldTriggerOfficialNew =
+    listMode.value === 'personal' &&
+    !!currentConversationId &&
+    !chatStore.isGenerating(currentConversationId).value
+
+  if (shouldTriggerOfficialNew) {
+    try {
+      await ChatService.StartFreshOpenClawSession(currentConversationId)
+    } catch (error) {
+      console.warn('[openclaw] failed to trigger official /new before creating a fresh conversation', error)
+    }
+  }
+
   // Clear selection; only purge cached messages if the conversation is not actively streaming
   // (another tab may still be using it).
   if (activeConversationId.value && !chatStore.isGenerating(activeConversationId.value).value) {
@@ -527,11 +541,11 @@ async function restoreSnapCache() {
   }
 }
 
-const handleNewConversationForAgent = (agentId: number) => {
+const handleNewConversationForAgent = async (agentId: number) => {
   if (activeAgentId.value !== agentId) {
     activeAgentId.value = agentId
   }
-  handleNewConversation()
+  await handleNewConversation()
 }
 
 const handleNewConversationForTeamRobot = (robotId: string) => {
@@ -556,7 +570,7 @@ function handleSnapNewConversation() {
   if (listMode.value === 'team' && activeTeamRobotId.value) {
     handleNewConversationForTeamRobot(activeTeamRobotId.value)
   } else {
-    handleNewConversation()
+    void handleNewConversation()
   }
 }
 
