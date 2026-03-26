@@ -93,19 +93,19 @@ func TestNormalizeHistoryTriggerType(t *testing.T) {
 
 func TestEnrichConversationHistoryItemsWithRunEntries_FillsDurationForManualConversation(t *testing.T) {
 	conversationItems := []OpenClawCronHistoryListItem{{
-		JobID:       "job-1",
+		JobID:          "job-1",
 		ConversationID: 42,
-		RunAtMs:     1774496838251,
-		Status:      "running",
-		TriggerType: "manual",
+		RunAtMs:        1774496838251,
+		Status:         "running",
+		TriggerType:    "manual",
 	}}
 	runEntries := []OpenClawCronRunEntry{{
-		RunAtMs:     1774496838251,
-		DurationMs:  35506,
-		SessionKey:  "agent:main:cron:job-1:run:session-1",
-		SessionID:   "session-1",
-		Status:      "ok",
-		Action:      "finished",
+		RunAtMs:    1774496838251,
+		DurationMs: 35506,
+		SessionKey: "agent:main:cron:job-1:run:session-1",
+		SessionID:  "session-1",
+		Status:     "ok",
+		Action:     "finished",
 	}}
 
 	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
@@ -133,12 +133,12 @@ func TestEnrichConversationHistoryItemsWithRunEntries_UpdatesStatusWhenConversat
 		TriggerType:    "manual",
 	}}
 	runEntries := []OpenClawCronRunEntry{{
-		RunAtMs:     1774496838251,
-		DurationMs:  35506,
-		SessionKey:  "agent:main:cron:job-1:run:session-1",
-		SessionID:   "session-1",
-		Status:      "ok",
-		Action:      "finished",
+		RunAtMs:    1774496838251,
+		DurationMs: 35506,
+		SessionKey: "agent:main:cron:job-1:run:session-1",
+		SessionID:  "session-1",
+		Status:     "ok",
+		Action:     "finished",
 	}}
 
 	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
@@ -182,8 +182,8 @@ func TestDeriveManualConversationHistoryState(t *testing.T) {
 			updatedAtMs:    5600,
 			sessionKey:     "",
 			active:         false,
-			wantStatus:     "running",
-			wantDurationMs: 0,
+			wantStatus:     "success",
+			wantDurationMs: 4600,
 		},
 	}
 
@@ -432,5 +432,152 @@ func TestBuildUpdateJobPatch_MapsDisableAndClearFlags(t *testing.T) {
 	}
 	if patch["deleteAfterRun"] != false {
 		t.Fatalf("expected keep-after-run to map deleteAfterRun=false, got %#v", patch["deleteAfterRun"])
+	}
+}
+
+func TestDeriveCronDeliveryAccountID(t *testing.T) {
+	tests := []struct {
+		name   string
+		option cronDeliveryChannelOption
+		want   string
+	}{
+		{
+			name: "uses explicit openclaw channel id for any platform",
+			option: cronDeliveryChannelOption{
+				ID:         7,
+				Platform:   "dingtalk",
+				ExtraConfig: `{"openclaw_channel_id":"shared_account"}`,
+			},
+			want: "shared_account",
+		},
+		{
+			name: "falls back to channel id when extra config has no account key",
+			option: cronDeliveryChannelOption{
+				ID:       9,
+				Platform: "wecom",
+			},
+			want: "channel_9",
+		},
+		{
+			name: "returns empty when channel id is invalid",
+			option: cronDeliveryChannelOption{
+				ID:       0,
+				Platform: "qq",
+			},
+			want: "",
+		},
+	}
+
+	for _, tc := range tests {
+		if got := deriveCronDeliveryAccountID(tc.option); got != tc.want {
+			t.Fatalf("%s: expected %q, got %q", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestResolveCronDeliveryChannelOption(t *testing.T) {
+	tests := []struct {
+		name        string
+		agentRowID  int64
+		platform    string
+		channels    []cronDeliveryChannelOption
+		wantChannel cronDeliveryChannelOption
+		wantOK      bool
+	}{
+		{
+			name:       "matches bound channel by agent and platform",
+			agentRowID: 11,
+			platform:   "feishu",
+			channels: []cronDeliveryChannelOption{
+				{ID: 1, AgentRowID: 10, Platform: "feishu", LastSenderID: "ou_old"},
+				{ID: 2, AgentRowID: 11, Platform: "feishu", LastSenderID: "ou_latest"},
+			},
+			wantChannel: cronDeliveryChannelOption{ID: 2, AgentRowID: 11, Platform: "feishu", LastSenderID: "ou_latest"},
+			wantOK:      true,
+		},
+		{
+			name:       "rejects multiple bound channels for same agent and platform",
+			agentRowID: 11,
+			platform:   "feishu",
+			channels: []cronDeliveryChannelOption{
+				{ID: 2, AgentRowID: 11, Platform: "feishu", LastSenderID: "ou_a"},
+				{ID: 3, AgentRowID: 11, Platform: "feishu", LastSenderID: "ou_b"},
+			},
+			wantOK: false,
+		},
+		{
+			name:       "rejects missing bound channel",
+			agentRowID: 11,
+			platform:   "wecom",
+			channels: []cronDeliveryChannelOption{
+				{ID: 2, AgentRowID: 11, Platform: "feishu", LastSenderID: "ou_a"},
+			},
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range tests {
+		got, err := resolveCronDeliveryChannelOption(tc.agentRowID, tc.platform, tc.channels)
+		if tc.wantOK {
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", tc.name, err)
+			}
+			if got.ID != tc.wantChannel.ID || got.LastSenderID != tc.wantChannel.LastSenderID {
+				t.Fatalf("%s: expected %#v, got %#v", tc.name, tc.wantChannel, got)
+			}
+			continue
+		}
+		if err == nil {
+			t.Fatalf("%s: expected error, got nil", tc.name)
+		}
+	}
+}
+
+func TestResolveCronDeliveryTargetID(t *testing.T) {
+	tests := []struct {
+		name          string
+		explicit      string
+		channel       cronDeliveryChannelOption
+		wantTargetID  string
+		wantErr       bool
+	}{
+		{
+			name:     "uses explicit target when provided",
+			explicit: "ou_manual",
+			channel: cronDeliveryChannelOption{
+				LastSenderID: "ou_last",
+			},
+			wantTargetID: "ou_manual",
+		},
+		{
+			name: "falls back to channel last sender id",
+			channel: cronDeliveryChannelOption{
+				LastSenderID: "ou_last",
+			},
+			wantTargetID: "ou_last",
+		},
+		{
+			name: "rejects missing explicit target and last sender id",
+			channel: cronDeliveryChannelOption{
+				Platform: "feishu",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		got, err := resolveCronDeliveryTargetID(tc.explicit, tc.channel)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("%s: expected error, got nil", tc.name)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.name, err)
+		}
+		if got != tc.wantTargetID {
+			t.Fatalf("%s: expected %q, got %q", tc.name, tc.wantTargetID, got)
+		}
 	}
 }

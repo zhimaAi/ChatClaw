@@ -2,7 +2,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Events } from '@wailsio/runtime'
+import { AlertCircle, LoaderCircle, RefreshCcw } from 'lucide-vue-next'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 import EmbeddedAssistantPage from '@/pages/openclaw/components/EmbeddedAssistantPage.vue'
 import TaskRunStatusBadge from '@/pages/scheduled-tasks/components/TaskRunStatusBadge.vue'
 import {
@@ -30,7 +33,10 @@ const loading = ref(false)
 const runs = ref<OpenClawCronHistoryListItem[]>([])
 const selectedRun = ref<OpenClawCronHistoryListItem | null>(null)
 const selectedDetail = ref<OpenClawCronRunDetail | null>(null)
+const detailLoading = ref(false)
+const detailError = ref('')
 const liveFinished = ref(false)
+let detailLoadSequence = 0
 
 type LiveToolState = {
   id: string
@@ -62,9 +68,19 @@ let currentWatchId: string | null = null
 // Triggered-run discovery keeps polling for the durable history row after "Run Now".
 const TRIGGERED_RUN_DISCOVERY_INTERVAL_MS = 1000
 const TRIGGERED_RUN_DISCOVERY_WINDOW_MS = 20000
+// DETAIL_LOADING_SKELETON_ROWS keeps the loading placeholder visually stable while
+// the right-side transcript detail is still resolving.
+const DETAIL_LOADING_SKELETON_ROWS = 6
 
 const hasRuns = computed(() => runs.value.length > 0)
 const waitingForTriggeredRun = computed(() => !!pendingRunDiscoveryTimer)
+const shouldShowPreparingState = computed(
+  () =>
+    !detailLoading.value &&
+    !detailError.value &&
+    !selectedDetail.value?.conversation_id &&
+    !selectedRun.value?.conversation_id
+)
 
 function displayRunStatusLabel(status: string) {
   if (status === 'running') return t('scheduledTasks.statusRunning')
@@ -157,21 +173,54 @@ async function discoverTriggeredRun(deadlineMs: number) {
 async function loadDetail(reconnect = false) {
   if (!selectedRun.value) {
     selectedDetail.value = null
+    detailError.value = ''
+    detailLoading.value = false
     return
   }
-  if (!props.job?.id || !selectedRun.value.session_id) {
-    selectedDetail.value = buildSyntheticDetail(selectedRun.value)
-    if (reconnect) {
-      await reconnectGatewayStream()
+
+  const currentRun = selectedRun.value
+  const requestSequence = ++detailLoadSequence
+  detailLoading.value = true
+  detailError.value = ''
+  selectedDetail.value = null
+
+  try {
+    if (!props.job?.id || !currentRun.session_id) {
+      if (requestSequence !== detailLoadSequence) return
+      selectedDetail.value = buildSyntheticDetail(currentRun)
+      if (reconnect) {
+        try {
+          await reconnectGatewayStream()
+        } catch (error) {
+          console.warn('[openclaw-cron] reconnect gateway stream failed:', error)
+        }
+      }
+    } else {
+      const detail = await OpenClawCronService.GetRunDetail(props.job.id, currentRun.session_id)
+      if (requestSequence !== detailLoadSequence) return
+      selectedDetail.value = detail
+      if (reconnect) {
+        try {
+          await reconnectGatewayStream()
+        } catch (error) {
+          console.warn('[openclaw-cron] reconnect gateway stream failed:', error)
+        }
+      }
     }
-    return
-  }
-  selectedDetail.value = await OpenClawCronService.GetRunDetail(
-    props.job.id,
-    selectedRun.value.session_id
-  )
-  if (reconnect) {
-    await reconnectGatewayStream()
+  } catch (error) {
+    if (requestSequence !== detailLoadSequence) return
+    selectedDetail.value = null
+    detailError.value =
+      getErrorMessage(error) ||
+      t(
+        'openclawCron.history.detailLoadFailedReason',
+        '请确认 OpenClaw Gateway 已启动，并稍后重试。'
+      )
+    await cleanupGatewayStream()
+  } finally {
+    if (requestSequence === detailLoadSequence) {
+      detailLoading.value = false
+    }
   }
 }
 
@@ -436,6 +485,8 @@ watch(
     if (!open) {
       selectedRun.value = null
       selectedDetail.value = null
+      detailError.value = ''
+      detailLoading.value = false
       stopPendingRunDiscovery()
       await cleanupGatewayStream()
       return
@@ -534,7 +585,64 @@ onBeforeUnmount(() => {
 
         <div class="min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
           <div
-            v-if="!selectedDetail?.conversation_id && !selectedRun?.conversation_id"
+            v-if="detailLoading"
+            class="flex h-full flex-col gap-4 p-6"
+          >
+            <div class="flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle class="size-4 animate-spin" />
+              <span>{{ t('openclawCron.history.detailLoading', '正在加载对话明细...') }}</span>
+            </div>
+            <div
+              v-for="index in DETAIL_LOADING_SKELETON_ROWS"
+              :key="`detail-loading-${index}`"
+              class="space-y-2"
+            >
+              <div class="h-4 w-24 animate-pulse rounded bg-muted/70" />
+              <div class="h-4 animate-pulse rounded bg-muted/60" />
+              <div class="h-4 w-4/5 animate-pulse rounded bg-muted/50" />
+            </div>
+          </div>
+          <div
+            v-else-if="detailError"
+            class="flex h-full items-center justify-center p-6"
+          >
+            <div class="w-full max-w-lg rounded-xl border border-[#fecaca] bg-[#fff5f5] p-5 text-left">
+              <div class="flex items-start gap-3">
+                <div class="rounded-full bg-[#fee2e2] p-2 text-[#dc2626]">
+                  <AlertCircle class="size-5" />
+                </div>
+                <div class="min-w-0 flex-1 space-y-3">
+                  <div class="space-y-1">
+                    <p class="text-sm font-medium text-[#991b1b]">
+                      {{ t('openclawCron.history.detailLoadFailed', '加载运行明细失败') }}
+                    </p>
+                    <p class="text-sm text-[#7f1d1d]">
+                      {{
+                        t(
+                          'openclawCron.history.detailLoadFailedDescription',
+                          '未能获取这次运行的对话明细，请检查 OpenClaw 运行状态后重试。'
+                        )
+                      }}
+                    </p>
+                  </div>
+                  <div class="rounded-lg border border-[#fecaca] bg-white/80 p-3">
+                    <p class="text-xs font-medium uppercase tracking-wide text-[#b91c1c]">
+                      {{ t('openclawCron.history.detailErrorReason', '失败原因') }}
+                    </p>
+                    <p class="mt-1 whitespace-pre-wrap break-all text-sm text-[#7f1d1d]">
+                      {{ detailError }}
+                    </p>
+                  </div>
+                  <Button variant="outline" class="gap-2" @click="void loadDetail(true)">
+                    <RefreshCcw class="size-4" />
+                    {{ t('openclawCron.history.retryLoadDetail', '重试加载') }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else-if="shouldShowPreparingState"
             class="flex h-full items-center justify-center text-sm text-muted-foreground"
           >
             {{
