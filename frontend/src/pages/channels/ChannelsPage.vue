@@ -372,6 +372,7 @@ async function handleInlineSave() {
       avatar: inlineFormAvatar.value,
       connection_type: 'gateway',
       extra_config: extraConfig,
+      openclaw_scope: false,
     })
 
     toast.success(t('channels.config.success'))
