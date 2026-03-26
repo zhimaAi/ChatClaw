@@ -22,6 +22,7 @@ export type NavModule =
   | 'skills'
   | 'openclaw-skills'
   | 'channels'
+  | 'openclaw-channels'
   | 'tools'
 
 /**
@@ -106,6 +107,7 @@ const moduleLabels: Record<NavModule, string> = {
   skills: 'nav.skills',
   'openclaw-skills': 'nav.openclawSkills',
   channels: 'nav.channels',
+  'openclaw-channels': 'nav.channels',
   tools: 'nav.tools',
 }
 
@@ -124,6 +126,7 @@ const singleTabModules: NavModule[] = [
   'skills',
   'openclaw-skills',
   'channels',
+  'openclaw-channels',
   'tools',
 ]
 

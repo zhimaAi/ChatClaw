@@ -28,10 +28,13 @@ type AgentExtras struct {
 	MCPServerEnabledIDs []string // IDs enabled for generation (subset)
 }
 
-// getAgentAndProviderConfig gets the agent and provider configuration for a conversation
+// getAgentAndProviderConfig gets the agent and provider configuration for a conversation.
+// It reads agent_type from the conversation to determine whether to query the
+// "agents" table (eino) or "openclaw_agents" table (openclaw).
 func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB, conversationID int64) (einoagent.Config, einoagent.ProviderConfig, AgentExtras, error) {
 	type conversationRow struct {
 		AgentID        int64  `bun:"agent_id"`
+		AgentType      string `bun:"agent_type"`
 		LLMProviderID  string `bun:"llm_provider_id"`
 		LLMModelID     string `bun:"llm_model_id"`
 		LibraryIDs     string `bun:"library_ids"`
@@ -42,7 +45,7 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "library_ids", "team_library_id", "enable_thinking", "chat_mode").
+		Column("agent_id", "agent_type", "llm_provider_id", "llm_model_id", "library_ids", "team_library_id", "enable_thinking", "chat_mode").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -81,14 +84,33 @@ func (s *ChatService) getAgentAndProviderConfig(ctx context.Context, db *bun.DB,
 		MCPServerEnabledIDs     string  `bun:"mcp_server_enabled_ids"`
 	}
 	var agent agentRow
-	if err := db.NewSelect().
-		Table("agents").
-		Column("name", "prompt", "default_llm_provider_id", "default_llm_model_id",
+
+	// OpenClaw agents live in a different table; fields overlap with agents.
+	agentTable := "agents"
+	agentColumns := []string{
+		"name", "prompt", "default_llm_provider_id", "default_llm_model_id",
+		"llm_temperature", "llm_top_p", "llm_max_tokens",
+		"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens",
+		"llm_max_context_count", "retrieval_top_k", "retrieval_match_threshold",
+		"sandbox_mode", "sandbox_network", "work_dir",
+		"mcp_enabled", "mcp_server_ids", "mcp_server_enabled_ids",
+	}
+	if conv.AgentType == "openclaw" {
+		agentTable = "openclaw_agents"
+		// openclaw_agents has no "prompt" column; select empty string as placeholder
+		agentColumns = []string{
+			"name", "'' AS prompt", "default_llm_provider_id", "default_llm_model_id",
 			"llm_temperature", "llm_top_p", "llm_max_tokens",
 			"enable_llm_temperature", "enable_llm_top_p", "enable_llm_max_tokens",
 			"llm_max_context_count", "retrieval_top_k", "retrieval_match_threshold",
 			"sandbox_mode", "sandbox_network", "work_dir",
-			"mcp_enabled", "mcp_server_ids", "mcp_server_enabled_ids").
+			"mcp_enabled", "mcp_server_ids", "mcp_server_enabled_ids",
+		}
+	}
+
+	if err := db.NewSelect().
+		Table(agentTable).
+		ColumnExpr(strings.Join(agentColumns, ", ")).
 		Where("id = ?", conv.AgentID).
 		Scan(ctx, &agent); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
