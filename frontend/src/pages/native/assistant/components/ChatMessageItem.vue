@@ -45,7 +45,7 @@ const props = defineProps<{
   agentIcon?: string
   sandboxMode?: string
   // Snap mode props
-  mode?: 'main' | 'snap' | 'embedded'
+  mode?: 'main' | 'snap' | 'embedded' | 'history-iframe'
   hasAttachedTarget?: boolean
   showAiSendButton?: boolean
   showAiEditButton?: boolean
