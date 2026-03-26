@@ -10,7 +10,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import type { OpenClawCronAgentOption } from '@bindings/chatclaw/internal/openclaw/cron'
+import {
+  OpenClawCronService,
+  type OpenClawCronAgentOption,
+  type OpenClawCronDeliveryPlatformOption,
+} from '@bindings/chatclaw/internal/openclaw/cron'
 import {
   addExpirationMonths,
   buildExpirationMonthOptions,
@@ -30,6 +34,7 @@ const props = defineProps<{
   title: string
   form: OpenClawCronFormState
   agents: OpenClawCronAgentOption[]
+  deliveryPlatforms: OpenClawCronDeliveryPlatformOption[]
 }>()
 
 const emit = defineEmits<{
@@ -108,8 +113,62 @@ const canSubmit = computed(() => {
   if (props.form.scheduleKind === 'every' && (!Number.isFinite(props.form.everyValue) || props.form.everyValue < 1)) return false
   if (props.form.scheduleKind === 'at' && !props.form.oneTimeDate.trim()) return false
   if (props.form.scheduleKind === 'custom' && props.form.customMode === 'weekly' && !props.form.customWeekdays.length) return false
+  if (!props.form.channelPlatform.trim()) return false
+  if (!props.form.deliveryTargetId.trim()) return false
   return true
 })
+
+const latestDeliveryTargetRequestToken = ref(0)
+
+// refreshLatestDeliveryTarget keeps the target input aligned with the latest sender
+// for the selected assistant and platform whenever the dialog context changes.
+async function refreshLatestDeliveryTarget() {
+  if (!props.open) return
+
+  const platform = props.form.channelPlatform.trim()
+  if (!platform) {
+    props.form.deliveryTargetId = ''
+    return
+  }
+
+  const requestToken = ++latestDeliveryTargetRequestToken.value
+  try {
+    const latestTargetID = await OpenClawCronService.GetLatestDeliveryTarget(props.form.agentId, platform)
+    if (requestToken !== latestDeliveryTargetRequestToken.value) return
+    props.form.deliveryTargetId = String(latestTargetID || '').trim()
+  } catch {
+    if (requestToken !== latestDeliveryTargetRequestToken.value) return
+    props.form.deliveryTargetId = ''
+  }
+}
+
+function shouldRefreshLatestDeliveryTarget(
+  open: boolean,
+  previousOpen: boolean,
+  currentAgentID: string,
+  previousAgentID: string,
+  currentPlatform: string,
+  previousPlatform: string,
+  currentTargetID: string
+) {
+  if (!open) return false
+
+  const normalizedTargetID = currentTargetID.trim()
+  const justOpened = open && !previousOpen
+  const agentChanged = currentAgentID !== previousAgentID
+  const platformChanged = currentPlatform !== previousPlatform
+
+  if (agentChanged || platformChanged) {
+    return true
+  }
+  if (!normalizedTargetID) {
+    return true
+  }
+  if (justOpened) {
+    return false
+  }
+  return false
+}
 
 function handleSubmit() {
   if (!canSubmit.value || props.saving) return
@@ -274,6 +333,26 @@ watch(
     if (oneTimePickerOpen.value) return
     syncVisibleOneTimeMonth(value)
   }
+)
+
+watch(
+  () => [props.open, props.form.agentId, props.form.channelPlatform] as const,
+  ([open, agentId, platform], previousValue) => {
+    const [previousOpen, previousAgentID, previousPlatform] = previousValue ?? [false, '', '']
+    if (!shouldRefreshLatestDeliveryTarget(
+      open,
+      previousOpen,
+      agentId,
+      previousAgentID,
+      platform,
+      previousPlatform,
+      props.form.deliveryTargetId
+    )) {
+      return
+    }
+    void refreshLatestDeliveryTarget()
+  },
+  { immediate: true }
 )
 
 onClickOutside(oneTimePickerRef, () => {
@@ -712,6 +791,71 @@ useEventListener(window, 'keydown', (event) => {
             </div>
           </section>
 
+          <section class="space-y-4 rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10">
+            <div class="space-y-1">
+              <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">
+                {{ t('openclawCron.dialog.deliveryTitle', '结果投递') }}
+              </h3>
+              <p class="text-sm text-muted-foreground">
+                {{ t('openclawCron.dialog.deliveryHint', '选择已配置频道的平台，并设置投递目标。') }}
+              </p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+                  {{ t('openclawCron.dialog.channelPlatform', '频道类型') }}
+                </Label>
+                <div class="relative">
+                  <select
+                    v-model="form.channelPlatform"
+                    class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                  >
+                    <option value="">{{ t('openclawCron.dialog.channelPlatformPlaceholder', '请选择已配置频道') }}</option>
+                    <option
+                      v-for="platform in deliveryPlatforms"
+                      :key="platform.platform"
+                      :value="platform.platform"
+                    >
+                      {{ t(`channels.platforms.${platform.platform}`, platform.label || platform.platform) }}
+                    </option>
+                  </select>
+                  <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+
+              <div class="space-y-1.5">
+                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+                  {{ t('openclawCron.dialog.deliveryTargetId', '目标 ID') }}
+                </Label>
+                <Input
+                  v-model="form.deliveryTargetId"
+                  :placeholder="t('openclawCron.dialog.deliveryTargetIdPlaceholder', '请输入目标会话或用户 ID')"
+                  class="h-10"
+                />
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
+                {{ t('openclawCron.dialog.deliveryTargetHintTitle', '默认目标') }}
+              </Label>
+              <p class="text-xs text-muted-foreground">
+                {{ t('openclawCron.dialog.deliveryTargetFixedHint', '默认会带出该助手在当前频道类型下最近一次投递的目标 ID，可继续手动调整。') }}
+              </p>
+            </div>
+
+            <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
+              <div>
+                <span class="text-sm text-foreground">{{ t('openclawCron.dialog.bestEffortDeliver', '尽力投递') }}</span>
+                <div class="text-xs text-muted-foreground">
+                  {{ t('openclawCron.dialog.bestEffortDeliverHint', '投递失败时，不让整个任务失败') }}
+                </div>
+              </div>
+              <Switch :model-value="form.bestEffortDeliver" @update:model-value="(value) => (form.bestEffortDeliver = !!value)" />
+            </label>
+          </section>
+
           <section
             class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10"
           >
@@ -802,36 +946,7 @@ useEventListener(window, 'keydown', (event) => {
                 </Label>
                 <Input v-model.number="form.timeoutMs" type="number" min="1000" class="h-10" />
               </div>
-              <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-                  {{ t('openclawCron.dialog.deliveryChannel', '投递通道') }}
-                </Label>
-                <Input
-                  v-model="form.deliveryChannel"
-                  :placeholder="t('openclawCron.dialog.deliveryChannelPlaceholder', '例如：last')"
-                  class="h-10"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-                  {{ t('openclawCron.dialog.deliveryTo', '投递目标') }}
-                </Label>
-                <Input
-                  v-model="form.deliveryTo"
-                  :placeholder="t('openclawCron.dialog.deliveryToPlaceholder', '目标会话或用户')"
-                  class="h-10"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-                  {{ t('openclawCron.dialog.deliveryAccountId', '账号 ID') }}
-                </Label>
-                <Input
-                  v-model="form.deliveryAccountId"
-                  :placeholder="t('openclawCron.dialog.deliveryAccountIdPlaceholder', '多账号场景下可选')"
-                  class="h-10"
-                />
-              </div>
+
 
               <div class="space-y-3 md:col-span-2">
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

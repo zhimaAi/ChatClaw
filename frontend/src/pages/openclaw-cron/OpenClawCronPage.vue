@@ -22,7 +22,13 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { OpenClawCronService, type OpenClawCronAgentOption, type OpenClawCronJob, type OpenClawCronSummary } from '@bindings/chatclaw/internal/openclaw/cron'
+import {
+  OpenClawCronService,
+  type OpenClawCronAgentOption,
+  type OpenClawCronDeliveryPlatformOption,
+  type OpenClawCronJob,
+  type OpenClawCronSummary,
+} from '@bindings/chatclaw/internal/openclaw/cron'
 import OpenClawCronTaskDialog from './OpenClawCronTaskDialog.vue'
 import OpenClawCronHistoryDialog from './OpenClawCronHistoryDialog.vue'
 import {
@@ -45,6 +51,7 @@ const saving = ref(false)
 const jobs = ref<OpenClawCronJob[]>([])
 const summary = ref<OpenClawCronSummary | null>(null)
 const agents = ref<OpenClawCronAgentOption[]>([])
+const deliveryPlatforms = ref<OpenClawCronDeliveryPlatformOption[]>([])
 const createDialogOpen = ref(false)
 const editingJob = ref<OpenClawCronJob | null>(null)
 const historyJob = ref<OpenClawCronJob | null>(null)
@@ -82,14 +89,16 @@ const agentNameMap = computed(() => {
 async function reloadAll() {
   loading.value = true
   try {
-    const [jobList, summaryValue, agentList] = await Promise.all([
+    const [jobList, summaryValue, agentList, deliveryPlatformList] = await Promise.all([
       OpenClawCronService.ListJobs(),
       OpenClawCronService.GetSummary(),
       OpenClawCronService.ListAgents(),
+      OpenClawCronService.ListDeliveryPlatforms(),
     ])
     jobs.value = jobList || []
     summary.value = summaryValue
     agents.value = agentList || []
+    deliveryPlatforms.value = deliveryPlatformList || []
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -104,12 +113,18 @@ onMounted(() => {
 function openCreateDialog() {
   editingJob.value = null
   form.value = createEmptyOpenClawCronForm()
+  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
+    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+  }
   createDialogOpen.value = true
 }
 
 function openEditDialog(job: OpenClawCronJob) {
   editingJob.value = job
   form.value = jobToForm(job)
+  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
+    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+  }
   createDialogOpen.value = true
 }
 
@@ -408,6 +423,7 @@ async function confirmDelete() {
       :title="editingJob ? t('openclawCron.edit', '编辑任务') : t('openclawCron.create', '创建任务')"
       :form="form"
       :agents="agents"
+      :delivery-platforms="deliveryPlatforms"
       @update:open="(value) => (createDialogOpen = value)"
       @submit="handleSubmit"
     />
