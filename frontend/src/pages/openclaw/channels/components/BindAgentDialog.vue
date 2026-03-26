@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import {
   OpenClawAgentsService,
   type OpenClawAgent,
-} from '@bindings/chatclaw/internal/services/openclawagents'
+} from '@bindings/chatclaw/internal/openclaw/agents'
 import { getLogoDataUrl } from '@/composables/useLogo'
 
 const props = defineProps<{

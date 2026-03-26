@@ -1,8 +1,8 @@
 # OpenClaw 飞书渠道（Feishu / Lark）
 
-本目录的 `OpenClawChannelService`（见 `service.go`）用于承接 OpenClaw 专用飞书渠道管理。**当前实现**是：创建/更新/启停/删除会先调用 OpenClaw Gateway 渠道 RPC，再同步本地 `channels` 行；飞书协议实现仍在 `internal/services/channels`（`FeishuAdapter`、`ChannelService`、`Gateway`）；入站消息与 OpenClaw 推理衔接在 `internal/bootstrap/app.go`。
+本目录的 `OpenClawChannelService`（见 `service.go`）用于承接 OpenClaw 专用飞书渠道管理。**当前实现**是：创建/更新/启停/删除通过 OpenClaw CLI（`openclaw config set/unset --batch-json`）修改配置文件，Gateway 文件监控器自动热加载渠道变更（无需重启），再同步本地 `channels` 行；飞书协议实现仍在 `internal/services/channels`（`FeishuAdapter`、`ChannelService`、`Gateway`）；入站消息与 OpenClaw 推理衔接在 `internal/bootstrap/app.go`。
 
-下文说明 ChatClaw 桌面应用内 OpenClaw 与飞书渠道的集成方式、消息生命周期、与主渠道差异、架构小结，以及**“OpenClaw 渠道 RPC + 本地映射缓存”**的配置与频道开关关系。
+下文说明 ChatClaw 桌面应用内 OpenClaw 与飞书渠道的集成方式、消息生命周期、与主渠道差异、架构小结，以及**“CLI 配置写入 + 热加载”**的配置与频道开关关系。
 
 ---
 
@@ -23,7 +23,7 @@
 
 - OpenClaw 相关页面（如 OpenClaw 渠道页）通过 **Wails 生成绑定** 调用 `OpenClawChannelService`（列表、创建飞书渠道、绑定 OpenClaw Agent、连接/断开等）。
 - OpenClaw 运行时状态、模型配置等由 `OpenClawRuntimeService` 等暴露给前端；Gateway 就绪与否直接影响 `SendOpenClawMessage` 是否成功（渠道回复失败时会提示 Gateway 未就绪类错误）。
-- **渠道 RPC 事实实现**：`OpenClawChannelService` 在渠道生命周期中通过 Gateway RPC 调用 `channels.create` / `channels.update` / `channels.enable` / `channels.disable` / `channels.delete`（并兼容 `channel.*` 别名）与 OpenClaw 同步渠道状态。
+- **渠道 CLI 操作**：`OpenClawChannelService` 在渠道生命周期中通过 `Manager.ExecCLI` 调用 `openclaw config set --batch-json` / `openclaw config unset` 修改 OpenClaw 配置文件，Gateway 文件监控器自动热加载渠道变更（无需重启）。
 
 ---
 
@@ -108,39 +108,39 @@ flowchart TB
 
 ---
 
-## 5. 渠道配置与 OpenClaw 的关系（重要：写入 RPC，不直接写 config 文件）
+## 5. 渠道配置与 OpenClaw 的关系（CLI 配置写入 + 热加载，无需重启）
 
 ### 5.1 飞书渠道配置应存在哪里
 
-- **写入路径**：通过 OpenClaw Gateway 渠道 RPC（如 `channels.create/update/enable/disable/delete` 及兼容别名）写入 OpenClaw 渠道状态。
-- **不是文件直写**：当前不会由 ChatClaw 直接执行 `config.get/config.patch` 把渠道配置写进 OpenClaw 配置文件（该方式目前用于模型/Agent 配置同步）。
-- **本地落库**：本地 `channels.extra_config` 仍保存飞书凭证，并新增 `openclaw_channel_id` 作为远端映射键，供连接、更新、删除时回查。
-- **消费方式**：`FeishuAdapter` 连接飞书时读取本地 `extra_config`；OpenClaw 侧主要负责渠道实体生命周期与启停状态同步。
+- **写入路径**：通过 OpenClaw CLI（`openclaw config set --batch-json` / `openclaw config unset`）直接修改 `~/.openclaw/openclaw.json` 配置文件中的 `channels.feishu.accounts.<id>` 段。Gateway 文件监控器检测到文件变更后自动热加载渠道配置，**无需重启 Gateway**。
+- **账户映射**：每个本地 `channels` 行对应一个 OpenClaw 配置中的 feishu account，key 为 `channel_<id>`（或 `extra_config.openclaw_channel_id`），存储在 `channels.feishu.accounts.<key>` 下。
+- **本地落库**：本地 `channels.extra_config` 仍保存飞书凭证，并通过 `openclaw_channel_id` 字段记录 OpenClaw 配置中的 account key。
+- **消费方式**：`FeishuAdapter` 连接飞书时读取本地 `extra_config`；OpenClaw 侧通过配置文件中的 feishu account 管理渠道生命周期。
 
 ### 5.2 概念拆分（避免混淆）
 
 | 对象 | 作用 |
 |------|------|
-| OpenClaw 渠道实体（`openclaw_channel_id`） | 通过渠道 RPC 创建/更新/启停/删除 |
+| OpenClaw 渠道账户（`channels.feishu.accounts.<key>`） | 通过 CLI `config set/unset` 创建/更新/启停/删除，热加载生效 |
 | 本地 `channels`（含 `extra_config`） | 保留飞书连接配置 + 远端映射，用于本地连接编排与 UI 展示 |
 | `openclaw_agents`（含 `openclaw_agent_id`） | ChatClaw 主进程 ↔ OpenClaw Gateway（`chat.run` 等） |
 | OpenClaw Runtime 其它配置（模型、工作区等） | 由 `openclawruntime` / 设置服务管理，与「飞书渠道行」无直接同步关系 |
 
-因此：渠道操作采用「**先调用 OpenClaw 渠道 RPC，再同步本地映射**」；运行时由 `handleChannelMessage` 拼装「飞书收消息 → 用 OpenClaw Agent id 调 Gateway」。
+因此：渠道操作采用「**通过 CLI 写入 OpenClaw 配置（热加载生效），同时同步本地映射**」；运行时由 `handleChannelMessage` 拼装「飞书收消息 → 用 OpenClaw Agent id 调 Gateway」。
 
 ---
 
 ## 6. 频道开启 / 关闭与 OpenClaw 的通信
 
-### 6.1 当前行为（有「渠道级」OpenClaw RPC）
+### 6.1 当前行为（CLI 配置写入 + 热加载）
 
 `OpenClawChannelService.ConnectChannel` / `DisconnectChannel`（针对 OpenClaw 渠道）应做：
 
-1. **OpenClaw API**：先调用 OpenClaw 渠道启停接口更新远端真实状态（source of truth）。
-2. **SQLite 映射缓存**：同步本地 `enabled`、`updated_at`，并保留 `openclaw_channel_id` 映射。
+1. **CLI 配置写入**：通过 `Manager.ExecCLI` 执行 `openclaw config set --batch-json` 将 feishu account 的 appId/appSecret/enabled 等写入配置文件。Gateway 文件监控器自动热加载，无需重启。
+2. **SQLite 映射缓存**：同步本地 `enabled`、`updated_at`，并保留 account key 映射（`openclaw_channel_id`）。
 3. **IM Gateway**：`gateway.ConnectChannel` 启动该 `channel_id` 的 `FeishuAdapter`（长连接飞书），或 `DisconnectChannel` 断开适配器并移出内存 map。
 
-应对 OpenClaw 发起渠道级启停调用；OpenClaw Gateway 进程生命周期仍可独立管理，但**渠道可用状态**以 OpenClaw 返回结果为准。
+OpenClaw Gateway 配置文件变更后自动热加载渠道配置，进程生命周期仍可独立管理。
 
 ### 6.2 与 OpenClaw 的间接关系
 
@@ -156,9 +156,9 @@ flowchart TB
 |------|------|
 | 渠道消息总入口与 OpenClaw 分支 | `internal/bootstrap/app.go`（`handleChannelMessage`、`runOpenClawChannelReply`、`streamOpenClawFeishuReply`） |
 | OpenClaw 聊天与 Gateway | `internal/services/chat/openclaw_chat.go` |
-| Gateway 生命周期 | `internal/services/openclawruntime/manager.go` |
+| Gateway 生命周期 | `internal/openclaw/runtime/manager.go` |
 | 本包 OpenClaw 渠道 API | `internal/services/openclaw/channels/service.go` |
 | 渠道启用与 `extra_config` | `internal/services/channels/service.go` |
 | 飞书适配器 | `internal/services/channels/feishu_adapter.go` |
 | OpenClaw 渠道 UI | `frontend/src/pages/openclaw/channels/OpenClawChannelsPage.vue` |
-| OpenClaw 渠道同步点（当前实现） | `internal/services/openclaw/channels/service.go`（create/update/enable/disable/delete + 映射写回） |
+| OpenClaw 渠道 CLI 操作 | `internal/services/openclaw/channels/service.go`（`setOpenClawFeishuAccount` / `removeOpenClawFeishuAccount` 通过 CLI 热加载） |

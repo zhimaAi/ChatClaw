@@ -17,6 +17,9 @@ import (
 	"chatclaw/internal/deeplink"
 	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
+	"chatclaw/internal/openclaw/agents"
+	"chatclaw/internal/openclaw/runtime"
+	openclawskills "chatclaw/internal/openclaw/skills"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
 	"chatclaw/internal/services/assistantmcp"
@@ -30,12 +33,11 @@ import (
 	"chatclaw/internal/services/greet"
 	"chatclaw/internal/services/i18n"
 	"chatclaw/internal/services/library"
+	"chatclaw/internal/services/librarymcp"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
 	openclawchannels "chatclaw/internal/services/openclaw/channels"
-	"chatclaw/internal/services/openclawagents"
-	"chatclaw/internal/services/openclawruntime"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
@@ -151,6 +153,11 @@ type Options struct {
 // NewApp 创建并初始化应用
 // 返回 app 实例和 cleanup 函数（用于关闭数据库等资源）
 func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
+	// Migrate $HOME/.chatclaw legacy layout into native/ and openclaw/ before logs and sqlite.
+	if err := define.EnsureDataLayout(); err != nil {
+		return nil, nil, fmt.Errorf("data layout: %w", err)
+	}
+
 	// 初始化日志（文件 + 控制台双写；生产模式仅写文件）
 	appLogger, logCleanup, err := logger.New()
 	if err != nil {
@@ -293,6 +300,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	// 注册助手 MCP 服务
 	assistantMCPService := assistantmcp.NewAssistantMCPService(app)
 	app.RegisterService(application.NewService(assistantMCPService))
+	// 注册知识库 MCP 服务（全局，自动启动，对外暴露知识库检索能力）
+	libraryMCPService := librarymcp.NewService(app)
 	// 注册聊天服务
 	chatService := chat.NewChatService(app)
 	chatService.SetChatWikiService(chatWikiService)
@@ -350,12 +359,44 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
 	configSvc := openclawruntime.NewConfigService(openclawManager)
+	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
+	configSvc.Register("mcp", func(ctx context.Context) (map[string]any, error) {
+		if !libraryMCPService.IsRunning() {
+			return nil, nil
+		}
+		mcpURL, token := libraryMCPService.ConnectionInfo()
+		if mcpURL == "" {
+			return nil, nil
+		}
+		scriptPath := libraryMCPService.BridgeScriptPath()
+		if scriptPath == "" {
+			return nil, nil
+		}
+		if err := libraryMCPService.EnsureBridgeScript(); err != nil {
+			return nil, fmt.Errorf("write mcp bridge script: %w", err)
+		}
+		return map[string]any{
+			"mcp": map[string]any{
+				"servers": map[string]any{
+					"chatclaw-knowledge": map[string]any{
+						"command": "node",
+						"args":    []string{scriptPath},
+						"env": map[string]string{
+							"CHATCLAW_MCP_URL":   mcpURL,
+							"CHATCLAW_MCP_TOKEN": token,
+						},
+					},
+				},
+			},
+		}, nil
+	})
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	app.RegisterService(application.NewService(openclawruntime.NewOpenClawRuntimeService(openclawManager)))
+	app.RegisterService(application.NewService(openclawskills.NewOpenClawSkillsService(openClawAgentsService, openclawManager)))
 	app.Event.On("providers:config-changed", func(e *application.CustomEvent) {
 		go configSvc.Sync(context.Background())
 	})
@@ -548,6 +589,11 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		}()
 		// Start all enabled assistant MCP servers in background.
 		go assistantMCPService.StartEnabledServers()
+		// Start global library MCP server and sync its config to OpenClaw Gateway.
+		libraryMCPService.OnStarted(func() {
+			go configSvc.Sync(context.Background())
+		})
+		go libraryMCPService.Start()
 	})
 
 	// 监听文件拖拽事件，将文件路径转发到前端
@@ -601,6 +647,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	return app, func() {
 		openclawManager.Shutdown()
 		assistantMCPService.StopAllServers()
+		libraryMCPService.Stop()
 		channelGateway.StopAll(context.Background())
 		scheduledTasksService.Stop()
 		chatService.Shutdown()

@@ -308,7 +308,10 @@ async function startReauthBinding() {
   }
   isReauthFlow.value = true
   pendingLoginSource.value = b?.chatwiki_version === 'yun' ? 'cloud' : 'open-source'
-  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
+  const authUrl = buildChatWikiLoginUrl(
+    base,
+    await BrowserService.GetLoginParams().catch(() => undefined)
+  )
   await startBinding(authUrl)
 }
 
@@ -442,7 +445,10 @@ async function handleGoToAuth() {
   isReauthFlow.value = false
   pendingLoginSource.value = 'open-source'
   const base = openSourceUrl.value.trim().replace(/\/+$/, '')
-  const authUrl = buildChatWikiLoginUrl(base, await BrowserService.GetLoginParams().catch(() => undefined))
+  const authUrl = buildChatWikiLoginUrl(
+    base,
+    await BrowserService.GetLoginParams().catch(() => undefined)
+  )
   await startBinding(authUrl)
 }
 

@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ScheduledTask, ScheduledTaskRun, ScheduledTaskRunDetail } from '../types'
 import { formatDuration, formatTaskTime } from '../utils'
 import TaskRunStatusBadge from './TaskRunStatusBadge.vue'
-import EmbeddedAssistantPage from '@/pages/assistant/components/EmbeddedAssistantPage.vue'
+import EmbeddedAssistantPage from '@/pages/native/assistant/components/EmbeddedAssistantPage.vue'
 
 const props = defineProps<{
   open: boolean
@@ -78,7 +78,9 @@ async function selectRun(run: ScheduledTaskRun) {
         <div
           class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]"
         >
-          <div v-if="loading" class="p-4 text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+          <div v-if="loading" class="p-4 text-sm text-muted-foreground">
+            {{ t('common.loading') }}
+          </div>
           <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
             {{ t('scheduledTasks.noRuns') }}
           </div>

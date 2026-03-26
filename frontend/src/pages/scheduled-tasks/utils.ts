@@ -42,15 +42,15 @@ export function describeSchedule(
       const hh = String(parsed.hour).padStart(2, '0')
       const mm = String(parsed.minute).padStart(2, '0')
       if (parsed.day_of_month) {
-        return t('scheduledTasks.describe.monthly', { day: parsed.day_of_month, time: `${hh}:${mm}` })
+        return t('scheduledTasks.describe.monthly', {
+          day: parsed.day_of_month,
+          time: `${hh}:${mm}`,
+        })
       }
       if (parsed.weekdays?.length) {
         const labels = parsed.weekdays
-          .map(
-            (value) =>
-              t(
-                WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabelKey || String(value)
-              )
+          .map((value) =>
+            t(WEEKDAY_OPTIONS.find((item) => item.value === value)?.shortLabelKey || String(value))
           )
           .join(' ')
         return t('scheduledTasks.describe.weekly', { labels, time: `${hh}:${mm}` })

@@ -11,7 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useAgents } from '@/pages/assistant/composables/useAgents'
+import { useAgents } from '@/pages/native/assistant/composables/useAgents'
 import type { Agent } from '@bindings/chatclaw/internal/services/agents'
 import { getLogoDataUrl } from '@/composables/useLogo'
 

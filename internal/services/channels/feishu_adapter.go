@@ -190,20 +190,20 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		}()
 	}
 
+	content := deref(msg.Content)
+	msgType := deref(msg.MessageType)
+	chatID := deref(msg.ChatId)
+
 	senderID := ""
 	if sender != nil && sender.SenderId != nil {
 		senderID = deref(sender.SenderId.OpenId)
 	}
 
+	fmt.Printf("[Feishu] 收到消息 - message_id: %s, 发送者: %s, 群聊: %s, 类型: %s, 内容: %s\n",
+		messageID, senderID, chatID, msgType, content)
+
 	senderName := a.resolveSenderName(ctx, senderID)
-
-	chatID := deref(msg.ChatId)
 	chatName := a.resolveChatName(ctx, chatID)
-	content := deref(msg.Content)
-	msgType := deref(msg.MessageType)
-
-	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n",
-		senderName, senderID, chatName, chatID, msgType, content)
 
 	chatType := deref(msg.ChatType)
 

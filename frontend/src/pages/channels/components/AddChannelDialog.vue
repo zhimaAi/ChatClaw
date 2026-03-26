@@ -125,7 +125,9 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
                 />
                 <span v-else class="text-xs leading-none text-muted-foreground">🤖</span>
               </div>
-              <p class="truncate text-sm font-medium leading-[22px] text-[#171717] dark:text-foreground">
+              <p
+                class="truncate text-sm font-medium leading-[22px] text-[#171717] dark:text-foreground"
+              >
                 {{ getPlatformDisplayName(platform.id, platform.name) }}
               </p>
             </div>

@@ -169,74 +169,66 @@ export const useChatStore = defineStore('chat', () => {
       const streaming = streamingByConversation.value[conversationId]
 
       if (isOpenClaw) {
-        // OpenClaw messages are not in local DB; IDs are ephemeral.
-        // If actively streaming, keep current state.
-        // If fetched is empty but we have local optimistic messages, keep them.
-        if (!streaming) {
-          if (fetched.length === 0 && current.length > 0) {
-            // Keep current messages to avoid wiping optimistic user messages
-          } else if (fetched.length > 0) {
-            // Merge: keep local optimistic messages (negative IDs) not yet in history
-            const merged: Message[] = [...fetched]
-            for (const msg of current) {
-              if (msg.id >= 0) continue
-              const existsOnServer = fetched.some(
-                (fm) =>
-                  fm.role === msg.role &&
-                  String(fm.content ?? '').trim() === String(msg.content ?? '').trim()
-              )
-              if (!existsOnServer) {
-                merged.push(msg)
-              }
+        // OpenClaw messages come from Gateway (authoritative source).
+        if (streaming) {
+          // While streaming, don't touch messages — streaming events manage state.
+        } else if (fetched.length > 0) {
+          // Not streaming: Gateway history is authoritative — replace entirely.
+          // Clean up old segment data for messages that will be replaced.
+          for (const msg of current) {
+            delete segmentsByMessage.value[msg.id]
+          }
+          messagesByConversation.value[conversationId] = fetched
+        } else if (fetched.length === 0 && current.length > 0) {
+          // Gateway returned empty but we have local messages (e.g. optimistic
+          // user message just sent). Keep them until Gateway catches up.
+        }
+      } else {
+        const normalizeContent = (v: unknown) => String(v ?? '').trim()
+
+        // IMPORTANT:
+        // On first app launch / first message, there are multiple async flows running:
+        // - ChatMessageList watches conversationId and calls loadMessages()
+        // - sendMessage() optimistically appends a local user message (negative ID)
+        // - backend emits streaming events to upsert the assistant placeholder
+        //
+        // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
+        // user message and/or streaming assistant placeholder, making the UI look empty until
+        // a later reload (often when streaming completes).
+        //
+        // Strategy:
+        // - If backend returns empty but we already have local messages, do not overwrite.
+        // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
+        if (fetched.length === 0 && current.length > 0) {
+          // Keep current messages; avoid clobbering optimistic/streaming state.
+        } else {
+          const fetchedIds = new Set(fetched.map((m) => m.id))
+          const merged: Message[] = [...fetched]
+
+          // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
+          // This avoids duplicates after a later reload.
+          for (const msg of current) {
+            if (msg.id >= 0) continue
+            const existsOnServer = fetched.some(
+              (fm) =>
+                fm.role === msg.role &&
+                normalizeContent(fm.content) === normalizeContent(msg.content)
+            )
+            if (!existsOnServer) {
+              merged.push(msg)
             }
-            messagesByConversation.value[conversationId] = merged
           }
-        }
-      } else {
-      const normalizeContent = (v: unknown) => String(v ?? '').trim()
 
-      // IMPORTANT:
-      // On first app launch / first message, there are multiple async flows running:
-      // - ChatMessageList watches conversationId and calls loadMessages()
-      // - sendMessage() optimistically appends a local user message (negative ID)
-      // - backend emits streaming events to upsert the assistant placeholder
-      //
-      // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
-      // user message and/or streaming assistant placeholder, making the UI look empty until
-      // a later reload (often when streaming completes).
-      //
-      // Strategy:
-      // - If backend returns empty but we already have local messages, do not overwrite.
-      // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
-      if (fetched.length === 0 && current.length > 0) {
-        // Keep current messages; avoid clobbering optimistic/streaming state.
-      } else {
-        const fetchedIds = new Set(fetched.map((m) => m.id))
-        const merged: Message[] = [...fetched]
-
-        // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
-        // This avoids duplicates after a later reload.
-        for (const msg of current) {
-          if (msg.id >= 0) continue
-          const existsOnServer = fetched.some(
-            (fm) =>
-              fm.role === msg.role && normalizeContent(fm.content) === normalizeContent(msg.content)
-          )
-          if (!existsOnServer) {
-            merged.push(msg)
+          // Keep streaming assistant placeholder/message if it's not in fetched yet.
+          if (streaming && !fetchedIds.has(streaming.messageId)) {
+            const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
+            if (localStreamingMsg) {
+              merged.push(localStreamingMsg)
+            }
           }
-        }
 
-        // Keep streaming assistant placeholder/message if it's not in fetched yet.
-        if (streaming && !fetchedIds.has(streaming.messageId)) {
-          const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
-          if (localStreamingMsg) {
-            merged.push(localStreamingMsg)
-          }
+          messagesByConversation.value[conversationId] = merged
         }
-
-        messagesByConversation.value[conversationId] = merged
-      }
       }
 
       // Build a map of tool results from tool-role messages (tool_call_id → content)
@@ -481,7 +473,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // Send a message via the OpenClaw OpenResponses API
+  // Send a message via the OpenClaw Gateway chat agent
   const sendOpenClawMessage = async (
     conversationId: number,
     content: string,
@@ -663,7 +655,8 @@ export const useChatStore = defineStore('chat', () => {
     tabId: string,
     images?: ImagePayload[]
   ) => {
-    if (conversationId <= 0 || messageId <= 0 || !newContent.trim()) return null
+    const hasContent = newContent.trim() !== '' || (images && images.length > 0)
+    if (conversationId <= 0 || messageId <= 0 || !hasContent) return null
 
     const current = messagesByConversation.value[conversationId]
     const msgToEdit = current?.find((m) => m.id === messageId)
@@ -835,7 +828,6 @@ export const useChatStore = defineStore('chat', () => {
       created_at: null as any,
       updated_at: null as any,
     } as any)
-
   }
 
   const SUB_AGENT_NAMES = new Set(['general_purpose', 'bash'])
@@ -894,7 +886,6 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.content += chunk
 
-      // Track segments: append to last content segment or start a new one
       const lastSeg = streaming.segments[streaming.segments.length - 1]
       if (lastSeg && lastSeg.type === 'content') {
         lastSeg.content += chunk
@@ -912,8 +903,20 @@ export const useChatStore = defineStore('chat', () => {
     const data = extractEventData(event)
     if (!data) return
 
-    const { conversation_id, request_id, delta, run_path, parent_tool_call_id } = data
+    const { conversation_id, request_id, delta, new_block, run_path, parent_tool_call_id } = data
     const streaming = streamingByConversation.value[conversation_id]
+
+    console.log('[chat-thinking] received', {
+      conversation_id,
+      request_id,
+      deltaLen: delta?.length,
+      deltaPreview: delta?.slice(0, 80),
+      new_block,
+      hasStreaming: !!streaming,
+      streamingRequestId: streaming?.requestId,
+      requestMatch: streaming?.requestId === request_id,
+      currentSegments: streaming?.segments?.map((s: any) => s.type),
+    })
 
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
@@ -927,7 +930,7 @@ export const useChatStore = defineStore('chat', () => {
           parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
           if (!parent.childSegments) parent.childSegments = []
           const lastChild = parent.childSegments[parent.childSegments.length - 1]
-          if (lastChild && lastChild.type === 'thinking') {
+          if (lastChild && lastChild.type === 'thinking' && !new_block) {
             lastChild.content += chunk
           } else {
             parent.childSegments.push({ type: 'thinking', content: chunk })
@@ -938,16 +941,24 @@ export const useChatStore = defineStore('chat', () => {
 
       streaming.thinkingContent += chunk
 
-      // Track segments: append to last thinking segment or start a new one.
-      // If the last segment is tools/content (thinking arrived slightly after
-      // a tool event due to transcript write delay), insert thinking before it
-      // so the rendered order is: thinking → tools → content.
       const lastSeg = streaming.segments[streaming.segments.length - 1]
-      if (lastSeg && lastSeg.type === 'thinking') {
+
+      console.log('[chat-thinking] appending to segments', {
+        new_block,
+        lastSegType: lastSeg?.type,
+        action: new_block
+          ? 'push new thinking segment'
+          : lastSeg?.type === 'thinking'
+            ? 'append to existing'
+            : 'push new thinking segment',
+        totalSegments: streaming.segments.length,
+        thinkingContentLen: streaming.thinkingContent.length,
+      })
+
+      if (new_block) {
+        streaming.segments.push({ type: 'thinking', content: chunk })
+      } else if (lastSeg && lastSeg.type === 'thinking') {
         lastSeg.content += chunk
-      } else if (lastSeg && lastSeg.type === 'tools') {
-        const insertIdx = streaming.segments.length - 1
-        streaming.segments.splice(insertIdx, 0, { type: 'thinking', content: chunk })
       } else {
         streaming.segments.push({ type: 'thinking', content: chunk })
       }
@@ -955,6 +966,13 @@ export const useChatStore = defineStore('chat', () => {
       upsertMessage(conversation_id, streaming.messageId, {
         thinking_content: streaming.thinkingContent,
       } as any)
+    } else {
+      console.warn('[chat-thinking] DROPPED - no matching streaming state', {
+        conversation_id,
+        request_id,
+        hasStreaming: !!streaming,
+        streamingRequestId: streaming?.requestId,
+      })
     }
   }
 
@@ -1145,11 +1163,6 @@ export const useChatStore = defineStore('chat', () => {
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
         }, 0)
-        // Reload history from Gateway to get authoritative record including
-        // thinking content, tool details, and all intermediate turns.
-        setTimeout(() => {
-          void loadMessages(conversation_id)
-        }, 300)
       } else {
         // Clear streaming state first
         delete streamingByConversation.value[conversation_id]
@@ -1290,12 +1303,14 @@ export const useChatStore = defineStore('chat', () => {
     )
     unsubscribers.push(
       Events.On(ChatEventType.CHUNK, (e: any) => {
+        console.log('[chat] >>> CHUNK event arrived at frontend')
         debug(ChatEventType.CHUNK, extractEventData(e))
         handleChatChunk(e)
       })
     )
     unsubscribers.push(
       Events.On(ChatEventType.THINKING, (e: any) => {
+        console.log('[chat] >>> THINKING event arrived at frontend', extractEventData(e))
         debug(ChatEventType.THINKING, extractEventData(e))
         handleChatThinking(e)
       })

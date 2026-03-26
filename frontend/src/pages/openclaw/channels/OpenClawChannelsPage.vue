@@ -52,14 +52,14 @@ import {
 import {
   OpenClawAgentsService,
   CreateOpenClawAgentInput,
-} from '@bindings/chatclaw/internal/services/openclawagents'
+} from '@bindings/chatclaw/internal/openclaw/agents'
 import { UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type {
   Channel,
   ChannelStats,
   PlatformMeta,
 } from '@bindings/chatclaw/internal/services/channels'
-import type { OpenClawAgent } from '@bindings/chatclaw/internal/services/openclawagents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 
 defineProps<{ tabId: string }>()
 
@@ -342,7 +342,7 @@ async function handleInlinePickAvatar() {
     })
     if (!path) return
     const { OpenClawAgentsService } = await import(
-      '@bindings/chatclaw/internal/services/openclawagents'
+      '@bindings/chatclaw/internal/openclaw/agents'
     )
     inlineFormAvatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {

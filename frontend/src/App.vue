@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } fr
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
-import AssistantPage from '@/pages/assistant/AssistantPage.vue'
+import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
 import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
@@ -14,6 +14,9 @@ const ScheduledTasksPage = defineAsyncComponent(
   () => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue')
 )
 const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
+const OpenClawSkillsPage = defineAsyncComponent(
+  () => import('@/pages/openclaw-skills/OpenClawSkillsPage.vue')
+)
 const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
 const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
 const DocumentViewerPage = defineAsyncComponent(
@@ -23,10 +26,10 @@ const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/Channel
 const OpenClawChannelsPage = defineAsyncComponent(
   () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
 )
-const OpenClawAssistantPage = defineAsyncComponent(
-  () => import('@/pages/openclaw-assistant/OpenClawAssistantPage.vue')
-)
+const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawPage.vue'))
+const OpenClawDashboardPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawDashboardPage.vue'))
 const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue'))
+
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
@@ -35,6 +38,10 @@ const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
 const activeTab = computed(() => navigationStore.activeTab)
+
+function resolveAssistantModule(system: typeof appStore.currentSystem): NavModule {
+  return system === 'openclaw' ? 'openclaw' : 'assistant'
+}
 
 // --- In-app text selection popup (HTML overlay, no separate window) ---
 const inAppPopup = ref({
@@ -54,14 +61,16 @@ async function dispatchSelectedText(text: string) {
       void SnapService.WakeAttached()
       Events.Emit('text-selection:send-to-snap', { text })
     } else {
-      if (activeTab.value?.module !== 'assistant') {
-        navigationStore.navigateToModule('assistant')
+      const target = resolveAssistantModule(appStore.currentSystem)
+      if (activeTab.value?.module !== target) {
+        navigationStore.navigateToModule(target, appStore.currentSystem)
       }
       Events.Emit('text-selection:send-to-assistant', { text })
     }
   } catch {
-    if (activeTab.value?.module !== 'assistant') {
-      navigationStore.navigateToModule('assistant')
+    const target = resolveAssistantModule(appStore.currentSystem)
+    if (activeTab.value?.module !== target) {
+      navigationStore.navigateToModule(target, appStore.currentSystem)
     }
     Events.Emit('text-selection:send-to-assistant', { text })
   }
@@ -130,10 +139,12 @@ async function handleDisableSelectionSearchFromPopup() {
  */
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
-  'openclaw-assistant': OpenClawAssistantPage,
+  openclaw: OpenClawPage,
+  'openclaw-dashboard': OpenClawDashboardPage,
   knowledge: KnowledgePage,
   'scheduled-tasks': ScheduledTasksPage,
   skills: SkillsPage,
+  'openclaw-skills': OpenClawSkillsPage,
   memory: MemoryPage,
   settings: SettingsPage,
   multiask: MultiaskPage,
@@ -158,7 +169,7 @@ watch(
   (len) => {
     if (len === 0) {
       const module: NavModule =
-        appStore.currentSystem === 'openclaw' ? 'openclaw-assistant' : 'assistant'
+        appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant'
       navigationStore.navigateToModule(module, appStore.currentSystem)
     }
   },
@@ -278,8 +289,9 @@ onMounted(async () => {
       } else {
         // Snap window is not attached (stopped or hidden)
         // Navigate to AI assistant and send text there
-        if (activeTab.value?.module !== 'assistant') {
-          navigationStore.navigateToModule('assistant')
+        const target = resolveAssistantModule(appStore.currentSystem)
+        if (activeTab.value?.module !== target) {
+          navigationStore.navigateToModule(target, appStore.currentSystem)
         }
         // Emit event for assistant page to receive text
         Events.Emit('text-selection:send-to-assistant', { text })
@@ -287,8 +299,9 @@ onMounted(async () => {
     } catch (error) {
       console.error('Failed to get snap status:', error)
       // Fallback: send to assistant
-      if (activeTab.value?.module !== 'assistant') {
-        navigationStore.navigateToModule('assistant')
+      const target = resolveAssistantModule(appStore.currentSystem)
+      if (activeTab.value?.module !== target) {
+        navigationStore.navigateToModule(target, appStore.currentSystem)
       }
       Events.Emit('text-selection:send-to-assistant', { text })
     }

@@ -119,15 +119,40 @@ func (s *ChatService) resolveWorkDir(ctx context.Context, db *bun.DB, agentID, c
 		WorkDir string `bun:"work_dir"`
 	}
 	var agent agentRow
-	if err := db.NewSelect().
+	err := db.NewSelect().
 		Table("agents").
 		Column("work_dir").
 		Where("id = ?", agentID).
-		Scan(ctx, &agent); err != nil {
+		Scan(ctx, &agent)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", errs.Wrap("error.chat_agent_read_failed", err)
 	}
 
 	workDir := agent.WorkDir
+	if errors.Is(err, sql.ErrNoRows) {
+		type openClawAgentRow struct {
+			WorkDir         string `bun:"work_dir"`
+			OpenClawAgentID string `bun:"openclaw_agent_id"`
+		}
+		var ocAgent openClawAgentRow
+		if ocErr := db.NewSelect().
+			Table("openclaw_agents").
+			Column("work_dir", "openclaw_agent_id").
+			Where("id = ?", agentID).
+			Scan(ctx, &ocAgent); ocErr != nil {
+			return "", errs.Wrap("error.chat_agent_read_failed", ocErr)
+		}
+
+		workDir = strings.TrimSpace(ocAgent.WorkDir)
+		if workDir == "" {
+			if ocRoot, ocRootErr := define.OpenClawDataRootDir(); ocRootErr == nil {
+				workDir = ocRoot
+			}
+		}
+		if ocAgent.OpenClawAgentID != "" {
+			workDir = filepath.Join(workDir, "workspace-"+ocAgent.OpenClawAgentID)
+		}
+	}
 	if workDir == "" {
 		// Use default work dir
 		workDir = defaultWorkDir()

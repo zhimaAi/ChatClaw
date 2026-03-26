@@ -111,7 +111,7 @@ const handlePickIcon = async () => {
     })
     if (!path) return
     const { OpenClawAgentsService } = await import(
-      '@bindings/chatclaw/internal/services/openclawagents'
+      '@bindings/chatclaw/internal/openclaw/agents'
     )
     avatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {

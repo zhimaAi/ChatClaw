@@ -21,6 +21,9 @@ Vue 3 + TypeScript + Vite + TailwindCSS v4 + shadcn-vue + Pinia + vue-i18n
 - `src/locales/` — 语言包 `zh-CN.ts` / `en-US.ts`
 - `src/lib/` — 工具函数
 - `src/assets/` — 静态资源、全局样式
+- `src/pages/native/` — **ChatClaw 原生**（Eino 主助手等），与 OpenClaw 隔离；例如 `native/assistant/`
+- `src/pages/openclaw/` — **OpenClaw Gateway** 相关页面与组件；入口页 `OpenClawPage.vue`；Pinia 导航模块名为 `openclaw`（不要使用 `openclaw-assistant`）
+- `src/pages/*`（其他）— 共享或尚未归入 native/openclaw 的业务页（如知识库、设置）；后续可逐步归类
 
 ## 必须遵守
 

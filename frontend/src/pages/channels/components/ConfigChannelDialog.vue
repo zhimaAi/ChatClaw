@@ -67,10 +67,7 @@ const currentPlatformId = computed(() => props.platform?.id || props.channel?.pl
 
 const isWeCom = computed(() => currentPlatformId.value === 'wecom')
 
-const PLATFORM_TIP_ENTRIES: Record<
-  string,
-  { platformUrl: string }
-> = {
+const PLATFORM_TIP_ENTRIES: Record<string, { platformUrl: string }> = {
   feishu: { platformUrl: 'https://open.feishu.cn/' },
   dingtalk: { platformUrl: 'https://open.dingtalk.com/' },
   qq: { platformUrl: 'https://q.qq.com/#/' },

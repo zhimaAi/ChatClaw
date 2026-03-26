@@ -3,13 +3,13 @@
  * Left-side navigation with system switcher (ChatClaw / OpenClaw).
  *
  * Menu items are fully computed from `currentSystem`:
- *  - Both: assistant, knowledge, scheduled-tasks, skills, channels, tools, multiask
+ *  - Both: assistant, knowledge, scheduled-tasks, skills (native vs openclaw-skills), channels, tools, multiask
  *  - chatclaw only: hides memory
  *  - openclaw only: shows memory
  *
  * Each nav item may specify a `systemModuleMap` to resolve to a different
  * NavModule per system. Example:
- *   { key: 'assistant', systemModuleMap: { openclaw: 'openclaw-assistant' } }
+ *   { key: 'assistant', systemModuleMap: { openclaw: 'openclaw' } }
  * When the user clicks the item, we look up the effective module from the map
  * (falling back to `key`) and open the tab with `systemOwner` captured.
  */
@@ -17,7 +17,13 @@
 type SvgComponent = any
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useNavigationStore, useAppStore, type NavModule, type SystemOwner } from '@/stores'
+import {
+  useNavigationStore,
+  useAppStore,
+  useSettingsStore,
+  type NavModule,
+  type SystemOwner,
+} from '@/stores'
 import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -37,6 +43,7 @@ import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
+const settingsStore = useSettingsStore()
 
 const switcherOpen = ref(false)
 
@@ -52,8 +59,8 @@ const systemOptions: SystemOption[] = [
   { value: 'openclaw', labelKey: 'nav.systemOpenClaw', iconUrl: openclawIconPng },
 ]
 
-const currentOption = computed(() =>
-  systemOptions.find((o) => o.value === appStore.currentSystem) ?? systemOptions[0]
+const currentOption = computed(
+  () => systemOptions.find((o) => o.value === appStore.currentSystem) ?? systemOptions[0]
 )
 
 const toggleSwitcher = () => {
@@ -67,8 +74,7 @@ const selectSystem = (system: SystemOwner) => {
   }
   appStore.setCurrentSystem(system)
   navigationStore.closeAllTabs()
-  const assistantModule: NavModule =
-    system === 'openclaw' ? 'openclaw-assistant' : 'assistant'
+  const assistantModule: NavModule = system === 'openclaw' ? 'openclaw' : 'assistant'
   navigationStore.navigateToModule(assistantModule, system)
   switcherOpen.value = false
 }
@@ -78,8 +84,8 @@ const selectSystem = (system: SystemOwner) => {
  *
  * `systems` — if set, only show this item when currentSystem is in the list.
  * `systemModuleMap` — optional per-system NavModule override.
- *   e.g. { openclaw: 'openclaw-assistant' } means: when currentSystem is openclaw,
- *   open the 'openclaw-assistant' module instead of the default `key`.
+ *   e.g. { openclaw: 'openclaw' } means: when currentSystem is openclaw,
+ *   open the 'openclaw' module instead of the default `key`.
  *   This allows the same nav label to open completely different pages per system.
  */
 interface NavItem {
@@ -89,6 +95,10 @@ interface NavItem {
   guiOnly?: boolean
   systems?: SystemOwner[]
   systemModuleMap?: Partial<Record<SystemOwner, NavModule>>
+  /** Optional custom click action (bypasses navigateToModule). */
+  action?: () => void
+  /** Optional active-state override for items that reuse another module. */
+  activeWhen?: () => boolean
 }
 
 const allTopNavItems: NavItem[] = [
@@ -98,7 +108,7 @@ const allTopNavItems: NavItem[] = [
     icon: IconAssistant,
     // 同一导航在不同系统打开不同页面的配置方法
     systemModuleMap: {
-      openclaw: 'openclaw-assistant',  // OpenClaw 模式下打开 openclaw-assistant 模块
+      openclaw: 'openclaw', // OpenClaw 模式下打开 openclaw 模块
     },
   },
   {
@@ -115,6 +125,9 @@ const allTopNavItems: NavItem[] = [
     key: 'skills',
     labelKey: 'nav.skills',
     icon: IconSkills,
+    systemModuleMap: {
+      openclaw: 'openclaw-skills',
+    },
   },
   {
     key: 'channels',
@@ -140,6 +153,19 @@ const allTopNavItems: NavItem[] = [
     labelKey: 'nav.multiask',
     icon: IconMultiask,
     guiOnly: true,
+  },
+  {
+    key: 'settings',
+    labelKey: 'settings.menu.openclawRuntime',
+    icon: IconSettings,
+    guiOnly: true,
+    systems: ['openclaw'],
+    action: () => {
+      settingsStore.setActiveMenu('openclawRuntime')
+      navigationStore.navigateToModule('settings', appStore.currentSystem)
+    },
+    activeWhen: () =>
+      navigationStore.activeModule === 'settings' && settingsStore.activeMenu === 'openclawRuntime',
   },
 ]
 
@@ -175,11 +201,16 @@ const resolveModule = (item: NavItem): NavModule => {
  * Check if a nav item is active by comparing the resolved module.
  */
 const isActive = (item: NavItem): boolean => {
+  if (item.activeWhen) return item.activeWhen()
   const mod = resolveModule(item)
   return navigationStore.activeModule === mod
 }
 
 const handleNavClick = (item: NavItem) => {
+  if (item.action) {
+    item.action()
+    return
+  }
   const mod = resolveModule(item)
   navigationStore.navigateToModule(mod, appStore.currentSystem)
 }
@@ -228,7 +259,14 @@ const navIconClass = (item: NavItem) =>
           :title="navigationStore.sidebarCollapsed ? t(currentOption.labelKey) : undefined"
           @click="toggleSwitcher"
         >
-          <div :class="cn('flex min-w-0 items-center gap-1.5', navigationStore.sidebarCollapsed && 'justify-center')">
+          <div
+            :class="
+              cn(
+                'flex min-w-0 items-center gap-1.5',
+                navigationStore.sidebarCollapsed && 'justify-center'
+              )
+            "
+          >
             <img
               :src="currentOption.iconUrl"
               alt=""
@@ -291,11 +329,7 @@ const navIconClass = (item: NavItem) =>
 
       <!-- Click-away overlay -->
       <Teleport to="body">
-        <div
-          v-if="switcherOpen"
-          class="fixed inset-0 z-40"
-          @click="switcherOpen = false"
-        />
+        <div v-if="switcherOpen" class="fixed inset-0 z-40" @click="switcherOpen = false" />
       </Teleport>
 
       <!-- Nav items -->
@@ -306,12 +340,7 @@ const navIconClass = (item: NavItem) =>
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
         @click="handleNavClick(item)"
       >
-        <component
-          :is="item.icon"
-          width="16"
-          height="16"
-          :class="navIconClass(item)"
-        />
+        <component :is="item.icon" width="16" height="16" :class="navIconClass(item)" />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
     </div>
@@ -326,12 +355,7 @@ const navIconClass = (item: NavItem) =>
         :title="navigationStore.sidebarCollapsed ? t(item.labelKey) : undefined"
         @click="handleNavClick(item)"
       >
-        <component
-          :is="item.icon"
-          width="16"
-          height="16"
-          :class="navIconClass(item)"
-        />
+        <component :is="item.icon" width="16" height="16" :class="navIconClass(item)" />
         <span v-if="!navigationStore.sidebarCollapsed">{{ t(item.labelKey) }}</span>
       </button>
     </div>

@@ -11,7 +11,8 @@ const createTabId = () => `tab-${uuidv4()}`
  */
 export type NavModule =
   | 'assistant'
-  | 'openclaw-assistant'
+  | 'openclaw'
+  | 'openclaw-dashboard'
   | 'knowledge'
   | 'scheduled-tasks'
   | 'memory'
@@ -19,6 +20,7 @@ export type NavModule =
   | 'settings'
   | 'document'
   | 'skills'
+  | 'openclaw-skills'
   | 'channels'
   | 'openclaw-channels'
   | 'tools'
@@ -92,7 +94,8 @@ export interface PendingChatData {
  */
 const moduleLabels: Record<NavModule, string> = {
   assistant: 'nav.assistant',
-  'openclaw-assistant': 'nav.openclawAssistant',
+  openclaw: 'nav.openclaw',
+  'openclaw-dashboard': 'nav.openclawDashboard',
   knowledge: 'nav.knowledge',
   'scheduled-tasks': 'nav.scheduledTasks',
   memory: 'nav.memory',
@@ -100,6 +103,7 @@ const moduleLabels: Record<NavModule, string> = {
   settings: 'nav.settings',
   document: 'nav.document',
   skills: 'nav.skills',
+  'openclaw-skills': 'nav.openclawSkills',
   channels: 'nav.channels',
   'openclaw-channels': 'nav.channels',
   tools: 'nav.tools',
@@ -110,13 +114,15 @@ const moduleLabels: Record<NavModule, string> = {
  * 这些模块点击时如果已存在标签页，则切换到该标签页而不是新建
  */
 const singleTabModules: NavModule[] = [
-  'openclaw-assistant',
+  'openclaw',
+  'openclaw-dashboard',
   'knowledge',
   'scheduled-tasks',
   'memory',
   'multiask',
   'settings',
   'skills',
+  'openclaw-skills',
   'channels',
   'openclaw-channels',
   'tools',
