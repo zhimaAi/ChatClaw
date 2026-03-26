@@ -21,7 +21,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
-import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
+import { type ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -35,7 +35,6 @@ import { LibraryService, type Library } from '@bindings/chatclaw/internal/servic
 import {
   ChatWikiService,
   TeamChatInput,
-  type Robot,
 } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
@@ -53,7 +52,6 @@ import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
 import { useTeamRobots } from './composables/useTeamRobots'
-import { supportsMultimodal } from '@/composables/useMultimodal'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -456,7 +454,7 @@ const handleDeleted = (id: number) => {
   })
 }
 
-const handleNewConversation = () => {
+const handleNewConversation = async () => {
   // Clear selection; only purge cached messages if the conversation is not actively streaming
   // (another tab may still be using it).
   if (activeConversationId.value && !chatStore.isGenerating(activeConversationId.value).value) {
@@ -527,11 +525,11 @@ async function restoreSnapCache() {
   }
 }
 
-const handleNewConversationForAgent = (agentId: number) => {
+const handleNewConversationForAgent = async (agentId: number) => {
   if (activeAgentId.value !== agentId) {
     activeAgentId.value = agentId
   }
-  handleNewConversation()
+  await handleNewConversation()
 }
 
 const handleNewConversationForTeamRobot = (robotId: string) => {
@@ -556,7 +554,7 @@ function handleSnapNewConversation() {
   if (listMode.value === 'team' && activeTeamRobotId.value) {
     handleNewConversationForTeamRobot(activeTeamRobotId.value)
   } else {
-    handleNewConversation()
+    void handleNewConversation()
   }
 }
 
