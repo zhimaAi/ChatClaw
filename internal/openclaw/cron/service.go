@@ -53,7 +53,7 @@ const (
 	openClawCronScheduleEvery = "every"
 	openClawCronScheduleCron  = "cron"
 
-	openClawCronPayloadAgentTurn  = "agentTurn"
+	openClawCronPayloadAgentTurn   = "agentTurn"
 	openClawCronPayloadSystemEvent = "systemEvent"
 
 	openClawCronSessionMain     = "main"
@@ -64,6 +64,10 @@ const (
 	openClawCronDeliveryModeNone     = "none"
 	openClawCronDeliveryModeAnnounce = "announce"
 	openClawCronDeliveryModeWebhook  = "webhook"
+
+	// openClawCronManualRunTabID scopes manual cron-triggered chat runs so the
+	// frontend can reuse the standard OpenClaw chat event pipeline.
+	openClawCronManualRunTabID = "openclaw-cron-manual-run"
 )
 
 // OpenClawCronService wraps OpenClaw-native cron management for the Wails frontend.
@@ -272,13 +276,22 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 	if jobID == "" {
 		return nil, fmt.Errorf("openclaw cron id is required")
 	}
+
+	job, err := s.findJobByID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	if shouldRunManualCronViaChat(*job) {
+		return s.runJobNowViaChat(*job)
+	}
+
 	triggeredAt := time.Now()
 	var payload struct {
 		Enqueued bool   `json:"enqueued"`
 		Ran      bool   `json:"ran"`
 		RunID    string `json:"runId"`
 	}
-	err := s.gatewayRequest(openClawCronMethodRun, map[string]any{
+	err = s.gatewayRequest(openClawCronMethodRun, map[string]any{
 		"id":   jobID,
 		"mode": openClawCronRunModeForce,
 	}, &payload)
@@ -291,11 +304,6 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 		Enqueued:    payload.Enqueued || payload.Ran,
 	}
 	if result.RunID == "" {
-		return result, nil
-	}
-
-	job, err := s.findJobByID(jobID)
-	if err != nil {
 		return result, nil
 	}
 
@@ -697,9 +705,6 @@ func (s *OpenClawCronService) listConversationHistoryItems(jobID string) ([]Open
 	items := make([]OpenClawCronHistoryListItem, 0, len(conversationList))
 	for _, conversation := range conversationList {
 		sessionKey := strings.TrimSpace(conversation.OpenClawSessionKey)
-		if sessionKey == "" {
-			continue
-		}
 		if !matchesCronExternalID(conversation.ExternalID, jobID) {
 			continue
 		}
@@ -910,6 +915,102 @@ func (s *OpenClawCronService) findLocalOpenClawAgentID(openClawAgentID string) (
 	return 0, nil
 }
 
+// runJobNowViaChat reuses the existing OpenClaw chat pipeline for manual
+// message-based runs so the frontend gets a normal conversation immediately.
+func (s *OpenClawCronService) runJobNowViaChat(job OpenClawCronJob) (*OpenClawCronRunNowResult, error) {
+	conversation, err := s.createManualRunConversation(job)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.app != nil {
+		s.app.Event.Emit("conversations:changed", map[string]any{
+			"agent_id": conversation.AgentID,
+		})
+	}
+
+	result, err := s.chatSvc.SendOpenClawMessage(chatservice.SendMessageInput{
+		ConversationID: conversation.ID,
+		Content:        strings.TrimSpace(job.Message),
+		TabID:          openClawCronManualRunTabID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &OpenClawCronRunNowResult{
+		RunID:          strings.TrimSpace(result.RequestID),
+		TriggerAtMs:    time.Now().UnixMilli(),
+		Enqueued:       true,
+		ConversationID: conversation.ID,
+	}, nil
+}
+
+// createManualRunConversation materializes a local conversation row before a
+// manual cron run enters the OpenClaw chat pipeline.
+func (s *OpenClawCronService) createManualRunConversation(job OpenClawCronJob) (*conversations.Conversation, error) {
+	localAgentID, err := s.resolveManualRunAgentID(job.AgentID)
+	if err != nil {
+		return nil, err
+	}
+	if localAgentID <= 0 {
+		return nil, fmt.Errorf("openclaw cron manual run agent is not available")
+	}
+
+	providerID, modelID := splitCronModelSelection(strings.TrimSpace(job.Model))
+	enableThinking := normalizeCronThinking(strings.TrimSpace(job.Thinking))
+	triggerAtMs := time.Now().UnixMilli()
+	externalID := fmt.Sprintf("%s:manual:%d", buildCronExternalID(job.ID, ""), triggerAtMs)
+
+	return s.convSvc.CreateConversation(conversations.CreateConversationInput{
+		AgentID:            localAgentID,
+		AgentType:          conversations.AgentTypeOpenClaw,
+		ConversationSource: conversations.ConversationSourceOpenClawCron,
+		Name:               buildCronConversationName(strings.TrimSpace(job.Name), triggerAtMs, triggerAtMs),
+		ExternalID:         externalID,
+		LLMProviderID:      providerID,
+		LLMModelID:         modelID,
+		EnableThinking:     enableThinking,
+		OpenClawSessionKey: "",
+		ChatMode:           conversations.ChatModeTask,
+		TeamType:           conversations.TeamTypePerson,
+	})
+}
+
+// shouldRunManualCronViaChat limits the new manual path to message-based agent
+// turns so auto-scheduled semantics remain unchanged for other payload types.
+func shouldRunManualCronViaChat(job OpenClawCronJob) bool {
+	if strings.TrimSpace(job.PayloadKind) != openClawCronPayloadAgentTurn {
+		return false
+	}
+	return strings.TrimSpace(job.Message) != ""
+}
+
+// splitCronModelSelection converts the form's "provider/model" shorthand into
+// conversation model fields. Bare aliases fall back to the agent's default provider.
+func splitCronModelSelection(raw string) (string, string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	}
+	return "", trimmed
+}
+
+// normalizeCronThinking maps cron thinking presets onto the boolean
+// conversation flag currently supported by the OpenClaw chat pipeline.
+func normalizeCronThinking(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "off", "false", "0", "none":
+		return false
+	default:
+		return true
+	}
+}
+
 // resolveManualRunAgentID maps the cron job agent to a local OpenClaw agent row and falls back to main.
 // resolveManualRunAgentID 把 Cron 任务里的 agent_id 映射到本地 openclaw_agents 记录，未指定时回退到 main。
 func (s *OpenClawCronService) resolveManualRunAgentID(openClawAgentID string) (int64, error) {
@@ -1085,8 +1186,8 @@ func buildCLIArgs(args []string, gatewayURL string, token string, jsonOutput boo
 }
 
 const (
-	openClawCronCommand = "cron"
-	openClawRunCommand  = "run"
+	openClawCronCommand                 = "cron"
+	openClawRunCommand                  = "run"
 	openClawCronDefaultConversationName = "OpenClaw Cron"
 )
 
