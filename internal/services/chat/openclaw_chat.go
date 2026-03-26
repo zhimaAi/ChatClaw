@@ -875,6 +875,46 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	return messages, nil
 }
 
+// StartFreshOpenClawSession sends the official `/new` command into the current
+// OpenClaw session so bundled command hooks (for example session-memory) can
+// run through the same path as the CLI/Web UI.
+func (s *ChatService) StartFreshOpenClawSession(conversationID int64) error {
+	if conversationID <= 0 {
+		return errs.New("error.chat_conversation_id_required")
+	}
+	if s.openclawGateway == nil || !s.openclawGateway.IsReady() {
+		return errs.New("error.openclaw_gateway_not_ready")
+	}
+
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return err
+	}
+
+	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var result struct {
+		RunID  string `json:"runId"`
+		Status string `json:"status"`
+	}
+	if err := s.openclawGateway.Request(ctx, "chat.send", map[string]any{
+		"sessionKey":     sessionKey,
+		"message":        "/new",
+		"idempotencyKey": uuid.NewString(),
+	}, &result); err != nil {
+		return err
+	}
+
+	s.app.Logger.Info("[openclaw-chat] StartFreshOpenClawSession",
+		"conv", conversationID,
+		"sessionKey", sessionKey,
+		"runId", result.RunID,
+		"status", result.Status)
+	return nil
+}
+
 // SendOpenClawMessage sends a message via the OpenClaw WebSocket chat.run API.
 // Messages are NOT stored in the local database; OpenClaw manages session history.
 func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageResult, error) {
