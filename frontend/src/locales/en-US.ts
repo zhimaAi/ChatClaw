@@ -409,6 +409,8 @@ export default {
       pageDesc:
         'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
       filterAll: 'All',
+      filterBuiltin: 'Built-in',
+      filterInstalled: 'Installed',
       filterShared: 'Shared',
       filterWorkspace: 'Workspace',
       locationShared: 'Shared',
@@ -442,6 +444,15 @@ export default {
       gateHintLabel: 'Gateway note',
       previewNoLocalPath:
         'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      add: {
+        title: 'Add',
+        createViaChatTitle: 'Create via chat',
+        createViaChatDesc: 'Jump to OpenClaw chat and start creating from your requirements',
+        choosePackageTitle: 'Choose skill package',
+        choosePackageDesc: 'Open ClawHub to search/download, and open the local folder to install',
+        createViaChatPrompt:
+          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
+      },
     },
     mcp: {
       title: 'MCP',

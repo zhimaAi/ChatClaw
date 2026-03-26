@@ -15,7 +15,7 @@ const ScheduledTasksPage = defineAsyncComponent(
 )
 const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
 const OpenClawSkillsPage = defineAsyncComponent(
-  () => import('@/pages/openclaw-skills/OpenClawSkillsPage.vue')
+  () => import('@/pages/openclaw/OpenClawSkillsPage.vue')
 )
 const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
 const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
