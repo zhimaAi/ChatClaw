@@ -66,6 +66,17 @@ watch(open, (val) => {
 const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform || 'feishu')
 
 const platformTipConfig = computed(() => {
+  if (currentPlatformId.value === 'dingtalk') {
+    return {
+      platformUrl: 'https://open-dev.dingtalk.com/',
+      docsUrl: getPlatformDocsUrl('dingtalk'),
+      prefix: t('channels.config.dingtalkTipPrefix'),
+      platformLink: t('channels.config.dingtalkPlatformLink'),
+      middle: t('channels.config.dingtalkTipMiddle'),
+      guideLink: t('channels.config.dingtalkGuideLink'),
+      suffix: t('channels.config.dingtalkTipSuffix'),
+    }
+  }
   return {
     platformUrl: 'https://open.feishu.cn/',
     docsUrl: getPlatformDocsUrl('feishu'),
@@ -78,7 +89,8 @@ const platformTipConfig = computed(() => {
 })
 
 const dialogTitle = computed(() => {
-  const botName = t('channels.meta.feishu.botName', 'feishu')
+  const platformKey = currentPlatformId.value === 'dingtalk' ? 'channels.meta.dingtalk.botName' : 'channels.meta.feishu.botName'
+  const botName = t(platformKey, currentPlatformId.value)
   if (props.channel) {
     return t('channels.config.editTitle', { platform: botName })
   }
@@ -131,7 +143,7 @@ async function handleVerify() {
   })
   verifying.value = true
   try {
-    await OpenClawChannelService.VerifyChannelConfig(extraConfig)
+    await OpenClawChannelService.VerifyChannelConfig(currentPlatformId.value, extraConfig)
     toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
@@ -164,6 +176,7 @@ async function handleSave() {
       toast.success(t('channels.config.editSuccess'))
     } else {
       channel = await OpenClawChannelService.CreateChannel({
+        platform: currentPlatformId.value,
         name: name.value.trim(),
         avatar: avatar.value,
         extra_config: extraConfig,

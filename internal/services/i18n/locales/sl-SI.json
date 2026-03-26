@@ -206,6 +206,7 @@
   "error.channel_ai_reply_empty": "AI odgovor ni uspel: ustvarjen je prazen odgovor",
   "error.dingtalk_network_dns_failed": "DingTalk povezava ni uspela: napaka pri razreševanju DNS-a, preverite omrežje ali nastavitve DNS",
   "channel.feishu_streaming_generating": "Ustvarjanje pretočnega odgovora, prosimo počakajte...",
+  "channel.dingtalk_streaming_generating": "Ustvarjanje pretočnega odgovora, prosimo počakajte...",
   "channel.feishu_stream_output_enabled": "Pretočni izhod je omogočen. Naslednji odgovori bodo poslani postopoma med generiranjem.",
   "channel.feishu_stream_output_disabled": "Pretočni izhod je onemogočen. Naslednji odgovori bodo poslani, ko bo celoten rezultat pripravljen.",
   "channel.wecom_stream_output_enabled": "Pretočni izhod WeCom je omogočen. Naslednji odgovori bodo poslani postopoma med generiranjem.",

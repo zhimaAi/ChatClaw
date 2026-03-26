@@ -206,6 +206,7 @@
   "error.channel_ai_reply_empty": "AI yanıtı başarısız: Boş yanıt oluşturuldu",
   "error.dingtalk_network_dns_failed": "DingTalk bağlantısı başarısız: DNS çözümleme hatası, lütfen ağ veya DNS ayarlarını kontrol edin",
   "channel.feishu_streaming_generating": "Akış yanıtı oluşturuluyor, lütfen bekleyin...",
+  "channel.dingtalk_streaming_generating": "Akış yanıtı oluşturuluyor, lütfen bekleyin...",
   "channel.feishu_stream_output_enabled": "Akış çıktısı etkinleştirildi. Sonraki yanıtlar oluşturuldukça gönderilecektir.",
   "channel.feishu_stream_output_disabled": "Akış çıktısı devre dışı bırakıldı. Sonraki yanıtlar tam sonuç hazır olduğunda gönderilecektir.",
   "channel.wecom_stream_output_enabled": "WeCom akış çıktısı etkinleştirildi. Sonraki yanıtlar oluşturuldukça gönderilecektir.",
