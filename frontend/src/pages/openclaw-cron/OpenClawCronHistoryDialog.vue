@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import EmbeddedAssistantPage from '@/pages/openclaw/components/EmbeddedAssistantPage.vue'
 import TaskRunStatusBadge from '@/pages/scheduled-tasks/components/TaskRunStatusBadge.vue'
+import { ChatEventType, useChatStore } from '@/stores'
 import {
   OpenClawCronService,
   type OpenClawCronHistoryListItem,
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const chatStore = useChatStore()
 const loading = ref(false)
 const runs = ref<OpenClawCronHistoryListItem[]>([])
 const selectedRun = ref<OpenClawCronHistoryListItem | null>(null)
@@ -61,19 +63,18 @@ type LivePreviewSegment =
 const liveSegments = ref<LivePreviewSegment[]>([])
 const liveToolMap = new Map<string, LiveToolState>()
 let detailRefreshTimer: number | null = null
-let pendingRunDiscoveryTimer: number | null = null
 let eventUnsubscribe: (() => void) | null = null
 let currentWatchId: string | null = null
+let forwardedStreamKey = ''
+let forwardedRequestId = ''
+let forwardedMessageId = 0
 
-// Triggered-run discovery keeps polling for the durable history row after "Run Now".
-const TRIGGERED_RUN_DISCOVERY_INTERVAL_MS = 1000
-const TRIGGERED_RUN_DISCOVERY_WINDOW_MS = 20000
 // DETAIL_LOADING_SKELETON_ROWS keeps the loading placeholder visually stable while
 // the right-side transcript detail is still resolving.
 const DETAIL_LOADING_SKELETON_ROWS = 6
 
 const hasRuns = computed(() => runs.value.length > 0)
-const waitingForTriggeredRun = computed(() => !!pendingRunDiscoveryTimer)
+const waitingForTriggeredRun = computed(() => false)
 const shouldShowPreparingState = computed(
   () =>
     !detailLoading.value &&
@@ -132,42 +133,8 @@ function findTriggeredRun() {
   return runs.value.find((item) => runTimestampMs(item) >= thresholdMs) ?? null
 }
 
-function stopPendingRunDiscovery() {
-  if (pendingRunDiscoveryTimer) {
-    window.clearTimeout(pendingRunDiscoveryTimer)
-    pendingRunDiscoveryTimer = null
-  }
-}
-
-// shouldContinueTriggeredRunDiscovery keeps polling until the run is bound to a real session
-// or local conversation. Stopping on the first pending row would leave the dialog frozen.
-function shouldContinueTriggeredRunDiscovery(run: OpenClawCronHistoryListItem | null) {
-  if (!run) return true
-  return !run.session_id && !run.conversation_id
-}
-
-function isRunWaitingForAssociation(run: OpenClawCronHistoryListItem) {
-  return !!run.is_pending_local && !run.session_id && !run.conversation_id
-}
-
-async function discoverTriggeredRun(deadlineMs: number) {
-  stopPendingRunDiscovery()
-  const matched = findTriggeredRun()
-  if (matched) {
-    selectedRun.value = matched
-    await loadDetail(true)
-    if (!shouldContinueTriggeredRunDiscovery(matched)) {
-      return
-    }
-  }
-  if (!props.open || Date.now() >= deadlineMs) {
-    return
-  }
-  pendingRunDiscoveryTimer = window.setTimeout(async () => {
-    pendingRunDiscoveryTimer = null
-    await loadRuns()
-    await discoverTriggeredRun(deadlineMs)
-  }, TRIGGERED_RUN_DISCOVERY_INTERVAL_MS)
+function isRunWaitingForAssociation(_run: OpenClawCronHistoryListItem) {
+  return false
 }
 
 async function loadDetail(reconnect = false) {
@@ -185,7 +152,10 @@ async function loadDetail(reconnect = false) {
   selectedDetail.value = null
 
   try {
-    if (!props.job?.id || !currentRun.session_id) {
+    // Prefer the local conversation mapping whenever it already exists so the
+    // right panel can embed the standard OpenClaw assistant immediately.
+    // 优先复用本地 conversation 映射，确保右侧直接嵌入任务助手对话框。
+    if (Number(currentRun.conversation_id || 0) > 0 || !props.job?.id || !currentRun.session_id) {
       if (requestSequence !== detailLoadSequence) return
       selectedDetail.value = buildSyntheticDetail(currentRun)
       if (reconnect) {
@@ -290,7 +260,7 @@ async function reconnectGatewayStream() {
   eventUnsubscribe = Events.On('openclaw:cron-run-event', async (event: any) => {
     const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
     if (!payload || payload.watch_id !== currentWatchId) return
-    applyLiveEvent(payload.event, payload.payload)
+    forwardLiveEventToEmbeddedConversation(payload.event, payload.payload)
     scheduleDetailRefresh()
   })
 }
@@ -309,84 +279,58 @@ function resetLivePreview() {
   liveSegments.value = []
   liveToolMap.clear()
   liveFinished.value = false
+  forwardedStreamKey = ''
+  forwardedRequestId = ''
+  forwardedMessageId = 0
 }
 
-// appendTextSegment keeps live preview in transcript order by merging adjacent same-type text blocks.
-function appendTextSegment(
-  type: 'thinking' | 'content',
-  chunk: string,
-  forceNewBlock = false,
-  label?: string
-) {
-  if (!chunk) return
-  const lastSegment = liveSegments.value[liveSegments.value.length - 1]
-  if (
-    !forceNewBlock &&
-    lastSegment?.type === type &&
-    (lastSegment.label || '') === (label || '')
-  ) {
-    lastSegment.content += chunk
-    return
-  }
-  liveSegments.value.push({ type, content: chunk, label })
-}
+// ensureForwardedChatStart boots the shared assistant store with a synthetic stream identity.
+// ensureForwardedChatStart 用合成的 request/message 标识启动共享聊天状态，让右侧复用助手对话框实时刷新。
+function ensureForwardedChatStart() {
+  const conversationId = Number(selectedDetail.value?.conversation_id || selectedRun.value?.conversation_id || 0)
+  if (!conversationId) return null
 
-// upsertLiveTool updates tool state in place so the UI stays stable across start/update/end events.
-function upsertLiveTool(tool: LiveToolState) {
-  const existing = liveToolMap.get(tool.id)
-  if (existing) {
-    existing.name = tool.name || existing.name
-    existing.status = tool.status || existing.status
-    existing.detail = tool.detail || existing.detail
-    return
-  }
-  const created = { ...tool }
-  liveToolMap.set(created.id, created)
-  const lastSegment = liveSegments.value[liveSegments.value.length - 1]
-  if (lastSegment?.type === 'tools') {
-    lastSegment.toolCalls.push(created)
-    return
-  }
-  liveSegments.value.push({ type: 'tools', toolCalls: [created] })
-}
+  const streamKey = String(
+    selectedRun.value?.run_id ||
+      selectedRun.value?.session_key ||
+      selectedRun.value?.session_id ||
+      conversationId
+  ).trim()
+  if (!streamKey) return null
 
-function stringifyPreviewPayload(value: unknown) {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
+  if (forwardedStreamKey === streamKey && forwardedRequestId && forwardedMessageId) {
+    return {
+      conversationId,
+      requestId: forwardedRequestId,
+      messageId: forwardedMessageId,
+    }
+  }
+
+  forwardedStreamKey = streamKey
+  forwardedRequestId = `openclaw-cron-${streamKey}`
+  // Use a stable negative id so history view can render one in-flight assistant message per run.
+  // 使用稳定的负数 messageId，保证每次运行只生成一条进行中的助手消息占位。
+  forwardedMessageId = -Math.max(1, conversationId) * 1000000 - (Number(selectedRun.value?.run_at_ms || 0) % 1000000)
+
+  chatStore.markOpenClawConversation(conversationId)
+  chatStore.handleForwardedEvent(ChatEventType.START, {
+    conversation_id: conversationId,
+    request_id: forwardedRequestId,
+    message_id: forwardedMessageId,
+    status: 'streaming',
+  })
+
+  return {
+    conversationId,
+    requestId: forwardedRequestId,
+    messageId: forwardedMessageId,
   }
 }
 
-function normalizeRunPath(value: unknown) {
-  if (!Array.isArray(value)) return ''
-  const items = value
-    .map((item) => String(item || '').trim())
-    .filter(Boolean)
-  return items.join(' > ')
-}
-
-function extractAgentLabel(payload: any, data: any) {
-  const runPath =
-    normalizeRunPath(data?.runPath) ||
-    normalizeRunPath(payload?.runPath) ||
-    normalizeRunPath(data?.run_path) ||
-    normalizeRunPath(payload?.run_path)
-  if (runPath) return runPath
-  const agentName = String(
-    data?.agentName || payload?.agentName || data?.agent || payload?.agent || ''
-  )
-  return agentName.trim()
-}
-
-function appendRetrievalSegment(items: LiveRetrievalItem[], label?: string) {
-  if (items.length === 0) return
-  liveSegments.value.push({ type: 'retrieval', items, label })
-}
-
-function applyLiveEvent(eventName: string, rawPayload: any) {
+// forwardLiveEventToEmbeddedConversation converts gateway raw frames into the same chat events
+// consumed by the standard assistant page, instead of rendering a custom preview panel.
+// forwardLiveEventToEmbeddedConversation 将网关原始事件转换为标准聊天事件，直接驱动复用的助手对话框。
+function forwardLiveEventToEmbeddedConversation(eventName: string, rawPayload: any) {
   let payload: any = rawPayload
   if (typeof rawPayload === 'string') {
     try {
@@ -397,13 +341,38 @@ function applyLiveEvent(eventName: string, rawPayload: any) {
   }
   if (!payload || typeof payload !== 'object') return
 
+  const streamState = ensureForwardedChatStart()
+  if (!streamState) return
+
   if (eventName === 'chat') {
     const state = String(payload.state || '')
-    if (state === 'final' || state === 'aborted' || state === 'error') {
+    if (state === 'final') {
       liveFinished.value = true
-    }
-    if (state === 'error' && payload.errorMessage) {
-      appendTextSegment('content', `\n[error] ${String(payload.errorMessage)}`, true)
+      chatStore.handleForwardedEvent(ChatEventType.COMPLETE, {
+        conversation_id: streamState.conversationId,
+        request_id: streamState.requestId,
+        message_id: streamState.messageId,
+        status: 'success',
+        finish_reason: 'stop',
+      })
+    } else if (state === 'aborted') {
+      liveFinished.value = true
+      chatStore.handleForwardedEvent(ChatEventType.STOPPED, {
+        conversation_id: streamState.conversationId,
+        request_id: streamState.requestId,
+        message_id: streamState.messageId,
+        status: 'cancelled',
+      })
+    } else if (state === 'error') {
+      liveFinished.value = true
+      chatStore.handleForwardedEvent(ChatEventType.ERROR, {
+        conversation_id: streamState.conversationId,
+        request_id: streamState.requestId,
+        message_id: streamState.messageId,
+        status: 'error',
+        error_key: 'error.chat_generation_failed',
+        error_data: { Error: String(payload.errorMessage || '') },
+      })
     }
     return
   }
@@ -412,16 +381,28 @@ function applyLiveEvent(eventName: string, rawPayload: any) {
 
   const stream = String(payload.stream || '')
   const data = payload.data || {}
-  const agentLabel = extractAgentLabel(payload, data)
 
   if (stream === 'assistant') {
     const delta = String(data.delta || data.text || '')
-    appendTextSegment('content', delta, false, agentLabel)
+    if (!delta) return
+    chatStore.handleForwardedEvent(ChatEventType.CHUNK, {
+      conversation_id: streamState.conversationId,
+      request_id: streamState.requestId,
+      message_id: streamState.messageId,
+      delta,
+    })
     return
   }
   if (stream === 'thinking') {
     const delta = String(data.delta || data.text || '')
-    appendTextSegment('thinking', delta, Boolean(data.newBlock), agentLabel)
+    if (!delta) return
+    chatStore.handleForwardedEvent(ChatEventType.THINKING, {
+      conversation_id: streamState.conversationId,
+      request_id: streamState.requestId,
+      message_id: streamState.messageId,
+      delta,
+      new_block: Boolean(data.newBlock),
+    })
     return
   }
   if (stream === 'retrieval') {
@@ -434,32 +415,35 @@ function applyLiveEvent(eventName: string, rawPayload: any) {
           : []
     const items = rawItems
       .map((item: any) => ({
-        source: String(item?.source || item?.type || 'retrieval'),
+        source: item?.source === 'memory' ? 'memory' : 'knowledge',
         content: String(item?.content || item?.text || item?.snippet || ''),
-        score: item?.score == null ? undefined : Number(item.score),
+        score: Number(item?.score ?? 0),
       }))
-      .filter((item: LiveRetrievalItem) => item.content)
-    appendRetrievalSegment(items, agentLabel)
+      .filter((item: { content: string }) => item.content)
+    if (items.length === 0) return
+    chatStore.handleForwardedEvent(ChatEventType.RETRIEVAL, {
+      conversation_id: streamState.conversationId,
+      request_id: streamState.requestId,
+      message_id: streamState.messageId,
+      items,
+    })
     return
   }
   if (stream === 'tool') {
-    const toolCallId = String(data.toolCallId || '')
-    const toolName = String(data.name || '')
     const phase = String(data.phase || '')
-    const detailParts = [
-      phase ? `phase: ${phase}` : '',
-      data.isError ? 'isError: true' : '',
-      stringifyPreviewPayload(data.args),
-      stringifyPreviewPayload(data.result),
-      stringifyPreviewPayload(data.meta),
-      stringifyPreviewPayload(data.error || data.message),
-    ].filter(Boolean)
-    upsertLiveTool({
-      id: toolCallId || `${toolName}-${liveToolMap.size}`,
-      name: toolName || 'tool',
-      status: phase || 'unknown',
-      detail: detailParts.join('\n\n'),
-      agentLabel,
+    if (phase !== 'start' && phase !== 'result') return
+    chatStore.handleForwardedEvent(ChatEventType.TOOL, {
+      conversation_id: streamState.conversationId,
+      request_id: streamState.requestId,
+      message_id: streamState.messageId,
+      type: phase === 'start' ? 'call' : 'result',
+      tool_call_id: String(data.toolCallId || ''),
+      tool_name: String(data.name || ''),
+      args_json: data.args == null ? '' : JSON.stringify(data.args),
+      result_json:
+        data.result == null
+          ? String(data.meta || data.error || data.message || '')
+          : JSON.stringify(data.result),
     })
     return
   }
@@ -469,12 +453,24 @@ function applyLiveEvent(eventName: string, rawPayload: any) {
       liveFinished.value = true
     }
     if (phase === 'error') {
-      appendTextSegment(
-        'content',
-        `\n[error] ${String(data.error || data.message || '')}`,
-        true,
-        agentLabel
-      )
+      chatStore.handleForwardedEvent(ChatEventType.ERROR, {
+        conversation_id: streamState.conversationId,
+        request_id: streamState.requestId,
+        message_id: streamState.messageId,
+        status: 'error',
+        error_key: 'error.chat_generation_failed',
+        error_data: { Error: String(data.error || data.message || '') },
+      })
+      return
+    }
+    if (phase === 'end') {
+      chatStore.handleForwardedEvent(ChatEventType.COMPLETE, {
+        conversation_id: streamState.conversationId,
+        request_id: streamState.requestId,
+        message_id: streamState.messageId,
+        status: 'success',
+        finish_reason: 'stop',
+      })
     }
   }
 }
@@ -487,15 +483,16 @@ watch(
       selectedDetail.value = null
       detailError.value = ''
       detailLoading.value = false
-      stopPendingRunDiscovery()
       await cleanupGatewayStream()
       return
     }
     selectedRun.value = null
     selectedDetail.value = null
     await loadRuns()
-    if (props.triggerAtMs) {
-      await discoverTriggeredRun(Date.now() + TRIGGERED_RUN_DISCOVERY_WINDOW_MS)
+    const matched = findTriggeredRun()
+    if (matched) {
+      selectedRun.value = matched
+      await loadDetail(true)
     }
   },
   { immediate: true }
@@ -520,7 +517,6 @@ onBeforeUnmount(() => {
     window.clearTimeout(detailRefreshTimer)
     detailRefreshTimer = null
   }
-  stopPendingRunDiscovery()
   void cleanupGatewayStream()
 })
 </script>

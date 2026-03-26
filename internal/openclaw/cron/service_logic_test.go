@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	chatservice "chatclaw/internal/services/chat"
 )
 
 func TestParseRunNowResult_ExtractsRunID(t *testing.T) {
@@ -27,7 +29,14 @@ func TestExtractGatewayRunContext_ReadsAgentEvent(t *testing.T) {
 	}
 }
 
-func TestMergeHistoryItems_PrefersRunLogAndRetainsConversation(t *testing.T) {
+func TestParseJobIDFromSessionKey_ReadsCronSessionKey(t *testing.T) {
+	jobID := parseJobIDFromSessionKey("agent:main:cron:job-1")
+	if jobID != "job-1" {
+		t.Fatalf("expected job id job-1, got %q", jobID)
+	}
+}
+
+func TestMergeHistoryItems_PrefersConversationOverRunLog(t *testing.T) {
 	runItems := []OpenClawCronHistoryListItem{{
 		JobID:          "job-1",
 		RunID:          "run-1",
@@ -57,17 +66,229 @@ func TestMergeHistoryItems_PrefersRunLogAndRetainsConversation(t *testing.T) {
 	if merged[0].ConversationID != 42 {
 		t.Fatalf("expected conversation id to be retained, got %d", merged[0].ConversationID)
 	}
-	if merged[0].Source != OpenClawCronHistorySourceRunLog {
-		t.Fatalf("expected run log item to win, got %q", merged[0].Source)
+	if merged[0].Source != OpenClawCronHistorySourceConversation {
+		t.Fatalf("expected conversation item to win, got %q", merged[0].Source)
 	}
 	if merged[0].SessionID != "session-1" {
-		t.Fatalf("expected session id from run log, got %q", merged[0].SessionID)
+		t.Fatalf("expected session id from run log to be merged in, got %q", merged[0].SessionID)
 	}
 	if merged[0].DurationMs != 2500 {
-		t.Fatalf("expected duration to be retained, got %d", merged[0].DurationMs)
+		t.Fatalf("expected duration from run log to be retained, got %d", merged[0].DurationMs)
 	}
 	if merged[0].TriggerType != "manual" {
-		t.Fatalf("expected trigger type to be retained, got %q", merged[0].TriggerType)
+		t.Fatalf("expected trigger type from conversation to be retained, got %q", merged[0].TriggerType)
+	}
+}
+
+func TestBuildRunLogHistoryItems_MapsRunEntriesToHistoryItems(t *testing.T) {
+	runItems := buildRunLogHistoryItems([]OpenClawCronRunEntry{{
+		JobID:      "job-1",
+		Action:     "manual",
+		Status:     "success",
+		RunAtMs:    1234,
+		DurationMs: 5678,
+		SessionID:  "session-1",
+		SessionKey: "agent:main:cron:job-1:run:session-1",
+	}})
+
+	if len(runItems) != 1 {
+		t.Fatalf("expected 1 run history item, got %d", len(runItems))
+	}
+	if runItems[0].JobID != "job-1" {
+		t.Fatalf("expected job id to be preserved, got %q", runItems[0].JobID)
+	}
+	if runItems[0].TriggerType != "manual" {
+		t.Fatalf("expected manual trigger type, got %q", runItems[0].TriggerType)
+	}
+	if runItems[0].Source != OpenClawCronHistorySourceRunLog {
+		t.Fatalf("expected run log source, got %q", runItems[0].Source)
+	}
+	if runItems[0].SessionKey != "agent:main:cron:job-1:run:session-1" {
+		t.Fatalf("expected session key to be preserved, got %q", runItems[0].SessionKey)
+	}
+}
+
+func TestBuildCronForwardEvents_StartsAndStreamsAssistantDelta(t *testing.T) {
+	state := &cronForwardState{}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"assistant","data":{"delta":"hello"}}`),
+	)
+
+	if len(events) != 2 {
+		t.Fatalf("expected start + chunk events, got %d", len(events))
+	}
+	if events[0].Name != chatservice.EventChatStart {
+		t.Fatalf("expected first event chat:start, got %q", events[0].Name)
+	}
+	if events[1].Name != chatservice.EventChatChunk {
+		t.Fatalf("expected second event chat:chunk, got %q", events[1].Name)
+	}
+	chunk, ok := events[1].Payload.(chatservice.ChatChunkEvent)
+	if !ok {
+		t.Fatalf("expected chunk payload type, got %T", events[1].Payload)
+	}
+	if chunk.ConversationID != 29 {
+		t.Fatalf("expected conversation id 29, got %d", chunk.ConversationID)
+	}
+	if chunk.Delta != "hello" {
+		t.Fatalf("expected delta hello, got %q", chunk.Delta)
+	}
+	if !state.Started {
+		t.Fatalf("expected forward state to be marked started")
+	}
+}
+
+func TestBuildCronForwardEvents_UsesTextFallbackForAssistantStream(t *testing.T) {
+	state := &cronForwardState{}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"assistant","data":{"text":"hello"}}`),
+	)
+
+	if len(events) != 2 {
+		t.Fatalf("expected start + chunk events, got %d", len(events))
+	}
+	chunk, ok := events[1].Payload.(chatservice.ChatChunkEvent)
+	if !ok {
+		t.Fatalf("expected chunk payload type, got %T", events[1].Payload)
+	}
+	if chunk.Delta != "hello" {
+		t.Fatalf("expected text fallback hello, got %q", chunk.Delta)
+	}
+}
+
+func TestBuildCronForwardEvents_CompletesOnLifecycleEnd(t *testing.T) {
+	state := &cronForwardState{
+		RequestID: "openclaw-cron:agent:main:cron:job-1:run-1",
+		MessageID: -29001,
+		Started:   true,
+	}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"lifecycle","data":{"phase":"end"}}`),
+	)
+
+	if len(events) != 1 {
+		t.Fatalf("expected complete event only, got %d", len(events))
+	}
+	if events[0].Name != chatservice.EventChatComplete {
+		t.Fatalf("expected chat:complete event, got %q", events[0].Name)
+	}
+	complete, ok := events[0].Payload.(chatservice.ChatCompleteEvent)
+	if !ok {
+		t.Fatalf("expected complete payload type, got %T", events[0].Payload)
+	}
+	if complete.Status != "success" {
+		t.Fatalf("expected success status, got %q", complete.Status)
+	}
+	if !state.Finished {
+		t.Fatalf("expected forward state to be marked finished")
+	}
+}
+
+func TestBuildCronForwardEvents_MapsToolStartToChatToolCall(t *testing.T) {
+	state := &cronForwardState{}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"tool","data":{"phase":"start","toolCallId":"call-1","name":"weather","args":{"city":"Shanghai"}}}`),
+	)
+
+	if len(events) != 2 {
+		t.Fatalf("expected start + tool events, got %d", len(events))
+	}
+	if events[1].Name != chatservice.EventChatTool {
+		t.Fatalf("expected chat:tool event, got %q", events[1].Name)
+	}
+	toolEvent, ok := events[1].Payload.(chatservice.ChatToolEvent)
+	if !ok {
+		t.Fatalf("expected tool payload type, got %T", events[1].Payload)
+	}
+	if toolEvent.Type != "call" {
+		t.Fatalf("expected tool call type, got %q", toolEvent.Type)
+	}
+	if toolEvent.ToolCallID != "call-1" {
+		t.Fatalf("expected tool call id call-1, got %q", toolEvent.ToolCallID)
+	}
+	if toolEvent.ToolName != "weather" {
+		t.Fatalf("expected tool name weather, got %q", toolEvent.ToolName)
+	}
+	if toolEvent.ArgsJSON != `{"city":"Shanghai"}` {
+		t.Fatalf("expected args json to be preserved, got %q", toolEvent.ArgsJSON)
+	}
+}
+
+func TestBuildCronForwardEvents_MapsToolResultToChatToolResult(t *testing.T) {
+	state := &cronForwardState{Started: true, RequestID: "req-1", MessageID: -1}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"tool","data":{"phase":"result","toolCallId":"call-1","name":"weather","result":{"temp":12}}}`),
+	)
+
+	if len(events) != 1 {
+		t.Fatalf("expected tool result event only, got %d", len(events))
+	}
+	toolEvent, ok := events[0].Payload.(chatservice.ChatToolEvent)
+	if !ok {
+		t.Fatalf("expected tool payload type, got %T", events[0].Payload)
+	}
+	if toolEvent.Type != "result" {
+		t.Fatalf("expected tool result type, got %q", toolEvent.Type)
+	}
+	if toolEvent.ResultJSON != `{"temp":12}` {
+		t.Fatalf("expected result json to be preserved, got %q", toolEvent.ResultJSON)
+	}
+}
+
+func TestBuildCronForwardEvents_MapsRetrievalItems(t *testing.T) {
+	state := &cronForwardState{}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"agent",
+		json.RawMessage(`{"runId":"run-1","sessionKey":"agent:main:cron:job-1","stream":"retrieval","data":{"items":[{"source":"memory","content":"memo","score":0.9},{"source":"knowledge","text":"doc","score":0.7}]}}`),
+	)
+
+	if len(events) != 2 {
+		t.Fatalf("expected start + retrieval events, got %d", len(events))
+	}
+	if events[1].Name != chatservice.EventChatRetrieval {
+		t.Fatalf("expected chat:retrieval event, got %q", events[1].Name)
+	}
+	retrievalEvent, ok := events[1].Payload.(chatservice.ChatRetrievalEvent)
+	if !ok {
+		t.Fatalf("expected retrieval payload type, got %T", events[1].Payload)
+	}
+	if len(retrievalEvent.Items) != 2 {
+		t.Fatalf("expected 2 retrieval items, got %d", len(retrievalEvent.Items))
+	}
+	if retrievalEvent.Items[0].Source != "memory" || retrievalEvent.Items[0].Content != "memo" {
+		t.Fatalf("expected first retrieval item to preserve memory content, got %+v", retrievalEvent.Items[0])
+	}
+	if retrievalEvent.Items[1].Source != "knowledge" || retrievalEvent.Items[1].Content != "doc" {
+		t.Fatalf("expected second retrieval item to normalize text into content, got %+v", retrievalEvent.Items[1])
 	}
 }
 
@@ -220,44 +441,6 @@ func TestBuildCLIArgs_AppendsGatewayFlagsToSubcommand(t *testing.T) {
 	}
 }
 
-func TestIsPendingRunAwaitingBinding(t *testing.T) {
-	tests := []struct {
-		name    string
-		pending *pendingCronRun
-		want    bool
-	}{
-		{
-			name: "waits before session is correlated",
-			pending: &pendingCronRun{
-				RunID: "run-1",
-			},
-			want: true,
-		},
-		{
-			name: "stops waiting after session key is known",
-			pending: &pendingCronRun{
-				RunID:      "run-1",
-				SessionKey: "agent:main:cron:job-1:run:session-1",
-			},
-			want: false,
-		},
-		{
-			name: "stops waiting after local conversation is created",
-			pending: &pendingCronRun{
-				RunID:          "run-1",
-				ConversationID: 22,
-			},
-			want: false,
-		},
-	}
-
-	for _, tc := range tests {
-		if got := isPendingRunAwaitingBinding(tc.pending); got != tc.want {
-			t.Fatalf("%s: expected %v, got %v", tc.name, tc.want, got)
-		}
-	}
-}
-
 func TestSplitCronModelSelection(t *testing.T) {
 	providerID, modelID := splitCronModelSelection("openai/gpt-5")
 	if providerID != "openai" || modelID != "gpt-5" {
@@ -283,36 +466,6 @@ func TestBuildCronConversationSource(t *testing.T) {
 	got := buildCronConversationSource(" job-123 ")
 	if got != "openclaw_cron:job-123" {
 		t.Fatalf("expected scoped cron conversation source, got %q", got)
-	}
-}
-
-func TestHasMatchingRunHistory_MatchesNearbyRunLogTimestamp(t *testing.T) {
-	pending := &pendingCronRun{
-		RunID:       "manual:job-1:1",
-		TriggerAtMs: 1774496122760,
-	}
-	runEntries := []OpenClawCronRunEntry{
-		{
-			RunAtMs: 1774496122705,
-		},
-	}
-	if !hasMatchingRunHistory(pending, runEntries, nil) {
-		t.Fatalf("expected nearby run log to reconcile pending item")
-	}
-}
-
-func TestHasMatchingRunHistory_DoesNotMatchFarTimestamp(t *testing.T) {
-	pending := &pendingCronRun{
-		RunID:       "manual:job-1:1",
-		TriggerAtMs: 1774496122760,
-	}
-	runEntries := []OpenClawCronRunEntry{
-		{
-			RunAtMs: 1774496022705,
-		},
-	}
-	if hasMatchingRunHistory(pending, runEntries, nil) {
-		t.Fatalf("did not expect distant run log to reconcile pending item")
 	}
 }
 
@@ -434,8 +587,8 @@ func TestDeriveCronDeliveryAccountID(t *testing.T) {
 		{
 			name: "uses explicit openclaw channel id for any platform",
 			option: cronDeliveryChannelOption{
-				ID:         7,
-				Platform:   "dingtalk",
+				ID:          7,
+				Platform:    "dingtalk",
 				ExtraConfig: `{"openclaw_channel_id":"shared_account"}`,
 			},
 			want: "shared_account",
@@ -525,11 +678,11 @@ func TestResolveCronDeliveryChannelOption(t *testing.T) {
 
 func TestResolveCronDeliveryTargetID(t *testing.T) {
 	tests := []struct {
-		name          string
-		explicit      string
-		channel       cronDeliveryChannelOption
-		wantTargetID  string
-		wantErr       bool
+		name         string
+		explicit     string
+		channel      cronDeliveryChannelOption
+		wantTargetID string
+		wantErr      bool
 	}{
 		{
 			name:     "uses explicit target when provided",

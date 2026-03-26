@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,13 +33,12 @@ const (
 	// defaultOpenClawCronListLimit keeps UI list pagination stable with OpenClaw defaults.
 	// defaultOpenClawCronListLimit 与 OpenClaw 默认分页保持一致，避免前后端理解不一致。
 	defaultOpenClawCronListLimit = 50
+	// conversationHistoryMatchWindowMs keeps local conversation history aligned with
+	// transcript/run metadata written a few seconds later by OpenClaw.
+	// conversationHistoryMatchWindowMs 用于把本地会话历史与稍后写入的 transcript/run 元数据对齐。
+	conversationHistoryMatchWindowMs = int64(30 * time.Second / time.Millisecond)
 	// globalCronTrackerListenerKey keeps the background run tracker singleton stable.
 	globalCronTrackerListenerKey = "openclaw-cron-global-tracker"
-	// pendingRunTTL bounds how long a pending run can wait for session correlation.
-	pendingRunTTL = 10 * time.Minute
-	// pendingRunReconcileWindowMs matches a local manual trigger to the durable run log.
-	// A small window is enough because cron.run writes the run log almost immediately.
-	pendingRunReconcileWindowMs = int64(30 * time.Second / time.Millisecond)
 	// openClawCronGatewayTimeout keeps gateway cron RPCs bounded.
 	openClawCronGatewayTimeout = 60 * time.Second
 
@@ -93,20 +93,25 @@ type OpenClawCronService struct {
 	watchSeq  atomic.Int64
 	watches   map[string]string
 	convMu    sync.Mutex
-	runMu     sync.Mutex
-	runTracks map[string]string
-	pending   map[string]*pendingCronRun
+	forwardMu sync.Mutex
+	forwards  map[string]*cronForwardState
 }
 
-type pendingCronRun struct {
-	JobID          string
-	RunID          string
-	TriggerAtMs    int64
-	AgentID        int64
-	JobName        string
-	SessionKey     string
-	ConversationID int64
-	ExpiresAt      time.Time
+// cronForwardState tracks the synthetic forwarded chat stream for one cron session.
+// cronForwardState 记录单个 Cron 会话转发到统一聊天流时的合成状态。
+type cronForwardState struct {
+	RequestID string
+	MessageID int64
+	Seq       int
+	Started   bool
+	Finished  bool
+}
+
+// cronForwardedEvent couples a frontend event name with its typed payload.
+// cronForwardedEvent 把前端事件名和对应的事件体组合在一起，便于统一发射。
+type cronForwardedEvent struct {
+	Name    string
+	Payload any
 }
 
 type cronConversationRecord struct {
@@ -141,8 +146,8 @@ type cronDeliveryChannelOption struct {
 
 type cronDeliverySelectionInput struct {
 	OpenClawAgentID string
-	Platform   string
-	TargetID   string
+	Platform        string
+	TargetID        string
 }
 
 func NewOpenClawCronService(
@@ -159,8 +164,7 @@ func NewOpenClawCronService(
 		convSvc:   convSvc,
 		chatSvc:   chatSvc,
 		watches:   make(map[string]string),
-		runTracks: make(map[string]string),
-		pending:   make(map[string]*pendingCronRun),
+		forwards:  make(map[string]*cronForwardState),
 	}
 }
 
@@ -392,7 +396,6 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 		return result, nil
 	}
 
-	s.registerPendingRun(*job, result)
 	return result, nil
 }
 
@@ -428,65 +431,22 @@ func (s *OpenClawCronService) ListRuns(jobID string, limit int) ([]OpenClawCronR
 	return merged, nil
 }
 
-// ListHistory merges run-log history, local cron conversations, and pending in-memory runs.
+// ListHistory loads local cron conversation history directly from conversations.
 func (s *OpenClawCronService) ListHistory(jobID string, limit int) ([]OpenClawCronHistoryListItem, error) {
 	if limit <= 0 {
 		limit = defaultOpenClawCronListLimit
-	}
-
-	runEntries, err := s.ListRuns(jobID, limit)
-	if err != nil {
-		return nil, err
-	}
-
-	runItems := make([]OpenClawCronHistoryListItem, 0, len(runEntries))
-	for _, entry := range runEntries {
-		runItems = append(runItems, OpenClawCronHistoryListItem{
-			JobID:       strings.TrimSpace(jobID),
-			SessionID:   strings.TrimSpace(entry.SessionID),
-			SessionKey:  strings.TrimSpace(entry.SessionKey),
-			Name:        buildCronConversationName(strings.TrimSpace(jobID), entry.RunAtMs, entry.TimestampMs),
-			Status:      strings.TrimSpace(entry.Status),
-			RunAtMs:     chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs),
-			DurationMs:  entry.DurationMs,
-			TriggerType: normalizeHistoryTriggerType(entry.Action, OpenClawCronHistorySourceRunLog),
-			Source:      OpenClawCronHistorySourceRunLog,
-		})
 	}
 
 	conversationItems, err := s.listConversationHistoryItems(jobID)
 	if err != nil {
 		return nil, err
 	}
-	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
-	s.reconcilePendingRuns(jobID, runEntries, conversationItems)
-	pendingItems := s.listPendingHistoryItems(jobID)
 
-	merged := mergeHistoryItems(runItems, conversationItems, pendingItems)
+	merged := mergeHistoryItems(nil, conversationItems, nil)
 	if len(merged) > limit {
 		merged = merged[:limit]
 	}
 	return merged, nil
-}
-
-// reconcilePendingRuns removes synthetic manual-run placeholders once a durable run log
-// entry or local mapped conversation exists for the same trigger window.
-func (s *OpenClawCronService) reconcilePendingRuns(jobID string, runEntries []OpenClawCronRunEntry, conversationItems []OpenClawCronHistoryListItem) {
-	s.runMu.Lock()
-	defer s.runMu.Unlock()
-
-	s.cleanupExpiredPendingRunsLocked(time.Now())
-	for runID, pending := range s.pending {
-		if pending == nil || strings.TrimSpace(pending.JobID) != strings.TrimSpace(jobID) {
-			continue
-		}
-		if !isPendingRunAwaitingBinding(pending) {
-			continue
-		}
-		if hasMatchingRunHistory(pending, runEntries, conversationItems) {
-			delete(s.pending, runID)
-		}
-	}
 }
 
 // GetRunDetail loads both the run record and the transcript file for a cron execution.
@@ -613,8 +573,53 @@ func (s *OpenClawCronService) OnGatewayReady() {
 		if runID == "" || sessionKey == "" {
 			return
 		}
-		s.bindRunSession(runID, sessionKey)
+		conversationID := s.bindRunSession(runID, sessionKey)
+		if conversationID <= 0 || s.app == nil {
+			return
+		}
+
+		forwardState := s.ensureCronForwardState(sessionKey, runID, conversationID)
+		forwardedEvents := buildCronForwardEvents(conversationID, sessionKey, runID, forwardState, event, payload)
+		for _, item := range forwardedEvents {
+			s.app.Event.Emit(item.Name, item.Payload)
+		}
+		if forwardState.Finished {
+			s.clearCronForwardState(sessionKey)
+		}
 	})
+}
+
+// ensureCronForwardState returns a stable synthetic streaming state for one cron session.
+// ensureCronForwardState 返回单个 Cron 会话稳定的合成流式状态，保证前端能持续复用同一条占位消息。
+func (s *OpenClawCronService) ensureCronForwardState(sessionKey string, runID string, conversationID int64) *cronForwardState {
+	s.forwardMu.Lock()
+	defer s.forwardMu.Unlock()
+
+	key := strings.TrimSpace(sessionKey)
+	state := s.forwards[key]
+	if state == nil || state.Finished {
+		state = &cronForwardState{}
+		s.forwards[key] = state
+	}
+
+	if strings.TrimSpace(runID) != "" {
+		state.RequestID = buildCronForwardRequestID(key, runID)
+	}
+	if state.RequestID == "" {
+		state.RequestID = buildCronForwardRequestID(key, "")
+	}
+	if state.MessageID == 0 {
+		state.MessageID = buildCronForwardMessageID(conversationID, key)
+	}
+	return state
+}
+
+// clearCronForwardState clears finished cron-forward stream state.
+// clearCronForwardState 清理已结束的 Cron 转发状态，避免下一轮运行复用旧的 request/message 标识。
+func (s *OpenClawCronService) clearCronForwardState(sessionKey string) {
+	s.forwardMu.Lock()
+	defer s.forwardMu.Unlock()
+	delete(s.forwards, strings.TrimSpace(sessionKey))
 }
 
 func (s *OpenClawCronService) jobsStorePath() (string, error) {
@@ -695,92 +700,41 @@ func (s *OpenClawCronService) findJobByID(jobID string) (*OpenClawCronJob, error
 	return nil, fmt.Errorf("openclaw cron job not found")
 }
 
-// registerPendingRun tracks a manual run until a gateway event reveals the real session key.
-func (s *OpenClawCronService) registerPendingRun(job OpenClawCronJob, result *OpenClawCronRunNowResult) {
-	if result == nil || strings.TrimSpace(result.RunID) == "" {
-		return
-	}
-
-	localAgentID, err := s.resolveManualRunAgentID(job.AgentID)
-	if err != nil {
-		s.app.Logger.Warn("[openclaw-cron] resolve pending run agent failed", "job_id", job.ID, "run_id", result.RunID, "error", err)
-	}
-
-	s.runMu.Lock()
-	defer s.runMu.Unlock()
-	s.cleanupExpiredPendingRunsLocked(time.Now())
-	s.pending[result.RunID] = &pendingCronRun{
-		JobID:       strings.TrimSpace(job.ID),
-		RunID:       strings.TrimSpace(result.RunID),
-		TriggerAtMs: result.TriggerAtMs,
-		AgentID:     localAgentID,
-		JobName:     strings.TrimSpace(job.Name),
-		ExpiresAt:   time.Now().Add(pendingRunTTL),
-	}
-}
-
-// bindRunSession correlates a pending run to the session key emitted by the gateway.
-func (s *OpenClawCronService) bindRunSession(runID string, sessionKey string) {
+// bindRunSession creates/updates the local conversation mapping directly from the
+// gateway event payload instead of relying on in-memory pending state.
+// bindRunSession 直接根据网关事件里的 sessionKey 建立本地会话映射，不再依赖 pending。
+func (s *OpenClawCronService) bindRunSession(runID string, sessionKey string) int64 {
 	runID = strings.TrimSpace(runID)
 	sessionKey = strings.TrimSpace(sessionKey)
 	if runID == "" || sessionKey == "" {
-		return
+		return 0
 	}
 
-	var pending *pendingCronRun
-	s.runMu.Lock()
-	s.cleanupExpiredPendingRunsLocked(time.Now())
-	s.runTracks[runID] = sessionKey
-	pending = s.pending[runID]
-	if pending != nil {
-		pending.SessionKey = sessionKey
-	}
-	s.runMu.Unlock()
-
-	if pending == nil {
-		return
+	jobID := parseJobIDFromSessionKey(sessionKey)
+	if jobID == "" {
+		return 0
 	}
 
 	job := OpenClawCronJob{
-		ID:         pending.JobID,
-		Name:       pending.JobName,
+		ID:         jobID,
 		AgentID:    "",
 		SessionKey: sessionKey,
 	}
-	if pending.AgentID > 0 {
-		if conversationID, _, err := s.ensurePendingConversation(job, pending); err != nil {
-			s.app.Logger.Warn("[openclaw-cron] ensure pending conversation failed", "job_id", pending.JobID, "run_id", pending.RunID, "error", err)
-		} else {
-			s.runMu.Lock()
-			if current := s.pending[runID]; current != nil {
-				current.ConversationID = conversationID
-				current.SessionKey = sessionKey
-			}
-			s.runMu.Unlock()
-		}
+	if foundJob, err := s.findJobByID(jobID); err == nil && foundJob != nil {
+		job = *foundJob
+		job.SessionKey = sessionKey
+	} else if s.app != nil && err != nil {
+		s.app.Logger.Warn("[openclaw-cron] find job by session key failed", "job_id", jobID, "run_id", runID, "error", err)
 	}
-}
 
-func (s *OpenClawCronService) ensurePendingConversation(job OpenClawCronJob, pending *pendingCronRun) (int64, int64, error) {
-	if pending == nil {
-		return 0, 0, nil
-	}
-	if pending.ConversationID > 0 {
-		return pending.ConversationID, pending.AgentID, nil
-	}
-	return s.ensureConversationForSession(job.ID, job, pending.SessionKey, pending.RunID, pending.TriggerAtMs)
-}
-
-func (s *OpenClawCronService) cleanupExpiredPendingRunsLocked(now time.Time) {
-	for runID, item := range s.pending {
-		if item == nil {
-			delete(s.pending, runID)
-			continue
+	conversationID, _, err := s.ensureConversationForSession(jobID, job, sessionKey, runID, time.Now().UnixMilli())
+	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Warn("[openclaw-cron] ensure conversation from gateway event failed", "job_id", jobID, "run_id", runID, "error", err)
 		}
-		if !item.ExpiresAt.IsZero() && now.After(item.ExpiresAt) {
-			delete(s.pending, runID)
-		}
+		return 0
 	}
+	return conversationID
 }
 
 func (s *OpenClawCronService) listConversationHistoryItems(jobID string) ([]OpenClawCronHistoryListItem, error) {
@@ -868,27 +822,20 @@ func enrichConversationHistoryItemsWithRunEntries(conversationItems []OpenClawCr
 	}
 }
 
-func (s *OpenClawCronService) listPendingHistoryItems(jobID string) []OpenClawCronHistoryListItem {
-	s.runMu.Lock()
-	defer s.runMu.Unlock()
-
-	s.cleanupExpiredPendingRunsLocked(time.Now())
-	items := make([]OpenClawCronHistoryListItem, 0, len(s.pending))
-	for _, pending := range s.pending {
-		if pending == nil || strings.TrimSpace(pending.JobID) != strings.TrimSpace(jobID) {
-			continue
-		}
+// buildRunLogHistoryItems converts run-log rows into the shared history DTO.
+// buildRunLogHistoryItems 把 run log 记录转换成历史列表统一使用的数据结构。
+func buildRunLogHistoryItems(runEntries []OpenClawCronRunEntry) []OpenClawCronHistoryListItem {
+	items := make([]OpenClawCronHistoryListItem, 0, len(runEntries))
+	for _, entry := range runEntries {
 		items = append(items, OpenClawCronHistoryListItem{
-			JobID:          pending.JobID,
-			RunID:          pending.RunID,
-			SessionKey:     pending.SessionKey,
-			ConversationID: pending.ConversationID,
-			Name:           buildCronConversationName(pending.JobName, pending.TriggerAtMs, pending.TriggerAtMs),
-			Status:         openClawCronHistoryStatusRunning,
-			RunAtMs:        pending.TriggerAtMs,
-			TriggerType:    normalizeHistoryTriggerType("", OpenClawCronHistorySourcePending),
-			Source:         OpenClawCronHistorySourcePending,
-			IsPendingLocal: isPendingRunAwaitingBinding(pending),
+			JobID:       strings.TrimSpace(entry.JobID),
+			SessionID:   strings.TrimSpace(entry.SessionID),
+			SessionKey:  strings.TrimSpace(entry.SessionKey),
+			Status:      strings.TrimSpace(entry.Status),
+			RunAtMs:     chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs),
+			DurationMs:  entry.DurationMs,
+			TriggerType: normalizeHistoryTriggerType(entry.Action, OpenClawCronHistorySourceRunLog),
+			Source:      OpenClawCronHistorySourceRunLog,
 		})
 	}
 	return items
@@ -2172,6 +2119,376 @@ func parseAgentIDFromSessionKey(sessionKey string) string {
 	return strings.TrimSpace(parts[1])
 }
 
+func parseJobIDFromSessionKey(sessionKey string) string {
+	parts := strings.Split(strings.TrimSpace(sessionKey), ":")
+	if len(parts) < 4 || parts[0] != "agent" || parts[2] != "cron" {
+		return ""
+	}
+	return strings.TrimSpace(parts[3])
+}
+
+// buildCronForwardEvents translates cron gateway frames into the standard
+// chat:* events already consumed by the shared frontend chat store.
+// buildCronForwardEvents 把 Cron 网关帧翻译成前端已经消费的 chat:* 事件，避免页面再维护第二套状态机。
+func buildCronForwardEvents(
+	conversationID int64,
+	sessionKey string,
+	runID string,
+	state *cronForwardState,
+	event string,
+	payload json.RawMessage,
+) []cronForwardedEvent {
+	if conversationID <= 0 || state == nil {
+		return nil
+	}
+
+	appendStart := func(items []cronForwardedEvent) []cronForwardedEvent {
+		// Emit a synthetic start only once per run so all later deltas keep writing
+		// into the same assistant placeholder on the page.
+		// 每轮运行只发送一次合成 start，保证后续增量都落在同一条助手占位消息上。
+		if state.Started {
+			return items
+		}
+		state.Started = true
+		return append(items, cronForwardedEvent{
+			Name: chatservice.EventChatStart,
+			Payload: chatservice.ChatStartEvent{
+				ChatEvent: buildCronChatEvent(conversationID, state),
+				Status:    "streaming",
+			},
+		})
+	}
+
+	switch strings.TrimSpace(event) {
+	case "agent":
+		var frame struct {
+			RunID      string          `json:"runId"`
+			SessionKey string          `json:"sessionKey"`
+			Stream     string          `json:"stream"`
+			Data       json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(payload, &frame) != nil {
+			return nil
+		}
+		if !matchSessionKey(frame.SessionKey, sessionKey) {
+			return nil
+		}
+		if trimmedRunID := strings.TrimSpace(runID); trimmedRunID != "" && strings.TrimSpace(frame.RunID) != "" && strings.TrimSpace(frame.RunID) != trimmedRunID {
+			return nil
+		}
+
+		switch strings.TrimSpace(frame.Stream) {
+		case "assistant":
+			var data struct {
+				Delta string `json:"delta"`
+				Text  string `json:"text"`
+			}
+			if json.Unmarshal(frame.Data, &data) != nil {
+				return nil
+			}
+			delta := firstNonEmptyString(data.Delta, data.Text)
+			if delta == "" {
+				return nil
+			}
+			items := appendStart(nil)
+			return append(items, cronForwardedEvent{
+				Name: chatservice.EventChatChunk,
+				Payload: chatservice.ChatChunkEvent{
+					ChatEvent: buildCronChatEvent(conversationID, state),
+					Delta:     delta,
+				},
+			})
+		case "thinking":
+			var data struct {
+				Delta    string `json:"delta"`
+				Text     string `json:"text"`
+				NewBlock bool   `json:"newBlock"`
+			}
+			if json.Unmarshal(frame.Data, &data) != nil {
+				return nil
+			}
+			delta := firstNonEmptyString(data.Delta, data.Text)
+			if delta == "" {
+				return nil
+			}
+			items := appendStart(nil)
+			return append(items, cronForwardedEvent{
+				Name: chatservice.EventChatThinking,
+				Payload: chatservice.ChatThinkingEvent{
+					ChatEvent: buildCronChatEvent(conversationID, state),
+					Delta:     delta,
+					NewBlock:  data.NewBlock,
+				},
+			})
+		case "retrieval":
+			var data struct {
+				Items     []map[string]any `json:"items"`
+				Results   []map[string]any `json:"results"`
+				Documents []map[string]any `json:"documents"`
+			}
+			if json.Unmarshal(frame.Data, &data) != nil {
+				return nil
+			}
+			rawItems := data.Items
+			if len(rawItems) == 0 {
+				rawItems = data.Results
+			}
+			if len(rawItems) == 0 {
+				rawItems = data.Documents
+			}
+			items := make([]chatservice.RetrievalItem, 0, len(rawItems))
+			for _, item := range rawItems {
+				content := firstNonEmptyString(stringFromAny(item["content"]), stringFromAny(item["text"]), stringFromAny(item["snippet"]))
+				if content == "" {
+					continue
+				}
+				source := "knowledge"
+				if strings.TrimSpace(stringFromAny(item["source"])) == "memory" {
+					source = "memory"
+				}
+				items = append(items, chatservice.RetrievalItem{
+					Source:  source,
+					Content: content,
+					Score:   float64FromAny(item["score"]),
+				})
+			}
+			if len(items) == 0 {
+				return nil
+			}
+			forwarded := appendStart(nil)
+			return append(forwarded, cronForwardedEvent{
+				Name: chatservice.EventChatRetrieval,
+				Payload: chatservice.ChatRetrievalEvent{
+					ChatEvent: buildCronChatEvent(conversationID, state),
+					Items:     items,
+				},
+			})
+		case "tool":
+			var data struct {
+				Phase      string          `json:"phase"`
+				ToolCallID string          `json:"toolCallId"`
+				Name       string          `json:"name"`
+				Args       json.RawMessage `json:"args"`
+				Result     json.RawMessage `json:"result"`
+				Meta       string          `json:"meta"`
+				Error      string          `json:"error"`
+				Message    string          `json:"message"`
+			}
+			if json.Unmarshal(frame.Data, &data) != nil {
+				return nil
+			}
+			phase := strings.TrimSpace(data.Phase)
+			if phase != "start" && phase != "result" {
+				return nil
+			}
+			forwarded := appendStart(nil)
+			resultJSON := ""
+			if len(data.Result) > 0 && string(data.Result) != "null" {
+				resultJSON = string(data.Result)
+			} else {
+				resultJSON = firstNonEmptyString(data.Meta, data.Error, data.Message)
+			}
+			argsJSON := ""
+			if len(data.Args) > 0 && string(data.Args) != "null" {
+				argsJSON = string(data.Args)
+			}
+			return append(forwarded, cronForwardedEvent{
+				Name: chatservice.EventChatTool,
+				Payload: chatservice.ChatToolEvent{
+					ChatEvent:  buildCronChatEvent(conversationID, state),
+					Type:       mapToolPhaseToEventType(phase),
+					ToolCallID: strings.TrimSpace(data.ToolCallID),
+					ToolName:   strings.TrimSpace(data.Name),
+					ArgsJSON:   argsJSON,
+					ResultJSON: resultJSON,
+				},
+			})
+		case "lifecycle":
+			var data struct {
+				Phase   string `json:"phase"`
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}
+			if json.Unmarshal(frame.Data, &data) != nil {
+				return nil
+			}
+			switch strings.TrimSpace(data.Phase) {
+			case "error":
+				state.Finished = true
+				return []cronForwardedEvent{{
+					Name: chatservice.EventChatError,
+					Payload: chatservice.ChatErrorEvent{
+						ChatEvent: buildCronChatEvent(conversationID, state),
+						Status:    "error",
+						ErrorKey:  "error.chat_generation_failed",
+						ErrorData: map[string]any{"Error": firstNonEmptyString(data.Error, data.Message)},
+					},
+				}}
+			case "end":
+				state.Finished = true
+				if !state.Started {
+					return nil
+				}
+				return []cronForwardedEvent{{
+					Name: chatservice.EventChatComplete,
+					Payload: chatservice.ChatCompleteEvent{
+						ChatEvent:    buildCronChatEvent(conversationID, state),
+						Status:       "success",
+						FinishReason: "stop",
+					},
+				}}
+			}
+		}
+	case "chat":
+		var frame struct {
+			RunID        string `json:"runId"`
+			SessionKey   string `json:"sessionKey"`
+			State        string `json:"state"`
+			ErrorMessage string `json:"errorMessage"`
+			Message      struct {
+				StopReason string `json:"stopReason"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(payload, &frame) != nil {
+			return nil
+		}
+		if !matchSessionKey(frame.SessionKey, sessionKey) {
+			return nil
+		}
+		if trimmedRunID := strings.TrimSpace(runID); trimmedRunID != "" && strings.TrimSpace(frame.RunID) != "" && strings.TrimSpace(frame.RunID) != trimmedRunID {
+			return nil
+		}
+
+		switch strings.TrimSpace(frame.State) {
+		case "error":
+			state.Finished = true
+			return []cronForwardedEvent{{
+				Name: chatservice.EventChatError,
+				Payload: chatservice.ChatErrorEvent{
+					ChatEvent: buildCronChatEvent(conversationID, state),
+					Status:    "error",
+					ErrorKey:  "error.chat_generation_failed",
+					ErrorData: map[string]any{"Error": frame.ErrorMessage},
+				},
+			}}
+		case "aborted":
+			state.Finished = true
+			if !state.Started {
+				return nil
+			}
+			return []cronForwardedEvent{{
+				Name: chatservice.EventChatStopped,
+				Payload: chatservice.ChatStoppedEvent{
+					ChatEvent: buildCronChatEvent(conversationID, state),
+					Status:    "cancelled",
+				},
+			}}
+		case "final":
+			state.Finished = true
+			if !state.Started {
+				return nil
+			}
+			return []cronForwardedEvent{{
+				Name: chatservice.EventChatComplete,
+				Payload: chatservice.ChatCompleteEvent{
+					ChatEvent:    buildCronChatEvent(conversationID, state),
+					Status:       "success",
+					FinishReason: firstNonEmptyString(frame.Message.StopReason, "stop"),
+				},
+			}}
+		}
+	}
+
+	return nil
+}
+
+// buildCronChatEvent creates the common chat-event metadata for cron forwarding.
+// buildCronChatEvent 构造 Cron 转发事件公用的聊天元数据。
+func buildCronChatEvent(conversationID int64, state *cronForwardState) chatservice.ChatEvent {
+	if state == nil {
+		return chatservice.ChatEvent{ConversationID: conversationID}
+	}
+	state.Seq++
+	return chatservice.ChatEvent{
+		ConversationID: conversationID,
+		RequestID:      state.RequestID,
+		Seq:            state.Seq,
+		MessageID:      state.MessageID,
+		Ts:             time.Now().UnixMilli(),
+	}
+}
+
+func buildCronForwardRequestID(sessionKey string, runID string) string {
+	trimmedSessionKey := strings.TrimSpace(sessionKey)
+	trimmedRunID := strings.TrimSpace(runID)
+	if trimmedRunID == "" {
+		return "openclaw-cron:" + trimmedSessionKey
+	}
+	return "openclaw-cron:" + trimmedSessionKey + ":" + trimmedRunID
+}
+
+func buildCronForwardMessageID(conversationID int64, sessionKey string) int64 {
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(strings.TrimSpace(sessionKey)))
+	return -conversationID*1_000_000 - int64(hasher.Sum32()%1_000_000) - 1
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func mapToolPhaseToEventType(phase string) string {
+	if strings.TrimSpace(phase) == "start" {
+		return "call"
+	}
+	return "result"
+}
+
+func stringFromAny(value any) string {
+	if value == nil {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", value))
+	}
+}
+
+func float64FromAny(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	case json.Number:
+		parsed, err := typed.Float64()
+		if err == nil {
+			return parsed
+		}
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		if err == nil {
+			return parsed
+		}
+	}
+	return 0
+}
+
 func matchSessionKey(got string, expected string) bool {
 	got = strings.TrimSpace(got)
 	expected = strings.TrimSpace(expected)
@@ -2243,44 +2560,6 @@ func chooseRunTimestamp(primaryTimeMs int64, fallbackTimeMs int64) int64 {
 	return time.Now().UnixMilli()
 }
 
-func isPendingRunAwaitingBinding(pending *pendingCronRun) bool {
-	if pending == nil {
-		return false
-	}
-	if strings.TrimSpace(pending.SessionKey) != "" {
-		return false
-	}
-	return pending.ConversationID <= 0
-}
-
-func hasMatchingRunHistory(pending *pendingCronRun, runEntries []OpenClawCronRunEntry, conversationItems []OpenClawCronHistoryListItem) bool {
-	if pending == nil {
-		return false
-	}
-	for _, entry := range runEntries {
-		if isCloseRunTimestamp(pending.TriggerAtMs, chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs)) {
-			return true
-		}
-	}
-	for _, item := range conversationItems {
-		if isCloseRunTimestamp(pending.TriggerAtMs, item.RunAtMs) {
-			return true
-		}
-	}
-	return false
-}
-
-func isCloseRunTimestamp(leftMs int64, rightMs int64) bool {
-	if leftMs <= 0 || rightMs <= 0 {
-		return false
-	}
-	diff := leftMs - rightMs
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff <= pendingRunReconcileWindowMs
-}
-
 func parseRunNowResult(output []byte, triggeredAt time.Time) (*OpenClawCronRunNowResult, error) {
 	var payload struct {
 		OK       bool   `json:"ok"`
@@ -2296,6 +2575,17 @@ func parseRunNowResult(output []byte, triggeredAt time.Time) (*OpenClawCronRunNo
 		TriggerAtMs: triggeredAt.UnixMilli(),
 		Enqueued:    payload.Enqueued || payload.Ran,
 	}, nil
+}
+
+func isCloseRunTimestamp(leftMs int64, rightMs int64) bool {
+	if leftMs <= 0 || rightMs <= 0 {
+		return false
+	}
+	diff := leftMs - rightMs
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= conversationHistoryMatchWindowMs
 }
 
 func extractGatewayRunContext(event string, payload json.RawMessage) (string, string) {
@@ -2496,11 +2786,11 @@ func normalizeHistoryTriggerType(action string, source string) string {
 
 func historySourceRank(source string) int {
 	switch strings.TrimSpace(source) {
-	case OpenClawCronHistorySourceRunLog:
+	case OpenClawCronHistorySourceConversation:
 		return 3
 	case OpenClawCronHistorySourcePending:
 		return 2
-	case OpenClawCronHistorySourceConversation:
+	case OpenClawCronHistorySourceRunLog:
 		return 1
 	default:
 		return 0
@@ -2574,19 +2864,19 @@ type openClawJobStoreItem struct {
 		TimeoutMs    int64  `json:"timeoutMs"`
 	} `json:"payload"`
 	Delivery struct {
-		Mode              string `json:"mode"`
-		Channel           string `json:"channel"`
-		To                string `json:"to"`
-		AccountID         string `json:"accountId"`
-		Announce          bool   `json:"announce"`
+		Mode      string `json:"mode"`
+		Channel   string `json:"channel"`
+		To        string `json:"to"`
+		AccountID string `json:"accountId"`
+		Announce  bool   `json:"announce"`
 		// BestEffort reads the native OpenClaw persisted key.
 		// BestEffort 读取 OpenClaw jobs.json 的原生字段 bestEffort。
-		BestEffort        bool   `json:"bestEffort"`
+		BestEffort bool `json:"bestEffort"`
 		// BestEffortDeliver keeps backward compatibility with earlier bridge payloads.
 		// BestEffortDeliver 兼容旧桥接层可能使用的 bestEffortDeliver 字段。
-		BestEffortDeliver bool   `json:"bestEffortDeliver"`
-		DeleteAfterRun    bool   `json:"deleteAfterRun"`
-		KeepAfterRun      bool   `json:"keepAfterRun"`
+		BestEffortDeliver bool `json:"bestEffortDeliver"`
+		DeleteAfterRun    bool `json:"deleteAfterRun"`
+		KeepAfterRun      bool `json:"keepAfterRun"`
 	} `json:"delivery"`
 	State struct {
 		NextRunAtMs        int64  `json:"nextRunAtMs"`
