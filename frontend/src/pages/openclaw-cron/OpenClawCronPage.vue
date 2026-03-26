@@ -57,10 +57,10 @@ const deleting = ref(false)
 const deletingJob = ref<OpenClawCronJob | null>(null)
 
 const summaryCards = computed(() => [
-  { key: 'total', label: t('openclawCron.summary.total', '总任务'), value: summary.value?.total ?? 0 },
-  { key: 'enabled', label: t('openclawCron.summary.enabled', '启用中'), value: summary.value?.enabled ?? 0 },
-  { key: 'disabled', label: t('openclawCron.summary.disabled', '已停用'), value: summary.value?.disabled ?? 0 },
-  { key: 'failed', label: t('openclawCron.summary.failed', '最近失败'), value: summary.value?.failed ?? 0 },
+  { key: 'total', label: t('openclawCron.summary.total', '任务总数'), value: summary.value?.total ?? 0 },
+  { key: 'enabled', label: t('openclawCron.summary.enabled', '运行中'), value: summary.value?.enabled ?? 0 },
+  { key: 'disabled', label: t('openclawCron.summary.disabled', '已暂停'), value: summary.value?.disabled ?? 0 },
+  { key: 'failed', label: t('openclawCron.summary.failed', '失败'), value: summary.value?.failed ?? 0 },
 ])
 
 async function reloadAll() {
@@ -165,10 +165,10 @@ async function confirmDelete() {
     <div class="flex h-20 shrink-0 items-center justify-between px-6">
       <div class="flex flex-col gap-1">
         <h1 class="text-base font-semibold text-[#262626] dark:text-foreground">
-          {{ t('openclawCron.title', 'OpenClaw 定时任务') }}
+          {{ t('openclawCron.title', '定时任务') }}
         </h1>
         <p class="text-sm text-[#737373] dark:text-muted-foreground">
-          {{ t('openclawCron.subtitle', '管理 OpenClaw 原生 cron 任务、历史运行与 transcript 详情') }}
+          {{ t('openclawCron.subtitle', '通过定时任务自动化执行 AI 任务') }}
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -223,10 +223,10 @@ async function confirmDelete() {
             </div>
             <div class="space-y-1">
               <div class="text-base font-medium leading-6 text-[#171717]">
-                {{ t('openclawCron.empty', '暂无 OpenClaw 定时任务') }}
+                {{ t('openclawCron.empty', '暂无定时任务') }}
               </div>
               <div class="text-sm leading-5 text-[#737373]">
-                {{ t('openclawCron.emptyDescription', '创建后将直接写入 OpenClaw 原生 cron 存储并由 Gateway 调度执行。') }}
+                {{ t('openclawCron.emptyDescription', '创建后，系统会按设定时间自动执行任务。') }}
               </div>
             </div>
             <button
@@ -246,8 +246,8 @@ async function confirmDelete() {
               <thead class="text-left text-sm text-[#0a0a0a]">
                 <tr>
                   <th class="w-[26%] px-5 py-3 font-medium">{{ t('openclawCron.columns.title', '任务') }}</th>
-                  <th class="w-[18%] px-5 py-3 font-medium">{{ t('openclawCron.columns.schedule', '时间') }}</th>
-                  <th class="w-[16%] px-5 py-3 font-medium">{{ t('openclawCron.columns.agent', 'Agent') }}</th>
+                  <th class="w-[18%] px-5 py-3 font-medium">{{ t('openclawCron.columns.schedule', '执行时间') }}</th>
+                  <th class="w-[16%] px-5 py-3 font-medium">{{ t('openclawCron.columns.agent', '关联助手') }}</th>
                   <th class="w-[18%] px-5 py-3 font-medium">{{ t('openclawCron.columns.runtime', '最近运行') }}</th>
                   <th class="w-[12%] px-5 py-3 font-medium">{{ t('openclawCron.columns.status', '状态') }}</th>
                   <th class="w-[88px] min-w-[88px] px-5 py-3 text-right font-medium">{{ t('openclawCron.columns.actions', '操作') }}</th>
