@@ -89,15 +89,18 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			}, nil
 		},
 		CreateScheduledTaskFn: func(input tools.ScheduledTaskCreateInput) (*tools.ScheduledTaskRecord, error) {
-			created, err := scheduledTasksService.CreateScheduledTask(scheduledtasks.CreateScheduledTaskInput{
-				Name:          input.Name,
-				Prompt:        input.Prompt,
-				AgentID:       input.AgentID,
-				ScheduleType:  input.ScheduleType,
-				ScheduleValue: input.ScheduleValue,
-				CronExpr:      input.CronExpr,
-				Enabled:       input.Enabled,
-			})
+			created, err := scheduledTasksService.CreateScheduledTaskWithSource(scheduledtasks.CreateScheduledTaskInput{
+				Name:                   input.Name,
+				Prompt:                 input.Prompt,
+				AgentID:                input.AgentID,
+				NotificationPlatform:   input.NotificationPlatform,
+				NotificationChannelIDs: input.NotificationChannelIDs,
+				ScheduleType:           input.ScheduleType,
+				ScheduleValue:          input.ScheduleValue,
+				CronExpr:               input.CronExpr,
+				Enabled:                input.Enabled,
+				ExpiresAt:              input.ExpiresAt,
+			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}
@@ -105,15 +108,18 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			return &record, nil
 		},
 		UpdateScheduledTaskFn: func(id int64, input tools.ScheduledTaskUpdateInput) (*tools.ScheduledTaskRecord, error) {
-			updated, err := scheduledTasksService.UpdateScheduledTask(id, scheduledtasks.UpdateScheduledTaskInput{
-				Name:          input.Name,
-				Prompt:        input.Prompt,
-				AgentID:       input.AgentID,
-				ScheduleType:  input.ScheduleType,
-				ScheduleValue: input.ScheduleValue,
-				CronExpr:      input.CronExpr,
-				Enabled:       input.Enabled,
-			})
+			updated, err := scheduledTasksService.UpdateScheduledTaskWithSource(id, scheduledtasks.UpdateScheduledTaskInput{
+				Name:                   input.Name,
+				Prompt:                 input.Prompt,
+				AgentID:                input.AgentID,
+				NotificationPlatform:   input.NotificationPlatform,
+				NotificationChannelIDs: input.NotificationChannelIDs,
+				ScheduleType:           input.ScheduleType,
+				ScheduleValue:          input.ScheduleValue,
+				CronExpr:               input.CronExpr,
+				Enabled:                input.Enabled,
+				ExpiresAt:              input.ExpiresAt,
+			}, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}
@@ -121,10 +127,10 @@ func newScheduledTaskManagementTools(agentsService *agents.AgentsService, schedu
 			return &record, nil
 		},
 		DeleteScheduledTaskFn: func(id int64) error {
-			return scheduledTasksService.DeleteScheduledTask(id)
+			return scheduledTasksService.DeleteScheduledTaskWithSource(id, scheduledtasks.OperationSourceAI)
 		},
 		SetScheduledTaskFn: func(id int64, enabled bool) (*tools.ScheduledTaskRecord, error) {
-			updated, err := scheduledTasksService.SetScheduledTaskEnabled(id, enabled)
+			updated, err := scheduledTasksService.SetScheduledTaskEnabledWithSource(id, enabled, scheduledtasks.OperationSourceAI)
 			if err != nil {
 				return nil, err
 			}
@@ -144,22 +150,25 @@ func convertScheduledTaskRecords(items []scheduledtasks.ScheduledTask) []tools.S
 
 func convertScheduledTaskRecord(item scheduledtasks.ScheduledTask) tools.ScheduledTaskRecord {
 	return tools.ScheduledTaskRecord{
-		ID:            item.ID,
-		Name:          item.Name,
-		Prompt:        item.Prompt,
-		AgentID:       item.AgentID,
-		ScheduleType:  item.ScheduleType,
-		ScheduleValue: item.ScheduleValue,
-		CronExpr:      item.CronExpr,
-		Timezone:      item.Timezone,
-		Enabled:       item.Enabled,
-		LastRunAt:     item.LastRunAt,
-		NextRunAt:     item.NextRunAt,
-		LastStatus:    item.LastStatus,
-		LastError:     item.LastError,
-		LastRunID:     item.LastRunID,
-		CreatedAt:     item.CreatedAt,
-		UpdatedAt:     item.UpdatedAt,
+		ID:                     item.ID,
+		Name:                   item.Name,
+		Prompt:                 item.Prompt,
+		AgentID:                item.AgentID,
+		NotificationPlatform:   item.NotificationPlatform,
+		NotificationChannelIDs: item.NotificationChannelIDs,
+		ScheduleType:           item.ScheduleType,
+		ScheduleValue:          item.ScheduleValue,
+		CronExpr:               item.CronExpr,
+		Timezone:               item.Timezone,
+		Enabled:                item.Enabled,
+		ExpiresAt:              item.ExpiresAt,
+		LastRunAt:              item.LastRunAt,
+		NextRunAt:              item.NextRunAt,
+		LastStatus:             item.LastStatus,
+		LastError:              item.LastError,
+		LastRunID:              item.LastRunID,
+		CreatedAt:              item.CreatedAt,
+		UpdatedAt:              item.UpdatedAt,
 	}
 }
 

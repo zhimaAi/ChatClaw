@@ -1853,21 +1853,14 @@ func ensureChatWikiBindingVersionColumn(db *bun.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var columns []struct {
-		CID        int            `bun:"cid"`
-		Name       string         `bun:"name"`
-		Type       string         `bun:"type"`
-		NotNull    int            `bun:"notnull"`
-		Default    sql.NullString `bun:"dflt_value"`
-		PrimaryKey int            `bun:"pk"`
-	}
-	if err := db.NewRaw("PRAGMA table_info(chatwiki_bindings)").Scan(ctx, &columns); err != nil {
+	var colCount int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(1) FROM pragma_table_info('chatwiki_bindings') WHERE name = 'chatwiki_version'`,
+	).Scan(&colCount); err != nil {
 		return err
 	}
-	for _, column := range columns {
-		if column.Name == "chatwiki_version" {
-			return nil
-		}
+	if colCount > 0 {
+		return nil
 	}
 	_, err := db.ExecContext(ctx, `
 ALTER TABLE chatwiki_bindings
