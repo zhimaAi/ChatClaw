@@ -6,6 +6,14 @@ import {
   type OpenClawCronRunEntry,
 } from '@bindings/chatclaw/internal/openclaw/cron'
 
+// These constants keep schedule descriptions consistent and avoid scattering literals.
+const SCHEDULE_PREFIX_EVERY = '每隔'
+const SCHEDULE_PREFIX_AT = '指定时间'
+const DURATION_SUFFIX_HOUR = 'h'
+const DURATION_SUFFIX_MINUTE = 'm'
+const DURATION_SUFFIX_SECOND = 's'
+const DURATION_SUFFIX_MILLISECOND = 'ms'
+
 export interface OpenClawCronFormState {
   id: string | null
   name: string
@@ -184,10 +192,10 @@ export function formatDurationMs(ms?: number | null) {
 
 export function describeOpenClawSchedule(job: Pick<OpenClawCronJob, 'schedule_kind' | 'cron_expr' | 'every_ms' | 'at_iso'>) {
   if (job.schedule_kind === 'every' && job.every_ms) {
-    return `every ${formatEvery(job.every_ms)}`
+    return `${SCHEDULE_PREFIX_EVERY} ${formatEvery(job.every_ms)}`
   }
   if (job.schedule_kind === 'at' && job.at_iso) {
-    return `at ${job.at_iso}`
+    return `${SCHEDULE_PREFIX_AT} ${job.at_iso}`
   }
   return job.cron_expr || '-'
 }
@@ -197,8 +205,8 @@ export function displayRunStatus(run: Pick<OpenClawCronRunEntry, 'status' | 'act
 }
 
 function formatEvery(ms: number) {
-  if (ms % 3600000 === 0) return `${ms / 3600000}h`
-  if (ms % 60000 === 0) return `${ms / 60000}m`
-  if (ms % 1000 === 0) return `${ms / 1000}s`
-  return `${ms}ms`
+  if (ms % 3600000 === 0) return `${ms / 3600000}${DURATION_SUFFIX_HOUR}`
+  if (ms % 60000 === 0) return `${ms / 60000}${DURATION_SUFFIX_MINUTE}`
+  if (ms % 1000 === 0) return `${ms / 1000}${DURATION_SUFFIX_SECOND}`
+  return `${ms}${DURATION_SUFFIX_MILLISECOND}`
 }
