@@ -67,7 +67,7 @@ const sizeClassMap: Record<DialogSize, string> = {
         <slot />
 
         <DialogClose
-          class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary"
+          class="absolute top-4 right-4 z-20 rounded-md p-0.5 transition-colors hover:bg-secondary"
         >
           <X class="w-4 h-4" />
           <span class="sr-only">Close</span>

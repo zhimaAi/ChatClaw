@@ -11,7 +11,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Switch } from '@/components/ui/switch'
 import type { Agent, ScheduledTask } from '../types'
 import { buildTaskTableDisplay } from './taskTableDisplay'
-import { describeSchedule, formatTaskTime } from '../utils'
+import { describeSchedule, formatDateOnly, formatTaskTime } from '../utils'
+import OperationLogTooltipCell from './OperationLogTooltipCell.vue'
+
+const TASK_DISPLAY_STATUS_EXPIRED = 'expired'
+const TASK_DISPLAY_STATUS_RUNNING = 'running'
+const TASK_DISPLAY_STATUS_PAUSED = 'paused'
+// Match the operation-log cells so long task names stay single-line and reveal full text on hover.
+const TASK_NAME_TOOLTIP_TRIGGER_CLASS =
+  'text-[15px] font-medium leading-6 text-[#171717] block w-full max-w-full overflow-hidden text-ellipsis whitespace-nowrap'
 
 const props = defineProps<{
   tasks: ScheduledTask[]
@@ -22,6 +30,7 @@ const { t } = useI18n()
 
 const emit = defineEmits<{
   edit: [task: ScheduledTask]
+  copy: [task: ScheduledTask]
   delete: [task: ScheduledTask]
   run: [task: ScheduledTask]
   history: [task: ScheduledTask]
@@ -29,13 +38,17 @@ const emit = defineEmits<{
 }>()
 
 function displayTaskStatus(task: ScheduledTask) {
-  return task.enabled ? 'running' : 'paused'
+  if (task.last_status === TASK_DISPLAY_STATUS_EXPIRED) {
+    return TASK_DISPLAY_STATUS_EXPIRED
+  }
+  return task.enabled ? TASK_DISPLAY_STATUS_RUNNING : TASK_DISPLAY_STATUS_PAUSED
 }
 
 function displayTaskStatusLabel(task: ScheduledTask) {
   const status = displayTaskStatus(task)
-  if (status === 'paused') return t('scheduledTasks.disabled')
-  if (status === 'running') return t('scheduledTasks.statusRunning')
+  if (status === TASK_DISPLAY_STATUS_EXPIRED) return t('scheduledTasks.statusExpired')
+  if (status === TASK_DISPLAY_STATUS_PAUSED) return t('scheduledTasks.disabled')
+  if (status === TASK_DISPLAY_STATUS_RUNNING) return t('scheduledTasks.statusRunning')
   return t('scheduledTasks.statusPending')
 }
 
@@ -52,6 +65,7 @@ function lastRunIconClass(task: ScheduledTask) {
 }
 
 function statusTextClass(task: ScheduledTask) {
+  if (task.last_status === TASK_DISPLAY_STATUS_EXPIRED) return 'text-[#d97706]'
   return task.enabled ? 'text-[#404040]' : 'text-[#737373]'
 }
 </script>
@@ -81,9 +95,10 @@ function statusTextClass(task: ScheduledTask) {
           >
             <td class="px-5 py-3.5">
               <div class="min-w-0 max-w-md space-y-1">
-                <div class="truncate text-[15px] font-medium leading-6 text-[#171717]">
-                  {{ task.name }}
-                </div>
+                <OperationLogTooltipCell
+                  :value="task.name"
+                  :trigger-class="TASK_NAME_TOOLTIP_TRIGGER_CLASS"
+                />
                 <div class="truncate text-sm leading-5 text-[#8c8c8c]">{{ task.prompt }}</div>
               </div>
             </td>
@@ -172,6 +187,9 @@ function statusTextClass(task: ScheduledTask) {
                   }}</DropdownMenuItem>
                   <DropdownMenuItem @select="emit('edit', task)">{{
                     t('scheduledTasks.edit')
+                  }}</DropdownMenuItem>
+                  <DropdownMenuItem @select="emit('copy', task)">{{
+                    t('scheduledTasks.copy')
                   }}</DropdownMenuItem>
                   <DropdownMenuItem
                     class="text-red-600 focus:text-red-600"

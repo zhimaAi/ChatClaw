@@ -174,6 +174,8 @@ func (m *Manager) reconcileLocked(restart bool) error {
 		return fail("ensureOpenClawStateDir", err, version, 0)
 	}
 
+	ensureSandboxConfigured(bundle)
+
 	// Start process if needed
 	m.mu.RLock()
 	needProcess := m.process == nil
@@ -399,6 +401,7 @@ func (m *Manager) connectClient(cfg OpenClawConfig, bundle *bundledRuntime) erro
 			Scopes:          []string{"operator.read", "operator.write", "operator.admin"},
 			OnEvent:         m.dispatchEvent,
 			OnDisconnect:    m.handleGatewayDisconnect,
+			OnLateError:     m.handleLateErrorResponse,
 		})
 		hello, err := client.Connect(ctx)
 		if err == nil {
@@ -606,6 +609,27 @@ func (m *Manager) SkillsStatus(ctx context.Context, agentID string) (json.RawMes
 	return raw, nil
 }
 
+// ExecCLI runs an openclaw CLI subcommand (e.g. "channels", "add", "--channel", "feishu")
+// and returns its combined stdout+stderr output. The command inherits the same
+// environment as the gateway process so config paths, node path, etc. are correct.
+// The gateway does NOT need to restart — channel config changes hot-apply via
+// file watcher (see docs/gateway/configuration: "Channels → No restart needed").
+func (m *Manager) ExecCLI(ctx context.Context, args ...string) ([]byte, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("resolve openclaw runtime for CLI exec: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, bundle.CLIPath, args...)
+	cmd.Env = buildGatewayEnv(m.store.Get(), bundle)
+	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("openclaw CLI %v: %w\n%s", args, err, string(out))
+	}
+	return out, nil
+}
+
 // AddEventListener registers a listener for gateway events with the given key.
 // The caller is responsible for removing it when done via RemoveEventListener.
 func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
@@ -621,6 +645,37 @@ func (m *Manager) RemoveEventListener(key string) {
 	delete(m.eventListeners, key)
 }
 
+// handleLateErrorResponse is called when a second (error) response arrives for
+// a request whose initial OK response was already consumed. This happens when
+// the Gateway sends an early ack followed by an async error (e.g. sandbox failure).
+// We re-dispatch it as a synthetic "agent_late_error" event so chat listeners
+// can detect and report the failure.
+func (m *Manager) handleLateErrorResponse(resp gatewayResponseFrame) {
+	errMsg := ""
+	errCode := ""
+	if resp.Error != nil {
+		errMsg = resp.Error.Message
+		errCode = resp.Error.Code
+	}
+	m.app.Logger.Warn("openclaw: late error response for completed request",
+		"id", resp.ID, "code", errCode, "error", errMsg)
+
+	synth := map[string]any{"error": errMsg, "code": errCode}
+	if len(resp.Payload) > 0 {
+		var extra map[string]any
+		if json.Unmarshal(resp.Payload, &extra) == nil {
+			for k, v := range extra {
+				synth[k] = v
+			}
+		}
+	}
+	payload, _ := json.Marshal(synth)
+	m.dispatchEvent(GatewayEventFrame{
+		Event:   "agent_late_error",
+		Payload: payload,
+	})
+}
+
 func (m *Manager) dispatchEvent(ev GatewayEventFrame) {
 	m.eventListenersMu.RLock()
 	listeners := make([]EventListener, 0, len(m.eventListeners))
@@ -631,9 +686,11 @@ func (m *Manager) dispatchEvent(ev GatewayEventFrame) {
 	m.eventListenersMu.RUnlock()
 
 	if ev.Event != "tick" && ev.Event != "health" {
-		m.app.Logger.Debug("[openclaw-gateway] dispatchEvent",
-			"event", ev.Event, "listeners", listenerCount,
-			"payloadLen", len(ev.Payload))
+		fmt.Printf("[openclaw-gateway] event received: %s (listeners=%d, payloadLen=%d)\n",
+			ev.Event, listenerCount, len(ev.Payload))
+		if ev.Event == "chat" || ev.Event == "agent" {
+			fmt.Printf("[openclaw-gateway] payload: %s\n", string(ev.Payload))
+		}
 	}
 
 	for _, fn := range listeners {
@@ -729,7 +786,6 @@ func buildGatewayEnv(cfg OpenClawConfig, bundle *bundledRuntime) []string {
 	}
 	envMap["OPENCLAW_STATE_DIR"] = bundle.StateDir
 	envMap["OPENCLAW_CONFIG_PATH"] = bundle.ConfigPath
-	envMap["OPENCLAW_SKIP_CHANNELS"] = "1"
 	envMap["OPENCLAW_SKIP_CANVAS_HOST"] = "1"
 	envMap["OPENCLAW_EMBEDDED_IN"] = "ChatClaw"
 
@@ -758,6 +814,65 @@ func openGatewayLogFile(logsDir string) (*os.File, error) {
 	}
 	return os.OpenFile(filepath.Join(logsDir, "openclaw-gateway.log"),
 		os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+}
+
+// ensureSandboxConfigured checks whether Docker is available.
+// If Docker is not running, any agent with sandbox.mode="all" is switched to
+// "none" so the agent can operate without a container runtime.
+func ensureSandboxConfigured(bundle *bundledRuntime) {
+	if isDockerAvailable() {
+		return
+	}
+
+	raw, err := os.ReadFile(bundle.ConfigPath)
+	if err != nil {
+		return
+	}
+	var cfg map[string]any
+	if json.Unmarshal(raw, &cfg) != nil {
+		return
+	}
+
+	agents, _ := cfg["agents"].(map[string]any)
+	if agents == nil {
+		return
+	}
+	list, _ := agents["list"].([]any)
+	if len(list) == 0 {
+		return
+	}
+
+	modified := false
+	for _, item := range list {
+		agent, _ := item.(map[string]any)
+		if agent == nil {
+			continue
+		}
+		sandbox, _ := agent["sandbox"].(map[string]any)
+		if sandbox == nil {
+			continue
+		}
+		if mode, _ := sandbox["mode"].(string); mode == "all" {
+			sandbox["mode"] = "off"
+			modified = true
+		}
+	}
+
+	if !modified {
+		return
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(bundle.ConfigPath, out, 0o644)
+}
+
+func isDockerAvailable() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "docker", "info").Run() == nil
 }
 
 func errStr(err error) string {

@@ -43,6 +43,7 @@ const moduleTabIcons: Partial<Record<NavModule, any>> = {
   skills: IconSkills,
   'openclaw-skills': IconSkills,
   channels: IconChannels,
+  'openclaw-channels': IconChannels,
   tools: IconTools,
 }
 import {
