@@ -181,6 +181,28 @@ export default {
     systemChatClaw: 'ChatClaw',
     systemOpenClaw: 'OpenClaw',
   },
+  toolsPage: {
+    subtitle: "Quick access to featured tools",
+    smartSidebar: {
+      title: "Smart Sidebar",
+      description: "Dock beside WeCom, QQ, and other chat apps for live AI queries",
+    },
+    selectionSearch: {
+      title: "Selection Search",
+      description: "Show an AI query after you copy text via right-click",
+    },
+    floatingIcon: {
+      title: "Desktop Floating Icon",
+      description: "Floating shortcut on the desktop",
+    },
+    multiask: {
+      title: "Multi Ask",
+      description: "Open multiple AIs in the browser at once",
+    },
+    addToMenuBar: "Add to sidebar",
+    removeFromMenuBar: "Remove from sidebar",
+    desktopOnlyHint: "The features below are available in the desktop app only",
+  },
   multiask: {
     title: '다중 질문',
     inputPlaceholder: '질문을 입력하고 Enter를 눌러 모든 AI에게 전송...',

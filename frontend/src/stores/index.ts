@@ -11,3 +11,4 @@ export {
 } from './chat'
 export { useNavigationStore, type NavModule, type Tab, type PendingChatData } from './navigation'
 export { useSettingsStore, type SettingsMenuItem } from './settings'
+export { useToolsGuiSettingsStore } from './toolsGuiSettings'

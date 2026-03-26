@@ -167,9 +167,11 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 	msg := event.Event.Message
 	sender := event.Event.Sender
 
-	// Guard: skip non-user messages (e.g. bot's own replies echoed back).
-	if sender != nil && deref(sender.SenderType) != "user" {
-		slog.Info("[feishu] skipping non-user message", "sender_type", deref(sender.SenderType))
+	// Skip only app-originated messages (bot self / echoed replies). Feishu may omit
+	// sender_type or send values like "unknown" in some group payloads; requiring
+	// exactly "user" would drop those legitimate messages.
+	if sender != nil && deref(sender.SenderType) == "app" {
+		slog.Info("[feishu] skipping app-originated message")
 		return nil
 	}
 
@@ -188,20 +190,20 @@ func (a *FeishuAdapter) onMessageReceive(ctx context.Context, event *larkim.P2Me
 		}()
 	}
 
+	content := deref(msg.Content)
+	msgType := deref(msg.MessageType)
+	chatID := deref(msg.ChatId)
+
 	senderID := ""
 	if sender != nil && sender.SenderId != nil {
 		senderID = deref(sender.SenderId.OpenId)
 	}
 
+	fmt.Printf("[Feishu] 收到消息 - message_id: %s, 发送者: %s, 群聊: %s, 类型: %s, 内容: %s\n",
+		messageID, senderID, chatID, msgType, content)
+
 	senderName := a.resolveSenderName(ctx, senderID)
-
-	chatID := deref(msg.ChatId)
 	chatName := a.resolveChatName(ctx, chatID)
-	content := deref(msg.Content)
-	msgType := deref(msg.MessageType)
-
-	fmt.Printf("[Feishu] 收到消息 - 发送者: %s(%s), 群聊: %s(%s), 类型: %s, 内容: %s\n",
-		senderName, senderID, chatName, chatID, msgType, content)
 
 	chatType := deref(msg.ChatType)
 

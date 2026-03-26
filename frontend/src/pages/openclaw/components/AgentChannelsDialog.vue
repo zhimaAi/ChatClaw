@@ -18,6 +18,10 @@ import {
 } from '@bindings/chatclaw/internal/openclaw/agents'
 import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
+import {
+  OpenClawChannelService,
+  CreateChannelInput,
+} from '@bindings/chatclaw/internal/services/openclaw/channels'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -26,7 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import ConfigChannelDialog from '@/pages/channels/components/ConfigChannelDialog.vue'
+import ConfigChannelDialog from '@/pages/openclaw/channels/components/ConfigChannelDialog.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,8 +209,8 @@ async function loadData() {
   loading.value = true
   try {
     const [channelList, platformList, agentList] = await Promise.all([
-      ChannelService.ListChannels(),
-      ChannelService.GetSupportedPlatforms(),
+      OpenClawChannelService.ListChannels(),
+      OpenClawChannelService.GetSupportedPlatforms(),
       OpenClawAgentsService.ListAgents(),
     ])
 
@@ -291,16 +295,28 @@ async function handleCreateChannel() {
       app_secret: inlineFormAppSecret.value.trim(),
     })
 
-    const channel = await ChannelService.CreateChannel({
-      platform: selectedPlatformMeta.value.id,
-      name: inlineFormName.value.trim(),
-      avatar: inlineFormAvatar.value,
-      connection_type: 'gateway',
-      extra_config: extraConfig,
-    })
-
-    if (channel) {
-      await ChannelService.BindAgent(channel.id, props.agent.id)
+    const platformId = selectedPlatformMeta.value.id
+    if (platformId === 'feishu') {
+      await OpenClawChannelService.CreateChannel(
+        new CreateChannelInput({
+          name: inlineFormName.value.trim(),
+          avatar: inlineFormAvatar.value,
+          extra_config: extraConfig,
+          agent_id: props.agent.id,
+        })
+      )
+    } else {
+      const channel = await ChannelService.CreateChannel({
+        platform: platformId,
+        name: inlineFormName.value.trim(),
+        avatar: inlineFormAvatar.value,
+        connection_type: 'gateway',
+        extra_config: extraConfig,
+        openclaw_scope: true,
+      })
+      if (channel) {
+        await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
+      }
     }
 
     toast.success(t('assistant.channels.createAndBindSuccess'))
@@ -319,7 +335,7 @@ async function handleBindChannel(channel: Channel) {
 
   actionLoadingId.value = channel.id
   try {
-    await ChannelService.BindAgent(channel.id, props.agent.id)
+    await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
     toast.success(t('assistant.channels.bindSuccess'))
     await loadData()
   } catch (error) {
@@ -332,7 +348,7 @@ async function handleBindChannel(channel: Channel) {
 async function handleUnbindChannel(channel: Channel) {
   actionLoadingId.value = channel.id
   try {
-    await ChannelService.UnbindAgent(channel.id)
+    await OpenClawChannelService.UnbindAgent(channel.id)
     toast.success(t('assistant.channels.unbindSuccess'))
     await loadData()
   } catch (error) {
@@ -345,12 +361,12 @@ async function handleUnbindChannel(channel: Channel) {
 async function handleToggleChannel(channel: Channel, enabled: boolean) {
   actionLoadingId.value = channel.id
   try {
-    await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled }))
+    await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled }))
     if (enabled) {
-      await ChannelService.ConnectChannel(channel.id)
+      await OpenClawChannelService.ConnectChannel(channel.id)
       toast.success(t('channels.connect.success', '连接成功'))
     } else {
-      await ChannelService.DisconnectChannel(channel.id)
+      await OpenClawChannelService.DisconnectChannel(channel.id)
       toast.success(t('channels.disconnect.success', '已断开连接'))
     }
     await loadData()
@@ -387,7 +403,11 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
+    if (selectedPlatformMeta.value.id === 'feishu') {
+      await OpenClawChannelService.VerifyChannelConfig(extraConfig)
+    } else {
+      await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
+    }
     toast.success(t('channels.inline.verifySuccess', '验证通过'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed', '验证失败'))
@@ -414,7 +434,7 @@ async function handleAddBotConfirm() {
 
   addBotLoading.value = true
   try {
-    await ChannelService.BindAgent(selectedBotId.value, props.agent.id)
+    await OpenClawChannelService.BindAgent(selectedBotId.value, props.agent.id)
     toast.success(t('assistant.channels.bindSuccess'))
     showAddBotDialog.value = false
     selectedBotId.value = null
@@ -431,7 +451,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
 
   try {
     if (!isEdit) {
-      await ChannelService.BindAgent(channel.id, props.agent.id)
+      await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
       toast.success(t('assistant.channels.createAndBindSuccess'))
     }
     channelToEdit.value = null

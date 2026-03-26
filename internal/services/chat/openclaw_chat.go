@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 
 	"github.com/google/uuid"
@@ -167,6 +168,66 @@ func buildKnowledgeContextMessage(userContent string, libraryIDs []int64, librar
 	}
 	sb.WriteString("</chatclaw_context>")
 	return sb.String()
+}
+
+// openClawSessionKeyForAgent builds the Gateway session key for a conversation.
+// OpenClaw expects agent-scoped keys like "agent:<agentId>:..." (see session docs).
+// A bare "conv_<id>" is interpreted as the default agent ("main"), which breaks
+// runs when agentId is not "main". The previous "agentId:conv_<id>" form was
+// also rejected by the gateway; the canonical prefix is "agent:".
+func openClawSessionKeyForAgent(agentID string, conversationID int64) string {
+	id := strings.TrimSpace(agentID)
+	if id == "" {
+		id = define.OpenClawMainAgentID
+	}
+	return fmt.Sprintf("agent:%s:conv_%d", id, conversationID)
+}
+
+// GetOpenClawLastAssistantReply fetches the last assistant message text from
+// the OpenClaw Gateway session. Returns empty string if unavailable.
+func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string {
+	if s.openclawGateway == nil || !s.openclawGateway.IsReady() {
+		return ""
+	}
+
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return ""
+	}
+	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var result struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content any    `json:"content"`
+		} `json:"messages"`
+	}
+	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
+		"key":   sessionKey,
+		"limit": 10,
+	}, &result); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get failed",
+			"conv", conversationID, "err", err)
+		return ""
+	}
+
+	s.app.Logger.Info("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get result",
+		"conv", conversationID, "message_count", len(result.Messages))
+
+	// Walk backwards to find the last assistant message with text content
+	for i := len(result.Messages) - 1; i >= 0; i-- {
+		msg := result.Messages[i]
+		s.app.Logger.Debug("[openclaw-chat] GetOpenClawLastAssistantReply: message",
+			"conv", conversationID, "index", i, "role", msg.Role)
+		if msg.Role == "assistant" {
+			if text := extractTextFromContent(msg.Content); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
 }
 
 func extractTextFromContent(content any) string {
@@ -595,10 +656,9 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 
 	cfg, err := s.getOpenClawAgentConfig(conversationID)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
-
-	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1030,6 +1090,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 
 // openClawChatRunState tracks the streaming state for a single chat.send invocation.
 type openClawChatRunState struct {
+	requestID       string
 	contentBuilder  strings.Builder
 	thinkingBuilder strings.Builder
 	finishReason    string
@@ -1113,7 +1174,7 @@ func (s *ChatService) handleOpenClawAgentEvent(
 
 		st.contentBuilder.WriteString(d.Delta)
 		st.emittedContent = st.contentBuilder.String()
-		s.appendGenerationContent(conversationID, "", d.Delta)
+		s.appendGenerationContent(conversationID, st.requestID, d.Delta)
 		emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent: ce(),
 			Delta:     d.Delta,
@@ -1445,7 +1506,7 @@ func (s *ChatService) processOpenClawContentBlocks(
 		st.emittedContent = newText
 		st.contentBuilder.Reset()
 		st.contentBuilder.WriteString(newText)
-		s.appendGenerationContent(conversationID, "", delta)
+		s.appendGenerationContent(conversationID, st.requestID, delta)
 		emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent: ce(),
 			Delta:     delta,
@@ -1460,7 +1521,7 @@ func (s *ChatService) processOpenClawContentBlocks(
 // concurrent "agent" and "chat" events for real-time streaming output.
 // Agent events provide text/tool deltas; chat events provide thinking blocks.
 func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, attachments []ImagePayload, cfg openClawAgentConfig) {
-	st := &openClawChatRunState{}
+	st := &openClawChatRunState{requestID: requestID}
 
 	assistantMsgID := -conversationID*1000 - int64(time.Now().UnixMilli()%100000)
 
@@ -1507,17 +1568,35 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 
 	// Listen for all gateway events and route accordingly.
 	s.openclawGateway.AddEventListener(listenerKey, func(event string, payload json.RawMessage) {
-		s.app.Logger.Debug("[openclaw-chat] event received",
+		s.app.Logger.Info("[openclaw-chat] event received",
 			"conv", conversationID, "event", event,
 			"payloadLen", len(payload))
 
-		if event == "chat" {
+		switch event {
+		case "chat":
 			s.handleOpenClawChatEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
-			return
-		}
-		// Handle "agent" events for streaming text, tools, and lifecycle.
-		if event == "agent" {
+		case "agent":
 			s.handleOpenClawAgentEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
+		case "agent_late_error":
+			var errEvt struct {
+				Error string `json:"error"`
+				RunID string `json:"runId"`
+			}
+			if json.Unmarshal(payload, &errEvt) != nil {
+				return
+			}
+			// Only handle if runId matches or we haven't captured a runId yet
+			if rid, _ := activeRunID.Load().(string); rid != "" && errEvt.RunID != "" && errEvt.RunID != rid {
+				return
+			}
+			s.app.Logger.Error("[openclaw-chat] late error from gateway",
+				"conv", conversationID, "runId", errEvt.RunID, "error", errEvt.Error)
+			emitError("error.chat_generation_failed", map[string]any{"Error": errEvt.Error})
+			select {
+			case <-done:
+			default:
+				close(done)
+			}
 		}
 	})
 
@@ -1553,6 +1632,13 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		params["thinking"] = "medium"
 	}
 
+	s.app.Logger.Info("[openclaw-chat] sending agent RPC",
+		"conv", conversationID,
+		"agentId", cfg.OpenClawAgentID,
+		"sessionKey", sessionKey,
+		"idempotencyKey", idempotencyKey,
+		"contentLen", len(userContent))
+
 	var runResult struct {
 		RunID string `json:"runId"`
 	}
@@ -1577,6 +1663,10 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		"conv", conversationID, "runId", runResult.RunID)
 
 	// Wait for the run to finish via lifecycle "end" event or context cancel.
+	// The agent RPC may return before all streaming events are delivered
+	// (e.g., the Gateway sends an early ack with runId). Wait for the
+	// actual completion signal from lifecycle "end" / chat "final" events
+	// so we don't tear down the event listener prematurely.
 	select {
 	case <-done:
 		s.app.Logger.Info("[openclaw-chat] run finished via lifecycle event",
@@ -1595,6 +1685,21 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			Status:    StatusCancelled,
 		})
 		return
+	default:
+		s.app.Logger.Info("[openclaw-chat] agent RPC returned before completion event, waiting for events",
+			"conv", conversationID, "runId", runResult.RunID)
+		select {
+		case <-done:
+		case <-ctx.Done():
+			emit(EventChatStopped, ChatStoppedEvent{
+				ChatEvent: ce(),
+				Status:    StatusCancelled,
+			})
+			return
+		case <-time.After(3 * time.Minute):
+			s.app.Logger.Warn("[openclaw-chat] timed out waiting for agent completion events",
+				"conv", conversationID, "runId", runResult.RunID)
+		}
 	}
 	if st.finishReason == "" {
 		st.finishReason = "stop"
