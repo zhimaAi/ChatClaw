@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileText, FolderOpen, Save, Plus, Trash2 } from 'lucide-vue-next'
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  FolderOpen,
+  Save,
+  Plus,
+  Trash2,
+} from 'lucide-vue-next'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toast'
@@ -44,8 +52,8 @@ async function loadAgents() {
     if (agents.value.length && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id
     }
-  } catch (e) {
-    toast.error(getErrorMessage(e))
+  } catch (error) {
+    toast.error(getErrorMessage(error))
   }
 }
 
@@ -62,6 +70,11 @@ const hasChanges = computed(() => fileContent.value !== originalContent.value)
 const selectedFile = computed(
   () => memoryFiles.value.find((f) => f.path === selectedFilePath.value) ?? null
 )
+const rootFiles = computed(() => memoryFiles.value.filter((file) => !isDailyMemoryFile(file.path)))
+const dailyMemoryFiles = computed(() =>
+  memoryFiles.value.filter((file) => isDailyMemoryFile(file.path))
+)
+const isDailyMemoryExpanded = ref(true)
 
 // Whether the agent has OpenClaw workspace configured
 const hasWorkspace = computed(() => workspaceId.value !== '')
@@ -79,7 +92,7 @@ async function loadFiles() {
     if (memoryFiles.value.length && !selectedFilePath.value) {
       await selectFile(memoryFiles.value[0].path)
     }
-  } catch (e) {
+  } catch {
     memoryFiles.value = []
     // Don't show error toast for missing workspace — it's expected
   } finally {
@@ -87,8 +100,12 @@ async function loadFiles() {
   }
 }
 
+function isDailyMemoryFile(path: string) {
+  return path.startsWith('memory/')
+}
+
 async function selectFile(path: string) {
-  if (hasChanges.value && !confirm(t('memory.unsavedChangesConfirm'))) {
+  if (hasChanges.value && !window.confirm(t('memory.unsavedChangesConfirm'))) {
     return
   }
   selectedFilePath.value = path
@@ -170,7 +187,14 @@ watch(selectedAgentId, () => {
   fileContent.value = ''
   originalContent.value = ''
   isEditing.value = false
+  isDailyMemoryExpanded.value = true
   loadFiles()
+})
+
+watch(selectedFilePath, (path) => {
+  if (path && isDailyMemoryFile(path)) {
+    isDailyMemoryExpanded.value = true
+  }
 })
 
 onMounted(() => {
@@ -247,7 +271,7 @@ onMounted(() => {
             </div>
             <div class="flex-1 overflow-y-auto">
               <button
-                v-for="file in memoryFiles"
+                v-for="file in rootFiles"
                 :key="file.path"
                 :class="
                   cn(
@@ -261,6 +285,42 @@ onMounted(() => {
                 <FileText class="size-3.5 shrink-0 text-muted-foreground" />
                 <span class="truncate">{{ file.name }}</span>
               </button>
+              <div v-if="dailyMemoryFiles.length" class="px-1 py-1">
+                <button
+                  :class="
+                    cn(
+                      'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors hover:bg-muted/50',
+                      selectedFilePath?.startsWith('memory/') && 'bg-muted/60'
+                    )
+                  "
+                  title="memory/"
+                  @click="isDailyMemoryExpanded = !isDailyMemoryExpanded"
+                >
+                  <component
+                    :is="isDailyMemoryExpanded ? ChevronDown : ChevronRight"
+                    class="size-3 shrink-0 text-muted-foreground"
+                  />
+                  <FolderOpen class="size-3.5 shrink-0 text-muted-foreground" />
+                  <span class="truncate">memory/</span>
+                </button>
+                <div v-if="isDailyMemoryExpanded" class="mt-0.5 space-y-0.5">
+                  <button
+                    v-for="file in dailyMemoryFiles"
+                    :key="file.path"
+                    :class="
+                      cn(
+                        'flex w-full items-center gap-1.5 rounded py-1.5 pr-2 pl-7 text-xs transition-colors hover:bg-muted/50',
+                        selectedFilePath === file.path && 'bg-muted'
+                      )
+                    "
+                    :title="file.path"
+                    @click="selectFile(file.path)"
+                  >
+                    <FileText class="size-3.5 shrink-0 text-muted-foreground" />
+                    <span class="truncate">{{ file.name }}</span>
+                  </button>
+                </div>
+              </div>
               <div
                 v-if="!memoryFiles.length && !isLoading"
                 class="p-3 text-xs text-muted-foreground text-center"
