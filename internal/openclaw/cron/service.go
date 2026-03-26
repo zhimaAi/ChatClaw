@@ -64,6 +64,12 @@ const (
 	openClawCronDeliveryModeNone     = "none"
 	openClawCronDeliveryModeAnnounce = "announce"
 	openClawCronDeliveryModeWebhook  = "webhook"
+	// openClawCronDeliveryTargetModeLastActive resolves delivery.to from channels.last_sender_id.
+	openClawCronDeliveryTargetModeLastActive = "last_active"
+	// openClawCronDeliveryTargetModeTargetID sends to the user-provided target directly.
+	openClawCronDeliveryTargetModeTargetID = "target_id"
+	// openClawCronChannelPlatformFeishu keeps OpenClaw account-key mapping explicit.
+	openClawCronChannelPlatformFeishu = "feishu"
 
 	// openClawCronManualRunTabID scopes manual cron-triggered chat runs so the
 	// frontend can reuse the standard OpenClaw chat event pipeline.
@@ -75,6 +81,8 @@ const (
 	// openClawCronHistoryStatusSuccess is used for manual chat runs after the
 	// local conversation has finished and no durable run-log row exists.
 	openClawCronHistoryStatusSuccess = "success"
+	// openClawCronChannelVisibilitySQL matches the OpenClaw channel list visibility rule.
+	openClawCronChannelVisibilitySQL = `(ch.openclaw_scope = 1 OR (ch.agent_id > 0 AND EXISTS (SELECT 1 FROM openclaw_agents AS oa WHERE oa.id = ch.agent_id) AND NOT EXISTS (SELECT 1 FROM agents AS a WHERE a.id = ch.agent_id)))`
 )
 
 // OpenClawCronService wraps OpenClaw-native cron management for the Wails frontend.
@@ -127,6 +135,20 @@ type manualConversationHistoryState struct {
 	DurationMs int64
 }
 
+type cronDeliveryChannelOption struct {
+	ID           int64  `bun:"id"`
+	AgentRowID   int64  `bun:"agent_id"`
+	Platform     string `bun:"platform"`
+	LastSenderID string `bun:"last_sender_id"`
+	ExtraConfig  string `bun:"extra_config"`
+}
+
+type cronDeliverySelectionInput struct {
+	OpenClawAgentID string
+	Platform   string
+	TargetID   string
+}
+
 func NewOpenClawCronService(
 	app *application.App,
 	manager *openclawruntime.Manager,
@@ -162,6 +184,50 @@ func (s *OpenClawCronService) ListAgents() ([]OpenClawCronAgentOption, error) {
 		})
 	}
 	return out, nil
+}
+
+// ListDeliveryPlatforms returns distinct configured OpenClaw channel platforms for cron delivery.
+// 返回已配置 OpenClaw 频道的平台列表，供 Cron 表单选择。
+func (s *OpenClawCronService) ListDeliveryPlatforms() ([]OpenClawCronDeliveryPlatformOption, error) {
+	options, err := s.listDeliveryChannelOptions("")
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	out := make([]OpenClawCronDeliveryPlatformOption, 0, len(options))
+	for _, option := range options {
+		platform := strings.TrimSpace(option.Platform)
+		if platform == "" {
+			continue
+		}
+		if _, exists := seen[platform]; exists {
+			continue
+		}
+		seen[platform] = struct{}{}
+		out = append(out, OpenClawCronDeliveryPlatformOption{
+			Platform: platform,
+			Label:    platform,
+		})
+	}
+	slices.SortFunc(out, func(left, right OpenClawCronDeliveryPlatformOption) int {
+		return strings.Compare(left.Platform, right.Platform)
+	})
+	return out, nil
+}
+
+// GetLatestDeliveryTarget returns the most recent target id for the given OpenClaw agent and platform.
+// 返回指定 OpenClaw 助手与频道类型对应的最近投递目标 ID。
+func (s *OpenClawCronService) GetLatestDeliveryTarget(openClawAgentID string, platform string) (string, error) {
+	targetID, _, _, err := s.resolveDeliverySelection(cronDeliverySelectionInput{
+		OpenClawAgentID: openClawAgentID,
+		Platform:        platform,
+		TargetID:        "",
+	})
+	if err != nil {
+		return "", err
+	}
+	return targetID, nil
 }
 
 // ListJobs reads the OpenClaw jobs store directly.
@@ -218,7 +284,11 @@ func (s *OpenClawCronService) GetSummary() (*OpenClawCronSummary, error) {
 // CreateJob creates a cron job through the OpenClaw Gateway RPC.
 // 通过 OpenClaw Gateway RPC 新建 Cron 任务，避免每次拉起 CLI 子进程。
 func (s *OpenClawCronService) CreateJob(input CreateOpenClawCronJobInput) (*OpenClawCronJob, error) {
-	payload, err := buildCreateJobPayload(input)
+	resolvedInput, err := s.resolveCreateDeliveryInput(input)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := buildCreateJobPayload(resolvedInput)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +305,11 @@ func (s *OpenClawCronService) CreateJob(input CreateOpenClawCronJobInput) (*Open
 // UpdateJob patches a cron job through the OpenClaw Gateway RPC.
 // 编辑任务时仅传递被修改的字段，避免用默认值误伤原配置。
 func (s *OpenClawCronService) UpdateJob(jobID string, input UpdateOpenClawCronJobInput) (*OpenClawCronJob, error) {
-	patch, err := buildUpdateJobPatch(input)
+	resolvedInput, err := s.resolveUpdateDeliveryInput(input)
+	if err != nil {
+		return nil, err
+	}
+	patch, err := buildUpdateJobPatch(resolvedInput)
 	if err != nil {
 		return nil, err
 	}
@@ -570,6 +644,29 @@ func (s *OpenClawCronService) db() (*bun.DB, error) {
 		return nil, fmt.Errorf("sqlite not initialized")
 	}
 	return db, nil
+}
+
+func (s *OpenClawCronService) listDeliveryChannelOptions(platform string) ([]cronDeliveryChannelOption, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var options []cronDeliveryChannelOption
+	query := db.NewSelect().
+		TableExpr("channels AS ch").
+		Column("ch.id", "ch.agent_id", "ch.platform", "ch.last_sender_id", "ch.extra_config").
+		Where(openClawCronChannelVisibilitySQL)
+	if trimmedPlatform := strings.TrimSpace(platform); trimmedPlatform != "" {
+		query = query.Where("ch.platform = ?", trimmedPlatform)
+	}
+	if err := query.OrderExpr("ch.id DESC").Scan(ctx, &options); err != nil {
+		return nil, err
+	}
+	return options, nil
 }
 
 func (s *OpenClawCronService) readJobsFromStore(storePath string) ([]openClawJobStoreItem, error) {
@@ -1291,6 +1388,145 @@ func isBenignCronRunOutput(output []byte) bool {
 	return payload.OK && !payload.Ran && strings.EqualFold(strings.TrimSpace(payload.Reason), "already-running")
 }
 
+func (s *OpenClawCronService) resolveCreateDeliveryInput(input CreateOpenClawCronJobInput) (CreateOpenClawCronJobInput, error) {
+	resolvedChannel, resolvedTarget, resolvedAccountID, err := s.resolveDeliverySelection(
+		cronDeliverySelectionInput{
+			OpenClawAgentID: input.AgentID,
+			Platform:        input.DeliveryChannel,
+			TargetID:        input.DeliveryTargetID,
+		},
+	)
+	if err != nil {
+		return input, err
+	}
+	if resolvedChannel == "" {
+		return input, nil
+	}
+	input.DeliveryChannel = resolvedChannel
+	input.DeliveryTo = resolvedTarget
+	input.DeliveryAccountID = resolvedAccountID
+	return input, nil
+}
+
+func (s *OpenClawCronService) resolveUpdateDeliveryInput(input UpdateOpenClawCronJobInput) (UpdateOpenClawCronJobInput, error) {
+	if input.DeliveryChannel == nil && input.DeliveryTargetID == nil && input.AgentID == nil {
+		return input, nil
+	}
+
+	resolvedChannel, resolvedTarget, resolvedAccountID, err := s.resolveDeliverySelection(
+		cronDeliverySelectionInput{
+			OpenClawAgentID: derefTrim(input.AgentID),
+			Platform:        derefTrim(input.DeliveryChannel),
+			TargetID:        derefTrim(input.DeliveryTargetID),
+		},
+	)
+	if err != nil {
+		return input, err
+	}
+
+	input.DeliveryChannel = stringPtr(resolvedChannel)
+	input.DeliveryTo = stringPtr(resolvedTarget)
+	input.DeliveryAccountID = stringPtr(resolvedAccountID)
+	return input, nil
+}
+
+func (s *OpenClawCronService) resolveDeliverySelection(input cronDeliverySelectionInput) (string, string, string, error) {
+	platform := strings.TrimSpace(input.Platform)
+	if platform == "" {
+		return "", "", "", nil
+	}
+
+	options, err := s.listDeliveryChannelOptions(platform)
+	if err != nil {
+		return "", "", "", err
+	}
+	localAgentID, err := s.resolveDeliveryAgentRowID(input.OpenClawAgentID)
+	if err != nil {
+		return "", "", "", err
+	}
+	matchedChannel, err := resolveCronDeliveryChannelOption(localAgentID, platform, options)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	resolvedTarget, err := resolveCronDeliveryTargetID(input.TargetID, matchedChannel)
+	if err != nil {
+		return "", "", "", err
+	}
+	return platform, resolvedTarget, deriveCronDeliveryAccountID(matchedChannel), nil
+}
+
+func (s *OpenClawCronService) resolveDeliveryAgentRowID(openClawAgentID string) (int64, error) {
+	trimmedAgentID := strings.TrimSpace(openClawAgentID)
+	if trimmedAgentID == "" {
+		return s.findLocalOpenClawAgentID("main")
+	}
+	return s.findLocalOpenClawAgentID(trimmedAgentID)
+}
+
+func resolveCronDeliveryChannelOption(agentRowID int64, platform string, channels []cronDeliveryChannelOption) (cronDeliveryChannelOption, error) {
+	if agentRowID <= 0 {
+		return cronDeliveryChannelOption{}, fmt.Errorf("openclaw cron delivery agent is required")
+	}
+	trimmedPlatform := strings.TrimSpace(platform)
+	if trimmedPlatform == "" {
+		return cronDeliveryChannelOption{}, fmt.Errorf("openclaw cron delivery platform is required")
+	}
+
+	filteredChannels := make([]cronDeliveryChannelOption, 0, len(channels))
+	for _, channel := range channels {
+		if channel.AgentRowID != agentRowID {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(channel.Platform), trimmedPlatform) {
+			filteredChannels = append(filteredChannels, channel)
+		}
+	}
+	if len(filteredChannels) == 0 {
+		return cronDeliveryChannelOption{}, fmt.Errorf("openclaw channel platform %s is not bound to the selected agent", trimmedPlatform)
+	}
+	if len(filteredChannels) > 1 {
+		return cronDeliveryChannelOption{}, fmt.Errorf("multiple openclaw channels match agent and platform %s", trimmedPlatform)
+	}
+	return filteredChannels[0], nil
+}
+
+func resolveCronDeliveryTargetID(explicitTargetID string, channel cronDeliveryChannelOption) (string, error) {
+	resolvedTargetID := strings.TrimSpace(explicitTargetID)
+	if resolvedTargetID != "" {
+		return resolvedTargetID, nil
+	}
+
+	resolvedTargetID = strings.TrimSpace(channel.LastSenderID)
+	if resolvedTargetID == "" {
+		return "", fmt.Errorf("openclaw channel platform %s has no last active target", strings.TrimSpace(channel.Platform))
+	}
+	return resolvedTargetID, nil
+}
+
+func deriveCronDeliveryAccountID(option cronDeliveryChannelOption) string {
+	if openClawChannelID := extractOpenClawChannelIDFromExtraConfig(option.ExtraConfig); openClawChannelID != "" {
+		return openClawChannelID
+	}
+	if option.ID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("channel_%d", option.ID)
+}
+
+func extractOpenClawChannelIDFromExtraConfig(extraConfig string) string {
+	if strings.TrimSpace(extraConfig) == "" {
+		return ""
+	}
+	var payload struct {
+		OpenClawChannelID string `json:"openclaw_channel_id"`
+	}
+	if err := json.Unmarshal([]byte(extraConfig), &payload); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(payload.OpenClawChannelID)
+}
+
 func buildCreateJobPayload(input CreateOpenClawCronJobInput) (map[string]any, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -1988,6 +2224,10 @@ func appendOptionalBoolArg(args *[]string, flag string, value *bool) {
 	}
 }
 
+func stringPtr(value string) *string {
+	return &value
+}
+
 func derefTrim(value *string) string {
 	if value == nil {
 		return ""
@@ -2277,14 +2517,17 @@ func preferHistoryItem(existing OpenClawCronHistoryListItem, incoming OpenClawCr
 func deriveManualConversationHistoryState(
 	runAtMs int64,
 	updatedAtMs int64,
-	sessionKey string,
+	_ string,
 	hasActiveGeneration bool,
 ) (string, int64) {
 	state := manualConversationHistoryState{
 		Status:     openClawCronHistoryStatusRunning,
 		DurationMs: 0,
 	}
-	if hasActiveGeneration || strings.TrimSpace(sessionKey) == "" || runAtMs <= 0 || updatedAtMs <= runAtMs {
+	// Manual runs that go through the local chat pipeline can finish before a session key
+	// is ever written back. Once generation is no longer active and the conversation moved
+	// forward in time, the history list should treat the run as completed.
+	if hasActiveGeneration || runAtMs <= 0 || updatedAtMs <= runAtMs {
 		return state.Status, state.DurationMs
 	}
 	state.Status = openClawCronHistoryStatusSuccess
@@ -2451,6 +2694,8 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 		DeliveryTo:         item.Delivery.To,
 		DeliveryAccountID:  item.Delivery.AccountID,
 		Announce:           item.Delivery.Mode == "announce" || item.Delivery.Announce,
+		DeliveryTargetMode: inferCronDeliveryTargetMode(item.Delivery.To),
+		DeliveryTargetID:   item.Delivery.To,
 		BestEffortDeliver:  item.Delivery.BestEffortDeliver,
 		DeleteAfterRun:     item.Delivery.DeleteAfterRun,
 		KeepAfterRun:       item.Delivery.KeepAfterRun,
@@ -2470,6 +2715,13 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func inferCronDeliveryTargetMode(deliveryTo string) string {
+	if strings.TrimSpace(deliveryTo) != "" {
+		return openClawCronDeliveryTargetModeTargetID
+	}
+	return openClawCronDeliveryTargetModeLastActive
 }
 
 type openClawRunEntryCLI struct {

@@ -58,9 +58,8 @@ export interface OpenClawCronFormState {
   sessionKey: string
   wakeMode: string
   announce: boolean
-  deliveryChannel: string
-  deliveryTo: string
-  deliveryAccountId: string
+  channelPlatform: string
+  deliveryTargetId: string
   bestEffortDeliver: boolean
   deleteAfterRun: boolean
   keepAfterRun: boolean
@@ -105,9 +104,8 @@ export function createEmptyOpenClawCronForm(): OpenClawCronFormState {
     sessionKey: '',
     wakeMode: 'now',
     announce: true,
-    deliveryChannel: 'last',
-    deliveryTo: '',
-    deliveryAccountId: '',
+    channelPlatform: '',
+    deliveryTargetId: '',
     bestEffortDeliver: false,
     deleteAfterRun: false,
     keepAfterRun: false,
@@ -160,9 +158,8 @@ export function jobToForm(job: OpenClawCronJob): OpenClawCronFormState {
     sessionKey: job.session_key || '',
     wakeMode: job.wake_mode || 'now',
     announce: !!job.announce,
-    deliveryChannel: job.delivery_channel || 'last',
-    deliveryTo: job.delivery_to || '',
-    deliveryAccountId: job.delivery_account_id || '',
+    channelPlatform: job.delivery_channel || '',
+    deliveryTargetId: job.delivery_target_id || job.delivery_to || '',
     bestEffortDeliver: !!job.best_effort_deliver,
     deleteAfterRun: !!job.delete_after_run,
     keepAfterRun: !!job.keep_after_run,
@@ -199,9 +196,8 @@ export function buildCreateInput(form: OpenClawCronFormState) {
     session_key: form.sessionKey,
     wake_mode: form.wakeMode,
     announce: form.announce,
-    delivery_channel: form.deliveryChannel,
-    delivery_to: form.deliveryTo,
-    delivery_account_id: form.deliveryAccountId,
+    delivery_target_id: form.deliveryTargetId,
+    delivery_channel: form.channelPlatform,
     best_effort_deliver: form.bestEffortDeliver,
     delete_after_run: form.deleteAfterRun,
     keep_after_run: form.keepAfterRun,
@@ -233,9 +229,8 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
     session_key: form.sessionKey || undefined,
     wake_mode: form.wakeMode || undefined,
     announce: form.announce,
-    delivery_channel: form.deliveryChannel || undefined,
-    delivery_to: form.deliveryTo || undefined,
-    delivery_account_id: form.deliveryAccountId || undefined,
+    delivery_target_id: form.deliveryTargetId || undefined,
+    delivery_channel: form.channelPlatform || undefined,
     best_effort_deliver: form.bestEffortDeliver,
     delete_after_run: form.deleteAfterRun,
     keep_after_run: form.keepAfterRun,
