@@ -954,6 +954,8 @@ export default {
     settings: {
       title: '助手设置',
       tabs: {
+        general: '基本信息',
+        advanced: '高级设置',
         model: '模型设置',
         prompt: '提示词设置',
         workspace: '工作区',
@@ -1708,7 +1710,7 @@ export default {
       describe: {
           interval: '每隔 {value} 分钟',
           monthly: '每月 {day} 号 {time}',
-      weekly: '每{labels} {time}',
+          weekly: '每周 {labels} {time}',
           daily: '每天 {time}',
       },
     form: {
