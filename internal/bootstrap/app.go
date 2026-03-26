@@ -52,9 +52,10 @@ import (
 	"chatclaw/internal/taskmanager"
 	"chatclaw/pkg/winutil"
 
+	"github.com/uptrace/bun"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
-	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -344,7 +345,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		handleChannelMessage(app, chatService, conversationsService, channelGW, msg)
 	})
 	channelGW = channelGateway
-	chatService.SetGateway(channelGateway)
+	wireChannelGateway(chatService, scheduledTasksService, channelGateway)
 	channelService := channels.NewChannelService(app, channelGateway, func(channelName string) (int64, error) {
 		return ensureChannelAgent(agentsService, channelName)
 	})
@@ -775,6 +776,16 @@ func handleChannelMessage(
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
+	if err := channels.UpdateChannelLastReplyTarget(ctx, db, msg.ChannelID, msg.ChatID, msg.SenderID); err != nil {
+		app.Logger.Warn(
+			"channel message: failed to update last reply target",
+			"channel_id", msg.ChannelID,
+			"chat_id", msg.ChatID,
+			"sender_id", msg.SenderID,
+			"error", err,
+		)
+	}
+
 	var channelRow struct {
 		AgentID     int64  `bun:"agent_id"`
 		ExtraConfig string `bun:"extra_config"`
@@ -999,6 +1010,7 @@ func handleChannelMessage(
 		sendReply(finalResponse)
 	}
 }
+
 type feishuStreamingReplyAdapter interface {
 	CreateStreamCardMessage(ctx context.Context, targetID string, replyToMessageID string, placeholder string) (*channels.FeishuStreamCardHandle, error)
 	UpdateStreamCardMessage(ctx context.Context, handle *channels.FeishuStreamCardHandle, text string, finish bool) error

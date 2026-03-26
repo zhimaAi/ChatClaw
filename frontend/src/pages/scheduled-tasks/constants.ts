@@ -1,5 +1,8 @@
 import type { SchedulePresetValue } from './types'
 
+// Default suffix appended when users duplicate a scheduled task from the list.
+export const TASK_COPY_NAME_SUFFIX = '副本'
+
 export const SCHEDULE_PRESET_LABELS: Record<SchedulePresetValue, string> = {
   every_minute: 'scheduledTasks.presets.everyMinute',
   every_5_minutes: 'scheduledTasks.presets.every5Minutes',
