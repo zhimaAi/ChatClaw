@@ -1718,6 +1718,7 @@ export default {
       descriptionPlaceholder: '可选，用于补充说明',
       agent: '关联助手',
       defaultAgent: '默认助手',
+      useDefaultAgent: '未指定（使用默认助手）',
       scheduleTitle: '设置定时时间',
       scheduleHint: '选择执行方式，并设置任务运行时间。',
       scheduleKinds: {
@@ -1731,6 +1732,8 @@ export default {
       timezone: '时区',
       exact: '精确执行',
       exactHint: '按设定时间精确触发任务',
+      enableNowTitle: '立即启用',
+      enableNowHint: '创建后立即开始运行此任务',
       message: '执行消息',
       messagePlaceholder: '助手定时执行时发送的消息内容',
       systemEvent: '系统事件',

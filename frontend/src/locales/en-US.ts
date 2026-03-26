@@ -1837,6 +1837,7 @@ export default {
       descriptionPlaceholder: 'Optional, used for extra context',
       agent: 'Linked Assistant',
       defaultAgent: 'Default Assistant',
+      useDefaultAgent: 'Unspecified (use default assistant)',
       scheduleTitle: 'Set the schedule',
       scheduleHint: 'Choose how the task should run and set the execution time.',
       scheduleKinds: {
@@ -1850,6 +1851,8 @@ export default {
       timezone: 'Timezone',
       exact: 'Exact Execution',
       exactHint: 'Trigger the task exactly at the configured time',
+      enableNowTitle: 'Enable immediately',
+      enableNowHint: 'Start running this task immediately after creation',
       message: 'Message',
       messagePlaceholder: 'Message sent when the assistant runs on schedule',
       systemEvent: 'System Event',
