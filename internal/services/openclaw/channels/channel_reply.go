@@ -2,6 +2,7 @@ package openclawchannels
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,10 +20,17 @@ type feishuStreamingAdapter interface {
 	UpdateStreamCardMessage(ctx context.Context, handle *channels.FeishuStreamCardHandle, text string, finish bool) error
 }
 
+// dingTalkStreamingAdapter is the subset of DingTalkAdapter used for real-time streaming replies.
+type dingTalkStreamingAdapter interface {
+	SendInteractiveCard(ctx context.Context, conversationID, cardBizID, cardData string) error
+	UpdateInteractiveCard(ctx context.Context, cardBizID, cardData string) error
+}
+
 // RunChannelReply handles channel messages for OpenClaw agents.
 // It requires the OpenClaw Gateway to be running.
 // When the Feishu channel has streaming enabled, it creates a streaming card
 // and pushes incremental updates as the agent generates tokens.
+// DingTalk channels also support streaming interactive cards.
 func RunChannelReply(
 	app *application.App,
 	chatService *chat.ChatService,
@@ -51,12 +59,22 @@ func RunChannelReply(
 	app.Logger.Info("openclaw channel: SendOpenClawMessage ok, waiting for generation",
 		"conv", conversationID, "requestID", res.RequestID)
 
-	if !useQuickMode && msg.Platform == channels.PlatformFeishu && replyTarget != "" {
-		streamEnabled := feishuStreamOutputEnabled(extraConfig)
-		if streamEnabled {
+	if !useQuickMode && replyTarget != "" {
+		switch msg.Platform {
+		case channels.PlatformFeishu:
+			streamEnabled := feishuStreamOutputEnabled(extraConfig)
+			if streamEnabled {
+				if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
+					if fa, ok := adapter.(feishuStreamingAdapter); ok {
+						streamFeishuReply(app, chatService, convService, conversationID, agentID, res.RequestID, fa, msg, replyTarget)
+						return
+					}
+				}
+			}
+		case channels.PlatformDingTalk:
 			if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {
-				if fa, ok := adapter.(feishuStreamingAdapter); ok {
-					streamFeishuReply(app, chatService, convService, conversationID, agentID, res.RequestID, fa, msg, replyTarget)
+				if da, ok := adapter.(dingTalkStreamingAdapter); ok {
+					streamDingTalkReply(app, chatService, convService, conversationID, agentID, res.RequestID, da, msg, replyTarget)
 					return
 				}
 			}
@@ -83,6 +101,94 @@ func RunChannelReply(
 	}
 
 	sendReply(finalResponse)
+}
+
+// streamDingTalkReply creates a DingTalk interactive streaming card and pushes
+// incremental content updates as the OpenClaw agent generates tokens.
+func streamDingTalkReply(
+	app *application.App,
+	chatService *chat.ChatService,
+	convService *conversations.ConversationsService,
+	conversationID int64,
+	agentID int64,
+	requestID string,
+	adapter dingTalkStreamingAdapter,
+	msg channels.IncomingMessage,
+	replyTarget string,
+) {
+	cardBizID := fmt.Sprintf("oc-%d-%s", conversationID, requestID[:min(8, len(requestID))])
+
+	createCtx, createCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer createCancel()
+
+	initialCardData := channels.BuildStreamingCardData("▌")
+	if err := adapter.SendInteractiveCard(createCtx, replyTarget, cardBizID, initialCardData); err != nil {
+		app.Logger.Warn("openclaw channel: create dingtalk stream card failed, falling back to plain reply",
+			"conv", conversationID, "error", err)
+		_ = chatService.WaitForGeneration(conversationID, requestID)
+		resp := finalResponse(chatService, conversationID, requestID)
+		updateConversationMeta(app, convService, conversationID, agentID, resp)
+		return
+	}
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- chatService.WaitForGeneration(conversationID, requestID)
+	}()
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	lastSent := "▌"
+
+	for {
+		select {
+		case waitErr := <-waitCh:
+			if waitErr != nil {
+				app.Logger.Error("openclaw channel: dingtalk generation wait failed", "conv", conversationID, "error", waitErr)
+			}
+
+			resp := finalResponse(chatService, conversationID, requestID)
+			if strings.TrimSpace(resp) == "" {
+				resp = i18n.T("error.channel_ai_reply_empty")
+			}
+
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if updateErr := adapter.UpdateInteractiveCard(updateCtx, cardBizID, channels.BuildStreamingCardData(resp)); updateErr != nil {
+				app.Logger.Error("openclaw channel: final dingtalk stream update failed",
+					"conv", conversationID, "error", updateErr)
+			}
+			updateCancel()
+
+			updateConversationMeta(app, convService, conversationID, agentID, resp)
+			return
+
+		case <-ticker.C:
+			current, ok := chatService.GetGenerationContent(conversationID, requestID)
+			if !ok || strings.TrimSpace(current) == "" || current == lastSent {
+				continue
+			}
+
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if updateErr := adapter.UpdateInteractiveCard(updateCtx, cardBizID, channels.BuildStreamingCardData(current+"▌")); updateErr != nil {
+				app.Logger.Warn("openclaw channel: dingtalk stream update failed",
+					"conv", conversationID, "error", updateErr)
+				updateCancel()
+				continue
+			}
+			updateCancel()
+
+			lastSent = current
+		}
+	}
+}
+
+// min returns the smaller of a and b.
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // streamFeishuReply creates a Feishu streaming card and pushes

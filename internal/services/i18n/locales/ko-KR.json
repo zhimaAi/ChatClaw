@@ -206,6 +206,7 @@
   "error.channel_ai_reply_empty": "AI 응답 실패: 빈 응답이 생성되었습니다",
   "error.dingtalk_network_dns_failed": "DingTalk 연결 실패: DNS 확인 오류, 네트워크 또는 DNS 설정을 확인하세요",
   "channel.feishu_streaming_generating": "응답을 스트리밍 생성하는 중입니다. 잠시만 기다려 주세요...",
+  "channel.dingtalk_streaming_generating": "응답을 스트리밍 생성하는 중입니다. 잠시만 기다려 주세요...",
   "channel.feishu_stream_output_enabled": "스트리밍 출력을 켰습니다. 이후 답변은 생성되면서 전송됩니다.",
   "channel.feishu_stream_output_disabled": "스트리밍 출력을 껐습니다. 이후 답변은 전체 결과가 준비된 뒤 전송됩니다.",
   "channel.wecom_stream_output_enabled": "WeCom 스트리밍 출력을 켰습니다. 이후 답변은 생성되면서 전송됩니다.",

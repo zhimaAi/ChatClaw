@@ -19,7 +19,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// OpenClawChannelService provides Feishu-focused channel management for OpenClaw.
+// OpenClawChannelService provides channel management for OpenClaw (Feishu + DingTalk).
 // It delegates to the shared channels infrastructure while filtering by OpenClaw agents.
 type OpenClawChannelService struct {
 	app             *application.App
@@ -138,8 +138,7 @@ func (s *OpenClawChannelService) GetChannelStats() (*channels.ChannelStats, erro
 	return stats, nil
 }
 
-// GetSupportedPlatforms returns the same platform list as ChatClaw for UI parity (tabs + add dialog).
-// Only Feishu is actually createable; the frontend shows others as disabled with "coming soon".
+// GetSupportedPlatforms returns the platform list for OpenClaw (Feishu + DingTalk available; others coming soon).
 func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta {
 	return []channels.PlatformMeta{
 		{ID: channels.PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
@@ -150,12 +149,20 @@ func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta
 	}
 }
 
-// CreateChannel creates a new Feishu channel. When agent_id > 0, binds that OpenClaw agent;
+// CreateChannel creates a new channel (Feishu or DingTalk). When agent_id > 0, binds that OpenClaw agent;
 // when agent_id is 0, creates an unbound channel (UI binds via BindAgent or auto-generate later).
 func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*channels.Channel, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, errs.New("error.channel_name_required")
+	}
+
+	platform := strings.TrimSpace(input.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu // legacy default
+	}
+	if platform != channels.PlatformFeishu && platform != channels.PlatformDingTalk {
+		return nil, errs.Newf("error.channel_platform_unsupported", map[string]any{"Platform": platform})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -166,7 +173,7 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 
 	// Create local DB row first to obtain a stable channel ID for the account key.
 	ch, err := s.channelSvc.CreateChannel(channels.CreateChannelInput{
-		Platform:       channels.PlatformFeishu,
+		Platform:       platform,
 		Name:           name,
 		Avatar:         input.Avatar,
 		ConnectionType: channels.ConnTypeGateway,
@@ -177,7 +184,7 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, err
 	}
 
-	accountKey := feishuAccountKey(ch.ID, input.ExtraConfig)
+	accountKey := channelAccountKey(ch.ID, input.ExtraConfig)
 	extraConfigWithID, err := withOpenClawChannelID(input.ExtraConfig, accountKey)
 	if err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
@@ -189,7 +196,7 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	}
 	ch.ExtraConfig = extraConfigWithID
 
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, name, input.ExtraConfig, false); err != nil {
+	if err := s.setOpenClawChannelAccount(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
 		return nil, errs.Wrap("error.channel_create_failed", err)
 	}
@@ -229,14 +236,14 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 		extraConfig = strings.TrimSpace(*input.ExtraConfig)
 	}
 
-	accountKey := feishuAccountKey(id, extraConfig)
+	accountKey := channelAccountKey(id, extraConfig)
 
 	enabled := m.Enabled
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
 
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, name, extraConfig, enabled); err != nil {
+	if err := s.setOpenClawChannelAccount(ctx, m.Platform, accountKey, name, extraConfig, enabled); err != nil {
 		return nil, errs.Wrap("error.channel_update_failed", err)
 	}
 
@@ -265,20 +272,35 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
+	accountKey := channelAccountKey(id, m.ExtraConfig)
 	if err := s.ensureOpenClawReady(); err != nil {
 		return err
 	}
-	if err := s.removeOpenClawFeishuAccount(ctx, accountKey); err != nil {
-		s.app.Logger.Warn("openclaw config unset feishu account failed, proceeding with local delete", "account", accountKey, "error", err)
+
+	switch m.Platform {
+	case channels.PlatformDingTalk:
+		if err := s.removeOpenClawDingTalkAccount(ctx, accountKey); err != nil {
+			s.app.Logger.Warn("openclaw config unset dingtalk account failed, proceeding with local delete", "account", accountKey, "error", err)
+		}
+	default: // Feishu
+		if err := s.removeOpenClawFeishuAccount(ctx, accountKey); err != nil {
+			s.app.Logger.Warn("openclaw config unset feishu account failed, proceeding with local delete", "account", accountKey, "error", err)
+		}
 	}
 
 	if err := s.channelSvc.DeleteChannel(id); err != nil {
 		return err
 	}
 
-	if err := s.syncOpenClawFeishuDefaultAccount(ctx); err != nil {
-		s.app.Logger.Warn("openclaw feishu default account sync failed after delete", "error", err)
+	switch m.Platform {
+	case channels.PlatformDingTalk:
+		if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
+			s.app.Logger.Warn("openclaw dingtalk default account sync failed after delete", "error", err)
+		}
+	default:
+		if err := s.syncOpenClawFeishuDefaultAccount(ctx); err != nil {
+			s.app.Logger.Warn("openclaw feishu default account sync failed after delete", "error", err)
+		}
 	}
 	return nil
 }
@@ -308,8 +330,8 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, m.Name, m.ExtraConfig, true); err != nil {
+	accountKey := channelAccountKey(id, m.ExtraConfig)
+	if err := s.setOpenClawChannelAccount(ctx, m.Platform, accountKey, m.Name, m.ExtraConfig, true); err != nil {
 		return errs.Wrap("error.channel_connect_failed", err)
 	}
 
@@ -338,17 +360,20 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, m.Name, m.ExtraConfig, false); err != nil {
+	accountKey := channelAccountKey(id, m.ExtraConfig)
+	if err := s.setOpenClawChannelAccount(ctx, m.Platform, accountKey, m.Name, m.ExtraConfig, false); err != nil {
 		return errs.Wrap("error.channel_disconnect_failed", err)
 	}
 
 	return s.channelSvc.DisconnectChannel(id)
 }
 
-// VerifyChannelConfig verifies Feishu credentials.
-func (s *OpenClawChannelService) VerifyChannelConfig(extraConfig string) error {
-	return s.channelSvc.VerifyChannelConfig(channels.PlatformFeishu, extraConfig)
+// VerifyChannelConfig verifies platform credentials (Feishu or DingTalk).
+func (s *OpenClawChannelService) VerifyChannelConfig(platform, extraConfig string) error {
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
+	return s.channelSvc.VerifyChannelConfig(platform, extraConfig)
 }
 
 // EnsureAgentForChannel auto-creates an OpenClaw agent and binds it to the channel.
@@ -394,6 +419,8 @@ func (s *OpenClawChannelService) ListAgents() ([]openclawagents.OpenClawAgent, e
 
 // CreateChannelInput for OpenClaw channel creation.
 type CreateChannelInput struct {
+	// Platform selects the IM platform: "feishu" (default) or "dingtalk".
+	Platform    string `json:"platform"`
 	Name        string `json:"name"`
 	Avatar      string `json:"avatar"`
 	ExtraConfig string `json:"extra_config"`
@@ -472,17 +499,27 @@ func (s *OpenClawChannelService) getChannelModel(ctx context.Context, id int64) 
 	return &m, nil
 }
 
-// feishuAccountKey returns the OpenClaw config account key for a channel row.
+// channelAccountKey returns the OpenClaw config account key for a channel row.
 // The key is stored in extra_config.openclaw_channel_id when available, otherwise
 // derived from the local DB channel ID.
-func feishuAccountKey(channelID int64, extraConfig string) string {
+func channelAccountKey(channelID int64, extraConfig string) string {
 	if id := extractOpenClawChannelID(extraConfig); id != "" {
 		return id
 	}
 	return fmt.Sprintf("channel_%d", channelID)
 }
 
-// setOpenClawFeishuAccount writes a feishu account into the OpenClaw config via CLI.
+// setOpenClawChannelAccount dispatches to the correct platform-specific account setter.
+func (s *OpenClawChannelService) setOpenClawChannelAccount(ctx context.Context, platform, accountKey, name, extraConfig string, enabled bool) error {
+	switch platform {
+	case channels.PlatformDingTalk:
+		return s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, enabled)
+	default:
+		return s.setOpenClawFeishuAccount(ctx, accountKey, name, extraConfig, enabled)
+	}
+}
+
+// setOpenClawFeishuAccount writes a Feishu account into the OpenClaw config via CLI.
 // It uses `openclaw config set --batch-json` to atomically set appId, appSecret,
 // name and enabled in one call. The gateway file watcher hot-applies channel changes
 // without restart.
@@ -523,7 +560,44 @@ func (s *OpenClawChannelService) setOpenClawFeishuAccount(ctx context.Context, a
 	return nil
 }
 
-// removeOpenClawFeishuAccount removes a feishu account from the OpenClaw config.
+// setOpenClawDingTalkAccount writes a DingTalk account into the OpenClaw config via CLI.
+// DingTalk uses the dingtalk-connector plugin with clientId/clientSecret keys.
+func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context, accountKey, name, extraConfig string, enabled bool) error {
+	appID, appSecret := parseAppCredentialsPair(extraConfig)
+	if appID == "" {
+		return fmt.Errorf("dingtalk clientId (app_id) is required")
+	}
+
+	prefix := "channels.dingtalk-connector.accounts." + accountKey
+
+	type batchEntry struct {
+		Path  string `json:"path"`
+		Value any    `json:"value"`
+	}
+	batch := []batchEntry{
+		{Path: prefix + ".clientId", Value: appID},
+		{Path: prefix + ".clientSecret", Value: appSecret},
+		{Path: prefix + ".enabled", Value: enabled},
+	}
+	if name = strings.TrimSpace(name); name != "" {
+		batch = append(batch, batchEntry{Path: prefix + ".name", Value: name})
+	}
+	batch = append(batch,
+		batchEntry{Path: "channels.dingtalk-connector.enabled", Value: enabled},
+	)
+
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("marshal config batch: %w", err)
+	}
+	_, err = s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON))
+	if err != nil {
+		return fmt.Errorf("openclaw config set dingtalk-connector account %s: %w", accountKey, err)
+	}
+	return nil
+}
+
+// removeOpenClawFeishuAccount removes a Feishu account from the OpenClaw config.
 func (s *OpenClawChannelService) removeOpenClawFeishuAccount(ctx context.Context, accountKey string) error {
 	path := "channels.feishu.accounts." + accountKey
 	_, err := s.openclawManager.ExecCLI(ctx, "config", "unset", path)
@@ -533,20 +607,17 @@ func (s *OpenClawChannelService) removeOpenClawFeishuAccount(ctx context.Context
 	return nil
 }
 
-// setOpenClawFeishuEnabled toggles the channels.feishu.enabled flag.
-func (s *OpenClawChannelService) setOpenClawFeishuEnabled(ctx context.Context, enabled bool) error {
-	val := "false"
-	if enabled {
-		val = "true"
-	}
-	_, err := s.openclawManager.ExecCLI(ctx, "config", "set", "channels.feishu.enabled", val, "--strict-json")
+// removeOpenClawDingTalkAccount removes a DingTalk account from the OpenClaw config.
+func (s *OpenClawChannelService) removeOpenClawDingTalkAccount(ctx context.Context, accountKey string) error {
+	path := "channels.dingtalk-connector.accounts." + accountKey
+	_, err := s.openclawManager.ExecCLI(ctx, "config", "unset", path)
 	if err != nil {
-		return fmt.Errorf("openclaw config set channels.feishu.enabled: %w", err)
+		return fmt.Errorf("openclaw config unset dingtalk-connector account %s: %w", accountKey, err)
 	}
 	return nil
 }
 
-// syncOpenClawFeishuDefaultAccount recalculates which feishu account should be
+// syncOpenClawFeishuDefaultAccount recalculates which Feishu account should be
 // the default and whether feishu should be enabled, then writes the result.
 func (s *OpenClawChannelService) syncOpenClawFeishuDefaultAccount(ctx context.Context) error {
 	channelList, err := s.ListAllFeishuChannels()
@@ -561,7 +632,7 @@ func (s *OpenClawChannelService) syncOpenClawFeishuDefaultAccount(ctx context.Co
 		if appID == "" {
 			continue
 		}
-		key := feishuAccountKey(ch.ID, ch.ExtraConfig)
+		key := channelAccountKey(ch.ID, ch.ExtraConfig)
 		if defaultAccount == "" || ch.Enabled {
 			defaultAccount = key
 		}
@@ -586,5 +657,67 @@ func (s *OpenClawChannelService) syncOpenClawFeishuDefaultAccount(ctx context.Co
 	}
 	_, err = s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON))
 	return err
+}
+
+// syncOpenClawDingTalkDefaultAccount recalculates whether DingTalk should be enabled
+// after a channel deletion, then updates the config.
+func (s *OpenClawChannelService) syncOpenClawDingTalkDefaultAccount(ctx context.Context) error {
+	channelList, err := s.listAllDingTalkChannels()
+	if err != nil {
+		return err
+	}
+
+	anyEnabled := false
+	for _, ch := range channelList {
+		if ch.Enabled {
+			anyEnabled = true
+			break
+		}
+	}
+
+	type batchEntry struct {
+		Path  string `json:"path"`
+		Value any    `json:"value"`
+	}
+	batch := []batchEntry{
+		{Path: "channels.dingtalk-connector.enabled", Value: anyEnabled},
+	}
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return err
+	}
+	_, err = s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON))
+	return err
+}
+
+// listAllDingTalkChannels returns all DingTalk channels in OpenClaw scope.
+func (s *OpenClawChannelService) listAllDingTalkChannels() ([]channels.Channel, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var models []channelModel
+	q := db.NewSelect().
+		Model(&models).
+		Where("ch.platform = ?", channels.PlatformDingTalk).
+		Where(openClawChannelVisibilitySQL).
+		OrderExpr("ch.id DESC")
+	if err := q.Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.channel_list_failed", err)
+	}
+
+	out := make([]channels.Channel, 0, len(models))
+	for i := range models {
+		ch := models[i].toDTO()
+		if s.gateway.IsConnected(ch.ID) {
+			ch.Status = channels.StatusOnline
+		}
+		out = append(out, ch)
+	}
+	return out, nil
 }
 

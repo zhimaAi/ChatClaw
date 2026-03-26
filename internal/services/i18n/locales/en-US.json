@@ -207,6 +207,7 @@
   "error.openclaw_gateway_not_ready_channel": "OpenClaw runtime is not running. Please start OpenClaw on your desktop before sending messages.",
   "error.dingtalk_network_dns_failed": "DingTalk connection failed: DNS resolution error, please check network or DNS settings",
   "channel.feishu_streaming_generating": "Generating a streaming reply, please wait...",
+  "channel.dingtalk_streaming_generating": "Generating a streaming reply, please wait...",
   "channel.feishu_stream_output_enabled": "Streaming output is enabled. Future replies will be sent progressively.",
   "channel.feishu_stream_output_disabled": "Streaming output is disabled. Future replies will be sent after the full result is ready.",
   "channel.wecom_stream_output_enabled": "WeCom streaming output is enabled. Future replies will be sent progressively.",

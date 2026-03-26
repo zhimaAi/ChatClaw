@@ -206,6 +206,7 @@
   "error.channel_ai_reply_empty": "Risposta IA non riuscita: generata risposta vuota",
   "error.dingtalk_network_dns_failed": "Connessione DingTalk fallita: errore di risoluzione DNS, verificare la rete o le impostazioni DNS",
   "channel.feishu_streaming_generating": "Generazione della risposta in streaming, attendi...",
+  "channel.dingtalk_streaming_generating": "Generazione della risposta in streaming, attendi...",
   "channel.feishu_stream_output_enabled": "L'output in streaming è attivato. Le prossime risposte verranno inviate progressivamente.",
   "channel.feishu_stream_output_disabled": "L'output in streaming è disattivato. Le prossime risposte verranno inviate quando il risultato completo sarà pronto.",
   "channel.wecom_stream_output_enabled": "L'output in streaming di WeCom è attivato. Le prossime risposte verranno inviate progressivamente.",

@@ -296,9 +296,10 @@ async function handleCreateChannel() {
     })
 
     const platformId = selectedPlatformMeta.value.id
-    if (platformId === 'feishu') {
+    if (platformId === 'feishu' || platformId === 'dingtalk') {
       await OpenClawChannelService.CreateChannel(
         new CreateChannelInput({
+          platform: platformId,
           name: inlineFormName.value.trim(),
           avatar: inlineFormAvatar.value,
           extra_config: extraConfig,
@@ -403,8 +404,8 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    if (selectedPlatformMeta.value.id === 'feishu') {
-      await OpenClawChannelService.VerifyChannelConfig(extraConfig)
+    if (selectedPlatformMeta.value.id === 'feishu' || selectedPlatformMeta.value.id === 'dingtalk') {
+      await OpenClawChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     } else {
       await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     }

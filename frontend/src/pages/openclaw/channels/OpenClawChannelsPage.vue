@@ -65,9 +65,9 @@ defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** OpenClaw: only Feishu is available; other platforms show coming soon (same as Twitter on ChatClaw). */
+/** OpenClaw: Feishu and DingTalk are available; other platforms show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu'
+  return platformId === 'feishu' || platformId === 'dingtalk'
 }
 
 const channels = ref<Channel[]>([])
@@ -369,6 +369,7 @@ async function handleInlineSave() {
     }
 
     const channel = await OpenClawChannelService.CreateChannel({
+      platform: selectedPlatformMeta.value.id,
       name: inlineFormName.value.trim(),
       avatar: inlineFormAvatar.value,
       extra_config: extraConfig,
@@ -416,7 +417,7 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    await OpenClawChannelService.VerifyChannelConfig(extraConfig)
+    await OpenClawChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
