@@ -1692,9 +1692,6 @@ export default {
       today: "আজ",
       yearOption: "বছর {year}",
     },
-    confirmDelete: "মুছে ফেলা",
-    deleteConfirmTitle: "মুছে ফেলার নিশ্চিতকরণ",
-    deleteConfirmDescription: "আপনি কি নিশ্চিত যে \"{name}\" টাস্কটি মুছে ফেলতে চান? এই কাজটি পূর্বাবস্থায় ফেরানো যাবে না।",
     copy: "কপি",
     copySuffix: "কপি",
     expiredCannotEnable: "মেয়াদ শেষ, আর চালু করা যাবে না",
@@ -1748,12 +1745,5 @@ export default {
       viewDetail: "বিস্তারিত দেখুন",
     },
     runHistoryTitle: "চালনার ইতিহাস",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

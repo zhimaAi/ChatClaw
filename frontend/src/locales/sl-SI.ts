@@ -1700,9 +1700,6 @@ export default {
       today: "Danes",
       yearOption: "Leto {year}",
     },
-    confirmDelete: "Izbriši",
-    deleteConfirmTitle: "Potrditev brisanja",
-    deleteConfirmDescription: "Ali res želiš izbrisati opravilo \"{name}\"? Tega dejanja ni mogoče razveljaviti.",
     copy: "Kopiraj",
     copySuffix: "Kopija",
     expiredCannotEnable: "Je poteklo in ga ni več mogoče omogočiti",
@@ -1756,12 +1753,5 @@ export default {
       viewDetail: "Poglej podrobnosti",
     },
     runHistoryTitle: "Zgodovina zagonov",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

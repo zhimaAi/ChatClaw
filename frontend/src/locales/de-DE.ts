@@ -590,7 +590,6 @@ export default {
       freeVersion: "Kostenlos",
       authExpiredPleaseReauth: "Login expired or not found, please re-authorize.",
       libraryEnabledHint: "Sync ChatWiki knowledge base. When enabled, it will appear in team knowledge base when asking questions.",
-      unbindConfirmDesc: "After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?",
       modelServiceDesc: "Nach dem Binden von ChatWiki können verfügbare Modelle und Guthaben direkt im Modelldienst angezeigt werden.",
       notLoggedInTitle: "Nicht bei ChatWiki angemeldet",
       notLoggedInDesc: "Melden Sie sich an, um die Modellliste und das Guthaben von ChatWiki Cloud zu synchronisieren.",
@@ -1699,9 +1698,6 @@ export default {
       today: "Heute",
       yearOption: "Jahr {year}",
     },
-    confirmDelete: "Löschen",
-    deleteConfirmTitle: "Löschen bestätigen",
-    deleteConfirmDescription: "Möchtest du die Aufgabe „{name}“ wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden.",
     copy: "Kopieren",
     copySuffix: "Kopie",
     expiredCannotEnable: "Abgelaufen und kann nicht erneut aktiviert werden",
@@ -1755,12 +1751,5 @@ export default {
       viewDetail: "Details anzeigen",
     },
     runHistoryTitle: "Ausführungsverlauf",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

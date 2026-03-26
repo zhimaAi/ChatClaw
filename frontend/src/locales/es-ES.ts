@@ -1702,9 +1702,6 @@ export default {
       today: "Hoy",
       yearOption: "Año {year}",
     },
-    confirmDelete: "Eliminar",
-    deleteConfirmTitle: "Confirmar eliminación",
-    deleteConfirmDescription: "¿Seguro que quieres eliminar la tarea \"{name}\"? Esta acción no se puede deshacer.",
     copy: "Copiar",
     copySuffix: "Copia",
     expiredCannotEnable: "Ha caducado y ya no se puede activar",
@@ -1758,12 +1755,5 @@ export default {
       viewDetail: "Ver detalles",
     },
     runHistoryTitle: "Historial de ejecuciones",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

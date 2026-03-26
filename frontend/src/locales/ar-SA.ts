@@ -583,7 +583,6 @@ export default {
       startUsingHint: "انقر على ",
       startUsing: "ابدأ الاستخدام",
       freeVersion: "مجاني",
-      unbindConfirmDesc: "After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?",
       modelServiceDesc: "بعد ربط ChatWiki، يمكنك عرض النماذج المتاحة والرصيد مباشرةً في خدمة النماذج.",
       notLoggedInTitle: "لم تسجل الدخول إلى ChatWiki",
       notLoggedInDesc: "سجّل الدخول لمزامنة قائمة نماذج ChatWiki Cloud ورصيدك المتبقي.",
@@ -1685,9 +1684,6 @@ export default {
       today: "اليوم",
       yearOption: "السنة {year}",
     },
-    confirmDelete: "حذف",
-    deleteConfirmTitle: "تأكيد الحذف",
-    deleteConfirmDescription: "هل أنت متأكد من حذف المهمة \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
     copy: "نسخ",
     copySuffix: "نسخة",
     expiredCannotEnable: "انتهت الصلاحية ولا يمكن تفعيلها مرة أخرى",
@@ -1741,12 +1737,5 @@ export default {
       viewDetail: "عرض التفاصيل",
     },
     runHistoryTitle: "سجل التشغيل",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

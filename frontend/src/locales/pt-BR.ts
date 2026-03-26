@@ -1701,9 +1701,6 @@ export default {
       today: "Hoje",
       yearOption: "Ano {year}",
     },
-    confirmDelete: "Excluir",
-    deleteConfirmTitle: "Confirmar exclusão",
-    deleteConfirmDescription: "Tem certeza de que deseja excluir a tarefa \"{name}\"? Esta ação não pode ser desfeita.",
     copy: "Copiar",
     copySuffix: "Cópia",
     expiredCannotEnable: "Expirada, não pode mais ser ativada",
@@ -1757,12 +1754,5 @@ export default {
       viewDetail: "Ver detalhes",
     },
     runHistoryTitle: "Histórico de execuções",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

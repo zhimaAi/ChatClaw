@@ -1713,9 +1713,6 @@ export default {
       today: "आज",
       yearOption: "वर्ष {year}",
     },
-    confirmDelete: "हटाएं",
-    deleteConfirmTitle: "हटाने की पुष्टि",
-    deleteConfirmDescription: "क्या आप वाकई \"{name}\" कार्य को हटाना चाहते हैं? यह क्रिया वापस नहीं ली जा सकती।",
     copy: "कॉपी करें",
     copySuffix: "कॉपी",
     expiredCannotEnable: "समाप्त हो चुका है, दोबारा चालू नहीं किया जा सकता",
@@ -1769,12 +1766,5 @@ export default {
       viewDetail: "विवरण देखें",
     },
     runHistoryTitle: "रन इतिहास",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

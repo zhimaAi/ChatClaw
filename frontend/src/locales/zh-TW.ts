@@ -1698,9 +1698,6 @@ export default {
       today: "今天",
       yearOption: "{year} 年",
     },
-    confirmDelete: "刪除",
-    deleteConfirmTitle: "確認刪除",
-    deleteConfirmDescription: "確定要刪除任務「{name}」嗎？此操作無法復原。",
     copy: "複製",
     copySuffix: "副本",
     expiredCannotEnable: "已過期，不能再啟用",
@@ -1752,13 +1749,6 @@ export default {
         enabled: "啟用",
         disabled: "停用",
       },
-    },
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
     },
   },
 }

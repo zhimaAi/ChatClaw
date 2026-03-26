@@ -1699,9 +1699,6 @@ export default {
       today: "Bugün",
       yearOption: "Yıl {year}",
     },
-    confirmDelete: "Sil",
-    deleteConfirmTitle: "Silme onayı",
-    deleteConfirmDescription: "\"{name}\" görevini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
     copy: "Kopyala",
     copySuffix: "Kopya",
     expiredCannotEnable: "Süresi doldu, yeniden etkinleştirilemez",
@@ -1755,12 +1752,5 @@ export default {
       viewDetail: "Ayrıntıları görüntüle",
     },
     runHistoryTitle: "Çalıştırma geçmişi",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

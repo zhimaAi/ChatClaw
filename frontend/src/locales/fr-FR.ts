@@ -1697,9 +1697,6 @@ export default {
       today: "Aujourd'hui",
       yearOption: "Année {year}",
     },
-    confirmDelete: "Supprimer",
-    deleteConfirmTitle: "Confirmer la suppression",
-    deleteConfirmDescription: "Voulez-vous vraiment supprimer la tâche \"{name}\" ? Cette action est irréversible.",
     copy: "Copier",
     copySuffix: "Copie",
     expiredCannotEnable: "Cette tâche a expiré et ne peut plus être activée",
@@ -1753,12 +1750,5 @@ export default {
       viewDetail: "Voir les détails",
     },
     runHistoryTitle: "Historique des exécutions",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

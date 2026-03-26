@@ -1758,11 +1758,4 @@ export default {
     },
     runHistoryTitle: "実行履歴",
   },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
-  },
 }

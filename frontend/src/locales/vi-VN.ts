@@ -1697,9 +1697,6 @@ export default {
       today: "Hôm nay",
       yearOption: "Năm {year}",
     },
-    confirmDelete: "Xóa",
-    deleteConfirmTitle: "Xác nhận xóa",
-    deleteConfirmDescription: "Bạn có chắc muốn xóa tác vụ \"{name}\" không? Hành động này không thể hoàn tác.",
     copy: "Sao chép",
     copySuffix: "Bản sao",
     expiredCannotEnable: "Đã hết hạn, không thể bật lại",
@@ -1753,12 +1750,5 @@ export default {
       viewDetail: "Xem chi tiết",
     },
     runHistoryTitle: "Lịch sử chạy",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

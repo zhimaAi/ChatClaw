@@ -1775,7 +1775,6 @@ export default {
       status: 'Status',
       actions: 'Actions',
     },
-    conversationEmpty: '대화 내용 없음',
     dialog: {
       subtitleCreate: "자동화된 AI 작업 예약",
       subtitleEdit: "자동화된 AI 작업 업데이트",
@@ -1817,15 +1816,6 @@ export default {
       weekdays0900: "평일 오전 9:00",
       everyMonday0900: "매주 월요일 오전 9:00",
       everyMonth10900: "매월 1일 오전 9:00",
-    },
-    weekdays: {
-      sunday: 'Sunday',
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-      friday: 'Friday',
-      saturday: 'Saturday',
     },
     weekdaysShort: {
       sunday: "일",
@@ -1937,12 +1927,5 @@ export default {
       viewDetail: "상세 보기",
     },
     runHistoryTitle: "실행 기록",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

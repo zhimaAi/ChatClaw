@@ -1696,9 +1696,6 @@ export default {
       today: "Oggi",
       yearOption: "Anno {year}",
     },
-    confirmDelete: "Delete",
-    deleteConfirmDescription: "Vuoi davvero eliminare l'attività \"{name}\"? Questa azione non può essere annullata.",
-    deleteConfirmTitle: "Confirm Delete",
     copy: "Copia",
     copySuffix: "Copia",
     expiredCannotEnable: "È scaduta e non può più essere attivata",
@@ -1752,12 +1749,5 @@ export default {
       viewDetail: "Vedi dettagli",
     },
     runHistoryTitle: "Cronologia esecuzioni",
-  },
-  floatingball: {
-    menu: {
-      hide: "隐藏",
-      restart: "重启",
-      settings: "设置",
-    },
   },
 }

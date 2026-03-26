@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import AssistantPage from '@/pages/assistant/AssistantPage.vue'
+import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
 import { ChatEventType, useChatStore } from '@/stores/chat'
 import { ChatService } from '@bindings/chatclaw/internal/services/chat'
 import {
