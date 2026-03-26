@@ -534,7 +534,7 @@ onUnmounted(() => {
         v-show="navigationStore.activeTabId === tab.id"
         :tab-id="tab.id"
         :system-owner="tab.systemOwner"
-        class="h-full w-full"
+        class="absolute inset-0"
       />
     </template>
   </MainLayout>
