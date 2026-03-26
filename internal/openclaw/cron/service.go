@@ -68,6 +68,13 @@ const (
 	// openClawCronManualRunTabID scopes manual cron-triggered chat runs so the
 	// frontend can reuse the standard OpenClaw chat event pipeline.
 	openClawCronManualRunTabID = "openclaw-cron-manual-run"
+
+	// openClawCronHistoryStatusRunning is the temporary UI state before a durable
+	// run log or local manual-run completion proves a terminal result.
+	openClawCronHistoryStatusRunning = "running"
+	// openClawCronHistoryStatusSuccess is used for manual chat runs after the
+	// local conversation has finished and no durable run-log row exists.
+	openClawCronHistoryStatusSuccess = "success"
 )
 
 // OpenClawCronService wraps OpenClaw-native cron management for the Wails frontend.
@@ -113,6 +120,11 @@ type manualRunConversationRow struct {
 	CreatedAt          time.Time `bun:"created_at"`
 	UpdatedAt          time.Time `bun:"updated_at"`
 	OpenClawAgentID    string    `bun:"openclaw_agent_id"`
+}
+
+type manualConversationHistoryState struct {
+	Status     string
+	DurationMs int64
 }
 
 func NewOpenClawCronService(
@@ -364,13 +376,15 @@ func (s *OpenClawCronService) ListHistory(jobID string, limit int) ([]OpenClawCr
 	runItems := make([]OpenClawCronHistoryListItem, 0, len(runEntries))
 	for _, entry := range runEntries {
 		runItems = append(runItems, OpenClawCronHistoryListItem{
-			JobID:      strings.TrimSpace(jobID),
-			SessionID:  strings.TrimSpace(entry.SessionID),
-			SessionKey: strings.TrimSpace(entry.SessionKey),
-			Name:       buildCronConversationName(strings.TrimSpace(jobID), entry.RunAtMs, entry.TimestampMs),
-			Status:     strings.TrimSpace(entry.Status),
-			RunAtMs:    chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs),
-			Source:     OpenClawCronHistorySourceRunLog,
+			JobID:       strings.TrimSpace(jobID),
+			SessionID:   strings.TrimSpace(entry.SessionID),
+			SessionKey:  strings.TrimSpace(entry.SessionKey),
+			Name:        buildCronConversationName(strings.TrimSpace(jobID), entry.RunAtMs, entry.TimestampMs),
+			Status:      strings.TrimSpace(entry.Status),
+			RunAtMs:     chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs),
+			DurationMs:  entry.DurationMs,
+			TriggerType: normalizeHistoryTriggerType(entry.Action, OpenClawCronHistorySourceRunLog),
+			Source:      OpenClawCronHistorySourceRunLog,
 		})
 	}
 
@@ -378,6 +392,7 @@ func (s *OpenClawCronService) ListHistory(jobID string, limit int) ([]OpenClawCr
 	if err != nil {
 		return nil, err
 	}
+	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
 	s.reconcilePendingRuns(jobID, runEntries, conversationItems)
 	pendingItems := s.listPendingHistoryItems(jobID)
 
@@ -708,17 +723,63 @@ func (s *OpenClawCronService) listConversationHistoryItems(jobID string) ([]Open
 		if !matchesCronExternalID(conversation.ExternalID, jobID) {
 			continue
 		}
+		runAtMs := conversation.UpdatedAt.UnixMilli()
+		triggerType := normalizeHistoryTriggerType("", OpenClawCronHistorySourceConversation)
+		if triggerAtMs := parseManualTriggerAtMs(conversation.ExternalID); triggerAtMs > 0 {
+			runAtMs = triggerAtMs
+			triggerType = "manual"
+		}
+		historyStatus, historyDurationMs := deriveManualConversationHistoryState(
+			runAtMs,
+			conversation.UpdatedAt.UnixMilli(),
+			sessionKey,
+			s.chatSvc != nil && s.chatSvc.HasActiveGeneration(conversation.ID),
+		)
 		items = append(items, OpenClawCronHistoryListItem{
 			JobID:          strings.TrimSpace(jobID),
 			SessionKey:     sessionKey,
 			ConversationID: conversation.ID,
 			Name:           strings.TrimSpace(conversation.Name),
-			Status:         "running",
-			RunAtMs:        conversation.UpdatedAt.UnixMilli(),
+			Status:         historyStatus,
+			RunAtMs:        runAtMs,
+			DurationMs:     historyDurationMs,
+			TriggerType:    triggerType,
 			Source:         OpenClawCronHistorySourceConversation,
 		})
 	}
 	return items, nil
+}
+
+func enrichConversationHistoryItemsWithRunEntries(conversationItems []OpenClawCronHistoryListItem, runEntries []OpenClawCronRunEntry) {
+	for index := range conversationItems {
+		item := &conversationItems[index]
+		if isTerminalHistoryItem(*item) {
+			continue
+		}
+
+		for _, entry := range runEntries {
+			runAtMs := chooseRunTimestamp(entry.RunAtMs, entry.TimestampMs)
+			if !isCloseRunTimestamp(item.RunAtMs, runAtMs) {
+				continue
+			}
+			if item.SessionKey == "" {
+				item.SessionKey = strings.TrimSpace(entry.SessionKey)
+			}
+			if item.SessionID == "" {
+				item.SessionID = strings.TrimSpace(entry.SessionID)
+			}
+			if item.DurationMs <= 0 {
+				item.DurationMs = entry.DurationMs
+			}
+			if item.TriggerType == "" {
+				item.TriggerType = normalizeHistoryTriggerType(entry.Action, item.Source)
+			}
+			if item.Status == "" || item.Status == openClawCronHistoryStatusRunning {
+				item.Status = strings.TrimSpace(entry.Status)
+			}
+			break
+		}
+	}
 }
 
 func (s *OpenClawCronService) listPendingHistoryItems(jobID string) []OpenClawCronHistoryListItem {
@@ -737,8 +798,9 @@ func (s *OpenClawCronService) listPendingHistoryItems(jobID string) []OpenClawCr
 			SessionKey:     pending.SessionKey,
 			ConversationID: pending.ConversationID,
 			Name:           buildCronConversationName(pending.JobName, pending.TriggerAtMs, pending.TriggerAtMs),
-			Status:         "running",
+			Status:         openClawCronHistoryStatusRunning,
 			RunAtMs:        pending.TriggerAtMs,
+			TriggerType:    normalizeHistoryTriggerType("", OpenClawCronHistorySourcePending),
 			Source:         OpenClawCronHistorySourcePending,
 			IsPendingLocal: isPendingRunAwaitingBinding(pending),
 		})
@@ -1965,6 +2027,25 @@ func matchesCronExternalID(externalID string, jobID string) bool {
 	return trimmedExternalID == baseID || strings.HasPrefix(trimmedExternalID, baseID+":")
 }
 
+func parseManualTriggerAtMs(externalID string) int64 {
+	trimmedExternalID := strings.TrimSpace(externalID)
+	if trimmedExternalID == "" {
+		return 0
+	}
+	parts := strings.Split(trimmedExternalID, ":")
+	if len(parts) < 2 {
+		return 0
+	}
+	if parts[len(parts)-2] != "manual" {
+		return 0
+	}
+	triggerAtMs, err := strconv.ParseInt(strings.TrimSpace(parts[len(parts)-1]), 10, 64)
+	if err != nil || triggerAtMs <= 0 {
+		return 0
+	}
+	return triggerAtMs
+}
+
 func buildCronConversationName(jobName string, primaryTimeMs int64, fallbackTimeMs int64) string {
 	trimmedJobName := strings.TrimSpace(jobName)
 	if trimmedJobName == "" {
@@ -2174,7 +2255,69 @@ func preferHistoryItem(existing OpenClawCronHistoryListItem, incoming OpenClawCr
 			preferred.RunAtMs = incoming.RunAtMs
 		}
 	}
+	if preferred.DurationMs <= 0 {
+		if existing.DurationMs > 0 {
+			preferred.DurationMs = existing.DurationMs
+		} else {
+			preferred.DurationMs = incoming.DurationMs
+		}
+	}
+	if preferred.TriggerType == "" {
+		if existing.TriggerType != "" {
+			preferred.TriggerType = existing.TriggerType
+		} else {
+			preferred.TriggerType = incoming.TriggerType
+		}
+	}
 	return preferred
+}
+
+// deriveManualConversationHistoryState infers a terminal manual-run state from
+// the local conversation when the OpenClaw run log is not available.
+func deriveManualConversationHistoryState(
+	runAtMs int64,
+	updatedAtMs int64,
+	sessionKey string,
+	hasActiveGeneration bool,
+) (string, int64) {
+	state := manualConversationHistoryState{
+		Status:     openClawCronHistoryStatusRunning,
+		DurationMs: 0,
+	}
+	if hasActiveGeneration || strings.TrimSpace(sessionKey) == "" || runAtMs <= 0 || updatedAtMs <= runAtMs {
+		return state.Status, state.DurationMs
+	}
+	state.Status = openClawCronHistoryStatusSuccess
+	state.DurationMs = updatedAtMs - runAtMs
+	return state.Status, state.DurationMs
+}
+
+// isTerminalHistoryItem skips run-log enrichment only when the item already has
+// enough durable data for the history list.
+func isTerminalHistoryItem(item OpenClawCronHistoryListItem) bool {
+	if strings.TrimSpace(item.Status) == "" || strings.TrimSpace(item.Status) == openClawCronHistoryStatusRunning {
+		return false
+	}
+	return strings.TrimSpace(item.SessionKey) != "" && item.DurationMs > 0
+}
+
+func normalizeHistoryTriggerType(action string, source string) string {
+	normalizedAction := strings.ToLower(strings.TrimSpace(action))
+	switch normalizedAction {
+	case "manual", "run_now":
+		return "manual"
+	case "schedule", "scheduled", "cron":
+		return "schedule"
+	}
+
+	switch strings.TrimSpace(source) {
+	case OpenClawCronHistorySourceRunLog:
+		return "schedule"
+	case OpenClawCronHistorySourcePending, OpenClawCronHistorySourceConversation:
+		return "manual"
+	default:
+		return "manual"
+	}
 }
 
 func historySourceRank(source string) int {
@@ -2231,6 +2374,7 @@ type openClawJobStoreItem struct {
 	Name          string `json:"name"`
 	Description   string `json:"description"`
 	Enabled       bool   `json:"enabled"`
+	AgentID       string `json:"agentId"`
 	CreatedAtMs   int64  `json:"createdAtMs"`
 	UpdatedAtMs   int64  `json:"updatedAtMs"`
 	SessionTarget string `json:"sessionTarget"`
@@ -2284,7 +2428,7 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 		Enabled:            item.Enabled,
 		CreatedAtMs:        item.CreatedAtMs,
 		UpdatedAtMs:        item.UpdatedAtMs,
-		AgentID:            item.Payload.AgentID,
+		AgentID:            firstNonEmpty(item.AgentID, item.Payload.AgentID),
 		SessionTarget:      item.SessionTarget,
 		SessionKey:         item.SessionKey,
 		WakeMode:           item.WakeMode,

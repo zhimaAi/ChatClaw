@@ -11,7 +11,7 @@ import {
   type OpenClawCronJob,
   type OpenClawCronRunDetail,
 } from '@bindings/chatclaw/internal/openclaw/cron'
-import { formatOpenClawCronTime } from './utils'
+import { formatDurationMs, formatOpenClawCronTime } from './utils'
 
 const props = defineProps<{
   open: boolean
@@ -517,7 +517,9 @@ onBeforeUnmount(() => {
                   {{ formatOpenClawCronTime(run.run_at_ms) }}
                 </div>
                 <div class="flex w-full items-center gap-1 text-[11px] text-muted-foreground">
-                  <span class="truncate">{{ displayRunTriggerLabel(run.source) }}</span>
+                  <span class="shrink-0">{{ displayRunTriggerLabel(run.trigger_type || run.source) }}</span>
+                  <span class="shrink-0 text-muted-foreground/50">&middot;</span>
+                  <span class="truncate">{{ formatDurationMs(run.duration_ms) }}</span>
                   <span
                     v-if="isRunWaitingForAssociation(run)"
                     class="shrink-0 text-muted-foreground/70"

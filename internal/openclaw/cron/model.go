@@ -235,6 +235,8 @@ type OpenClawCronHistoryListItem struct {
 	Name           string `json:"name"`
 	Status         string `json:"status"`
 	RunAtMs        int64  `json:"run_at_ms"`
+	DurationMs     int64  `json:"duration_ms"`
+	TriggerType    string `json:"trigger_type"`
 	Source         string `json:"source"`
 	IsPendingLocal bool   `json:"is_pending_local"`
 }

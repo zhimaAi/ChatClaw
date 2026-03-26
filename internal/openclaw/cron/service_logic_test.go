@@ -35,6 +35,8 @@ func TestMergeHistoryItems_PrefersRunLogAndRetainsConversation(t *testing.T) {
 		SessionKey:     "agent:main:cron:job-1",
 		Status:         "ok",
 		RunAtMs:        200,
+		DurationMs:     2500,
+		TriggerType:    "manual",
 		Source:         OpenClawCronHistorySourceRunLog,
 		IsPendingLocal: false,
 	}}
@@ -60,6 +62,144 @@ func TestMergeHistoryItems_PrefersRunLogAndRetainsConversation(t *testing.T) {
 	}
 	if merged[0].SessionID != "session-1" {
 		t.Fatalf("expected session id from run log, got %q", merged[0].SessionID)
+	}
+	if merged[0].DurationMs != 2500 {
+		t.Fatalf("expected duration to be retained, got %d", merged[0].DurationMs)
+	}
+	if merged[0].TriggerType != "manual" {
+		t.Fatalf("expected trigger type to be retained, got %q", merged[0].TriggerType)
+	}
+}
+
+func TestNormalizeHistoryTriggerType(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		source string
+		want   string
+	}{
+		{name: "manual action wins", action: "manual", source: OpenClawCronHistorySourceRunLog, want: "manual"},
+		{name: "run log defaults to schedule", action: "", source: OpenClawCronHistorySourceRunLog, want: "schedule"},
+		{name: "pending defaults to manual", action: "", source: OpenClawCronHistorySourcePending, want: "manual"},
+		{name: "conversation defaults to manual", action: "", source: OpenClawCronHistorySourceConversation, want: "manual"},
+	}
+
+	for _, tc := range tests {
+		if got := normalizeHistoryTriggerType(tc.action, tc.source); got != tc.want {
+			t.Fatalf("%s: expected %q, got %q", tc.name, tc.want, got)
+		}
+	}
+}
+
+func TestEnrichConversationHistoryItemsWithRunEntries_FillsDurationForManualConversation(t *testing.T) {
+	conversationItems := []OpenClawCronHistoryListItem{{
+		JobID:       "job-1",
+		ConversationID: 42,
+		RunAtMs:     1774496838251,
+		Status:      "running",
+		TriggerType: "manual",
+	}}
+	runEntries := []OpenClawCronRunEntry{{
+		RunAtMs:     1774496838251,
+		DurationMs:  35506,
+		SessionKey:  "agent:main:cron:job-1:run:session-1",
+		SessionID:   "session-1",
+		Status:      "ok",
+		Action:      "finished",
+	}}
+
+	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
+
+	if conversationItems[0].DurationMs != 35506 {
+		t.Fatalf("expected duration to be backfilled, got %d", conversationItems[0].DurationMs)
+	}
+	if conversationItems[0].SessionKey != "agent:main:cron:job-1:run:session-1" {
+		t.Fatalf("expected session key to be backfilled, got %q", conversationItems[0].SessionKey)
+	}
+	if conversationItems[0].SessionID != "session-1" {
+		t.Fatalf("expected session id to be backfilled, got %q", conversationItems[0].SessionID)
+	}
+}
+
+func TestEnrichConversationHistoryItemsWithRunEntries_UpdatesStatusWhenConversationAlreadyHasSessionAndDuration(t *testing.T) {
+	conversationItems := []OpenClawCronHistoryListItem{{
+		JobID:          "job-1",
+		ConversationID: 42,
+		RunAtMs:        1774496838251,
+		SessionKey:     "agent:main:cron:job-1:run:session-1",
+		SessionID:      "session-1",
+		Status:         "running",
+		DurationMs:     35506,
+		TriggerType:    "manual",
+	}}
+	runEntries := []OpenClawCronRunEntry{{
+		RunAtMs:     1774496838251,
+		DurationMs:  35506,
+		SessionKey:  "agent:main:cron:job-1:run:session-1",
+		SessionID:   "session-1",
+		Status:      "ok",
+		Action:      "finished",
+	}}
+
+	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
+
+	if conversationItems[0].Status != "ok" {
+		t.Fatalf("expected status to be updated from run log, got %q", conversationItems[0].Status)
+	}
+}
+
+func TestDeriveManualConversationHistoryState(t *testing.T) {
+	tests := []struct {
+		name           string
+		runAtMs        int64
+		updatedAtMs    int64
+		sessionKey     string
+		active         bool
+		wantStatus     string
+		wantDurationMs int64
+	}{
+		{
+			name:           "active manual run stays running",
+			runAtMs:        1000,
+			updatedAtMs:    5000,
+			sessionKey:     "agent:main:conv_1",
+			active:         true,
+			wantStatus:     "running",
+			wantDurationMs: 0,
+		},
+		{
+			name:           "completed manual run shows success and duration",
+			runAtMs:        1000,
+			updatedAtMs:    5600,
+			sessionKey:     "agent:main:conv_1",
+			active:         false,
+			wantStatus:     "success",
+			wantDurationMs: 4600,
+		},
+		{
+			name:           "missing session key keeps pending state",
+			runAtMs:        1000,
+			updatedAtMs:    5600,
+			sessionKey:     "",
+			active:         false,
+			wantStatus:     "running",
+			wantDurationMs: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		status, durationMs := deriveManualConversationHistoryState(
+			tc.runAtMs,
+			tc.updatedAtMs,
+			tc.sessionKey,
+			tc.active,
+		)
+		if status != tc.wantStatus {
+			t.Fatalf("%s: expected status %q, got %q", tc.name, tc.wantStatus, status)
+		}
+		if durationMs != tc.wantDurationMs {
+			t.Fatalf("%s: expected duration %d, got %d", tc.name, tc.wantDurationMs, durationMs)
+		}
 	}
 }
 
