@@ -35,6 +35,7 @@ type gatewayClientOptions struct {
 	Scopes          []string
 	OnEvent         func(GatewayEventFrame)
 	OnDisconnect    func(error)
+	OnLateError     func(gatewayResponseFrame)
 }
 
 type GatewayClient struct {
@@ -403,11 +404,18 @@ func (c *GatewayClient) readLoop() {
 			c.mu.Unlock()
 			if ch != nil {
 				ch <- resp
+			} else if !resp.OK && c.opts.OnLateError != nil {
+				c.opts.OnLateError(resp)
 			}
 		case "event":
 			var event GatewayEventFrame
-			if json.Unmarshal(payload, &event) == nil && c.opts.OnEvent != nil {
-				c.opts.OnEvent(event)
+			if json.Unmarshal(payload, &event) == nil {
+				if event.Event != "tick" && event.Event != "health" {
+					fmt.Printf("[gateway-client] raw event: %s\n", string(payload))
+				}
+				if c.opts.OnEvent != nil {
+					c.opts.OnEvent(event)
+				}
 			}
 		}
 	}

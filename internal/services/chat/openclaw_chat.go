@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 
 	"github.com/google/uuid"
@@ -44,6 +45,19 @@ type openClawAgentConfig struct {
 	EnableThinking  bool
 	LibraryIDs      []int64
 	LibraryNames    map[int64]string
+}
+
+type openClawTranscriptMsg struct {
+	Role       string   `json:"role"`
+	Content    any      `json:"content"`
+	ToolUseID  string   `json:"tool_use_id,omitempty"`
+	ToolCallID string   `json:"toolCallId,omitempty"`
+	ToolName   string   `json:"toolName,omitempty"`
+	StopReason string   `json:"stopReason,omitempty"`
+	MediaPath  string   `json:"MediaPath,omitempty"`
+	MediaPaths []string `json:"MediaPaths,omitempty"`
+	MediaType  string   `json:"MediaType,omitempty"`
+	MediaTypes []string `json:"MediaTypes,omitempty"`
 }
 
 // openClawSessionKey builds the Gateway session key for a conversation.
@@ -144,12 +158,236 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 }
 
 // resolveOpenClawSessionKey prefers the session key persisted on the conversation record.
-// resolveOpenClawSessionKey 优先使用会话表中保存的真实 session_key，缺失时再回退到旧的 conv_<id> 规则。
+// When the stored value is missing, it falls back to the canonical conv_<id> key.
 func resolveOpenClawSessionKey(cfg openClawAgentConfig, conversationID int64) string {
 	if strings.TrimSpace(cfg.SessionKey) != "" {
 		return strings.TrimSpace(cfg.SessionKey)
 	}
 	return openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+}
+
+func buildOpenClawMessagesFromTranscript(conversationID int64, transcriptMessages []openClawTranscriptMsg) []Message {
+	// OpenClaw transcripts break a single agent turn into multiple
+	// assistant+toolResult messages (e.g. thinking→toolCalls→toolResults→
+	// thinking→toolCalls→toolResults→final text). We merge consecutive
+	// assistant/toolResult messages into one assistant Message and build
+	// ordered segments so the frontend can render them interleaved.
+
+	type toolCallEntry struct {
+		id   string
+		name string
+	}
+
+	type segment struct {
+		Type        string   `json:"type"`
+		Content     string   `json:"content,omitempty"`
+		ToolCallIDs []string `json:"tool_call_ids,omitempty"`
+	}
+
+	type assistantGroup struct {
+		segments     []segment
+		allToolCalls []map[string]any
+		toolResults  []Message
+		contentAll   strings.Builder
+		thinkingAll  strings.Builder
+		// pending tracks toolCall ids from the most recent assistant message,
+		// consumed in order by subsequent toolResult messages.
+		pending []toolCallEntry
+	}
+
+	// appendToolCallSegment adds a tool call id to the last 'tools' segment,
+	// or creates a new one if the last segment is not 'tools'.
+	appendToolCallSeg := func(g *assistantGroup, id string) {
+		if n := len(g.segments); n > 0 && g.segments[n-1].Type == "tools" {
+			g.segments[n-1].ToolCallIDs = append(g.segments[n-1].ToolCallIDs, id)
+		} else {
+			g.segments = append(g.segments, segment{Type: "tools", ToolCallIDs: []string{id}})
+		}
+	}
+
+	var messages []Message
+	var msgIDCounter int64
+	now := time.Now()
+
+	var group *assistantGroup
+
+	flushGroup := func() {
+		if group == nil {
+			return
+		}
+		msgIDCounter--
+		msg := Message{
+			ID:              msgIDCounter,
+			ConversationID:  conversationID,
+			Role:            "assistant",
+			Content:         group.contentAll.String(),
+			ThinkingContent: group.thinkingAll.String(),
+			Status:          StatusSuccess,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if len(group.allToolCalls) > 0 {
+			tc, _ := json.Marshal(group.allToolCalls)
+			msg.ToolCalls = string(tc)
+		}
+		if len(group.segments) > 0 {
+			seg, _ := json.Marshal(group.segments)
+			msg.Segments = string(seg)
+		}
+		messages = append(messages, msg)
+		messages = append(messages, group.toolResults...)
+		group = nil
+	}
+
+	for _, m := range transcriptMessages {
+		if m.Role == "system" {
+			continue
+		}
+
+		if m.Role == "toolResult" {
+			resultContent := extractTextFromContent(m.Content)
+			if group == nil {
+				group = &assistantGroup{}
+			}
+			if len(group.pending) > 0 {
+				tc := group.pending[0]
+				group.pending = group.pending[1:]
+				msgIDCounter--
+				group.toolResults = append(group.toolResults, Message{
+					ID:             msgIDCounter,
+					ConversationID: conversationID,
+					Role:           "tool",
+					Content:        resultContent,
+					ToolCallID:     tc.id,
+					ToolCallName:   tc.name,
+					Status:         StatusSuccess,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+				})
+			} else {
+				toolCallID := m.ToolCallID
+				if toolCallID == "" {
+					toolCallID = m.ToolUseID
+				}
+				toolName := m.ToolName
+				if toolCallID == "" {
+					toolCallID = fmt.Sprintf("tool_%d", -msgIDCounter)
+				}
+				group.allToolCalls = append(group.allToolCalls, map[string]any{
+					"id":       toolCallID,
+					"type":     "function",
+					"function": map[string]any{"name": toolName, "arguments": "{}"},
+				})
+				appendToolCallSeg(group, toolCallID)
+				msgIDCounter--
+				group.toolResults = append(group.toolResults, Message{
+					ID:             msgIDCounter,
+					ConversationID: conversationID,
+					Role:           "tool",
+					Content:        resultContent,
+					ToolCallID:     toolCallID,
+					ToolCallName:   toolName,
+					Status:         StatusSuccess,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+				})
+			}
+			continue
+		}
+
+		if m.Role == "assistant" {
+			if group == nil {
+				group = &assistantGroup{}
+			}
+			group.pending = nil
+
+			blocks, ok := m.Content.([]any)
+			if !ok {
+				if s, ok := m.Content.(string); ok && s != "" {
+					if group.contentAll.Len() > 0 {
+						group.contentAll.WriteString("\n")
+					}
+					group.contentAll.WriteString(s)
+					group.segments = append(group.segments, segment{Type: "content", Content: s})
+				}
+				continue
+			}
+			for _, block := range blocks {
+				bm, ok := block.(map[string]any)
+				if !ok {
+					continue
+				}
+				blockType, _ := bm["type"].(string)
+				switch blockType {
+				case "text":
+					if text, _ := bm["text"].(string); text != "" {
+						if group.contentAll.Len() > 0 {
+							group.contentAll.WriteString("\n")
+						}
+						group.contentAll.WriteString(text)
+						group.segments = append(group.segments, segment{Type: "content", Content: text})
+					}
+				case "thinking":
+					if t, _ := bm["thinking"].(string); t != "" {
+						if group.thinkingAll.Len() > 0 {
+							group.thinkingAll.WriteString("\n\n")
+						}
+						group.thinkingAll.WriteString(t)
+						group.segments = append(group.segments, segment{Type: "thinking", Content: t})
+					}
+				case "toolCall":
+					name, _ := bm["name"].(string)
+					id, _ := bm["id"].(string)
+					argsRaw := bm["arguments"]
+					argsJSON, _ := json.Marshal(argsRaw)
+					group.allToolCalls = append(group.allToolCalls, map[string]any{
+						"id":       id,
+						"type":     "function",
+						"function": map[string]any{"name": name, "arguments": string(argsJSON)},
+					})
+					entry := toolCallEntry{id: id, name: name}
+					group.pending = append(group.pending, entry)
+					appendToolCallSeg(group, id)
+				}
+			}
+			continue
+		}
+
+		flushGroup()
+
+		msgIDCounter--
+		contentStr := extractTextFromContent(m.Content)
+		attachments := buildOpenClawTranscriptAttachments(
+			m.Content,
+			contentStr,
+			m.MediaPath,
+			m.MediaPaths,
+			m.MediaType,
+			m.MediaTypes,
+		)
+		if m.Role == "user" {
+			contentStr = cleanOpenClawUserMessage(contentStr)
+		}
+
+		msg := Message{
+			ID:             msgIDCounter,
+			ConversationID: conversationID,
+			Role:           m.Role,
+			Content:        contentStr,
+			Status:         StatusSuccess,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+		if len(attachments) > 0 {
+			if b, err := json.Marshal(attachments); err == nil {
+				msg.ImagesJSON = string(b)
+			}
+		}
+		messages = append(messages, msg)
+	}
+	flushGroup()
+
+	return messages
 }
 
 // buildKnowledgeContextMessage wraps the user's message with a system instruction
@@ -179,6 +417,66 @@ func buildKnowledgeContextMessage(userContent string, libraryIDs []int64, librar
 	}
 	sb.WriteString("</chatclaw_context>")
 	return sb.String()
+}
+
+// openClawSessionKeyForAgent builds the Gateway session key for a conversation.
+// OpenClaw expects agent-scoped keys like "agent:<agentId>:..." (see session docs).
+// A bare "conv_<id>" is interpreted as the default agent ("main"), which breaks
+// runs when agentId is not "main". The previous "agentId:conv_<id>" form was
+// also rejected by the gateway; the canonical prefix is "agent:".
+func openClawSessionKeyForAgent(agentID string, conversationID int64) string {
+	id := strings.TrimSpace(agentID)
+	if id == "" {
+		id = define.OpenClawMainAgentID
+	}
+	return fmt.Sprintf("agent:%s:conv_%d", id, conversationID)
+}
+
+// GetOpenClawLastAssistantReply fetches the last assistant message text from
+// the OpenClaw Gateway session. Returns empty string if unavailable.
+func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string {
+	if s.openclawGateway == nil || !s.openclawGateway.IsReady() {
+		return ""
+	}
+
+	cfg, err := s.getOpenClawAgentConfig(conversationID)
+	if err != nil {
+		return ""
+	}
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var result struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content any    `json:"content"`
+		} `json:"messages"`
+	}
+	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
+		"key":   sessionKey,
+		"limit": 10,
+	}, &result); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get failed",
+			"conv", conversationID, "err", err)
+		return ""
+	}
+
+	s.app.Logger.Info("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get result",
+		"conv", conversationID, "message_count", len(result.Messages))
+
+	// Walk backwards to find the last assistant message with text content
+	for i := len(result.Messages) - 1; i >= 0; i-- {
+		msg := result.Messages[i]
+		s.app.Logger.Debug("[openclaw-chat] GetOpenClawLastAssistantReply: message",
+			"conv", conversationID, "index", i, "role", msg.Role)
+		if msg.Role == "assistant" {
+			if text := extractTextFromContent(msg.Content); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
 }
 
 func extractTextFromContent(content any) string {
@@ -596,295 +894,33 @@ func hasOpenClawImageAttachment(attachments []ImagePayload) bool {
 }
 
 // GetOpenClawMessages fetches conversation history from the OpenClaw Gateway
-// via the sessions.get WebSocket RPC method.
+// via the official chat.history RPC method.
 func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, error) {
 	if conversationID <= 0 {
 		return nil, errs.New("error.chat_conversation_id_required")
 	}
-	if s.openclawGateway == nil || !s.openclawGateway.IsReady() {
-		return nil, nil
-	}
 
 	cfg, err := s.getOpenClawAgentConfig(conversationID)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
-
 	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var rawResult struct {
-		Messages []json.RawMessage `json:"messages"`
+	var result struct {
+		Messages []openClawTranscriptMsg `json:"messages"`
 	}
-	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
-		"key":   sessionKey,
-		"limit": 200,
-	}, &rawResult); err != nil {
-		s.app.Logger.Warn("[openclaw-chat] sessions.get failed",
+	if err := s.openclawGateway.QueryRequest(ctx, "chat.history", map[string]any{
+		"sessionKey": sessionKey,
+		"limit":      200,
+	}, &result); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] chat.history failed",
 			"conv", conversationID, "err", err)
 		return nil, nil
 	}
 
-	type transcriptMsg struct {
-		Role       string   `json:"role"`
-		Content    any      `json:"content"`
-		ToolUseID  string   `json:"tool_use_id,omitempty"`
-		ToolCallID string   `json:"toolCallId,omitempty"`
-		ToolName   string   `json:"toolName,omitempty"`
-		MediaPath  string   `json:"MediaPath,omitempty"`
-		MediaPaths []string `json:"MediaPaths,omitempty"`
-		MediaType  string   `json:"MediaType,omitempty"`
-		MediaTypes []string `json:"MediaTypes,omitempty"`
-	}
-	var result struct {
-		Messages []transcriptMsg
-	}
-	for _, raw := range rawResult.Messages {
-		var msg transcriptMsg
-		if err := json.Unmarshal(raw, &msg); err == nil {
-			result.Messages = append(result.Messages, msg)
-		}
-	}
-
-	// OpenClaw transcripts break a single agent turn into multiple
-	// assistant+toolResult messages (e.g. thinking→toolCalls→toolResults→
-	// thinking→toolCalls→toolResults→final text). We merge consecutive
-	// assistant/toolResult messages into one assistant Message and build
-	// ordered segments so the frontend can render them interleaved.
-
-	type toolCallEntry struct {
-		id   string
-		name string
-	}
-
-	type segment struct {
-		Type        string   `json:"type"`
-		Content     string   `json:"content,omitempty"`
-		ToolCallIDs []string `json:"tool_call_ids,omitempty"`
-	}
-
-	type assistantGroup struct {
-		segments     []segment
-		allToolCalls []map[string]any
-		toolResults  []Message
-		contentAll   strings.Builder
-		thinkingAll  strings.Builder
-		// pending tracks toolCall ids from the most recent assistant message,
-		// consumed in order by subsequent toolResult messages.
-		pending []toolCallEntry
-	}
-
-	// appendToolCallSegment adds a tool call id to the last 'tools' segment,
-	// or creates a new one if the last segment is not 'tools'.
-	appendToolCallSeg := func(g *assistantGroup, id string) {
-		if n := len(g.segments); n > 0 && g.segments[n-1].Type == "tools" {
-			g.segments[n-1].ToolCallIDs = append(g.segments[n-1].ToolCallIDs, id)
-		} else {
-			g.segments = append(g.segments, segment{Type: "tools", ToolCallIDs: []string{id}})
-		}
-	}
-
-	var messages []Message
-	var msgIDCounter int64
-	now := time.Now()
-
-	var group *assistantGroup
-
-	flushGroup := func() {
-		if group == nil {
-			return
-		}
-		msgIDCounter--
-		msg := Message{
-			ID:              msgIDCounter,
-			ConversationID:  conversationID,
-			Role:            "assistant",
-			Content:         group.contentAll.String(),
-			ThinkingContent: group.thinkingAll.String(),
-			Status:          StatusSuccess,
-			CreatedAt:       now,
-			UpdatedAt:       now,
-		}
-		if len(group.allToolCalls) > 0 {
-			tc, _ := json.Marshal(group.allToolCalls)
-			msg.ToolCalls = string(tc)
-		}
-		if len(group.segments) > 0 {
-			seg, _ := json.Marshal(group.segments)
-			msg.Segments = string(seg)
-			var segTypes []string
-			for _, s := range group.segments {
-				segTypes = append(segTypes, s.Type)
-			}
-			s.app.Logger.Debug("[openclaw-chat] flushGroup segments",
-				"conv", conversationID, "segTypes", segTypes)
-		}
-		messages = append(messages, msg)
-		messages = append(messages, group.toolResults...)
-		group = nil
-	}
-
-	// Dump transcript structure for debugging
-	for i, m := range result.Messages {
-		contentJSON, _ := json.Marshal(m.Content)
-		s.app.Logger.Info("[openclaw-chat] transcript msg",
-			"conv", conversationID, "idx", i, "role", m.Role,
-			"content", string(contentJSON))
-	}
-
-	for _, m := range result.Messages {
-		if m.Role == "system" {
-			continue
-		}
-
-		if m.Role == "toolResult" {
-			resultContent := extractTextFromContent(m.Content)
-			if group == nil {
-				group = &assistantGroup{}
-			}
-			if len(group.pending) > 0 {
-				tc := group.pending[0]
-				group.pending = group.pending[1:]
-				msgIDCounter--
-				group.toolResults = append(group.toolResults, Message{
-					ID:             msgIDCounter,
-					ConversationID: conversationID,
-					Role:           "tool",
-					Content:        resultContent,
-					ToolCallID:     tc.id,
-					ToolCallName:   tc.name,
-					Status:         StatusSuccess,
-					CreatedAt:      now,
-					UpdatedAt:      now,
-				})
-			} else {
-				// No pending toolCall blocks — extract tool info from
-				// the toolResult message fields.
-				toolCallID := m.ToolCallID
-				if toolCallID == "" {
-					toolCallID = m.ToolUseID
-				}
-				toolName := m.ToolName
-				if toolCallID == "" {
-					toolCallID = fmt.Sprintf("tool_%d", -msgIDCounter)
-				}
-				group.allToolCalls = append(group.allToolCalls, map[string]any{
-					"id":       toolCallID,
-					"type":     "function",
-					"function": map[string]any{"name": toolName, "arguments": "{}"},
-				})
-				appendToolCallSeg(group, toolCallID)
-				msgIDCounter--
-				group.toolResults = append(group.toolResults, Message{
-					ID:             msgIDCounter,
-					ConversationID: conversationID,
-					Role:           "tool",
-					Content:        resultContent,
-					ToolCallID:     toolCallID,
-					ToolCallName:   toolName,
-					Status:         StatusSuccess,
-					CreatedAt:      now,
-					UpdatedAt:      now,
-				})
-			}
-			continue
-		}
-
-		if m.Role == "assistant" {
-			if group == nil {
-				group = &assistantGroup{}
-			}
-			group.pending = nil
-
-			blocks, ok := m.Content.([]any)
-			if !ok {
-				if s, ok := m.Content.(string); ok && s != "" {
-					if group.contentAll.Len() > 0 {
-						group.contentAll.WriteString("\n")
-					}
-					group.contentAll.WriteString(s)
-					group.segments = append(group.segments, segment{Type: "content", Content: s})
-				}
-				continue
-			}
-			for _, block := range blocks {
-				bm, ok := block.(map[string]any)
-				if !ok {
-					continue
-				}
-				blockType, _ := bm["type"].(string)
-				switch blockType {
-				case "text":
-					if text, _ := bm["text"].(string); text != "" {
-						if group.contentAll.Len() > 0 {
-							group.contentAll.WriteString("\n")
-						}
-						group.contentAll.WriteString(text)
-						group.segments = append(group.segments, segment{Type: "content", Content: text})
-					}
-				case "thinking":
-					if t, _ := bm["thinking"].(string); t != "" {
-						if group.thinkingAll.Len() > 0 {
-							group.thinkingAll.WriteString("\n\n")
-						}
-						group.thinkingAll.WriteString(t)
-						group.segments = append(group.segments, segment{Type: "thinking", Content: t})
-					}
-				case "toolCall":
-					name, _ := bm["name"].(string)
-					id, _ := bm["id"].(string)
-					argsRaw := bm["arguments"]
-					argsJSON, _ := json.Marshal(argsRaw)
-					group.allToolCalls = append(group.allToolCalls, map[string]any{
-						"id":       id,
-						"type":     "function",
-						"function": map[string]any{"name": name, "arguments": string(argsJSON)},
-					})
-					entry := toolCallEntry{id: id, name: name}
-					group.pending = append(group.pending, entry)
-					appendToolCallSeg(group, id)
-				}
-			}
-			continue
-		}
-
-		// User or other role: flush any pending assistant group first.
-		flushGroup()
-
-		msgIDCounter--
-		contentStr := extractTextFromContent(m.Content)
-		attachments := buildOpenClawTranscriptAttachments(
-			m.Content,
-			contentStr,
-			m.MediaPath,
-			m.MediaPaths,
-			m.MediaType,
-			m.MediaTypes,
-		)
-		if m.Role == "user" {
-			contentStr = cleanOpenClawUserMessage(contentStr)
-		}
-
-		msg := Message{
-			ID:             msgIDCounter,
-			ConversationID: conversationID,
-			Role:           m.Role,
-			Content:        contentStr,
-			Status:         StatusSuccess,
-			CreatedAt:      now,
-			UpdatedAt:      now,
-		}
-		if len(attachments) > 0 {
-			if b, err := json.Marshal(attachments); err == nil {
-				msg.ImagesJSON = string(b)
-			}
-		}
-		messages = append(messages, msg)
-	}
-	flushGroup()
-
-	return messages, nil
+	return buildOpenClawMessagesFromTranscript(conversationID, result.Messages), nil
 }
 
 // SendOpenClawMessage sends a message via the OpenClaw WebSocket chat.run API.
@@ -1071,6 +1107,7 @@ func (s *ChatService) emitOpenClawUserMessage(conversationID int64, tabID, reque
 
 // openClawChatRunState tracks the streaming state for a single chat.send invocation.
 type openClawChatRunState struct {
+	requestID       string
 	contentBuilder  strings.Builder
 	thinkingBuilder strings.Builder
 	finishReason    string
@@ -1154,7 +1191,7 @@ func (s *ChatService) handleOpenClawAgentEvent(
 
 		st.contentBuilder.WriteString(d.Delta)
 		st.emittedContent = st.contentBuilder.String()
-		s.appendGenerationContent(conversationID, "", d.Delta)
+		s.appendGenerationContent(conversationID, st.requestID, d.Delta)
 		emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent: ce(),
 			Delta:     d.Delta,
@@ -1486,7 +1523,7 @@ func (s *ChatService) processOpenClawContentBlocks(
 		st.emittedContent = newText
 		st.contentBuilder.Reset()
 		st.contentBuilder.WriteString(newText)
-		s.appendGenerationContent(conversationID, "", delta)
+		s.appendGenerationContent(conversationID, st.requestID, delta)
 		emit(EventChatChunk, ChatChunkEvent{
 			ChatEvent: ce(),
 			Delta:     delta,
@@ -1501,7 +1538,7 @@ func (s *ChatService) processOpenClawContentBlocks(
 // concurrent "agent" and "chat" events for real-time streaming output.
 // Agent events provide text/tool deltas; chat events provide thinking blocks.
 func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int64, tabID, requestID, userContent string, attachments []ImagePayload, cfg openClawAgentConfig) {
-	st := &openClawChatRunState{}
+	st := &openClawChatRunState{requestID: requestID}
 
 	assistantMsgID := -conversationID*1000 - int64(time.Now().UnixMilli()%100000)
 
@@ -1548,17 +1585,35 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 
 	// Listen for all gateway events and route accordingly.
 	s.openclawGateway.AddEventListener(listenerKey, func(event string, payload json.RawMessage) {
-		s.app.Logger.Debug("[openclaw-chat] event received",
+		s.app.Logger.Info("[openclaw-chat] event received",
 			"conv", conversationID, "event", event,
 			"payloadLen", len(payload))
 
-		if event == "chat" {
+		switch event {
+		case "chat":
 			s.handleOpenClawChatEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
-			return
-		}
-		// Handle "agent" events for streaming text, tools, and lifecycle.
-		if event == "agent" {
+		case "agent":
 			s.handleOpenClawAgentEvent(conversationID, sessionKey, &activeRunID, st, done, ce, emit, emitError, payload)
+		case "agent_late_error":
+			var errEvt struct {
+				Error string `json:"error"`
+				RunID string `json:"runId"`
+			}
+			if json.Unmarshal(payload, &errEvt) != nil {
+				return
+			}
+			// Only handle if runId matches or we haven't captured a runId yet
+			if rid, _ := activeRunID.Load().(string); rid != "" && errEvt.RunID != "" && errEvt.RunID != rid {
+				return
+			}
+			s.app.Logger.Error("[openclaw-chat] late error from gateway",
+				"conv", conversationID, "runId", errEvt.RunID, "error", errEvt.Error)
+			emitError("error.chat_generation_failed", map[string]any{"Error": errEvt.Error})
+			select {
+			case <-done:
+			default:
+				close(done)
+			}
 		}
 	})
 
@@ -1594,6 +1649,13 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		params["thinking"] = "medium"
 	}
 
+	s.app.Logger.Info("[openclaw-chat] sending agent RPC",
+		"conv", conversationID,
+		"agentId", cfg.OpenClawAgentID,
+		"sessionKey", sessionKey,
+		"idempotencyKey", idempotencyKey,
+		"contentLen", len(userContent))
+
 	var runResult struct {
 		RunID string `json:"runId"`
 	}
@@ -1618,6 +1680,10 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		"conv", conversationID, "runId", runResult.RunID)
 
 	// Wait for the run to finish via lifecycle "end" event or context cancel.
+	// The agent RPC may return before all streaming events are delivered
+	// (e.g., the Gateway sends an early ack with runId). Wait for the
+	// actual completion signal from lifecycle "end" / chat "final" events
+	// so we don't tear down the event listener prematurely.
 	select {
 	case <-done:
 		s.app.Logger.Info("[openclaw-chat] run finished via lifecycle event",
@@ -1636,11 +1702,25 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			Status:    StatusCancelled,
 		})
 		return
+	default:
+		s.app.Logger.Info("[openclaw-chat] agent RPC returned before completion event, waiting for events",
+			"conv", conversationID, "runId", runResult.RunID)
+		select {
+		case <-done:
+		case <-ctx.Done():
+			emit(EventChatStopped, ChatStoppedEvent{
+				ChatEvent: ce(),
+				Status:    StatusCancelled,
+			})
+			return
+		case <-time.After(3 * time.Minute):
+			s.app.Logger.Warn("[openclaw-chat] timed out waiting for agent completion events",
+				"conv", conversationID, "runId", runResult.RunID)
+		}
 	}
 	if st.finishReason == "" {
 		st.finishReason = "stop"
 	}
-
 	emit(EventChatComplete, ChatCompleteEvent{
 		ChatEvent:    ce(),
 		Status:       StatusSuccess,

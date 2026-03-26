@@ -34,6 +34,7 @@ import (
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/memory"
 	"chatclaw/internal/services/multiask"
+	openclawchannels "chatclaw/internal/services/openclaw/channels"
 	"chatclaw/internal/services/providers"
 	"chatclaw/internal/services/scheduledtasks"
 	"chatclaw/internal/services/settings"
@@ -282,6 +283,8 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return nil, nil, fmt.Errorf("ensure openclaw main agent: %w", err)
 	}
 	app.RegisterService(application.NewService(openClawAgentsService))
+	// 注册 OpenClaw Runtime 管理器（供 OpenClaw Agent/Channel 与聊天桥接复用）
+	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	// 注册会话服务
 	conversationsService := conversations.NewConversationsService(app)
 	app.RegisterService(application.NewService(conversationsService))
@@ -342,13 +345,15 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		return ensureChannelAgent(agentsService, channelName)
 	})
 	app.RegisterService(application.NewService(channelService))
+	// 注册 OpenClaw 频道服务（Feishu-focused channel management for OpenClaw）
+	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService, openclawManager)
+	app.RegisterService(application.NewService(openClawChannelService))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))
 	// 注册工具链服务（管理 uv、bun 等外部工具的安装/更新，前端可调用）
 	toolchainService := toolchain.NewToolchainService(app)
 	app.RegisterService(application.NewService(toolchainService))
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
-	openclawManager := openclawruntime.NewManager(app, settings.NewSettingsService(app))
 	configSvc := openclawruntime.NewConfigService(openclawManager)
 	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))

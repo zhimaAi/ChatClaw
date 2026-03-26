@@ -21,7 +21,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
-import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
+import { type ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -35,7 +35,6 @@ import { LibraryService, type Library } from '@bindings/chatclaw/internal/servic
 import {
   ChatWikiService,
   TeamChatInput,
-  type Robot,
 } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
@@ -53,7 +52,6 @@ import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
 import { useTeamRobots } from './composables/useTeamRobots'
-import { supportsMultimodal } from '@/composables/useMultimodal'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -459,7 +457,7 @@ const handleDeleted = (id: number) => {
   })
 }
 
-const handleNewConversation = () => {
+const handleNewConversation = async () => {
   // Clear selection; only purge cached messages if the conversation is not actively streaming
   // (another tab may still be using it).
   if (activeConversationId.value && !chatStore.isGenerating(activeConversationId.value).value) {
@@ -530,11 +528,11 @@ async function restoreSnapCache() {
   }
 }
 
-const handleNewConversationForAgent = (agentId: number) => {
+const handleNewConversationForAgent = async (agentId: number) => {
   if (activeAgentId.value !== agentId) {
     activeAgentId.value = agentId
   }
-  handleNewConversation()
+  await handleNewConversation()
 }
 
 const handleNewConversationForTeamRobot = (robotId: string) => {
@@ -559,7 +557,7 @@ function handleSnapNewConversation() {
   if (listMode.value === 'team' && activeTeamRobotId.value) {
     handleNewConversationForTeamRobot(activeTeamRobotId.value)
   } else {
-    handleNewConversation()
+    void handleNewConversation()
   }
 }
 
@@ -1401,6 +1399,7 @@ let unsubscribeConversationsChanged: (() => void) | null = null
 let unsubscribeAgentsChanged: (() => void) | null = null
 let unsubscribeModelsChanged: (() => void) | null = null
 let unsubscribeMessagesChanged: (() => void) | null = null
+let unsubscribeChannelConversationActivated: (() => void) | null = null
 // Snap mode event listeners
 let unsubscribeSnapSettings: (() => void) | null = null
 let unsubscribeSnapStateChanged: (() => void) | null = null
@@ -1665,6 +1664,59 @@ onMounted(() => {
     }
   })
 
+  // Listen for channel-originated conversations to auto-navigate
+  unsubscribeChannelConversationActivated = Events.On(
+    'channel:conversation-activated',
+    async (event: any) => {
+      const payload = Array.isArray(event?.data) ? event.data[0] : (event?.data ?? event)
+      const eventAgentType = String(payload?.agent_type ?? '')
+      if (eventAgentType !== 'openclaw') return
+
+      const agentId = Number(payload?.agent_id)
+      const conversationId = Number(payload?.conversation_id)
+      if (!agentId || !conversationId) return
+
+      // Refresh conversations for this agent to include the new/updated one
+      await loadConversations(agentId, {
+        preserveSelection: true,
+        force: true,
+        activeAgentId: activeAgentId.value,
+        affectActiveSelection: false,
+      })
+
+      // Navigate to the openclaw-assistant module if not already active
+      if (!isTabActive.value) {
+        navigationStore.navigateToModule('openclaw')
+      }
+
+      // Select the agent if not already selected
+      if (activeAgentId.value !== agentId) {
+        activeAgentId.value = agentId
+        listMode.value = 'personal'
+      }
+
+      // Wait a tick for the UI to update after agent switch
+      await nextTick()
+
+      // Find the conversation and select it
+      const allConvs = getAllAgentConversations(agentId)
+      const conv = allConvs.find((c) => c.id === conversationId)
+      if (conv) {
+        handleSelectConversation(conv)
+      } else {
+        // Conversation may not be in the truncated list; load it directly
+        try {
+          const fetched = await ConversationsService.GetConversation(conversationId)
+          if (fetched) {
+            handleSelectConversation(fetched)
+          }
+        } catch {
+          // Silently ignore — conversation may have been deleted
+        }
+      }
+    }
+  )
+
   // Listen for model/provider changes from settings page (e.g., add/delete model, enable/disable provider)
   unsubscribeModelsChanged = Events.On('models:changed', () => {
     void loadModels()
@@ -1705,6 +1757,8 @@ onUnmounted(() => {
   unsubscribeModelsChanged = null
   unsubscribeChatCompleteTeamDialogue?.()
   unsubscribeChatCompleteTeamDialogue = null
+  unsubscribeChannelConversationActivated?.()
+  unsubscribeChannelConversationActivated = null
 
   // Snap mode cleanup
   unsubscribeSnapSettings?.()

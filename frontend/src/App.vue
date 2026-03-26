@@ -26,11 +26,13 @@ const DocumentViewerPage = defineAsyncComponent(
   () => import('@/pages/document/DocumentViewerPage.vue')
 )
 const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/ChannelsPage.vue'))
-const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawPage.vue'))
-const OpenClawDashboardPage = defineAsyncComponent(
-  () => import('@/pages/openclaw/OpenClawDashboardPage.vue')
+const OpenClawChannelsPage = defineAsyncComponent(
+  () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
 )
+const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawPage.vue'))
+const OpenClawDashboardPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawDashboardPage.vue'))
 const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue'))
+
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
@@ -152,6 +154,7 @@ const moduleComponents: Record<NavModule, unknown> = {
   multiask: MultiaskPage,
   document: DocumentViewerPage,
   channels: ChannelsPage,
+  'openclaw-channels': OpenClawChannelsPage,
   tools: ToolsPage,
 }
 
@@ -169,10 +172,9 @@ watch(
   () => navigationStore.tabs.length,
   (len) => {
     if (len === 0) {
-      navigationStore.navigateToModule(
-        resolveAssistantModule(appStore.currentSystem),
-        appStore.currentSystem
-      )
+      const module: NavModule =
+        appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant'
+      navigationStore.navigateToModule(module, appStore.currentSystem)
     }
   },
   { immediate: true }

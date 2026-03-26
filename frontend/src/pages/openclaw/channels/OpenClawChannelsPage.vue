@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,7 +18,6 @@ import {
 import IconChannels from '@/assets/icons/channelsMax.svg'
 import IconCheck from '@/assets/icons/check-icon.svg'
 import IconClose from '@/assets/icons/close-icon.svg'
-import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -44,33 +44,36 @@ import {
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
-import { getPlatformDocsUrl, openExternalLink } from './platformDocs'
-import { ChannelService, UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
+import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
+import { getPlatformIcon } from '@/pages/common/channelUtils'
+import {
+  OpenClawChannelService,
+} from '@bindings/chatclaw/internal/services/openclaw/channels'
+import {
+  OpenClawAgentsService,
+  CreateOpenClawAgentInput,
+} from '@bindings/chatclaw/internal/openclaw/agents'
+import { UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type {
   Channel,
   ChannelStats,
   PlatformMeta,
 } from '@bindings/chatclaw/internal/services/channels'
-import { AgentsService, type Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 
 defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** Platforms that support add/filter in UI (feishu + wecom + dingtalk + qq). */
+/** OpenClaw: only Feishu is available; other platforms show coming soon (same as Twitter on ChatClaw). */
 function isChannelPlatformSelectable(platformId: string) {
-  return (
-    platformId === 'feishu' ||
-    platformId === 'wecom' ||
-    platformId === 'dingtalk' ||
-    platformId === 'qq'
-  )
+  return platformId === 'feishu'
 }
 
 const channels = ref<Channel[]>([])
 const stats = ref<ChannelStats>({ total: 0, connected: 0, disconnected: 0 })
 const platforms = ref<PlatformMeta[]>([])
-const agents = ref<Agent[]>([])
+const agents = ref<OpenClawAgent[]>([])
 const loading = ref(false)
 const addDialogOpen = ref(false)
 const configDialogOpen = ref(false)
@@ -80,7 +83,6 @@ const deleteDialogOpen = ref(false)
 const channelToDelete = ref<Channel | null>(null)
 const bindDialogOpen = ref(false)
 const channelToBind = ref<Channel | null>(null)
-/** True when bind dialog was opened right after creating a channel (show auto-generate option) */
 const bindFromCreate = ref(false)
 const toggleDialogOpen = ref(false)
 const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
@@ -111,24 +113,6 @@ const selectedPlatformMeta = computed(() => {
   return platforms.value.find((p) => p.id === selectedFilter.value) || null
 })
 
-const isInlineWeCom = computed(() => selectedPlatformMeta.value?.id === 'wecom')
-const inlineAppIdLabel = computed(() =>
-  isInlineWeCom.value ? t('channels.config.wecomBotId') : t('channels.config.appId')
-)
-const inlineAppSecretLabel = computed(() =>
-  isInlineWeCom.value ? t('channels.config.wecomSecret') : t('channels.config.appSecret')
-)
-const inlineAppIdPlaceholder = computed(() =>
-  isInlineWeCom.value
-    ? t('channels.config.wecomAppIdPlaceholder')
-    : t('channels.config.appIdPlaceholder')
-)
-const inlineAppSecretPlaceholder = computed(() =>
-  isInlineWeCom.value
-    ? t('channels.config.wecomAppSecretPlaceholder')
-    : t('channels.config.appSecretPlaceholder')
-)
-
 const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
   return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
@@ -138,10 +122,10 @@ async function loadData() {
   loading.value = true
   try {
     const [channelList, channelStats, platformList, agentsList] = await Promise.all([
-      ChannelService.ListChannels(),
-      ChannelService.GetChannelStats(),
-      ChannelService.GetSupportedPlatforms(),
-      AgentsService.ListAgents(),
+      OpenClawChannelService.ListChannels(),
+      OpenClawChannelService.GetChannelStats(),
+      OpenClawChannelService.GetSupportedPlatforms(),
+      OpenClawChannelService.ListAgents(),
     ])
     channels.value = channelList || []
     stats.value = channelStats || { total: 0, connected: 0, disconnected: 0 }
@@ -198,7 +182,7 @@ function confirmDelete(channel: Channel) {
 async function handleDelete() {
   if (!channelToDelete.value) return
   try {
-    await ChannelService.DeleteChannel(channelToDelete.value.id)
+    await OpenClawChannelService.DeleteChannel(channelToDelete.value.id)
     toast.success(t('channels.delete.success'))
     loadData()
   } catch (error) {
@@ -211,8 +195,8 @@ async function handleDelete() {
 
 async function handleEnableChannel(channel: Channel) {
   try {
-    await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: true }))
-    await ChannelService.ConnectChannel(channel.id)
+    await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: true }))
+    await OpenClawChannelService.ConnectChannel(channel.id)
     toast.success(t('channels.toggle.enableSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -223,8 +207,8 @@ async function handleEnableChannel(channel: Channel) {
 
 async function handleDisableChannel(channel: Channel) {
   try {
-    await ChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: false }))
-    await ChannelService.DisconnectChannel(channel.id)
+    await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: false }))
+    await OpenClawChannelService.DisconnectChannel(channel.id)
     toast.success(t('channels.toggle.disableSuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -241,7 +225,6 @@ async function handleToggleConnection(channel: Channel, val: boolean) {
 function cancelToggle() {
   toggleDialogOpen.value = false
   channelToToggle.value = null
-  // Just in case the UI switch visually toggled, reload data to revert it to DB state.
   loadData()
 }
 
@@ -267,7 +250,7 @@ async function confirmUnbindAssistant() {
   const ch = channelToUnbind.value
   if (!ch) return
   try {
-    await ChannelService.UnbindAgent(ch.id)
+    await OpenClawChannelService.UnbindAgent(ch.id)
     toast.success(t('channels.unbindSuccess'))
     loadData()
   } catch (error) {
@@ -286,7 +269,7 @@ function handleOpenBind(channel: Channel) {
 async function handleBindAgent(agentId: number) {
   if (!channelToBind.value) return
   try {
-    await ChannelService.BindAgent(channelToBind.value.id, agentId)
+    await OpenClawChannelService.BindAgent(channelToBind.value.id, agentId)
     toast.success(t('channels.bindSuccess'))
     loadData()
   } catch (error) {
@@ -299,10 +282,24 @@ async function handleBindAgent(agentId: number) {
 }
 
 async function handleAutoGenerate() {
-  if (!channelToBind.value) return
+  const ch = channelToBind.value
+  if (!ch) return
   try {
-    await ChannelService.EnsureAgentForChannel(channelToBind.value.id)
-    await ChannelService.ConnectChannel(channelToBind.value.id)
+    // Same payload shape as CreateAgentDialog / useAgents.createAgent (OpenClawAgentsService.CreateAgent).
+    const baseName = ch.name.trim() || t('channels.agentFallback')
+    const created = await OpenClawAgentsService.CreateAgent(
+      new CreateOpenClawAgentInput({
+        name: `${baseName} Agent`,
+        icon: '',
+        identity_emoji: '',
+      })
+    )
+    if (!created) {
+      toast.error(t('assistant.errors.createFailed'))
+      return
+    }
+    await OpenClawChannelService.BindAgent(ch.id, created.id)
+    await OpenClawChannelService.ConnectChannel(ch.id)
     toast.success(t('channels.bindAgent.autoGenerateSuccess'))
     loadData()
   } catch (error) {
@@ -312,10 +309,6 @@ async function handleAutoGenerate() {
     channelToBind.value = null
     bindFromCreate.value = false
   }
-}
-
-function getPlatformIcon(platformId: string): string | null {
-  return platformIconMap[platformId] || null
 }
 
 function getPlatformName(platformId: string): string {
@@ -348,7 +341,10 @@ async function handleInlinePickAvatar() {
       ],
     })
     if (!path) return
-    inlineFormAvatar.value = await AgentsService.ReadIconFile(path)
+    const { OpenClawAgentsService } = await import(
+      '@bindings/chatclaw/internal/openclaw/agents'
+    )
+    inlineFormAvatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to pick icon:', error)
@@ -366,13 +362,17 @@ async function handleInlineSave() {
       app_secret: inlineFormAppSecret.value.trim(),
     })
 
-    const channel = await ChannelService.CreateChannel({
-      platform: selectedPlatformMeta.value.id,
+    const firstAgent = agents.value[0]
+    if (!firstAgent) {
+      toast.error(t('channels.bindAgent.empty'))
+      return
+    }
+
+    const channel = await OpenClawChannelService.CreateChannel({
       name: inlineFormName.value.trim(),
       avatar: inlineFormAvatar.value,
-      connection_type: 'gateway',
       extra_config: extraConfig,
-      openclaw_scope: false,
+      agent_id: firstAgent.id,
     })
 
     toast.success(t('channels.config.success'))
@@ -395,6 +395,15 @@ function openPlatformDocs() {
   void openExternalLink(url)
 }
 
+function getAppId(extraConfig: string): string {
+  try {
+    const config = JSON.parse(extraConfig)
+    return config.app_id || config.token || t('common.na')
+  } catch {
+    return t('common.na')
+  }
+}
+
 async function handleInlineVerify() {
   if (!isInlineFormValid.value) {
     toast.error(t('channels.inline.fillRequired'))
@@ -407,21 +416,12 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
+    await OpenClawChannelService.VerifyChannelConfig(extraConfig)
     toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
   } finally {
     inlineFormVerifying.value = false
-  }
-}
-
-function getAppId(extraConfig: string): string {
-  try {
-    const config = JSON.parse(extraConfig)
-    return config.app_id || config.token || t('common.na')
-  } catch {
-    return t('common.na')
   }
 }
 
@@ -621,8 +621,8 @@ onMounted(loadData)
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     class="gap-2 rounded px-4 py-[5px]"
-                    :disabled="channel.agent_id === 0"
                     @click="openUnbindConfirm(channel)"
+                    :disabled="channel.agent_id === 0"
                   >
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
@@ -745,11 +745,9 @@ onMounted(loadData)
         </Button>
       </div>
 
-      <!-- Inline Add Form - Specific platform selected (per Figma: Inline Add Form) -->
+      <!-- Inline Add Form - Feishu platform selected (no channels in this filter) -->
       <div v-else class="space-y-6">
-        <!-- Form Row: three vertical fields, labels with * and 4px gap to input -->
         <div class="flex items-end gap-4">
-          <!-- * 机器人头像/名称: 262px width, avatar 40x40 + input flex-1, gap 8px -->
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
@@ -783,42 +781,37 @@ onMounted(loadData)
               />
             </div>
           </div>
-
-          <!-- * APPID: 260px -->
           <div class="flex w-[260px] shrink-0 flex-col gap-1">
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
               <span class="text-destructive" aria-hidden="true">*</span>
-              <span>{{ inlineAppIdLabel }}</span>
+              <span>{{ t('channels.config.appId') }}</span>
             </label>
             <Input
               v-model="inlineFormAppId"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="inlineAppIdPlaceholder"
+              :placeholder="t('channels.config.appIdPlaceholder')"
               maxlength="60"
             />
           </div>
-
-          <!-- * APP Secret: 260px -->
           <div class="flex w-[260px] shrink-0 flex-col gap-1">
             <label
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
               <span class="text-destructive" aria-hidden="true">*</span>
-              <span>{{ inlineAppSecretLabel }}</span>
+              <span>{{ t('channels.config.appSecret') }}</span>
             </label>
             <Input
               v-model="inlineFormAppSecret"
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="inlineAppSecretPlaceholder"
+              :placeholder="t('channels.config.appSecretPlaceholder')"
               maxlength="200"
             />
           </div>
         </div>
 
-        <!-- Button row: 验证配置 | 保存添加 | 配置步骤, gap 12px -->
         <div class="flex items-center gap-3">
           <Button
             type="button"

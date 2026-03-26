@@ -170,6 +170,28 @@ export default {
     systemChatClaw: 'ChatClaw',
     systemOpenClaw: 'OpenClaw',
   },
+  toolsPage: {
+    subtitle: "特色工具便捷使用",
+    smartSidebar: {
+      title: "智慧側邊欄",
+      description: "吸附在企微、QQ 等聊天側邊欄，即時查詢 AI",
+    },
+    selectionSearch: {
+      title: "滑詞搜尋",
+      description: "文字右鍵複製後跳出 AI 查詢",
+    },
+    floatingIcon: {
+      title: "桌面懸浮圖示",
+      description: "桌面懸浮捷徑入口",
+    },
+    multiask: {
+      title: "多問",
+      description: "多個 AI 透過網頁同時開啟檢視",
+    },
+    addToMenuBar: "加入側邊欄",
+    removeFromMenuBar: "從側邊欄移除",
+    desktopOnlyHint: "以下功能僅桌面客戶端可用",
+  },
   multiask: {
     title: 'Multi Ask',
     inputPlaceholder: 'Type a question and press Enter to send to all AIs...',
