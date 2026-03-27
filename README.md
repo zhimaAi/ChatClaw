@@ -298,8 +298,12 @@ ChatClaw_D2/
 └── images/                     # README screenshots (legacy)
 ```
 
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).
+
 ### Changelog
-To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
+To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
 
 ### 2026/03/18
@@ -321,7 +325,6 @@ To view the complete update log, please click👉️👉️[UpdateLog.md](./docs
 3. **i18n Loading Improvements**: Refactored i18n initialization to support async locale message loading and made message typing more flexible for dynamic locale structures.<br/>
 4. **Performance & Build Optimizations**: Improved Vite bundling via manual chunking and async component loading in `App.vue`; added reusable `copyToClipboard` utility; tuned server-mode performance and tokenizer dictionary loading for Chinese segmentation.<br/>
 5. **Build/Dev Workflow Updates**: Updated `development.md` and Dockerfiles for clearer, more reliable build steps (bindings generation, frontend deps), plus backend app init/systray refinements for stability.<br/>
-
 
 
 

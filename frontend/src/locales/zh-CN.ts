@@ -753,7 +753,7 @@ export default {
     about: {
       title: '关于我们',
       appName: 'ChatClaw',
-      copyright: '© 2026 武汉芝麻小客服网络科技有限公司 版权所有',
+      copyright: '© 2026 武汉芝麻小客服网络科技有限公司 · MIT License',
       officialWebsite: '官方网站',
       view: '查看',
       checkUpdate: '检查更新',

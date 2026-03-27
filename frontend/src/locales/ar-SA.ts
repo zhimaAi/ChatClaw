@@ -723,7 +723,7 @@ export default {
     "about": {
       "title": "About Us",
       "appName": "ChatClaw",
-      "copyright": "© 2026 ChatClaw Sesame Network Technology  All rights reserved",
+      "copyright": "© 2026 ChatClaw Sesame Network Technology · MIT License",
       "officialWebsite": "الموقع الرسمي",
       "view": "عرض",
       "checkUpdate": "التحقق من التحديثات",

@@ -724,7 +724,7 @@ export default {
     "about": {
       "title": "Giới thiệu",
       "appName": "ChatClaw",
-      "copyright": "© 2026 ChatClaw Sesame Network Technology Bảo lưu mọi quyền",
+      "copyright": "© 2026 ChatClaw Sesame Network Technology · MIT License",
       "officialWebsite": "Trang web chính thức",
       "view": "Xem",
       "checkUpdate": "Kiểm tra cập nhật",

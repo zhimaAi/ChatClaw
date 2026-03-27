@@ -280,6 +280,9 @@ ChatClaw_D2/
 └── images/                     # README screenshots
 ```
 
+### License
+This project is licensed under the MIT License. See [LICENSE](../../LICENSE).
+
 ### Changelog
 To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
@@ -300,7 +303,6 @@ To view the complete update log, please click👉️👉️[UpdateLog.md](./Upda
 4. **Sandbox Security**: Implemented sensitive path protection in sandbox mode to prevent unauthorized file access.<br/>
 5. **Build System Improvements**: Replaced shell commands with Go tools for directory creation, file existence checks, and platform detection in Taskfile.<br/>
 6. **License Update**: Switched from GNU Affero GPL to GNU General Public License.<br/>
-
 
 
 
