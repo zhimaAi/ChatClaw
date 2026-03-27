@@ -113,13 +113,18 @@ tasks:
       ARCH: '{{.ARCH | default ARCH}}'
 
   # Produces build/openclaw-runtime/windows-<arch>/ for the NSIS step. The app resolves this at install time as $INSTDIR/rt/windows-<arch> (see internal/openclaw/runtime/bundle.go).
+  # Packages as .zip so NSIS installs in one pass (no per-file Delete entries → fast uninstall via RMDir /r).
   bundle:openclaw:runtime:
-    summary: Bundles OpenClaw Node runtime under build/openclaw-runtime
+    summary: Bundles OpenClaw Node runtime under build/openclaw-runtime and zips it for NSIS
     internal: true
     cmds:
       - go run ./internal/tools/openclawbundle -config build/runtime.yml -os windows -arch {{.ARCH | default ARCH}}
-    vars:
-      ARCH: '{{.ARCH | default ARCH}}'
+      - |
+        {{if eq OS "windows"}}
+        powershell -Command "if (!(Test-Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip')) { Compress-Archive -Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}\*' -DestinationPath '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip' -Force; Write-Host 'Zipped runtime.' } else { Write-Host 'Zip exists, skipping compression.' }"
+        {{else}}
+        test -f {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}}.zip && echo "Zip exists, skipping." || (cd {{.ROOT_DIR}}/build/openclaw-runtime && zip -r windows-{{.ARCH | default ARCH}}.zip windows-{{.ARCH | default ARCH}}/)
+        {{end}}
 
   create:nsis:installer:
     summary: Creates an NSIS installer
@@ -132,11 +137,11 @@ tasks:
     cmds:
       # Create the Microsoft WebView2 bootstrapper if it doesn't exist
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
-      - | 
+      - |
         {{if eq OS "windows"}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH}}" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH}}.zip" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
         {{else}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH}}" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH}}.zip" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
         {{end}}
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
