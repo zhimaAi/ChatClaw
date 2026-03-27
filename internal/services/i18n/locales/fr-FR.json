@@ -190,6 +190,7 @@
   "error.channel_list_failed": "Échec de la liste des canaux",
   "error.channel_create_failed": "Échec de la création du canal",
   "error.channel_update_failed": "Échec de la mise à jour du canal",
+  "error.dingtalk_plugin_not_ready": "Le plugin connecteur DingTalk est encore en cours d'installation ou n'est pas prêt. Veuillez réessayer plus tard.",
   "error.channel_delete_failed": "Échec de la suppression du canal",
   "error.channel_read_failed": "Échec de la lecture du canal",
   "error.channel_not_found": "Canal '{{.ID}}' introuvable",

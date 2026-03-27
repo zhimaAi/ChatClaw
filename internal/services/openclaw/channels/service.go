@@ -263,7 +263,13 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 	}
 
 	if m.Platform == channels.PlatformDingTalk {
-		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, enabled); err != nil {
+		// OpenClaw rejects channels.dingtalk-* config until the connector plugin is installed.
+		if !s.isDingTalkPluginInstalledLocally() {
+			if enabled {
+				return nil, errs.New("error.dingtalk_plugin_not_ready")
+			}
+			// Disabled: persist credentials locally only; OpenClaw sync runs on connect after install.
+		} else if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, enabled); err != nil {
 			return nil, errs.Wrap("error.channel_update_failed", err)
 		}
 	} else {
@@ -829,6 +835,9 @@ func (s *OpenClawChannelService) removeOpenClawDingTalkAccount(ctx context.Conte
 // syncOpenClawDingTalkDefaultAccount recalculates whether dingtalk-connector should be
 // globally enabled after a channel is deleted, then writes the result.
 func (s *OpenClawChannelService) syncOpenClawDingTalkDefaultAccount(ctx context.Context) error {
+	if !s.isDingTalkPluginInstalledLocally() {
+		return nil
+	}
 	db, err := s.db()
 	if err != nil {
 		return err

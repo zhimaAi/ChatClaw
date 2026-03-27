@@ -190,6 +190,7 @@
   "error.channel_list_failed": "Kanäle auflisten fehlgeschlagen",
   "error.channel_create_failed": "Kanal erstellen fehlgeschlagen",
   "error.channel_update_failed": "Kanal aktualisieren fehlgeschlagen",
+  "error.dingtalk_plugin_not_ready": "Das DingTalk-Connector-Plugin wird noch installiert oder ist nicht bereit. Bitte versuchen Sie es später erneut.",
   "error.channel_delete_failed": "Kanal löschen fehlgeschlagen",
   "error.channel_read_failed": "Kanal lesen fehlgeschlagen",
   "error.channel_not_found": "Kanal '{{.ID}}' nicht gefunden",

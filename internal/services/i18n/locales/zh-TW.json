@@ -190,6 +190,7 @@
   "error.channel_list_failed": "列出頻道失敗",
   "error.channel_create_failed": "建立頻道失敗",
   "error.channel_update_failed": "更新頻道失敗",
+  "error.dingtalk_plugin_not_ready": "釘釘連接器外掛仍在安裝或未就緒，請稍後再試。",
   "error.channel_delete_failed": "刪除頻道失敗",
   "error.channel_read_failed": "讀取頻道失敗",
   "error.channel_not_found": "找不到頻道 '{{.ID}}'",

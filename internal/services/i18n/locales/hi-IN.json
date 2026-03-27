@@ -190,6 +190,7 @@
   "error.channel_list_failed": "चैनल सूची बनाने में विफल",
   "error.channel_create_failed": "चैनल निर्माण में विफल",
   "error.channel_update_failed": "चैनल अपडेट करने में विफल",
+  "error.dingtalk_plugin_not_ready": "DingTalk कनेक्टर प्लगइन अभी स्थापित हो रहा है या तैयार नहीं है। कृपया बाद में पुनः प्रयास करें।",
   "error.channel_delete_failed": "चैनल हटाने में विफल",
   "error.channel_read_failed": "चैनल पढ़ने में विफल",
   "error.channel_not_found": "चैनल '{{.ID}}' नहीं मिला",

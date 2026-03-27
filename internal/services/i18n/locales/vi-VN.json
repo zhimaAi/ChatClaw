@@ -190,6 +190,7 @@
   "error.channel_list_failed": "Liệt kê kênh thất bại",
   "error.channel_create_failed": "Tạo kênh thất bại",
   "error.channel_update_failed": "Cập nhật kênh thất bại",
+  "error.dingtalk_plugin_not_ready": "Plugin kết nối DingTalk vẫn đang cài đặt hoặc chưa sẵn sàng. Vui lòng thử lại sau.",
   "error.channel_delete_failed": "Xóa kênh thất bại",
   "error.channel_read_failed": "Đọc kênh thất bại",
   "error.channel_not_found": "Không tìm thấy kênh '{{.ID}}'",

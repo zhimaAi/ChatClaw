@@ -86,6 +86,7 @@ const bindDialogOpen = ref(false)
 const channelToBind = ref<Channel | null>(null)
 const bindFromCreate = ref(false)
 const toggleDialogOpen = ref(false)
+const toggleConfirming = ref(false)
 const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
 const unbindDialogOpen = ref(false)
 const channelToUnbind = ref<Channel | null>(null)
@@ -224,21 +225,26 @@ async function handleToggleConnection(channel: Channel, val: boolean) {
 }
 
 function cancelToggle() {
+  if (toggleConfirming.value) return
   toggleDialogOpen.value = false
   channelToToggle.value = null
   loadData()
 }
 
 async function confirmToggle() {
-  if (!channelToToggle.value) return
+  if (!channelToToggle.value || toggleConfirming.value) return
   const { channel, val } = channelToToggle.value
-  toggleDialogOpen.value = false
-  channelToToggle.value = null
-
-  if (val) {
-    await handleEnableChannel(channel)
-  } else {
-    await handleDisableChannel(channel)
+  toggleConfirming.value = true
+  try {
+    if (val) {
+      await handleEnableChannel(channel)
+    } else {
+      await handleDisableChannel(channel)
+    }
+  } finally {
+    toggleConfirming.value = false
+    toggleDialogOpen.value = false
+    channelToToggle.value = null
   }
 }
 
@@ -911,11 +917,13 @@ onMounted(loadData)
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel :disabled="toggleConfirming" @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
           <Button
-            class="bg-primary text-primary-foreground hover:bg-primary/90"
+            class="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            :disabled="toggleConfirming"
             @click="confirmToggle"
           >
+            <LoaderCircle v-if="toggleConfirming" class="size-4 shrink-0 animate-spin" />
             {{ t('common.confirm') }}
           </Button>
         </AlertDialogFooter>
