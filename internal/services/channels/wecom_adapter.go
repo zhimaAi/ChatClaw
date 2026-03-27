@@ -49,6 +49,13 @@ type WeComConfig struct {
 	StreamOutputEnabled *bool  `json:"stream_output_enabled,omitempty"` // Defaults to enabled
 }
 
+// WeComReplyContext carries callback-level reply metadata.
+// req_id/response_url must be scoped to the current incoming message.
+type WeComReplyContext struct {
+	ReqID       string `json:"req_id"`
+	ResponseURL string `json:"response_url"`
+}
+
 func ParseWeComConfig(configJSON string) (WeComConfig, error) {
 	var cfg WeComConfig
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
@@ -59,6 +66,23 @@ func ParseWeComConfig(configJSON string) (WeComConfig, error) {
 
 func (c WeComConfig) StreamOutputEnabledOrDefault() bool {
 	return c.StreamOutputEnabled == nil || *c.StreamOutputEnabled
+}
+
+func ParseWeComReplyContext(rawData string) (WeComReplyContext, error) {
+	rawData = strings.TrimSpace(rawData)
+	if rawData == "" {
+		return WeComReplyContext{}, fmt.Errorf("wecom reply context is empty")
+	}
+	var replyCtx WeComReplyContext
+	if err := json.Unmarshal([]byte(rawData), &replyCtx); err != nil {
+		return WeComReplyContext{}, fmt.Errorf("parse wecom reply context: %w", err)
+	}
+	replyCtx.ReqID = strings.TrimSpace(replyCtx.ReqID)
+	replyCtx.ResponseURL = strings.TrimSpace(replyCtx.ResponseURL)
+	if replyCtx.ReqID == "" && replyCtx.ResponseURL == "" {
+		return WeComReplyContext{}, fmt.Errorf("wecom reply context missing req_id and response_url")
+	}
+	return replyCtx, nil
 }
 
 // WeComAdapter implements PlatformAdapter for WeCom using WebSocket.
@@ -653,9 +677,22 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 		content = string(contentJSON)
 	}
 
-	senderID := body.From.UserID
-	chatID := body.ChatID
-	if chatID == "" && body.ChatType == "single" {
+	senderID := strings.TrimSpace(body.From.UserID)
+	_, isGroupChat, isSingleChat := normalizeWeComChatType(body.ChatType)
+	chatID := strings.TrimSpace(body.ChatID)
+
+	// Heuristic fallback when chat_type is missing/unknown:
+	// if chat id equals sender id, treat as direct chat.
+	if !isGroupChat && !isSingleChat && senderID != "" && chatID != "" && strings.EqualFold(chatID, senderID) {
+		isSingleChat = true
+	}
+
+	// For direct chat, normalize to senderID to keep a stable conversation key.
+	// Some payloads may include a transient/alternate chatid for the same user.
+	if isSingleChat && senderID != "" {
+		chatID = senderID
+	}
+	if chatID == "" {
 		chatID = senderID
 	}
 
@@ -676,7 +713,7 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 		SenderName: senderID,
 		ChatID:     chatID,
 		ChatName:   "",
-		IsGroup:    body.ChatType == "group",
+		IsGroup:    isGroupChat,
 		Content:    content,
 		MsgType:    msgType,
 		RawData:    string(rawData),
@@ -684,6 +721,25 @@ func (a *WeComAdapter) handleIncomingMessage(frame WeComFrame) {
 
 	// Keep the WebSocket reader responsive while downstream processing runs.
 	go a.handler(msg)
+}
+
+func normalizeWeComChatType(raw string) (chatType string, isGroup bool, isSingle bool) {
+	chatType = strings.ToLower(strings.TrimSpace(raw))
+	switch chatType {
+	case "group", "group_chat":
+		return chatType, true, false
+	case "single", "single_chat", "direct", "dm":
+		return chatType, false, true
+	}
+
+	if strings.Contains(chatType, "group") {
+		return chatType, true, false
+	}
+	if strings.Contains(chatType, "single") || strings.Contains(chatType, "direct") {
+		return chatType, false, true
+	}
+
+	return chatType, false, false
 }
 
 func (a *WeComAdapter) handleEvent(frame WeComFrame) {
@@ -729,6 +785,22 @@ func (a *WeComAdapter) SendMessage(ctx context.Context, targetID string, content
 	responseURL := a.lastResponseURL
 	reqID := a.lastReqID
 	a.mu.Unlock()
+
+	return a.sendMessageWithReplyContext(ctx, WeComReplyContext{
+		ReqID:       reqID,
+		ResponseURL: responseURL,
+	}, targetID, content)
+}
+
+// SendMessageWithContext replies using the current message-scoped req_id/response_url.
+// This prevents cross-thread reply mixups when multiple messages are processed concurrently.
+func (a *WeComAdapter) SendMessageWithContext(ctx context.Context, replyCtx WeComReplyContext, targetID string, content string) error {
+	return a.sendMessageWithReplyContext(ctx, replyCtx, targetID, content)
+}
+
+func (a *WeComAdapter) sendMessageWithReplyContext(ctx context.Context, replyCtx WeComReplyContext, targetID string, content string) error {
+	responseURL := strings.TrimSpace(replyCtx.ResponseURL)
+	reqID := strings.TrimSpace(replyCtx.ReqID)
 
 	msg, err := buildWeComOutgoingMessage(content)
 	if err != nil {

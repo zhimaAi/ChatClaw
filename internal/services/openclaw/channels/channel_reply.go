@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"chatclaw/internal/errs"
 	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
@@ -45,13 +46,25 @@ func RunChannelReply(
 		TabID:          "channel_backend",
 	})
 	if err != nil {
-		app.Logger.Warn("openclaw channel: gateway not ready", "conv", conversationID, "error", err)
-		sendReply(i18n.T("error.openclaw_gateway_not_ready_channel"))
+		errMsg := i18n.T("error.openclaw_gateway_not_ready_channel")
+		if ie, ok := err.(*errs.I18nError); ok {
+			switch ie.Key {
+			case "error.chat_generation_in_progress", "error.chat_generation_in_progress_other_tab":
+				errMsg = ie.Message
+			}
+		}
+		app.Logger.Warn("openclaw channel: send openclaw message failed", "conv", conversationID, "error", err)
+		sendReply(errMsg)
 		return
 	}
 
 	app.Logger.Info("openclaw channel: SendOpenClawMessage ok, waiting for generation",
 		"conv", conversationID, "requestID", res.RequestID)
+
+	// OpenClaw channel runs do not persist channel user messages into local DB.
+	// Push conversation/message refresh signals immediately so frontend can
+	// sync the channel-triggered user turn without waiting for final completion.
+	syncChannelIncomingState(app, convService, conversationID, agentID, content, msg.SenderName)
 
 	if !useQuickMode && replyTarget != "" && msg.Platform == channels.PlatformFeishu {
 		streamEnabled := feishuStreamOutputEnabled(extraConfig)
@@ -85,6 +98,37 @@ func RunChannelReply(
 	}
 
 	sendReply(finalResponse)
+}
+
+func syncChannelIncomingState(
+	app *application.App,
+	convService *conversations.ConversationsService,
+	conversationID int64,
+	agentID int64,
+	content string,
+	senderName string,
+) {
+	preview := chat.CleanOpenClawChannelUserMessage(strings.TrimSpace(content))
+	senderName = strings.TrimSpace(senderName)
+	if senderName != "" {
+		prefix := senderName + "："
+		preview = strings.TrimSpace(strings.TrimPrefix(preview, prefix))
+	}
+
+	if preview != "" {
+		_, _ = convService.UpdateConversation(conversationID, conversations.UpdateConversationInput{
+			LastMessage: &preview,
+		})
+	}
+
+	app.Event.Emit("conversations:changed", map[string]any{
+		"agent_id": agentID,
+	})
+	emitConversationMessagesChanged(app, conversationID)
+	// The OpenClaw gateway transcript may lag behind the generation events.
+	// Re-emit a few refreshes so the assistant UI can pick up late-arriving
+	// user/assistant turns without waiting for another manual refresh.
+	scheduleConversationMessageRefreshes(app, conversationID, 800*time.Millisecond, 2*time.Second, 4*time.Second)
 }
 
 // streamFeishuReply creates a Feishu streaming card and pushes
@@ -192,9 +236,28 @@ func updateConversationMeta(
 	app.Event.Emit("conversations:changed", map[string]any{
 		"agent_id": agentID,
 	})
+	emitConversationMessagesChanged(app, conversationID)
+	scheduleConversationMessageRefreshes(app, conversationID, 600*time.Millisecond, 1500*time.Millisecond)
+}
+
+func emitConversationMessagesChanged(app *application.App, conversationID int64) {
 	app.Event.Emit("chat:messages-changed", map[string]any{
 		"conversation_id": conversationID,
 	})
+}
+
+func scheduleConversationMessageRefreshes(app *application.App, conversationID int64, delays ...time.Duration) {
+	if len(delays) == 0 {
+		return
+	}
+	go func(convID int64, refreshDelays []time.Duration) {
+		for _, delay := range refreshDelays {
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			emitConversationMessagesChanged(app, convID)
+		}
+	}(conversationID, append([]time.Duration(nil), delays...))
 }
 
 func feishuStreamOutputEnabled(extraConfig string) bool {
