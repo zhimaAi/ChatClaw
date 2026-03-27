@@ -479,6 +479,11 @@ onMounted(() => {
 })
 </script>
 
+<!--
+  Single root required: App.vue switches tabs with v-show + absolute inset-0 on each page component.
+  Multiple roots (e.g. main div + Dialog sibling) break directive/fallthrough host binding in Vue 3,
+  so the skills grid could stay visible under other tabs.
+-->
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
     <template v-if="!detailOpen">
@@ -813,52 +818,52 @@ onMounted(() => {
         </div>
       </div>
     </template>
+
+    <Dialog :open="addDialogOpen" @update:open="(v) => (addDialogOpen = v)">
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('settings.openclawSkills.add.title') }}</DialogTitle>
+        </DialogHeader>
+
+        <div class="grid gap-3 py-2">
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
+            @click="handleCreateViaChat"
+          >
+            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Plus class="size-4" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-foreground">
+                {{ t('settings.openclawSkills.add.createViaChatTitle') }}
+              </div>
+              <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ t('settings.openclawSkills.add.createViaChatDesc') }}
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
+            @click="handleChooseSkillPackage"
+          >
+            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <FolderOpen class="size-4" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-foreground">
+                {{ t('settings.openclawSkills.add.choosePackageTitle') }}
+              </div>
+              <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ t('settings.openclawSkills.add.choosePackageDesc') }}
+              </div>
+            </div>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
-
-  <Dialog :open="addDialogOpen" @update:open="(v) => (addDialogOpen = v)">
-    <DialogContent size="lg">
-      <DialogHeader>
-        <DialogTitle>{{ t('settings.openclawSkills.add.title') }}</DialogTitle>
-      </DialogHeader>
-
-      <div class="grid gap-3 py-2">
-        <button
-          type="button"
-          class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
-          @click="handleCreateViaChat"
-        >
-          <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <Plus class="size-4" />
-          </div>
-          <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">
-              {{ t('settings.openclawSkills.add.createViaChatTitle') }}
-            </div>
-            <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {{ t('settings.openclawSkills.add.createViaChatDesc') }}
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
-          @click="handleChooseSkillPackage"
-        >
-          <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <FolderOpen class="size-4" />
-          </div>
-          <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">
-              {{ t('settings.openclawSkills.add.choosePackageTitle') }}
-            </div>
-            <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {{ t('settings.openclawSkills.add.choosePackageDesc') }}
-            </div>
-          </div>
-        </button>
-      </div>
-    </DialogContent>
-  </Dialog>
 </template>
 
