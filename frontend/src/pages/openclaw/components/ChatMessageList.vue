@@ -15,6 +15,7 @@ const props = defineProps<{
   hasAttachedTarget?: boolean
   showAiSendButton?: boolean
   showAiEditButton?: boolean
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -218,6 +219,7 @@ watch(
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
+          :read-only="readOnly"
           @edit="handleEdit"
           @snap-send-and-trigger="(content) => emit('snapSendAndTrigger', content)"
           @snap-send-to-edit="(content) => emit('snapSendToEdit', content)"
@@ -253,6 +255,7 @@ watch(
           :has-attached-target="hasAttachedTarget"
           :show-ai-send-button="showAiSendButton"
           :show-ai-edit-button="showAiEditButton"
+          :read-only="readOnly"
           @snap-send-and-trigger="(content) => emit('snapSendAndTrigger', content)"
           @snap-send-to-edit="(content) => emit('snapSendToEdit', content)"
           @snap-copy="(content) => emit('snapCopy', content)"
