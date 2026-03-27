@@ -803,6 +803,8 @@ export default {
       freeBadge: 'Gratis',
       noModel: 'Nessun modello',
       selectKnowledge: 'Seleziona knowledge base',
+      openclawTeamKnowledgeDisabled:
+        'Le knowledge base di team non sono ancora disponibili in OpenClaw',
       knowledgeChipRemoveNotSupported: 'Rimozione non disponibile in questa modalità',
       selectImages: 'Seleziona immagini',
       selectImagesDisabled: 'Devi selezionare un modello che supporta immagini',

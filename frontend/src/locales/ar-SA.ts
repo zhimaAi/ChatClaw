@@ -796,6 +796,7 @@ export default {
       freeBadge: 'مجاني',
       noModel: 'لا يوجد نموذج متاح',
       selectKnowledge: 'اختر قاعدة المعرفة',
+      openclawTeamKnowledgeDisabled: 'قواعد معرفة الفريق غير متاحة في OpenClaw بعد',
       knowledgeChipRemoveNotSupported: 'لا يمكن الإزالة في هذا الوضع',
       selectImages: 'اختر الصور',
       selectImagesDisabled: 'اختر نموذجًا يدعم إدخال الصور',

@@ -804,6 +804,8 @@ export default {
       freeBadge: 'ফ্রি',
       noModel: 'কোনো মডেল নেই',
       selectKnowledge: 'নলেজ বেস সিলেক্ট',
+      openclawTeamKnowledgeDisabled:
+        'OpenClaw-এ টিম নলেজ বেস এখনো উপলব্ধ নয়',
       knowledgeChipRemoveNotSupported: 'এই মোডে সরানো সমর্থিত নয়',
       selectImages: 'ইমেজ সিলেক্ট',
       selectImagesDisabled: 'ইমেজ ইনপুট সাপোর্ট করে এমন মডেল সিলেক্ট করুন',

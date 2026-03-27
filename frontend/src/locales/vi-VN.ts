@@ -807,6 +807,8 @@ export default {
       freeBadge: 'Miễn phí',
       noModel: 'Không có mô hình khả dụng',
       selectKnowledge: 'Chọn Cơ sở tri thức',
+      openclawTeamKnowledgeDisabled:
+        'Cơ sở tri thức nhóm chưa khả dụng trong OpenClaw',
       knowledgeChipRemoveNotSupported: 'Chế độ hiện tại không hỗ trợ gỡ bỏ',
       selectImages: 'Chọn hình ảnh',
       selectImagesDisabled: 'Chọn mô hình hỗ trợ đầu vào hình ảnh',

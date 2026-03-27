@@ -807,6 +807,8 @@ export default {
       freeBadge: 'Gratis',
       noModel: 'Sin modelo disponible',
       selectKnowledge: 'Seleccionar base de conocimientos',
+      openclawTeamKnowledgeDisabled:
+        'Las bases de conocimiento de equipo aún no están disponibles en OpenClaw',
       knowledgeChipRemoveNotSupported: 'No se puede quitar en este modo',
       selectImages: 'Seleccionar imágenes',
       selectImagesDisabled: 'Selecciona un modelo que soporte entrada de imágenes',

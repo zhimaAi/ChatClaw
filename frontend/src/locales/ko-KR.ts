@@ -840,6 +840,7 @@ export default {
       freeBadge: '무료',
       noModel: '사용 가능한 모델 없음',
       selectKnowledge: '지식베이스 선택',
+      openclawTeamKnowledgeDisabled: 'OpenClaw에서는 팀 지식베이스를 아직 사용할 수 없습니다',
       knowledgeChipRemoveNotSupported: '현재 모드에서는 삭제할 수 없습니다',
       selectImages: '이미지 선택',
       selectImagesDisabled: '이미지 입력을 지원하는 모델을 선택하세요',
