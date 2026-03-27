@@ -29,6 +29,11 @@ export const useAppStore = defineStore('app', () => {
   const setCurrentSystem = (system: SystemOwner) => {
     currentSystem.value = system
     localStorage.setItem('currentSystem', system)
+    try {
+      Events.Emit('system:changed', { system })
+    } catch (e) {
+      console.warn('Failed to emit system:changed event:', e)
+    }
   }
 
   /** Whether "多问" appears in the left sidebar (default: visible). */
