@@ -346,7 +346,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 	app.RegisterService(application.NewService(channelService))
 	// 注册 OpenClaw 频道服务（Feishu-focused channel management for OpenClaw）
-	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService, openclawManager)
+	openClawChannelService := openclawchannels.NewOpenClawChannelService(app, channelGateway, openClawAgentsService, channelService, conversationsService, openclawManager)
 	app.RegisterService(application.NewService(openClawChannelService))
 	// 注册自动更新服务
 	app.RegisterService(application.NewService(updater.NewUpdaterService(app)))

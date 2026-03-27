@@ -5,8 +5,8 @@
  * based on the current system mode, kept in sync with the main window.
  */
 import { onUnmounted } from 'vue'
-import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
-import OpenClawPage from '@/pages/openclaw/OpenClawPage.vue'
+import AssistantPage from '@/pages/assistant/AssistantPage.vue'
+import OpenClawPage from '@/pages/openclaw/assistant/OpenClawPage.vue'
 import { Toaster } from '@/components/ui/toast'
 import { useLocaleSync } from '@/composables/useLocale'
 import { useThemeSync } from '@/composables/useThemeSync'

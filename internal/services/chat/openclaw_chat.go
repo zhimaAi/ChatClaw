@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/channels"
 
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
@@ -67,6 +69,131 @@ type openClawTranscriptMsg struct {
 // causes INVALID_REQUEST errors for any non-default agent.
 func openClawSessionKey(agentID string, conversationID int64) string {
 	return fmt.Sprintf("agent:%s:conv_%d", agentID, conversationID)
+}
+
+func openClawConversationSourceFromExternalID(externalID string) (channels.ChannelConversationSource, bool) {
+	source, ok := channels.ParseChannelConversationExternalID(externalID)
+	if !ok || source.ChannelID <= 0 || strings.TrimSpace(source.TargetID) == "" {
+		return channels.ChannelConversationSource{}, false
+	}
+	return source, true
+}
+
+func dedupeStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+// resolveOpenClawSessionKeys returns candidate session keys for a conversation.
+// Channel-originated OpenClaw conversations may be written into platform-native
+// keys (e.g. "agent:main:wecom:group:<id>"), while local runs use "conv_<id>".
+func (s *ChatService) resolveOpenClawSessionKeys(conversationID int64, openClawAgentID string) []string {
+	id := strings.TrimSpace(openClawAgentID)
+	if id == "" {
+		id = define.OpenClawMainAgentID
+	}
+
+	candidates := []string{
+		fmt.Sprintf("agent:%s:conv_%d", id, conversationID),
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return candidates
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var externalID string
+	if err := db.NewSelect().
+		Table("conversations").
+		Column("external_id").
+		Where("id = ?", conversationID).
+		Scan(ctx, &externalID); err != nil {
+		return candidates
+	}
+
+	source, ok := openClawConversationSourceFromExternalID(externalID)
+	if !ok {
+		return candidates
+	}
+
+	var platform string
+	if err := db.NewSelect().
+		Table("channels").
+		Column("platform").
+		Where("id = ?", source.ChannelID).
+		Scan(ctx, &platform); err != nil {
+		return candidates
+	}
+
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformWeCom:
+		targetID := strings.TrimSpace(source.TargetID)
+		lowerTarget := strings.ToLower(targetID)
+		scope := strings.TrimSpace(source.Scope)
+		// Prefer the exact platform-native namespace when we know the chat scope.
+		if scope == channels.ChannelConversationScopeGroup || scope == channels.ChannelConversationScopeDM {
+			exact := []string{
+				fmt.Sprintf("agent:%s:wecom:%s:%s", id, scope, lowerTarget),
+				fmt.Sprintf("agent:%s:wecom:%s:%s", id, scope, targetID),
+			}
+			if scope == channels.ChannelConversationScopeDM {
+				exact = append([]string{
+					fmt.Sprintf("agent:%s:wecom:direct:%s", id, lowerTarget),
+					fmt.Sprintf("agent:%s:wecom:direct:%s", id, targetID),
+				}, exact...)
+			}
+			candidates = append(exact, candidates...)
+			break
+		}
+		// Legacy conversations have no stored scope; keep trying both namespaces.
+		candidates = append([]string{
+			fmt.Sprintf("agent:%s:wecom:group:%s", id, lowerTarget),
+			fmt.Sprintf("agent:%s:wecom:dm:%s", id, lowerTarget),
+			fmt.Sprintf("agent:%s:wecom:direct:%s", id, lowerTarget),
+			fmt.Sprintf("agent:%s:wecom:group:%s", id, targetID),
+			fmt.Sprintf("agent:%s:wecom:dm:%s", id, targetID),
+			fmt.Sprintf("agent:%s:wecom:direct:%s", id, targetID),
+		}, candidates...)
+	case channels.PlatformFeishu:
+		targetID := strings.TrimSpace(source.TargetID)
+		scope := strings.TrimSpace(source.Scope)
+		switch scope {
+		case channels.ChannelConversationScopeDM:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+			}, candidates...)
+		case channels.ChannelConversationScopeGroup:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+			}, candidates...)
+		default:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
+			}, candidates...)
+		}
+	}
+
+	return dedupeStrings(candidates)
 }
 
 // getOpenClawAgentConfig reads the openclaw_agents table to build the chat.run config.
@@ -432,6 +559,19 @@ func openClawSessionKeyForAgent(agentID string, conversationID int64) string {
 	return fmt.Sprintf("agent:%s:conv_%d", id, conversationID)
 }
 
+func openClawSessionKeyMatches(got, want string) bool {
+	got = strings.ToLower(strings.TrimSpace(got))
+	want = strings.ToLower(strings.TrimSpace(want))
+	if got == "" || want == "" {
+		return true
+	}
+	if got == want {
+		return true
+	}
+	// Some gateway payloads may include namespaced forms; keep backward compatibility.
+	return strings.HasSuffix(got, ":"+want)
+}
+
 // GetOpenClawLastAssistantReply fetches the last assistant message text from
 // the OpenClaw Gateway session. Returns empty string if unavailable.
 func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string {
@@ -443,31 +583,44 @@ func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string
 	if err != nil {
 		return ""
 	}
-	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
+	sessionKeys := s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var result struct {
+	type sessionResult struct {
+		Key      string
 		Messages []struct {
 			Role    string `json:"role"`
 			Content any    `json:"content"`
 		} `json:"messages"`
 	}
-	if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
-		"key":   sessionKey,
-		"limit": 10,
-	}, &result); err != nil {
-		s.app.Logger.Warn("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get failed",
-			"conv", conversationID, "err", err)
+	var picked sessionResult
+	for _, key := range sessionKeys {
+		var current sessionResult
+		current.Key = key
+		if err := s.openclawGateway.QueryRequest(ctx, "sessions.get", map[string]any{
+			"key":   key,
+			"limit": 10,
+		}, &current); err != nil {
+			continue
+		}
+		if len(current.Messages) == 0 && len(picked.Messages) > 0 {
+			continue
+		}
+		if len(current.Messages) >= len(picked.Messages) {
+			picked = current
+		}
+	}
+	if len(picked.Messages) == 0 {
 		return ""
 	}
 
 	s.app.Logger.Info("[openclaw-chat] GetOpenClawLastAssistantReply: sessions.get result",
-		"conv", conversationID, "message_count", len(result.Messages))
+		"conv", conversationID, "session_key", picked.Key, "message_count", len(picked.Messages))
 
 	// Walk backwards to find the last assistant message with text content
-	for i := len(result.Messages) - 1; i >= 0; i-- {
-		msg := result.Messages[i]
+	for i := len(picked.Messages) - 1; i >= 0; i-- {
+		msg := picked.Messages[i]
 		s.app.Logger.Debug("[openclaw-chat] GetOpenClawLastAssistantReply: message",
 			"conv", conversationID, "index", i, "role", msg.Role)
 		if msg.Role == "assistant" {
@@ -800,23 +953,84 @@ func buildOpenClawTranscriptAttachments(
 	return attachments
 }
 
-// cleanOpenClawUserMessage strips the "Sender (untrusted metadata)" block,
-// the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway
-// automatically prepends to user messages sent via chat.send, and
-// the <chatclaw_context> block injected by buildKnowledgeContextMessage.
-func cleanOpenClawUserMessage(s string) string {
-	s = strings.TrimLeft(s, " \t\n")
+// OpenClaw channel plugins (e.g. WeCom) prefix user text with fenced JSON metadata blocks.
+var openClawUntrustedMetadataMarkers = []string{
+	"Conversation info (untrusted metadata)",
+	"Sender (untrusted metadata)",
+}
 
-	// Strip "Sender (untrusted metadata):\n```json\n...\n```\n" block
-	if strings.HasPrefix(s, "Sender (untrusted metadata)") {
-		// Find the closing ``` and skip past it
-		if idx := strings.Index(s, "```\n"); idx != -1 {
-			rest := s[idx+4:]
-			if idx2 := strings.Index(rest, "```"); idx2 != -1 {
-				s = strings.TrimLeft(rest[idx2+3:], " \t\n")
+var openClawChannelMessageIDLineRE = regexp.MustCompile(`^\[message_id:\s*[^\]]+\]$`)
+
+// skipOpenClawLeadingCodeFence consumes a markdown ``` fenced block at the start of s.
+func skipOpenClawLeadingCodeFence(s string) (rest string, ok bool) {
+	s = strings.TrimLeft(s, " \t\n\r")
+	if !strings.HasPrefix(s, "```") {
+		return "", false
+	}
+	afterTicks := s[3:]
+	nl := strings.Index(afterTicks, "\n")
+	if nl < 0 {
+		return "", false
+	}
+	body := afterTicks[nl+1:]
+	closeNL := strings.Index(body, "\n```")
+	if closeNL >= 0 {
+		tail := body[closeNL+len("\n```"):]
+		return strings.TrimLeft(tail, " \t\n\r"), true
+	}
+	closeCRNL := strings.Index(body, "\r\n```")
+	if closeCRNL >= 0 {
+		tail := body[closeCRNL+len("\r\n```"):]
+		return strings.TrimLeft(tail, " \t\n\r"), true
+	}
+	// Closing fence without a preceding newline (still valid markdown in practice)
+	if idx := strings.Index(body, "```"); idx >= 0 {
+		tail := strings.TrimLeft(body[idx+3:], " \t\n\r")
+		return tail, true
+	}
+	return "", false
+}
+
+func stripOpenClawUntrustedMetadataPrefixes(s string) string {
+	s = strings.TrimLeft(s, " \t\n\r")
+	for {
+		stripped := false
+		for _, marker := range openClawUntrustedMetadataMarkers {
+			if !strings.HasPrefix(s, marker) {
+				continue
 			}
+			after := strings.TrimLeft(s[len(marker):], " \t")
+			if strings.HasPrefix(after, ":") {
+				after = strings.TrimLeft(after[1:], " \t\n\r")
+			} else {
+				after = strings.TrimLeft(after, " \t\n\r")
+			}
+			rest, ok := skipOpenClawLeadingCodeFence(after)
+			if !ok {
+				continue
+			}
+			s = strings.TrimLeft(rest, " \t\n\r")
+			stripped = true
+			break
+		}
+		if !stripped {
+			break
 		}
 	}
+	return s
+}
+
+// CleanOpenClawChannelUserMessage removes OpenClaw-injected channel metadata fences,
+// gateway timestamp prefixes, and hidden ChatClaw blocks so UI and previews show plain user text.
+func CleanOpenClawChannelUserMessage(s string) string {
+	return cleanOpenClawUserMessage(s)
+}
+
+// cleanOpenClawUserMessage strips "(untrusted metadata)" fenced blocks from channel plugins,
+// the "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix that the Gateway may prepend, and
+// hidden <chatclaw_context> / <chatclaw_attachments> blocks.
+func cleanOpenClawUserMessage(s string) string {
+	s = stripOpenClawUntrustedMetadataPrefixes(s)
 
 	// Strip "[Day YYYY-MM-DD HH:MM TZ] " timestamp prefix
 	if strings.HasPrefix(s, "[") {
@@ -825,7 +1039,34 @@ func cleanOpenClawUserMessage(s string) string {
 		}
 	}
 
-	return stripChatClawHiddenBlocks(s, "chatclaw_context", "chatclaw_attachments")
+	s = stripChatClawHiddenBlocks(s, "chatclaw_context", "chatclaw_attachments")
+	return stripOpenClawChannelEnvelopeLines(s)
+}
+
+func stripOpenClawChannelEnvelopeLines(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	if idx := strings.Index(s, "\n[System:"); idx >= 0 {
+		s = strings.TrimSpace(s[:idx])
+	} else if strings.HasPrefix(s, "[System:") {
+		return ""
+	}
+
+	lines := strings.Split(s, "\n")
+	start := 0
+	for start < len(lines) {
+		line := strings.TrimSpace(lines[start])
+		if line == "" || openClawChannelMessageIDLineRE.MatchString(line) {
+			start++
+			continue
+		}
+		break
+	}
+
+	return strings.TrimSpace(strings.Join(lines[start:], "\n"))
 }
 
 func (s *ChatService) buildOpenClawRPCAttachments(attachments []ImagePayload) []map[string]any {
@@ -904,21 +1145,42 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	if err != nil {
 		return nil, err
 	}
-	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
+	primary := resolveOpenClawSessionKey(cfg, conversationID)
+	candidates := dedupeStrings(append([]string{primary}, s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)...))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var result struct {
 		Messages []openClawTranscriptMsg `json:"messages"`
 	}
-	if err := s.openclawGateway.QueryRequest(ctx, "chat.history", map[string]any{
-		"sessionKey": sessionKey,
-		"limit":      200,
-	}, &result); err != nil {
-		s.app.Logger.Warn("[openclaw-chat] chat.history failed",
-			"conv", conversationID, "err", err)
+	chosenSessionKey := ""
+	for _, key := range candidates {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		var current struct {
+			Messages []openClawTranscriptMsg `json:"messages"`
+		}
+		if err := s.openclawGateway.QueryRequest(ctx, "chat.history", map[string]any{
+			"sessionKey": key,
+			"limit":      200,
+		}, &current); err != nil {
+			continue
+		}
+		if len(current.Messages) == 0 {
+			continue
+		}
+		result = current
+		chosenSessionKey = key
+		break
+	}
+	if len(result.Messages) == 0 {
+		s.app.Logger.Warn("[openclaw-chat] chat.history empty for all candidate keys",
+			"conv", conversationID, "keys", candidates)
 		return nil, nil
 	}
+	s.app.Logger.Info("[openclaw-chat] chat.history picked session key",
+		"conv", conversationID, "session_key", chosenSessionKey, "message_count", len(result.Messages))
 
 	return buildOpenClawMessagesFromTranscript(conversationID, result.Messages), nil
 }
@@ -1164,6 +1426,13 @@ func (s *ChatService) handleOpenClawAgentEvent(
 		return
 	}
 
+	// Filter by session first to avoid cross-session stream contamination.
+	if !openClawSessionKeyMatches(frame.SessionKey, sessionKey) {
+		s.app.Logger.Debug("[openclaw-chat] agent event: session mismatch, skipping",
+			"conv", conversationID, "got", frame.SessionKey, "want", sessionKey)
+		return
+	}
+
 	// Route by runId
 	if rid, _ := activeRunID.Load().(string); rid != "" {
 		if frame.RunID != "" && frame.RunID != rid {
@@ -1334,8 +1603,7 @@ func (s *ChatService) handleOpenClawChatEvent(
 		"contentLen", len(chatEvt.Message.Content))
 
 	// Filter by session
-	if chatEvt.SessionKey != "" && chatEvt.SessionKey != sessionKey &&
-		!strings.HasSuffix(chatEvt.SessionKey, ":"+sessionKey) {
+	if !openClawSessionKeyMatches(chatEvt.SessionKey, sessionKey) {
 		s.app.Logger.Debug("[openclaw-chat] chat event: session mismatch, skipping",
 			"conv", conversationID, "got", chatEvt.SessionKey, "want", sessionKey)
 		return

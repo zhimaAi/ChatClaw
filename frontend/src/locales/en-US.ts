@@ -953,6 +953,8 @@ export default {
       freeBadge: 'Free',
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
+      openclawTeamKnowledgeDisabled:
+        'Team knowledge bases are not available in OpenClaw yet',
       knowledgeChipRemoveNotSupported: 'Removal is not supported in this mode',
       selectImages: 'Select images',
       selectImagesDisabled: 'Select a model that supports image input',

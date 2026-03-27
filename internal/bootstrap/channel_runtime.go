@@ -191,19 +191,26 @@ func handleChannelMessage(
 		agentType = conversations.AgentTypeOpenClaw
 	}
 
-	// Use ChatID as conversation key so different platform chats get separate conversations.
-	// Fall back to SenderID for direct messages (where ChatID may be empty).
-	convKey := msg.ChatID
-	if convKey == "" {
-		convKey = msg.SenderID
+	externalID, legacyExternalIDs := buildChannelConversationExternalIDs(msg)
+	if externalID == "" {
+		if len(legacyExternalIDs) > 0 {
+			externalID = legacyExternalIDs[0]
+		}
 	}
-	externalID := fmt.Sprintf("ch:%d:%s", msg.ChannelID, convKey)
 
 	// Build display name: prefer resolved ChatName/SenderName;
-	// fall back to "「<platform><type>」<excerpt>" when unavailable.
+	// WeCom groups often omit ChatName — use the first message body as the session title.
+	// Otherwise fall back to "「<platform><type>」<excerpt>" when unavailable.
 	displayName := msg.ChatName
 	if displayName == "" && msg.IsGroup {
-		displayName = channelDisplayName(msg.Platform, true, textContent)
+		if msg.Platform == channels.PlatformWeCom {
+			if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
+				displayName = t
+			}
+		}
+		if displayName == "" {
+			displayName = channelDisplayName(msg.Platform, true, textContent)
+		}
 	}
 	if displayName == "" {
 		displayName = msg.SenderName
@@ -212,10 +219,22 @@ func handleChannelMessage(
 		displayName = channelDisplayName(msg.Platform, false, textContent)
 	}
 
-	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, displayName, agentType)
+	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, legacyExternalIDs, displayName, agentType)
 	if err != nil {
 		app.Logger.Error("channel message: find/create conversation failed", "error", err)
 		return
+	}
+
+	// Upgrade legacy placeholder titles (e.g. "group:chatid" from sync) once we have first text.
+	if msg.Platform == channels.PlatformWeCom && msg.IsGroup && strings.TrimSpace(msg.ChatName) == "" {
+		if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
+			if channels.IsWeComGroupPlaceholderConversationName(conv.Name) && t != strings.TrimSpace(conv.Name) {
+				_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
+					Name: &t,
+				})
+				conv.Name = t
+			}
+		}
 	}
 
 	// Notify frontend that conversation list has changed (e.g. new conversation created)
@@ -393,6 +412,14 @@ func sendChannelReply(ctx context.Context, adapter channels.PlatformAdapter, msg
 		}); ok {
 			_, err := feishuAdapter.ReplyMessage(ctx, msg.MessageID, text)
 			return err
+		}
+	}
+	if msg.Platform == channels.PlatformWeCom {
+		if wecomAdapter, ok := adapter.(*channels.WeComAdapter); ok {
+			replyCtx, err := channels.ParseWeComReplyContext(msg.RawData)
+			if err == nil {
+				return wecomAdapter.SendMessageWithContext(ctx, replyCtx, targetID, text)
+			}
 		}
 	}
 
@@ -576,10 +603,6 @@ func streamFeishuReply(
 	}
 }
 
-type wecomReplyContext struct {
-	ReqID string `json:"req_id"`
-}
-
 func streamWeComReply(
 	app *application.App,
 	db *bun.DB,
@@ -589,9 +612,12 @@ func streamWeComReply(
 	adapter wecomStreamingReplyAdapter,
 	msg channels.IncomingMessage,
 ) (string, bool, error) {
-	replyCtx, err := extractWeComReplyContext(msg.RawData)
+	replyCtx, err := channels.ParseWeComReplyContext(msg.RawData)
 	if err != nil {
 		return "", false, err
+	}
+	if strings.TrimSpace(replyCtx.ReqID) == "" {
+		return "", false, fmt.Errorf("wecom reply context missing req_id")
 	}
 
 	streamID := channels.GenerateWeComReqID("stream")
@@ -658,17 +684,6 @@ func streamWeComReply(
 			sentAny = true
 		}
 	}
-}
-
-func extractWeComReplyContext(rawData string) (wecomReplyContext, error) {
-	var replyCtx wecomReplyContext
-	if err := json.Unmarshal([]byte(rawData), &replyCtx); err != nil {
-		return wecomReplyContext{}, fmt.Errorf("parse wecom reply context: %w", err)
-	}
-	if strings.TrimSpace(replyCtx.ReqID) == "" {
-		return wecomReplyContext{}, fmt.Errorf("wecom reply context missing req_id")
-	}
-	return replyCtx, nil
 }
 
 func fetchLatestAssistantMessage(ctx context.Context, db *bun.DB, conversationID int64) (assistantMessageSnapshot, error) {
@@ -995,15 +1010,50 @@ func extractTextContent(msg channels.IncomingMessage) string {
 // externalID is a stable key (e.g., "ch:1:oc_xxx") for lookup.
 // displayName is a human-readable name (e.g., group/user name) for display.
 // agentType should be "openclaw" for OpenClaw agents, or "" for default (eino).
+var channelConversationLocks sync.Map
+
+func migrateConversationExternalIDIfNeeded(ctx context.Context, db *bun.DB, convID int64, canonical string) error {
+	if convID <= 0 || strings.TrimSpace(canonical) == "" {
+		return nil
+	}
+	var cur string
+	err := db.NewSelect().
+		Table("conversations").
+		Column("external_id").
+		Where("id = ?", convID).
+		Scan(ctx, &cur)
+	if err != nil {
+		return nil
+	}
+	if strings.TrimSpace(cur) == strings.TrimSpace(canonical) {
+		return nil
+	}
+	_, err = db.NewUpdate().
+		Table("conversations").
+		Set("external_id = ?", canonical).
+		Set("updated_at = ?", sqlite.NowUTC()).
+		Where("id = ?", convID).
+		Exec(ctx)
+	return err
+}
+
 func findOrCreateConversation(
 	ctx context.Context,
 	db *bun.DB,
 	convService *conversations.ConversationsService,
 	agentID int64,
 	externalID string,
+	legacyExternalIDs []string,
 	displayName string,
 	agentType string,
 ) (*conversations.Conversation, error) {
+	externalID = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(externalID))
+	legacyExternalIDs = canonicalizeConversationExternalIDs(legacyExternalIDs...)
+
+	lockIDs := append([]string{externalID}, legacyExternalIDs...)
+	unlock := lockChannelConversation(agentID, lockIDs...)
+	defer unlock()
+
 	// Try to find existing conversation by external_id
 	type convRow struct {
 		ID int64 `bun:"id"`
@@ -1013,14 +1063,49 @@ func findOrCreateConversation(
 		Table("conversations").
 		Column("id").
 		Where("agent_id = ?", agentID).
-		Where("external_id = ?", externalID).
+		Where("LOWER(TRIM(external_id)) = LOWER(TRIM(?))", externalID).
+		OrderExpr("id ASC").
 		Limit(1).
 		Scan(ctx, &existing)
 	if err == nil && existing.ID > 0 {
+		if migrateErr := migrateConversationExternalIDIfNeeded(ctx, db, existing.ID, externalID); migrateErr != nil {
+			return nil, migrateErr
+		}
 		conv, err := convService.GetConversation(existing.ID)
 		if err == nil {
 			ensureConversationAgentType(ctx, db, conv, agentType)
 			return conv, nil
+		}
+	}
+
+	// Lazily migrate legacy channel conversations to the canonical external_id.
+	for _, legacyExternalID := range legacyExternalIDs {
+		if legacyExternalID == "" || legacyExternalID == externalID {
+			continue
+		}
+		existing = convRow{}
+		err = db.NewSelect().
+			Table("conversations").
+			Column("id").
+			Where("agent_id = ?", agentID).
+			Where("LOWER(TRIM(external_id)) = LOWER(TRIM(?))", legacyExternalID).
+			OrderExpr("id ASC").
+			Limit(1).
+			Scan(ctx, &existing)
+		if err == nil && existing.ID > 0 {
+			if _, updateErr := db.NewUpdate().
+				Table("conversations").
+				Set("external_id = ?", externalID).
+				Set("updated_at = ?", sqlite.NowUTC()).
+				Where("id = ?", existing.ID).
+				Exec(ctx); updateErr != nil {
+				return nil, fmt.Errorf("update legacy conversation external_id: %w", updateErr)
+			}
+			conv, getErr := convService.GetConversation(existing.ID)
+			if getErr == nil {
+				ensureConversationAgentType(ctx, db, conv, agentType)
+				return conv, nil
+			}
 		}
 	}
 
@@ -1053,6 +1138,94 @@ func findOrCreateConversation(
 	}
 
 	return conv, nil
+}
+
+func lockChannelConversation(agentID int64, externalIDs ...string) func() {
+	lockKey := fmt.Sprintf("%d:", agentID)
+	for _, externalID := range externalIDs {
+		externalID = strings.TrimSpace(externalID)
+		if externalID != "" {
+			lockKey += externalID
+			break
+		}
+	}
+
+	muValue, _ := channelConversationLocks.LoadOrStore(lockKey, &sync.Mutex{})
+	mu := muValue.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+func buildChannelConversationExternalIDs(msg channels.IncomingMessage) (string, []string) {
+	scope := ""
+	switch msg.Platform {
+	case channels.PlatformWeCom, channels.PlatformFeishu:
+		if msg.IsGroup {
+			scope = channels.ChannelConversationScopeGroup
+		} else {
+			scope = channels.ChannelConversationScopeDM
+		}
+	}
+
+	chatID := strings.TrimSpace(msg.ChatID)
+	senderID := strings.TrimSpace(msg.SenderID)
+	targetID := chatID
+	if targetID == "" {
+		targetID = senderID
+	}
+
+	legacyIDs := make([]string, 0, 3)
+	appendLegacy := func(id string) {
+		id = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(id))
+		if id == "" {
+			return
+		}
+		for _, existing := range legacyIDs {
+			if existing == id {
+				return
+			}
+		}
+		legacyIDs = append(legacyIDs, id)
+	}
+
+	if msg.Platform == channels.PlatformFeishu && !msg.IsGroup {
+		if senderID != "" {
+			targetID = senderID
+		}
+		if chatID != "" && !strings.EqualFold(chatID, targetID) {
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, scope, chatID))
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", chatID))
+		}
+	}
+
+	if targetID == "" {
+		return "", legacyIDs
+	}
+
+	externalID := channels.BuildChannelConversationExternalID(msg.ChannelID, scope, targetID)
+	appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", targetID))
+	return externalID, legacyIDs
+}
+
+func canonicalizeConversationExternalIDs(externalIDs ...string) []string {
+	out := make([]string, 0, len(externalIDs))
+	for _, externalID := range externalIDs {
+		externalID = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(externalID))
+		if externalID == "" {
+			continue
+		}
+		duplicate := false
+		for _, existing := range out {
+			if existing == externalID {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			out = append(out, externalID)
+		}
+	}
+	return out
 }
 
 // ensureConversationAgentType patches an existing conversation's agent_type

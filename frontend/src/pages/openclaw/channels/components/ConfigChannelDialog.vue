@@ -49,8 +49,8 @@ watch(open, (val) => {
       avatar.value = props.channel.avatar
       try {
         const config = JSON.parse(props.channel.extra_config)
-        appId.value = config.app_id || ''
-        appSecret.value = config.app_secret || ''
+        appId.value = config.app_id || config.bot_id || ''
+        appSecret.value = config.app_secret || config.secret || ''
       } catch {
         appId.value = ''
         appSecret.value = ''
@@ -65,8 +65,20 @@ watch(open, (val) => {
 })
 
 const currentPlatformId = computed(() => props.platform?.id || props.channel?.platform || 'feishu')
+const isWeComPlatform = computed(() => currentPlatformId.value === 'wecom')
 
 const platformTipConfig = computed(() => {
+  if (isWeComPlatform.value) {
+    return {
+      platformUrl: 'https://open.work.weixin.qq.com/',
+      docsUrl: getPlatformDocsUrl('wecom'),
+      prefix: t('channels.config.wecomTipPrefix'),
+      platformLink: t('channels.config.wecomPlatformLink'),
+      middle: t('channels.config.wecomTipMiddle'),
+      guideLink: t('channels.config.wecomGuideLink'),
+      suffix: t('channels.config.wecomTipSuffix'),
+    }
+  }
   if (currentPlatformId.value === 'dingtalk') {
     return {
       platformUrl: 'https://open-dev.dingtalk.com/',
@@ -90,13 +102,34 @@ const platformTipConfig = computed(() => {
 })
 
 const dialogTitle = computed(() => {
-  const platformKey = currentPlatformId.value === 'dingtalk' ? 'channels.meta.dingtalk.botName' : 'channels.meta.feishu.botName'
-  const botName = t(platformKey, currentPlatformId.value)
+  let botName: string
+  if (isWeComPlatform.value) {
+    botName = t('channels.meta.wecom.botName', 'wecom')
+  } else if (currentPlatformId.value === 'dingtalk') {
+    botName = t('channels.meta.dingtalk.botName', 'dingtalk')
+  } else {
+    botName = t('channels.meta.feishu.botName', 'feishu')
+  }
   if (props.channel) {
     return t('channels.config.editTitle', { platform: botName })
   }
   return t('channels.config.title', { platform: botName })
 })
+
+const appIdLabelKey = computed(() =>
+  isWeComPlatform.value ? 'channels.config.wecomBotId' : 'channels.config.appId'
+)
+const appSecretLabelKey = computed(() =>
+  isWeComPlatform.value ? 'channels.config.wecomSecret' : 'channels.config.appSecret'
+)
+const appIdPlaceholderKey = computed(() =>
+  isWeComPlatform.value ? 'channels.config.wecomAppIdPlaceholder' : 'channels.config.appIdPlaceholder'
+)
+const appSecretPlaceholderKey = computed(() =>
+  isWeComPlatform.value
+    ? 'channels.config.wecomAppSecretPlaceholder'
+    : 'channels.config.appSecretPlaceholder'
+)
 
 const isFormValid = computed(() => {
   if (!name.value.trim()) return false
@@ -139,6 +172,7 @@ async function handleVerify() {
     return
   }
   const extraConfig = JSON.stringify({
+    platform: currentPlatformId.value,
     app_id: appId.value.trim(),
     app_secret: appSecret.value.trim(),
   })
@@ -159,6 +193,7 @@ async function handleSave() {
   saving.value = true
   try {
     const extraConfig = JSON.stringify({
+      platform: currentPlatformId.value,
       app_id: appId.value.trim(),
       app_secret: appSecret.value.trim(),
     })
@@ -293,12 +328,12 @@ async function handleOpenExternalLink(url: string) {
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
             <span class="text-destructive" aria-hidden="true">*</span>
-            {{ t('channels.config.appId') }}
+            {{ t(appIdLabelKey) }}
           </Label>
           <Input
             id="app-id"
             v-model="appId"
-            :placeholder="t('channels.config.appIdPlaceholder')"
+            :placeholder="t(appIdPlaceholderKey)"
             maxlength="60"
           />
         </div>
@@ -308,13 +343,13 @@ async function handleOpenExternalLink(url: string) {
             class="flex items-center gap-1 text-sm font-medium text-[#0a0a0a] dark:text-foreground"
           >
             <span class="text-destructive" aria-hidden="true">*</span>
-            {{ t('channels.config.appSecret') }}
+            {{ t(appSecretLabelKey) }}
           </Label>
           <Input
             id="app-secret"
             v-model="appSecret"
             type="password"
-            :placeholder="t('channels.config.appSecretPlaceholder')"
+            :placeholder="t(appSecretPlaceholderKey)"
             maxlength="200"
           />
         </div>

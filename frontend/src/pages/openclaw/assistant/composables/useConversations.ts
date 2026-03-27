@@ -9,6 +9,7 @@ import {
   CreateConversationInput,
   UpdateConversationInput,
 } from '@bindings/chatclaw/internal/services/conversations'
+import { OpenClawChannelService } from '@bindings/chatclaw/internal/services/openclaw/channels'
 import { Events } from '@wailsio/runtime'
 
 export function useConversations(tabId: string) {
@@ -58,6 +59,7 @@ export function useConversations(tabId: string) {
     setAgentLoading(agentId, true)
     const previousConversationId = activeConversationId.value
     try {
+      await OpenClawChannelService.SyncAgentConversations(agentId)
       const list = await ConversationsService.ListConversations(agentId, 'openclaw')
       const next = list || []
       conversationsByAgent.value = {

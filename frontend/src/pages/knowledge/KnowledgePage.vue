@@ -26,7 +26,7 @@ import LibraryContentArea from './components/LibraryContentArea.vue'
 import FolderTreeItem from './components/FolderTreeItem.vue'
 import TeamFolderCard from './components/TeamFolderCard.vue'
 import TeamFileCard from './components/TeamFileCard.vue'
-import ChatInputArea from '@/pages/native/assistant/components/ChatInputArea.vue'
+import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -66,16 +66,16 @@ import {
 } from '@/lib/chatwikiCache'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { FileStack } from 'lucide-vue-next'
-import { useAgents } from '@/pages/native/assistant/composables/useAgents'
-import { useModelSelection } from '@/pages/native/assistant/composables/useModelSelection'
+import { useAgents } from '@/pages/assistant/composables/useAgents'
+import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
 import { toast } from '@/components/ui/toast'
 
 type LibraryTab = 'personal' | 'team'
 
 const { t } = useI18n()
-const navigationStore = useNavigationStore()
 const appStore = useAppStore()
+const navigationStore = useNavigationStore()
 const settingsStore = useSettingsStore()
 
 const activeTab = ref<LibraryTab>('personal')
@@ -335,11 +335,14 @@ const isLibraryEmpty = computed(
 )
 const isPersonalTab = computed(() => activeTab.value === 'personal')
 
-// Show bottom chat input: personal tab with a library, or team tab with a selected team library
+// Show bottom chat input: personal tab with a library, or team tab with a selected team library.
+// Team knowledge chat is not implemented for OpenClaw yet — hide input there only.
 const showChatInputArea = computed(
   () =>
     (activeTab.value === 'personal' && !isLibraryEmpty.value) ||
-    (activeTab.value === 'team' && !!selectedTeamLibrary.value)
+    (activeTab.value === 'team' &&
+      !!selectedTeamLibrary.value &&
+      appStore.currentSystem !== 'openclaw')
 )
 
 const loadLibraries = async () => {
