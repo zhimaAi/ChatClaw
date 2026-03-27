@@ -100,16 +100,19 @@ Section
 
     ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go).
     ; Packaged as a .zip in the installer: NSIS registers only one File entry for the zip (vs thousands of individual files
-    ; if File /r were used). Installs via PowerShell Expand-Archive (fast single-pass extraction).
+    ; if File /r were used). Extract with Windows tar.exe (bsdtar): much faster than PowerShell Expand-Archive on huge
+    ; trees with many small files (e.g. node_modules). Zip layout must be flat: archive root = contents of windows-<arch>/
+    ; (bin/, manifest.json, node_modules/, ...), not a nested windows-<arch>/ folder (matches Compress-Archive ...\target\*).
     !ifdef ARG_OPENCLAW_RUNTIME
         CreateDirectory "$INSTDIR\rt"
+        CreateDirectory "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"
         SetOutPath "$INSTDIR\rt"
         ; The zip file is compressed into the installer data section; NSIS registers only this single File line.
         File "${ARG_OPENCLAW_RUNTIME}"
         DetailPrint "Extracting OpenClaw runtime..."
         SetDetailsPrint listonly
-        ; Extract zip in-place then remove the zip (rt dir is now populated, no per-file Delete entries in uninstaller)
-        ExecWait 'powershell -ExecutionPolicy Bypass -Command "Expand-Archive -Path $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -DestinationPath $INSTDIR\rt -Force; Remove-Item -Path $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -Force"'
+        ExecWait 'powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "tar -xf $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -C $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"'
+        Delete "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip"
         SetDetailsPrint both
     !endif
 

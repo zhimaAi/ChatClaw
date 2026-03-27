@@ -113,7 +113,8 @@ tasks:
       ARCH: '{{.ARCH | default ARCH}}'
 
   # Produces build/openclaw-runtime/windows-<arch>/ for the NSIS step. The app resolves this at install time as $INSTDIR/rt/windows-<arch> (see internal/openclaw/runtime/bundle.go).
-  # Packages as .zip so NSIS installs in one pass (no per-file Delete entries → fast uninstall via RMDir /r).
+  # Packages as .zip (flat: zip root = folder contents, not a windows-<arch>/ wrapper) so NSIS installs in one pass
+  # (no per-file Delete entries; fast uninstall via RMDir /r). Installer extracts with tar.exe, not Expand-Archive.
   bundle:openclaw:runtime:
     summary: Bundles OpenClaw Node runtime under build/openclaw-runtime and zips it for NSIS
     internal: true
@@ -123,7 +124,7 @@ tasks:
         {{if eq OS "windows"}}
         powershell -Command "if (!(Test-Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip')) { Compress-Archive -Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}\*' -DestinationPath '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip' -Force; Write-Host 'Zipped runtime.' } else { Write-Host 'Zip exists, skipping compression.' }"
         {{else}}
-        test -f {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}}.zip && echo "Zip exists, skipping." || (cd {{.ROOT_DIR}}/build/openclaw-runtime && zip -r windows-{{.ARCH | default ARCH}}.zip windows-{{.ARCH | default ARCH}}/)
+        test -f {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}}.zip && echo "Zip exists, skipping." || (cd {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}} && zip -r ../windows-{{.ARCH | default ARCH}}.zip .)
         {{end}}
 
   create:nsis:installer:
