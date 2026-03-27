@@ -83,6 +83,10 @@ var registry = map[string]toolSpec{
 	"codex": codexSpec(),
 }
 
+// openclawVersion is the bundled OpenClaw runtime version (matches build/runtime.yml).
+// Used for OSS downloads when no bundled runtime is available.
+const openclawVersion = "2026.3.24"
+
 // openclawSpec is a placeholder entry for the openclaw runtime in the registry.
 // The actual download URL is resolved via the API at runtime (see InstallOpenClawRuntime),
 // so binaryPathInArchive is intentionally omitted — this spec is not used for
@@ -100,22 +104,22 @@ var openclawSpec = toolSpec{
 
 // InstallOpenClawRuntime downloads the OpenClaw runtime package from OSS and installs it
 // to ~/.chatclaw/openclaw/runtime/<target>/current using an atomic staging+backup+activate
-// pattern. It reuses the same /tool-latest API endpoint and OSS CDN as the toolchain extension
-// downloads, so no additional backend logic is required.
+// pattern. It uses a fixed version number and fetches the download URL from the backend API.
 //
 // This is called as a fallback when reconcileLocked cannot find any bundled runtime.
 // The installed layout matches the output of internal/tools/openclawbundle:
 //   tools/node/, lib/node_modules/openclaw/, bin/openclaw(.cmd), manifest.json
 func (s *ToolchainService) InstallOpenClawRuntime() error {
 	target := runtime.GOOS + "-" + runtime.GOARCH
+	version := openclawVersion
 
-	s.app.Logger.Info("toolchain: installing openclaw runtime from OSS", "target", target)
+	s.app.Logger.Info("toolchain: installing openclaw runtime from OSS", "target", target, "version", version)
 
-	// Fetch latest version + OSS URL from the same API used by toolchain extension downloads
-	version, ossURL, err := s.fetchToolLatest("openclaw", runtime.GOOS, runtime.GOARCH)
+	// Fetch download URL from API using fixed version
+	ossURL, err := s.fetchOSSDownloadURL("openclaw", version, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
-		s.app.Logger.Error("toolchain: failed to fetch openclaw latest info from API", "error", err)
-		return fmt.Errorf("fetch openclaw latest: %w", err)
+		s.app.Logger.Error("toolchain: failed to fetch openclaw download URL from API", "error", err)
+		return fmt.Errorf("fetch openclaw download URL: %w", err)
 	}
 	s.app.Logger.Info("toolchain: openclaw runtime", "version", version, "url", ossURL)
 
@@ -247,12 +251,9 @@ func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, e
 	status.Installed = true
 	status.RuntimePath = currentDir
 
-	// Fetch latest version from API
-	latest, _, apiErr := s.fetchToolLatest("openclaw", runtime.GOOS, runtime.GOARCH)
-	if apiErr == nil && latest != "" {
-		status.LatestVersion = latest
-		status.HasUpdate = strings.TrimSpace(latest) != status.InstalledVersion
-	}
+	// OpenClaw uses a fixed version (not fetched from API), so HasUpdate is always false
+	status.LatestVersion = manifest.OpenClawVersion
+	status.HasUpdate = false
 
 	return status, nil
 }
