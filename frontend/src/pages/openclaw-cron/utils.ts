@@ -27,6 +27,9 @@ const DEFAULT_ONE_TIME_MINUTE = 0
 const DEFAULT_ONE_TIME_SECOND = 0
 const DEFAULT_OPENCLAW_SESSION_TARGET = 'isolated'
 const DEFAULT_OPENCLAW_DELIVERY_MODE = 'announce'
+const OPENCLAW_DELIVERY_MODE_NONE = 'none'
+// Keep the cron form default aligned with the requested half-hour timeout in milliseconds.
+const DEFAULT_OPENCLAW_TIMEOUT_MS = 1800000
 
 export type OpenClawCronScheduleKind = 'cron' | 'every' | 'at' | 'custom'
 export type OpenClawCronCustomMode = 'daily' | 'weekly' | 'monthly'
@@ -101,7 +104,7 @@ export function createEmptyOpenClawCronForm(): OpenClawCronFormState {
     thinking: 'off',
     expectFinal: false,
     lightContext: false,
-    timeoutMs: 30000,
+    timeoutMs: DEFAULT_OPENCLAW_TIMEOUT_MS,
     sessionTarget: DEFAULT_OPENCLAW_SESSION_TARGET,
     sessionKey: '',
     wakeMode: 'now',
@@ -155,7 +158,7 @@ export function jobToForm(job: OpenClawCronJob): OpenClawCronFormState {
     thinking: job.thinking || 'off',
     expectFinal: !!job.expect_final,
     lightContext: !!job.light_context,
-    timeoutMs: Number(job.timeout_ms || 30000),
+    timeoutMs: Number(job.timeout_ms || DEFAULT_OPENCLAW_TIMEOUT_MS),
     sessionTarget: job.session_target || DEFAULT_OPENCLAW_SESSION_TARGET,
     sessionKey: job.session_key || '',
     wakeMode: job.wake_mode || 'now',
@@ -179,8 +182,7 @@ export function buildCreateInput(form: OpenClawCronFormState) {
   const schedulePayload = resolveSchedulePayload(form)
   // OpenClaw default / OpenClaw 默认：agentTurn cron tasks should use isolated sessions unless caller overrides it.
   const sessionTarget = form.sessionTarget || DEFAULT_OPENCLAW_SESSION_TARGET
-  // Explicit delivery mode / 显式投递模式：once a delivery channel is configured, always send announce mode to avoid silent non-delivery.
-  const deliveryMode = form.channelPlatform ? DEFAULT_OPENCLAW_DELIVERY_MODE : undefined
+  const deliveryConfig = resolveDeliveryConfig(form)
   return new CreateOpenClawCronJobInput({
     name: form.name,
     description: form.description,
@@ -202,9 +204,9 @@ export function buildCreateInput(form: OpenClawCronFormState) {
     session_key: form.sessionKey,
     wake_mode: form.wakeMode,
     announce: form.announce,
-    delivery_mode: deliveryMode,
-    delivery_target_id: form.deliveryTargetId,
-    delivery_channel: form.channelPlatform,
+    delivery_mode: deliveryConfig.mode,
+    delivery_target_id: deliveryConfig.targetId,
+    delivery_channel: deliveryConfig.channelPlatform,
     best_effort_deliver: form.bestEffortDeliver,
     delete_after_run: form.deleteAfterRun,
     keep_after_run: form.keepAfterRun,
@@ -217,8 +219,7 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
   const schedulePayload = resolveSchedulePayload(form)
   // OpenClaw default / OpenClaw 默认：keep update payload aligned with create payload for isolated-session cron jobs.
   const sessionTarget = form.sessionTarget || DEFAULT_OPENCLAW_SESSION_TARGET
-  // Explicit delivery mode / 显式投递模式：updates with configured channels should continue to push via announce mode.
-  const deliveryMode = form.channelPlatform ? DEFAULT_OPENCLAW_DELIVERY_MODE : undefined
+  const deliveryConfig = resolveDeliveryConfig(form)
   return new UpdateOpenClawCronJobInput({
     name: form.name,
     description: form.description,
@@ -240,14 +241,32 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
     session_key: form.sessionKey || undefined,
     wake_mode: form.wakeMode || undefined,
     announce: form.announce,
-    delivery_mode: deliveryMode,
-    delivery_target_id: form.deliveryTargetId || undefined,
-    delivery_channel: form.channelPlatform || undefined,
+    delivery_mode: deliveryConfig.mode,
+    delivery_target_id: deliveryConfig.targetId || undefined,
+    delivery_channel: deliveryConfig.channelPlatform || undefined,
     best_effort_deliver: form.bestEffortDeliver,
     delete_after_run: form.deleteAfterRun,
     keep_after_run: form.keepAfterRun,
     enabled: form.enabled,
   })
+}
+
+function resolveDeliveryConfig(form: OpenClawCronFormState) {
+  const channelPlatform = form.channelPlatform.trim()
+  const targetId = form.deliveryTargetId.trim()
+  // Incomplete delivery settings must fall back to internal-only mode so create/edit stays optional.
+  if (!channelPlatform || !targetId) {
+    return {
+      mode: OPENCLAW_DELIVERY_MODE_NONE,
+      channelPlatform: '',
+      targetId: '',
+    }
+  }
+  return {
+    mode: DEFAULT_OPENCLAW_DELIVERY_MODE,
+    channelPlatform,
+    targetId,
+  }
 }
 
 export function formatOpenClawCronTime(value?: number | null) {
