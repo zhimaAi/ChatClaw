@@ -113,8 +113,6 @@ const canSubmit = computed(() => {
   if (props.form.scheduleKind === 'every' && (!Number.isFinite(props.form.everyValue) || props.form.everyValue < 1)) return false
   if (props.form.scheduleKind === 'at' && !props.form.oneTimeDate.trim()) return false
   if (props.form.scheduleKind === 'custom' && props.form.customMode === 'weekly' && !props.form.customWeekdays.length) return false
-  if (!props.form.channelPlatform.trim()) return false
-  if (!props.form.deliveryTargetId.trim()) return false
   return true
 })
 
