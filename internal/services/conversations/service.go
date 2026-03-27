@@ -83,50 +83,6 @@ func (s *ConversationsService) ListConversations(agentID int64, agentType string
 	return out, nil
 }
 
-// ListConversationsBySource lists conversations for a specific source in reverse updated order.
-func (s *ConversationsService) ListConversationsBySource(agentID int64, agentType string, source string) ([]Conversation, error) {
-	if agentID <= 0 {
-		return nil, errs.New("error.agent_id_required")
-	}
-
-	normalizedSource := NormalizeConversationSource(source)
-	normalizedAgentType := strings.TrimSpace(agentType)
-	if normalizedAgentType == "" {
-		normalizedAgentType = AgentTypeEino
-	}
-
-	db, err := s.db()
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	models := make([]conversationModel, 0)
-	query := db.NewSelect().
-		Model(&models).
-		Where("agent_id = ?", agentID).
-		Where("agent_type = ?", normalizedAgentType).
-		OrderExpr("updated_at DESC, id DESC")
-
-	if normalizedSource == ConversationSourceManual {
-		query = query.Where("conversation_source = ''")
-	} else {
-		query = query.Where("conversation_source = ?", normalizedSource)
-	}
-
-	if err := query.Scan(ctx); err != nil {
-		return nil, errs.Wrap("error.conversation_list_failed", err)
-	}
-
-	out := make([]Conversation, 0, len(models))
-	for i := range models {
-		out = append(out, models[i].toDTO())
-	}
-	return out, nil
-}
-
 // GetConversation 获取单个会话
 func (s *ConversationsService) GetConversation(id int64) (*Conversation, error) {
 	if id <= 0 {
@@ -246,8 +202,6 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	if agentType == "" {
 		agentType = AgentTypeEino
 	}
-	conversationSource := NormalizeConversationSource(input.ConversationSource)
-
 	// Team conversations use virtual agent groups; OpenClaw conversations reference openclaw_agents table.
 	// Only validate against the agents table for standard eino agents.
 	if teamType != TeamTypeTeam && agentType != AgentTypeOpenClaw {
@@ -273,7 +227,6 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	m := &conversationModel{
 		AgentID:            input.AgentID,
 		AgentType:          agentType,
-		ConversationSource: conversationSource,
 		Name:               name,
 		ExternalID:         strings.TrimSpace(input.ExternalID),
 		LastMessage:        lastMessage,

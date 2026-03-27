@@ -1800,7 +1800,7 @@ export default {
       enabled: '运行中',
       disabled: '已暂停',
       failed: '失败',
-      failedRuns: '失败执行',
+      failedRuns: '失败',
     },
     columns: {
       title: '任务',

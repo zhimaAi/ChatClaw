@@ -691,13 +691,6 @@ func TestNormalizeCronThinking(t *testing.T) {
 	}
 }
 
-func TestBuildCronConversationSource(t *testing.T) {
-	got := buildCronConversationSource(" job-123 ")
-	if got != "openclaw_cron:job-123" {
-		t.Fatalf("expected scoped cron conversation source, got %q", got)
-	}
-}
-
 func TestBuildCreateJobPayload_MapsAgentTurnFields(t *testing.T) {
 	payload, err := buildCreateJobPayload(CreateOpenClawCronJobInput{
 		Name:              "job",

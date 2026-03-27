@@ -1002,7 +1002,6 @@ func (s *OpenClawCronService) ensureRunConversation(jobID string, run OpenClawCr
 
 	return s.ensureConversationRecord(
 		localAgentID,
-		buildCronConversationSource(jobID),
 		sessionKey,
 		buildCronExternalID(jobID, run.SessionID),
 		buildCronConversationName(jobName, run.RunAtMs, run.TimestampMs),
@@ -1092,11 +1091,10 @@ func (s *OpenClawCronService) resolveManualRunAgentID(openClawAgentID string) (i
 
 // insertConversationRecord creates a read-only history conversation record for a cron run session.
 // insertConversationRecord 为 Cron 历史创建本地会话记录，供只读嵌入页读取完整 OpenClaw 消息。
-func (s *OpenClawCronService) insertConversationRecord(agentID int64, conversationSource, sessionKey, externalID, name string) (int64, error) {
+func (s *OpenClawCronService) insertConversationRecord(agentID int64, sessionKey, externalID, name string) (int64, error) {
 	created, err := s.convSvc.CreateConversation(conversations.CreateConversationInput{
 		AgentID:            agentID,
 		AgentType:          conversations.AgentTypeOpenClaw,
-		ConversationSource: strings.TrimSpace(conversationSource),
 		Name:               strings.TrimSpace(name),
 		ExternalID:         strings.TrimSpace(externalID),
 		OpenClawSessionKey: strings.TrimSpace(sessionKey),
@@ -1111,7 +1109,7 @@ func (s *OpenClawCronService) insertConversationRecord(agentID int64, conversati
 
 // ensureConversationRecord serializes session-key based history inserts so background binding
 // and detail reads cannot create duplicate local conversations for the same cron session.
-func (s *OpenClawCronService) ensureConversationRecord(agentID int64, conversationSource, sessionKey, externalID, name string) (int64, int64, error) {
+func (s *OpenClawCronService) ensureConversationRecord(agentID int64, sessionKey, externalID, name string) (int64, int64, error) {
 	s.convMu.Lock()
 	defer s.convMu.Unlock()
 
@@ -1123,7 +1121,7 @@ func (s *OpenClawCronService) ensureConversationRecord(agentID int64, conversati
 		return existing.ID, existing.AgentID, nil
 	}
 
-	createdID, err := s.insertConversationRecord(agentID, conversationSource, sessionKey, externalID, name)
+	createdID, err := s.insertConversationRecord(agentID, sessionKey, externalID, name)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1216,7 +1214,6 @@ func (s *OpenClawCronService) ensureConversationForSession(jobID string, job Ope
 
 	return s.ensureConversationRecord(
 		localAgentID,
-		buildCronConversationSource(jobID),
 		sessionKey,
 		buildCronExternalID(jobID, runID),
 		buildCronConversationName(jobName, runAtMs, runAtMs),
@@ -2712,14 +2709,6 @@ func buildCronExternalID(jobID string, runPart string) string {
 		return fmt.Sprintf("openclaw-cron:%s", trimmedJobID)
 	}
 	return fmt.Sprintf("openclaw-cron:%s:%s", trimmedJobID, trimmedRunPart)
-}
-
-func buildCronConversationSource(jobID string) string {
-	trimmedJobID := strings.TrimSpace(jobID)
-	if trimmedJobID == "" {
-		return conversations.ConversationSourceOpenClawCron
-	}
-	return conversations.ConversationSourceOpenClawCron + ":" + trimmedJobID
 }
 
 func parseManualTriggerAtMs(externalID string) int64 {

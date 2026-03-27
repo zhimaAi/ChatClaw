@@ -68,15 +68,15 @@ const JOB_LAST_STATUS_FAILED = 'failed'
 const JOB_LAST_STATUS_SUCCESS = 'success'
 
 function displayFailedRunSummaryCount() {
-  const currentSummary = summary.value as (OpenClawCronSummary & { failed_runs?: number }) | null
-  return Number(currentSummary?.failed_runs ?? summary.value?.failed ?? 0)
+  return jobs.value.filter((job) => showLastRun(job) && lastRunState(job) === JOB_LAST_STATUS_FAILED)
+    .length
 }
 
 const summaryCards = computed(() => [
   { key: 'total', label: t('openclawCron.summary.total', '任务总数'), value: summary.value?.total ?? 0 },
   { key: 'enabled', label: t('openclawCron.summary.enabled', '运行中'), value: summary.value?.enabled ?? 0 },
   { key: 'disabled', label: t('openclawCron.summary.disabled', '已暂停'), value: summary.value?.disabled ?? 0 },
-  { key: 'failed', label: t('openclawCron.summary.failedRuns', '失败执行'), value: displayFailedRunSummaryCount() },
+  { key: 'failed', label: t('openclawCron.summary.failedRuns', '失败'), value: displayFailedRunSummaryCount() },
 ])
 
 const agentNameMap = computed(() => {

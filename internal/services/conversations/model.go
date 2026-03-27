@@ -30,14 +30,6 @@ const (
 	TeamTypeTeam   = "team"
 )
 
-// ConversationSource constants
-const (
-	// ConversationSourceManual is the default source for regular user-created chats.
-	ConversationSourceManual = ""
-	// ConversationSourceOpenClawCron marks conversations created for OpenClaw cron runs.
-	ConversationSourceOpenClawCron = "openclaw_cron"
-)
-
 // NormalizeChatMode validates and canonicalizes chat mode values.
 // Empty values default to task mode.
 func NormalizeChatMode(raw string) (string, bool) {
@@ -68,27 +60,12 @@ func NormalizeTeamType(raw string) (string, bool) {
 	}
 }
 
-// NormalizeConversationSource canonicalizes conversation source values.
-// Unknown values fall back to the default manual source.
-func NormalizeConversationSource(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	switch {
-	case trimmed == ConversationSourceOpenClawCron:
-		return ConversationSourceOpenClawCron
-	case strings.HasPrefix(trimmed, ConversationSourceOpenClawCron+":"):
-		return trimmed
-	default:
-		return ConversationSourceManual
-	}
-}
-
 // Conversation 会话 DTO（暴露给前端）
 type Conversation struct {
 	ID int64 `json:"id"`
 
 	AgentID            int64   `json:"agent_id"`
 	AgentType          string  `json:"agent_type"`
-	ConversationSource string  `json:"conversation_source"`
 	Name               string  `json:"name"`
 	ExternalID         string  `json:"external_id"` // External unique identifier (e.g., channel conversation key)
 	LastMessage        string  `json:"last_message"`
@@ -111,7 +88,6 @@ type Conversation struct {
 type CreateConversationInput struct {
 	AgentID            int64   `json:"agent_id"`
 	AgentType          string  `json:"agent_type"`
-	ConversationSource string  `json:"conversation_source"`
 	Name               string  `json:"name"`
 	ExternalID         string  `json:"external_id"` // Optional external unique identifier
 	LastMessage        string  `json:"last_message"`
@@ -151,7 +127,6 @@ type conversationModel struct {
 
 	AgentID            int64  `bun:"agent_id,notnull"`
 	AgentType          string `bun:"agent_type,notnull"`
-	ConversationSource string `bun:"conversation_source,notnull"`
 	Name               string `bun:"name,notnull"`
 	ExternalID         string `bun:"external_id,notnull"`
 	LastMessage        string `bun:"last_message,notnull"`
@@ -218,7 +193,6 @@ func (m *conversationModel) toDTO() Conversation {
 
 		AgentID:            m.AgentID,
 		AgentType:          agentType,
-		ConversationSource: NormalizeConversationSource(m.ConversationSource),
 		Name:               m.Name,
 		ExternalID:         m.ExternalID,
 		LastMessage:        m.LastMessage,
