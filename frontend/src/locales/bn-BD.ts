@@ -724,7 +724,7 @@ export default {
     "about": {
       "title": "আমাদের সম্পর্কে",
       "appName": "ChatClaw",
-      "copyright": "© 2026 চাটক্লো সেসামি নেটওয়ার্ক প্রযুক্তি সংস্থা সর্বস্বত্ব সংরক্ষিত",
+      "copyright": "© 2026 ChatClaw Sesame Network Technology · MIT License",
       "officialWebsite": "অফিসিয়াল ওয়েবসাইট",
       "view": "দেখুন",
       "checkUpdate": "আপডেট চেক",
