@@ -266,6 +266,10 @@ const onDblClick = () => {
   void FloatingBallService.OpenMainFromUI()
 }
 
+const onClose = () => {
+  void FloatingBallService.CloseFromUI()
+}
+
 const onResize = () => {
   const prevW = innerWidth.value
   innerWidth.value = window.innerWidth
@@ -424,6 +428,22 @@ watch(
             @dragstart.prevent
           />
         </div>
+
+        <!-- Close button: top-right corner, visible on hover, hidden when collapsed -->
+        <button
+          v-if="!collapsed"
+          class="absolute top-0 right-0 z-50 w-[18px] h-[18px] flex items-center justify-center rounded-full bg-black/30 hover:bg-black/55 text-white/90 transition-opacity duration-150 pointer-events-auto"
+          :class="hovered ? 'opacity-100' : 'opacity-0'"
+          style="font-size: 10px; line-height: 1; --wails-draggable: no-drag"
+          :title="t('floatingball.menu.hide')"
+          @click.stop="onClose"
+          @pointerdown.stop
+          @pointermove.stop
+          @pointerup.stop
+          @pointercancel.stop
+        >
+          ✕
+        </button>
       </div>
     </div>
 
