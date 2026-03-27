@@ -86,6 +86,16 @@ func chatWikiChatCompletionsURL(serverURL string) string {
 	return baseURL + "/chat/completions"
 }
 
+// chatWikiTeamManageChatCompletionsURL returns the team-assistant streaming endpoint
+// (manage API). Do not use chatWikiChatCompletionsURL (/chatclaw/v1/chat/completions) for team tab.
+func chatWikiTeamManageChatCompletionsURL(serverURL string) string {
+	baseURL := normalizeManagementBaseURL(serverURL)
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/manage/chatclaw/chat/completions"
+}
+
 func getModelCatalogSource(binding *Binding) modelCatalogSource {
 	if binding == nil {
 		return modelCatalogSource{
