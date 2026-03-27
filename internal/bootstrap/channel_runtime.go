@@ -191,24 +191,11 @@ func handleChannelMessage(
 		agentType = conversations.AgentTypeOpenClaw
 	}
 
-	// Use a normalized chat key so transient whitespace/empty values do not
-	// accidentally split one real-world chat into multiple conversations.
-	convKey := strings.TrimSpace(msg.ChatID)
-	if convKey == "" {
-		convKey = strings.TrimSpace(msg.SenderID)
-	}
-	legacyExternalID := channels.BuildChannelConversationExternalID(msg.ChannelID, "", convKey)
-	convScope := ""
-	if msg.Platform == channels.PlatformWeCom {
-		if msg.IsGroup {
-			convScope = channels.ChannelConversationScopeGroup
-		} else {
-			convScope = channels.ChannelConversationScopeDM
-		}
-	}
-	externalID := channels.BuildChannelConversationExternalID(msg.ChannelID, convScope, convKey)
+	externalID, legacyExternalIDs := buildChannelConversationExternalIDs(msg)
 	if externalID == "" {
-		externalID = legacyExternalID
+		if len(legacyExternalIDs) > 0 {
+			externalID = legacyExternalIDs[0]
+		}
 	}
 
 	// Build display name: prefer resolved ChatName/SenderName;
@@ -232,7 +219,7 @@ func handleChannelMessage(
 		displayName = channelDisplayName(msg.Platform, false, textContent)
 	}
 
-	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, legacyExternalID, displayName, agentType)
+	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, legacyExternalIDs, displayName, agentType)
 	if err != nil {
 		app.Logger.Error("channel message: find/create conversation failed", "error", err)
 		return
@@ -1056,16 +1043,15 @@ func findOrCreateConversation(
 	convService *conversations.ConversationsService,
 	agentID int64,
 	externalID string,
-	legacyExternalID string,
+	legacyExternalIDs []string,
 	displayName string,
 	agentType string,
 ) (*conversations.Conversation, error) {
 	externalID = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(externalID))
-	if legacyExternalID != "" {
-		legacyExternalID = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(legacyExternalID))
-	}
+	legacyExternalIDs = canonicalizeConversationExternalIDs(legacyExternalIDs...)
 
-	unlock := lockChannelConversation(agentID, externalID, legacyExternalID)
+	lockIDs := append([]string{externalID}, legacyExternalIDs...)
+	unlock := lockChannelConversation(agentID, lockIDs...)
 	defer unlock()
 
 	// Try to find existing conversation by external_id
@@ -1092,8 +1078,11 @@ func findOrCreateConversation(
 		}
 	}
 
-	// Lazily migrate legacy channel conversations to the new scoped external_id.
-	if legacyExternalID != "" && legacyExternalID != externalID {
+	// Lazily migrate legacy channel conversations to the canonical external_id.
+	for _, legacyExternalID := range legacyExternalIDs {
+		if legacyExternalID == "" || legacyExternalID == externalID {
+			continue
+		}
 		existing = convRow{}
 		err = db.NewSelect().
 			Table("conversations").
@@ -1165,6 +1154,78 @@ func lockChannelConversation(agentID int64, externalIDs ...string) func() {
 	mu := muValue.(*sync.Mutex)
 	mu.Lock()
 	return mu.Unlock
+}
+
+func buildChannelConversationExternalIDs(msg channels.IncomingMessage) (string, []string) {
+	scope := ""
+	switch msg.Platform {
+	case channels.PlatformWeCom, channels.PlatformFeishu:
+		if msg.IsGroup {
+			scope = channels.ChannelConversationScopeGroup
+		} else {
+			scope = channels.ChannelConversationScopeDM
+		}
+	}
+
+	chatID := strings.TrimSpace(msg.ChatID)
+	senderID := strings.TrimSpace(msg.SenderID)
+	targetID := chatID
+	if targetID == "" {
+		targetID = senderID
+	}
+
+	legacyIDs := make([]string, 0, 3)
+	appendLegacy := func(id string) {
+		id = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(id))
+		if id == "" {
+			return
+		}
+		for _, existing := range legacyIDs {
+			if existing == id {
+				return
+			}
+		}
+		legacyIDs = append(legacyIDs, id)
+	}
+
+	if msg.Platform == channels.PlatformFeishu && !msg.IsGroup {
+		if senderID != "" {
+			targetID = senderID
+		}
+		if chatID != "" && !strings.EqualFold(chatID, targetID) {
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, scope, chatID))
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", chatID))
+		}
+	}
+
+	if targetID == "" {
+		return "", legacyIDs
+	}
+
+	externalID := channels.BuildChannelConversationExternalID(msg.ChannelID, scope, targetID)
+	appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", targetID))
+	return externalID, legacyIDs
+}
+
+func canonicalizeConversationExternalIDs(externalIDs ...string) []string {
+	out := make([]string, 0, len(externalIDs))
+	for _, externalID := range externalIDs {
+		externalID = channels.CanonicalChannelConversationExternalID(strings.TrimSpace(externalID))
+		if externalID == "" {
+			continue
+		}
+		duplicate := false
+		for _, existing := range out {
+			if existing == externalID {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			out = append(out, externalID)
+		}
+	}
+	return out
 }
 
 // ensureConversationAgentType patches an existing conversation's agent_type
