@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import AssistantPage from '../AssistantPage.vue'
+import OpenClawPage from '../OpenClawPage.vue'
 
 const props = defineProps<{
   conversationId: number
   agentId?: number | null
+  readOnly?: boolean
 }>()
 </script>
 
 <template>
-  <AssistantPage
-    :key="`embedded-${props.conversationId}`"
-    :tab-id="`embedded-${props.conversationId}`"
+  <OpenClawPage
+    :key="`openclaw-embedded-${props.conversationId}`"
+    :tab-id="`openclaw-embedded-${props.conversationId}`"
     mode="embedded"
+    :readonly="props.readOnly ?? false"
     :initial-conversation-id="props.conversationId"
     :initial-agent-id="props.agentId ?? null"
   />

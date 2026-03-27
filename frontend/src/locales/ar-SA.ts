@@ -1438,6 +1438,8 @@ export default {
       "cancel": "إلغاء",
       "success": "تم إنشاء القناة بنجاح",
       "failed": "فشل إنشاء القناة",
+      "dingtalkPluginInstalling": "جارٍ تثبيت مكوّن DingTalk",
+      "dingtalkPluginInstallingDesc": "يتم تثبيت مكوّن DingTalk Connector في الخلفية. يمكنك الآن المتابعة لربط مساعد والتحقق من حالة الاتصال لاحقاً.",
       "avatarHint": "انقر للاستبدال، يوصى بـ 100*100 بكسل، بحد أقصى 100KB",
       "feishuTipPrefix": "تسجيل الدخول إلى",
       "feishuTipMiddle": "لإنشاء بوت، اتبع",

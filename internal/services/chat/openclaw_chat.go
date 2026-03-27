@@ -38,6 +38,7 @@ func (s *ChatService) SetOpenClawGateway(gw OpenClawGatewayInfo) {
 type openClawAgentConfig struct {
 	AgentID         int64
 	OpenClawAgentID string
+	SessionKey      string
 	ProviderID      string
 	ModelID         string
 	Capabilities    []string
@@ -79,16 +80,17 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	defer cancel()
 
 	type conversationRow struct {
-		AgentID        int64  `bun:"agent_id"`
-		LLMProviderID  string `bun:"llm_provider_id"`
-		LLMModelID     string `bun:"llm_model_id"`
-		EnableThinking bool   `bun:"enable_thinking"`
-		LibraryIDs     string `bun:"library_ids"`
+		AgentID            int64  `bun:"agent_id"`
+		LLMProviderID      string `bun:"llm_provider_id"`
+		LLMModelID         string `bun:"llm_model_id"`
+		EnableThinking     bool   `bun:"enable_thinking"`
+		LibraryIDs         string `bun:"library_ids"`
+		OpenClawSessionKey string `bun:"openclaw_session_key"`
 	}
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids").
+		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids", "openclaw_session_key").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_conversation_not_found")
@@ -120,6 +122,7 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	cfg := openClawAgentConfig{
 		AgentID:         conv.AgentID,
 		OpenClawAgentID: agent.OpenClawAgentID,
+		SessionKey:      strings.TrimSpace(conv.OpenClawSessionKey),
 		ProviderID:      providerID,
 		ModelID:         modelID,
 		EnableThinking:  conv.EnableThinking,
@@ -152,6 +155,15 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	}
 
 	return cfg, nil
+}
+
+// resolveOpenClawSessionKey prefers the session key persisted on the conversation record.
+// When the stored value is missing, it falls back to the canonical conv_<id> key.
+func resolveOpenClawSessionKey(cfg openClawAgentConfig, conversationID int64) string {
+	if strings.TrimSpace(cfg.SessionKey) != "" {
+		return strings.TrimSpace(cfg.SessionKey)
+	}
+	return openClawSessionKey(cfg.OpenClawAgentID, conversationID)
 }
 
 func buildOpenClawMessagesFromTranscript(conversationID int64, transcriptMessages []openClawTranscriptMsg) []Message {
@@ -431,7 +443,7 @@ func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string
 	if err != nil {
 		return ""
 	}
-	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -892,7 +904,7 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	if err != nil {
 		return nil, err
 	}
-	sessionKey := openClawSessionKeyForAgent(cfg.OpenClawAgentID, conversationID)
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -969,6 +981,7 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 		"content_len", len(content), "attachments", len(attachments))
 
 	requestID := uuid.New().String()
+	s.emitOpenClawUserMessage(input.ConversationID, input.TabID, requestID, content, attachments)
 	genCtx, cancel := context.WithCancel(context.Background())
 
 	gen := &activeGeneration{
@@ -1045,6 +1058,7 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	}
 
 	requestID := uuid.New().String()
+	s.emitOpenClawUserMessage(input.ConversationID, input.TabID, requestID, content, attachments)
 	genCtx, cancel := context.WithCancel(context.Background())
 
 	gen := &activeGeneration{
@@ -1062,6 +1076,33 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	}()
 
 	return &SendMessageResult{RequestID: requestID, MessageID: input.MessageID}, nil
+}
+
+// emitOpenClawUserMessage mirrors the standard chat pipeline by sending a local
+// user-message event before the OpenClaw gateway starts streaming.
+func (s *ChatService) emitOpenClawUserMessage(conversationID int64, tabID, requestID, content string, attachments []ImagePayload) {
+	imagesJSON := "[]"
+	if len(attachments) > 0 {
+		if data, err := json.Marshal(attachments); err == nil {
+			imagesJSON = string(data)
+		}
+	}
+
+	// Use a synthetic negative message id so the frontend can render the user
+	// bubble immediately without requiring a local DB insert for OpenClaw chats.
+	messageID := -conversationID*1000000 - time.Now().UnixMilli()%1000000
+	s.app.Event.Emit(EventChatUserMessage, ChatUserMessageEvent{
+		ChatEvent: ChatEvent{
+			ConversationID: conversationID,
+			TabID:          tabID,
+			RequestID:      requestID,
+			Seq:            0,
+			MessageID:      messageID,
+			Ts:             time.Now().UnixMilli(),
+		},
+		Content:    content,
+		ImagesJSON: imagesJSON,
+	})
 }
 
 // openClawChatRunState tracks the streaming state for a single chat.send invocation.
@@ -1526,7 +1567,7 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		Status:    StatusStreaming,
 	})
 
-	sessionKey := openClawSessionKey(cfg.OpenClawAgentID, conversationID)
+	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
 
