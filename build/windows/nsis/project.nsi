@@ -98,6 +98,12 @@ Section
     
     !insertmacro wails.files
 
+    ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go)
+    !ifdef ARG_OPENCLAW_RUNTIME
+        SetOutPath "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"
+        File /r "${ARG_OPENCLAW_RUNTIME}\*.*"
+    !endif
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

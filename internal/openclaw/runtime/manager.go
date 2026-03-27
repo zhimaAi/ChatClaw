@@ -889,7 +889,9 @@ func ensureSandboxConfigured(bundle *bundledRuntime) {
 func isDockerAvailable() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, "docker", "info").Run() == nil
+	cmd := exec.CommandContext(ctx, "docker", "info")
+	setCmdHideWindow(cmd)
+	return cmd.Run() == nil
 }
 
 func errStr(err error) string {
