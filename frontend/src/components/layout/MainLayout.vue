@@ -18,7 +18,7 @@ import SideNav from './SideNav.vue'
       <SideNav />
 
       <!-- 主内容区 -->
-      <main class="flex flex-1 flex-col overflow-hidden">
+      <main class="relative flex-1 overflow-hidden">
         <slot />
       </main>
     </div>
