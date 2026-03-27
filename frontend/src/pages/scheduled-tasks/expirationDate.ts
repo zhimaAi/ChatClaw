@@ -4,6 +4,7 @@ export const DEFAULT_SCHEDULED_TASK_TIMEZONE = 'UTC'
 const EXPIRATION_END_OF_DAY_HOUR = 23
 const EXPIRATION_END_OF_DAY_MINUTE = 59
 const EXPIRATION_END_OF_DAY_SECOND = 59
+const TIME_INPUT_DEFAULT_SECOND = 0
 
 type TimeZoneDateParts = {
   year: string
@@ -119,6 +120,42 @@ export function buildExpirationDateTime(dateOnly: string, timezone?: string | nu
     EXPIRATION_END_OF_DAY_SECOND,
     timezone
   )
+}
+
+export function buildTimeZoneDateTime(
+  dateOnly: string,
+  hour: number,
+  minute: number,
+  second: number,
+  timezone?: string | null
+) {
+  const value = dateOnly.trim()
+  if (!value) return null
+  const [year, month, day] = value.split('-').map((item) => Number(item))
+  if (!year || !month || !day) return null
+  return buildTimeZoneDate(
+    year,
+    month,
+    day,
+    Math.min(23, Math.max(0, Math.floor(Number(hour) || 0))),
+    Math.min(59, Math.max(0, Math.floor(Number(minute) || 0))),
+    Math.min(59, Math.max(0, Math.floor(Number(second) || 0))),
+    timezone
+  )
+}
+
+export function toDateTimeInputValue(value?: string | Date | null, timezone?: string | null) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = getTimeZoneDateParts(date, timezone)
+  if (!parts?.hour || !parts.minute) return null
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second || TIME_INPUT_DEFAULT_SECOND),
+  }
 }
 
 export function isExpirationDateExpired(

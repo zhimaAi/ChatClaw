@@ -1436,6 +1436,8 @@ export default {
       "cancel": "Cancelar",
       "success": "Canal creado exitosamente",
       "failed": "Error al crear canal",
+      "dingtalkPluginInstalling": "Instalando plugin de DingTalk",
+      "dingtalkPluginInstallingDesc": "El plugin de DingTalk Connector se está instalando en segundo plano. Puede continuar vinculando un asistente ahora y verificar el estado de conexión más tarde.",
       "avatarHint": "Haz clic para reemplazar, recomendado 100*100px, máx 100KB",
       "feishuTipPrefix": "Inicia sesión en",
       "feishuTipMiddle": "para crear un bot, sigue",

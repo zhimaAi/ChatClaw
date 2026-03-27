@@ -1046,7 +1046,7 @@ func (s *ProvidersService) checkClaude(ctx context.Context, input CheckAPIKeyInp
 		APIKey:    input.APIKey,
 		Model:     modelID,
 		BaseURL:   baseURL,
-		MaxTokens: 100,
+		MaxTokens: 1000,
 	})
 	if err != nil {
 		return &CheckAPIKeyResult{

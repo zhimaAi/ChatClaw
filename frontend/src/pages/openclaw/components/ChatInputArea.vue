@@ -8,7 +8,7 @@ import {
   ArrowUp,
   Square,
   Check,
-  Lightbulb,
+  Trash2,
   X,
   Image as ImageIcon,
   FileText,
@@ -40,7 +40,9 @@ import {
 } from 'reka-ui'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import IconSelectKnowledge from '@/assets/icons/select-knowledge.svg'
+import IconKnowledge from '@/assets/icons/knowledge-icon.svg'
+import IconUpload from '@/assets/icons/upload-icon.svg'
+import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import ChatModeSelector from './ChatModeSelector.vue'
 import {
   DropdownMenu,
@@ -342,6 +344,11 @@ const formatFileSize = (bytes: number): string => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
+const getFileIcon = (fileName: string): string => {
+  const ext = fileName.split('.').pop()?.trim().toLowerCase() || ''
+  return getFileTypeIconUrl(ext)
+}
+
 const handleSelectImagesClick = () => {
   fileInputRef.value?.click()
 }
@@ -569,42 +576,57 @@ onUnmounted(() => {
         @drop="handleDrop"
       >
         <!-- Image preview area -->
-        <div v-if="pendingImages.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
-          <div
-            v-for="img in pendingImages"
-            :key="img.id"
-            class="group relative h-16 w-16 overflow-hidden rounded-md border border-border bg-muted/40"
-          >
-            <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
-            <button
-              class="absolute right-0 top-0 flex size-4 cursor-pointer items-center justify-center rounded-bl-md bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
-              @click="handleRemoveImage(img.id)"
+        <div v-if="pendingImages.length > 0" class="mb-3">
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="img in pendingImages"
+              :key="img.id"
+              class="group relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-border/70 bg-muted/40"
             >
-              <X class="size-3" />
-            </button>
+              <img :src="img.dataUrl" class="h-full w-full object-cover" :alt="img.fileName" />
+              <div
+                class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/95 via-background/60 to-transparent px-1.5 pt-4 pb-1"
+              >
+                <p class="truncate text-[10px] text-foreground/90">{{ img.fileName }}</p>
+              </div>
+              <button
+                class="absolute right-1 top-1 flex size-5 cursor-pointer items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground active:scale-95"
+                @click="handleRemoveImage(img.id)"
+              >
+                <X class="size-3" />
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- File preview area -->
-        <div v-if="pendingFiles.length > 0" class="-mt-1 mb-3 flex flex-wrap gap-2">
-          <div
-            v-for="f in pendingFiles"
-            :key="f.id"
-            class="group relative flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
-          >
-            <File class="size-4 shrink-0 text-muted-foreground" />
-            <div class="flex min-w-0 flex-col">
-              <span class="truncate text-xs font-medium text-foreground" :title="f.fileName">{{
-                f.fileName
-              }}</span>
-              <span class="text-[10px] text-muted-foreground">{{ formatFileSize(f.size) }}</span>
-            </div>
-            <button
-              class="ml-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full bg-destructive/80 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100 active:bg-destructive"
-              @click="emit('removeFile', f.id)"
+        <div v-if="pendingFiles.length > 0" class="mb-3">
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="f in pendingFiles"
+              :key="f.id"
+              class="group relative flex min-w-[220px] max-w-[282px] items-center gap-2 rounded-2xl bg-muted px-4 py-2"
             >
-              <X class="size-3" />
-            </button>
+              <img
+                :src="getFileIcon(f.fileName)"
+                class="h-6 w-6 shrink-0 object-contain"
+                :alt="f.fileName"
+              />
+              <div class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-sm text-foreground" :title="f.fileName">{{
+                  f.fileName
+                }}</span>
+                <span class="text-xs leading-5 text-muted-foreground">{{
+                  formatFileSize(f.size)
+                }}</span>
+              </div>
+              <button
+                class="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
+                @click="emit('removeFile', f.id)"
+              >
+                <Trash2 class="size-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -615,25 +637,27 @@ onUnmounted(() => {
             (selectedLibraryIds.length > 0 ||
               (assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0))
           "
-          class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5"
+          class="-mt-1 mb-3 flex flex-wrap items-center gap-2"
         >
           <!-- Personal libraries -->
           <div
             v-for="lib in visibleLibraries"
             :key="'p-' + lib.id"
-            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+            class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
           >
-            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[148px] truncate">{{ lib.name }}</span>
             <button
-              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
+              type="button"
+              class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
               @click="handleRemoveLibrary(lib.id)"
             >
-              <X class="size-3" />
+              <X class="size-4" />
             </button>
           </div>
           <span
             v-if="overflowCount > 0"
-            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+            class="inline-flex h-8 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground"
           >
             +{{ overflowCount }}
           </span>
@@ -641,30 +665,32 @@ onUnmounted(() => {
           <div
             v-for="lib in visibleTeamLibraries"
             :key="'t-' + lib.id"
-            class="group flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
+            class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
             :title="lib.name"
           >
-            <span class="max-w-[120px] truncate">{{ lib.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[148px] truncate">{{ lib.name }}</span>
             <button
-              class="cursor-pointer rounded-sm p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 active:bg-muted-foreground/20 group-hover:opacity-100"
+              class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
               @click="handleRemoveTeamLibrary(lib.id)"
             >
-              <X class="size-3" />
+              <X class="size-4" />
             </button>
           </div>
           <span
             v-if="teamOverflowCount > 0"
-            class="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground"
+            class="inline-flex h-8 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground"
           >
             +{{ teamOverflowCount }}
           </span>
         </div>
-        <div v-else-if="selectedTeamLibrary" class="-mt-1 mb-3 flex flex-wrap items-center gap-1.5">
+        <div v-else-if="selectedTeamLibrary" class="-mt-1 mb-3 flex flex-wrap items-center gap-2">
           <div
-            class="flex items-center gap-1 rounded-md border border-border bg-muted/50 pl-2 pr-2 py-0.5 text-xs text-muted-foreground"
+            class="flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80"
             :title="selectedTeamLibrary.name"
           >
-            <span class="max-w-[160px] truncate">{{ selectedTeamLibrary.name }}</span>
+            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+            <span class="max-w-[188px] truncate">{{ selectedTeamLibrary.name }}</span>
           </div>
         </div>
 
@@ -694,10 +720,10 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                    class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                     @click="emit('new-conversation')"
                   >
-                    <Plus class="size-4 text-muted-foreground" />
+                    <Plus class="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -705,6 +731,7 @@ onUnmounted(() => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <div v-if="!isTeamMode" class="mx-0.5 h-6 w-px shrink-0 bg-border/70" />
 
             <!-- ChatModeSelector: show in both modes，内部自己处理悬浮提示 -->
             <ChatModeSelector
@@ -725,7 +752,7 @@ onUnmounted(() => {
                       @update:model-value="(v: any) => v && emit('update:activeAgentId', Number(v))"
                     >
                       <SelectTrigger
-                        class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95"
+                        class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-transparent bg-muted px-3 text-xs shadow-none hover:bg-muted/80 active:bg-muted/90 active:scale-95"
                       >
                         <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
                           <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
@@ -768,7 +795,7 @@ onUnmounted(() => {
                         <SelectTrigger
                           :class="
                             cn(
-                              'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-border bg-background px-3 text-xs shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-muted/40 active:bg-muted active:scale-95',
+                              'h-8 w-full min-w-0 max-w-[220px] cursor-pointer rounded-full border border-transparent bg-muted px-3 text-xs shadow-none hover:bg-muted/80 active:bg-muted/90 active:scale-95',
                               useCompactToolbar && 'max-w-[140px]'
                             )
                           "
@@ -928,27 +955,18 @@ onUnmounted(() => {
                   variant="ghost"
                   :class="
                     cn(
-                      'size-8 rounded-full border border-border bg-background',
+                      'size-8 rounded-full border border-transparent bg-muted text-muted-foreground shadow-none',
                       (assistantSelectedTeamLibraryIds &&
                         assistantSelectedTeamLibraryIds.length > 0) ||
                         selectedLibraryIds.length > 0
-                        ? 'border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95'
-                        : 'hover:bg-muted/40 active:bg-muted active:scale-95',
+                        ? 'text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95'
+                        : 'hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95',
                       useCompactToolbar &&
                         'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
                     )
                   "
                 >
-                  <IconSelectKnowledge
-                    class="size-4 pointer-events-none"
-                    :class="
-                      (assistantSelectedTeamLibraryIds &&
-                        assistantSelectedTeamLibraryIds.length > 0) ||
-                      selectedLibraryIds.length > 0
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    "
-                  />
+                  <IconKnowledge class="size-4 pointer-events-none" />
                 </Button>
               </SelectTriggerRaw>
               <SelectPortal>
@@ -1049,9 +1067,9 @@ onUnmounted(() => {
                   <Button
                     size="icon"
                     variant="ghost"
-                    class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10 hover:bg-primary/10 active:bg-primary/20 active:scale-95"
+                    class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95"
                   >
-                    <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+                    <IconKnowledge class="size-4 pointer-events-none" />
                   </Button>
                 </SelectTriggerRaw>
                 <SelectPortal>
@@ -1085,9 +1103,9 @@ onUnmounted(() => {
                 variant="ghost"
                 disabled
                 :title="selectedTeamLibrary.name"
-                class="size-8 rounded-full border border-border bg-background border-primary/50 bg-primary/10"
+                class="size-8 rounded-full border border-transparent bg-muted text-foreground"
               >
-                <IconSelectKnowledge class="size-4 pointer-events-none text-primary" />
+                <IconKnowledge class="size-4 pointer-events-none" />
               </Button>
             </template>
 
@@ -1099,10 +1117,10 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                      class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                       @click="handleSelectFilesClick"
                     >
-                      <File class="size-4 text-muted-foreground" />
+                      <IconUpload class="size-4" />
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -1121,10 +1139,10 @@ onUnmounted(() => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                      class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                       @click="handleSelectImagesClick"
                     >
-                      <ImageIcon class="size-4 text-muted-foreground" />
+                      <ImageIcon class="size-4" />
                     </Button>
                   </span>
                 </TooltipTrigger>
@@ -1140,9 +1158,9 @@ onUnmounted(() => {
                 <Button
                   size="icon"
                   variant="ghost"
-                  class="size-8 rounded-full border border-border bg-background hover:bg-muted/40 active:bg-muted active:scale-95"
+                  class="size-8 rounded-full border border-transparent bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95"
                 >
-                  <MoreHorizontal class="size-4 text-muted-foreground" />
+                  <MoreHorizontal class="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1150,7 +1168,7 @@ onUnmounted(() => {
                 class="w-40 rounded-[6px] shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)]"
               >
                 <DropdownMenuItem class="gap-2" @select="handleSelectFilesClick">
-                  <File class="size-4 text-muted-foreground" />
+                  <IconUpload class="size-4 text-muted-foreground" />
                   <span class="text-xs text-foreground">{{ t('assistant.chat.uploadFile') }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem class="gap-2" @select="handleSelectImagesClick">
@@ -1168,7 +1186,7 @@ onUnmounted(() => {
                     }
                   "
                 >
-                  <IconSelectKnowledge class="size-4 text-muted-foreground" />
+                  <IconKnowledge class="size-4 text-muted-foreground" />
                   <span class="text-xs text-foreground">{{
                     t('assistant.chat.selectKnowledge')
                   }}</span>
@@ -1180,7 +1198,7 @@ onUnmounted(() => {
           <template v-if="isGenerating">
             <Button
               size="icon"
-              class="size-6 rounded-full bg-muted-foreground/20 text-foreground hover:bg-muted-foreground/30 active:bg-muted-foreground/50 active:scale-95"
+              class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95"
               :title="t('assistant.chat.stop')"
               @click="emit('stop')"
             >
@@ -1195,7 +1213,7 @@ onUnmounted(() => {
                   <span class="inline-flex" @click="handleDisabledSendClick">
                     <Button
                       size="icon"
-                      class="size-6 pointer-events-none rounded-full bg-muted-foreground/20 text-muted-foreground disabled:opacity-100"
+                      class="size-8 pointer-events-none rounded-full border border-transparent bg-muted text-muted-foreground disabled:opacity-100"
                       disabled
                     >
                       <ArrowUp class="size-4" />
@@ -1210,7 +1228,7 @@ onUnmounted(() => {
             <Button
               v-else
               size="icon"
-              class="size-6 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/75 active:scale-95"
+              class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95"
               :title="t('assistant.chat.send')"
               @click="handleSendClick"
             >

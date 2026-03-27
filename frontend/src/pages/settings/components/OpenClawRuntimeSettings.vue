@@ -202,11 +202,16 @@ onUnmounted(() => {
       </SettingsItem>
 
       <!-- Runtime Path -->
-      <SettingsItem :label="t('settings.openclawRuntime.runtimePath')">
-        <span class="break-all font-mono text-sm text-muted-foreground">{{
-          displayRuntimePath
-        }}</span>
-      </SettingsItem>
+      <div class="flex items-start justify-between border-b border-border p-4 dark:border-white/10">
+        <span class="shrink-0 whitespace-nowrap pt-0.5 text-sm font-medium text-foreground">
+          {{ t('settings.openclawRuntime.runtimePath') }}
+        </span>
+        <div class="min-w-0 flex-1 pl-6 text-right">
+          <span class="block break-all font-mono text-sm text-muted-foreground">
+            {{ displayRuntimePath }}
+          </span>
+        </div>
+      </div>
 
       <!-- Error Message -->
       <div

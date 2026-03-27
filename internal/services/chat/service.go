@@ -735,6 +735,16 @@ func (s *ChatService) appendGenerationContent(conversationID int64, requestID st
 	gen.mu.Unlock()
 }
 
+// HasActiveGeneration reports whether the conversation still has a live generation.
+// Cron history uses this to avoid marking manual runs as completed too early.
+func (s *ChatService) HasActiveGeneration(conversationID int64) bool {
+	if conversationID <= 0 {
+		return false
+	}
+	_, ok := s.activeGenerations.Load(conversationID)
+	return ok
+}
+
 // startGeneration creates a new generation context and launches the goroutine.
 func (s *ChatService) startGeneration(db *bun.DB, conversationID int64, tabID string, agentConfig einoagent.Config, providerConfig einoagent.ProviderConfig, agentExtras AgentExtras, runFn func(ctx context.Context, requestID string)) (*SendMessageResult, error) {
 	requestID := uuid.New().String()
