@@ -1437,6 +1437,8 @@ export default {
       "cancel": "ANNULLA",
       "success": "Canale creato con successo",
       "failed": "Creazione canale fallita",
+      "dingtalkPluginInstalling": "Installazione plugin DingTalk in corso",
+      "dingtalkPluginInstallingDesc": "Il plugin DingTalk Connector è in fase di installazione in background. Puoi procedere con l'associazione di un assistente ora e controllare lo stato della connessione in seguito.",
       "avatarHint": "Clicca per sostituire, dimensione consigliata 100*100px, massimo 100kb",
       "feishuTipPrefix": "Accedi a",
       "feishuTipMiddle": "crea un robot, segui le",

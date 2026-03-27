@@ -1438,6 +1438,8 @@ export default {
       "cancel": "Prekliči",
       "success": "Kanal uspešno ustvarjen",
       "failed": "Ustvarjanje kanala ni uspelo",
+      "dingtalkPluginInstalling": "Nameščanje vtičnika DingTalk",
+      "dingtalkPluginInstallingDesc": "Vtičnik DingTalk Connector se namešča v ozadju. Zdaj lahko nadaljujete z vezavo asistenta in pozneje preverite stanje povezave.",
       "avatarHint": "Kliknite za zamenjavo, priporočeno 100*100px, največ 100KB",
       "feishuTipPrefix": "Prijavite se v",
       "feishuTipMiddle": "za ustvarjanje bota, sledite",

@@ -792,7 +792,7 @@ func (s *ChatWikiService) runTeamChatStream(
 	startPayload["status"] = "streaming"
 	s.app.Event.Emit("chat:start", startPayload)
 
-	candidates := []string{chatWikiChatCompletionsURL(binding.ServerURL)}
+	candidates := []string{chatWikiTeamManageChatCompletionsURL(binding.ServerURL)}
 
 	reqBody := map[string]any{
 		"robot_key": robotKey,
