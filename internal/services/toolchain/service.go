@@ -224,24 +224,28 @@ type OpenClawRuntimeStatus struct {
 }
 
 // GetOpenClawRuntimeStatus returns the installation status of the OpenClaw runtime
-// by reading ~/.chatclaw/openclaw/runtime/<target>/current/manifest.json only.
+// by reading manifest.json from (in order):
+//   1) ~/.chatclaw/openclaw/runtime/<target>/current (OSS download install)
+//   2) <exeDir>/rt/<target> (NSIS / installer bundle next to ChatClaw.exe)
+//   3) on macOS: <exeDir>/../Resources/rt/<target> (app bundle)
 // We do not spawn openclaw --version here: on Windows that flashes a console window, and CLI
 // output is verbose while manifest.openclawVersion matches API semver for updates.
 func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, error) {
 	target := runtime.GOOS + "-" + runtime.GOARCH
-	currentDir, err := openclawRuntimeCurrentDir(target)
-	if err != nil {
-		return nil, err
-	}
 
 	status := &OpenClawRuntimeStatus{Name: "openclaw", Installing: false}
 
-	manifestPath := filepath.Join(currentDir, "manifest.json")
+	root, err := resolveOpenClawRuntimeRootForStatus(target)
+	if err != nil {
+		return nil, err
+	}
+	if root == "" {
+		return status, nil
+	}
+
+	manifestPath := filepath.Join(root, "manifest.json")
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return status, nil // not installed
-		}
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
 
@@ -254,13 +258,67 @@ func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, e
 
 	status.InstalledVersion = strings.TrimSpace(manifest.OpenClawVersion)
 	status.Installed = true
-	status.RuntimePath = currentDir
+	status.RuntimePath = root
 
 	// OpenClaw uses a fixed version (not fetched from API), so HasUpdate is always false
 	status.LatestVersion = manifest.OpenClawVersion
 	status.HasUpdate = false
 
 	return status, nil
+}
+
+// resolveOpenClawRuntimeRootForStatus returns the runtime root directory whose manifest to read
+// for UI status. Order matches internal/openclaw/runtime bundledRuntimeCandidates.
+func resolveOpenClawRuntimeRootForStatus(target string) (string, error) {
+	currentDir, err := openclawRuntimeCurrentDir(target)
+	if err != nil {
+		return "", err
+	}
+	if ok, err := isValidOpenClawRuntimeRoot(currentDir); err != nil {
+		return "", err
+	} else if ok {
+		return currentDir, nil
+	}
+
+	execPath, err := os.Executable()
+	if err != nil || strings.TrimSpace(execPath) == "" {
+		return "", nil
+	}
+	execDir := filepath.Dir(execPath)
+
+	var embedded []string
+	if runtime.GOOS == "darwin" {
+		embedded = append(embedded, filepath.Clean(filepath.Join(execDir, "..", "Resources", "rt", target)))
+	}
+	embedded = append(embedded, filepath.Join(execDir, "rt", target))
+
+	for _, root := range embedded {
+		if ok, err := isValidOpenClawRuntimeRoot(root); err != nil {
+			return "", err
+		} else if ok {
+			return root, nil
+		}
+	}
+
+	return "", nil
+}
+
+func isValidOpenClawRuntimeRoot(root string) (bool, error) {
+	manifestPath := filepath.Join(root, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	cli := filepath.Join(root, "bin", openClawCLIName())
+	if _, err := os.Stat(cli); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // openclawRuntimeTargetDir returns ~/.chatclaw/openclaw/runtime/<target>
