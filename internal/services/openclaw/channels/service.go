@@ -40,7 +40,7 @@ const wecomPluginID = "wecom-openclaw-plugin"
 // Timeouts for OpenClaw CLI (config set), plugin install/list, and gateway restart.
 const (
 	openClawChannelSyncTimeout = 120 * time.Second
-	openClawCLIRetryTimeout  = 90 * time.Second
+	openClawCLIRetryTimeout    = 90 * time.Second
 )
 
 func NewOpenClawChannelService(
@@ -309,9 +309,10 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 		return err
 	}
 
-	if platform == channels.PlatformWeCom {
-		if err := s.removeManagedRouteBinding(platform, id); err != nil {
-			s.app.Logger.Warn("openclaw wecom route binding cleanup failed after delete", "channel_id", id, "error", err)
+	if isPluginManagedOpenClawPlatform(platform) {
+		accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
+		if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
+			s.app.Logger.Warn("openclaw channel route binding cleanup failed after delete", "channel_id", id, "platform", platform, "error", err)
 		}
 	}
 	if err := s.syncOpenClawPlatformConfigAfterDelete(ctx, platform); err != nil {
@@ -342,8 +343,10 @@ func (s *OpenClawChannelService) UnbindAgent(id int64) error {
 	if err := s.channelSvc.UnbindAgent(id); err != nil {
 		return err
 	}
-	if strings.TrimSpace(m.Platform) == channels.PlatformWeCom && m.OpenClawScope {
-		if err := s.removeManagedRouteBinding(channels.PlatformWeCom, id); err != nil {
+	platform := strings.TrimSpace(m.Platform)
+	if m.OpenClawScope && isPluginManagedOpenClawPlatform(platform) {
+		accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
+		if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
 			return errs.Wrap("error.channel_bind_failed", err)
 		}
 		if err := s.restartOpenClawGateway(); err != nil {
@@ -384,7 +387,7 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		}
 	}
 
-	if platform == channels.PlatformWeCom {
+	if isPluginManagedOpenClawPlatform(platform) {
 		if m.AgentID == 0 {
 			return errs.New("error.channel_connect_requires_agent")
 		}
@@ -424,7 +427,7 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 		return wrapOpenClawSyncErr(err, "error.channel_disconnect_failed", nil)
 	}
 
-	if platform == channels.PlatformWeCom {
+	if isPluginManagedOpenClawPlatform(platform) {
 		_ = s.gateway.DisconnectChannel(context.Background(), id)
 		enabled := false
 		_, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
@@ -435,13 +438,22 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 }
 
 func (s *OpenClawChannelService) isPluginManagedChannelOnline(ch channels.Channel) bool {
-	if strings.TrimSpace(ch.Platform) != channels.PlatformWeCom {
+	if !isPluginManagedOpenClawPlatform(ch.Platform) {
 		return false
 	}
 	if !ch.OpenClawScope || !ch.Enabled {
 		return false
 	}
 	return s.openclawManager != nil && s.openclawManager.IsReady()
+}
+
+func isPluginManagedOpenClawPlatform(platform string) bool {
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformFeishu, channels.PlatformWeCom:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *OpenClawChannelService) syncChannelRoutingBinding(channelID int64, agentID int64) error {
@@ -454,32 +466,34 @@ func (s *OpenClawChannelService) syncChannelRoutingBinding(channelID int64, agen
 	if err != nil {
 		return err
 	}
-	if !m.OpenClawScope || strings.TrimSpace(m.Platform) != channels.PlatformWeCom {
+	platform := strings.TrimSpace(m.Platform)
+	if !m.OpenClawScope || !isPluginManagedOpenClawPlatform(platform) {
 		return nil
 	}
 	agent, err := s.agentsSvc.GetAgent(agentID)
 	if err != nil {
 		return err
 	}
-	if err := s.upsertManagedRouteBinding(channels.PlatformWeCom, channelID, strings.TrimSpace(agent.OpenClawAgentID)); err != nil {
+	accountID := openClawManagedAccountID(platform, channelID, m.ExtraConfig)
+	if err := s.upsertManagedRouteBinding(platform, accountID, strings.TrimSpace(agent.OpenClawAgentID)); err != nil {
 		return err
 	}
 	return s.restartOpenClawGateway()
 }
 
-func (s *OpenClawChannelService) upsertManagedRouteBinding(platform string, channelID int64, openclawAgentID string) error {
+func (s *OpenClawChannelService) upsertManagedRouteBinding(platform string, accountID string, openclawAgentID string) error {
 	cfg, configPath, err := loadOpenClawJSONConfig()
 	if err != nil {
 		return err
 	}
 	bindings := configBindings(cfg)
-	bindings = removeManagedBindings(bindings, platform, channelID)
+	bindings = removeManagedBindings(bindings, platform, accountID)
 	bindings = append([]any{map[string]any{
 		"type":    "route",
 		"agentId": strings.TrimSpace(openclawAgentID),
 		"match": map[string]any{
 			"channel":   strings.TrimSpace(platform),
-			"accountId": "default",
+			"accountId": strings.TrimSpace(accountID),
 		},
 	}}, bindings...)
 	cfg["bindings"] = bindings
@@ -487,12 +501,12 @@ func (s *OpenClawChannelService) upsertManagedRouteBinding(platform string, chan
 	return saveOpenClawJSONConfig(configPath, cfg)
 }
 
-func (s *OpenClawChannelService) removeManagedRouteBinding(platform string, channelID int64) error {
+func (s *OpenClawChannelService) removeManagedRouteBinding(platform string, accountID string) error {
 	cfg, configPath, err := loadOpenClawJSONConfig()
 	if err != nil {
 		return err
 	}
-	cfg["bindings"] = removeManagedBindings(configBindings(cfg), platform, channelID)
+	cfg["bindings"] = removeManagedBindings(configBindings(cfg), platform, accountID)
 	return saveOpenClawJSONConfig(configPath, cfg)
 }
 
@@ -534,21 +548,21 @@ func configBindings(cfg map[string]any) []any {
 	return append([]any(nil), bindings...)
 }
 
-func removeManagedBindings(bindings []any, platform string, channelID int64) []any {
+func removeManagedBindings(bindings []any, platform string, accountID string) []any {
 	if len(bindings) == 0 {
 		return bindings
 	}
 	out := make([]any, 0, len(bindings))
 	for _, item := range bindings {
 		entry, _ := item.(map[string]any)
-		if !isManagedChannelBinding(entry, platform, channelID) {
+		if !isManagedChannelBinding(entry, platform, accountID) {
 			out = append(out, item)
 		}
 	}
 	return out
 }
 
-func isManagedChannelBinding(entry map[string]any, platform string, channelID int64) bool {
+func isManagedChannelBinding(entry map[string]any, platform string, accountID string) bool {
 	if entry == nil {
 		return false
 	}
@@ -564,7 +578,14 @@ func isManagedChannelBinding(entry map[string]any, platform string, channelID in
 	if strings.TrimSpace(channelValue) != strings.TrimSpace(platform) {
 		return false
 	}
-	if strings.TrimSpace(accountValue) != "default" {
+	accountValue = strings.TrimSpace(accountValue)
+	accountID = strings.TrimSpace(accountID)
+	if accountValue != accountID {
+		if !(strings.TrimSpace(platform) == channels.PlatformFeishu && accountValue == "default") {
+			return false
+		}
+	}
+	if accountValue == "" {
 		return false
 	}
 	if _, ok := match["peer"]; ok {
@@ -579,8 +600,22 @@ func isManagedChannelBinding(entry map[string]any, platform string, channelID in
 	if roles, ok := match["roles"].([]any); ok && len(roles) > 0 {
 		return false
 	}
-	_ = channelID
 	return true
+}
+
+func openClawManagedAccountID(platform string, channelID int64, extraConfig string) string {
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformFeishu:
+		if id := extractOpenClawChannelID(extraConfig); id != "" {
+			return id
+		}
+		if channelID > 0 {
+			return fmt.Sprintf("channel_%d", channelID)
+		}
+		return ""
+	default:
+		return "default"
+	}
 }
 
 func ensurePerChannelPeerDMScope(cfg map[string]any) {

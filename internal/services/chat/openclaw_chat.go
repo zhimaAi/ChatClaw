@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -155,11 +156,27 @@ func (s *ChatService) resolveOpenClawSessionKeys(conversationID int64, openClawA
 		}, candidates...)
 	case channels.PlatformFeishu:
 		targetID := strings.TrimSpace(source.TargetID)
-		candidates = append([]string{
-			fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
-			fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
-			fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
-		}, candidates...)
+		scope := strings.TrimSpace(source.Scope)
+		switch scope {
+		case channels.ChannelConversationScopeDM:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+			}, candidates...)
+		case channels.ChannelConversationScopeGroup:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+			}, candidates...)
+		default:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
+				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
+			}, candidates...)
+		}
 	}
 
 	return dedupeStrings(candidates)
@@ -693,6 +710,8 @@ var openClawUntrustedMetadataMarkers = []string{
 	"Sender (untrusted metadata)",
 }
 
+var openClawChannelMessageIDLineRE = regexp.MustCompile(`^\[message_id:\s*[^\]]+\]$`)
+
 // skipOpenClawLeadingCodeFence consumes a markdown ``` fenced block at the start of s.
 func skipOpenClawLeadingCodeFence(s string) (rest string, ok bool) {
 	s = strings.TrimLeft(s, " \t\n\r")
@@ -771,7 +790,34 @@ func cleanOpenClawUserMessage(s string) string {
 		}
 	}
 
-	return stripChatClawHiddenBlocks(s, "chatclaw_context", "chatclaw_attachments")
+	s = stripChatClawHiddenBlocks(s, "chatclaw_context", "chatclaw_attachments")
+	return stripOpenClawChannelEnvelopeLines(s)
+}
+
+func stripOpenClawChannelEnvelopeLines(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+
+	if idx := strings.Index(s, "\n[System:"); idx >= 0 {
+		s = strings.TrimSpace(s[:idx])
+	} else if strings.HasPrefix(s, "[System:") {
+		return ""
+	}
+
+	lines := strings.Split(s, "\n")
+	start := 0
+	for start < len(lines) {
+		line := strings.TrimSpace(lines[start])
+		if line == "" || openClawChannelMessageIDLineRE.MatchString(line) {
+			start++
+			continue
+		}
+		break
+	}
+
+	return strings.TrimSpace(strings.Join(lines[start:], "\n"))
 }
 
 func (s *ChatService) buildOpenClawRPCAttachments(attachments []ImagePayload) []map[string]any {
@@ -871,13 +917,16 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 		}, &current); err != nil {
 			continue
 		}
-		if len(current.Messages) == 0 && len(rawResult.Messages) > 0 {
+		if len(current.Messages) == 0 {
+			if len(rawResult.Messages) == 0 {
+				rawResult = current
+				chosenSessionKey = key
+			}
 			continue
 		}
-		if len(current.Messages) >= len(rawResult.Messages) {
-			rawResult = current
-			chosenSessionKey = key
-		}
+		rawResult = current
+		chosenSessionKey = key
+		break
 	}
 	if len(rawResult.Messages) == 0 {
 		s.app.Logger.Warn("[openclaw-chat] sessions.get empty for all candidate keys",

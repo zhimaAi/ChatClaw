@@ -17,14 +17,22 @@ import (
 	"chatclaw/internal/services/chat"
 	"chatclaw/internal/services/conversations"
 	"chatclaw/internal/sqlite"
+
+	lark "github.com/larksuite/oapi-sdk-go/v3"
+	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	"github.com/uptrace/bun"
 )
 
 type openClawSessionStoreEntry struct {
 	UpdatedAt   int64  `json:"updatedAt"`
 	ChatType    string `json:"chatType"`
 	SessionFile string `json:"sessionFile"`
-	Origin      struct {
-		Label string `json:"label"`
+	DeliveryCtx struct {
+		AccountID string `json:"accountId"`
+	} `json:"deliveryContext"`
+	Origin struct {
+		Label     string `json:"label"`
+		AccountID string `json:"accountId"`
 	} `json:"origin"`
 }
 
@@ -40,8 +48,14 @@ type openClawSessionHistoryLine struct {
 }
 
 type syncedChannelTarget struct {
-	Platform string
-	Channel  channels.Channel
+	Platform  string
+	AccountID string
+	Channel   channels.Channel
+}
+
+type syncedSessionCandidate struct {
+	source openClawPluginSessionSource
+	entry  openClawSessionStoreEntry
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.
@@ -66,24 +80,39 @@ func (s *OpenClawChannelService) SyncAgentConversations(agentID int64) error {
 		return nil
 	}
 
-	store, err := s.loadAgentSessionStore(strings.TrimSpace(agent.OpenClawAgentID))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
+	selected := make(map[string]syncedSessionCandidate)
+
+	for _, sourceAgentID := range collectSyncSourceAgentIDs(strings.TrimSpace(agent.OpenClawAgentID)) {
+		store, err := s.loadAgentSessionStore(sourceAgentID)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return errs.Wrap("error.channel_list_failed", err)
 		}
-		return errs.Wrap("error.channel_list_failed", err)
+
+		for sessionKey, entry := range store {
+			source, ok := parseOpenClawPluginSessionKey(sourceAgentID, sessionKey, entry)
+			if !ok {
+				continue
+			}
+			target, ok := channelTargets[buildSyncedChannelTargetKey(source.Platform, source.AccountID)]
+			if !ok {
+				continue
+			}
+
+			candidateKey := buildSyncedSessionCandidateKey(target.Channel.ID, source.Scope, source.TargetID)
+			next := syncedSessionCandidate{source: source, entry: entry}
+			current, exists := selected[candidateKey]
+			if !exists || shouldReplaceSyncedSessionCandidate(current, next) {
+				selected[candidateKey] = next
+			}
+		}
 	}
 
-	for sessionKey, entry := range store {
-		source, ok := parseOpenClawPluginSessionKey(strings.TrimSpace(agent.OpenClawAgentID), sessionKey)
-		if !ok {
-			continue
-		}
-		target, ok := channelTargets[source.Platform]
-		if !ok {
-			continue
-		}
-		if err := s.syncSessionConversation(agentID, target.Channel, source.Scope, source.TargetID, entry); err != nil {
+	for _, candidate := range selected {
+		target := channelTargets[buildSyncedChannelTargetKey(candidate.source.Platform, candidate.source.AccountID)]
+		if err := s.syncSessionConversation(agentID, target.Channel, candidate.source.Scope, candidate.source.TargetID, candidate.entry); err != nil {
 			return errs.Wrap("error.channel_list_failed", err)
 		}
 	}
@@ -117,12 +146,15 @@ func (s *OpenClawChannelService) listSyncTargets(agentID int64) (map[string]sync
 		if platform == "" {
 			continue
 		}
-		if _, exists := out[platform]; exists {
+		accountID := openClawManagedAccountID(platform, ch.ID, ch.ExtraConfig)
+		key := buildSyncedChannelTargetKey(platform, accountID)
+		if _, exists := out[key]; exists {
 			continue
 		}
-		out[platform] = syncedChannelTarget{
-			Platform: platform,
-			Channel:  ch,
+		out[key] = syncedChannelTarget{
+			Platform:  platform,
+			AccountID: accountID,
+			Channel:   ch,
 		}
 	}
 	return out, nil
@@ -161,7 +193,7 @@ func (s *OpenClawChannelService) syncSessionConversation(
 		return nil
 	}
 
-	name := buildSyncedConversationName(entry, scope, targetID)
+	name := s.buildSyncedConversationName(ch, entry, scope, targetID)
 	convID, err := s.convSvc.FindOrCreateByExternalID(agentID, externalID, name, conversations.AgentTypeOpenClaw)
 	if err != nil {
 		return err
@@ -177,11 +209,12 @@ func (s *OpenClawChannelService) syncSessionConversation(
 	if err != nil {
 		return err
 	}
+	currentName, _ := loadConversationName(context.Background(), db, convID)
 	q := db.NewUpdate().
 		Table("conversations").
 		Set("updated_at = ?", updateAt).
 		Where("id = ?", convID)
-	if name != "" {
+	if shouldUpdateSyncedConversationName(currentName, name, scope, targetID) {
 		q = q.Set("name = ?", name)
 	}
 	if lastMessage != "" {
@@ -194,12 +227,14 @@ func (s *OpenClawChannelService) syncSessionConversation(
 }
 
 type openClawPluginSessionSource struct {
-	Platform string
-	Scope    string
-	TargetID string
+	Platform  string
+	AccountID string
+	RawScope  string
+	Scope     string
+	TargetID  string
 }
 
-func parseOpenClawPluginSessionKey(agentID string, sessionKey string) (openClawPluginSessionSource, bool) {
+func parseOpenClawPluginSessionKey(agentID string, sessionKey string, entry openClawSessionStoreEntry) (openClawPluginSessionSource, bool) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	prefix := "agent:" + strings.TrimSpace(agentID) + ":"
 	if !strings.HasPrefix(sessionKey, prefix) {
@@ -217,24 +252,83 @@ func parseOpenClawPluginSessionKey(agentID string, sessionKey string) (openClawP
 		return openClawPluginSessionSource{}, false
 	}
 
-	switch platform {
-	case channels.PlatformWeCom:
-		scope = normalizePluginConversationScope(scope)
-	default:
-		return openClawPluginSessionSource{}, false
-	}
+	scope = normalizePluginConversationScope(platform, scope, targetID, entry.ChatType)
 	if scope == "" {
 		return openClawPluginSessionSource{}, false
 	}
 
 	return openClawPluginSessionSource{
-		Platform: platform,
-		Scope:    scope,
-		TargetID: targetID,
+		Platform:  platform,
+		AccountID: extractOpenClawSessionAccountID(platform, entry),
+		RawScope:  strings.TrimSpace(parts[3]),
+		Scope:     scope,
+		TargetID:  targetID,
 	}, true
 }
 
-func normalizePluginConversationScope(scope string) string {
+func collectSyncSourceAgentIDs(openclawAgentID string) []string {
+	openclawAgentID = strings.TrimSpace(openclawAgentID)
+	if openclawAgentID == "" {
+		return nil
+	}
+	if openclawAgentID == "main" {
+		return []string{openclawAgentID}
+	}
+	return []string{openclawAgentID, "main"}
+}
+
+func buildSyncedChannelTargetKey(platform string, accountID string) string {
+	return strings.TrimSpace(platform) + ":" + strings.TrimSpace(accountID)
+}
+
+func buildSyncedSessionCandidateKey(channelID int64, scope string, targetID string) string {
+	return fmt.Sprintf("%d:%s:%s", channelID, strings.TrimSpace(scope), channels.NormalizeChannelConversationTargetID(targetID))
+}
+
+func shouldReplaceSyncedSessionCandidate(current, next syncedSessionCandidate) bool {
+	if next.entry.UpdatedAt != current.entry.UpdatedAt {
+		return next.entry.UpdatedAt > current.entry.UpdatedAt
+	}
+	return syncedSessionScopePriority(next.source.RawScope) > syncedSessionScopePriority(current.source.RawScope)
+}
+
+func syncedSessionScopePriority(scope string) int {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case "group", "direct", "dm", "p2p":
+		return 2
+	case "chat":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func extractOpenClawSessionAccountID(platform string, entry openClawSessionStoreEntry) string {
+	accountID := strings.TrimSpace(entry.DeliveryCtx.AccountID)
+	if accountID == "" {
+		accountID = strings.TrimSpace(entry.Origin.AccountID)
+	}
+	if accountID != "" {
+		return accountID
+	}
+	if strings.TrimSpace(platform) == channels.PlatformFeishu {
+		return ""
+	}
+	return "default"
+}
+
+func normalizePluginConversationScope(platform string, scope string, targetID string, chatType string) string {
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformWeCom:
+		return normalizeWeComPluginConversationScope(scope)
+	case channels.PlatformFeishu:
+		return normalizeFeishuPluginConversationScope(scope, targetID, chatType)
+	default:
+		return ""
+	}
+}
+
+func normalizeWeComPluginConversationScope(scope string) string {
 	switch strings.TrimSpace(strings.ToLower(scope)) {
 	case "dm", "direct":
 		return channels.ChannelConversationScopeDM
@@ -245,9 +339,47 @@ func normalizePluginConversationScope(scope string) string {
 	}
 }
 
-func buildSyncedConversationName(entry openClawSessionStoreEntry, scope string, targetID string) string {
+func normalizeFeishuPluginConversationScope(scope string, targetID string, chatType string) string {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case "dm", "direct", "p2p":
+		return channels.ChannelConversationScopeDM
+	case "group":
+		return channels.ChannelConversationScopeGroup
+	case "chat":
+		lowerTarget := strings.ToLower(strings.TrimSpace(targetID))
+		switch {
+		case strings.HasPrefix(lowerTarget, "oc_"):
+			return channels.ChannelConversationScopeGroup
+		case strings.HasPrefix(lowerTarget, "ou_"), strings.HasPrefix(lowerTarget, "on_"):
+			return channels.ChannelConversationScopeDM
+		}
+
+		lowerChatType := strings.ToLower(strings.TrimSpace(chatType))
+		switch {
+		case strings.Contains(lowerChatType, "group"):
+			return channels.ChannelConversationScopeGroup
+		case strings.Contains(lowerChatType, "p2p"),
+			strings.Contains(lowerChatType, "single"),
+			strings.Contains(lowerChatType, "dm"),
+			strings.Contains(lowerChatType, "direct"):
+			return channels.ChannelConversationScopeDM
+		default:
+			return ""
+		}
+	default:
+		return ""
+	}
+}
+
+func (s *OpenClawChannelService) buildSyncedConversationName(ch channels.Channel, entry openClawSessionStoreEntry, scope string, targetID string) string {
+	if ch.Platform == channels.PlatformFeishu && scope == channels.ChannelConversationScopeGroup {
+		if name := strings.TrimSpace(s.resolveFeishuChatName(ch.ExtraConfig, targetID)); name != "" {
+			return name
+		}
+	}
+
 	name := strings.TrimSpace(entry.Origin.Label)
-	if name != "" {
+	if name != "" && !isSyncedConversationPlaceholderName(name, scope, targetID) {
 		return name
 	}
 	if scope == channels.ChannelConversationScopeGroup {
@@ -257,6 +389,85 @@ func buildSyncedConversationName(entry openClawSessionStoreEntry, scope string, 
 		return "group:" + channels.NormalizeChannelConversationTargetID(targetID)
 	}
 	return "user:" + channels.NormalizeChannelConversationTargetID(targetID)
+}
+
+func loadConversationName(ctx context.Context, db *bun.DB, convID int64) (string, error) {
+	var name string
+	err := db.NewSelect().
+		Table("conversations").
+		Column("name").
+		Where("id = ?", convID).
+		Limit(1).
+		Scan(ctx, &name)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(name), nil
+}
+
+func shouldUpdateSyncedConversationName(currentName, nextName, scope, targetID string) bool {
+	currentName = strings.TrimSpace(currentName)
+	nextName = strings.TrimSpace(nextName)
+	if nextName == "" || currentName == nextName {
+		return false
+	}
+	if currentName == "" {
+		return true
+	}
+	currentPlaceholder := isSyncedConversationPlaceholderName(currentName, scope, targetID)
+	nextPlaceholder := isSyncedConversationPlaceholderName(nextName, scope, targetID)
+	if currentPlaceholder && !nextPlaceholder {
+		return true
+	}
+	if !currentPlaceholder && nextPlaceholder {
+		return false
+	}
+	return true
+}
+
+func isSyncedConversationPlaceholderName(name, scope, targetID string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return true
+	}
+	normalizedTargetID := channels.NormalizeChannelConversationTargetID(targetID)
+	lowerName := strings.ToLower(name)
+	if scope == channels.ChannelConversationScopeGroup {
+		if strings.HasPrefix(name, "group:") || strings.HasPrefix(name, "「飞书群」") || strings.HasPrefix(name, "「企微群」") {
+			return true
+		}
+		if strings.EqualFold(name, targetID) || strings.EqualFold(name, normalizedTargetID) {
+			return true
+		}
+		if strings.HasPrefix(lowerName, "feishu:g-oc_") || strings.HasPrefix(lowerName, "oc_") {
+			return true
+		}
+		return false
+	}
+	return strings.HasPrefix(name, "user:")
+}
+
+func (s *OpenClawChannelService) resolveFeishuChatName(extraConfig string, chatID string) string {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" {
+		return ""
+	}
+	cfg, err := channels.ParseFeishuConfig(extraConfig)
+	if err != nil || strings.TrimSpace(cfg.AppID) == "" || strings.TrimSpace(cfg.AppSecret) == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client := lark.NewClient(strings.TrimSpace(cfg.AppID), strings.TrimSpace(cfg.AppSecret))
+	resp, err := client.Im.Chat.Get(ctx, larkim.NewGetChatReqBuilder().ChatId(chatID).Build())
+	if err != nil || !resp.Success() || resp.Data == nil {
+		return ""
+	}
+	if resp.Data.Name == nil {
+		return ""
+	}
+	return strings.TrimSpace(*resp.Data.Name)
 }
 
 func extractLastSessionMessage(sessionFile string) string {
