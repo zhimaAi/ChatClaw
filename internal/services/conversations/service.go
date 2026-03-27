@@ -202,7 +202,6 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 	if agentType == "" {
 		agentType = AgentTypeEino
 	}
-
 	// Team conversations use virtual agent groups; OpenClaw conversations reference openclaw_agents table.
 	// Only validate against the agents table for standard eino agents.
 	if teamType != TeamTypeTeam && agentType != AgentTypeOpenClaw {
@@ -226,20 +225,21 @@ func (s *ConversationsService) CreateConversation(input CreateConversationInput)
 
 	teamLibraryID := strings.TrimSpace(input.TeamLibraryID)
 	m := &conversationModel{
-		AgentID:        input.AgentID,
-		AgentType:      agentType,
-		Name:           name,
-		ExternalID:     strings.TrimSpace(input.ExternalID),
-		LastMessage:    lastMessage,
-		IsPinned:       false,
-		LLMProviderID:  strings.TrimSpace(input.LLMProviderID),
-		LLMModelID:     strings.TrimSpace(input.LLMModelID),
-		LibraryIDs:     s.serializeLibraryIDs(input.LibraryIDs),
-		EnableThinking: input.EnableThinking,
-		ChatMode:       chatMode,
-		TeamType:       teamType,
-		DialogueID:     dialogueID,
-		TeamLibraryID:  teamLibraryID,
+		AgentID:            input.AgentID,
+		AgentType:          agentType,
+		Name:               name,
+		ExternalID:         strings.TrimSpace(input.ExternalID),
+		LastMessage:        lastMessage,
+		IsPinned:           false,
+		LLMProviderID:      strings.TrimSpace(input.LLMProviderID),
+		LLMModelID:         strings.TrimSpace(input.LLMModelID),
+		LibraryIDs:         s.serializeLibraryIDs(input.LibraryIDs),
+		EnableThinking:     input.EnableThinking,
+		OpenClawSessionKey: strings.TrimSpace(input.OpenClawSessionKey),
+		ChatMode:           chatMode,
+		TeamType:           teamType,
+		DialogueID:         dialogueID,
+		TeamLibraryID:      teamLibraryID,
 	}
 
 	if _, err := db.NewInsert().Model(m).Exec(ctx); err != nil {
