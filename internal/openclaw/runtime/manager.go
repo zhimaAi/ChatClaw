@@ -24,9 +24,16 @@ import (
 // EventListener receives gateway events. Parameters are event name and raw JSON payload.
 type EventListener func(event string, payload json.RawMessage)
 
+// ToolchainServiceIF is the subset of *toolchain.ToolchainService needed by Manager.
+// Implemented as an interface to avoid a cyclic import.
+type ToolchainServiceIF interface {
+	InstallOpenClawRuntime() error
+}
+
 type Manager struct {
-	app   *application.App
-	store *configStore
+	app             *application.App
+	store           *configStore
+	toolchainSvc    ToolchainServiceIF
 
 	opMu sync.Mutex
 	mu   sync.RWMutex
@@ -50,18 +57,26 @@ type Manager struct {
 	eventListeners   map[string]EventListener // keyed by caller-chosen ID
 }
 
-func NewManager(app *application.App, settingsSvc *settings.SettingsService) *Manager {
+func NewManager(app *application.App, settingsSvc *settings.SettingsService, toolchainSvc ToolchainServiceIF) *Manager {
 	store := newConfigStore(settingsSvc)
 	cfg := store.Get()
-	return &Manager{
-		app:   app,
-		store: store,
+	m := &Manager{
+		app:          app,
+		store:        store,
+		toolchainSvc: toolchainSvc,
 		status: RuntimeStatus{
 			Phase:      PhaseIdle,
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		},
 		eventListeners: make(map[string]EventListener),
 	}
+	return m
+}
+
+// SetToolchainService injects the toolchain service after construction.
+// Call this before Manager.Start() so the OSS fallback is available.
+func (m *Manager) SetToolchainService(svc ToolchainServiceIF) {
+	m.toolchainSvc = svc
 }
 
 func (m *Manager) Start() {
@@ -148,7 +163,24 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 	bundle, err := resolveBundledRuntime()
 	if err != nil {
-		return fail("resolveBundledRuntime", err, "", 0)
+		// No bundled runtime found — try installing from OSS as a fallback
+		m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
+		m.broadcastStatus(RuntimeStatus{
+			Phase:       PhaseUpgrading,
+			Message:     "No OpenClaw runtime found, downloading from OSS...",
+			GatewayURL: gatewayURL(cfg.GatewayPort),
+		})
+		if m.toolchainSvc == nil {
+			return fail("resolveBundledRuntime", err, "", 0)
+		}
+		if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
+			return fail("OSS runtime install", installErr, "", 0)
+		}
+		// Reload bundle after OSS install
+		bundle, err = resolveBundledRuntime()
+		if err != nil {
+			return fail("resolveBundledRuntime after OSS install", err, "", 0)
+		}
 	}
 
 	if restart {

@@ -42,6 +42,7 @@ const tools = [
   { id: 'codex', nameKey: 'settings.general.toolchain.codex.name' },
   { id: 'uv', nameKey: 'settings.general.toolchain.uv.name' },
   { id: 'bun', nameKey: 'settings.general.toolchain.bun.name' },
+  { id: 'openclaw', nameKey: 'settings.general.toolchain.openclaw.name' },
 ]
 
 // 下载方式
@@ -137,6 +138,22 @@ const handleStart = async () => {
   progress.message = t('settings.general.toolchain.testInstall.starting')
 
   try {
+    // openclaw uses InstallOpenClawRuntime (OSS download + install), not TestInstall
+    if (selectedTool.value === 'openclaw') {
+      await ToolchainService.InstallOpenClawRuntime()
+      isFinished.value = true
+      isRunning.value = false
+      result.value = {
+        success: true,
+        message: t('settings.general.toolchain.testInstall.completed'),
+        version: '',
+        methodUsed: 'oss',
+      }
+      progress.status = 'completed'
+      progress.message = t('settings.general.toolchain.testInstall.completed')
+      return
+    }
+
     // 使用正确的类型创建配置
     const config = new TestInstallConfig({
       tool: selectedTool.value,

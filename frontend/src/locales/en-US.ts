@@ -343,6 +343,11 @@ export default {
           description:
             'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
         },
+        openclaw: {
+          name: 'OpenClaw Runtime',
+          description:
+            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
+        },
       },
     },
     memory: {
