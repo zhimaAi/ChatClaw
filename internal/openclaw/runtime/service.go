@@ -28,6 +28,13 @@ func (s *OpenClawRuntimeService) UpgradeRuntime() (*RuntimeUpgradeResult, error)
 	return s.manager.UpgradeRuntime()
 }
 
+// InstallAndStartRuntime downloads and installs the OpenClaw runtime from OSS, then
+// starts the gateway. This mirrors the install-then-activate flow of UpgradeRuntime,
+// but downloads the full OSS bundle instead of running npm install.
+func (s *OpenClawRuntimeService) InstallAndStartRuntime() (*RuntimeUpgradeResult, error) {
+	return s.manager.InstallAndStartRuntime()
+}
+
 func (s *OpenClawRuntimeService) GetDashboardURL() string {
 	cfg := s.manager.store.Get()
 	return fmt.Sprintf("http://127.0.0.1:%d?token=%s", cfg.GatewayPort, cfg.GatewayToken)
