@@ -205,6 +205,7 @@ const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
 )
+const shouldHideOpenClawKnowledgeChatToggles = computed(() => appStore.currentSystem === 'openclaw')
 
 // Team sidebar group cache (per library)
 const teamLibraryGroupsByLibraryId = ref<Map<string, ChatWikiLibraryGroup[]>>(new Map())
@@ -1030,6 +1031,20 @@ watch(activeAgentId, () => {
 watch(providersWithModels, () => {
   selectDefaultModel(activeAgent.value, null)
 })
+
+watch(
+  shouldHideOpenClawKnowledgeChatToggles,
+  (shouldHide) => {
+    if (!shouldHide) return
+    if (chatMode.value !== 'chat') {
+      chatMode.value = 'chat'
+    }
+    if (enableThinking.value) {
+      enableThinking.value = false
+    }
+  },
+  { immediate: true }
+)
 
 watch(enableThinking, (newValue) => {
   if (!isInitialMount) {
@@ -1961,6 +1976,8 @@ const handleRemoveImage = (id: string) => {
           v-model:enable-thinking="enableThinking"
           v-model:active-agent-id="activeAgentId"
           mode="knowledge"
+          :hide-chat-mode-selector="shouldHideOpenClawKnowledgeChatToggles"
+          :hide-thinking-toggle="shouldHideOpenClawKnowledgeChatToggles"
           :providers-with-models="providersWithModels"
           :has-models="hasModels"
           :selected-model-info="selectedModelInfo"
