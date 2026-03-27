@@ -299,7 +299,7 @@ ChatClaw_D2/
 ```
 
 ### Changelog
-To view the complete update log, please click👉️👉️[UpdateLog.md](./docs/readmes/UpdateLog.md)
+To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
 
 ### 2026/03/27
