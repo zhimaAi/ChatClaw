@@ -89,6 +89,7 @@ const props = withDefaults(
     chatInput: string
     chatMode: string
     hideChatModeSelector?: boolean
+    hideThinkingToggle?: boolean
     selectedModelKey: string
     selectedModelInfo: {
       providerId: string
@@ -127,6 +128,7 @@ const props = withDefaults(
   {
     mode: 'assistant',
     hideChatModeSelector: false,
+    hideThinkingToggle: false,
     isTeamMode: false,
     selectedTeamLibrary: null,
     teamLibraries: () => [],
@@ -975,7 +977,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Thinking mode toggle: hidden in team mode -->
-            <TooltipProvider v-if="!isTeamMode">
+            <TooltipProvider v-if="!isTeamMode && !hideThinkingToggle">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button

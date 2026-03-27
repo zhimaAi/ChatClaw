@@ -112,17 +112,31 @@ tasks:
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
 
+  # Produces build/openclaw-runtime/windows-<arch>/ for the NSIS step. The app resolves this at install time as $INSTDIR/rt/windows-<arch> (see internal/openclaw/runtime/bundle.go).
+  bundle:openclaw:runtime:
+    summary: Bundles OpenClaw Node runtime under build/openclaw-runtime
+    internal: true
+    cmds:
+      - go run ./internal/tools/openclawbundle -config build/runtime.yml -os windows -arch {{.ARCH | default ARCH}}
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
+
   create:nsis:installer:
     summary: Creates an NSIS installer
+    deps:
+      - task: bundle:openclaw:runtime
+        vars:
+          ARCH:
+            ref: .ARCH
     dir: build/windows/nsis
     cmds:
       # Create the Microsoft WebView2 bootstrapper if it doesn't exist
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       - | 
         {{if eq OS "windows"}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH}}" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
         {{else}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" "-DARG_OPENCLAW_RUNTIME={{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH}}" "-DARG_OPENCLAW_RUNTIME_TARGET=windows-{{.ARCH}}" project.nsi
         {{end}}
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
