@@ -35,14 +35,17 @@ watch(
   (system) => {
     if (
       system === 'openclaw' &&
-      (settingsStore.activeMenu === 'chatwiki' || settingsStore.activeMenu === 'mcp')
+      (settingsStore.activeMenu === 'chatwiki' ||
+        settingsStore.activeMenu === 'mcp' ||
+        settingsStore.activeMenu === 'openclawRuntime')
     ) {
       settingsStore.setActiveMenu('generalSettings')
     }
     if (system === 'chatclaw' && settingsStore.activeMenu === 'openclawRuntime') {
       settingsStore.setActiveMenu('generalSettings')
     }
-  }
+  },
+  { immediate: true }
 )
 
 // 菜单项对应的翻译 key

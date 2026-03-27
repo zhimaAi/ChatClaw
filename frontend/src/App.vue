@@ -30,6 +30,9 @@ const OpenClawChannelsPage = defineAsyncComponent(
   () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
 )
 const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/assistant/OpenClawPage.vue'))
+const OpenClawRuntimePage = defineAsyncComponent(
+  () => import('@/pages/openclaw/OpenClawRuntimePage.vue')
+)
 const OpenClawDashboardPage = defineAsyncComponent(
   () => import('@/pages/openclaw/OpenClawDashboardPage.vue')
 )
@@ -145,6 +148,7 @@ async function handleDisableSelectionSearchFromPopup() {
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   openclaw: OpenClawPage,
+  'openclaw-runtime': OpenClawRuntimePage,
   'openclaw-cron': OpenClawCronPage,
   'openclaw-dashboard': OpenClawDashboardPage,
   knowledge: KnowledgePage,

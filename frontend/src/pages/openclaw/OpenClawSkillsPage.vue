@@ -28,14 +28,13 @@ import type {
 import { OpenClawRuntimeService } from '@bindings/chatclaw/internal/openclaw/runtime'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import { Events } from '@wailsio/runtime'
-import { useNavigationStore, useSettingsStore, type NavModule } from '@/stores'
+import { useNavigationStore, type NavModule } from '@/stores'
 
 const props = defineProps<{
   tabId: string
 }>()
 
 const { t } = useI18n()
-const settingsStore = useSettingsStore()
 const navigationStore = useNavigationStore()
 
 type SkillsFilter = 'all' | 'builtin' | 'installed'
@@ -411,8 +410,7 @@ async function openInstallationDir(root: string) {
 }
 
 function navigateToOpenClawRuntimeSettings() {
-  settingsStore.setActiveMenu('openclawRuntime')
-  navigationStore.navigateToModule('settings')
+  navigationStore.navigateToModule('openclaw-runtime')
 }
 
 async function openDetail(s: OpenClawSkill) {
@@ -866,4 +864,3 @@ onMounted(() => {
     </Dialog>
   </div>
 </template>
-

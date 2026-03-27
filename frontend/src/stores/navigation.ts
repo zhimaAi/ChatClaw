@@ -12,6 +12,7 @@ const createTabId = () => `tab-${uuidv4()}`
 export type NavModule =
   | 'assistant'
   | 'openclaw'
+  | 'openclaw-runtime'
   | 'openclaw-cron'
   | 'openclaw-dashboard'
   | 'knowledge'
@@ -98,6 +99,7 @@ export interface PendingChatData {
 const moduleLabels: Record<NavModule, string> = {
   assistant: 'nav.assistant',
   openclaw: 'nav.openclaw',
+  'openclaw-runtime': 'settings.menu.openclawRuntime',
   'openclaw-cron': 'nav.scheduledTasks',
   'openclaw-dashboard': 'nav.openclawDashboard',
   knowledge: 'nav.knowledge',
@@ -119,6 +121,7 @@ const moduleLabels: Record<NavModule, string> = {
  */
 const singleTabModules: NavModule[] = [
   'openclaw',
+  'openclaw-runtime',
   'openclaw-cron',
   'openclaw-dashboard',
   'knowledge',

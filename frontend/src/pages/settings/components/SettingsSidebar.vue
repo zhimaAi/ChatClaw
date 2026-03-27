@@ -30,7 +30,6 @@ interface MenuItem {
 const allMenuItems: MenuItem[] = [
   { id: 'modelService', labelKey: 'settings.menu.modelService', icon: ModelServiceIcon },
   { id: 'generalSettings', labelKey: 'settings.menu.generalSettings', icon: GeneralSettingsIcon },
-  { id: 'openclawRuntime', labelKey: 'settings.menu.openclawRuntime', icon: ToolsIcon },
   { id: 'chatwiki', labelKey: 'settings.menu.chatwiki', icon: BindChatclawIcon },
   { id: 'skills', labelKey: 'settings.menu.skills', icon: SkillsIcon },
   { id: 'mcp', labelKey: 'settings.menu.mcp', icon: MCPIcon },
@@ -48,7 +47,6 @@ const allMenuItems: MenuItem[] = [
 const menuItems = computed(() =>
   allMenuItems.filter((item) => {
     if (item.guiOnly && !appStore.isGUIMode) return false
-    if (appStore.currentSystem === 'chatclaw' && item.id === 'openclawRuntime') return false
     if (
       appStore.currentSystem === 'openclaw' &&
       (item.id === 'chatwiki' || item.id === 'mcp')

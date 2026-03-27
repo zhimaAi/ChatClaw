@@ -20,7 +20,6 @@ import { useI18n } from 'vue-i18n'
 import {
   useNavigationStore,
   useAppStore,
-  useSettingsStore,
   type NavModule,
   type SystemOwner,
 } from '@/stores'
@@ -43,7 +42,6 @@ import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
-const settingsStore = useSettingsStore()
 
 const switcherOpen = ref(false)
 const triggerRef = ref<HTMLButtonElement | null>(null)
@@ -190,17 +188,11 @@ const allTopNavItems: NavItem[] = [
     guiOnly: true,
   },
   {
-    key: 'settings',
+    key: 'openclaw-runtime',
     labelKey: 'settings.menu.openclawRuntime',
     icon: IconSettings,
     guiOnly: true,
     systems: ['openclaw'],
-    action: () => {
-      settingsStore.setActiveMenu('openclawRuntime')
-      navigationStore.navigateToModule('settings', appStore.currentSystem)
-    },
-    activeWhen: () =>
-      navigationStore.activeModule === 'settings' && settingsStore.activeMenu === 'openclawRuntime',
   },
 ]
 
