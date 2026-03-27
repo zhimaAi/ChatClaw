@@ -137,12 +137,16 @@ Section "uninstall"
     !insertmacro wails.setShellContext
 
     ; Stop app and bundled Node so $INSTDIR (especially rt\) is not locked; avoids slow per-file uninstall and delete failures.
-    ExecWait 'cmd /c taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T 2>nul'
+    ExecWait 'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -Command "taskkill /F /IM ${PRODUCT_EXECUTABLE} /T"'
     ; Stops all node.exe; may affect other Node apps during uninstall only. Narrower kill would need a bundled script.
-    ExecWait 'cmd /c taskkill /F /IM node.exe /T 2>nul'
+    ExecWait 'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -Command "taskkill /F /IM node.exe /T"'
     Sleep 400
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+
+    ; Wipe rt\ in one OS call (fast; avoids NSIS RMDir walking node_modules with per-file log lines). Zip-based installs add no per-file rt Deletes.
+    ; Note: brief cmd window possible; PowerShell Remove-Item line breaks NSIS ExecWait parsing (-Recurse/-Force split into extra args).
+    ExecWait 'cmd /c if exist "$INSTDIR\rt" rd /s /q "$INSTDIR\rt"'
 
     RMDir /r $INSTDIR
 
