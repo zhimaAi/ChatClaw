@@ -12,6 +12,7 @@ const createTabId = () => `tab-${uuidv4()}`
 export type NavModule =
   | 'assistant'
   | 'openclaw'
+  | 'openclaw-cron'
   | 'openclaw-dashboard'
   | 'knowledge'
   | 'scheduled-tasks'
@@ -87,6 +88,8 @@ export interface PendingChatData {
   pendingImages?: PendingChatImage[]
   /** Target tab ID that should consume this data */
   targetTabId: string
+  /** Module of the tab that should consume this data */
+  module: NavModule
 }
 
 /**
@@ -95,6 +98,7 @@ export interface PendingChatData {
 const moduleLabels: Record<NavModule, string> = {
   assistant: 'nav.assistant',
   openclaw: 'nav.openclaw',
+  'openclaw-cron': 'nav.scheduledTasks',
   'openclaw-dashboard': 'nav.openclawDashboard',
   knowledge: 'nav.knowledge',
   'scheduled-tasks': 'nav.scheduledTasks',
@@ -115,6 +119,7 @@ const moduleLabels: Record<NavModule, string> = {
  */
 const singleTabModules: NavModule[] = [
   'openclaw',
+  'openclaw-cron',
   'openclaw-dashboard',
   'knowledge',
   'scheduled-tasks',
@@ -386,9 +391,12 @@ export const useNavigationStore = defineStore('navigation', () => {
    * Set pending chat data (e.g. from knowledge page) and create a new assistant tab.
    * Returns the new tab ID.
    */
-  const setPendingChatAndOpenAssistant = (data: Omit<PendingChatData, 'targetTabId'>): string => {
-    const tabId = addTab({ module: 'assistant' })
-    pendingChatData.value = { ...data, targetTabId: tabId }
+  const setPendingChatAndOpenAssistant = (
+    data: Omit<PendingChatData, 'targetTabId'> & { module?: NavModule }
+  ): string => {
+    const module = data.module ?? 'assistant'
+    const tabId = addTab({ module })
+    pendingChatData.value = { ...data, module, targetTabId: tabId }
     return tabId
   }
 

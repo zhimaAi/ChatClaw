@@ -49,6 +49,7 @@ const props = defineProps<{
   hasAttachedTarget?: boolean
   showAiSendButton?: boolean
   showAiEditButton?: boolean
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -600,7 +601,7 @@ onUnmounted(() => {
 
           <!-- Snap mode: Send to edit button (assistant messages only) -->
           <Button
-            v-if="isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
+            v-if="!readOnly && isSnapMode && isAssistant && showAiEditButton && hasAttachedTarget"
             size="icon"
             variant="ghost"
             class="size-6"
@@ -624,7 +625,7 @@ onUnmounted(() => {
 
           <!-- Edit button (only for user messages) -->
           <Button
-            v-if="isUser"
+            v-if="isUser && !readOnly"
             size="icon"
             variant="ghost"
             class="size-6"

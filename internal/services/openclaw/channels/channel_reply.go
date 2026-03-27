@@ -24,6 +24,8 @@ type feishuStreamingAdapter interface {
 // It requires the OpenClaw Gateway to be running.
 // When the Feishu channel has streaming enabled, it creates a streaming card
 // and pushes incremental updates as the agent generates tokens.
+// DingTalk messages are fully handled by the OpenClaw dingtalk-connector plugin
+// and never arrive here via the Go adapter path.
 func RunChannelReply(
 	app *application.App,
 	chatService *chat.ChatService,
@@ -64,7 +66,7 @@ func RunChannelReply(
 	// sync the channel-triggered user turn without waiting for final completion.
 	syncChannelIncomingState(app, convService, conversationID, agentID, content, msg.SenderName)
 
-	if !useQuickMode && msg.Platform == channels.PlatformFeishu && replyTarget != "" {
+	if !useQuickMode && replyTarget != "" && msg.Platform == channels.PlatformFeishu {
 		streamEnabled := feishuStreamOutputEnabled(extraConfig)
 		if streamEnabled {
 			if adapter := gateway.GetAdapter(msg.ChannelID); adapter != nil {

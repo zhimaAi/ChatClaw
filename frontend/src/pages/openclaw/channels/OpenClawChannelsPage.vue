@@ -21,7 +21,7 @@ import IconClose from '@/assets/icons/close-icon.svg'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toast'
+import { toast, useToast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialogs } from '@wailsio/runtime'
 import {
@@ -63,10 +63,11 @@ import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
+const { toast: addToast } = useToast()
 
-/** OpenClaw: Feishu and WeCom are available; other platforms still show coming soon. */
+/** OpenClaw: Feishu, WeCom, and DingTalk are available; other platforms show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom'
+  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
 }
 
 const channels = ref<Channel[]>([])
@@ -84,6 +85,7 @@ const bindDialogOpen = ref(false)
 const channelToBind = ref<Channel | null>(null)
 const bindFromCreate = ref(false)
 const toggleDialogOpen = ref(false)
+const toggleConfirming = ref(false)
 const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
 const unbindDialogOpen = ref(false)
 const channelToUnbind = ref<Channel | null>(null)
@@ -236,21 +238,26 @@ async function handleToggleConnection(channel: Channel, val: boolean) {
 }
 
 function cancelToggle() {
+  if (toggleConfirming.value) return
   toggleDialogOpen.value = false
   channelToToggle.value = null
   loadData()
 }
 
 async function confirmToggle() {
-  if (!channelToToggle.value) return
+  if (!channelToToggle.value || toggleConfirming.value) return
   const { channel, val } = channelToToggle.value
-  toggleDialogOpen.value = false
-  channelToToggle.value = null
-
-  if (val) {
-    await handleEnableChannel(channel)
-  } else {
-    await handleDisableChannel(channel)
+  toggleConfirming.value = true
+  try {
+    if (val) {
+      await handleEnableChannel(channel)
+    } else {
+      await handleDisableChannel(channel)
+    }
+  } finally {
+    toggleConfirming.value = false
+    toggleDialogOpen.value = false
+    channelToToggle.value = null
   }
 }
 
@@ -390,7 +397,16 @@ async function handleInlineSave() {
       agent_id: firstAgent.id,
     })
 
-    toast.success(t('channels.config.success'))
+    if (selectedPlatformMeta.value?.id === 'dingtalk') {
+      addToast({
+        title: t('channels.config.dingtalkPluginInstalling'),
+        description: t('channels.config.dingtalkPluginInstallingDesc'),
+        variant: 'default',
+        duration: 6000,
+      })
+    } else {
+      toast.success(t('channels.config.success'))
+    }
     resetInlineForm()
     await loadData()
     if (channel) {
@@ -432,7 +448,7 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    await OpenClawChannelService.VerifyChannelConfig(extraConfig)
+    await OpenClawChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     toast.success(t('channels.inline.verifySuccess'))
   } catch (error) {
     toast.error(getErrorMessage(error) || t('channels.inline.verifyFailed'))
@@ -916,11 +932,13 @@ onMounted(loadData)
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel :disabled="toggleConfirming" @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
           <Button
-            class="bg-primary text-primary-foreground hover:bg-primary/90"
+            class="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            :disabled="toggleConfirming"
             @click="confirmToggle"
           >
+            <LoaderCircle v-if="toggleConfirming" class="size-4 shrink-0 animate-spin" />
             {{ t('common.confirm') }}
           </Button>
         </AlertDialogFooter>

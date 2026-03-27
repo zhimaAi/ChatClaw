@@ -50,9 +50,9 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
   return fallbackName || platformId
 }
 
-/** OpenClaw: only Feishu is available; others show coming soon (same pattern as Twitter on ChatClaw). */
+/** OpenClaw: Feishu and DingTalk are available; others show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return ['feishu', 'wecom'].includes(platformId)
+  return ['feishu', 'wecom', 'dingtalk'].includes(platformId)
 }
 </script>
 

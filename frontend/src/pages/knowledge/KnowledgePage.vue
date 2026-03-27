@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { useAppStore, useNavigationStore, useSettingsStore } from '@/stores'
+import { useNavigationStore, useSettingsStore, useAppStore } from '@/stores'
 import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
@@ -205,6 +205,7 @@ const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
 )
+const shouldHideOpenClawKnowledgeChatToggles = computed(() => appStore.currentSystem === 'openclaw')
 
 // Team sidebar group cache (per library)
 const teamLibraryGroupsByLibraryId = ref<Map<string, ChatWikiLibraryGroup[]>>(new Map())
@@ -1034,6 +1035,20 @@ watch(providersWithModels, () => {
   selectDefaultModel(activeAgent.value, null)
 })
 
+watch(
+  shouldHideOpenClawKnowledgeChatToggles,
+  (shouldHide) => {
+    if (!shouldHide) return
+    if (chatMode.value !== 'chat') {
+      chatMode.value = 'chat'
+    }
+    if (enableThinking.value) {
+      enableThinking.value = false
+    }
+  },
+  { immediate: true }
+)
+
 watch(enableThinking, (newValue) => {
   if (!isInitialMount) {
     toast.default(newValue ? t('assistant.chat.thinkingOn') : t('assistant.chat.thinkingOff'))
@@ -1057,6 +1072,7 @@ const handleSendMessage = () => {
 
   // Set pending chat data and open a new assistant tab
   navigationStore.setPendingChatAndOpenAssistant({
+    module: appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant',
     chatInput: messageContent,
     libraryIds,
     ...(teamLibraryId && { teamLibraryId }),
@@ -1963,6 +1979,8 @@ const handleRemoveImage = (id: string) => {
           v-model:enable-thinking="enableThinking"
           v-model:active-agent-id="activeAgentId"
           mode="knowledge"
+          :hide-chat-mode-selector="shouldHideOpenClawKnowledgeChatToggles"
+          :hide-thinking-toggle="shouldHideOpenClawKnowledgeChatToggles"
           :providers-with-models="providersWithModels"
           :has-models="hasModels"
           :selected-model-info="selectedModelInfo"

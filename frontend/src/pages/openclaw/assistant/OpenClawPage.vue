@@ -21,7 +21,7 @@ import SnapModeHeader from './components/SnapModeHeader.vue'
 import { useNavigationStore, useChatStore, useSettingsStore } from '@/stores'
 import type { PendingChatImage } from '@/stores/navigation'
 import { type OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
-import type { ImagePayload } from '@bindings/chatclaw/internal/services/chat'
+import { type ImagePayload } from '@bindings/chatclaw/internal/services/chat'
 import { Events } from '@wailsio/runtime'
 import {
   ConversationsService,
@@ -35,7 +35,6 @@ import { LibraryService, type Library } from '@bindings/chatclaw/internal/servic
 import {
   ChatWikiService,
   TeamChatInput,
-  type Robot,
 } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
@@ -53,7 +52,6 @@ import { useConversations } from './composables/useConversations'
 import { useModelSelection } from './composables/useModelSelection'
 import { useSnapMode } from './composables/useSnapMode'
 import { useTeamRobots } from './composables/useTeamRobots'
-import { supportsMultimodal } from '@/composables/useMultimodal'
 
 /**
  * Props - 每个标签页实例都有自己独立的 tabId
@@ -64,11 +62,13 @@ const props = withDefaults(
   defineProps<{
     tabId: string
     mode?: 'main' | 'snap' | 'embedded'
+    readonly?: boolean
     initialConversationId?: number | null
     initialAgentId?: number | null
   }>(),
   {
     mode: 'main',
+    readonly: false,
     initialConversationId: null,
     initialAgentId: null,
   }
@@ -77,6 +77,7 @@ const props = withDefaults(
 // Computed for mode checks
 const isSnapMode = computed(() => props.mode === 'snap')
 const isEmbeddedMode = computed(() => props.mode === 'embedded')
+const isReadOnlyMode = computed(() => props.readonly)
 
 type ListMode = 'personal' | 'team'
 
@@ -456,7 +457,7 @@ const handleDeleted = (id: number) => {
   })
 }
 
-const handleNewConversation = () => {
+const handleNewConversation = async () => {
   // Clear selection; only purge cached messages if the conversation is not actively streaming
   // (another tab may still be using it).
   if (activeConversationId.value && !chatStore.isGenerating(activeConversationId.value).value) {
@@ -527,11 +528,11 @@ async function restoreSnapCache() {
   }
 }
 
-const handleNewConversationForAgent = (agentId: number) => {
+const handleNewConversationForAgent = async (agentId: number) => {
   if (activeAgentId.value !== agentId) {
     activeAgentId.value = agentId
   }
-  handleNewConversation()
+  await handleNewConversation()
 }
 
 const handleNewConversationForTeamRobot = (robotId: string) => {
@@ -556,7 +557,7 @@ function handleSnapNewConversation() {
   if (listMode.value === 'team' && activeTeamRobotId.value) {
     handleNewConversationForTeamRobot(activeTeamRobotId.value)
   } else {
-    handleNewConversation()
+    void handleNewConversation()
   }
 }
 
@@ -1982,8 +1983,9 @@ onUnmounted(() => {
             :agent-icon="isTeamMode ? activeTeamRobot?.icon : activeAgent?.icon"
             :sandbox-mode="activeAgent?.sandbox_mode"
             :has-attached-target="hasAttachedTarget"
-            :show-ai-send-button="showAiSendButton"
-            :show-ai-edit-button="showAiEditButton"
+            :show-ai-send-button="isReadOnlyMode ? false : showAiSendButton"
+            :show-ai-edit-button="isReadOnlyMode ? false : showAiEditButton"
+            :read-only="isReadOnlyMode"
             class="min-w-0 flex-1 overflow-hidden"
             @pointerdown.capture="handleWakeAttachedPointerDown"
             @edit-message="handleEditMessage"
@@ -1997,6 +1999,7 @@ onUnmounted(() => {
             v-if="
               !isAgentEmpty &&
               !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+              !isReadOnlyMode &&
               (!isSnapMode || (chatMessages.length === 0 && !isGenerating))
             "
             data-snap-wake="true"
@@ -2057,6 +2060,7 @@ onUnmounted(() => {
         v-if="
           !isAgentEmpty &&
           !(listMode === 'team' && (!teamBound || teamRobots.length === 0)) &&
+          !isReadOnlyMode &&
           isSnapMode &&
           (chatMessages.length > 0 || isGenerating)
         "

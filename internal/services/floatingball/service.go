@@ -26,7 +26,7 @@ const (
 
 	// UI/behavior tuning (DIP pixels)
 	ballSize        = 64
-	defaultMargin   = 0
+	defaultMargin   = 24 // breathing room from screen right edge
 	edgeSnapGap     = 24
 	collapsedWidth  = 32
 	collapsedVisible = 18
@@ -209,8 +209,25 @@ func (s *FloatingBallService) safeRelativePositionLocked() (int, int) {
 	}
 
 	// Fallback: Wails DIP bounds.
+	// NOTE: On macOS Retina, win.Bounds() may return physical pixel coordinates for X,Y
+	// while the work area is in DIP. If the raw relative position clearly exceeds the
+	// work area size, attempt to convert using the cached scale factor.
 	b := s.win.Bounds()
-	return b.X - work.X, b.Y - work.Y
+	relX := b.X - work.X
+	relY := b.Y - work.Y
+	if s.primaryScaleFactor > 1.1 && (relX > work.Width || relY > work.Height) {
+		convertedX := physicalToDip(relX, s.primaryScaleFactor)
+		convertedY := physicalToDip(relY, s.primaryScaleFactor)
+		if convertedX <= work.Width && convertedY <= work.Height {
+			s.debugLog("safeRelativePosition:physical_fallback", map[string]any{
+				"rawX": relX, "rawY": relY,
+				"convertedX": convertedX, "convertedY": convertedY,
+				"scaleFactor": s.primaryScaleFactor,
+			})
+			return convertedX, convertedY
+		}
+	}
+	return relX, relY
 }
 
 func NewFloatingBallService(app *application.App, mainWindow *application.WebviewWindow) *FloatingBallService {
@@ -279,10 +296,6 @@ func (s *FloatingBallService) SetVisible(visible bool) error {
 	s.hovered = false
 	s.dragging = false
 	s.dragMoved = false
-	// New behavior: always start in non-docked, non-collapsed state when showing
-	// so the ball is fully visible and free-floating instead of half-hidden at edges.
-	s.dock = DockNone
-	s.collapsed = false
 
 	win.Show()
 	// 首次显示时，impl 可能还没 ready；用重试机制确保定位最终生效
@@ -327,11 +340,32 @@ func (s *FloatingBallService) Hover(entered bool) {
 		s.rehideTimer.Stop()
 		s.rehideTimer = nil
 	}
-	// New behavior: hover 仅记录悬浮状态，不再触发贴边展开/回缩或自动半隐藏。
 	s.hovered = entered
 	if entered {
 		s.lastHoverEnterAt = now
 		s.lastHoverEnterWasCollapsed = s.collapsed
+		// Expand collapsed ball when mouse enters.
+		if s.dock != DockNone && s.collapsed {
+			s.expandLocked()
+		}
+	} else {
+		// Ignore spurious leave events that fire immediately after expanding from collapsed.
+		// macOS fires a synthetic leave during the resize/reposition that expansion causes.
+		if s.lastHoverEnterWasCollapsed && enterAgeMs >= 0 && enterAgeMs < 150 {
+			s.debugLog("Hover:spurious_leave", map[string]any{"enterAgeMs": enterAgeMs})
+			return
+		}
+		// Schedule rehide when mouse leaves a docked-but-expanded ball.
+		if s.dock != DockNone && !s.collapsed && !s.dragging {
+			s.rehideTimer = time.AfterFunc(rehideDebounce, func() {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if s.win == nil || !s.visible || s.hovered || s.dragging {
+					return
+				}
+				s.rehideLocked()
+			})
+		}
 	}
 }
 
@@ -565,6 +599,12 @@ func (s *FloatingBallService) ensureLocked() *application.WebviewWindow {
 			Backdrop:     application.MacBackdropTransparent,
 			DisableShadow: true,
 			WindowLevel:  application.MacWindowLevelFloating,
+			// Allow the floating ball to appear on all Spaces (Mission Control desktops).
+			// Stationary prevents the window from sliding during Space transitions.
+			// IgnoresCycle excludes it from Cmd+` cycling.
+			CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces |
+				application.MacWindowCollectionBehaviorStationary |
+				application.MacWindowCollectionBehaviorIgnoresCycle,
 			// 不依赖 titlebar drag，前端使用 --wails-draggable
 			InvisibleTitleBarHeight: 0,
 		},
@@ -788,12 +828,24 @@ func (s *FloatingBallService) snapAfterMoveAtLocked(relX, relY int) {
 		return
 	}
 
-	// New behavior: do not snap/dock to screen edges or half-hide.
-	// Just clamp the final position into the visible work area so the ball
-	// stays fully visible at (roughly) the location where the user released it.
+	y := clamp(relY, 0, work.Height-height)
+
+	// Snap to left edge if close enough.
+	if relX <= edgeSnapGap {
+		s.dock = DockLeft
+		s.collapseToYLocked(y)
+		return
+	}
+	// Snap to right edge if close enough.
+	if relX+width >= work.Width-edgeSnapGap {
+		s.dock = DockRight
+		s.collapseToYLocked(y)
+		return
+	}
+
+	// Free floating: clamp into visible work area.
 	s.dock = DockNone
 	s.collapsed = false
-	y := clamp(relY, 0, work.Height-height)
 	x := clamp(relX, 0, work.Width-width)
 	s.debugLog("snap:free", map[string]any{"x": x, "y": y, "relX": relX, "relY": relY})
 	s.setRelativePositionLocked(x, y)
@@ -880,12 +932,32 @@ func (s *FloatingBallService) restoreOrDefaultLocked() {
 		s.debugLog("restore:last_state", map[string]any{
 			"x": s.lastRelX, "y": s.lastRelY, "dock": s.lastDock, "collapsed": s.lastCollapsed,
 		})
-		// New behavior: after upgrade, we no longer restore dock/collapsed state.
-		// Only restore the last position and always use full ball size so it never stays half-hidden.
-		s.dock = DockNone
-		s.collapsed = false
-		s.setSizeLocked(ballSize, ballSize)
-		s.setRelativePositionLocked(s.lastRelX, s.lastRelY)
+		// Restore dock and collapsed state.
+		s.dock = s.lastDock
+		s.collapsed = s.lastCollapsed
+		w := ballSize
+		if s.collapsed {
+			w = collapsedWidth
+		}
+		s.setSizeLocked(w, ballSize)
+
+		x, y := s.lastRelX, s.lastRelY
+		if work, ok := s.workAreaLocked(); ok {
+			// Always clamp y to screen height.
+			y = clamp(y, 0, work.Height-ballSize)
+			// For free-floating balls, guard against off-screen or edge-flush positions.
+			if s.dock == DockNone {
+				x = clamp(x, 0, work.Width-ballSize-defaultMargin)
+			}
+			if x != s.lastRelX || y != s.lastRelY {
+				s.debugLog("restore:clamped", map[string]any{
+					"origX": s.lastRelX, "origY": s.lastRelY,
+					"clampedX": x, "clampedY": y,
+					"work": work,
+				})
+			}
+		}
+		s.setRelativePositionLocked(x, y)
 		return
 	}
 	s.resetToDefaultPositionLocked()

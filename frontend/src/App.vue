@@ -13,9 +13,12 @@ const KnowledgePage = defineAsyncComponent(() => import('@/pages/knowledge/Knowl
 const ScheduledTasksPage = defineAsyncComponent(
   () => import('@/pages/scheduled-tasks/ScheduledTasksPage.vue')
 )
+const OpenClawCronPage = defineAsyncComponent(
+  () => import('@/pages/openclaw-cron/OpenClawCronPage.vue')
+)
 const SkillsPage = defineAsyncComponent(() => import('@/pages/skills/SkillsPage.vue'))
 const OpenClawSkillsPage = defineAsyncComponent(
-  () => import('@/pages/openclaw-skills/OpenClawSkillsPage.vue')
+  () => import('@/pages/openclaw/OpenClawSkillsPage.vue')
 )
 const MemoryPage = defineAsyncComponent(() => import('@/pages/memory/MemoryPage.vue'))
 const MultiaskPage = defineAsyncComponent(() => import('@/pages/multiask/MultiaskPage.vue'))
@@ -142,6 +145,7 @@ async function handleDisableSelectionSearchFromPopup() {
 const moduleComponents: Record<NavModule, unknown> = {
   assistant: AssistantPage,
   openclaw: OpenClawPage,
+  'openclaw-cron': OpenClawCronPage,
   'openclaw-dashboard': OpenClawDashboardPage,
   knowledge: KnowledgePage,
   'scheduled-tasks': ScheduledTasksPage,
@@ -536,7 +540,7 @@ onUnmounted(() => {
         v-show="navigationStore.activeTabId === tab.id"
         :tab-id="tab.id"
         :system-owner="tab.systemOwner"
-        class="h-full w-full"
+        class="absolute inset-0"
       />
     </template>
   </MainLayout>

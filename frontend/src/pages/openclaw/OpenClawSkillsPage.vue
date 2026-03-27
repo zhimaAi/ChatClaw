@@ -11,12 +11,14 @@ import {
   FileText,
   FileCode,
   Settings,
+  Plus,
 } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { OpenClawSkillsService } from '@bindings/chatclaw/internal/openclaw/skills'
 import type {
   OpenClawSkill,
@@ -25,9 +27,10 @@ import type {
 } from '@bindings/chatclaw/internal/openclaw/skills/models'
 import { OpenClawRuntimeService } from '@bindings/chatclaw/internal/openclaw/runtime'
 import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
-import { useNavigationStore, useSettingsStore } from '@/stores'
+import { Events } from '@wailsio/runtime'
+import { useNavigationStore, useSettingsStore, type NavModule } from '@/stores'
 
-defineProps<{
+const props = defineProps<{
   tabId: string
 }>()
 
@@ -35,18 +38,19 @@ const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const navigationStore = useNavigationStore()
 
-type LocFilter = 'all' | 'shared' | 'workspace'
+type SkillsFilter = 'all' | 'builtin' | 'installed'
 
 const skills = ref<OpenClawSkill[]>([])
 const loading = ref(false)
 const refreshing = ref(false)
 const searchQuery = ref('')
-const locFilter = ref<LocFilter>('all')
+const filter = ref<SkillsFilter>('all')
 /** Default install target: workspace-main/skills (matches openclaw skills install). */
 const mainWorkspaceSkillsRoot = ref('')
 /** Optional managed overrides: …/openclaw/skills */
 const managedSkillsRoot = ref('')
 const gatewayConnected = ref(true)
+const addDialogOpen = ref(false)
 
 const detailOpen = ref(false)
 const activeSkill = ref<OpenClawSkill | null>(null)
@@ -113,10 +117,10 @@ function stripFrontmatter(markdown: string): string {
 
 const filteredSkills = computed(() => {
   let list = skills.value
-  if (locFilter.value === 'shared') {
-    list = list.filter((s) => s.location === 'shared')
-  } else if (locFilter.value === 'workspace') {
-    list = list.filter((s) => s.location === 'workspace')
+  if (filter.value === 'builtin') {
+    list = list.filter((s) => !isWorkspaceSkill(s))
+  } else if (filter.value === 'installed') {
+    list = list.filter((s) => isWorkspaceSkill(s))
   }
   const q = searchQuery.value.trim().toLowerCase()
   if (q) {
@@ -140,6 +144,46 @@ const filteredSkills = computed(() => {
         (s.ineligibleReason && s.ineligibleReason.toLowerCase().includes(q)) ||
         instHay.includes(q)
       )
+    })
+  }
+  return list
+})
+
+function isWorkspaceSkill(s: OpenClawSkill): boolean {
+  if (s.location === 'workspace') return true
+  const inst = s.installations ?? []
+  return inst.some((i) => i.location === 'workspace')
+}
+
+function pickWorkspaceInstallation(s: OpenClawSkill): SkillInstallation | null {
+  const inst = s.installations ?? []
+  return inst.find((i) => i.location === 'workspace') ?? null
+}
+
+function pickPrimaryInstallation(s: OpenClawSkill): SkillInstallation | null {
+  const inst = s.installations ?? []
+  if (inst.length === 0) return null
+  return pickWorkspaceInstallation(s) ?? inst[0]
+}
+
+function skillSourceTag(s: OpenClawSkill): string {
+  const ins = pickPrimaryInstallation(s)
+  const layer = ins?.layer || s.dataSource || 'gateway'
+  return `openclaw-${layer}`
+}
+
+const displayedSkills = computed(() => {
+  const list = filteredSkills.value.slice()
+  if (filter.value === 'all') {
+    list.sort((a, b) => {
+      const aw = isWorkspaceSkill(a)
+      const bw = isWorkspaceSkill(b)
+      if (aw !== bw) return aw ? -1 : 1
+      const as = (a.slug || a.name || '').toLowerCase()
+      const bs = (b.slug || b.name || '').toLowerCase()
+      if (as < bs) return -1
+      if (as > bs) return 1
+      return 0
     })
   }
   return list
@@ -230,6 +274,59 @@ function eligibleLabelText(s: OpenClawSkill): string {
   if (s.eligible === true) return t('settings.openclawSkills.eligibleYes')
   if (s.eligible === false) return t('settings.openclawSkills.eligibleNo')
   return t('settings.openclawSkills.eligibleUnknown')
+}
+
+function listAgentHint(s: OpenClawSkill): string {
+  const ins = pickWorkspaceInstallation(s)
+  if (!ins) return ''
+  const name = ins.agentName?.trim()
+  const id = ins.openclawAgentId?.trim()
+  if (name && id) return `${name} (${id})`
+  return name || id || ''
+}
+
+function openAddDialog() {
+  addDialogOpen.value = true
+}
+
+function closeAddDialog() {
+  addDialogOpen.value = false
+}
+
+function switchCurrentTabToModule(module: NavModule) {
+  const tab = navigationStore.tabs.find((t) => t.id === props.tabId)
+  if (!tab) {
+    navigationStore.navigateToModule(module)
+    return
+  }
+  tab.module = module
+  tab.title = undefined
+  tab.titleKey = module === 'openclaw' ? 'nav.openclaw' : tab.titleKey
+  tab.icon = undefined
+  tab.iconIsDefault = true
+  navigationStore.activeModule = module
+  navigationStore.setActiveTab(props.tabId)
+}
+
+function handleCreateViaChat() {
+  closeAddDialog()
+  switchCurrentTabToModule('openclaw')
+  const prompt = t('settings.openclawSkills.add.createViaChatPrompt')
+  window.setTimeout(() => {
+    // OpenClaw page listens to this event to prefill chat input and auto-send.
+    // Delay to ensure the OpenClaw page is mounted and subscribed.
+    Events.Emit('text-selection:send-to-assistant', { text: prompt })
+  }, 150)
+}
+
+async function handleChooseSkillPackage() {
+  closeAddDialog()
+  try {
+    await BrowserService.OpenURL('https://clawhub.ai/skills?sort=downloads')
+  } catch (e) {
+    toast.error(getErrorMessage(e))
+  }
+  await openMainWorkspaceSkillsFolder()
 }
 
 async function loadSkillInstallDirs() {
@@ -382,6 +479,11 @@ onMounted(() => {
 })
 </script>
 
+<!--
+  Single root required: App.vue switches tabs with v-show + absolute inset-0 on each page component.
+  Multiple roots (e.g. main div + Dialog sibling) break directive/fallthrough host binding in Vue 3,
+  so the skills grid could stay visible under other tabs.
+-->
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
     <template v-if="!detailOpen">
@@ -414,6 +516,14 @@ onMounted(() => {
             <button
               type="button"
               class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              :title="t('settings.openclawSkills.add.title')"
+              @click="openAddDialog"
+            >
+              <Plus class="size-4" />
+            </button>
+            <button
+              type="button"
+              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               :title="t('settings.openclawSkills.openMainWorkspaceSkillsDir')"
               @click="openMainWorkspaceSkillsFolder"
             >
@@ -436,30 +546,30 @@ onMounted(() => {
           <div class="flex flex-wrap gap-1.5">
             <button
               v-for="opt in [
-                { v: 'all' as LocFilter, key: 'settings.openclawSkills.filterAll' },
-                { v: 'shared' as LocFilter, key: 'settings.openclawSkills.filterShared' },
-                { v: 'workspace' as LocFilter, key: 'settings.openclawSkills.filterWorkspace' },
+                { v: 'all' as SkillsFilter, key: 'settings.openclawSkills.filterAll' },
+                { v: 'builtin' as SkillsFilter, key: 'settings.openclawSkills.filterBuiltin' },
+                { v: 'installed' as SkillsFilter, key: 'settings.openclawSkills.filterInstalled' },
               ] as const"
-              :key="opt.v"
+              :key="String(opt.v)"
               type="button"
-              class="rounded-md px-2.5 py-1 text-xs transition-colors"
+              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
               :class="
-                locFilter === opt.v
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/60'
+                filter === opt.v
+                  ? 'bg-foreground text-background'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
               "
-              @click="locFilter = opt.v"
+              @click="filter = opt.v"
             >
               {{ t(opt.key) }}
             </button>
           </div>
-          <div class="relative min-w-[200px] max-w-md flex-1">
+          <div class="relative w-80 max-w-full sm:ml-auto">
             <Search
               class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
             />
             <Input
               v-model="searchQuery"
-              class="h-8 pl-8 text-xs"
+              class="h-9 pl-8 text-sm"
               :placeholder="t('settings.openclawSkills.searchPlaceholder')"
             />
           </div>
@@ -475,94 +585,69 @@ onMounted(() => {
           {{ t('common.loading') }}
         </div>
         <div
-          v-else-if="filteredSkills.length === 0"
-          class="flex flex-col items-center justify-center gap-1 py-16 text-center text-muted-foreground"
+          v-else-if="displayedSkills.length === 0"
+          class="flex flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground"
         >
           <span class="text-sm">{{ t('settings.openclawSkills.noSkills') }}</span>
           <span class="max-w-sm text-xs">{{ t('settings.openclawSkills.noSkillsHint') }}</span>
         </div>
-        <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <button
-            v-for="s in filteredSkills"
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
+          <div
+            v-for="s in displayedSkills"
             :key="s.slug"
-            type="button"
-            class="flex flex-col rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent/40 dark:shadow-none dark:ring-1 dark:ring-white/10"
+            class="group flex cursor-pointer flex-col rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent/30 dark:shadow-none dark:ring-1 dark:ring-white/10"
             @click="openDetail(s)"
           >
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <div class="truncate text-sm font-medium text-foreground">
-                  {{ s.name || s.slug }}
+                <div class="flex items-center gap-2">
+                  <span class="truncate text-sm font-medium text-foreground">
+                    {{ s.name || s.slug }}
+                  </span>
+                  <Badge
+                    variant="secondary"
+                    class="shrink-0 bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                  >
+                    {{
+                      isWorkspaceSkill(s)
+                        ? t('settings.openclawSkills.filterInstalled')
+                        : t('settings.openclawSkills.filterBuiltin')
+                    }}
+                  </Badge>
                 </div>
-                <div class="truncate font-mono text-[11px] text-muted-foreground">{{ s.slug }}</div>
-              </div>
-              <div class="flex shrink-0 flex-col items-end gap-0.5">
-                <Badge
-                  variant="secondary"
-                  class="bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
-                >
-                  {{ locationLabel(s) }}
-                </Badge>
-                <span
-                  v-if="(s.installations?.length ?? 0) > 1"
-                  class="text-[10px] text-muted-foreground"
-                >
-                  {{
-                    t('settings.openclawSkills.locationCount', { count: s.installations!.length })
-                  }}
-                </span>
+                <div class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/60">
+                  {{ s.slug }}
+                </div>
               </div>
             </div>
-            <p v-if="s.description" class="mt-2 line-clamp-2 text-xs text-muted-foreground">
+            <p
+              v-if="s.description"
+              class="mt-2 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
+            >
               {{ s.description }}
             </p>
-            <dl
-              class="mt-3 space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground"
-            >
-              <div class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.permissionLabel') }}
-                </dt>
-                <dd class="min-w-0 break-words">{{ s.permission || t('common.na') }}</dd>
+            <div v-else class="mt-2 min-h-[2lh]" />
+            <div class="mt-auto flex items-center justify-between gap-2 pt-4">
+              <span v-if="s.version" class="text-[11px] text-muted-foreground">v{{ s.version }}</span>
+              <span v-else class="text-[11px] text-muted-foreground" />
+              <div class="flex min-w-0 items-center justify-end gap-1.5">
+                <Badge
+                  variant="secondary"
+                  class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                >
+                  {{ skillSourceTag(s) }}
+                </Badge>
+                <Badge
+                  v-if="listAgentHint(s)"
+                  variant="secondary"
+                  class="min-w-0 max-w-[140px] truncate bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+                  :title="listAgentHint(s)"
+                >
+                  {{ listAgentHint(s) }}
+                </Badge>
               </div>
-              <div class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.scopeLabel') }}
-                </dt>
-                <dd class="min-w-0 break-words">{{ s.scope || t('common.na') }}</dd>
-              </div>
-              <div v-if="s.location === 'workspace'" class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.agentBinding') }}
-                </dt>
-                <dd class="min-w-0 break-words">{{ agentBindingLabel(s) || t('common.na') }}</dd>
-              </div>
-              <div v-if="s.version" class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.skills.version') }}
-                </dt>
-                <dd>{{ s.version }}</dd>
-              </div>
-              <div class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.dataSourceLabel') }}
-                </dt>
-                <dd class="min-w-0 break-words">{{ dataSourceLabel(s) }}</dd>
-              </div>
-              <div v-if="s.dataSource === 'gateway'" class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.eligibleLabel') }}
-                </dt>
-                <dd>{{ eligibleLabelText(s) }}</dd>
-              </div>
-              <div v-if="s.dataSource === 'gateway' && s.ineligibleReason" class="flex gap-1">
-                <dt class="shrink-0 font-medium text-foreground/80">
-                  {{ t('settings.openclawSkills.gateHintLabel') }}
-                </dt>
-                <dd class="min-w-0 break-words">{{ s.ineligibleReason }}</dd>
-              </div>
-            </dl>
-          </button>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -583,9 +668,7 @@ onMounted(() => {
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-base font-semibold">{{
-                  activeSkill.name || activeSkill.slug
-                }}</span>
+                <span class="text-base font-semibold">{{ activeSkill.name || activeSkill.slug }}</span>
                 <Badge
                   variant="secondary"
                   class="bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
@@ -607,9 +690,7 @@ onMounted(() => {
               {{ t('settings.skills.openDir') }}
             </button>
           </div>
-          <dl
-            class="grid gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2"
-          >
+          <dl class="grid gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2">
             <div>
               <dt class="font-medium text-foreground/90">
                 {{ t('settings.openclawSkills.permissionLabel') }}
@@ -619,41 +700,27 @@ onMounted(() => {
               </dd>
             </div>
             <div>
-              <dt class="font-medium text-foreground/90">
-                {{ t('settings.openclawSkills.scopeLabel') }}
-              </dt>
-              <dd class="mt-0.5 text-muted-foreground">
-                {{ activeSkill.scope || t('common.na') }}
-              </dd>
+              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.scopeLabel') }}</dt>
+              <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.scope || t('common.na') }}</dd>
             </div>
             <div v-if="activeSkill.location === 'workspace'">
-              <dt class="font-medium text-foreground/90">
-                {{ t('settings.openclawSkills.agentBinding') }}
-              </dt>
-              <dd class="mt-0.5 text-muted-foreground">
-                {{ agentBindingLabel(activeSkill) || t('common.na') }}
-              </dd>
+              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.agentBinding') }}</dt>
+              <dd class="mt-0.5 text-muted-foreground">{{ agentBindingLabel(activeSkill) || t('common.na') }}</dd>
             </div>
             <div v-if="activeSkill.version">
               <dt class="font-medium text-foreground/90">{{ t('settings.skills.version') }}</dt>
               <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.version }}</dd>
             </div>
             <div>
-              <dt class="font-medium text-foreground/90">
-                {{ t('settings.openclawSkills.dataSourceLabel') }}
-              </dt>
+              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.dataSourceLabel') }}</dt>
               <dd class="mt-0.5 text-muted-foreground">{{ dataSourceLabel(activeSkill) }}</dd>
             </div>
             <div v-if="activeSkill.dataSource === 'gateway'">
-              <dt class="font-medium text-foreground/90">
-                {{ t('settings.openclawSkills.eligibleLabel') }}
-              </dt>
+              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.eligibleLabel') }}</dt>
               <dd class="mt-0.5 text-muted-foreground">{{ eligibleLabelText(activeSkill) }}</dd>
             </div>
             <div v-if="activeSkill.dataSource === 'gateway' && activeSkill.ineligibleReason">
-              <dt class="font-medium text-foreground/90">
-                {{ t('settings.openclawSkills.gateHintLabel') }}
-              </dt>
+              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.gateHintLabel') }}</dt>
               <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.ineligibleReason }}</dd>
             </div>
           </dl>
@@ -673,15 +740,9 @@ onMounted(() => {
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <div class="min-w-0 flex-1 space-y-1">
                     <div class="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                      <span class="font-medium text-foreground/90">{{
-                        installationAgentLine(ins)
-                      }}</span>
-                      <span class="rounded bg-muted px-1 py-0 font-mono text-[10px]">{{
-                        installationLayerLabel(ins.layer)
-                      }}</span>
-                      <span class="rounded bg-muted px-1 py-0 text-[10px]">{{
-                        diskLocationBadge(ins.location)
-                      }}</span>
+                      <span class="font-medium text-foreground/90">{{ installationAgentLine(ins) }}</span>
+                      <span class="rounded bg-muted px-1 py-0 font-mono text-[10px]">{{ installationLayerLabel(ins.layer) }}</span>
+                      <span class="rounded bg-muted px-1 py-0 text-[10px]">{{ diskLocationBadge(ins.location) }}</span>
                     </div>
                     <div class="break-all font-mono text-[10px] text-muted-foreground">
                       {{ ins.skillRoot }}
@@ -701,12 +762,8 @@ onMounted(() => {
           </div>
         </div>
         <div v-if="activeSkill.skillRoot" class="flex min-h-0 flex-1 overflow-hidden">
-          <aside
-            class="flex w-52 shrink-0 flex-col overflow-hidden border-r border-border bg-muted/20"
-          >
-            <div
-              class="border-b border-border px-2 py-1.5 text-[11px] font-medium text-muted-foreground"
-            >
+          <aside class="flex w-52 shrink-0 flex-col overflow-hidden border-r border-border bg-muted/20">
+            <div class="border-b border-border px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
               {{ t('settings.skills.selectFile') }}
             </div>
             <div class="min-h-0 flex-1 overflow-auto p-1">
@@ -761,5 +818,52 @@ onMounted(() => {
         </div>
       </div>
     </template>
+
+    <Dialog :open="addDialogOpen" @update:open="(v) => (addDialogOpen = v)">
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>{{ t('settings.openclawSkills.add.title') }}</DialogTitle>
+        </DialogHeader>
+
+        <div class="grid gap-3 py-2">
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
+            @click="handleCreateViaChat"
+          >
+            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Plus class="size-4" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-foreground">
+                {{ t('settings.openclawSkills.add.createViaChatTitle') }}
+              </div>
+              <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ t('settings.openclawSkills.add.createViaChatDesc') }}
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
+            @click="handleChooseSkillPackage"
+          >
+            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <FolderOpen class="size-4" />
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-foreground">
+                {{ t('settings.openclawSkills.add.choosePackageTitle') }}
+              </div>
+              <div class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {{ t('settings.openclawSkills.add.choosePackageDesc') }}
+              </div>
+            </div>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
+

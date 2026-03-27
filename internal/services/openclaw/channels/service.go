@@ -210,7 +210,9 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	}
 	ch.ExtraConfig = extraConfigWithID
 
-	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
+	if platform == channels.PlatformDingTalk {
+		go s.installDingTalkPluginBackground(ch.ID)
+	} else if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
 		return nil, wrapOpenClawSyncErr(err, "error.channel_create_failed", nil)
 	}
@@ -264,7 +266,18 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 		enabled = *input.Enabled
 	}
 
-	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, extraConfig, enabled); err != nil {
+	if platform == channels.PlatformDingTalk {
+		if !s.isDingTalkPluginInstalledLocally() {
+			if enabled {
+				return nil, errs.New("error.dingtalk_plugin_not_ready")
+			}
+		} else {
+			openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+			if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, openclawAgentID, enabled); err != nil {
+				return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
+			}
+		}
+	} else if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, extraConfig, enabled); err != nil {
 		return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 	}
 
@@ -301,12 +314,23 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 	if err := s.ensureOpenClawReady(); err != nil {
 		return err
 	}
-	if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
+	if platform == channels.PlatformDingTalk {
+		if err := s.removeOpenClawDingTalkAccount(ctx, accountKey); err != nil {
+			s.app.Logger.Warn("openclaw config unset dingtalk account failed, proceeding with local delete", "account", accountKey, "error", err)
+		}
+	} else if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
 		s.app.Logger.Warn("openclaw config unset channel failed, proceeding with local delete", "platform", platform, "account", accountKey, "error", err)
 	}
 
 	if err := s.channelSvc.DeleteChannel(id); err != nil {
 		return err
+	}
+
+	if platform == channels.PlatformDingTalk {
+		if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
+			s.app.Logger.Warn("openclaw dingtalk default account sync failed after delete", "error", err)
+		}
+		return nil
 	}
 
 	if isPluginManagedOpenClawPlatform(platform) {
@@ -325,6 +349,20 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 func (s *OpenClawChannelService) BindAgent(id int64, agentID int64) error {
 	if err := s.channelSvc.BindAgent(id, agentID); err != nil {
 		return err
+	}
+	if err := s.ensureOpenClawReady(); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		m, err := s.getChannelModel(ctx, id)
+		if err == nil && m.Platform == channels.PlatformDingTalk && m.Enabled && s.isDingTalkPluginInstalledLocally() {
+			accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+			openclawAgentID := s.lookupOpenClawAgentID(ctx, agentID)
+			if openclawAgentID != "" {
+				if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, true); err != nil {
+					s.app.Logger.Warn("openclaw: failed to sync agentId after BindAgent for dingtalk", "channelId", id, "error", err)
+				}
+			}
+		}
 	}
 	return s.syncChannelRoutingBinding(id, agentID)
 }
@@ -369,6 +407,10 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if m.Platform == channels.PlatformDingTalk {
+		return s.connectDingTalkViaPlugin(id, m)
 	}
 
 	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
@@ -416,6 +458,15 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if m.Platform == channels.PlatformDingTalk {
+		accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+		openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, false); err != nil {
+			s.app.Logger.Warn("openclaw dingtalk config disable failed, proceeding with local disconnect", "error", err)
+		}
+		return s.setChannelOnlineStatus(ctx, id, false)
 	}
 
 	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
@@ -630,17 +681,20 @@ func ensurePerChannelPeerDMScope(cfg map[string]any) {
 	}
 }
 
-// VerifyChannelConfig verifies credentials for Feishu/WeCom based on config payload.
-func (s *OpenClawChannelService) VerifyChannelConfig(extraConfig string) error {
-	platform := openClawPlatformFromInput("", extraConfig)
-	if platform == channels.PlatformWeCom {
+// VerifyChannelConfig verifies credentials for Feishu/WeCom/DingTalk based on the platform payload.
+func (s *OpenClawChannelService) VerifyChannelConfig(platform string, extraConfig string) error {
+	p := strings.TrimSpace(platform)
+	if p == "" {
+		p = openClawPlatformFromInput("", extraConfig)
+	}
+	if p == channels.PlatformWeCom {
 		ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 		defer cancel()
 		if err := s.ensureOpenClawWeComPluginInstalled(ctx); err != nil {
 			return errs.Wrap("error.channel_verify_failed", err)
 		}
 	}
-	return s.channelSvc.VerifyChannelConfig(platform, extraConfig)
+	return s.channelSvc.VerifyChannelConfig(p, extraConfig)
 }
 
 // EnsureAgentForChannel auto-creates an OpenClaw agent and binds it to the channel.
@@ -735,6 +789,8 @@ func openClawPlatformFromInput(explicitPlatform, extraConfig string) string {
 	switch platform {
 	case channels.PlatformWeCom:
 		return channels.PlatformWeCom
+	case channels.PlatformDingTalk:
+		return channels.PlatformDingTalk
 	case channels.PlatformFeishu:
 		return channels.PlatformFeishu
 	default:
