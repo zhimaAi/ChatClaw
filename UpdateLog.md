@@ -1,5 +1,60 @@
 ## Changelog
 
+### 2026/03/27
+1. **OpenClaw Runtime Install/Uninstall Optimization**: Replaced file copy with robocopy for efficiency, optimized process termination logic to prevent file lock issues, updated NSIS installer packaging format (tar/zip).
+2. **OpenClaw Manager Standalone Page**: Implemented OpenClaw manager as a standalone page, unified chat assistant style in OpenClaw mode to match ChatClaw.
+3. **Feishu Channel Integration**: Completed Feishu message sync functionality, support for group message replies.
+4. **DingTalk Channel Integration**: Added new DingTalk Agent and DingTalk channel functionality.
+5. **OpenClaw Skills Page**: Refactored `OpenClawSkillsPage.vue` component structure for Vue 3 single root element compliance, enhanced dialog for adding skills.
+6. **License Update**: Restored and updated license to MTI agreement.
+
+### 2026/03/26
+1. **OpenClaw Skills Feature**: Implemented OpenClaw Skills page and backend service integration, added runtime bundling and NSIS installer support.
+2. **OpenClaw Version Update**: Upgraded OpenClaw version to 2026.3.24, updated Docker command execution logic and layout configuration.
+3. **Scheduled Task Channel Optimization**: Optimized scheduled task editing, added channel logic, improved immediate execution functionality, fixed required field timeout issues.
+4. **History Task Optimization**: Optimized history task compatibility with task assistant conversations, list errors, and history record processing.
+5. **Feishu Channel Integration**: Completed Feishu channel integration.
+6. **Code Split**: Refactored localization files and MCP configuration management.
+
+### 2026/03/25
+1. **OpenClaw Mode Optimization**: Hidden thinking mode and task mode in OpenClaw mode's knowledge base interface, support for selecting knowledge base.
+2. **Feishu Channel**: Completed Feishu integration, support for group message replies, optimized channel creation.
+3. **Scheduled Task Refinement**: Fixed scheduled task editing and real-time channel configuration update issues, hidden CMD command popup.
+4. **Image Model Error Handling**: Added image model error prompts.
+5. **File Migration**: Implemented file migration functionality.
+6. **History Task Compatibility**: History task compatible with task assistant conversations, fixed history conversation list loading.
+7. **Agent Sync**: OpenClaw Agent streaming output, history message rendering and error handling.
+8. **Upgrade Logic**: OpenClaw upgrade logic optimization.
+
+### 2026/03/24
+1. **OpenClaw Assistant Page**: Completed OpenClaw assistant page with Agent CRUD, streaming output, and chat functionality.
+2. **OpenClaw Agent Streaming Rendering**: Implemented OpenClaw Agent streaming output and history message rendering.
+3. **Memory Page Sync**: Memory page data synchronization optimization.
+4. **OpenClaw Console**: Added OpenClaw console entry.
+5. **Tools Page**: Completed tools page functionality.
+6. **System Switch**: Support for system switching functionality.
+7. **History Record Optimization**: Adjusted complete AI assistant in history records to read-only mode.
+8. **Scheduled Task Optimization**: Optimized scheduled task list, fixed history task popup issues.
+
+### 2026/03/23
+1. **OpenClaw Agent Core Features**: Implemented OpenClaw Agent CRUD, streaming output, and chat functionality.
+2. **OpenClaw Assistant Page**: Added OpenClaw assistant page.
+3. **npm Global Library Copy**: Implemented npm global library copying functionality to OpenClaw bundle.
+4. **Agent Sync**: OpenClaw Agent synchronization.
+5. **Page Adjustments**: Various page style and layout adjustments.
+
+### 2026/03/20
+1. **Version 0.7.0 Release**: Updated application version to 0.7.0.
+2. **OpenClaw Service Integration**: Integrated OpenClaw service, multi-agent configuration sync to OpenClaw.
+3. **Memory System Refactoring**: Refactored memory system to be compatible with OpenClaw, switched to OpenClaw specification standards.
+4. **Agent Synchronization**: OpenClaw Agent synchronization functionality.
+5. **MiniMax Provider**: Added MiniMax provider integration and sync functionality.
+6. **Windows Console Window Hiding**: Implemented `setCmdHideWindow` function to prevent console window from appearing on Windows when opening directories and files.
+7. **Dark Mode Compatibility**: Improved dark mode compatibility across UI components.
+8. **App Data Directory Refactoring**: Refactored app data directory handling to use unified `AppDataDir` function for better maintainability.
+9. **UI Style Updates**: Multiple style adjustments for channel modal, scheduled task validation and styling, knowledge base page input field, folder styling, settings page, and knowledge library list.
+10. **Documentation**: Completed development documentation updates.
+
 ### 2026/03/18
 1. **README Refresh (Multi-language)**: Updated README files across multiple languages with new previews, clearer capability descriptions, and consistent image paths/structure.<br/>
 2. **Channel Integrations & Messaging**: Improved messaging flows and guardrails for multiple channels (e.g., QQ config dedup & image sending, WeCom/Feishu streaming output, DingTalk checks and related config updates).<br/>
