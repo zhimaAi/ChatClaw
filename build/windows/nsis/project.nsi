@@ -98,23 +98,19 @@ Section
     
     !insertmacro wails.files
 
-    ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go)
-    ; Use robocopy instead of File /r so NSIS does not register one Delete per file (uninstall would walk the whole tree and be very slow).
+    ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go).
+    ; Packaged as a .zip in the installer: NSIS registers only one File entry for the zip (vs thousands of individual files
+    ; if File /r were used). Installs via PowerShell Expand-Archive (fast single-pass extraction).
     !ifdef ARG_OPENCLAW_RUNTIME
-        CreateDirectory "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"
-        DetailPrint "Copying OpenClaw runtime..."
+        CreateDirectory "$INSTDIR\rt"
+        SetOutPath "$INSTDIR\rt"
+        ; The zip file is compressed into the installer data section; NSIS registers only this single File line.
+        File "${ARG_OPENCLAW_RUNTIME}"
+        DetailPrint "Extracting OpenClaw runtime..."
         SetDetailsPrint listonly
-        ExecWait 'cmd /c robocopy "${ARG_OPENCLAW_RUNTIME}" "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}" /E /COPY:DAT /R:2 /W:1 /NP /NFL /NDL /NJH /NJS'
+        ; Extract zip in-place then remove the zip (rt dir is now populated, no per-file Delete entries in uninstaller)
+        ExecWait 'powershell -ExecutionPolicy Bypass -Command "Expand-Archive -Path $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -DestinationPath $INSTDIR\rt -Force; Remove-Item -Path $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -Force"'
         SetDetailsPrint both
-        ; robocopy uses bitmask 0-7 for success; 8+ is failure
-        IntCmp $0 8 runtimeRobocopyFail runtimeRobocopyOk runtimeRobocopyFail
-        runtimeRobocopyOk:
-            Goto afterOpenclawRuntimeCopy
-        runtimeRobocopyFail:
-            DetailPrint "robocopy failed (exit $0)"
-            MessageBox MB_OK "Failed to copy OpenClaw runtime (robocopy exit code $0).$\n$\nPlease free disk space and retry."
-            Abort
-        afterOpenclawRuntimeCopy:
     !endif
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
