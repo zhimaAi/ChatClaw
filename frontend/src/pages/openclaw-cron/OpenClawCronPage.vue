@@ -40,6 +40,7 @@ import {
   jobToForm,
   type OpenClawCronFormState,
 } from './utils'
+import { getLastRunVisualState } from './status'
 
 defineProps<{
   tabId: string
@@ -63,8 +64,6 @@ const deleteDialogOpen = ref(false)
 const deleting = ref(false)
 const deletingJob = ref<OpenClawCronJob | null>(null)
 
-const JOB_DISPLAY_STATUS_RUNNING = 'running'
-const JOB_DISPLAY_STATUS_PAUSED = 'paused'
 const JOB_LAST_STATUS_FAILED = 'failed'
 const JOB_LAST_STATUS_SUCCESS = 'success'
 
@@ -152,15 +151,22 @@ function statusTextClass(job: OpenClawCronJob) {
   return job.enabled ? 'text-[#404040]' : 'text-[#737373]'
 }
 
+function lastRunState(job: OpenClawCronJob) {
+  return getLastRunVisualState({
+    lastStatus: job.last_status,
+    lastError: job.last_error,
+  })
+}
+
 function lastRunIcon(job: OpenClawCronJob) {
-  if (job.last_status === JOB_LAST_STATUS_FAILED) return CircleAlert
-  if (job.last_status === JOB_LAST_STATUS_SUCCESS) return CircleCheck
+  if (lastRunState(job) === JOB_LAST_STATUS_FAILED) return CircleAlert
+  if (lastRunState(job) === JOB_LAST_STATUS_SUCCESS) return CircleCheck
   return Clock3
 }
 
 function lastRunIconClass(job: OpenClawCronJob) {
-  if (job.last_status === JOB_LAST_STATUS_FAILED) return 'text-[#ef4444]'
-  if (job.last_status === JOB_LAST_STATUS_SUCCESS) return 'text-[#22c55e]'
+  if (lastRunState(job) === JOB_LAST_STATUS_FAILED) return 'text-[#ef4444]'
+  if (lastRunState(job) === JOB_LAST_STATUS_SUCCESS) return 'text-[#22c55e]'
   return 'text-[#a3a3a3]'
 }
 
@@ -340,7 +346,7 @@ async function confirmDelete() {
                       <div class="space-y-1 text-sm">
                         <div class="font-medium leading-6 text-[#171717]">{{ describeOpenClawSchedule(job) }}</div>
                         <div class="flex items-center gap-1.5 text-[#8c8c8c]">
-                          <TooltipProvider v-if="job.last_status === JOB_LAST_STATUS_FAILED && job.last_error">
+                          <TooltipProvider v-if="lastRunState(job) === JOB_LAST_STATUS_FAILED && job.last_error">
                             <Tooltip>
                               <TooltipTrigger as-child>
                                 <button

@@ -14,6 +14,7 @@ import {
   type OpenClawCronRunDetail,
 } from '@bindings/chatclaw/internal/openclaw/cron'
 import OpenClawCronTranscriptView from './OpenClawCronTranscriptView.vue'
+import { normalizeOpenClawRunStatus } from './status'
 import { formatDurationMs, formatOpenClawCronTime } from './utils'
 
 const DETAIL_LOADING_SKELETON_ROWS = 6
@@ -51,13 +52,7 @@ const shouldShowPreparingState = computed(
 )
 
 function normalizeRunStatus(status: string) {
-  const normalized = String(status || '')
-    .trim()
-    .toLowerCase()
-  if (normalized === 'success' || normalized === 'ok' || normalized === 'delivered')
-    return 'success'
-  if (normalized === 'failed' || normalized === 'error') return 'failed'
-  return 'success'
+  return normalizeOpenClawRunStatus(status)
 }
 
 function displayRunStatusLabel(status: string) {

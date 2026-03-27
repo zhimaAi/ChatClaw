@@ -9,6 +9,7 @@ import type {
   OpenClawCronRunDetail,
   OpenClawCronTranscriptMessage,
 } from '@bindings/chatclaw/internal/openclaw/cron'
+import { normalizeOpenClawRunStatus } from './status'
 import { formatDurationMs, formatOpenClawCronTime } from './utils'
 
 const props = defineProps<{
@@ -25,13 +26,7 @@ const TEXT_BLOCK_TYPE = 'text'
 const transcriptMessages = computed(() => props.detail.messages ?? [])
 
 function normalizeRunStatus(status: string) {
-  const normalized = String(status || '')
-    .trim()
-    .toLowerCase()
-  if (normalized === 'success' || normalized === 'ok' || normalized === 'delivered')
-    return 'success'
-  if (normalized === 'failed' || normalized === 'error') return 'failed'
-  return 'success'
+  return normalizeOpenClawRunStatus(status)
 }
 
 function displayRunStatusLabel(status: string) {
@@ -151,8 +146,8 @@ function messageTimestamp(message: OpenClawCronTranscriptMessage) {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col bg-background">
-    <div class="border-b border-border px-5 py-4">
+  <div class="flex h-full min-h-0 flex-col overflow-y-auto bg-background">
+    <div class="shrink-0 border-b border-border px-5 py-4">
       <div class="flex flex-wrap items-center gap-3">
         <TaskRunStatusBadge
           :status="normalizeRunStatus(detail.run.status)"
