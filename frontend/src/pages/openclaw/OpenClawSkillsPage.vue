@@ -12,6 +12,8 @@ import {
   FileCode,
   Settings,
   Plus,
+  Trash2,
+  Grid2X2,
 } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +21,7 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { OpenClawSkillsService } from '@bindings/chatclaw/internal/openclaw/skills'
 import type {
   OpenClawSkill,
@@ -154,23 +157,6 @@ function isWorkspaceSkill(s: OpenClawSkill): boolean {
   return inst.some((i) => i.location === 'workspace')
 }
 
-function pickWorkspaceInstallation(s: OpenClawSkill): SkillInstallation | null {
-  const inst = s.installations ?? []
-  return inst.find((i) => i.location === 'workspace') ?? null
-}
-
-function pickPrimaryInstallation(s: OpenClawSkill): SkillInstallation | null {
-  const inst = s.installations ?? []
-  if (inst.length === 0) return null
-  return pickWorkspaceInstallation(s) ?? inst[0]
-}
-
-function skillSourceTag(s: OpenClawSkill): string {
-  const ins = pickPrimaryInstallation(s)
-  const layer = ins?.layer || s.dataSource || 'gateway'
-  return `openclaw-${layer}`
-}
-
 const displayedSkills = computed(() => {
   const list = filteredSkills.value.slice()
   if (filter.value === 'all') {
@@ -276,10 +262,11 @@ function eligibleLabelText(s: OpenClawSkill): string {
 }
 
 function listAgentHint(s: OpenClawSkill): string {
-  const ins = pickWorkspaceInstallation(s)
-  if (!ins) return ''
-  const name = ins.agentName?.trim()
-  const id = ins.openclawAgentId?.trim()
+  const inst = s.installations ?? []
+  const ws = inst.find((i) => i.location === 'workspace')
+  if (!ws) return ''
+  const name = ws.agentName?.trim()
+  const id = ws.openclawAgentId?.trim()
   if (name && id) return `${name} (${id})`
   return name || id || ''
 }
@@ -485,20 +472,20 @@ onMounted(() => {
 <template>
   <div class="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
     <template v-if="!detailOpen">
-      <div class="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-3">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="min-w-0">
-            <div class="text-sm font-medium text-foreground">
-              {{ t('settings.openclawSkills.title') }}
-            </div>
-            <p class="text-xs text-muted-foreground">
-              {{ t('settings.openclawSkills.pageDesc') }}
+      <div class="shrink-0 space-y-4 px-6 pb-2 pt-4">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0 space-y-1">
+            <h1 class="text-base font-semibold leading-6 text-[#262626] dark:text-foreground">
+              {{ t('settings.openclawSkills.listHeading') }}
+            </h1>
+            <p class="text-sm leading-5 text-[#737373] dark:text-muted-foreground">
+              {{ t('settings.openclawSkills.listSubheading') }}
             </p>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
               :title="t('nav.settings')"
               @click="navigateToOpenClawRuntimeSettings"
             >
@@ -506,22 +493,24 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-muted px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-50"
+              :disabled="refreshing"
               @click="handleRefresh"
             >
-              <RefreshCw class="size-4" :class="refreshing && 'animate-spin'" />
+              <RefreshCw class="size-4 shrink-0" :class="refreshing && 'animate-spin'" />
+              {{ t('settings.openclawSkills.refreshCta') }}
             </button>
             <button
               type="button"
-              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              :title="t('settings.openclawSkills.add.title')"
+              class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-foreground px-4 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
               @click="openAddDialog"
             >
-              <Plus class="size-4" />
+              <Plus class="size-4 shrink-0" />
+              {{ t('settings.openclawSkills.addSkillCta') }}
             </button>
             <button
               type="button"
-              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
               :title="t('settings.openclawSkills.openMainWorkspaceSkillsDir')"
               @click="openMainWorkspaceSkillsFolder"
             >
@@ -529,7 +518,7 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              class="inline-flex cursor-pointer items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
               :title="t('settings.openclawSkills.openManagedSkillsDir')"
               @click="openManagedSkillsFolder"
             >
@@ -540,8 +529,8 @@ onMounted(() => {
         <p v-if="!gatewayConnected" class="text-xs text-muted-foreground">
           {{ t('settings.openclawSkills.gatewayOfflineHint') }}
         </p>
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap gap-2">
             <button
               v-for="opt in [
                 { v: 'all' as SkillsFilter, key: 'settings.openclawSkills.filterAll' },
@@ -550,31 +539,31 @@ onMounted(() => {
               ] as const"
               :key="String(opt.v)"
               type="button"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="min-h-8 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
               :class="
                 filter === opt.v
                   ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+                  : 'bg-muted text-foreground hover:bg-muted/80'
               "
               @click="filter = opt.v"
             >
               {{ t(opt.key) }}
             </button>
           </div>
-          <div class="relative w-80 max-w-full sm:ml-auto">
+          <div class="relative w-full min-w-[200px] max-w-[320px] sm:w-80 sm:shrink-0">
             <Search
-              class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <Input
               v-model="searchQuery"
-              class="h-9 pl-8 text-sm"
+              class="h-9 border-[#e5e5e5] bg-background pl-10 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
               :placeholder="t('settings.openclawSkills.searchPlaceholder')"
             />
           </div>
         </div>
       </div>
 
-      <div class="min-h-0 flex-1 overflow-auto p-4">
+      <div class="min-h-0 flex-1 overflow-auto px-6 pb-6 pt-2">
         <div
           v-if="loading"
           class="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
@@ -589,64 +578,84 @@ onMounted(() => {
           <span class="text-sm">{{ t('settings.openclawSkills.noSkills') }}</span>
           <span class="max-w-sm text-xs">{{ t('settings.openclawSkills.noSkillsHint') }}</span>
         </div>
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-          <div
-            v-for="s in displayedSkills"
-            :key="s.slug"
-            class="group flex cursor-pointer flex-col rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent/30 dark:shadow-none dark:ring-1 dark:ring-white/10"
-            @click="openDetail(s)"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="truncate text-sm font-medium text-foreground">
-                    {{ s.name || s.slug }}
-                  </span>
-                  <Badge
-                    variant="secondary"
-                    class="shrink-0 bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
-                  >
-                    {{
-                      isWorkspaceSkill(s)
-                        ? t('settings.openclawSkills.filterInstalled')
-                        : t('settings.openclawSkills.filterBuiltin')
-                    }}
-                  </Badge>
+        <TooltipProvider v-else :delay-duration="200">
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+            <div
+              v-for="s in displayedSkills"
+              :key="s.slug"
+              class="flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[#d9d9d9] bg-card text-left shadow-sm transition-shadow hover:shadow-md dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
+              @click="openDetail(s)"
+            >
+              <div class="flex gap-3 p-4">
+                <div
+                  class="flex size-14 shrink-0 items-center justify-center rounded-md bg-red-50 dark:bg-red-950/40"
+                >
+                  <Grid2X2 class="size-8 text-red-600 dark:text-red-400" />
                 </div>
-                <div class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/60">
-                  {{ s.slug }}
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="truncate text-sm font-normal leading-[22px] text-[#171717] dark:text-foreground"
+                    >
+                      {{ s.name || s.slug }}
+                    </span>
+                    <Badge
+                      variant="secondary"
+                      class="shrink-0 bg-[#f0f0f0] px-2 py-0.5 text-[10px] text-[#595959] dark:bg-muted dark:text-muted-foreground"
+                    >
+                      {{ isWorkspaceSkill(s) ? t('settings.openclawSkills.filterInstalled') : t('settings.openclawSkills.filterBuiltin') }}
+                    </Badge>
+                  </div>
+                  <div class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/60">
+                    {{ s.slug }}
+                  </div>
+                  <p
+                    class="mt-1 line-clamp-2 min-h-[32px] text-xs leading-4 text-[#737373] dark:text-muted-foreground"
+                  >
+                    {{ s.description || '\u00a0' }}
+                  </p>
                 </div>
               </div>
-            </div>
-            <p
-              v-if="s.description"
-              class="mt-2 line-clamp-2 min-h-[2lh] text-xs leading-relaxed text-muted-foreground"
-            >
-              {{ s.description }}
-            </p>
-            <div v-else class="mt-2 min-h-[2lh]" />
-            <div class="mt-auto flex items-center justify-between gap-2 pt-4">
-              <span v-if="s.version" class="text-[11px] text-muted-foreground">v{{ s.version }}</span>
-              <span v-else class="text-[11px] text-muted-foreground" />
-              <div class="flex min-w-0 items-center justify-end gap-1.5">
-                <Badge
-                  variant="secondary"
-                  class="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
-                >
-                  {{ skillSourceTag(s) }}
-                </Badge>
-                <Badge
-                  v-if="listAgentHint(s)"
-                  variant="secondary"
-                  class="min-w-0 max-w-[140px] truncate bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
-                  :title="listAgentHint(s)"
-                >
-                  {{ listAgentHint(s) }}
-                </Badge>
+              <div class="h-px w-full bg-[#e5e5e5] dark:bg-border" />
+              <div class="flex h-[52px] shrink-0 items-center justify-between gap-2 px-4">
+                <div class="flex min-w-0 flex-wrap items-center gap-1">
+                  <Badge
+                    variant="secondary"
+                    class="shrink-0 bg-[#f0f0f0] px-1.5 py-0 text-[10px] text-[#595959] dark:bg-muted dark:text-muted-foreground"
+                  >
+                    {{ dataSourceLabel(s) }}
+                  </Badge>
+                  <Badge
+                    v-if="listAgentHint(s)"
+                    variant="secondary"
+                    class="min-w-0 max-w-[140px] shrink-0 truncate bg-[#f0f0f0] px-1.5 py-0 text-[10px] text-[#595959] dark:bg-muted dark:text-muted-foreground"
+                    :title="listAgentHint(s)"
+                  >
+                    {{ listAgentHint(s) }}
+                  </Badge>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span v-if="s.version" class="text-[11px] text-muted-foreground">v{{ s.version }}</span>
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <button
+                        type="button"
+                        class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                        :class="!isWorkspaceSkill(s) && 'opacity-60'"
+                        @click.stop="openSkillDir(s)"
+                      >
+                        <Trash2 class="size-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="max-w-[240px] text-center">
+                      {{ isWorkspaceSkill(s) ? t('settings.openclawSkills.openSkillFolderToRemove') : t('settings.openclawSkills.builtinCannotDelete') }}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </TooltipProvider>
       </div>
     </template>
 

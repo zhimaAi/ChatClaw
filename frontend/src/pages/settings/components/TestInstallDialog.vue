@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import {
   DownloadMethod,
   TestInstallConfig,
@@ -42,6 +43,7 @@ const tools = [
   { id: 'codex', nameKey: 'settings.general.toolchain.codex.name' },
   { id: 'uv', nameKey: 'settings.general.toolchain.uv.name' },
   { id: 'bun', nameKey: 'settings.general.toolchain.bun.name' },
+  { id: 'openclaw', nameKey: 'settings.general.toolchain.openclaw.name' },
 ]
 
 // 下载方式
@@ -137,6 +139,22 @@ const handleStart = async () => {
   progress.message = t('settings.general.toolchain.testInstall.starting')
 
   try {
+    // openclaw uses InstallAndStartRuntime (OSS download + install + gateway start), not TestInstall
+    if (selectedTool.value === 'openclaw') {
+      await OpenClawRuntimeService.InstallAndStartRuntime()
+      isFinished.value = true
+      isRunning.value = false
+      result.value = {
+        success: true,
+        message: t('settings.general.toolchain.testInstall.completed'),
+        version: '',
+        methodUsed: 'oss',
+      }
+      progress.status = 'completed'
+      progress.message = t('settings.general.toolchain.testInstall.completed')
+      return
+    }
+
     // 使用正确的类型创建配置
     const config = new TestInstallConfig({
       tool: selectedTool.value,

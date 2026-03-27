@@ -343,6 +343,11 @@ export default {
           description:
             'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
         },
+        openclaw: {
+          name: 'OpenClaw Runtime',
+          description:
+            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
+        },
       },
     },
     memory: {
@@ -428,18 +433,24 @@ export default {
     },
     openclawSkills: {
       title: 'OpenClaw Skills',
+      listHeading: 'Skills',
+      listSubheading: 'Browse and manage AI capabilities',
+      refreshCta: 'Refresh',
+      addSkillCta: 'Add skill',
       pageDesc:
         'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
       filterAll: 'All',
       filterBuiltin: 'Built-in',
       filterInstalled: 'Installed',
+      builtinCannotDelete: 'Built-in skills cannot be deleted',
+      openSkillFolderToRemove: 'Open the folder in your file manager to remove this skill',
       filterShared: 'Shared',
       filterWorkspace: 'Workspace',
       locationShared: 'Shared',
       locationWorkspace: 'Workspace',
       diskLocationsTitle: 'On-disk locations',
       locationCount: '{count} copies',
-      searchPlaceholder: 'Search skills, paths, agent, or permissions…',
+      searchPlaceholder: 'Search skills',
       noSkills: 'No OpenClaw skills found',
       noSkillsHint:
         'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
