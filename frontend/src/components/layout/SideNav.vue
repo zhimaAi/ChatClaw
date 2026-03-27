@@ -15,7 +15,7 @@
  */
 
 type SvgComponent = any
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   useNavigationStore,
@@ -46,6 +46,38 @@ const appStore = useAppStore()
 const settingsStore = useSettingsStore()
 
 const switcherOpen = ref(false)
+const triggerRef = ref<HTMLButtonElement | null>(null)
+const dropdownRef = ref<HTMLDivElement | null>(null)
+const dropdownStyle = ref({ top: '0px', left: '0px', minWidth: '0px' })
+
+const updateDropdownPosition = async () => {
+  if (!triggerRef.value) return
+  await nextTick()
+  const rect = triggerRef.value.getBoundingClientRect()
+  dropdownStyle.value = {
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    minWidth: `${Math.max(rect.width, 128)}px`,
+  }
+}
+
+watch(switcherOpen, (open) => {
+  if (open) updateDropdownPosition()
+})
+
+// Close dropdown when clicking outside the trigger or dropdown panel.
+// Using a native mousedown listener avoids the full-screen overlay that was
+// previously blocking all clicks (including Wails native drag-region events).
+const handleOutsideMouseDown = (e: MouseEvent) => {
+  if (!switcherOpen.value) return
+  const target = e.target as Node
+  if (triggerRef.value?.contains(target)) return
+  if (dropdownRef.value?.contains(target)) return
+  switcherOpen.value = false
+}
+
+onMounted(() => document.addEventListener('mousedown', handleOutsideMouseDown, true))
+onUnmounted(() => document.removeEventListener('mousedown', handleOutsideMouseDown, true))
 
 interface SystemOption {
   value: SystemOwner
@@ -252,6 +284,7 @@ const navIconClass = (item: NavItem) =>
       <!-- System Switcher (Figma: pill 100px, #F5F5F5 border; hover #F0F0F0 + #D4D4D4 border) -->
       <div class="relative mx-2 mb-1">
         <button
+          ref="triggerRef"
           type="button"
           :class="
             cn(
@@ -290,7 +323,12 @@ const navIconClass = (item: NavItem) =>
           </span>
         </button>
 
-        <!-- Dropdown -->
+      </div>
+
+      <!-- Dropdown teleported to body to escape SideNav's overflow-hidden / stacking-context constraints.
+           Click-away is handled by a global mousedown listener (handleOutsideMouseDown) instead of a
+           full-screen overlay, which prevents blocking Wails native drag-region events on the TitleBar. -->
+      <Teleport to="body">
         <Transition
           enter-active-class="transition duration-150 ease-out"
           enter-from-class="scale-95 opacity-0"
@@ -301,12 +339,9 @@ const navIconClass = (item: NavItem) =>
         >
           <div
             v-if="switcherOpen"
-            :class="
-              cn(
-                'absolute left-0 right-0 top-full z-50 mt-1 flex flex-col gap-0.5 overflow-hidden rounded-md bg-popover p-0.5 shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)] dark:shadow-none dark:ring-1 dark:ring-white/10',
-                navigationStore.sidebarCollapsed && 'left-0 min-w-32'
-              )
-            "
+            ref="dropdownRef"
+            class="fixed z-[200] flex flex-col gap-0.5 overflow-hidden rounded-md bg-popover p-0.5 shadow-[0_6px_30px_rgba(0,0,0,0.05),0_16px_24px_rgba(0,0,0,0.04),0_8px_10px_rgba(0,0,0,0.08)] dark:shadow-none dark:ring-1 dark:ring-white/10"
+            :style="dropdownStyle"
           >
             <button
               v-for="opt in systemOptions"
@@ -328,11 +363,6 @@ const navIconClass = (item: NavItem) =>
             </button>
           </div>
         </Transition>
-      </div>
-
-      <!-- Click-away overlay -->
-      <Teleport to="body">
-        <div v-if="switcherOpen" class="fixed inset-0 z-40" @click="switcherOpen = false" />
       </Teleport>
 
       <!-- Nav items -->
