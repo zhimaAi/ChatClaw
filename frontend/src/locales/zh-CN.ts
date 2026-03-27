@@ -1449,6 +1449,8 @@ export default {
       cancel: '取 消',
       success: '频道创建成功',
       failed: '频道创建失败',
+      dingtalkPluginInstalling: "钉钉插件安装中",
+      dingtalkPluginInstallingDesc: "钉钉连接器插件正在后台安装，可稍后查看连接状态，现在可继续绑定助手",
       avatarHint: '点击替换，建议尺寸为100*100px，大小不超过100kb',
       feishuTipPrefix: '登录',
       feishuTipMiddle: '创建机器人，按照',
