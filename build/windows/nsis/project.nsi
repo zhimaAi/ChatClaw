@@ -98,10 +98,22 @@ Section
     
     !insertmacro wails.files
 
-    ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go)
+    ; OpenClaw bundled CLI: must live under $INSTDIR\rt\<windows-amd64|windows-arm64> (embedded path in internal/openclaw/runtime/bundle.go).
+    ; Packaged as a .zip in the installer: NSIS registers only one File entry for the zip (vs thousands of individual files
+    ; if File /r were used). Extract with Windows tar.exe (bsdtar): much faster than PowerShell Expand-Archive on huge
+    ; trees with many small files (e.g. node_modules). Zip layout must be flat: archive root = contents of windows-<arch>/
+    ; (bin/, manifest.json, node_modules/, ...), not a nested windows-<arch>/ folder (matches Compress-Archive ...\target\*).
     !ifdef ARG_OPENCLAW_RUNTIME
-        SetOutPath "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"
-        File /r "${ARG_OPENCLAW_RUNTIME}\*.*"
+        CreateDirectory "$INSTDIR\rt"
+        CreateDirectory "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"
+        SetOutPath "$INSTDIR\rt"
+        ; The zip file is compressed into the installer data section; NSIS registers only this single File line.
+        File "${ARG_OPENCLAW_RUNTIME}"
+        DetailPrint "Extracting OpenClaw runtime..."
+        SetDetailsPrint listonly
+        ExecWait 'powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "tar -xf $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip -C $INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}"'
+        Delete "$INSTDIR\rt\${ARG_OPENCLAW_RUNTIME_TARGET}.zip"
+        SetDetailsPrint both
     !endif
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
@@ -124,7 +136,17 @@ SectionEnd
 Section "uninstall" 
     !insertmacro wails.setShellContext
 
+    ; Stop app and bundled Node so $INSTDIR (especially rt\) is not locked; avoids slow per-file uninstall and delete failures.
+    ExecWait 'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -Command "taskkill /F /IM ${PRODUCT_EXECUTABLE} /T"'
+    ; Stops all node.exe; may affect other Node apps during uninstall only. Narrower kill would need a bundled script.
+    ExecWait 'powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -Command "taskkill /F /IM node.exe /T"'
+    Sleep 400
+
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+
+    ; Wipe rt\ in one OS call (fast; avoids NSIS RMDir walking node_modules with per-file log lines). Zip-based installs add no per-file rt Deletes.
+    ; Note: brief cmd window possible; PowerShell Remove-Item line breaks NSIS ExecWait parsing (-Recurse/-Force split into extra args).
+    ExecWait 'cmd /c if exist "$INSTDIR\rt" rd /s /q "$INSTDIR\rt"'
 
     RMDir /r $INSTDIR
 
