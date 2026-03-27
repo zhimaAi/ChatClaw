@@ -190,6 +190,7 @@
   "error.toolchain_install_failed": "安装失败",
   "error.channel_list_failed": "获取频道列表失败",
   "error.channel_create_failed": "创建频道失败",
+  "error.channel_openclaw_sync_timeout": "OpenClaw 配置同步超时，请稍后重试，或检查 OpenClaw Gateway 是否正常运行",
   "error.channel_update_failed": "更新频道失败",
   "error.dingtalk_plugin_not_ready": "钉钉连接器插件仍在安装或未就绪，请稍后再试。",
   "error.channel_delete_failed": "删除频道失败",

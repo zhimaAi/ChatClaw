@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Kurulum başarısız",
   "error.channel_list_failed": "Kanal listeleme başarısız",
   "error.channel_create_failed": "Kanal oluşturma başarısız",
+  "error.channel_openclaw_sync_timeout": "OpenClaw yapılandırma eşitlemesi zaman aşımına uğradı. Daha sonra tekrar deneyin veya OpenClaw Gateway'in çalıştığını doğrulayın.",
   "error.channel_update_failed": "Kanal güncelleme başarısız",
   "error.dingtalk_plugin_not_ready": "DingTalk bağlayıcı eklentisi hâlâ kuruluyor veya hazır değil. Lütfen daha sonra tekrar deneyin.",
   "error.channel_delete_failed": "Kanal silme başarısız",

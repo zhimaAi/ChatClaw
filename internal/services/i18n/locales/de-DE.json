@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Installation fehlgeschlagen",
   "error.channel_list_failed": "Kanäle auflisten fehlgeschlagen",
   "error.channel_create_failed": "Kanal erstellen fehlgeschlagen",
+  "error.channel_openclaw_sync_timeout": "OpenClaw-Konfigurationssynchronisation hat das Zeitlimit überschritten. Bitte später erneut versuchen oder prüfen, ob der OpenClaw Gateway läuft.",
   "error.channel_update_failed": "Kanal aktualisieren fehlgeschlagen",
   "error.dingtalk_plugin_not_ready": "Das DingTalk-Connector-Plugin wird noch installiert oder ist nicht bereit. Bitte versuchen Sie es später erneut.",
   "error.channel_delete_failed": "Kanal löschen fehlgeschlagen",

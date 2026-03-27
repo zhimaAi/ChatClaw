@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Installazione non riuscita",
   "error.channel_list_failed": "Elenco canali non riuscito",
   "error.channel_create_failed": "Creazione canale non riuscita",
+  "error.channel_openclaw_sync_timeout": "Timeout della sincronizzazione della configurazione OpenClaw. Riprovare più tardi o verificare che OpenClaw Gateway sia in esecuzione.",
   "error.channel_update_failed": "Aggiornamento canale non riuscito",
   "error.dingtalk_plugin_not_ready": "Il plugin del connettore DingTalk è ancora in installazione o non è pronto. Riprova più tardi.",
   "error.channel_delete_failed": "Eliminazione canale non riuscita",

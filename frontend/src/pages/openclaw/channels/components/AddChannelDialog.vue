@@ -52,7 +52,7 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
 
 /** OpenClaw: Feishu and DingTalk are available; others show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'dingtalk'
+  return ['feishu', 'wecom', 'dingtalk'].includes(platformId)
 }
 </script>
 
