@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Cài đặt thất bại",
   "error.channel_list_failed": "Liệt kê kênh thất bại",
   "error.channel_create_failed": "Tạo kênh thất bại",
+  "error.channel_openclaw_sync_timeout": "Đồng bộ cấu hình OpenClaw hết thời gian. Hãy thử lại sau hoặc kiểm tra OpenClaw Gateway đang chạy.",
   "error.channel_update_failed": "Cập nhật kênh thất bại",
   "error.channel_delete_failed": "Xóa kênh thất bại",
   "error.channel_read_failed": "Đọc kênh thất bại",

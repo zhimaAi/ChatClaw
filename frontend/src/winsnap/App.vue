@@ -4,7 +4,7 @@
  * Reuses AssistantPage with snap mode
  */
 import { onUnmounted } from 'vue'
-import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
+import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import { Toaster } from '@/components/ui/toast'
 import { useLocaleSync } from '@/composables/useLocale'
 import { useThemeSync } from '@/composables/useThemeSync'

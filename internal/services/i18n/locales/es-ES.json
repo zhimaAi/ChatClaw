@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Instalación fallida",
   "error.channel_list_failed": "Error al listar canales",
   "error.channel_create_failed": "Error al crear el canal",
+  "error.channel_openclaw_sync_timeout": "Se agotó el tiempo de sincronización de la configuración de OpenClaw. Vuelva a intentarlo o compruebe que OpenClaw Gateway está en ejecución.",
   "error.channel_update_failed": "Error al actualizar el canal",
   "error.channel_delete_failed": "Error al eliminar el canal",
   "error.channel_read_failed": "Error al leer el canal",

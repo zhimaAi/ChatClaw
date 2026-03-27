@@ -190,6 +190,7 @@
   "error.toolchain_install_failed": "installation failed",
   "error.channel_list_failed": "failed to list channels",
   "error.channel_create_failed": "failed to create channel",
+  "error.channel_openclaw_sync_timeout": "OpenClaw configuration sync timed out. Retry later or verify the OpenClaw Gateway is running.",
   "error.channel_update_failed": "failed to update channel",
   "error.channel_delete_failed": "failed to delete channel",
   "error.channel_read_failed": "failed to read channel",

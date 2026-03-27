@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } fr
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
-import AssistantPage from '@/pages/native/assistant/AssistantPage.vue'
+import AssistantPage from '@/pages/assistant/AssistantPage.vue'
 import { Events } from '@wailsio/runtime'
 import { UpdaterService } from '@bindings/chatclaw/internal/services/updater'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
@@ -26,8 +26,10 @@ const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/Channel
 const OpenClawChannelsPage = defineAsyncComponent(
   () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
 )
-const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawPage.vue'))
-const OpenClawDashboardPage = defineAsyncComponent(() => import('@/pages/openclaw/OpenClawDashboardPage.vue'))
+const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/assistant/OpenClawPage.vue'))
+const OpenClawDashboardPage = defineAsyncComponent(
+  () => import('@/pages/openclaw/OpenClawDashboardPage.vue')
+)
 const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue'))
 
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'

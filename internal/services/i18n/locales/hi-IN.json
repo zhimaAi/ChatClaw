@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "इंस्टॉलेशन विफल",
   "error.channel_list_failed": "चैनल सूची बनाने में विफल",
   "error.channel_create_failed": "चैनल निर्माण में विफल",
+  "error.channel_openclaw_sync_timeout": "OpenClaw कॉन्फ़िगरेशन सिंक का समय समाप्त। बाद में पुनः प्रयास करें या सुनिश्चित करें कि OpenClaw Gateway चल रहा है।",
   "error.channel_update_failed": "चैनल अपडेट करने में विफल",
   "error.channel_delete_failed": "चैनल हटाने में विफल",
   "error.channel_read_failed": "चैनल पढ़ने में विफल",

@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "فشل التثبيت",
   "error.channel_list_failed": "فشل في سرد القنوات",
   "error.channel_create_failed": "فشل في إنشاء القناة",
+  "error.channel_openclaw_sync_timeout": "انتهت مهلة مزامنة إعدادات OpenClaw. أعد المحاولة لاحقًا أو تحقق من أن OpenClaw Gateway يعمل.",
   "error.channel_update_failed": "فشل في تحديث القناة",
   "error.channel_delete_failed": "فشل في حذف القناة",
   "error.channel_read_failed": "فشل في قراءة القناة",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import AssistantPage from '../AssistantPage.vue'
+import OpenClawPage from '../OpenClawPage.vue'
 
 const props = defineProps<{
   conversationId: number
@@ -8,7 +8,7 @@ const props = defineProps<{
 </script>
 
 <template>
-  <AssistantPage
+  <OpenClawPage
     :key="`embedded-${props.conversationId}`"
     :tab-id="`embedded-${props.conversationId}`"
     mode="embedded"
