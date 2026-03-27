@@ -21,7 +21,7 @@ import IconClose from '@/assets/icons/close-icon.svg'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toast'
+import { toast, useToast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { Dialogs } from '@wailsio/runtime'
 import {
@@ -64,6 +64,7 @@ import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
+const { toast: addToast } = useToast()
 
 /** OpenClaw: Feishu and DingTalk are available; other platforms show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
@@ -376,7 +377,16 @@ async function handleInlineSave() {
       agent_id: firstAgent.id,
     })
 
-    toast.success(t('channels.config.success'))
+    if (selectedPlatformMeta.value?.id === 'dingtalk') {
+      addToast({
+        title: t('channels.config.dingtalkPluginInstalling'),
+        description: t('channels.config.dingtalkPluginInstallingDesc'),
+        variant: 'default',
+        duration: 6000,
+      })
+    } else {
+      toast.success(t('channels.config.success'))
+    }
     resetInlineForm()
     await loadData()
     if (channel) {

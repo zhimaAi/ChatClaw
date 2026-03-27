@@ -1441,6 +1441,8 @@ export default {
       cancel: 'Cancel',
       success: 'Channel created successfully',
       failed: 'Failed to create channel',
+      dingtalkPluginInstalling: "釘釘插件安裝中",
+      dingtalkPluginInstallingDesc: "釘釘連接器插件正在後台安裝，可稍後查看連接狀態，現在可繼續綁定助手",
       avatarHint: 'Click to replace, recommended size 100*100px, max 100kb',
       feishuTipPrefix: 'Login to',
       feishuTipMiddle: 'to create a bot, follow',

@@ -178,12 +178,8 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, err
 	}
 
-	// DingTalk requires the OpenClaw plugin to be installed — allow extra time for npm download.
-	createTimeout := 15 * time.Second
-	if platform == channels.PlatformDingTalk {
-		createTimeout = dingTalkPluginInstallTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), createTimeout)
+	// CreateChannel only performs DB operations; DingTalk plugin installation runs in the background.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	// Create local DB row first to obtain a stable channel ID for the account key.
@@ -212,15 +208,11 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	ch.ExtraConfig = extraConfigWithID
 
 	if platform == channels.PlatformDingTalk {
-		// Ensure plugin installed, then write initial (disabled) config to OpenClaw.
-		if err := s.ensureDingTalkPluginInstalled(ctx); err != nil {
-			_ = s.channelSvc.DeleteChannel(ch.ID)
-			return nil, errs.Wrap("error.channel_create_failed", err)
-		}
-		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, input.ExtraConfig, false); err != nil {
-			_ = s.channelSvc.DeleteChannel(ch.ID)
-			return nil, errs.Wrap("error.channel_create_failed", err)
-		}
+		// Start plugin installation in the background so CreateChannel returns immediately.
+		// ConnectChannel (called when the user binds an agent and enables the channel) will
+		// call ensureDingTalkPluginInstalled again idempotently, so no data is lost if the
+		// background goroutine fails.
+		go s.installDingTalkPluginBackground(ch.ID)
 	} else {
 		if err := s.setOpenClawChannelAccount(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
 			_ = s.channelSvc.DeleteChannel(ch.ID)
@@ -750,6 +742,31 @@ func (s *OpenClawChannelService) ensureDingTalkPluginInstalled(ctx context.Conte
 
 	return fmt.Errorf("install %s: ClawHub rate limit exceeded after %d attempts, please try again later: %w",
 		dingTalkPluginName, maxAttempts, lastErr)
+}
+
+// installDingTalkPluginBackground installs the DingTalk connector plugin in a goroutine and
+// writes the initial (disabled) account config once done. Called by CreateChannel so the RPC
+// returns immediately without blocking on the npm download. ConnectChannel retries idempotently
+// when the user later enables the channel, so a failure here is non-fatal.
+func (s *OpenClawChannelService) installDingTalkPluginBackground(channelID int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), dingTalkPluginInstallTimeout)
+	defer cancel()
+
+	if err := s.ensureDingTalkPluginInstalled(ctx); err != nil {
+		s.app.Logger.Warn("openclaw: background dingtalk plugin installation failed", "channelId", channelID, "error", err)
+		return
+	}
+
+	m, err := s.getChannelModel(ctx, channelID)
+	if err != nil {
+		s.app.Logger.Warn("openclaw: failed to fetch channel after dingtalk plugin install", "channelId", channelID, "error", err)
+		return
+	}
+
+	accountKey := channelAccountKey(channelID, m.ExtraConfig)
+	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, false); err != nil {
+		s.app.Logger.Warn("openclaw: failed to write initial dingtalk config after background install", "channelId", channelID, "error", err)
+	}
 }
 
 // isDingTalkPluginInstalledLocally returns true when the dingtalk-connector extension

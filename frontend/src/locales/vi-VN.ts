@@ -1439,6 +1439,8 @@ export default {
       cancel: 'Hủy',
       success: 'Tạo kênh thành công',
       failed: 'Tạo kênh thất bại',
+      dingtalkPluginInstalling: "Đang cài đặt plugin DingTalk",
+      dingtalkPluginInstallingDesc: "Plugin DingTalk Connector đang được cài đặt nền. Bạn có thể tiếp tục liên kết trợ lý ngay bây giờ và kiểm tra trạng thái kết nối sau.",
       avatarHint: 'Nhấp để thay thế, khuyến nghị 100*100px, tối đa 100KB',
       feishuTipPrefix: 'Đăng nhập vào',
       feishuTipMiddle: 'để tạo bot, làm theo',

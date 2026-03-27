@@ -40,7 +40,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/toast'
+import { toast, useToast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/channels/platformDocs'
@@ -52,6 +52,7 @@ const props = defineProps<{
 const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
+const { toast: addToast } = useToast()
 
 /** Platforms that support create/bind in UI (feishu + wecom + dingtalk). */
 function isChannelPlatformSelectable(platformId: string) {
@@ -320,7 +321,16 @@ async function handleCreateChannel() {
       }
     }
 
-    toast.success(t('assistant.channels.createAndBindSuccess'))
+    if (platformId === 'dingtalk') {
+      addToast({
+        title: t('channels.config.dingtalkPluginInstalling'),
+        description: t('channels.config.dingtalkPluginInstallingDesc'),
+        variant: 'default',
+        duration: 6000,
+      })
+    } else {
+      toast.success(t('assistant.channels.createAndBindSuccess'))
+    }
     resetInlineForm()
     await loadData()
     showCreateForm.value = false

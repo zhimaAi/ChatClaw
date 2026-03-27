@@ -1573,6 +1573,8 @@ export default {
       cancel: '취소',
       success: '채널이 성공적으로 생성되었습니다',
       failed: '채널 생성 실패',
+      dingtalkPluginInstalling: "DingTalk 플러그인 설치 중",
+      dingtalkPluginInstallingDesc: "DingTalk 커넥터 플러그인이 백그라운드에서 설치 중입니다. 지금 어시스턴트 연결을 계속 진행하고 나중에 연결 상태를 확인할 수 있습니다.",
       avatarHint: '클릭하여 교체, 권장 100*100px, 최대 100KB',
       feishuTipPrefix: '로그인',
       feishuTipMiddle: '봇을 생성하려면',

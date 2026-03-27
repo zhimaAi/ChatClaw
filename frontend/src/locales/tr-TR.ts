@@ -1440,6 +1440,8 @@ export default {
       cancel: 'İptal',
       success: 'Kanal başarıyla oluşturuldu',
       failed: 'Kanal oluşturma başarısız',
+      dingtalkPluginInstalling: "DingTalk eklentisi yükleniyor",
+      dingtalkPluginInstallingDesc: "DingTalk Connector eklentisi arka planda yükleniyor. Şimdi bir asistan bağlamaya devam edebilir, bağlantı durumunu daha sonra kontrol edebilirsiniz.",
       avatarHint: 'Değiştirmek için tıklayın, önerilen 100*100px, maks 100KB',
       feishuTipPrefix: 'Giriş yapın',
       feishuTipMiddle: 'bot oluşturmak için, takip edin',
