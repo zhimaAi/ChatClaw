@@ -171,8 +171,21 @@ export const useChatStore = defineStore('chat', () => {
 
       if (isOpenClaw) {
         // OpenClaw messages come from Gateway (authoritative source).
-        if (streaming) {
-          // While streaming, don't touch messages — streaming events manage state.
+        if (streaming && fetched.length > 0) {
+          // Channel-originated runs use tab "channel_backend": user text exists in Gateway
+          // immediately, but streaming events only update the assistant row. Merge transcript
+          // from Gateway with the live streaming assistant placeholder.
+          const streamRow = current.find((m) => m.id === streaming.messageId)
+          if (streamRow) {
+            let merged = [...fetched]
+            if (merged.length > 0 && merged[merged.length - 1].role === MessageRole.ASSISTANT) {
+              merged = merged.slice(0, -1)
+            }
+            merged.push(streamRow)
+            messagesByConversation.value[conversationId] = merged
+          }
+        } else if (streaming) {
+          // Gateway empty (lag) — keep local state; streaming events manage assistant.
         } else if (fetched.length > 0) {
           // Not streaming: Gateway history is authoritative — replace entirely.
           // Clean up old segment data for messages that will be replaced.
@@ -1226,6 +1239,8 @@ export const useChatStore = defineStore('chat', () => {
         setTimeout(() => {
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
+          // Re-fetch Gateway transcript (includes channel user turns); IDs differ from stream placeholder.
+          void loadMessages(conversation_id)
         }, 0)
       } else {
         // Clear streaming state first
@@ -1258,6 +1273,7 @@ export const useChatStore = defineStore('chat', () => {
         setTimeout(() => {
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
+          void loadMessages(conversation_id)
         }, 0)
       } else {
         // Clear streaming state first
@@ -1315,13 +1331,16 @@ export const useChatStore = defineStore('chat', () => {
         status: MessageStatus.ERROR,
       } as any)
 
-      // Persist streaming segments locally since we don't call loadMessages for errors.
+      // Persist streaming segments locally for non-OpenClaw; OpenClaw refreshes from Gateway below.
       persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
 
       // Clear streaming state after a tick to let the UI read from segments first
       setTimeout(() => {
         delete streamingByConversation.value[conversation_id]
         delete activeRequestByConversation.value[conversation_id]
+        if (openClawConversations.value.has(conversation_id)) {
+          void loadMessages(conversation_id)
+        }
       }, 0)
     }
   }

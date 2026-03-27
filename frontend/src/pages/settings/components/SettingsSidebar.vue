@@ -44,8 +44,20 @@ const allMenuItems: MenuItem[] = [
   { id: 'about', labelKey: 'settings.menu.about', icon: AboutIcon },
 ]
 
-// Filter out GUI-only items when running in server mode
-const menuItems = computed(() => allMenuItems.filter((item) => !item.guiOnly || appStore.isGUIMode))
+// Filter: GUI-only in server mode; system-specific menus
+const menuItems = computed(() =>
+  allMenuItems.filter((item) => {
+    if (item.guiOnly && !appStore.isGUIMode) return false
+    if (appStore.currentSystem === 'chatclaw' && item.id === 'openclawRuntime') return false
+    if (
+      appStore.currentSystem === 'openclaw' &&
+      (item.id === 'chatwiki' || item.id === 'mcp')
+    ) {
+      return false
+    }
+    return true
+  })
+)
 
 const handleMenuClick = (menuId: SettingsMenuItem) => {
   settingsStore.setActiveMenu(menuId)

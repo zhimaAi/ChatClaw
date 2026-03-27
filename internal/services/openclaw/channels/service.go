@@ -6,34 +6,49 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
-	"chatclaw/internal/services/channels"
 	openclawagents "chatclaw/internal/openclaw/agents"
 	openclawruntime "chatclaw/internal/openclaw/runtime"
+	"chatclaw/internal/services/channels"
+	"chatclaw/internal/services/conversations"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// OpenClawChannelService provides Feishu-focused channel management for OpenClaw.
+// OpenClawChannelService provides OpenClaw channel management for OpenClaw agents.
 // It delegates to the shared channels infrastructure while filtering by OpenClaw agents.
 type OpenClawChannelService struct {
 	app             *application.App
 	gateway         *channels.Gateway
 	agentsSvc       *openclawagents.OpenClawAgentsService
 	channelSvc      *channels.ChannelService
+	convSvc         *conversations.ConversationsService
 	openclawManager *openclawruntime.Manager
 }
+
+const wecomPluginPackage = "@wecom/wecom-openclaw-plugin"
+const wecomPluginID = "wecom-openclaw-plugin"
+
+// Timeouts for OpenClaw CLI (config set), plugin install/list, and gateway restart.
+const (
+	openClawChannelSyncTimeout = 120 * time.Second
+	openClawCLIRetryTimeout  = 90 * time.Second
+)
 
 func NewOpenClawChannelService(
 	app *application.App,
 	gw *channels.Gateway,
 	agentsSvc *openclawagents.OpenClawAgentsService,
 	channelSvc *channels.ChannelService,
+	convSvc *conversations.ConversationsService,
 	openclawManager *openclawruntime.Manager,
 ) *OpenClawChannelService {
 	return &OpenClawChannelService{
@@ -41,6 +56,7 @@ func NewOpenClawChannelService(
 		gateway:         gw,
 		agentsSvc:       agentsSvc,
 		channelSvc:      channelSvc,
+		convSvc:         convSvc,
 		openclawManager: openclawManager,
 	}
 }
@@ -80,7 +96,7 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 	out := make([]channels.Channel, 0, len(models))
 	for i := range models {
 		ch := models[i].toDTO()
-		if s.gateway.IsConnected(ch.ID) {
+		if s.gateway.IsConnected(ch.ID) || s.isPluginManagedChannelOnline(ch) {
 			ch.Status = channels.StatusOnline
 		}
 		out = append(out, ch)
@@ -91,6 +107,10 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 // ListAllFeishuChannels returns all Feishu channels (including unbound ones)
 // for the "add existing bot" workflow.
 func (s *OpenClawChannelService) ListAllFeishuChannels() ([]channels.Channel, error) {
+	return s.listAllChannelsByPlatform(channels.PlatformFeishu)
+}
+
+func (s *OpenClawChannelService) listAllChannelsByPlatform(platform string) ([]channels.Channel, error) {
 	db, err := s.db()
 	if err != nil {
 		return nil, err
@@ -102,7 +122,7 @@ func (s *OpenClawChannelService) ListAllFeishuChannels() ([]channels.Channel, er
 	var models []channelModel
 	q := db.NewSelect().
 		Model(&models).
-		Where("ch.platform = ?", channels.PlatformFeishu).
+		Where("ch.platform = ?", platform).
 		Where(openClawChannelVisibilitySQL).
 		OrderExpr("ch.id DESC")
 	if err := q.Scan(ctx); err != nil {
@@ -112,7 +132,7 @@ func (s *OpenClawChannelService) ListAllFeishuChannels() ([]channels.Channel, er
 	out := make([]channels.Channel, 0, len(models))
 	for i := range models {
 		ch := models[i].toDTO()
-		if s.gateway.IsConnected(ch.ID) {
+		if s.gateway.IsConnected(ch.ID) || s.isPluginManagedChannelOnline(ch) {
 			ch.Status = channels.StatusOnline
 		}
 		out = append(out, ch)
@@ -139,7 +159,7 @@ func (s *OpenClawChannelService) GetChannelStats() (*channels.ChannelStats, erro
 }
 
 // GetSupportedPlatforms returns the same platform list as ChatClaw for UI parity (tabs + add dialog).
-// Only Feishu is actually createable; the frontend shows others as disabled with "coming soon".
+// OpenClaw currently supports creating Feishu and WeCom channels directly.
 func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta {
 	return []channels.PlatformMeta{
 		{ID: channels.PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
@@ -150,7 +170,7 @@ func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta
 	}
 }
 
-// CreateChannel creates a new Feishu channel. When agent_id > 0, binds that OpenClaw agent;
+// CreateChannel creates a new OpenClaw channel. When agent_id > 0, binds that OpenClaw agent;
 // when agent_id is 0, creates an unbound channel (UI binds via BindAgent or auto-generate later).
 func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*channels.Channel, error) {
 	name := strings.TrimSpace(input.Name)
@@ -158,15 +178,16 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, errs.New("error.channel_name_required")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 	if err := s.ensureOpenClawReady(); err != nil {
 		return nil, err
 	}
+	platform := openClawPlatformFromInput(input.Platform, input.ExtraConfig)
 
 	// Create local DB row first to obtain a stable channel ID for the account key.
 	ch, err := s.channelSvc.CreateChannel(channels.CreateChannelInput{
-		Platform:       channels.PlatformFeishu,
+		Platform:       platform,
 		Name:           name,
 		Avatar:         input.Avatar,
 		ConnectionType: channels.ConnTypeGateway,
@@ -177,7 +198,7 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, err
 	}
 
-	accountKey := feishuAccountKey(ch.ID, input.ExtraConfig)
+	accountKey := openClawChannelAccountKey(ch.ID, input.ExtraConfig)
 	extraConfigWithID, err := withOpenClawChannelID(input.ExtraConfig, accountKey)
 	if err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
@@ -189,9 +210,9 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	}
 	ch.ExtraConfig = extraConfigWithID
 
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, name, input.ExtraConfig, false); err != nil {
+	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
-		return nil, errs.Wrap("error.channel_create_failed", err)
+		return nil, wrapOpenClawSyncErr(err, "error.channel_create_failed", nil)
 	}
 
 	if input.AgentID > 0 {
@@ -199,6 +220,9 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 			return nil, err
 		}
 		ch.AgentID = input.AgentID
+		if err := s.syncChannelRoutingBinding(ch.ID, input.AgentID); err != nil {
+			return nil, wrapOpenClawSyncErr(err, "error.channel_create_failed", nil)
+		}
 	}
 
 	return ch, nil
@@ -213,7 +237,7 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
@@ -229,15 +253,19 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 		extraConfig = strings.TrimSpace(*input.ExtraConfig)
 	}
 
-	accountKey := feishuAccountKey(id, extraConfig)
+	accountKey := openClawChannelAccountKey(id, extraConfig)
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
 
 	enabled := m.Enabled
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
 
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, name, extraConfig, enabled); err != nil {
-		return nil, errs.Wrap("error.channel_update_failed", err)
+	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, extraConfig, enabled); err != nil {
+		return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 	}
 
 	extraConfigWithID, err := withOpenClawChannelID(extraConfig, accountKey)
@@ -258,42 +286,74 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 	if id <= 0 {
 		return errs.New("error.channel_id_required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
 	if err := s.ensureOpenClawReady(); err != nil {
 		return err
 	}
-	if err := s.removeOpenClawFeishuAccount(ctx, accountKey); err != nil {
-		s.app.Logger.Warn("openclaw config unset feishu account failed, proceeding with local delete", "account", accountKey, "error", err)
+	if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
+		s.app.Logger.Warn("openclaw config unset channel failed, proceeding with local delete", "platform", platform, "account", accountKey, "error", err)
 	}
 
 	if err := s.channelSvc.DeleteChannel(id); err != nil {
 		return err
 	}
 
-	if err := s.syncOpenClawFeishuDefaultAccount(ctx); err != nil {
-		s.app.Logger.Warn("openclaw feishu default account sync failed after delete", "error", err)
+	if platform == channels.PlatformWeCom {
+		if err := s.removeManagedRouteBinding(platform, id); err != nil {
+			s.app.Logger.Warn("openclaw wecom route binding cleanup failed after delete", "channel_id", id, "error", err)
+		}
+	}
+	if err := s.syncOpenClawPlatformConfigAfterDelete(ctx, platform); err != nil {
+		s.app.Logger.Warn("openclaw channel default config sync failed after delete", "platform", platform, "error", err)
 	}
 	return nil
 }
 
 // BindAgent delegates to the shared ChannelService.
 func (s *OpenClawChannelService) BindAgent(id int64, agentID int64) error {
-	return s.channelSvc.BindAgent(id, agentID)
+	if err := s.channelSvc.BindAgent(id, agentID); err != nil {
+		return err
+	}
+	return s.syncChannelRoutingBinding(id, agentID)
 }
 
 // UnbindAgent delegates to the shared ChannelService.
 func (s *OpenClawChannelService) UnbindAgent(id int64) error {
-	return s.channelSvc.UnbindAgent(id)
+	if id <= 0 {
+		return errs.New("error.channel_id_required")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	m, err := s.getChannelModel(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.channelSvc.UnbindAgent(id); err != nil {
+		return err
+	}
+	if strings.TrimSpace(m.Platform) == channels.PlatformWeCom && m.OpenClawScope {
+		if err := s.removeManagedRouteBinding(channels.PlatformWeCom, id); err != nil {
+			return errs.Wrap("error.channel_bind_failed", err)
+		}
+		if err := s.restartOpenClawGateway(); err != nil {
+			return errs.Wrap("error.channel_bind_failed", err)
+		}
+	}
+	return nil
 }
 
-// ConnectChannel delegates to the shared ChannelService.
+// ConnectChannel enables the OpenClaw plugin-managed channel.
 func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 	if id <= 0 {
 		return errs.New("error.channel_id_required")
@@ -301,16 +361,20 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 	if err := s.ensureOpenClawReady(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, m.Name, m.ExtraConfig, true); err != nil {
-		return errs.Wrap("error.channel_connect_failed", err)
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
+	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, m.Name, m.ExtraConfig, true); err != nil {
+		return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
 	}
 
 	extraConfigWithID, encodeErr := withOpenClawChannelID(m.ExtraConfig, accountKey)
@@ -320,10 +384,23 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		}
 	}
 
+	if platform == channels.PlatformWeCom {
+		if m.AgentID == 0 {
+			return errs.New("error.channel_connect_requires_agent")
+		}
+		if err := s.syncChannelRoutingBinding(id, m.AgentID); err != nil {
+			return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
+		}
+		_ = s.gateway.DisconnectChannel(context.Background(), id)
+		enabled := true
+		_, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
+		return err
+	}
+
 	return s.channelSvc.ConnectChannel(id)
 }
 
-// DisconnectChannel delegates to the shared ChannelService.
+// DisconnectChannel disables the OpenClaw plugin-managed channel.
 func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	if id <= 0 {
 		return errs.New("error.channel_id_required")
@@ -331,24 +408,204 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	if err := s.ensureOpenClawReady(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	accountKey := feishuAccountKey(id, m.ExtraConfig)
-	if err := s.setOpenClawFeishuAccount(ctx, accountKey, m.Name, m.ExtraConfig, false); err != nil {
-		return errs.Wrap("error.channel_disconnect_failed", err)
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
+	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, m.Name, m.ExtraConfig, false); err != nil {
+		return wrapOpenClawSyncErr(err, "error.channel_disconnect_failed", nil)
+	}
+
+	if platform == channels.PlatformWeCom {
+		_ = s.gateway.DisconnectChannel(context.Background(), id)
+		enabled := false
+		_, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
+		return err
 	}
 
 	return s.channelSvc.DisconnectChannel(id)
 }
 
-// VerifyChannelConfig verifies Feishu credentials.
+func (s *OpenClawChannelService) isPluginManagedChannelOnline(ch channels.Channel) bool {
+	if strings.TrimSpace(ch.Platform) != channels.PlatformWeCom {
+		return false
+	}
+	if !ch.OpenClawScope || !ch.Enabled {
+		return false
+	}
+	return s.openclawManager != nil && s.openclawManager.IsReady()
+}
+
+func (s *OpenClawChannelService) syncChannelRoutingBinding(channelID int64, agentID int64) error {
+	if channelID <= 0 || agentID <= 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	m, err := s.getChannelModel(ctx, channelID)
+	if err != nil {
+		return err
+	}
+	if !m.OpenClawScope || strings.TrimSpace(m.Platform) != channels.PlatformWeCom {
+		return nil
+	}
+	agent, err := s.agentsSvc.GetAgent(agentID)
+	if err != nil {
+		return err
+	}
+	if err := s.upsertManagedRouteBinding(channels.PlatformWeCom, channelID, strings.TrimSpace(agent.OpenClawAgentID)); err != nil {
+		return err
+	}
+	return s.restartOpenClawGateway()
+}
+
+func (s *OpenClawChannelService) upsertManagedRouteBinding(platform string, channelID int64, openclawAgentID string) error {
+	cfg, configPath, err := loadOpenClawJSONConfig()
+	if err != nil {
+		return err
+	}
+	bindings := configBindings(cfg)
+	bindings = removeManagedBindings(bindings, platform, channelID)
+	bindings = append([]any{map[string]any{
+		"type":    "route",
+		"agentId": strings.TrimSpace(openclawAgentID),
+		"match": map[string]any{
+			"channel":   strings.TrimSpace(platform),
+			"accountId": "default",
+		},
+	}}, bindings...)
+	cfg["bindings"] = bindings
+	ensurePerChannelPeerDMScope(cfg)
+	return saveOpenClawJSONConfig(configPath, cfg)
+}
+
+func (s *OpenClawChannelService) removeManagedRouteBinding(platform string, channelID int64) error {
+	cfg, configPath, err := loadOpenClawJSONConfig()
+	if err != nil {
+		return err
+	}
+	cfg["bindings"] = removeManagedBindings(configBindings(cfg), platform, channelID)
+	return saveOpenClawJSONConfig(configPath, cfg)
+}
+
+func loadOpenClawJSONConfig() (map[string]any, string, error) {
+	root, err := define.OpenClawDataRootDir()
+	if err != nil {
+		return nil, "", err
+	}
+	configPath := filepath.Join(root, "openclaw.json")
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg := make(map[string]any)
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			return nil, "", fmt.Errorf("parse openclaw config: %w", err)
+		}
+	}
+	return cfg, configPath, nil
+}
+
+func saveOpenClawJSONConfig(configPath string, cfg map[string]any) error {
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal openclaw config: %w", err)
+	}
+	if err := os.WriteFile(configPath, out, 0o644); err != nil {
+		return fmt.Errorf("write openclaw config: %w", err)
+	}
+	return nil
+}
+
+func configBindings(cfg map[string]any) []any {
+	bindings, _ := cfg["bindings"].([]any)
+	if bindings == nil {
+		return []any{}
+	}
+	return append([]any(nil), bindings...)
+}
+
+func removeManagedBindings(bindings []any, platform string, channelID int64) []any {
+	if len(bindings) == 0 {
+		return bindings
+	}
+	out := make([]any, 0, len(bindings))
+	for _, item := range bindings {
+		entry, _ := item.(map[string]any)
+		if !isManagedChannelBinding(entry, platform, channelID) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func isManagedChannelBinding(entry map[string]any, platform string, channelID int64) bool {
+	if entry == nil {
+		return false
+	}
+	match, _ := entry["match"].(map[string]any)
+	if match == nil {
+		return false
+	}
+	if bindingType, _ := entry["type"].(string); strings.TrimSpace(bindingType) == "acp" {
+		return false
+	}
+	channelValue, _ := match["channel"].(string)
+	accountValue, _ := match["accountId"].(string)
+	if strings.TrimSpace(channelValue) != strings.TrimSpace(platform) {
+		return false
+	}
+	if strings.TrimSpace(accountValue) != "default" {
+		return false
+	}
+	if _, ok := match["peer"]; ok {
+		return false
+	}
+	if _, ok := match["guildId"]; ok {
+		return false
+	}
+	if _, ok := match["teamId"]; ok {
+		return false
+	}
+	if roles, ok := match["roles"].([]any); ok && len(roles) > 0 {
+		return false
+	}
+	_ = channelID
+	return true
+}
+
+func ensurePerChannelPeerDMScope(cfg map[string]any) {
+	session, _ := cfg["session"].(map[string]any)
+	if session == nil {
+		session = map[string]any{}
+		cfg["session"] = session
+	}
+	scope, _ := session["dmScope"].(string)
+	if strings.TrimSpace(scope) == "" || strings.EqualFold(strings.TrimSpace(scope), "main") {
+		session["dmScope"] = "per-channel-peer"
+	}
+}
+
+// VerifyChannelConfig verifies credentials for Feishu/WeCom based on config payload.
 func (s *OpenClawChannelService) VerifyChannelConfig(extraConfig string) error {
-	return s.channelSvc.VerifyChannelConfig(channels.PlatformFeishu, extraConfig)
+	platform := openClawPlatformFromInput("", extraConfig)
+	if platform == channels.PlatformWeCom {
+		ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
+		defer cancel()
+		if err := s.ensureOpenClawWeComPluginInstalled(ctx); err != nil {
+			return errs.Wrap("error.channel_verify_failed", err)
+		}
+	}
+	return s.channelSvc.VerifyChannelConfig(platform, extraConfig)
 }
 
 // EnsureAgentForChannel auto-creates an OpenClaw agent and binds it to the channel.
@@ -394,6 +651,7 @@ func (s *OpenClawChannelService) ListAgents() ([]openclawagents.OpenClawAgent, e
 
 // CreateChannelInput for OpenClaw channel creation.
 type CreateChannelInput struct {
+	Platform    string `json:"platform,omitempty"`
 	Name        string `json:"name"`
 	Avatar      string `json:"avatar"`
 	ExtraConfig string `json:"extra_config"`
@@ -403,6 +661,7 @@ type CreateChannelInput struct {
 
 // appCredentialsJSON is used to parse/build extra_config.
 type appCredentialsJSON struct {
+	Platform          string `json:"platform,omitempty"`
 	AppID             string `json:"app_id"`
 	AppSecret         string `json:"app_secret"`
 	OpenClawChannelID string `json:"openclaw_channel_id,omitempty"`
@@ -419,6 +678,33 @@ func parseAppCredentialsPair(extraConfig string) (appID, appSecret string) {
 		return "", ""
 	}
 	return strings.TrimSpace(cfg.AppID), strings.TrimSpace(cfg.AppSecret)
+}
+
+func parseOpenClawPlatform(extraConfig string) string {
+	extraConfig = strings.TrimSpace(extraConfig)
+	if extraConfig == "" {
+		return ""
+	}
+	var cfg appCredentialsJSON
+	if err := json.Unmarshal([]byte(extraConfig), &cfg); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Platform)
+}
+
+func openClawPlatformFromInput(explicitPlatform, extraConfig string) string {
+	platform := strings.ToLower(strings.TrimSpace(explicitPlatform))
+	if platform == "" {
+		platform = strings.ToLower(parseOpenClawPlatform(extraConfig))
+	}
+	switch platform {
+	case channels.PlatformWeCom:
+		return channels.PlatformWeCom
+	case channels.PlatformFeishu:
+		return channels.PlatformFeishu
+	default:
+		return channels.PlatformFeishu
+	}
 }
 
 func withOpenClawChannelID(extraConfig, openClawChannelID string) (string, error) {
@@ -472,14 +758,65 @@ func (s *OpenClawChannelService) getChannelModel(ctx context.Context, id int64) 
 	return &m, nil
 }
 
-// feishuAccountKey returns the OpenClaw config account key for a channel row.
+// openClawChannelAccountKey returns the OpenClaw config account key for a channel row.
 // The key is stored in extra_config.openclaw_channel_id when available, otherwise
 // derived from the local DB channel ID.
-func feishuAccountKey(channelID int64, extraConfig string) string {
+func openClawChannelAccountKey(channelID int64, extraConfig string) string {
 	if id := extractOpenClawChannelID(extraConfig); id != "" {
 		return id
 	}
 	return fmt.Sprintf("channel_%d", channelID)
+}
+
+func (s *OpenClawChannelService) syncOpenClawChannelConfig(ctx context.Context, platform, accountKey, name, extraConfig string, enabled bool) error {
+	switch platform {
+	case channels.PlatformWeCom:
+		if err := s.ensureOpenClawWeComPluginInstalled(ctx); err != nil {
+			return err
+		}
+		if err := s.setOpenClawWeComConfig(ctx, name, extraConfig, enabled); err != nil {
+			return err
+		}
+		if err := s.restartOpenClawGateway(); err != nil {
+			return err
+		}
+		return nil
+	default:
+		return s.setOpenClawFeishuAccount(ctx, accountKey, name, extraConfig, enabled)
+	}
+}
+
+func (s *OpenClawChannelService) removeOpenClawChannelConfig(ctx context.Context, platform, accountKey string) error {
+	switch platform {
+	case channels.PlatformWeCom:
+		if err := s.ensureOpenClawWeComPluginInstalled(ctx); err != nil {
+			return err
+		}
+		if err := s.removeOpenClawWeComConfig(ctx); err != nil {
+			return err
+		}
+		if err := s.restartOpenClawGateway(); err != nil {
+			return err
+		}
+		return nil
+	default:
+		return s.removeOpenClawFeishuAccount(ctx, accountKey)
+	}
+}
+
+func (s *OpenClawChannelService) syncOpenClawPlatformConfigAfterDelete(ctx context.Context, platform string) error {
+	switch platform {
+	case channels.PlatformWeCom:
+		if err := s.ensureOpenClawWeComPluginInstalled(ctx); err != nil {
+			return err
+		}
+		if err := s.syncOpenClawWeComDefaultConfig(ctx); err != nil {
+			return err
+		}
+		return s.restartOpenClawGateway()
+	default:
+		return s.syncOpenClawFeishuDefaultAccount(ctx)
+	}
 }
 
 // setOpenClawFeishuAccount writes a feishu account into the OpenClaw config via CLI.
@@ -516,9 +853,169 @@ func (s *OpenClawChannelService) setOpenClawFeishuAccount(ctx context.Context, a
 	if err != nil {
 		return fmt.Errorf("marshal config batch: %w", err)
 	}
-	_, err = s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON))
+	_, err = s.execOpenClawCLIWithRetry(ctx, "config", "set", "--batch-json", string(batchJSON))
 	if err != nil {
 		return fmt.Errorf("openclaw config set feishu account %s: %w", accountKey, err)
+	}
+	return nil
+}
+
+func (s *OpenClawChannelService) ensureOpenClawWeComPluginInstalled(ctx context.Context) error {
+	out, err := s.execOpenClawPluginCLI(ctx, "plugins", "list")
+	if err == nil && containsWeComPluginMarker(string(out)) {
+		return nil
+	}
+	if _, installErr := s.execOpenClawPluginCLI(ctx, "plugins", "install", wecomPluginPackage); installErr != nil {
+		installMsg := strings.ToLower(installErr.Error())
+		installedButInterrupted := strings.Contains(installMsg, "installed plugin:") && containsWeComPluginMarker(installMsg)
+		if installedButInterrupted {
+			s.app.Logger.Warn("openclaw plugin install interrupted after success marker; will verify by listing plugins", "plugin", wecomPluginPackage, "error", installErr)
+		}
+		if !strings.Contains(installMsg, "plugin already exists") && !installedButInterrupted {
+			return fmt.Errorf("openclaw plugins install %s: %w", wecomPluginPackage, installErr)
+		}
+	}
+	verifyOut, verifyErr := s.execOpenClawPluginCLI(ctx, "plugins", "list")
+	if verifyErr != nil {
+		return fmt.Errorf("verify installed plugin %s: %w", wecomPluginPackage, verifyErr)
+	}
+	if !containsWeComPluginMarker(string(verifyOut)) {
+		return fmt.Errorf("plugin %s not found after installation", wecomPluginPackage)
+	}
+	return nil
+}
+
+func containsWeComPluginMarker(out string) bool {
+	out = strings.ToLower(out)
+	return strings.Contains(out, strings.ToLower(wecomPluginPackage)) || strings.Contains(out, strings.ToLower(wecomPluginID))
+}
+
+// execOpenClawPluginCLI uses the same retry strategy as other OpenClaw CLI calls (install/list can be slow).
+func (s *OpenClawChannelService) execOpenClawPluginCLI(ctx context.Context, args ...string) ([]byte, error) {
+	return s.execOpenClawCLIWithRetry(ctx, args...)
+}
+
+func isContextDeadlineExceededError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "context deadline exceeded")
+}
+
+// wrapOpenClawSyncErr maps CLI/plugin timeout to a dedicated i18n message; other errors use key (optional data for Wrapf).
+func wrapOpenClawSyncErr(err error, key string, data map[string]any) error {
+	if err == nil {
+		return nil
+	}
+	if isContextDeadlineExceededError(err) {
+		return errs.Wrap("error.channel_openclaw_sync_timeout", err)
+	}
+	if data != nil {
+		return errs.Wrapf(key, err, data)
+	}
+	return errs.Wrap(key, err)
+}
+
+// execOpenClawCLIWithRetry runs the OpenClaw CLI; on deadline exceeded retries once with a longer timeout (same as plugin install).
+func (s *OpenClawChannelService) execOpenClawCLIWithRetry(ctx context.Context, args ...string) ([]byte, error) {
+	out, err := s.openclawManager.ExecCLI(ctx, args...)
+	if err == nil {
+		return out, nil
+	}
+	if !isContextDeadlineExceededError(err) {
+		return out, err
+	}
+	retryCtx, cancel := context.WithTimeout(context.Background(), openClawCLIRetryTimeout)
+	defer cancel()
+	s.app.Logger.Warn("openclaw CLI timed out with caller context; retrying with longer timeout",
+		"args", strings.Join(args, " "), "error", err)
+	return s.openclawManager.ExecCLI(retryCtx, args...)
+}
+
+func (s *OpenClawChannelService) setOpenClawWeComConfig(ctx context.Context, name, extraConfig string, enabled bool) error {
+	botID, secret := parseAppCredentialsPair(extraConfig)
+	if botID == "" {
+		return fmt.Errorf("wecom botId is required")
+	}
+
+	type batchEntry struct {
+		Path  string `json:"path"`
+		Value any    `json:"value"`
+	}
+	batch := []batchEntry{
+		{Path: "channels.wecom.botId", Value: botID},
+		{Path: "channels.wecom.secret", Value: secret},
+		{Path: "channels.wecom.enabled", Value: enabled},
+		{Path: "channels.wecom.dmPolicy", Value: "open"},
+		{Path: "channels.wecom.groupPolicy", Value: "open"},
+	}
+	if strings.TrimSpace(name) != "" {
+		batch = append(batch, batchEntry{Path: "channels.wecom.name", Value: strings.TrimSpace(name)})
+	}
+
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("marshal wecom config batch: %w", err)
+	}
+	if _, err := s.execOpenClawCLIWithRetry(ctx, "config", "set", "--batch-json", string(batchJSON)); err != nil {
+		return fmt.Errorf("openclaw config set wecom account: %w", err)
+	}
+	return nil
+}
+
+func (s *OpenClawChannelService) removeOpenClawWeComConfig(ctx context.Context) error {
+	type batchEntry struct {
+		Path  string `json:"path"`
+		Value any    `json:"value"`
+	}
+	batch := []batchEntry{
+		{Path: "channels.wecom.enabled", Value: false},
+		{Path: "channels.wecom.dmPolicy", Value: "open"},
+		{Path: "channels.wecom.groupPolicy", Value: "open"},
+	}
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("marshal wecom disable config batch: %w", err)
+	}
+	if _, err := s.execOpenClawCLIWithRetry(ctx, "config", "set", "--batch-json", string(batchJSON)); err != nil {
+		return fmt.Errorf("openclaw config disable wecom channel: %w", err)
+	}
+	_, _ = s.execOpenClawCLIWithRetry(ctx, "config", "unset", "channels.wecom.botId")
+	_, _ = s.execOpenClawCLIWithRetry(ctx, "config", "unset", "channels.wecom.secret")
+	return nil
+}
+
+func (s *OpenClawChannelService) syncOpenClawWeComDefaultConfig(ctx context.Context) error {
+	channelList, err := s.listAllChannelsByPlatform(channels.PlatformWeCom)
+	if err != nil {
+		return err
+	}
+	var selected *channels.Channel
+	for i := range channelList {
+		botID, _ := parseAppCredentialsPair(channelList[i].ExtraConfig)
+		if botID == "" {
+			continue
+		}
+		if selected == nil || channelList[i].Enabled {
+			candidate := channelList[i]
+			selected = &candidate
+		}
+	}
+	if selected == nil {
+		return s.removeOpenClawWeComConfig(ctx)
+	}
+	return s.setOpenClawWeComConfig(ctx, selected.Name, selected.ExtraConfig, selected.Enabled)
+}
+
+func (s *OpenClawChannelService) restartOpenClawGateway() error {
+	if s.openclawManager == nil {
+		return fmt.Errorf("openclaw manager is not initialized")
+	}
+	if _, err := s.openclawManager.RestartGateway(); err != nil {
+		return fmt.Errorf("restart openclaw gateway: %w", err)
 	}
 	return nil
 }
@@ -526,7 +1023,7 @@ func (s *OpenClawChannelService) setOpenClawFeishuAccount(ctx context.Context, a
 // removeOpenClawFeishuAccount removes a feishu account from the OpenClaw config.
 func (s *OpenClawChannelService) removeOpenClawFeishuAccount(ctx context.Context, accountKey string) error {
 	path := "channels.feishu.accounts." + accountKey
-	_, err := s.openclawManager.ExecCLI(ctx, "config", "unset", path)
+	_, err := s.execOpenClawCLIWithRetry(ctx, "config", "unset", path)
 	if err != nil {
 		return fmt.Errorf("openclaw config unset feishu account %s: %w", accountKey, err)
 	}
@@ -539,7 +1036,7 @@ func (s *OpenClawChannelService) setOpenClawFeishuEnabled(ctx context.Context, e
 	if enabled {
 		val = "true"
 	}
-	_, err := s.openclawManager.ExecCLI(ctx, "config", "set", "channels.feishu.enabled", val, "--strict-json")
+	_, err := s.execOpenClawCLIWithRetry(ctx, "config", "set", "channels.feishu.enabled", val, "--strict-json")
 	if err != nil {
 		return fmt.Errorf("openclaw config set channels.feishu.enabled: %w", err)
 	}
@@ -561,7 +1058,7 @@ func (s *OpenClawChannelService) syncOpenClawFeishuDefaultAccount(ctx context.Co
 		if appID == "" {
 			continue
 		}
-		key := feishuAccountKey(ch.ID, ch.ExtraConfig)
+		key := openClawChannelAccountKey(ch.ID, ch.ExtraConfig)
 		if defaultAccount == "" || ch.Enabled {
 			defaultAccount = key
 		}
@@ -584,7 +1081,6 @@ func (s *OpenClawChannelService) syncOpenClawFeishuDefaultAccount(ctx context.Co
 	if err != nil {
 		return err
 	}
-	_, err = s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON))
+	_, err = s.execOpenClawCLIWithRetry(ctx, "config", "set", "--batch-json", string(batchJSON))
 	return err
 }
-

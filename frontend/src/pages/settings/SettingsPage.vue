@@ -4,7 +4,7 @@
  * 可在主窗口和独立设置窗口中复用
  */
 import type { Component } from 'vue'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -24,10 +24,26 @@ import SnapSettings from './components/SnapSettings.vue'
 import ToolsSettings from './components/ToolsSettings.vue'
 import OpenClawRuntimeSettings from './components/OpenClawRuntimeSettings.vue'
 import AboutSettings from './components/AboutSettings.vue'
-import { useSettingsStore, type SettingsMenuItem } from '@/stores'
+import { useAppStore, useSettingsStore, type SettingsMenuItem } from '@/stores'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+const appStore = useAppStore()
+
+watch(
+  () => appStore.currentSystem,
+  (system) => {
+    if (
+      system === 'openclaw' &&
+      (settingsStore.activeMenu === 'chatwiki' || settingsStore.activeMenu === 'mcp')
+    ) {
+      settingsStore.setActiveMenu('generalSettings')
+    }
+    if (system === 'chatclaw' && settingsStore.activeMenu === 'openclawRuntime') {
+      settingsStore.setActiveMenu('generalSettings')
+    }
+  }
+)
 
 // 菜单项对应的翻译 key
 const menuLabelKeys: Record<SettingsMenuItem, string> = {

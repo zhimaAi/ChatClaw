@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/channels"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
@@ -76,11 +77,42 @@ func (s *ConversationsService) ListConversations(agentID int64, agentType string
 	}
 	s.app.Logger.Info("[conversations] ListConversations loaded", "agent_id", agentID, "agent_type", agentType, "count", len(models))
 
+	models = dedupeChannelScopedConversations(models)
+
 	out := make([]Conversation, 0, len(models))
 	for i := range models {
 		out = append(out, models[i].toDTO())
 	}
 	return out, nil
+}
+
+// dedupeChannelScopedConversations collapses rows that share the same canonical channel
+// external_id (e.g. ch:2:group:xxx) after fixing case-sensitivity; keeps the first row in
+// sort order (pinned / newest first).
+func dedupeChannelScopedConversations(models []conversationModel) []conversationModel {
+	if len(models) < 2 {
+		return models
+	}
+	seen := make(map[string]struct{}, len(models))
+	out := make([]conversationModel, 0, len(models))
+	for i := range models {
+		ext := strings.TrimSpace(models[i].ExternalID)
+		if ext == "" || !strings.HasPrefix(ext, "ch:") {
+			out = append(out, models[i])
+			continue
+		}
+		key := channels.CanonicalChannelConversationExternalID(ext)
+		if key == "" {
+			out = append(out, models[i])
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, models[i])
+	}
+	return out
 }
 
 // GetConversation 获取单个会话
@@ -121,6 +153,11 @@ func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalI
 		return 0, err
 	}
 
+	externalID = strings.TrimSpace(externalID)
+	if c := channels.CanonicalChannelConversationExternalID(externalID); c != "" {
+		externalID = c
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -128,12 +165,21 @@ func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalI
 	findErr := db.NewSelect().
 		Model(&m).
 		Where("agent_id = ?", agentID).
-		Where("external_id = ?", externalID).
-		OrderExpr("id DESC").
+		Where("LOWER(TRIM(external_id)) = LOWER(TRIM(?))", externalID).
+		OrderExpr("id ASC").
 		Limit(1).
 		Scan(ctx)
 
 	if findErr == nil && m.ID > 0 {
+		// Migrate legacy mixed-case external_id to canonical form.
+		if strings.TrimSpace(m.ExternalID) != externalID {
+			_, _ = db.NewUpdate().
+				Table("conversations").
+				Set("external_id = ?", externalID).
+				Set("updated_at = ?", sqlite.NowUTC()).
+				Where("id = ?", m.ID).
+				Exec(ctx)
+		}
 		return m.ID, nil
 	}
 

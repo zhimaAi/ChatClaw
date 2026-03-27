@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "ইন্সটল ব্যর্থ",
   "error.channel_list_failed": "চ্যানেল তালিকা ব্যর্থ",
   "error.channel_create_failed": "চ্যানেল তৈরি ব্যর্থ",
+  "error.channel_openclaw_sync_timeout": "OpenClaw কনফিগারেশন সিঙ্কের সময় শেষ। পরে আবার চেষ্টা করুন বা OpenClaw Gateway চালু আছে কিনা দেখুন।",
   "error.channel_update_failed": "চ্যানেল আপডেট ব্যর্থ",
   "error.channel_delete_failed": "চ্যানেল ডিলিট ব্যর্থ",
   "error.channel_read_failed": "চ্যানেল পড়তে ব্যর্থ",

@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "安裝失敗",
   "error.channel_list_failed": "列出頻道失敗",
   "error.channel_create_failed": "建立頻道失敗",
+  "error.channel_openclaw_sync_timeout": "OpenClaw 設定同步逾時，請稍後重試，或確認 OpenClaw Gateway 是否正常運作",
   "error.channel_update_failed": "更新頻道失敗",
   "error.channel_delete_failed": "刪除頻道失敗",
   "error.channel_read_failed": "讀取頻道失敗",

@@ -53,7 +53,6 @@ import {
   OpenClawAgentsService,
   CreateOpenClawAgentInput,
 } from '@bindings/chatclaw/internal/openclaw/agents'
-import { UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type {
   Channel,
   ChannelStats,
@@ -65,9 +64,9 @@ defineProps<{ tabId: string }>()
 
 const { t, te } = useI18n()
 
-/** OpenClaw: only Feishu is available; other platforms show coming soon (same as Twitter on ChatClaw). */
+/** OpenClaw: Feishu and WeCom are available; other platforms still show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu'
+  return platformId === 'feishu' || platformId === 'wecom'
 }
 
 const channels = ref<Channel[]>([])
@@ -117,6 +116,22 @@ const isInlineFormValid = computed(() => {
   if (!inlineFormName.value.trim()) return false
   return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
 })
+
+const isInlineWeCom = computed(() => selectedFilter.value === 'wecom')
+const inlineAppIdLabelKey = computed(() =>
+  isInlineWeCom.value ? 'channels.config.wecomBotId' : 'channels.config.appId'
+)
+const inlineAppSecretLabelKey = computed(() =>
+  isInlineWeCom.value ? 'channels.config.wecomSecret' : 'channels.config.appSecret'
+)
+const inlineAppIdPlaceholderKey = computed(() =>
+  isInlineWeCom.value ? 'channels.config.wecomAppIdPlaceholder' : 'channels.config.appIdPlaceholder'
+)
+const inlineAppSecretPlaceholderKey = computed(() =>
+  isInlineWeCom.value
+    ? 'channels.config.wecomAppSecretPlaceholder'
+    : 'channels.config.appSecretPlaceholder'
+)
 
 async function loadData() {
   loading.value = true
@@ -195,7 +210,6 @@ async function handleDelete() {
 
 async function handleEnableChannel(channel: Channel) {
   try {
-    await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: true }))
     await OpenClawChannelService.ConnectChannel(channel.id)
     toast.success(t('channels.toggle.enableSuccess'))
   } catch (error) {
@@ -207,7 +221,6 @@ async function handleEnableChannel(channel: Channel) {
 
 async function handleDisableChannel(channel: Channel) {
   try {
-    await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled: false }))
     await OpenClawChannelService.DisconnectChannel(channel.id)
     toast.success(t('channels.toggle.disableSuccess'))
   } catch (error) {
@@ -358,6 +371,7 @@ async function handleInlineSave() {
   inlineFormSaving.value = true
   try {
     const extraConfig = JSON.stringify({
+      platform: selectedPlatformMeta.value.id,
       app_id: inlineFormAppId.value.trim(),
       app_secret: inlineFormAppSecret.value.trim(),
     })
@@ -369,6 +383,7 @@ async function handleInlineSave() {
     }
 
     const channel = await OpenClawChannelService.CreateChannel({
+      platform: selectedPlatformMeta.value.id,
       name: inlineFormName.value.trim(),
       avatar: inlineFormAvatar.value,
       extra_config: extraConfig,
@@ -398,7 +413,7 @@ function openPlatformDocs() {
 function getAppId(extraConfig: string): string {
   try {
     const config = JSON.parse(extraConfig)
-    return config.app_id || config.token || t('common.na')
+    return config.app_id || config.bot_id || config.token || t('common.na')
   } catch {
     return t('common.na')
   }
@@ -411,6 +426,7 @@ async function handleInlineVerify() {
   }
   if (!selectedPlatformMeta.value) return
   const extraConfig = JSON.stringify({
+    platform: selectedPlatformMeta.value.id,
     app_id: inlineFormAppId.value.trim(),
     app_secret: inlineFormAppSecret.value.trim(),
   })
@@ -786,12 +802,12 @@ onMounted(loadData)
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
               <span class="text-destructive" aria-hidden="true">*</span>
-              <span>{{ t('channels.config.appId') }}</span>
+              <span>{{ t(inlineAppIdLabelKey) }}</span>
             </label>
             <Input
               v-model="inlineFormAppId"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="t('channels.config.appIdPlaceholder')"
+              :placeholder="t(inlineAppIdPlaceholderKey)"
               maxlength="60"
             />
           </div>
@@ -800,13 +816,13 @@ onMounted(loadData)
               class="flex items-center gap-1 text-sm font-medium leading-5 text-[#0a0a0a] dark:text-foreground"
             >
               <span class="text-destructive" aria-hidden="true">*</span>
-              <span>{{ t('channels.config.appSecret') }}</span>
+              <span>{{ t(inlineAppSecretLabelKey) }}</span>
             </label>
             <Input
               v-model="inlineFormAppSecret"
               type="password"
               class="h-10 w-full rounded-lg border-[#e5e5e5] px-4 py-[9.5px] shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:border-border dark:shadow-none dark:ring-1 dark:ring-white/10"
-              :placeholder="t('channels.config.appSecretPlaceholder')"
+              :placeholder="t(inlineAppSecretPlaceholderKey)"
               maxlength="200"
             />
           </div>

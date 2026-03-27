@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "インストールに失敗しました",
   "error.channel_list_failed": "チャンネル一覧の取得に失敗しました",
   "error.channel_create_failed": "チャンネルの作成に失敗しました",
+  "error.channel_openclaw_sync_timeout": "OpenClaw の設定同期がタイムアウトしました。しばらくしてから再試行するか、OpenClaw Gateway が動作しているか確認してください。",
   "error.channel_update_failed": "チャンネルの更新に失敗しました",
   "error.channel_delete_failed": "チャンネルの削除に失敗しました",
   "error.channel_read_failed": "チャンネルの読み込みに失敗しました",

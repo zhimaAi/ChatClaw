@@ -255,10 +255,10 @@ export default {
       tools: '功能工具',
       chatwiki: '账号管理',
       about: '关于我们',
-      openclawRuntime: 'OpenClaw 服务',
+      openclawRuntime: 'OpenClaw 管家',
     },
     openclawRuntime: {
-      title: 'OpenClaw 服务',
+      title: 'OpenClaw 管家',
       gatewayConnection: 'Gateway 连接',
       runtimeStatus: '运行状态',
       gatewayEndpoint: 'Gateway 地址',
