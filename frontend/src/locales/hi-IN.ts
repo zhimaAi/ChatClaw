@@ -1456,6 +1456,8 @@ export default {
       cancel: 'रद्द करें',
       success: 'चैनल सफलतापूर्वक बनाया गया',
       failed: 'चैनल बनाने में विफल',
+      dingtalkPluginInstalling: "DingTalk प्लगइन इंस्टॉल हो रहा है",
+      dingtalkPluginInstallingDesc: "DingTalk कनेक्टर प्लगइन पृष्ठभूमि में इंस्टॉल हो रहा है। आप अभी सहायक को बाइंड करना जारी रख सकते हैं और बाद में कनेक्शन स्थिति जांच सकते हैं।",
       avatarHint: 'बदलने के लिए क्लिक करें, अनुशंसित आकार 100*100px, अधिकतम 100kb',
       feishuTipPrefix: 'लॉगिन करें',
       feishuTipMiddle: 'बॉट बनाने के लिए, अनुसरण करें',

@@ -1436,6 +1436,8 @@ export default {
       cancel: 'বাতিল',
       success: 'চ্যানেল তৈরি সফল',
       failed: 'চ্যানেল তৈরি ব্যর্থ',
+      dingtalkPluginInstalling: "DingTalk প্লাগইন ইনস্টল হচ্ছে",
+      dingtalkPluginInstallingDesc: "DingTalk কানেক্টর প্লাগইন ব্যাকগ্রাউন্ডে ইনস্টল হচ্ছে। আপনি এখনই সহকারী বাইন্ড করতে পারেন এবং পরে সংযোগ অবস্থা পরীক্ষা করতে পারবেন।",
       avatarHint: 'ক্লিক করে পরিবর্তন করুন, প্রস্তাবিত 100*100px, সর্বোচ্চ 100KB',
       feishuTipPrefix: 'লগইন করুন',
       feishuTipMiddle: 'বট তৈরি করতে, অনুসরণ করুন',

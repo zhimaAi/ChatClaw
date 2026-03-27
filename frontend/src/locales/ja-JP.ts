@@ -1446,6 +1446,8 @@ export default {
       cancel: 'キャンセル',
       success: 'Channel created successfully',
       failed: 'Failed to create channel',
+      dingtalkPluginInstalling: "DingTalkプラグインインストール中",
+      dingtalkPluginInstallingDesc: "DingTalkコネクタープラグインをバックグラウンドでインストール中です。接続状態は後で確認できます。今すぐアシスタントのバインドに進めます。",
       avatarHint: 'Click to replace, recommended size 100*100px, max 100kb',
       feishuTipPrefix: 'ログイン',
       feishuTipMiddle: 'to create a bot, follow',
