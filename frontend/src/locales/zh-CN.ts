@@ -832,6 +832,7 @@ export default {
       freeBadge: '免费',
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
+      openclawTeamKnowledgeDisabled: '团队知识库暂未开放',
       knowledgeChipRemoveNotSupported: '当前模式不支持删除',
       selectImages: '选择图片',
       selectImagesDisabled: '需选择支持输入图片的模型',

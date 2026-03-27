@@ -806,6 +806,8 @@ export default {
       freeBadge: 'Ücretsiz',
       noModel: 'Mevcut model yok',
       selectKnowledge: 'Bilgi tabanı seç',
+      openclawTeamKnowledgeDisabled:
+        'OpenClaw’da ekip bilgi tabanları henüz kullanılamıyor',
       knowledgeChipRemoveNotSupported: 'Bu modda kaldırma desteklenmiyor',
       selectImages: 'Resim seç',
       selectImagesDisabled: 'Girişi destekleyen bir model seçin',

@@ -229,24 +229,7 @@ const teamOverflowCount = computed(() =>
 // Control knowledge select dropdown open state (so "更多" 菜单可以复用同一套选择逻辑)
 const knowledgeSelectOpen = ref(false)
 
-const selectedKnowledgeCount = computed(
-  () => props.selectedLibraryIds.length + (props.assistantSelectedTeamLibraryIds?.length ?? 0)
-)
-const knowledgeLibraryTab = ref<'personal' | 'team'>('personal')
-const hasPersonalLibraries = computed(() => props.libraries.length > 0)
-const hasAssistantTeamLibraries = computed(() => (props.assistantTeamLibraries?.length ?? 0) > 0)
-
-const resetKnowledgeLibraryTab = () => {
-  if (hasPersonalLibraries.value) {
-    knowledgeLibraryTab.value = 'personal'
-    return
-  }
-  if (hasAssistantTeamLibraries.value) {
-    knowledgeLibraryTab.value = 'team'
-    return
-  }
-  knowledgeLibraryTab.value = 'personal'
-}
+const selectedKnowledgeCount = computed(() => props.selectedLibraryIds.length)
 
 function handleRemoveTeamLibrary(id: string) {
   emit('toggleAssistantTeamLibrary', id)
@@ -952,7 +935,6 @@ onUnmounted(() => {
                         (open: boolean) => {
                           knowledgeSelectOpen = open
                           if (open) {
-                            resetKnowledgeLibraryTab()
                             emit('loadLibraries')
                           }
                         }
@@ -993,27 +975,34 @@ onUnmounted(() => {
                           <div class="mb-1 flex items-center justify-between gap-1 px-0.5">
                             <div class="flex items-center gap-0.5 rounded-[6px] bg-muted/70 p-0.5">
                               <button
-                                class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
-                                :class="
-                                  knowledgeLibraryTab === 'personal'
-                                    ? 'bg-foreground text-background'
-                                    : 'text-foreground hover:bg-background/70'
-                                "
-                                @click.stop="knowledgeLibraryTab = 'personal'"
+                                type="button"
+                                class="h-8 cursor-default rounded-[6px] bg-foreground px-3 text-sm font-medium text-background"
+                                @click.stop
                               >
                                 {{ t('knowledge.tabs.personal') }}
                               </button>
-                              <button
-                                class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
-                                :class="
-                                  knowledgeLibraryTab === 'team'
-                                    ? 'bg-foreground text-background'
-                                    : 'text-foreground hover:bg-background/70'
-                                "
-                                @click.stop="knowledgeLibraryTab = 'team'"
-                              >
-                                {{ t('knowledge.tabs.team') }}
-                              </button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger as-child>
+                                    <span
+                                      class="inline-flex cursor-not-allowed rounded-[6px] outline-none"
+                                      tabindex="-1"
+                                    >
+                                      <button
+                                        type="button"
+                                        disabled
+                                        class="h-8 cursor-not-allowed rounded-[6px] px-3 text-sm font-medium text-muted-foreground opacity-60"
+                                        @click.stop
+                                      >
+                                        {{ t('knowledge.tabs.team') }}
+                                      </button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{{ t('assistant.chat.openclawTeamKnowledgeDisabled') }}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                             <button
                               class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -1026,63 +1015,28 @@ onUnmounted(() => {
                           <SelectViewport
                             class="max-h-[260px] space-y-0.5 overflow-y-auto rounded-[4px]"
                           >
-                            <!-- Personal libraries (multi-select) -->
-                            <template v-if="knowledgeLibraryTab === 'personal'">
-                              <template v-if="libraries.length > 0">
-                                <SelectItemRaw
-                                  v-for="lib in libraries"
-                                  :key="lib.id"
-                                  :value="Number(lib.id)"
-                                  class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
-                                >
-                                  <span
-                                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
-                                  >
-                                    <IconKnowledge class="size-4" />
-                                  </span>
-                                  <SelectItemText class="flex-1 truncate">{{
-                                    lib.name
-                                  }}</SelectItemText>
-                                  <SelectItemIndicator
-                                    class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
-                                  >
-                                    <Check class="size-4" />
-                                  </SelectItemIndicator>
-                                </SelectItemRaw>
-                              </template>
-                              <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
-                                {{ t('assistant.chat.noKnowledge') }}
-                              </div>
-                            </template>
-
-                            <!-- Team libraries (multi-select) -->
-                            <template
-                              v-else-if="
-                                assistantTeamLibraries && assistantTeamLibraries.length > 0
-                              "
-                            >
-                              <div
-                                v-for="lib in assistantTeamLibraries"
-                                :key="`team-${lib.id}`"
-                                class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors hover:bg-muted"
-                                @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
+                            <!-- Personal libraries only (OpenClaw: team tab disabled) -->
+                            <template v-if="libraries.length > 0">
+                              <SelectItemRaw
+                                v-for="lib in libraries"
+                                :key="lib.id"
+                                :value="Number(lib.id)"
+                                class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
                               >
                                 <span
                                   class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
                                 >
                                   <IconKnowledge class="size-4" />
                                 </span>
-                                <span class="flex-1 truncate">{{ lib.name }}</span>
-                                <span
-                                  v-if="
-                                    assistantSelectedTeamLibraryIds &&
-                                    assistantSelectedTeamLibraryIds.includes(lib.id)
-                                  "
+                                <SelectItemText class="flex-1 truncate">{{
+                                  lib.name
+                                }}</SelectItemText>
+                                <SelectItemIndicator
                                   class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
                                 >
                                   <Check class="size-4" />
-                                </span>
-                              </div>
+                                </SelectItemIndicator>
+                              </SelectItemRaw>
                             </template>
                             <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
                               {{ t('assistant.chat.noKnowledge') }}

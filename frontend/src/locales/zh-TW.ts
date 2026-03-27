@@ -807,6 +807,7 @@ export default {
       freeBadge: 'Free',
       noModel: 'No model available',
       selectKnowledge: 'Select knowledge base',
+      openclawTeamKnowledgeDisabled: '團隊知識庫尚未開放',
       knowledgeChipRemoveNotSupported: '目前模式不支援刪除',
       selectImages: 'Select images',
       selectImagesDisabled: 'Select a model that supports image input',

@@ -807,6 +807,8 @@ export default {
       freeBadge: 'Brezplačno',
       noModel: 'Ni na voljo modelov',
       selectKnowledge: 'Izberi bazo znanja',
+      openclawTeamKnowledgeDisabled:
+        'Team knowledge bases are not available in OpenClaw yet',
       knowledgeChipRemoveNotSupported: 'V tem načinu odstranitev ni podprta',
       selectImages: 'Izberi slike',
       selectImagesDisabled: 'Izberite model, ki podpira vnos slik',
