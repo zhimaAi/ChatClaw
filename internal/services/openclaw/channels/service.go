@@ -269,8 +269,11 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 				return nil, errs.New("error.dingtalk_plugin_not_ready")
 			}
 			// Disabled: persist credentials locally only; OpenClaw sync runs on connect after install.
-		} else if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, enabled); err != nil {
-			return nil, errs.Wrap("error.channel_update_failed", err)
+		} else {
+			openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+			if err := s.setOpenClawDingTalkAccount(ctx, accountKey, name, extraConfig, openclawAgentID, enabled); err != nil {
+				return nil, errs.Wrap("error.channel_update_failed", err)
+			}
 		}
 	} else {
 		if err := s.setOpenClawChannelAccount(ctx, m.Platform, accountKey, name, extraConfig, enabled); err != nil {
@@ -334,9 +337,38 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 	return nil
 }
 
-// BindAgent delegates to the shared ChannelService.
+// BindAgent binds an agent to a channel. For enabled DingTalk channels, it also
+// syncs the agentId into the OpenClaw dingtalk-connector config immediately so
+// that the new agent takes effect without requiring a reconnect cycle.
 func (s *OpenClawChannelService) BindAgent(id int64, agentID int64) error {
-	return s.channelSvc.BindAgent(id, agentID)
+	if err := s.channelSvc.BindAgent(id, agentID); err != nil {
+		return err
+	}
+
+	if err := s.ensureOpenClawReady(); err != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	m, err := s.getChannelModel(ctx, id)
+	if err != nil || m.Platform != channels.PlatformDingTalk || !m.Enabled {
+		return nil
+	}
+	if !s.isDingTalkPluginInstalledLocally() {
+		return nil
+	}
+
+	accountKey := channelAccountKey(id, m.ExtraConfig)
+	openclawAgentID := s.lookupOpenClawAgentID(ctx, agentID)
+	if openclawAgentID == "" {
+		return nil
+	}
+	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, true); err != nil {
+		s.app.Logger.Warn("openclaw: failed to sync agentId after BindAgent for dingtalk", "channelId", id, "error", err)
+	}
+	return nil
 }
 
 // UnbindAgent delegates to the shared ChannelService.
@@ -400,7 +432,8 @@ func (s *OpenClawChannelService) connectDingTalkViaPlugin(id int64, m *channelMo
 	}
 
 	accountKey := channelAccountKey(id, m.ExtraConfig)
-	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, true); err != nil {
+	openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, true); err != nil {
 		return errs.Wrap("error.channel_connect_failed", err)
 	}
 
@@ -437,7 +470,8 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 
 	if m.Platform == channels.PlatformDingTalk {
 		// Write disabled config to OpenClaw plugin; log but don't abort on failure.
-		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, false); err != nil {
+		openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, false); err != nil {
 			s.app.Logger.Warn("openclaw dingtalk config disable failed, proceeding with local disconnect", "error", err)
 		}
 		return s.setChannelOnlineStatus(ctx, id, false)
@@ -770,7 +804,8 @@ func (s *OpenClawChannelService) installDingTalkPluginBackground(channelID int64
 	}
 
 	accountKey := channelAccountKey(channelID, m.ExtraConfig)
-	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, false); err != nil {
+	openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+	if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, false); err != nil {
 		s.app.Logger.Warn("openclaw: failed to write initial dingtalk config after background install", "channelId", channelID, "error", err)
 	}
 }
@@ -788,8 +823,11 @@ func (s *OpenClawChannelService) isDingTalkPluginInstalledLocally() bool {
 }
 
 // setOpenClawDingTalkAccount writes a DingTalk account into the OpenClaw config via CLI.
+// openclawAgentID is the Gateway-level agent ID (e.g. "cc_agent_xxx"); when non-empty it is
+// written as accounts.<key>.agentId so the dingtalk-connector plugin routes messages to the
+// correct agent instead of falling back to the default main agent.
 // The plugin must already be installed before calling this function.
-func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context, accountKey, name, extraConfig string, enabled bool) error {
+func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context, accountKey, name, extraConfig, openclawAgentID string, enabled bool) error {
 	appID, appSecret := parseAppCredentialsPair(extraConfig)
 	if appID == "" {
 		return fmt.Errorf("dingtalk clientId (app_id) is required")
@@ -809,6 +847,9 @@ func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context,
 	if name = strings.TrimSpace(name); name != "" {
 		batch = append(batch, batchEntry{Path: prefix + ".name", Value: name})
 	}
+	if openclawAgentID = strings.TrimSpace(openclawAgentID); openclawAgentID != "" {
+		batch = append(batch, batchEntry{Path: prefix + ".agentId", Value: openclawAgentID})
+	}
 	batch = append(batch,
 		batchEntry{Path: "channels.dingtalk-connector.enabled", Value: enabled},
 	)
@@ -821,6 +862,26 @@ func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context,
 		return fmt.Errorf("openclaw config set dingtalk-connector account %s: %w", accountKey, err)
 	}
 	return nil
+}
+
+// lookupOpenClawAgentID returns the Gateway-level agent ID string for the given local
+// openclaw_agents primary key. Returns empty string if not found or on error.
+func (s *OpenClawChannelService) lookupOpenClawAgentID(ctx context.Context, agentID int64) string {
+	if agentID <= 0 {
+		return ""
+	}
+	db, err := s.db()
+	if err != nil {
+		return ""
+	}
+	var openclawAgentID string
+	_ = db.NewSelect().
+		Table("openclaw_agents").
+		ColumnExpr("openclaw_agent_id").
+		Where("id = ?", agentID).
+		Limit(1).
+		Scan(ctx, &openclawAgentID)
+	return strings.TrimSpace(openclawAgentID)
 }
 
 // removeOpenClawDingTalkAccount removes a DingTalk account from the OpenClaw config.
