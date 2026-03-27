@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"chatclaw/internal/define"
 	einoagent "chatclaw/internal/eino/agent"
 	"chatclaw/internal/eino/tools"
+	"chatclaw/internal/services/channels"
 	"chatclaw/internal/services/mcp"
 	"chatclaw/internal/services/skills"
 	"chatclaw/internal/sqlite"
@@ -419,7 +419,8 @@ func (s *ChatService) buildExtras(ctx context.Context, gc *generationContext) ([
 	return extraTools, extraHandlers, cleanup
 }
 
-// resolveChannelSource parses the conversation's external_id (format "ch:{channelID}:{targetID}")
+// resolveChannelSource parses the conversation's external_id
+// (format "ch:{channelID}:{targetID}" or "ch:{channelID}:{scope}:{targetID}")
 // to extract the source channel_id and target_id for auto-filling IM sender tool defaults
 // (feishu_sender, wecom_sender, dingtalk_sender).
 func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conversationID int64) (channelID int64, targetID string, ok bool) {
@@ -433,23 +434,18 @@ func (s *ChatService) resolveChannelSource(ctx context.Context, db *bun.DB, conv
 		return 0, "", false
 	}
 
-	// Format: "ch:{channelID}:{targetID}"
-	if !strings.HasPrefix(externalID, "ch:") {
+	source, ok := channels.ParseChannelConversationExternalID(externalID)
+	if !ok {
 		return 0, "", false
 	}
-	parts := strings.SplitN(externalID, ":", 3)
-	if len(parts) != 3 {
+	if source.ChannelID <= 0 {
 		return 0, "", false
 	}
-	chID, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil || chID <= 0 {
-		return 0, "", false
-	}
-	tgt := strings.TrimSpace(parts[2])
+	tgt := strings.TrimSpace(source.TargetID)
 	if tgt == "" {
 		return 0, "", false
 	}
-	return chID, tgt, true
+	return source.ChannelID, tgt, true
 }
 
 // --- streaming / event processing ---

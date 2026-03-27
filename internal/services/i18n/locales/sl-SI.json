@@ -189,6 +189,7 @@
   "error.toolchain_install_failed": "Namestitev ni uspela",
   "error.channel_list_failed": "Seznam kanalov ni uspel",
   "error.channel_create_failed": "Ustvarjanje kanala ni uspelo",
+  "error.channel_openclaw_sync_timeout": "Časovna omejitev sinhronizacije konfiguracije OpenClaw. Poskusite znova pozneje ali preverite, ali OpenClaw Gateway teče.",
   "error.channel_update_failed": "Posodobitev kanala ni uspela",
   "error.dingtalk_plugin_not_ready": "Vtičnik povezovalnika DingTalk se še namešča ali ni pripravljen. Poskusite znova pozneje.",
   "error.channel_delete_failed": "Brisanje kanala ni uspelo",
