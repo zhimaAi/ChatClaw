@@ -83,6 +83,513 @@ var registry = map[string]toolSpec{
 	"codex": codexSpec(),
 }
 
+// openclawSpec is a placeholder entry for the openclaw runtime in the registry.
+// The actual download URL is resolved via the API at runtime (see InstallOpenClawRuntime),
+// so binaryPathInArchive is intentionally omitted — this spec is not used for
+// downloadWithSingleURL. Instead InstallOpenClawRuntime handles the full
+// download → extract → atomic activation flow independently.
+var openclawSpec = toolSpec{
+	name: "openclaw",
+	archiveFormat: func(goos string) string {
+		if goos == "windows" {
+			return "zip"
+		}
+		return "tar.gz"
+	},
+}
+
+// InstallOpenClawRuntime downloads the OpenClaw runtime package from OSS and installs it
+// to ~/.chatclaw/openclaw/runtime/<target>/current using an atomic staging+backup+activate
+// pattern. It reuses the same /tool-latest API endpoint and OSS CDN as the toolchain extension
+// downloads, so no additional backend logic is required.
+//
+// This is called as a fallback when reconcileLocked cannot find any bundled runtime.
+// The installed layout matches the output of internal/tools/openclawbundle:
+//   tools/node/, lib/node_modules/openclaw/, bin/openclaw(.cmd), manifest.json
+func (s *ToolchainService) InstallOpenClawRuntime() error {
+	target := runtime.GOOS + "-" + runtime.GOARCH
+
+	s.app.Logger.Info("toolchain: installing openclaw runtime from OSS", "target", target)
+
+	// Fetch latest version + OSS URL from the same API used by toolchain extension downloads
+	version, ossURL, err := s.fetchToolLatest("openclaw", runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		s.app.Logger.Error("toolchain: failed to fetch openclaw latest info from API", "error", err)
+		return fmt.Errorf("fetch openclaw latest: %w", err)
+	}
+	s.app.Logger.Info("toolchain: openclaw runtime", "version", version, "url", ossURL)
+
+	// Prepare target dirs
+	userTargetDir, err := openclawRuntimeTargetDir(target)
+	if err != nil {
+		return fmt.Errorf("resolve runtime target dir: %w", err)
+	}
+	if err := os.MkdirAll(userTargetDir, 0o700); err != nil {
+		return fmt.Errorf("create runtime target dir: %w", err)
+	}
+
+	stagingDir := filepath.Join(userTargetDir, fmt.Sprintf(".staging-oss-%d", time.Now().UnixNano()))
+	backupDir := filepath.Join(userTargetDir, ".backup")
+	cleanup := func() { _ = os.RemoveAll(stagingDir) }
+
+	if err := os.MkdirAll(stagingDir, 0o755); err != nil {
+		return fmt.Errorf("create staging dir: %w", err)
+	}
+
+	// Download from OSS with progress reporting
+	archiveFormat := openclawSpec.archiveFormat(runtime.GOOS)
+	archivePath := filepath.Join(stagingDir, "archive."+archiveFormat)
+	if err := s.downloadOpenClawArchive(context.Background(), ossURL, archivePath, version); err != nil {
+		cleanup()
+		return fmt.Errorf("download openclaw from OSS: %w", err)
+	}
+
+	// Extract the full archive into staging
+	if err := extractArchiveToDir(archivePath, stagingDir, archiveFormat); err != nil {
+		cleanup()
+		return fmt.Errorf("extract openclaw archive: %w", err)
+	}
+	_ = os.Remove(archivePath)
+
+	// Verify extracted layout
+	if err := verifyOpenClawLibLayout(stagingDir); err != nil {
+		cleanup()
+		return fmt.Errorf("verify openclaw layout: %w", err)
+	}
+
+	// Write CLI wrappers if missing
+	if err := writeOpenClawCLIWrappers(stagingDir, runtime.GOOS); err != nil {
+		cleanup()
+		return fmt.Errorf("write CLI wrappers: %w", err)
+	}
+
+	// Verify the CLI runs
+	if err := verifyOpenClawCLI(filepath.Join(stagingDir, "bin", openClawCLIName())); err != nil {
+		cleanup()
+		return fmt.Errorf("openclaw CLI smoke check: %w", err)
+	}
+
+	// Atomic activation: backup current, rename staging to current
+	currentDir, err := openclawRuntimeCurrentDir(target)
+	if err != nil {
+		cleanup()
+		return fmt.Errorf("resolve current dir: %w", err)
+	}
+	hadCurrent := false
+	if _, err := os.Stat(currentDir); err == nil {
+		hadCurrent = true
+		if err := os.Rename(currentDir, backupDir); err != nil {
+			cleanup()
+			return fmt.Errorf("backup current runtime: %w", err)
+		}
+	}
+
+	if err := os.Rename(stagingDir, currentDir); err != nil {
+		if hadCurrent {
+			_ = os.Rename(backupDir, currentDir)
+		}
+		cleanup()
+		return fmt.Errorf("activate openclaw runtime: %w", err)
+	}
+
+	cleanup = func() {
+		_ = os.RemoveAll(stagingDir)
+		_ = os.RemoveAll(backupDir)
+	}
+	cleanup()
+
+	s.app.Logger.Info("toolchain: openclaw runtime installed", "version", version, "path", currentDir)
+	return nil
+}
+
+// OpenClawRuntimeStatus mirrors the ToolStatus shape for the openclaw runtime entry in the UI.
+type OpenClawRuntimeStatus struct {
+	Name              string `json:"name"`
+	Installed         bool   `json:"installed"`
+	InstalledVersion  string `json:"installed_version"`
+	LatestVersion     string `json:"latest_version,omitempty"`
+	HasUpdate         bool   `json:"has_update"`
+	Installing        bool   `json:"installing"`
+	RuntimePath       string `json:"runtime_path"`
+	GatewayStatus     string `json:"gateway_status"` // "idle" | "running" | "error"
+}
+
+// GetOpenClawRuntimeStatus returns the installation status of the OpenClaw runtime
+// by inspecting ~/.chatclaw/openclaw/runtime/<target>/current/manifest.json and running
+// openclaw --version. It does not query the gateway — use the OpenClawRuntimeService for that.
+func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, error) {
+	target := runtime.GOOS + "-" + runtime.GOARCH
+	currentDir, err := openclawRuntimeCurrentDir(target)
+	if err != nil {
+		return nil, err
+	}
+
+	status := &OpenClawRuntimeStatus{Name: "openclaw", Installing: false}
+
+	manifestPath := filepath.Join(currentDir, "manifest.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return status, nil // not installed
+		}
+		return nil, fmt.Errorf("read manifest: %w", err)
+	}
+
+	var manifest struct {
+		OpenClawVersion string `json:"openclawVersion"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+
+	cliPath := filepath.Join(currentDir, "bin", openClawCLIName())
+	cliPath, err = filepath.EvalSymlinks(cliPath)
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, cliPath, "--version").CombinedOutput()
+		if err == nil {
+			status.InstalledVersion = strings.TrimSpace(string(out))
+		}
+	}
+	if status.InstalledVersion == "" {
+		status.InstalledVersion = manifest.OpenClawVersion
+	}
+
+	status.Installed = true
+	status.RuntimePath = currentDir
+
+	// Fetch latest version from API
+	latest, _, apiErr := s.fetchToolLatest("openclaw", runtime.GOOS, runtime.GOARCH)
+	if apiErr == nil && latest != "" {
+		status.LatestVersion = latest
+		status.HasUpdate = latest != status.InstalledVersion
+	}
+
+	return status, nil
+}
+
+// openclawRuntimeTargetDir returns ~/.chatclaw/openclaw/runtime/<target>
+func openclawRuntimeTargetDir(target string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".chatclaw", "openclaw", "runtime", target), nil
+}
+
+// openclawRuntimeCurrentDir returns ~/.chatclaw/openclaw/runtime/<target>/current
+func openclawRuntimeCurrentDir(target string) (string, error) {
+	dir, err := openclawRuntimeTargetDir(target)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "current"), nil
+}
+
+func openClawCLIName() string {
+	if runtime.GOOS == "windows" {
+		return "openclaw.cmd"
+	}
+	return "openclaw"
+}
+
+func verifyOpenClawLibLayout(dir string) error {
+	pkg := filepath.Join(dir, "lib", "node_modules", "openclaw", "package.json")
+	if _, err := os.Stat(pkg); err != nil {
+		return fmt.Errorf("openclaw package missing at %s", pkg)
+	}
+	return nil
+}
+
+func verifyOpenClawCLI(cliPath string) error {
+	if runtime.GOOS != "windows" {
+		out, err := exec.Command(cliPath, "--version").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("openclaw CLI check: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
+}
+
+func writeOpenClawCLIWrappers(outputDir, goos string) error {
+	binDir := filepath.Join(outputDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return err
+	}
+
+	if goos == "windows" {
+		cliPath := filepath.Join(binDir, "openclaw.cmd")
+		if _, err := os.Stat(cliPath); err == nil {
+			return nil // already exists
+		}
+		content := strings.Join([]string{
+			"@echo off",
+			"setlocal",
+			`set "SCRIPT_DIR=%~dp0"`,
+			"set OPENCLAW_EMBEDDED_IN=ChatClaw",
+			`"%SCRIPT_DIR%..\tools\node\node.exe" "%SCRIPT_DIR%..\lib\node_modules\openclaw\dist\entry.js" %*`,
+			"",
+		}, "\r\n")
+		return os.WriteFile(cliPath, []byte(content), 0o644)
+	}
+
+	cliPath := filepath.Join(binDir, "openclaw")
+	if _, err := os.Stat(cliPath); err == nil {
+		return nil
+	}
+	content := strings.Join([]string{
+		"#!/bin/sh",
+		"set -eu",
+		`SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"`,
+		`export OPENCLAW_EMBEDDED_IN="ChatClaw"`,
+		`exec "$SCRIPT_DIR/../tools/node/bin/node" "$SCRIPT_DIR/../lib/node_modules/openclaw/dist/entry.js" "$@"`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(cliPath, []byte(content), 0o755); err != nil {
+		return err
+	}
+	return os.Chmod(cliPath, 0o755)
+}
+
+// downloadOpenClawArchive downloads the OSS archive to disk with progress reporting.
+// It uses streaming so the file never fully resides in memory.
+func (s *ToolchainService) downloadOpenClawArchive(ctx context.Context, dlURL, destPath, version string) error {
+	s.app.Logger.Info("toolchain: downloading openclaw runtime from OSS", "url", dlURL)
+
+	connectTimeout := 10 * time.Second
+	readTimeout := 50 * time.Minute
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{Timeout: connectTimeout}).DialContext,
+		TLSHandshakeTimeout: connectTimeout,
+		ResponseHeaderTimeout: readTimeout,
+		DisableCompression:    true,
+	}
+	client := &http.Client{Transport: transport, Timeout: connectTimeout + readTimeout}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dlURL, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept-Encoding", "identity")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("OSS returned HTTP %d", resp.StatusCode)
+	}
+
+	totalSize := resp.ContentLength
+	startTime := time.Now()
+
+	// Stream to disk with progress
+	f, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create dest file: %w", err)
+	}
+
+	var downloaded int64
+	for {
+		select {
+		case <-ctx.Done():
+			f.Close()
+			_ = os.Remove(destPath)
+			return ctx.Err()
+		default:
+		}
+
+		const bufSize = 32 * 1024
+		buf := make([]byte, bufSize)
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := f.Write(buf[:n]); writeErr != nil {
+				f.Close()
+				_ = os.Remove(destPath)
+				return fmt.Errorf("write: %w", writeErr)
+			}
+			downloaded += int64(n)
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			f.Close()
+			_ = os.Remove(destPath)
+			return fmt.Errorf("read: %w", readErr)
+		}
+
+		// Emit progress every ~1 MB or on last chunk
+		if downloaded%1024*1024 < bufSize || readErr == io.EOF {
+			var speed float64
+			elapsed := time.Since(startTime)
+			if elapsed > 0 {
+				speed = float64(downloaded) / elapsed.Seconds() / 1024
+			}
+			var remaining int64
+			if speed > 0 && totalSize > 0 {
+				remaining = int64(float64(totalSize-downloaded)/speed) * 1000
+			}
+			percent := 0.0
+			if totalSize > 0 {
+				percent = float64(downloaded) * 100 / float64(totalSize)
+			}
+			s.emitProgress(DownloadProgress{
+				Tool:        "openclaw",
+				URL:         dlURL,
+				TotalSize:   totalSize,
+				Downloaded:  downloaded,
+				Percent:     percent,
+				Speed:       speed,
+				ElapsedTime: elapsed.Milliseconds(),
+				Remaining:   remaining,
+			})
+		}
+	}
+
+	if err := f.Close(); err != nil {
+		_ = os.Remove(destPath)
+		return fmt.Errorf("close file: %w", err)
+	}
+
+	s.app.Logger.Info("toolchain: openclaw runtime downloaded", "bytes", downloaded, "elapsed", time.Since(startTime))
+	return nil
+}
+
+// extractArchiveToDir extracts a zip or tar.gz archive to destDir, stripping the top-level
+// directory entry (consistent with how openclawbundle builds the archive).
+func extractArchiveToDir(archivePath, destDir, format string) error {
+	switch format {
+	case "zip":
+		return extractZipToDir(archivePath, destDir)
+	case "tar.gz":
+		return extractTarGzToDir(archivePath, destDir)
+	default:
+		return fmt.Errorf("unsupported archive format: %s", format)
+	}
+}
+
+func extractZipToDir(archivePath, destDir string) error {
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	for _, file := range reader.File {
+		relativePath, ok := stripArchiveRoot(file.Name)
+		if !ok {
+			continue
+		}
+		targetPath := filepath.Join(destDir, relativePath)
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		src, err := file.Open()
+		if err != nil {
+			return err
+		}
+		dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
+		if err != nil {
+			src.Close()
+			return err
+		}
+		if _, err := io.Copy(dst, src); err != nil {
+			src.Close()
+			dst.Close()
+			return err
+		}
+		src.Close()
+		if err := dst.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func extractTarGzToDir(archivePath, destDir string) error {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		relativePath, ok := stripArchiveRoot(hdr.Name)
+		if !ok {
+			continue
+		}
+		targetPath := filepath.Join(destDir, relativePath)
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			fileMode := os.FileMode(hdr.Mode)
+			if fileMode == 0 {
+				fileMode = 0o644
+			}
+			dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(dst, tr); err != nil {
+				dst.Close()
+				return err
+			}
+			if err := dst.Close(); err != nil {
+				return err
+			}
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			if err := os.Symlink(hdr.Linkname, targetPath); err != nil && !os.IsExist(err) {
+				return err
+			}
+		}
+	}
+}
+
+// stripArchiveRoot strips the top-level directory component from an archive entry name.
+func stripArchiveRoot(name string) (string, bool) {
+	name = filepath.ToSlash(name)
+	name = strings.TrimPrefix(name, "./")
+	parts := strings.SplitN(name, "/", 2)
+	if len(parts) < 2 || parts[1] == "" {
+		return "", false
+	}
+	return filepath.FromSlash(parts[1]), true
+}
+
 // ToolchainService manages external tool binaries (uv, bun) within the app data dir.
 // It is registered as a Wails service so the frontend can query status and trigger installs.
 type ToolchainService struct {

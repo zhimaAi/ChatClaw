@@ -344,6 +344,10 @@ export default {
           name: '安全沙箱',
           description: '在隔离环境中执行命令，保护系统安全，防止误操作影响本机文件。',
         },
+        openclaw: {
+          name: 'OpenClaw 运行环境',
+          description: 'OpenClaw Agent 的 Node.js 运行时环境，包含 openclaw CLI 和 Gateway。从 OSS 下载后安装到 ~/.chatclaw/openclaw/runtime/',
+        },
       },
     },
     memory: {
