@@ -23,11 +23,12 @@ type OpenClawCronDeliveryPlatformOption struct {
 // OpenClawCronSummary is the page-level summary card model.
 // OpenClaw Cron 页面统计卡片模型。
 type OpenClawCronSummary struct {
-	Total     int    `json:"total"`
-	Enabled   int    `json:"enabled"`
-	Disabled  int    `json:"disabled"`
-	Failed    int    `json:"failed"`
-	StorePath string `json:"store_path"`
+	Total      int    `json:"total"`
+	Enabled    int    `json:"enabled"`
+	Disabled   int    `json:"disabled"`
+	Failed     int    `json:"failed"`
+	FailedRuns int    `json:"failed_runs"`
+	StorePath  string `json:"store_path"`
 }
 
 // OpenClawCronJob is the flattened job DTO returned to the frontend.

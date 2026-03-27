@@ -1920,6 +1920,7 @@ export default {
       enabled: 'Running',
       disabled: 'Paused',
       failed: 'Failed',
+      failedRuns: 'Failed Runs',
     },
     columns: {
       title: 'Task',

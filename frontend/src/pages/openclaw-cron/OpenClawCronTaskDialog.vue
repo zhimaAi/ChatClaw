@@ -776,21 +776,6 @@ useEventListener(window, 'keydown', (event) => {
             </div>
           </section>
 
-          <section class="space-y-4">
-            
-
-            <div class="space-y-1.5">
-              <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
-                {{ t('openclawCron.dialog.systemEvent', '系统事件') }}
-              </Label>
-              <Input
-                v-model="form.systemEvent"
-                :placeholder="t('openclawCron.dialog.systemEventPlaceholder', '可选，用于传递 OpenClaw 系统事件载荷')"
-                class="h-10"
-              />
-            </div>
-          </section>
-
           <section class="space-y-4 rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10">
             <div class="space-y-1">
               <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">

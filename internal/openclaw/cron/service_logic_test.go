@@ -2,10 +2,13 @@ package openclawcron
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	chatservice "chatclaw/internal/services/chat"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 func TestParseRunNowResult_ExtractsRunID(t *testing.T) {
@@ -36,47 +39,12 @@ func TestParseJobIDFromSessionKey_ReadsCronSessionKey(t *testing.T) {
 	}
 }
 
-func TestMergeHistoryItems_PrefersConversationOverRunLog(t *testing.T) {
-	runItems := []OpenClawCronHistoryListItem{{
-		JobID:          "job-1",
-		RunID:          "run-1",
-		SessionID:      "session-1",
-		SessionKey:     "agent:main:cron:job-1",
-		Status:         "ok",
-		RunAtMs:        200,
-		DurationMs:     2500,
-		TriggerType:    "manual",
-		Source:         OpenClawCronHistorySourceRunLog,
-		IsPendingLocal: false,
-	}}
-	conversationItems := []OpenClawCronHistoryListItem{{
-		JobID:          "job-1",
-		SessionKey:     "agent:main:cron:job-1",
-		ConversationID: 42,
-		Name:           "job-1 / 2026-03-26 12:00:00",
-		Status:         "running",
-		RunAtMs:        100,
-		Source:         OpenClawCronHistorySourceConversation,
-	}}
+func TestBuildCronForwardMessageID_DiffersAcrossRuns(t *testing.T) {
+	left := buildCronForwardMessageID(29, "agent:main:cron:job-1", "run-1")
+	right := buildCronForwardMessageID(29, "agent:main:cron:job-1", "run-2")
 
-	merged := mergeHistoryItems(runItems, conversationItems, nil)
-	if len(merged) != 1 {
-		t.Fatalf("expected 1 merged item, got %d", len(merged))
-	}
-	if merged[0].ConversationID != 42 {
-		t.Fatalf("expected conversation id to be retained, got %d", merged[0].ConversationID)
-	}
-	if merged[0].Source != OpenClawCronHistorySourceConversation {
-		t.Fatalf("expected conversation item to win, got %q", merged[0].Source)
-	}
-	if merged[0].SessionID != "session-1" {
-		t.Fatalf("expected session id from run log to be merged in, got %q", merged[0].SessionID)
-	}
-	if merged[0].DurationMs != 2500 {
-		t.Fatalf("expected duration from run log to be retained, got %d", merged[0].DurationMs)
-	}
-	if merged[0].TriggerType != "manual" {
-		t.Fatalf("expected trigger type from conversation to be retained, got %q", merged[0].TriggerType)
+	if left == right {
+		t.Fatalf("expected different message ids for different runs, got %d and %d", left, right)
 	}
 }
 
@@ -199,6 +167,380 @@ func TestBuildCronForwardEvents_CompletesOnLifecycleEnd(t *testing.T) {
 	}
 }
 
+func TestBuildCronForwardEvents_TranslatesChatDeltaBlocks(t *testing.T) {
+	state := &cronForwardState{
+		RequestID: "openclaw-cron:agent:main:cron:job-1:run-1",
+		MessageID: -29001,
+	}
+	events := buildCronForwardEvents(
+		29,
+		"agent:main:cron:job-1",
+		"run-1",
+		state,
+		"chat",
+		json.RawMessage(`{
+			"runId":"run-1",
+			"sessionKey":"agent:main:cron:job-1",
+			"state":"delta",
+			"message":{
+				"role":"assistant",
+				"content":[
+					{"type":"thinking","thinking":"step one"},
+					{"type":"toolCall","toolCallId":"call-1","name":"weather","args":{"city":"Shanghai"}},
+					{"type":"toolResult","toolCallId":"call-1","content":{"temp":12}},
+					{"type":"text","text":"hello"}
+				]
+			}
+		}`),
+	)
+
+	if len(events) != 5 {
+		t.Fatalf("expected start + tool call + tool result + thinking + chunk, got %d", len(events))
+	}
+	if events[0].Name != chatservice.EventChatStart {
+		t.Fatalf("expected first event chat:start, got %q", events[0].Name)
+	}
+	if events[1].Name != chatservice.EventChatTool || events[2].Name != chatservice.EventChatTool {
+		t.Fatalf("expected tool events at positions 2 and 3, got %q / %q", events[1].Name, events[2].Name)
+	}
+	if events[3].Name != chatservice.EventChatThinking {
+		t.Fatalf("expected fourth event chat:thinking, got %q", events[3].Name)
+	}
+	if events[4].Name != chatservice.EventChatChunk {
+		t.Fatalf("expected final event chat:chunk, got %q", events[4].Name)
+	}
+
+	toolCall, ok := events[1].Payload.(chatservice.ChatToolEvent)
+	if !ok || toolCall.Type != "call" || toolCall.ToolCallID != "call-1" {
+		t.Fatalf("unexpected tool call payload: %#v", events[1].Payload)
+	}
+	toolResult, ok := events[2].Payload.(chatservice.ChatToolEvent)
+	if !ok || toolResult.Type != "result" || toolResult.ToolCallID != "call-1" {
+		t.Fatalf("unexpected tool result payload: %#v", events[2].Payload)
+	}
+	thinking, ok := events[3].Payload.(chatservice.ChatThinkingEvent)
+	if !ok || thinking.Delta != "step one" {
+		t.Fatalf("unexpected thinking payload: %#v", events[3].Payload)
+	}
+	chunk, ok := events[4].Payload.(chatservice.ChatChunkEvent)
+	if !ok || chunk.Delta != "hello" {
+		t.Fatalf("unexpected chunk payload: %#v", events[4].Payload)
+	}
+}
+
+func TestListHistory_ReadsOpenClawRunLogWithoutConversationFallback(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	runFile := filepath.Join(tempHome, ".chatclaw", "openclaw", "cron", "runs", "job-1.jsonl")
+	if err := os.MkdirAll(filepath.Dir(runFile), 0o755); err != nil {
+		t.Fatalf("create run log dir: %v", err)
+	}
+	if err := os.WriteFile(runFile, []byte(`{"ts":1234,"jobId":"job-1","action":"manual","status":"success","runAtMs":1234,"durationMs":5678,"sessionId":"session-1","sessionKey":"agent:main:cron:job-1:run:session-1"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write run log: %v", err)
+	}
+
+	service := &OpenClawCronService{}
+	items, err := service.ListHistory("job-1", 10)
+	if err != nil {
+		t.Fatalf("ListHistory returned error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 history item from run log, got %d", len(items))
+	}
+	if items[0].Source != OpenClawCronHistorySourceRunLog {
+		t.Fatalf("expected run log source, got %q", items[0].Source)
+	}
+	if items[0].SessionID != "session-1" {
+		t.Fatalf("expected session id from run log, got %q", items[0].SessionID)
+	}
+}
+
+func TestGetRunDetail_ReadsTranscriptWithoutCreatingConversation(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	rootDir := filepath.Join(tempHome, ".chatclaw", "openclaw")
+	runFile := filepath.Join(rootDir, "cron", "runs", "job-1.jsonl")
+	sessionFile := filepath.Join(rootDir, "agents", "main", "sessions", "session-1.jsonl")
+	if err := os.MkdirAll(filepath.Dir(runFile), 0o755); err != nil {
+		t.Fatalf("create run log dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(sessionFile), 0o755); err != nil {
+		t.Fatalf("create session dir: %v", err)
+	}
+	runLine := `{"ts":1234,"jobId":"job-1","action":"manual","status":"success","runAtMs":1234,"durationMs":5678,"sessionId":"session-1","sessionKey":"agent:main:cron:job-1:run:session-1"}`
+	if err := os.WriteFile(runFile, []byte(runLine+"\n"), 0o644); err != nil {
+		t.Fatalf("write run log: %v", err)
+	}
+	transcriptLine := `{"type":"message","id":"msg-1","timestamp":"2026-03-27T10:00:00Z","message":{"role":"assistant","provider":"openai","model":"gpt-5","stopReason":"end_turn","content":[{"type":"thinking","thinking":"thinking text"},{"type":"text","text":"final answer"}]}}`
+	if err := os.WriteFile(sessionFile, []byte(transcriptLine+"\n"), 0o644); err != nil {
+		t.Fatalf("write session transcript: %v", err)
+	}
+
+	service := &OpenClawCronService{}
+	detail, err := service.GetRunDetail("job-1", "session-1")
+	if err != nil {
+		t.Fatalf("GetRunDetail returned error: %v", err)
+	}
+	if detail == nil {
+		t.Fatalf("expected detail to be returned")
+	}
+	if detail.ConversationID != 0 {
+		t.Fatalf("expected history detail to avoid local conversation mapping, got %d", detail.ConversationID)
+	}
+	if len(detail.Messages) != 1 {
+		t.Fatalf("expected 1 transcript message, got %d", len(detail.Messages))
+	}
+	if detail.Messages[0].Role != "assistant" {
+		t.Fatalf("expected assistant transcript message, got %q", detail.Messages[0].Role)
+	}
+	if detail.Messages[0].ContentText != "thinking text\n\nfinal answer" {
+		t.Fatalf("expected transcript text to be preserved, got %q", detail.Messages[0].ContentText)
+	}
+}
+
+func TestGetSummary_CountsFailedJobs(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	rootDir := filepath.Join(tempHome, ".chatclaw", "openclaw")
+	jobsFile := filepath.Join(rootDir, "cron", "jobs.json")
+	firstRunFile := filepath.Join(rootDir, "cron", "runs", "job-1.jsonl")
+	secondRunFile := filepath.Join(rootDir, "cron", "runs", "job-2.jsonl")
+	if err := os.MkdirAll(filepath.Dir(jobsFile), 0o755); err != nil {
+		t.Fatalf("create cron dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(firstRunFile), 0o755); err != nil {
+		t.Fatalf("create run dir: %v", err)
+	}
+
+	jobsPayload := `{
+		"jobs":[
+			{"id":"job-1","name":"job-1","enabled":true,"state":{"lastStatus":"error"}},
+			{"id":"job-2","name":"job-2","enabled":false,"state":{"lastStatus":"success"}}
+		]
+	}`
+	if err := os.WriteFile(jobsFile, []byte(jobsPayload), 0o644); err != nil {
+		t.Fatalf("write jobs store: %v", err)
+	}
+	if err := os.WriteFile(
+		firstRunFile,
+		[]byte(
+			`{"ts":1000,"job_id":"job-1","status":"error"}`+"\n"+
+				`{"ts":2000,"job_id":"job-1","status":"success"}`+"\n"+
+				`{"ts":3000,"job_id":"job-1","status":"failed"}`+"\n",
+		),
+		0o644,
+	); err != nil {
+		t.Fatalf("write first run log: %v", err)
+	}
+	if err := os.WriteFile(
+		secondRunFile,
+		[]byte(
+			`{"ts":4000,"job_id":"job-2","status":"failed"}`+"\n"+
+				`{"ts":5000,"job_id":"job-2","status":"failed"}`+"\n",
+		),
+		0o644,
+	); err != nil {
+		t.Fatalf("write second run log: %v", err)
+	}
+
+	service := &OpenClawCronService{}
+	summary, err := service.GetSummary()
+	if err != nil {
+		t.Fatalf("GetSummary returned error: %v", err)
+	}
+	if summary == nil {
+		t.Fatalf("expected summary to be returned")
+	}
+	if summary.Total != 2 {
+		t.Fatalf("expected total 2, got %d", summary.Total)
+	}
+	if summary.Failed != 1 {
+		t.Fatalf("expected failed job count 1, got %d", summary.Failed)
+	}
+	if summary.FailedRuns != 4 {
+		t.Fatalf("expected failed run count 4, got %d", summary.FailedRuns)
+	}
+}
+
+func TestListJobs_PrefersLatestRunLogStatusOverStoreSnapshot(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	rootDir := filepath.Join(tempHome, ".chatclaw", "openclaw")
+	jobsFile := filepath.Join(rootDir, "cron", "jobs.json")
+	runFile := filepath.Join(rootDir, "cron", "runs", "job-1.jsonl")
+	if err := os.MkdirAll(filepath.Dir(runFile), 0o755); err != nil {
+		t.Fatalf("create run dir: %v", err)
+	}
+
+	jobsPayload := `{
+		"jobs":[
+			{"id":"job-1","name":"job-1","enabled":true,"state":{"lastRunAtMs":1000,"lastStatus":"success","lastError":""}}
+		]
+	}`
+	if err := os.WriteFile(jobsFile, []byte(jobsPayload), 0o644); err != nil {
+		t.Fatalf("write jobs store: %v", err)
+	}
+	runPayload := "" +
+		`{"ts":2000,"jobId":"job-1","status":"success","runAtMs":2000,"sessionId":"session-old"}` + "\n" +
+		`{"ts":3000,"jobId":"job-1","status":"failed","error":"gateway timeout","runAtMs":3000,"sessionId":"session-new"}` + "\n"
+	if err := os.WriteFile(runFile, []byte(runPayload), 0o644); err != nil {
+		t.Fatalf("write run log: %v", err)
+	}
+
+	service := &OpenClawCronService{}
+	items, err := service.ListJobs()
+	if err != nil {
+		t.Fatalf("ListJobs returned error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(items))
+	}
+	if items[0].LastRunAtMs != 3000 {
+		t.Fatalf("expected latest run timestamp 3000 from run log, got %d", items[0].LastRunAtMs)
+	}
+	if items[0].LastStatus != "failed" {
+		t.Fatalf("expected latest run status failed from run log, got %q", items[0].LastStatus)
+	}
+	if items[0].LastError != "gateway timeout" {
+		t.Fatalf("expected latest run error from run log, got %q", items[0].LastError)
+	}
+}
+
+func TestListJobs_UsesStoreSnapshotWhenNoRunLogExists(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	rootDir := filepath.Join(tempHome, ".chatclaw", "openclaw")
+	jobsFile := filepath.Join(rootDir, "cron", "jobs.json")
+	if err := os.MkdirAll(filepath.Dir(jobsFile), 0o755); err != nil {
+		t.Fatalf("create cron dir: %v", err)
+	}
+
+	jobsPayload := `{
+		"jobs":[
+			{"id":"job-1","name":"job-1","enabled":true,"state":{"lastRunAtMs":1000,"lastStatus":"success","lastError":"stale snapshot error"}}
+		]
+	}`
+	if err := os.WriteFile(jobsFile, []byte(jobsPayload), 0o644); err != nil {
+		t.Fatalf("write jobs store: %v", err)
+	}
+
+	service := &OpenClawCronService{}
+	items, err := service.ListJobs()
+	if err != nil {
+		t.Fatalf("ListJobs returned error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(items))
+	}
+	if items[0].LastRunAtMs != 1000 {
+		t.Fatalf("expected store snapshot timestamp 1000, got %d", items[0].LastRunAtMs)
+	}
+	if items[0].LastStatus != "success" {
+		t.Fatalf("expected store snapshot status success, got %q", items[0].LastStatus)
+	}
+	if items[0].LastError != "stale snapshot error" {
+		t.Fatalf("expected store snapshot error to remain, got %q", items[0].LastError)
+	}
+}
+
+func TestEmitConversationChanged_EmitsConversationRefreshEvent(t *testing.T) {
+	const (
+		testOpenClawCronConversationChangedEvent = "conversations:changed"
+		testOpenClawCronAgentID                  = int64(136)
+		testOpenClawCronEventWaitTimeout         = time.Second
+	)
+
+	app := application.New(application.Options{})
+	service := &OpenClawCronService{app: app}
+
+	eventCh := make(chan map[string]any, 1)
+	unsubscribe := app.Event.On(testOpenClawCronConversationChangedEvent, func(event *application.CustomEvent) {
+		payload, ok := event.Data.(map[string]any)
+		if !ok {
+			return
+		}
+		eventCh <- payload
+	})
+	defer unsubscribe()
+
+	service.emitConversationChanged(testOpenClawCronAgentID)
+
+	select {
+	case payload := <-eventCh:
+		agentID, ok := payload["agent_id"].(int64)
+		if ok && agentID == testOpenClawCronAgentID {
+			return
+		}
+		floatID, ok := payload["agent_id"].(float64)
+		if !ok || int64(floatID) != testOpenClawCronAgentID {
+			t.Fatalf("unexpected event payload: %#v", payload)
+		}
+	case <-time.After(testOpenClawCronEventWaitTimeout):
+		t.Fatalf("expected %q event", testOpenClawCronConversationChangedEvent)
+	}
+}
+
+func TestEmitConversationActivated_EmitsConversationSelectionEvent(t *testing.T) {
+	const (
+		testOpenClawCronConversationActivatedEvent = "channel:conversation-activated"
+		testOpenClawCronAgentID                    = int64(136)
+		testOpenClawCronConversationID             = int64(62)
+		testOpenClawCronEventWaitTimeout           = time.Second
+	)
+
+	app := application.New(application.Options{})
+	service := &OpenClawCronService{app: app}
+
+	eventCh := make(chan map[string]any, 1)
+	unsubscribe := app.Event.On(testOpenClawCronConversationActivatedEvent, func(event *application.CustomEvent) {
+		payload, ok := event.Data.(map[string]any)
+		if !ok {
+			return
+		}
+		eventCh <- payload
+	})
+	defer unsubscribe()
+
+	service.emitConversationActivated(testOpenClawCronAgentID, testOpenClawCronConversationID)
+
+	select {
+	case payload := <-eventCh:
+		if payload["agent_type"] != "openclaw" {
+			t.Fatalf("unexpected agent type payload: %#v", payload)
+		}
+		agentID, ok := payload["agent_id"].(int64)
+		if !ok || agentID != testOpenClawCronAgentID {
+			t.Fatalf("unexpected agent id payload: %#v", payload)
+		}
+		conversationID, ok := payload["conversation_id"].(int64)
+		if !ok || conversationID != testOpenClawCronConversationID {
+			t.Fatalf("unexpected conversation id payload: %#v", payload)
+		}
+	case <-time.After(testOpenClawCronEventWaitTimeout):
+		t.Fatalf("expected %q event", testOpenClawCronConversationActivatedEvent)
+	}
+}
+
 func TestBuildCronForwardEvents_MapsToolStartToChatToolCall(t *testing.T) {
 	state := &cronForwardState{}
 	events := buildCronForwardEvents(
@@ -302,124 +644,11 @@ func TestNormalizeHistoryTriggerType(t *testing.T) {
 		{name: "manual action wins", action: "manual", source: OpenClawCronHistorySourceRunLog, want: "manual"},
 		{name: "run log defaults to schedule", action: "", source: OpenClawCronHistorySourceRunLog, want: "schedule"},
 		{name: "pending defaults to manual", action: "", source: OpenClawCronHistorySourcePending, want: "manual"},
-		{name: "conversation defaults to manual", action: "", source: OpenClawCronHistorySourceConversation, want: "manual"},
 	}
 
 	for _, tc := range tests {
 		if got := normalizeHistoryTriggerType(tc.action, tc.source); got != tc.want {
 			t.Fatalf("%s: expected %q, got %q", tc.name, tc.want, got)
-		}
-	}
-}
-
-func TestEnrichConversationHistoryItemsWithRunEntries_FillsDurationForManualConversation(t *testing.T) {
-	conversationItems := []OpenClawCronHistoryListItem{{
-		JobID:          "job-1",
-		ConversationID: 42,
-		RunAtMs:        1774496838251,
-		Status:         "running",
-		TriggerType:    "manual",
-	}}
-	runEntries := []OpenClawCronRunEntry{{
-		RunAtMs:    1774496838251,
-		DurationMs: 35506,
-		SessionKey: "agent:main:cron:job-1:run:session-1",
-		SessionID:  "session-1",
-		Status:     "ok",
-		Action:     "finished",
-	}}
-
-	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
-
-	if conversationItems[0].DurationMs != 35506 {
-		t.Fatalf("expected duration to be backfilled, got %d", conversationItems[0].DurationMs)
-	}
-	if conversationItems[0].SessionKey != "agent:main:cron:job-1:run:session-1" {
-		t.Fatalf("expected session key to be backfilled, got %q", conversationItems[0].SessionKey)
-	}
-	if conversationItems[0].SessionID != "session-1" {
-		t.Fatalf("expected session id to be backfilled, got %q", conversationItems[0].SessionID)
-	}
-}
-
-func TestEnrichConversationHistoryItemsWithRunEntries_UpdatesStatusWhenConversationAlreadyHasSessionAndDuration(t *testing.T) {
-	conversationItems := []OpenClawCronHistoryListItem{{
-		JobID:          "job-1",
-		ConversationID: 42,
-		RunAtMs:        1774496838251,
-		SessionKey:     "agent:main:cron:job-1:run:session-1",
-		SessionID:      "session-1",
-		Status:         "running",
-		DurationMs:     35506,
-		TriggerType:    "manual",
-	}}
-	runEntries := []OpenClawCronRunEntry{{
-		RunAtMs:    1774496838251,
-		DurationMs: 35506,
-		SessionKey: "agent:main:cron:job-1:run:session-1",
-		SessionID:  "session-1",
-		Status:     "ok",
-		Action:     "finished",
-	}}
-
-	enrichConversationHistoryItemsWithRunEntries(conversationItems, runEntries)
-
-	if conversationItems[0].Status != "ok" {
-		t.Fatalf("expected status to be updated from run log, got %q", conversationItems[0].Status)
-	}
-}
-
-func TestDeriveManualConversationHistoryState(t *testing.T) {
-	tests := []struct {
-		name           string
-		runAtMs        int64
-		updatedAtMs    int64
-		sessionKey     string
-		active         bool
-		wantStatus     string
-		wantDurationMs int64
-	}{
-		{
-			name:           "active manual run stays running",
-			runAtMs:        1000,
-			updatedAtMs:    5000,
-			sessionKey:     "agent:main:conv_1",
-			active:         true,
-			wantStatus:     "running",
-			wantDurationMs: 0,
-		},
-		{
-			name:           "completed manual run shows success and duration",
-			runAtMs:        1000,
-			updatedAtMs:    5600,
-			sessionKey:     "agent:main:conv_1",
-			active:         false,
-			wantStatus:     "success",
-			wantDurationMs: 4600,
-		},
-		{
-			name:           "missing session key keeps pending state",
-			runAtMs:        1000,
-			updatedAtMs:    5600,
-			sessionKey:     "",
-			active:         false,
-			wantStatus:     "success",
-			wantDurationMs: 4600,
-		},
-	}
-
-	for _, tc := range tests {
-		status, durationMs := deriveManualConversationHistoryState(
-			tc.runAtMs,
-			tc.updatedAtMs,
-			tc.sessionKey,
-			tc.active,
-		)
-		if status != tc.wantStatus {
-			t.Fatalf("%s: expected status %q, got %q", tc.name, tc.wantStatus, status)
-		}
-		if durationMs != tc.wantDurationMs {
-			t.Fatalf("%s: expected duration %d, got %d", tc.name, tc.wantDurationMs, durationMs)
 		}
 	}
 }
