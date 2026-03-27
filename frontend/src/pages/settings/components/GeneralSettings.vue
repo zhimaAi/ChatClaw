@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore, type Theme } from '@/stores'
 import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
 import SettingsCard from './SettingsCard.vue'
@@ -166,7 +167,7 @@ const handleInstallOpenClaw = async () => {
     openclawStatus.value = { ...openclawStatus.value, installing: true }
   }
   try {
-    await ToolchainService.InstallOpenClawRuntime()
+    await OpenClawRuntimeService.InstallAndStartRuntime()
     await nextTick()
     await loadOpenClawStatus()
   } catch (e) {

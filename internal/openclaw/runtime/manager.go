@@ -118,6 +118,57 @@ func (m *Manager) RestartGateway() (RuntimeStatus, error) {
 	return m.GetStatus(), err
 }
 
+// InstallAndStartRuntime downloads the OpenClaw runtime from OSS and starts the gateway.
+// This is the "OSS install" equivalent of UpgradeRuntime: it installs the runtime bundle,
+// stops any existing gateway, and starts a new one using the newly installed runtime.
+func (m *Manager) InstallAndStartRuntime() (*RuntimeUpgradeResult, error) {
+	m.opMu.Lock()
+	defer m.opMu.Unlock()
+
+	cfg := m.store.Get()
+
+	// Broadcast installing state
+	m.broadcastStatus(RuntimeStatus{
+		Phase:       PhaseUpgrading,
+		Message:     "Downloading OpenClaw runtime from OSS...",
+		GatewayURL: gatewayURL(cfg.GatewayPort),
+	})
+	m.closeClient()
+	m.stopProcess()
+
+	if err := m.toolchainSvc.InstallOpenClawRuntime(); err != nil {
+		_ = m.reconcileLocked(false)
+		return nil, fmt.Errorf("OSS runtime install: %w", err)
+	}
+
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		_ = m.reconcileLocked(false)
+		return nil, fmt.Errorf("resolveBundledRuntime after OSS install: %w", err)
+	}
+	installedVersion, err := verifyInstalled(bundle)
+	if err != nil {
+		_ = m.reconcileLocked(false)
+		return nil, fmt.Errorf("verifyInstalled after OSS install: %w", err)
+	}
+
+	// Activate the newly installed runtime
+	if err := m.reconcileLocked(false); err != nil {
+		_ = m.reconcileLocked(false)
+		return nil, fmt.Errorf("reconcile after OSS install: %w", err)
+	}
+
+	status := m.GetStatus()
+	return &RuntimeUpgradeResult{
+		PreviousVersion: "",
+		CurrentVersion:  installedVersion,
+		LatestVersion:   installedVersion,
+		Upgraded:        true,
+		RuntimeSource:   status.RuntimeSource,
+		RuntimePath:     status.RuntimePath,
+	}, nil
+}
+
 func (m *Manager) UpgradeRuntime() (*RuntimeUpgradeResult, error) {
 	m.opMu.Lock()
 	defer m.opMu.Unlock()

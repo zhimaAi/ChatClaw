@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime'
 import {
   DownloadMethod,
   TestInstallConfig,
@@ -138,9 +139,9 @@ const handleStart = async () => {
   progress.message = t('settings.general.toolchain.testInstall.starting')
 
   try {
-    // openclaw uses InstallOpenClawRuntime (OSS download + install), not TestInstall
+    // openclaw uses InstallAndStartRuntime (OSS download + install + gateway start), not TestInstall
     if (selectedTool.value === 'openclaw') {
-      await ToolchainService.InstallOpenClawRuntime()
+      await OpenClawRuntimeService.InstallAndStartRuntime()
       isFinished.value = true
       isRunning.value = false
       result.value = {

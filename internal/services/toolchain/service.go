@@ -149,8 +149,12 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 		return fmt.Errorf("download openclaw from OSS: %w", err)
 	}
 
-	// Extract the full archive into staging
-	if err := extractArchiveToDir(archivePath, stagingDir, archiveFormat); err != nil {
+	// Extract: OSS zip is flat (bin/, lib/, tools/, manifest.json). Do not use stripArchiveRoot.
+	// Windows: prefer bundled tar -xf (same as NSIS) for large trees; fall back to Go flat unzip.
+	if err := extractOpenClawRuntimeArchive(archivePath, stagingDir, archiveFormat); err != nil {
+		if s.app != nil {
+			s.app.Logger.Error("toolchain: extract openclaw archive failed", "error", err, "archive", archivePath)
+		}
 		cleanup()
 		return fmt.Errorf("extract openclaw archive: %w", err)
 	}
@@ -583,6 +587,201 @@ func stripArchiveRoot(name string) (string, bool) {
 		return "", false
 	}
 	return filepath.FromSlash(parts[1]), true
+}
+
+// zipSanitizedRelativePath returns a safe relative path for a zip entry (flat layout, no zip-slip).
+func zipSanitizedRelativePath(name string) (string, bool) {
+	name = filepath.ToSlash(strings.TrimSpace(name))
+	if name == "" {
+		return "", false
+	}
+	name = strings.TrimPrefix(name, "./")
+	if strings.HasPrefix(name, "/") {
+		return "", false
+	}
+	if len(name) >= 2 && name[1] == ':' { // Windows "C:/..."
+		return "", false
+	}
+	for _, seg := range strings.Split(name, "/") {
+		if seg == ".." {
+			return "", false
+		}
+	}
+	name = strings.TrimSuffix(name, "/")
+	if name == "" {
+		return "", false
+	}
+	return filepath.FromSlash(name), true
+}
+
+func pathWithinDir(baseDir, targetPath string) bool {
+	baseAbs, err := filepath.Abs(baseDir)
+	if err != nil {
+		return false
+	}
+	targetAbs, err := filepath.Abs(targetPath)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(baseAbs, targetAbs)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
+// extractOpenClawRuntimeArchive unpacks the OpenClaw OSS bundle (flat root: bin, lib, tools, manifest.json).
+func extractOpenClawRuntimeArchive(archivePath, destDir, format string) error {
+	switch format {
+	case "zip":
+		if runtime.GOOS == "windows" {
+			if err := extractZipViaWindowsTar(archivePath, destDir); err == nil {
+				return nil
+			}
+		}
+		return extractZipToDirFlat(archivePath, destDir)
+	case "tar.gz":
+		return extractTarGzToDirFlat(archivePath, destDir)
+	default:
+		return fmt.Errorf("unsupported archive format: %s", format)
+	}
+}
+
+// extractZipViaWindowsTar uses the system tar.exe (Windows 10+) to expand zip, matching NSIS installer behavior.
+func extractZipViaWindowsTar(archivePath, destDir string) error {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("tar", "-xf", archivePath, "-C", destDir)
+	hideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tar -xf: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// extractZipToDirFlat extracts zip entries preserving paths from archive root (no top-level strip).
+func extractZipToDirFlat(archivePath, destDir string) error {
+	destAbs, err := filepath.Abs(destDir)
+	if err != nil {
+		return err
+	}
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	for _, file := range reader.File {
+		rel, ok := zipSanitizedRelativePath(file.Name)
+		if !ok {
+			continue
+		}
+		targetPath := filepath.Join(destAbs, rel)
+		if !pathWithinDir(destAbs, targetPath) {
+			continue
+		}
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		src, err := file.Open()
+		if err != nil {
+			return err
+		}
+		dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
+		if err != nil {
+			src.Close()
+			return err
+		}
+		_, copyErr := io.Copy(dst, src)
+		_ = src.Close()
+		closeErr := dst.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
+}
+
+// extractTarGzToDirFlat extracts tar.gz preserving paths from archive root (no top-level strip).
+func extractTarGzToDirFlat(archivePath, destDir string) error {
+	destAbs, err := filepath.Abs(destDir)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gzr, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		rel, ok := zipSanitizedRelativePath(hdr.Name) // same rules as zip entries
+		if !ok {
+			continue
+		}
+		targetPath := filepath.Join(destAbs, rel)
+		if !pathWithinDir(destAbs, targetPath) {
+			continue
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			fileMode := os.FileMode(hdr.Mode)
+			if fileMode == 0 {
+				fileMode = 0o644
+			}
+			dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(dst, tr); err != nil {
+				dst.Close()
+				return err
+			}
+			if err := dst.Close(); err != nil {
+				return err
+			}
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return err
+			}
+			if err := os.Symlink(hdr.Linkname, targetPath); err != nil && !os.IsExist(err) {
+				return err
+			}
+		}
+	}
 }
 
 // ToolchainService manages external tool binaries (uv, bun) within the app data dir.
