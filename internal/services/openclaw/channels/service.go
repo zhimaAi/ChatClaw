@@ -160,12 +160,13 @@ func (s *OpenClawChannelService) GetChannelStats() (*channels.ChannelStats, erro
 }
 
 // GetSupportedPlatforms returns the same platform list as ChatClaw for UI parity (tabs + add dialog).
-// OpenClaw currently supports creating Feishu and WeCom channels directly.
+// OpenClaw currently supports creating Feishu, WeCom, DingTalk, and WeChat (personal) channels.
 func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta {
 	return []channels.PlatformMeta{
 		{ID: channels.PlatformDingTalk, Name: "DingTalk", AuthType: "token"},
 		{ID: channels.PlatformFeishu, Name: "Feishu", AuthType: "token"},
 		{ID: channels.PlatformWeCom, Name: "WeCom", AuthType: "token"},
+		{ID: channels.PlatformWechat, Name: "WeChat", AuthType: "qrcode"},
 		{ID: channels.PlatformQQ, Name: "QQ", AuthType: "token"},
 		{ID: channels.PlatformTwitter, Name: "X (Twitter)", AuthType: "token"},
 	}
@@ -213,6 +214,9 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 
 	if platform == channels.PlatformDingTalk {
 		go s.installDingTalkPluginBackground(ch.ID)
+	} else if platform == channels.PlatformWechat {
+		// WeChat uses QR code authentication; no credentials to sync on create.
+		// Plugin installation and QR code generation happen via GenerateWechatQRCode().
 	} else if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
 		_ = s.channelSvc.DeleteChannel(ch.ID)
 		return nil, wrapOpenClawSyncErr(err, "error.channel_create_failed", nil)
@@ -278,6 +282,9 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 				return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 			}
 		}
+	} else if platform == channels.PlatformWechat {
+		// WeChat channel name updates are local-only; no credentials to push.
+		// Enable/disable is handled via ConnectChannel / DisconnectChannel.
 	} else if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, extraConfig, enabled); err != nil {
 		return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 	}
@@ -319,6 +326,9 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 		if err := s.removeOpenClawDingTalkAccount(ctx, accountKey); err != nil {
 			s.app.Logger.Warn("openclaw config unset dingtalk account failed, proceeding with local delete", "account", accountKey, "error", err)
 		}
+	} else if platform == channels.PlatformWechat {
+		// WeChat sessions are managed by the plugin internally; no config entry to unset.
+		// Route bindings are cleaned up below after deletion.
 	} else if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
 		s.app.Logger.Warn("openclaw config unset channel failed, proceeding with local delete", "platform", platform, "account", accountKey, "error", err)
 	}
@@ -330,6 +340,14 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 	if platform == channels.PlatformDingTalk {
 		if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
 			s.app.Logger.Warn("openclaw dingtalk default account sync failed after delete", "error", err)
+		}
+		return nil
+	}
+
+	if platform == channels.PlatformWechat {
+		accountID := openClawWechatAccountID(id)
+		if err := s.removeManagedRouteBinding(channels.PlatformWechat, accountID); err != nil {
+			s.app.Logger.Warn("openclaw wechat route binding cleanup failed after delete", "channel_id", id, "error", err)
 		}
 		return nil
 	}
@@ -414,6 +432,10 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		return s.connectDingTalkViaPlugin(id, m)
 	}
 
+	if m.Platform == channels.PlatformWechat {
+		return s.connectWechatViaPlugin(id, m)
+	}
+
 	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
 	platform := strings.TrimSpace(m.Platform)
 	if platform == "" {
@@ -471,6 +493,10 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 			s.app.Logger.Warn("openclaw dingtalk config disable failed, proceeding with local disconnect", "error", err)
 		}
 		return s.setChannelOnlineStatus(ctx, id, false)
+	}
+
+	if m.Platform == channels.PlatformWechat {
+		return s.disconnectWechatViaPlugin(id)
 	}
 
 	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
@@ -801,6 +827,8 @@ func openClawPlatformFromInput(explicitPlatform, extraConfig string) string {
 		return channels.PlatformDingTalk
 	case channels.PlatformFeishu:
 		return channels.PlatformFeishu
+	case channels.PlatformWechat:
+		return channels.PlatformWechat
 	default:
 		return channels.PlatformFeishu
 	}

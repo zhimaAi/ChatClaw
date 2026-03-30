@@ -44,6 +44,7 @@ import {
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
+import WechatConfigDialog from './components/WechatConfigDialog.vue'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
 import { getPlatformIcon } from '@/pages/common/channelUtils'
 import {
@@ -65,9 +66,14 @@ defineProps<{ tabId: string }>()
 const { t, te } = useI18n()
 const { toast: addToast } = useToast()
 
-/** OpenClaw: Feishu, WeCom, and DingTalk are available; other platforms show coming soon. */
+/** OpenClaw: Feishu, WeCom, DingTalk, and WeChat (personal) are available; others show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
+  return (
+    platformId === 'feishu' ||
+    platformId === 'wecom' ||
+    platformId === 'dingtalk' ||
+    platformId === 'wechat'
+  )
 }
 
 const channels = ref<Channel[]>([])
@@ -89,6 +95,7 @@ const toggleConfirming = ref(false)
 const channelToToggle = ref<{ channel: Channel; val: boolean } | null>(null)
 const unbindDialogOpen = ref(false)
 const channelToUnbind = ref<Channel | null>(null)
+const wechatConfigOpen = ref(false)
 
 watch(unbindDialogOpen, (open) => {
   if (!open) channelToUnbind.value = null
@@ -170,7 +177,11 @@ function handleSelectPlatform(platform: PlatformMeta) {
   selectedPlatform.value = platform
   channelToEdit.value = null
   addDialogOpen.value = false
-  configDialogOpen.value = true
+  if (platform.id === 'wechat') {
+    wechatConfigOpen.value = true
+  } else {
+    configDialogOpen.value = true
+  }
 }
 
 function handleEditChannel(channel: Channel) {
@@ -792,7 +803,32 @@ onMounted(loadData)
         </Button>
       </div>
 
-      <!-- Inline Add Form - Feishu platform selected (no channels in this filter) -->
+      <!-- Empty State - WeChat tab selected (QR code flow, not a credential form) -->
+      <div
+        v-else-if="selectedFilter === 'wechat'"
+        class="flex flex-col items-center justify-center py-16 text-center"
+      >
+        <div
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted mb-4"
+        >
+          <SquareDashed class="h-6 w-6 text-[#737373] dark:text-muted-foreground" />
+        </div>
+        <h3 class="text-base font-medium text-[#262626] dark:text-foreground">
+          {{ t('channels.wechat.emptyTitle') }}
+        </h3>
+        <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
+          {{ t('channels.wechat.emptyDesc') }}
+        </p>
+        <Button
+          class="mt-6 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+          @click="wechatConfigOpen = true"
+        >
+          <Plus class="h-4 w-4 shrink-0" />
+          {{ t('channels.wechat.addNow') }}
+        </Button>
+      </div>
+
+      <!-- Inline Add Form - Feishu/WeCom/DingTalk platform selected (no channels in this filter) -->
       <div v-else class="space-y-6">
         <div class="flex items-end gap-4">
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
@@ -892,6 +928,12 @@ onMounted(loadData)
         </div>
       </div>
     </div>
+
+    <!-- WeChat Config Dialog (QR code flow) -->
+    <WechatConfigDialog
+      v-model:open="wechatConfigOpen"
+      @connected="loadData"
+    />
 
     <!-- Add Channel Dialog -->
     <AddChannelDialog

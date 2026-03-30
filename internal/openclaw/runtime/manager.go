@@ -730,6 +730,40 @@ func (m *Manager) ExecCLI(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// ExecNpx runs an npx command using the bundled Node.js runtime with the same
+// isolated environment as the OpenClaw gateway process.
+func (m *Manager) ExecNpx(ctx context.Context, args ...string) ([]byte, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("resolve openclaw runtime for npx exec: %w", err)
+	}
+	var npxPath string
+	if runtime.GOOS == "windows" {
+		npxPath = filepath.Join(bundle.Root, "tools", "node", "npx.cmd")
+	} else {
+		npxPath = filepath.Join(bundle.Root, "tools", "node", "bin", "npx")
+	}
+	cmd := exec.CommandContext(ctx, npxPath, args...)
+	cmd.Env = buildGatewayEnv(m.store.Get(), bundle)
+	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return out, fmt.Errorf("npx %v: %w\n%s", args, err, string(out))
+	}
+	return out, nil
+}
+
+// BundleStateDir returns the state directory (OPENCLAW_STATE_DIR) used by the bundled OpenClaw runtime.
+// This is the root for the openclaw.json config, extensions directory, etc.
+func (m *Manager) BundleStateDir() (string, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return "", fmt.Errorf("resolve openclaw runtime: %w", err)
+	}
+	return bundle.StateDir, nil
+}
+
 // AddEventListener registers a listener for gateway events with the given key.
 // The caller is responsible for removing it when done via RemoveEventListener.
 func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
