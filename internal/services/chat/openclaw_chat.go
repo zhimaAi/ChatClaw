@@ -191,6 +191,30 @@ func (s *ChatService) resolveOpenClawSessionKeys(conversationID int64, openClawA
 				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
 			}, candidates...)
 		}
+	case channels.PlatformDingTalk:
+		targetID := strings.TrimSpace(source.TargetID)
+		scope := strings.TrimSpace(source.Scope)
+		switch scope {
+		case channels.ChannelConversationScopeGroup:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:dingtalk:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk-connector:group:%s", id, targetID),
+			}, candidates...)
+		case channels.ChannelConversationScopeDM:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:dingtalk:dm:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk:direct:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk-connector:dm:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk-connector:direct:%s", id, targetID),
+			}, candidates...)
+		default:
+			candidates = append([]string{
+				fmt.Sprintf("agent:%s:dingtalk:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk:dm:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk-connector:group:%s", id, targetID),
+				fmt.Sprintf("agent:%s:dingtalk-connector:dm:%s", id, targetID),
+			}, candidates...)
+		}
 	}
 
 	return dedupeStrings(candidates)
