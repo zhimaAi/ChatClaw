@@ -268,7 +268,7 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 
 	if platform == channels.PlatformDingTalk {
 		if !s.isDingTalkPluginInstalledLocally() {
-			if enabled {
+			if input.Enabled != nil {
 				return nil, errs.New("error.dingtalk_plugin_not_ready")
 			}
 		} else {
@@ -461,6 +461,9 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	}
 
 	if m.Platform == channels.PlatformDingTalk {
+		if !s.isDingTalkPluginInstalledLocally() {
+			return errs.New("error.dingtalk_plugin_not_ready")
+		}
 		accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
 		openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
 		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, false); err != nil {

@@ -1550,6 +1550,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Bật thành công",
+      "dingtalkPluginNotReady": "Plugin kết nối DingTalk vẫn đang cài đặt hoặc chưa sẵn sàng. Vui lòng thử lại sau.",
       "disableSuccess": "Tắt thành công",
       "enableTitle": "Bật kênh này?",
       "disableTitle": "Tắt kênh này?",

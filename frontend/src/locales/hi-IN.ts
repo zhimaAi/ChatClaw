@@ -1567,6 +1567,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "सफलतापूर्वक सक्षम किया गया",
+      "dingtalkPluginNotReady": "DingTalk कनेक्टर प्लगइन अभी स्थापित हो रहा है या तैयार नहीं है। कृपया बाद में पुनः प्रयास करें।",
       "disableSuccess": "सफलतापूर्वक अक्षम किया गया",
       "enableTitle": "इस चैनल को सक्षम करें?",
       "disableTitle": "इस चैनल को अक्षम करें?",

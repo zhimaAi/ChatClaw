@@ -1570,6 +1570,7 @@ export default {
     },
     toggle: {
       enableSuccess: '开启成功',
+      dingtalkPluginNotReady: "钉钉连接器插件仍在安装或未就绪，请稍后再试。",
       disableSuccess: '关闭成功',
       enableTitle: '确定要开启该频道吗？',
       disableTitle: '确定要关闭该频道吗？',

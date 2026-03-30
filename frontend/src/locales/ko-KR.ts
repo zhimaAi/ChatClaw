@@ -1707,6 +1707,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "활성화 성공",
+      "dingtalkPluginNotReady": "딩톡 커넥터 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
       "disableSuccess": "비활성화 성공",
       "enableTitle": "이 채널을 활성화하시겠습니까?",
       "disableTitle": "이 채널을 비활성화하시겠습니까?",
