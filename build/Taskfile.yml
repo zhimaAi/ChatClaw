@@ -176,6 +176,49 @@ tasks:
       - sh: go run ./internal/tools/notempty "{{.PLATFORM}}"
         msg: "PLATFORM is required. Use: PLATFORM=amd64, PLATFORM=arm64, or PLATFORM=multi"
 
+  bundle:openclaw:runtime:
+    summary: Bundles OpenClaw Linux runtime and exports tar.gz package
+    desc: |
+      Bundles the OpenClaw runtime for the specified Linux platform(s) and
+      exports flat tar.gz archives under build/openclaw-runtime/.
+      PLATFORM is required: amd64, arm64, or multi (amd64+arm64).
+      Usage:
+        task bundle:openclaw:runtime PLATFORM=amd64
+        task bundle:openclaw:runtime PLATFORM=arm64
+        task bundle:openclaw:runtime PLATFORM=multi
+    cmds:
+      - |
+        set -euo pipefail
+
+        case "{{.PLATFORM}}" in
+          amd64|arm64)
+            archs="{{.PLATFORM}}"
+            ;;
+          multi)
+            archs="amd64 arm64"
+            ;;
+          *)
+            echo "Unsupported PLATFORM={{.PLATFORM}}. Use amd64, arm64, or multi." >&2
+            exit 1
+            ;;
+        esac
+
+        mkdir -p build/openclaw-runtime
+
+        for arch in $archs; do
+          echo "Bundling OpenClaw runtime for linux/${arch}..."
+          go run ./internal/tools/openclawbundle -config build/runtime.yml -os linux -arch "${arch}"
+          rm -f "build/openclaw-runtime/linux-${arch}.tar.gz"
+          tar -C "build/openclaw-runtime/linux-${arch}" -czf "build/openclaw-runtime/linux-${arch}.tar.gz" .
+        done
+    vars:
+      PLATFORM: "{{.PLATFORM}}"
+    preconditions:
+      - sh: npm version
+        msg: "npm is required to bundle OpenClaw runtime. Please install Node.js/npm first."
+      - sh: go run ./internal/tools/notempty "{{.PLATFORM}}"
+        msg: "PLATFORM is required. Use: PLATFORM=amd64, PLATFORM=arm64, or PLATFORM=multi"
+
   run:docker:
     summary: Builds and runs the Docker image (current architecture)
     desc: |
