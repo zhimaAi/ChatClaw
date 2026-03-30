@@ -17,6 +17,7 @@ import (
 
 const (
 	dingTalkPluginName             = "@dingtalk-real-ai/dingtalk-connector"
+	dingTalkPluginChannelID        = "dingtalk-connector" // channel identifier used in openclaw.json bindings
 	dingTalkPluginInstallTimeout   = 3 * time.Minute
 	dingTalkPluginExtensionSubdir  = "extensions/dingtalk-connector"
 )
@@ -216,6 +217,14 @@ func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context,
 	if _, err := s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON)); err != nil {
 		return fmt.Errorf("openclaw config set dingtalk-connector account %s: %w", accountKey, err)
 	}
+
+	// Sync route binding so the dingtalk-connector plugin routes messages to the correct agent.
+	// The plugin reads cfg.bindings (not the account-level agentId field) for per-account routing.
+	if openclawAgentID != "" {
+		if err := s.upsertManagedRouteBinding(dingTalkPluginChannelID, accountKey, openclawAgentID); err != nil {
+			s.app.Logger.Warn("openclaw: failed to upsert dingtalk route binding", "accountKey", accountKey, "error", err)
+		}
+	}
 	return nil
 }
 
@@ -241,6 +250,10 @@ func (s *OpenClawChannelService) removeOpenClawDingTalkAccount(ctx context.Conte
 	path := "channels.dingtalk-connector.accounts." + accountKey
 	if _, err := s.openclawManager.ExecCLI(ctx, "config", "unset", path); err != nil {
 		return fmt.Errorf("openclaw config unset dingtalk-connector account %s: %w", accountKey, err)
+	}
+	// Remove the corresponding route binding.
+	if err := s.removeManagedRouteBinding(dingTalkPluginChannelID, accountKey); err != nil {
+		s.app.Logger.Warn("openclaw: failed to remove dingtalk route binding", "accountKey", accountKey, "error", err)
 	}
 	return nil
 }

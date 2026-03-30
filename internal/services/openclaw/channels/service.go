@@ -13,6 +13,7 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/i18n"
 	openclawagents "chatclaw/internal/openclaw/agents"
 	openclawruntime "chatclaw/internal/openclaw/runtime"
 	"chatclaw/internal/services/channels"
@@ -722,8 +723,12 @@ func (s *OpenClawChannelService) EnsureAgentForChannel(channelID int64) (int64, 
 		return m.AgentID, nil
 	}
 
+	agentName := strings.TrimSpace(m.Name)
+	if agentName == "" {
+		agentName = define.DefaultAgentNameForLocale(i18n.GetLocale())
+	}
 	agent, err := s.agentsSvc.CreateAgent(openclawagents.CreateOpenClawAgentInput{
-		Name: fmt.Sprintf("%s Agent", m.Name),
+		Name: agentName,
 	})
 	if err != nil {
 		return 0, errs.Wrap("error.channel_agent_create_failed", err)

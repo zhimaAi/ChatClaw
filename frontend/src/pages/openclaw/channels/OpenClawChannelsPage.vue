@@ -324,7 +324,7 @@ async function handleAutoGenerate() {
     const baseName = ch.name.trim() || t('channels.agentFallback')
     const created = await OpenClawAgentsService.CreateAgent(
       new CreateOpenClawAgentInput({
-        name: `${baseName} Agent`,
+        name: baseName,
         icon: '',
         identity_emoji: '',
       })
