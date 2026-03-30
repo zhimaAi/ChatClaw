@@ -98,6 +98,18 @@ export interface StreamingMessageState {
   isOpenClaw?: boolean // OpenClaw messages are not persisted in local DB
 }
 
+type SmoothStreamOp = {
+  kind: 'content' | 'thinking'
+  units: string[]
+  offset: number
+  newBlock?: boolean
+  runPath?: string[]
+  parentToolCallId?: string
+}
+
+const SMOOTH_STREAM_INTERVAL_MS = 20
+const SMOOTH_STREAM_INITIAL_DELAY_MS = 48
+
 // Auto-decrementing counter for local optimistic message IDs (always negative to avoid collision with backend IDs)
 let localMessageCounter = 0
 
@@ -839,6 +851,7 @@ export const useChatStore = defineStore('chat', () => {
     messagesByConversation.value[conversationId] = []
     delete streamingByConversation.value[conversationId]
     delete activeRequestByConversation.value[conversationId]
+    resetSmoothStream(conversationId)
   }
 
   const restoreStreamingSnapshot = (
@@ -850,6 +863,8 @@ export const useChatStore = defineStore('chat', () => {
     if (conversationId <= 0 || messageId <= 0 || !String(requestId).trim()) {
       return
     }
+
+    resetSmoothStream(conversationId)
 
     streamingByConversation.value[conversationId] = {
       messageId,
@@ -920,6 +935,8 @@ export const useChatStore = defineStore('chat', () => {
     if (!data) return
 
     const { conversation_id, request_id, message_id } = data
+
+    resetSmoothStream(conversation_id)
 
     // Initialize streaming state
     streamingByConversation.value[conversation_id] = {
@@ -1002,6 +1019,281 @@ export const useChatStore = defineStore('chat', () => {
     return lastCalling ?? lastMatch
   }
 
+  const smoothStreamQueueByConversation = new Map<number, SmoothStreamOp[]>()
+  const smoothStreamTimerByConversation = new Map<number, ReturnType<typeof setTimeout>>()
+  const smoothStreamStartedByConversation = new Set<number>()
+  const graphemeSegmenter: any =
+    typeof Intl !== 'undefined' && 'Segmenter' in Intl
+      ? new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' })
+      : null
+
+  const splitSmoothUnits = (chunk: string) => {
+    if (!chunk) return []
+    if (graphemeSegmenter) {
+      return Array.from(graphemeSegmenter.segment(chunk), (part: any) => String(part.segment ?? ''))
+    }
+    return Array.from(chunk)
+  }
+
+  const totalSmoothBacklogUnits = (queue: SmoothStreamOp[]) => {
+    return queue.reduce((sum, op) => sum + Math.max(0, op.units.length - op.offset), 0)
+  }
+
+  const nextSmoothTakeCount = (totalRemaining: number) => {
+    if (totalRemaining >= 120) return 6
+    if (totalRemaining >= 80) return 5
+    if (totalRemaining >= 48) return 4
+    if (totalRemaining >= 24) return 3
+    if (totalRemaining >= 12) return 2
+    return 1
+  }
+
+  const applyStreamContentChunk = (
+    conversationId: number,
+    streaming: StreamingMessageState,
+    chunk: string,
+    runPath?: string[],
+    parentToolCallId?: string
+  ) => {
+    if (!chunk) return
+
+    const subAgentName = extractSubAgentName(runPath)
+
+    if (subAgentName) {
+      const parent = findSubAgentToolCall(streaming, subAgentName, parentToolCallId)
+      if (parent) {
+        parent.childContent = (parent.childContent || '') + chunk
+        if (!parent.childSegments) parent.childSegments = []
+        const lastChild = parent.childSegments[parent.childSegments.length - 1]
+        if (lastChild && lastChild.type === 'content') {
+          lastChild.content += chunk
+        } else {
+          parent.childSegments.push({ type: 'content', content: chunk })
+        }
+        return
+      }
+    }
+
+    streaming.content += chunk
+
+    const lastSeg = streaming.segments[streaming.segments.length - 1]
+    if (lastSeg && lastSeg.type === 'content') {
+      lastSeg.content += chunk
+    } else {
+      streaming.segments.push({ type: 'content', content: chunk })
+    }
+
+    upsertMessage(conversationId, streaming.messageId, {
+      content: streaming.content,
+    })
+  }
+
+  const applyStreamThinkingChunk = (
+    conversationId: number,
+    streaming: StreamingMessageState,
+    chunk: string,
+    newBlock: boolean,
+    runPath?: string[],
+    parentToolCallId?: string
+  ) => {
+    if (!chunk) return
+
+    const subAgentName = extractSubAgentName(runPath)
+
+    if (subAgentName) {
+      const parent = findSubAgentToolCall(streaming, subAgentName, parentToolCallId)
+      if (parent) {
+        parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
+        if (!parent.childSegments) parent.childSegments = []
+        const lastChild = parent.childSegments[parent.childSegments.length - 1]
+        if (lastChild && lastChild.type === 'thinking' && !newBlock) {
+          lastChild.content += chunk
+        } else {
+          parent.childSegments.push({ type: 'thinking', content: chunk })
+        }
+        return
+      }
+    }
+
+    streaming.thinkingContent += chunk
+
+    const lastSeg = streaming.segments[streaming.segments.length - 1]
+
+    debug('thinking segment append', {
+      new_block: newBlock,
+      lastSegType: lastSeg?.type,
+      action: newBlock
+        ? 'push new thinking segment'
+        : lastSeg?.type === 'thinking'
+          ? 'append to existing'
+          : 'push new thinking segment',
+      totalSegments: streaming.segments.length,
+      thinkingContentLen: streaming.thinkingContent.length,
+    })
+
+    if (newBlock) {
+      streaming.segments.push({ type: 'thinking', content: chunk })
+    } else if (lastSeg && lastSeg.type === 'thinking') {
+      lastSeg.content += chunk
+    } else if (appendLateThinkingTail(streaming.segments, chunk)) {
+      debug('merged late thinking tail into previous block', {
+        totalSegments: streaming.segments.length,
+        thinkingContentLen: streaming.thinkingContent.length,
+      })
+    } else {
+      streaming.segments.push({ type: 'thinking', content: chunk })
+    }
+
+    upsertMessage(conversationId, streaming.messageId, {
+      thinking_content: streaming.thinkingContent,
+    } as any)
+  }
+
+  const clearSmoothStreamTimer = (conversationId: number) => {
+    const timer = smoothStreamTimerByConversation.get(conversationId)
+    if (timer) {
+      clearTimeout(timer)
+      smoothStreamTimerByConversation.delete(conversationId)
+    }
+  }
+
+  const clearSmoothStream = (conversationId: number) => {
+    clearSmoothStreamTimer(conversationId)
+    smoothStreamQueueByConversation.delete(conversationId)
+  }
+
+  const resetSmoothStream = (conversationId: number) => {
+    clearSmoothStream(conversationId)
+    smoothStreamStartedByConversation.delete(conversationId)
+  }
+
+  const flushSmoothStream = (conversationId: number) => {
+    const queue = smoothStreamQueueByConversation.get(conversationId)
+    if (!queue || queue.length === 0) {
+      clearSmoothStreamTimer(conversationId)
+      return
+    }
+
+    clearSmoothStreamTimer(conversationId)
+
+    const streaming = streamingByConversation.value[conversationId]
+    if (!streaming) {
+      clearSmoothStream(conversationId)
+      return
+    }
+
+    while (queue.length > 0) {
+      const op = queue[0]
+      const chunk = op.units.slice(op.offset).join('')
+      if (chunk) {
+        if (op.kind === 'content') {
+          applyStreamContentChunk(conversationId, streaming, chunk, op.runPath, op.parentToolCallId)
+        } else {
+          applyStreamThinkingChunk(
+            conversationId,
+            streaming,
+            chunk,
+            Boolean(op.newBlock && op.offset === 0),
+            op.runPath,
+            op.parentToolCallId
+          )
+        }
+      }
+      queue.shift()
+    }
+
+    clearSmoothStream(conversationId)
+  }
+
+  const pumpSmoothStream = (conversationId: number) => {
+    const queue = smoothStreamQueueByConversation.get(conversationId)
+    const streaming = streamingByConversation.value[conversationId]
+    if (!queue || queue.length === 0 || !streaming) {
+      clearSmoothStream(conversationId)
+      return
+    }
+
+    const op = queue[0]
+    const remaining = op.units.length - op.offset
+    if (remaining <= 0) {
+      queue.shift()
+      pumpSmoothStream(conversationId)
+      return
+    }
+
+    const totalRemaining = totalSmoothBacklogUnits(queue)
+    const takeCount = nextSmoothTakeCount(totalRemaining)
+    const isFirstSlice = op.offset === 0
+    const chunk = op.units.slice(op.offset, op.offset + takeCount).join('')
+    op.offset += takeCount
+
+    if (op.kind === 'content') {
+      applyStreamContentChunk(conversationId, streaming, chunk, op.runPath, op.parentToolCallId)
+    } else {
+      applyStreamThinkingChunk(
+        conversationId,
+        streaming,
+        chunk,
+        Boolean(op.newBlock && isFirstSlice),
+        op.runPath,
+        op.parentToolCallId
+      )
+    }
+
+    if (op.offset >= op.units.length) {
+      queue.shift()
+    }
+
+    if (queue.length === 0) {
+      clearSmoothStream(conversationId)
+      return
+    }
+
+    clearSmoothStreamTimer(conversationId)
+    smoothStreamTimerByConversation.set(
+      conversationId,
+      setTimeout(() => {
+        pumpSmoothStream(conversationId)
+      }, SMOOTH_STREAM_INTERVAL_MS)
+    )
+  }
+
+  const enqueueSmoothStream = (
+    conversationId: number,
+    op: Omit<SmoothStreamOp, 'units' | 'offset'> & { chunk: string }
+  ) => {
+    const units = splitSmoothUnits(op.chunk)
+    if (units.length === 0) return
+
+    const queue = smoothStreamQueueByConversation.get(conversationId) ?? []
+    queue.push({
+      kind: op.kind,
+      units,
+      offset: 0,
+      newBlock: op.newBlock,
+      runPath: op.runPath,
+      parentToolCallId: op.parentToolCallId,
+    })
+    smoothStreamQueueByConversation.set(conversationId, queue)
+
+    if (!smoothStreamTimerByConversation.has(conversationId) && queue.length === 1) {
+      const delay = smoothStreamStartedByConversation.has(conversationId)
+        ? 0
+        : SMOOTH_STREAM_INITIAL_DELAY_MS
+      smoothStreamStartedByConversation.add(conversationId)
+      if (delay === 0) {
+        pumpSmoothStream(conversationId)
+      } else {
+        smoothStreamTimerByConversation.set(
+          conversationId,
+          setTimeout(() => {
+            pumpSmoothStream(conversationId)
+          }, delay)
+        )
+      }
+    }
+  }
+
   const handleChatChunk = (event: any) => {
     const data = extractEventData(event)
     if (!data) return
@@ -1012,35 +1304,11 @@ export const useChatStore = defineStore('chat', () => {
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
       if (!chunk) return
-
-      const subAgentName = extractSubAgentName(run_path)
-
-      if (subAgentName) {
-        const parent = findSubAgentToolCall(streaming, subAgentName, parent_tool_call_id)
-        if (parent) {
-          parent.childContent = (parent.childContent || '') + chunk
-          if (!parent.childSegments) parent.childSegments = []
-          const lastChild = parent.childSegments[parent.childSegments.length - 1]
-          if (lastChild && lastChild.type === 'content') {
-            lastChild.content += chunk
-          } else {
-            parent.childSegments.push({ type: 'content', content: chunk })
-          }
-          return
-        }
-      }
-
-      streaming.content += chunk
-
-      const lastSeg = streaming.segments[streaming.segments.length - 1]
-      if (lastSeg && lastSeg.type === 'content') {
-        lastSeg.content += chunk
-      } else {
-        streaming.segments.push({ type: 'content', content: chunk })
-      }
-
-      upsertMessage(conversation_id, streaming.messageId, {
-        content: streaming.content,
+      enqueueSmoothStream(conversation_id, {
+        kind: 'content',
+        chunk,
+        runPath: run_path,
+        parentToolCallId: parent_tool_call_id,
       })
     }
   }
@@ -1052,7 +1320,7 @@ export const useChatStore = defineStore('chat', () => {
     const { conversation_id, request_id, delta, new_block, run_path, parent_tool_call_id } = data
     const streaming = ensureStreamingState(conversation_id, data)
 
-    console.log('[chat-thinking] received', {
+    debug('thinking received', {
       conversation_id,
       request_id,
       deltaLen: delta?.length,
@@ -1067,58 +1335,15 @@ export const useChatStore = defineStore('chat', () => {
     if (streaming && streaming.requestId === request_id) {
       const chunk = delta || ''
       if (!chunk) return
-
-      const subAgentName = extractSubAgentName(run_path)
-
-      if (subAgentName) {
-        const parent = findSubAgentToolCall(streaming, subAgentName, parent_tool_call_id)
-        if (parent) {
-          parent.childThinkingContent = (parent.childThinkingContent || '') + chunk
-          if (!parent.childSegments) parent.childSegments = []
-          const lastChild = parent.childSegments[parent.childSegments.length - 1]
-          if (lastChild && lastChild.type === 'thinking' && !new_block) {
-            lastChild.content += chunk
-          } else {
-            parent.childSegments.push({ type: 'thinking', content: chunk })
-          }
-          return
-        }
-      }
-
-      streaming.thinkingContent += chunk
-
-      const lastSeg = streaming.segments[streaming.segments.length - 1]
-
-      console.log('[chat-thinking] appending to segments', {
-        new_block,
-        lastSegType: lastSeg?.type,
-        action: new_block
-          ? 'push new thinking segment'
-          : lastSeg?.type === 'thinking'
-            ? 'append to existing'
-            : 'push new thinking segment',
-        totalSegments: streaming.segments.length,
-        thinkingContentLen: streaming.thinkingContent.length,
+      enqueueSmoothStream(conversation_id, {
+        kind: 'thinking',
+        chunk,
+        newBlock: Boolean(new_block),
+        runPath: run_path,
+        parentToolCallId: parent_tool_call_id,
       })
-
-      if (new_block) {
-        streaming.segments.push({ type: 'thinking', content: chunk })
-      } else if (lastSeg && lastSeg.type === 'thinking') {
-        lastSeg.content += chunk
-      } else if (appendLateThinkingTail(streaming.segments, chunk)) {
-        console.log('[chat-thinking] merged late thinking tail into previous block', {
-          totalSegments: streaming.segments.length,
-          thinkingContentLen: streaming.thinkingContent.length,
-        })
-      } else {
-        streaming.segments.push({ type: 'thinking', content: chunk })
-      }
-
-      upsertMessage(conversation_id, streaming.messageId, {
-        thinking_content: streaming.thinkingContent,
-      } as any)
     } else {
-      console.warn('[chat-thinking] DROPPED - no matching streaming state', {
+      debug('thinking dropped - no matching streaming state', {
         conversation_id,
         request_id,
         hasStreaming: !!streaming,
@@ -1175,6 +1400,8 @@ export const useChatStore = defineStore('chat', () => {
       })
       return
     }
+
+    flushSmoothStream(conversation_id)
 
     const subAgentName = extractSubAgentName(run_path)
 
@@ -1283,6 +1510,8 @@ export const useChatStore = defineStore('chat', () => {
     if (!streaming || streaming.requestId !== request_id) return
     if (!Array.isArray(items) || items.length === 0) return
 
+    flushSmoothStream(conversation_id)
+
     const retrievalItems: RetrievalItemInfo[] = items.map((item: any) => ({
       source: item.source as 'knowledge' | 'memory',
       content: String(item.content ?? ''),
@@ -1300,6 +1529,8 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
+      flushSmoothStream(conversation_id)
+
       // Finalize message locally first to avoid visible "jump"
       upsertMessage(conversation_id, streaming.messageId, {
         content: streaming.content,
@@ -1311,11 +1542,13 @@ export const useChatStore = defineStore('chat', () => {
       if (openClawConversations.value.has(conversation_id)) {
         persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
         setTimeout(() => {
+          resetSmoothStream(conversation_id)
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
         }, 0)
       } else {
         // Clear streaming state first
+        resetSmoothStream(conversation_id)
         delete streamingByConversation.value[conversation_id]
         delete activeRequestByConversation.value[conversation_id]
 
@@ -1333,6 +1566,8 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
+      flushSmoothStream(conversation_id)
+
       upsertMessage(conversation_id, streaming.messageId, {
         content: streaming.content,
         thinking_content: streaming.thinkingContent,
@@ -1343,11 +1578,13 @@ export const useChatStore = defineStore('chat', () => {
       if (openClawConversations.value.has(conversation_id)) {
         persistStreamingSegments(segmentsByMessage.value, streaming.messageId, streaming.segments)
         setTimeout(() => {
+          resetSmoothStream(conversation_id)
           delete streamingByConversation.value[conversation_id]
           delete activeRequestByConversation.value[conversation_id]
         }, 0)
       } else {
         // Clear streaming state first
+        resetSmoothStream(conversation_id)
         delete streamingByConversation.value[conversation_id]
         delete activeRequestByConversation.value[conversation_id]
 
@@ -1365,6 +1602,8 @@ export const useChatStore = defineStore('chat', () => {
     const streaming = streamingByConversation.value[conversation_id]
 
     if (streaming && streaming.requestId === request_id) {
+      flushSmoothStream(conversation_id)
+
       streaming.status = MessageStatus.ERROR
 
       // Store error message
@@ -1408,6 +1647,7 @@ export const useChatStore = defineStore('chat', () => {
 
       // Clear streaming state after a tick to let the UI read from segments first
       setTimeout(() => {
+        resetSmoothStream(conversation_id)
         delete streamingByConversation.value[conversation_id]
         delete activeRequestByConversation.value[conversation_id]
       }, 0)
@@ -1494,14 +1734,12 @@ export const useChatStore = defineStore('chat', () => {
     )
     unsubscribers.push(
       Events.On(ChatEventType.CHUNK, (e: any) => {
-        console.log('[chat] >>> CHUNK event arrived at frontend')
         debug(ChatEventType.CHUNK, extractEventData(e))
         handleChatChunk(e)
       })
     )
     unsubscribers.push(
       Events.On(ChatEventType.THINKING, (e: any) => {
-        console.log('[chat] >>> THINKING event arrived at frontend', extractEventData(e))
         debug(ChatEventType.THINKING, extractEventData(e))
         handleChatThinking(e)
       })
