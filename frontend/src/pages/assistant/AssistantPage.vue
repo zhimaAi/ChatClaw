@@ -1375,8 +1375,7 @@ watch(activeTeamRobotId, (newId, oldId) => {
 // 当前标签页是否激活
 // For snap/embedded mode, always consider it active since it does not follow main tab visibility.
 const isTabActive = computed(
-  () =>
-    isSnapMode.value || isIsolatedIframeMode.value || navigationStore.activeTabId === props.tabId
+  () => isSnapMode.value || isIsolatedIframeMode.value || navigationStore.activeTabId === props.tabId
 )
 
 async function initializeEmbeddedConversation() {

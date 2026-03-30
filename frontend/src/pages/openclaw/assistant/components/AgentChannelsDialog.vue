@@ -611,15 +611,6 @@ function handleWecomManualFromQr() {
                 <div
                   class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
                 >
-                  <div v-if="isWeCom" class="mb-4">
-                    <Button
-                      class="h-10 w-full gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                      @click="showWecomAddDialog = true"
-                    >
-                      <Plus class="size-4 shrink-0" />
-                      {{ t('channels.wecomAdd.openScanAdd') }}
-                    </Button>
-                  </div>
                   <div class="mb-6 flex flex-col items-center gap-2 pt-2">
                     <button
                       type="button"

@@ -54,9 +54,9 @@ type syncedChannelTarget struct {
 }
 
 type syncedSessionCandidate struct {
-	source        openClawPluginSessionSource
-	entry         openClawSessionStoreEntry
-	rawSessionKey string
+	source          openClawPluginSessionSource
+	entry           openClawSessionStoreEntry
+	rawSessionKey   string
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.

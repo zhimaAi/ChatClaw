@@ -813,15 +813,6 @@ onMounted(loadData)
 
       <!-- Inline Add Form - Feishu platform selected (no channels in this filter) -->
       <div v-else class="space-y-6">
-        <div v-if="selectedFilter === 'wecom'" class="-mt-1">
-          <Button
-            class="h-9 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-            @click="openWecomAddFromInline"
-          >
-            <Plus class="h-4 w-4 shrink-0" />
-            {{ t('channels.wecomAdd.openScanAdd') }}
-          </Button>
-        </div>
         <div class="flex items-end gap-4">
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
             <label
