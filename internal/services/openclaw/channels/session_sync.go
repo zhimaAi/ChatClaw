@@ -54,8 +54,9 @@ type syncedChannelTarget struct {
 }
 
 type syncedSessionCandidate struct {
-	source openClawPluginSessionSource
-	entry  openClawSessionStoreEntry
+	source          openClawPluginSessionSource
+	entry           openClawSessionStoreEntry
+	rawSessionKey   string
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.
@@ -102,7 +103,7 @@ func (s *OpenClawChannelService) SyncAgentConversations(agentID int64) error {
 			}
 
 			candidateKey := buildSyncedSessionCandidateKey(target.Channel.ID, source.Scope, source.TargetID)
-			next := syncedSessionCandidate{source: source, entry: entry}
+			next := syncedSessionCandidate{source: source, entry: entry, rawSessionKey: sessionKey}
 			current, exists := selected[candidateKey]
 			if !exists || shouldReplaceSyncedSessionCandidate(current, next) {
 				selected[candidateKey] = next
@@ -112,7 +113,7 @@ func (s *OpenClawChannelService) SyncAgentConversations(agentID int64) error {
 
 	for _, candidate := range selected {
 		target := channelTargets[buildSyncedChannelTargetKey(candidate.source.Platform, candidate.source.AccountID)]
-		if err := s.syncSessionConversation(agentID, target.Channel, candidate.source.Scope, candidate.source.TargetID, candidate.entry); err != nil {
+		if err := s.syncSessionConversation(agentID, target.Channel, candidate.source.Scope, candidate.source.TargetID, candidate.entry, candidate.rawSessionKey); err != nil {
 			return errs.Wrap("error.channel_list_failed", err)
 		}
 	}
@@ -146,7 +147,7 @@ func (s *OpenClawChannelService) listSyncTargets(agentID int64) (map[string]sync
 		if platform == "" {
 			continue
 		}
-		accountID := openClawManagedAccountID(platform, ch.ID, ch.ExtraConfig)
+		accountID := openClawSyncAccountID(ch)
 		key := buildSyncedChannelTargetKey(platform, accountID)
 		if _, exists := out[key]; exists {
 			continue
@@ -181,12 +182,23 @@ func (s *OpenClawChannelService) loadAgentSessionStore(openclawAgentID string) (
 	return store, nil
 }
 
+// openClawSyncAccountID matches OpenClaw session store deliveryContext.accountId for plugin channels.
+func openClawSyncAccountID(ch channels.Channel) string {
+	switch strings.TrimSpace(ch.Platform) {
+	case channels.PlatformDingTalk:
+		return openClawChannelAccountKey(ch.ID, ch.ExtraConfig)
+	default:
+		return openClawManagedAccountID(ch.Platform, ch.ID, ch.ExtraConfig)
+	}
+}
+
 func (s *OpenClawChannelService) syncSessionConversation(
 	agentID int64,
 	ch channels.Channel,
 	scope string,
 	targetID string,
 	entry openClawSessionStoreEntry,
+	openClawSessionKey string,
 ) error {
 	externalID := channels.BuildChannelConversationExternalID(ch.ID, scope, targetID)
 	if externalID == "" {
@@ -220,6 +232,9 @@ func (s *OpenClawChannelService) syncSessionConversation(
 	if lastMessage != "" {
 		q = q.Set("last_message = ?", lastMessage)
 	}
+	if sk := strings.TrimSpace(openClawSessionKey); sk != "" {
+		q = q.Set("openclaw_session_key = ?", sk)
+	}
 	if _, err := q.Exec(context.Background()); err != nil {
 		return fmt.Errorf("update synced conversation: %w", err)
 	}
@@ -246,6 +261,9 @@ func parseOpenClawPluginSessionKey(agentID string, sessionKey string, entry open
 		return openClawPluginSessionSource{}, false
 	}
 	platform := strings.TrimSpace(parts[2])
+	if p := strings.ToLower(platform); p == "dingtalk-connector" {
+		platform = channels.PlatformDingTalk
+	}
 	scope := strings.TrimSpace(parts[3])
 	targetID := strings.TrimSpace(strings.Join(parts[4:], ":"))
 	if platform == "" || targetID == "" {
@@ -323,6 +341,32 @@ func normalizePluginConversationScope(platform string, scope string, targetID st
 		return normalizeWeComPluginConversationScope(scope)
 	case channels.PlatformFeishu:
 		return normalizeFeishuPluginConversationScope(scope, targetID, chatType)
+	case channels.PlatformDingTalk:
+		return normalizeDingTalkPluginConversationScope(scope, targetID, chatType)
+	default:
+		return ""
+	}
+}
+
+func normalizeDingTalkPluginConversationScope(scope string, targetID string, chatType string) string {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case "dm", "direct", "p2p":
+		return channels.ChannelConversationScopeDM
+	case "group":
+		return channels.ChannelConversationScopeGroup
+	case "chat":
+		lowerChatType := strings.ToLower(strings.TrimSpace(chatType))
+		switch {
+		case strings.Contains(lowerChatType, "group"):
+			return channels.ChannelConversationScopeGroup
+		case strings.Contains(lowerChatType, "p2p"),
+			strings.Contains(lowerChatType, "single"),
+			strings.Contains(lowerChatType, "dm"),
+			strings.Contains(lowerChatType, "direct"):
+			return channels.ChannelConversationScopeDM
+		default:
+			return ""
+		}
 	default:
 		return ""
 	}

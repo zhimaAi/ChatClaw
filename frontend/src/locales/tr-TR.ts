@@ -1548,6 +1548,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Başarıyla etkinleştirildi",
+      "dingtalkPluginNotReady": "DingTalk bağlayıcı eklentisi hâlâ kuruluyor veya hazır değil. Lütfen daha sonra tekrar deneyin.",
       "disableSuccess": "Başarıyla devre dışı bırakıldı",
       "enableTitle": "Bu kanalı etkinleştirmek istiyor musunuz?",
       "disableTitle": "Bu kanalı devre dışı bırakmak istiyor musunuz?",

@@ -1556,6 +1556,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Enabled successfully",
+      "dingtalkPluginNotReady": "釘釘連接器外掛仍在安裝或未就緒，請稍後再試。",
       "disableSuccess": "Disabled successfully",
       "enableTitle": "Enable this channel?",
       "disableTitle": "Disable this channel?",

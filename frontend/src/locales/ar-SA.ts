@@ -1549,6 +1549,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "تم التمكين بنجاح",
+      "dingtalkPluginNotReady": "إضافة موصل DingTalk لا تزال قيد التثبيت أو غير جاهزة. يرجى المحاولة لاحقًا.",
       "disableSuccess": "تم التعطيل بنجاح",
       "enableTitle": "هل تريد تمكين هذه القناة؟",
       "disableTitle": "هل تريد تعطيل هذه القناة؟",
