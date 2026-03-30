@@ -344,6 +344,10 @@ export default {
           name: '安全沙箱',
           description: '在隔离环境中执行命令，保护系统安全，防止误操作影响本机文件。',
         },
+        openclaw: {
+          name: 'OpenClaw 运行环境',
+          description: 'OpenClaw Agent 的 Node.js 运行时环境，包含 openclaw CLI 和 Gateway。从 OSS 下载后安装到 ~/.chatclaw/openclaw/runtime/',
+        },
       },
     },
     memory: {
@@ -423,18 +427,24 @@ export default {
     },
     openclawSkills: {
       title: 'OpenClaw 技能',
+      listHeading: '技能',
+      listSubheading: '浏览和管理 AI 能力',
+      refreshCta: '刷新',
+      addSkillCta: '添加技能',
       pageDesc:
         '优先通过已连接的 OpenClaw Gateway 调用 skills.status；离线时按 OpenClaw 文档扫描状态目录（managed / workspace / bundled / extraDirs）。',
       filterAll: '全部',
       filterBuiltin: '内置',
       filterInstalled: '安装的',
+      builtinCannotDelete: '内置技能不能删除',
+      openSkillFolderToRemove: '在文件管理器中打开技能文件夹后可手动移除',
       filterShared: '共享目录',
       filterWorkspace: '工作区',
       locationShared: '共享',
       locationWorkspace: '工作区',
       diskLocationsTitle: '磁盘位置',
       locationCount: '{count} 处安装',
-      searchPlaceholder: '搜索技能、路径、代理或权限…',
+      searchPlaceholder: '请输入搜索技能',
       noSkills: '未发现 OpenClaw 技能',
       noSkillsHint:
         '请确认 Gateway 已连接；离线时请按 OpenClaw 文档放置技能（状态目录下 skills、各 workspace-*/skills、bundled 包、openclaw.json 的 skills.load.extraDirs）。',

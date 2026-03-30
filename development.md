@@ -109,5 +109,10 @@ wails3 generate bindings -clean -ts && cd frontend && npm i && npm run build && 
 wails3 task build:docker PLATFORM=multi  (wails3 task build:docker PLATFORM=amd64)
 mv ./bin/linux_amd64/server ./bin/ChatClaw_server_linux_amd64
 mv ./bin/linux_arm64/server ./bin/ChatClaw_server_linux_arm64
-```
 
+# 单独导出 OpenClaw runtime 压缩包
+wails3 task bundle:openclaw:runtime PLATFORM=multi  (wails3 task bundle:openclaw:runtime PLATFORM=amd64)
+# 输出:
+# build/openclaw-runtime/linux-amd64.tar.gz
+# build/openclaw-runtime/linux-arm64.tar.gz
+```

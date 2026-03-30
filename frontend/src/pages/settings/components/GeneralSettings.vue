@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore, type Theme } from '@/stores'
 import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
 import SettingsCard from './SettingsCard.vue'
@@ -124,7 +125,59 @@ const toolDefs: ToolDef[] = [
 const toolStatuses = reactive<Record<string, ToolStatus>>({})
 const installErrors = reactive<Record<string, boolean>>({})
 const downloadProgress = reactive<Record<string, DownloadProgress>>({})
+
+interface OpenClawStatus {
+  name: string
+  installed: boolean
+  installed_version: string
+  latest_version: string
+  has_update: boolean
+  installing: boolean
+  runtime_path: string
+}
+const openclawStatus = ref<OpenClawStatus | null>(null)
+const openclawInstallError = ref(false)
+
 const isDevMode = ref(false)
+
+const loadOpenClawStatus = async () => {
+  try {
+    const status = await ToolchainService.GetOpenClawRuntimeStatus()
+    if (status) {
+      openclawStatus.value = {
+        name: status.name,
+        installed: status.installed,
+        installed_version: status.installed_version,
+        latest_version: status.latest_version || '',
+        has_update: status.has_update,
+        installing: status.installing,
+        runtime_path: status.runtime_path,
+      }
+      openclawInstallError.value = false
+    }
+  } catch (e) {
+    console.error('Failed to load openclaw status:', e)
+    openclawStatus.value = { name: 'openclaw', installed: false, installed_version: '', latest_version: '', has_update: false, installing: false, runtime_path: '' }
+  }
+}
+
+const handleInstallOpenClaw = async () => {
+  openclawInstallError.value = false
+  if (openclawStatus.value) {
+    openclawStatus.value = { ...openclawStatus.value, installing: true }
+  }
+  try {
+    await OpenClawRuntimeService.InstallAndStartRuntime()
+    await nextTick()
+    await loadOpenClawStatus()
+  } catch (e) {
+    console.error('Failed to install openclaw runtime:', e)
+    openclawInstallError.value = true
+    if (openclawStatus.value) {
+      openclawStatus.value = { ...openclawStatus.value, installing: false }
+    }
+  }
+}
 
 // 加载是否为开发模式
 const loadDevMode = async () => {
@@ -182,6 +235,8 @@ const loadToolStatuses = async () => {
   } catch (e) {
     console.error('Failed to load toolchain statuses:', e)
   }
+  // 加载 OpenClaw 运行时状态
+  await loadOpenClawStatus()
   // 加载开发模式
   await loadDevMode()
 }
@@ -275,6 +330,83 @@ onUnmounted(() => {
 
     <!-- 开发工具 -->
     <SettingsCard :title="t('settings.general.toolchain.title')">
+      <!-- OpenClaw 运行环境（独立卡片，不走 toolDefs 循环） -->
+      <div class="flex items-start justify-between gap-4 p-4 border-b border-border dark:border-white/10">
+        <div class="flex min-w-0 flex-1 items-start gap-3">
+          <div
+            class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
+          >
+            <Package class="size-4" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="text-sm font-medium text-foreground">{{ t('settings.general.toolchain.openclaw.name') }}</span>
+            <p class="text-xs text-muted-foreground truncate">{{ t('settings.general.toolchain.openclaw.description') }}</p>
+            <p
+              v-if="openclawStatus?.runtime_path"
+              class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
+              :title="openclawStatus.runtime_path"
+            >
+              <FolderOpen class="size-3 shrink-0" />
+              {{ openclawStatus.runtime_path }}
+            </p>
+            <p
+              v-if="openclawStatus?.installed && openclawStatus?.installed_version"
+              class="mt-0.5 text-xs text-muted-foreground/60"
+              :title="openclawStatus.installed_version"
+            >
+              {{ t('settings.general.toolchain.testInstall.version') }}: {{ openclawStatus.installed_version }}
+            </p>
+
+            <!-- Download Progress -->
+            <div
+              v-if="downloadProgress['openclaw'] && openclawStatus?.installing"
+              class="mt-2 flex flex-col gap-1"
+            >
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-muted-foreground">{{ downloadProgress['openclaw'].percent.toFixed(1) }}%</span>
+                <span class="text-muted-foreground">{{ formatSpeed(downloadProgress['openclaw'].speed) }}</span>
+              </div>
+              <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  class="h-full bg-primary transition-all duration-300"
+                  :style="{ width: `${downloadProgress['openclaw'].percent}%` }"
+                />
+              </div>
+              <div class="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{{ formatFileSize(downloadProgress['openclaw'].downloaded) }} / {{ formatFileSize(downloadProgress['openclaw'].totalSize) }}</span>
+                <span v-if="downloadProgress['openclaw'].remaining > 0">{{ formatRemaining(downloadProgress['openclaw'].remaining) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+          <!-- Installed badge (same width pattern as uv/bun/codex — no long version here) -->
+          <span
+            v-if="openclawStatus?.installed && !openclawStatus?.installing"
+            class="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
+          >
+            <Check class="size-3 shrink-0" />
+            {{ t('settings.general.toolchain.installed') }}
+          </span>
+
+          <!-- Installing state -->
+          <span v-else-if="openclawStatus?.installing" class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+            <Loader2 class="size-3 animate-spin" />
+            {{ t('settings.general.toolchain.installing') }}
+          </span>
+
+          <!-- Install / Update button -->
+          <template v-else>
+            <span v-if="openclawInstallError" class="text-xs text-destructive">{{ t('settings.general.toolchain.installFailed') }}</span>
+            <Button size="sm" variant="outline" @click="handleInstallOpenClaw">
+              <Download class="size-3.5" />
+              {{ openclawStatus?.installed ? t('settings.general.toolchain.install') : t('settings.general.toolchain.install') }}
+            </Button>
+          </template>
+        </div>
+      </div>
+
       <div
         v-for="(tool, index) in toolDefs"
         :key="tool.id"
