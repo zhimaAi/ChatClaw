@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import AddChannelDialog from './components/AddChannelDialog.vue'
 import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
+import WecomAddDialog from './components/WecomAddDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
 import { getPlatformIcon } from '@/pages/common/channelUtils'
@@ -76,6 +77,7 @@ const platforms = ref<PlatformMeta[]>([])
 const agents = ref<OpenClawAgent[]>([])
 const loading = ref(false)
 const addDialogOpen = ref(false)
+const wecomAddDialogOpen = ref(false)
 const configDialogOpen = ref(false)
 const selectedPlatform = ref<PlatformMeta | null>(null)
 const channelToEdit = ref<Channel | null>(null)
@@ -169,6 +171,25 @@ function handleSelectPlatform(platform: PlatformMeta) {
   selectedPlatform.value = platform
   channelToEdit.value = null
   addDialogOpen.value = false
+  if (platform.id === 'wecom') {
+    wecomAddDialogOpen.value = true
+  } else {
+    configDialogOpen.value = true
+  }
+}
+
+function openWecomAddFromInline() {
+  selectedPlatform.value = platforms.value.find((p) => p.id === 'wecom') || null
+  channelToEdit.value = null
+  wecomAddDialogOpen.value = true
+}
+
+function handleWecomManualEntry() {
+  wecomAddDialogOpen.value = false
+  if (!selectedPlatform.value || selectedPlatform.value.id !== 'wecom') {
+    selectedPlatform.value = platforms.value.find((p) => p.id === 'wecom') || null
+  }
+  channelToEdit.value = null
   configDialogOpen.value = true
 }
 
@@ -779,6 +800,15 @@ onMounted(loadData)
 
       <!-- Inline Add Form - Feishu platform selected (no channels in this filter) -->
       <div v-else class="space-y-6">
+        <div v-if="selectedFilter === 'wecom'" class="-mt-1">
+          <Button
+            class="h-9 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+            @click="openWecomAddFromInline"
+          >
+            <Plus class="h-4 w-4 shrink-0" />
+            {{ t('channels.wecomAdd.openScanAdd') }}
+          </Button>
+        </div>
         <div class="flex items-end gap-4">
           <div class="flex w-[262px] shrink-0 flex-col gap-1">
             <label
@@ -883,6 +913,12 @@ onMounted(loadData)
       v-model:open="addDialogOpen"
       :platforms="platforms"
       @select="handleSelectPlatform"
+    />
+
+    <WecomAddDialog
+      v-model:open="wecomAddDialogOpen"
+      @saved="(ch, isEdit) => handleConfigSaved(ch, isEdit)"
+      @manual="handleWecomManualEntry"
     />
 
     <!-- Config Channel Dialog -->

@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import ConfigChannelDialog from '@/pages/openclaw/channels/components/ConfigChannelDialog.vue'
+import WecomAddDialog from '@/pages/openclaw/channels/components/WecomAddDialog.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,6 +80,7 @@ const showAddBotDialog = ref(false)
 const selectedBotId = ref<number | null>(null)
 const addBotLoading = ref(false)
 const showConfigChannelDialog = ref(false)
+const showWecomAddDialog = ref(false)
 const channelToEdit = ref<Channel | null>(null)
 
 const currentAgentId = computed(() => props.agent?.id ?? 0)
@@ -471,6 +473,21 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
     toast.error(getErrorMessage(error))
   }
 }
+
+function handleOpenNewChannelFromAddBotDialog() {
+  showAddBotDialog.value = false
+  if (selectedPlatformMeta.value?.id === 'wecom') {
+    showWecomAddDialog.value = true
+  } else {
+    showConfigChannelDialog.value = true
+  }
+}
+
+function handleWecomManualFromQr() {
+  showWecomAddDialog.value = false
+  channelToEdit.value = null
+  showConfigChannelDialog.value = true
+}
 </script>
 
 <template>
@@ -579,6 +596,15 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                 <div
                   class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
                 >
+                  <div v-if="isWeCom" class="mb-4">
+                    <Button
+                      class="h-10 w-full gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                      @click="showWecomAddDialog = true"
+                    >
+                      <Plus class="size-4 shrink-0" />
+                      {{ t('channels.wecomAdd.openScanAdd') }}
+                    </Button>
+                  </div>
                   <div class="mb-6 flex flex-col items-center gap-2 pt-2">
                     <button
                       type="button"
@@ -867,7 +893,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
         <Button
           class="mb-4 h-10 w-full shrink-0 gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="addBotLoading"
-          @click="showConfigChannelDialog = true; showAddBotDialog = false"
+          @click="handleOpenNewChannelFromAddBotDialog"
         >
           <Plus class="size-4 shrink-0" />
           {{ t('assistant.channels.addBot') }}
@@ -959,6 +985,12 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
       </div>
     </DialogContent>
   </Dialog>
+
+  <WecomAddDialog
+    v-model:open="showWecomAddDialog"
+    @saved="handleConfigChannelSaved"
+    @manual="handleWecomManualFromQr"
+  />
 
   <!-- Config Channel Dialog -->
   <ConfigChannelDialog
