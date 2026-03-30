@@ -17,12 +17,7 @@
 type SvgComponent = any
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  useNavigationStore,
-  useAppStore,
-  type NavModule,
-  type SystemOwner,
-} from '@/stores'
+import { useNavigationStore, useAppStore, type NavModule, type SystemOwner } from '@/stores'
 import { cn } from '@/lib/utils'
 import IconAssistant from '@/assets/icons/assistant.svg'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -245,11 +240,11 @@ const handleNavClick = (item: NavItem) => {
 /** Side nav row: OpenClaw active uses #FFE2E2 background; icon color applied separately. */
 const navButtonClass = (item: NavItem) =>
   cn(
-    'group mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+    'group mx-2 flex items-center gap-2 rounded-md px-2 py-[9px] text-left text-[15px] font-bold transition-colors',
     navigationStore.sidebarCollapsed && 'justify-center',
     isActive(item)
       ? cn(
-          'font-medium text-accent-foreground',
+          'text-accent-foreground',
           appStore.currentSystem === 'openclaw' ? 'bg-[#FFE2E2]' : 'bg-accent'
         )
       : 'text-accent-foreground hover:bg-accent/50'
@@ -280,7 +275,7 @@ const navIconClass = (item: NavItem) =>
           type="button"
           :class="
             cn(
-              'flex w-full items-center justify-between rounded-[100px] border border-solid border-[#F5F5F5] bg-background px-2 py-1.5 text-sm transition-colors hover:border-[#d4d4d4] hover:bg-[#f0f0f0] dark:border-border dark:bg-muted/30 dark:hover:border-neutral-500 dark:hover:bg-muted/80',
+              'flex w-full items-center justify-between rounded-[100px] border border-solid border-[#F5F5F5] bg-background px-2 py-[9px] text-[15px] font-bold transition-colors hover:border-[#d4d4d4] hover:bg-[#f0f0f0] dark:border-border dark:bg-muted/30 dark:hover:border-neutral-500 dark:hover:bg-muted/80',
               navigationStore.sidebarCollapsed && 'justify-center px-1.5'
             )
           "
@@ -302,7 +297,7 @@ const navIconClass = (item: NavItem) =>
             />
             <span
               v-if="!navigationStore.sidebarCollapsed"
-              class="truncate text-left text-sm font-medium leading-5 tracking-normal text-foreground"
+              class="truncate text-left text-[15px] font-bold leading-5 tracking-normal text-foreground"
             >
               {{ t(currentOption.labelKey) }}
             </span>
@@ -314,7 +309,6 @@ const navIconClass = (item: NavItem) =>
             <IconDown class="size-3.5" />
           </span>
         </button>
-
       </div>
 
       <!-- Dropdown teleported to body to escape SideNav's overflow-hidden / stacking-context constraints.
@@ -339,7 +333,7 @@ const navIconClass = (item: NavItem) =>
               v-for="opt in systemOptions"
               :key="opt.value"
               type="button"
-              class="flex w-full min-w-0 items-center gap-2 rounded-md px-4 py-[5px] text-left text-sm font-normal leading-[22px] text-[#262626] transition-colors hover:bg-accent dark:text-popover-foreground"
+              class="flex w-full min-w-0 items-center gap-2 rounded-md px-4 py-[8px] text-left text-[15px] font-bold leading-[22px] text-[#262626] transition-colors hover:bg-accent dark:text-popover-foreground"
               @click="selectSystem(opt.value)"
             >
               <img

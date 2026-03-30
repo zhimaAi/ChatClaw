@@ -31,16 +31,8 @@ onUnmounted(() => {
   <div
     class="flex h-screen w-screen flex-col overflow-hidden border border-border bg-background text-foreground"
   >
-    <AssistantPage
-      v-if="appStore.currentSystem !== 'openclaw'"
-      tab-id="winsnap"
-      mode="snap"
-    />
-    <OpenClawPage
-      v-else
-      tab-id="winsnap"
-      mode="snap"
-    />
+    <AssistantPage v-if="appStore.currentSystem !== 'openclaw'" tab-id="winsnap" mode="snap" />
+    <OpenClawPage v-else tab-id="winsnap" mode="snap" />
     <Toaster />
   </div>
 </template>

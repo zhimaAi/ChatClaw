@@ -54,9 +54,9 @@ type syncedChannelTarget struct {
 }
 
 type syncedSessionCandidate struct {
-	source          openClawPluginSessionSource
-	entry           openClawSessionStoreEntry
-	rawSessionKey   string
+	source        openClawPluginSessionSource
+	entry         openClawSessionStoreEntry
+	rawSessionKey string
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.
@@ -263,6 +263,8 @@ func parseOpenClawPluginSessionKey(agentID string, sessionKey string, entry open
 	platform := strings.TrimSpace(parts[2])
 	if p := strings.ToLower(platform); p == "dingtalk-connector" {
 		platform = channels.PlatformDingTalk
+	} else if p == openClawQQChannelID {
+		platform = channels.PlatformQQ
 	}
 	scope := strings.TrimSpace(parts[3])
 	targetID := strings.TrimSpace(strings.Join(parts[4:], ":"))
@@ -343,6 +345,42 @@ func normalizePluginConversationScope(platform string, scope string, targetID st
 		return normalizeFeishuPluginConversationScope(scope, targetID, chatType)
 	case channels.PlatformDingTalk:
 		return normalizeDingTalkPluginConversationScope(scope, targetID, chatType)
+	case channels.PlatformQQ:
+		return normalizeQQPluginConversationScope(scope, targetID, chatType)
+	default:
+		return ""
+	}
+}
+
+func normalizeQQPluginConversationScope(scope string, targetID string, chatType string) string {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case "dm", "direct", "c2c", "private":
+		return channels.ChannelConversationScopeDM
+	case "group", "guild", "channel":
+		return channels.ChannelConversationScopeGroup
+	case "chat":
+		lowerTarget := strings.ToLower(strings.TrimSpace(targetID))
+		switch {
+		case strings.HasPrefix(lowerTarget, "user:"):
+			return channels.ChannelConversationScopeDM
+		case strings.HasPrefix(lowerTarget, "group:"), strings.HasPrefix(lowerTarget, "guild:"), strings.HasPrefix(lowerTarget, "channel:"):
+			return channels.ChannelConversationScopeGroup
+		}
+
+		lowerChatType := strings.ToLower(strings.TrimSpace(chatType))
+		switch {
+		case strings.Contains(lowerChatType, "group"),
+			strings.Contains(lowerChatType, "guild"),
+			strings.Contains(lowerChatType, "channel"):
+			return channels.ChannelConversationScopeGroup
+		case strings.Contains(lowerChatType, "c2c"),
+			strings.Contains(lowerChatType, "private"),
+			strings.Contains(lowerChatType, "dm"),
+			strings.Contains(lowerChatType, "direct"):
+			return channels.ChannelConversationScopeDM
+		default:
+			return ""
+		}
 	default:
 		return ""
 	}
@@ -415,24 +453,15 @@ func normalizeFeishuPluginConversationScope(scope string, targetID string, chatT
 	}
 }
 
-func (s *OpenClawChannelService) buildSyncedConversationName(ch channels.Channel, entry openClawSessionStoreEntry, scope string, targetID string) string {
-	if ch.Platform == channels.PlatformFeishu && scope == channels.ChannelConversationScopeGroup {
-		if name := strings.TrimSpace(s.resolveFeishuChatName(ch.ExtraConfig, targetID)); name != "" {
-			return name
-		}
+func (s *OpenClawChannelService) buildSyncedConversationName(_ channels.Channel, entry openClawSessionStoreEntry, scope string, targetID string) string {
+	title := channels.ConversationTitleFromFirstMessage(extractFirstSessionUserMessageText(entry.SessionFile))
+	if title == "" {
+		title = channels.ConversationTitleFromFirstMessage(extractLastSessionMessage(entry.SessionFile))
 	}
-
-	name := strings.TrimSpace(entry.Origin.Label)
-	if name != "" && !isSyncedConversationPlaceholderName(name, scope, targetID) {
-		return name
+	if title != "" {
+		return formatAssistantConversationName(scope, title)
 	}
-	if scope == channels.ChannelConversationScopeGroup {
-		if t := extractFirstSessionUserMessageText(entry.SessionFile); t != "" {
-			return channels.ConversationTitleFromFirstMessage(t)
-		}
-		return "group:" + channels.NormalizeChannelConversationTargetID(targetID)
-	}
-	return "user:" + channels.NormalizeChannelConversationTargetID(targetID)
+	return formatAssistantConversationName(scope, channels.NormalizeChannelConversationTargetID(targetID))
 }
 
 func loadConversationName(ctx context.Context, db *bun.DB, convID int64) (string, error) {
@@ -480,6 +509,12 @@ func isSyncedConversationPlaceholderName(name, scope, targetID string) bool {
 		if strings.HasPrefix(name, "group:") || strings.HasPrefix(name, "「飞书群」") || strings.HasPrefix(name, "「企微群」") {
 			return true
 		}
+		if strings.HasPrefix(name, "「群聊」") {
+			rest := strings.TrimSpace(strings.TrimPrefix(name, "「群聊」"))
+			if strings.EqualFold(rest, targetID) || strings.EqualFold(rest, normalizedTargetID) {
+				return true
+			}
+		}
 		if strings.EqualFold(name, targetID) || strings.EqualFold(name, normalizedTargetID) {
 			return true
 		}
@@ -488,7 +523,21 @@ func isSyncedConversationPlaceholderName(name, scope, targetID string) bool {
 		}
 		return false
 	}
-	return strings.HasPrefix(name, "user:")
+	if strings.HasPrefix(name, "user:") {
+		return true
+	}
+	return strings.EqualFold(name, targetID) || strings.EqualFold(name, normalizedTargetID)
+}
+
+func formatAssistantConversationName(scope string, title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return ""
+	}
+	if scope == channels.ChannelConversationScopeGroup {
+		return "「群聊」" + title
+	}
+	return title
 }
 
 func (s *OpenClawChannelService) resolveFeishuChatName(extraConfig string, chatID string) string {

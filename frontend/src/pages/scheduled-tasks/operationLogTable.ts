@@ -47,10 +47,7 @@ export interface OperationLogDisplayRow {
   showSharedColumns: boolean
 }
 
-export type OperationLogFieldLabelResolver = (
-  fieldKey: string,
-  fieldLabel: string
-) => string
+export type OperationLogFieldLabelResolver = (fieldKey: string, fieldLabel: string) => string
 
 interface ParsedCustomScheduleValue {
   hour?: number

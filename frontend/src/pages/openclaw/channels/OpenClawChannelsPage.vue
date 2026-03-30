@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -47,9 +46,7 @@ import WecomAddDialog from './components/WecomAddDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
 import { getPlatformIcon } from '@/pages/common/channelUtils'
-import {
-  OpenClawChannelService,
-} from '@bindings/chatclaw/internal/services/openclaw/channels'
+import { OpenClawChannelService } from '@bindings/chatclaw/internal/services/openclaw/channels'
 import {
   OpenClawAgentsService,
   CreateOpenClawAgentInput,
@@ -329,8 +326,12 @@ function handleOpenBind(channel: Channel) {
 
 async function handleBindAgent(agentId: number) {
   if (!channelToBind.value) return
+  const channel = channelToBind.value
   try {
-    await OpenClawChannelService.BindAgent(channelToBind.value.id, agentId)
+    await OpenClawChannelService.BindAgent(channel.id, agentId)
+    if (bindFromCreate.value && channel.platform === 'qq') {
+      await OpenClawChannelService.ConnectChannel(channel.id)
+    }
     toast.success(t('channels.bindSuccess'))
     loadData()
   } catch (error) {
@@ -402,9 +403,7 @@ async function handleInlinePickAvatar() {
       ],
     })
     if (!path) return
-    const { OpenClawAgentsService } = await import(
-      '@bindings/chatclaw/internal/openclaw/agents'
-    )
+    const { OpenClawAgentsService } = await import('@bindings/chatclaw/internal/openclaw/agents')
     inlineFormAvatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
@@ -424,18 +423,12 @@ async function handleInlineSave() {
       app_secret: inlineFormAppSecret.value.trim(),
     })
 
-    const firstAgent = agents.value[0]
-    if (!firstAgent) {
-      toast.error(t('channels.bindAgent.empty'))
-      return
-    }
-
     const channel = await OpenClawChannelService.CreateChannel({
       platform: selectedPlatformMeta.value.id,
       name: inlineFormName.value.trim(),
       avatar: inlineFormAvatar.value,
       extra_config: extraConfig,
-      agent_id: firstAgent.id,
+      agent_id: 0,
     })
 
     if (selectedPlatformMeta.value?.id === 'dingtalk') {
@@ -694,8 +687,8 @@ onMounted(loadData)
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     class="gap-2 rounded px-4 py-[5px]"
-                    @click="openUnbindConfirm(channel)"
                     :disabled="channel.agent_id === 0"
+                    @click="openUnbindConfirm(channel)"
                   >
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
@@ -988,7 +981,9 @@ onMounted(loadData)
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel :disabled="toggleConfirming" @click="cancelToggle">{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogCancel :disabled="toggleConfirming" @click="cancelToggle">{{
+            t('common.cancel')
+          }}</AlertDialogCancel>
           <Button
             class="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
             :disabled="toggleConfirming"

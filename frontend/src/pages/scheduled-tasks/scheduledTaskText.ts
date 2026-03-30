@@ -1,7 +1,4 @@
-export type ScheduledTaskTranslate = (
-  key: string,
-  params?: Record<string, unknown>
-) => string
+export type ScheduledTaskTranslate = (key: string, params?: Record<string, unknown>) => string
 
 export interface ScheduleTextFormatter {
   interval: (params: { value: number }) => string
@@ -173,7 +170,9 @@ export function getOperationLogStatusValueLabel(
     'operationStatusEnabledLabel' | 'operationStatusDisabledLabel'
   >
 ) {
-  const normalizedValue = String(value || '').trim().toLowerCase()
+  const normalizedValue = String(value || '')
+    .trim()
+    .toLowerCase()
   if (!normalizedValue) return ''
   if (normalizedValue === '启用' || normalizedValue === 'enabled') {
     return formatter.operationStatusEnabledLabel()

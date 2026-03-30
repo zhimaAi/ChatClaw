@@ -25,10 +25,7 @@ export function normalizeOpenClawRunStatus(status?: string | null) {
   ) {
     return RUN_STATUS_SUCCESS
   }
-  if (
-    normalizedStatus === RUN_STATUS_FAILED ||
-    normalizedStatus === RUN_STATUS_ERROR
-  ) {
+  if (normalizedStatus === RUN_STATUS_FAILED || normalizedStatus === RUN_STATUS_ERROR) {
     return RUN_STATUS_FAILED
   }
   return RUN_STATUS_SUCCESS

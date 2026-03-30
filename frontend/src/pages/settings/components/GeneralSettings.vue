@@ -157,7 +157,15 @@ const loadOpenClawStatus = async () => {
     }
   } catch (e) {
     console.error('Failed to load openclaw status:', e)
-    openclawStatus.value = { name: 'openclaw', installed: false, installed_version: '', latest_version: '', has_update: false, installing: false, runtime_path: '' }
+    openclawStatus.value = {
+      name: 'openclaw',
+      installed: false,
+      installed_version: '',
+      latest_version: '',
+      has_update: false,
+      installing: false,
+      runtime_path: '',
+    }
   }
 }
 
@@ -331,7 +339,9 @@ onUnmounted(() => {
     <!-- 开发工具 -->
     <SettingsCard :title="t('settings.general.toolchain.title')">
       <!-- OpenClaw 运行环境（独立卡片，不走 toolDefs 循环） -->
-      <div class="flex items-start justify-between gap-4 p-4 border-b border-border dark:border-white/10">
+      <div
+        class="flex items-start justify-between gap-4 p-4 border-b border-border dark:border-white/10"
+      >
         <div class="flex min-w-0 flex-1 items-start gap-3">
           <div
             class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
@@ -339,8 +349,12 @@ onUnmounted(() => {
             <Package class="size-4" />
           </div>
           <div class="min-w-0 flex-1">
-            <span class="text-sm font-medium text-foreground">{{ t('settings.general.toolchain.openclaw.name') }}</span>
-            <p class="text-xs text-muted-foreground truncate">{{ t('settings.general.toolchain.openclaw.description') }}</p>
+            <span class="text-sm font-medium text-foreground">{{
+              t('settings.general.toolchain.openclaw.name')
+            }}</span>
+            <p class="text-xs text-muted-foreground truncate">
+              {{ t('settings.general.toolchain.openclaw.description') }}
+            </p>
             <p
               v-if="openclawStatus?.runtime_path"
               class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
@@ -354,7 +368,8 @@ onUnmounted(() => {
               class="mt-0.5 text-xs text-muted-foreground/60"
               :title="openclawStatus.installed_version"
             >
-              {{ t('settings.general.toolchain.testInstall.version') }}: {{ openclawStatus.installed_version }}
+              {{ t('settings.general.toolchain.testInstall.version') }}:
+              {{ openclawStatus.installed_version }}
             </p>
 
             <!-- Download Progress -->
@@ -363,8 +378,12 @@ onUnmounted(() => {
               class="mt-2 flex flex-col gap-1"
             >
               <div class="flex items-center justify-between text-xs">
-                <span class="text-muted-foreground">{{ downloadProgress['openclaw'].percent.toFixed(1) }}%</span>
-                <span class="text-muted-foreground">{{ formatSpeed(downloadProgress['openclaw'].speed) }}</span>
+                <span class="text-muted-foreground"
+                  >{{ downloadProgress['openclaw'].percent.toFixed(1) }}%</span
+                >
+                <span class="text-muted-foreground">{{
+                  formatSpeed(downloadProgress['openclaw'].speed)
+                }}</span>
               </div>
               <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
@@ -373,8 +392,13 @@ onUnmounted(() => {
                 />
               </div>
               <div class="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{{ formatFileSize(downloadProgress['openclaw'].downloaded) }} / {{ formatFileSize(downloadProgress['openclaw'].totalSize) }}</span>
-                <span v-if="downloadProgress['openclaw'].remaining > 0">{{ formatRemaining(downloadProgress['openclaw'].remaining) }}</span>
+                <span
+                  >{{ formatFileSize(downloadProgress['openclaw'].downloaded) }} /
+                  {{ formatFileSize(downloadProgress['openclaw'].totalSize) }}</span
+                >
+                <span v-if="downloadProgress['openclaw'].remaining > 0">{{
+                  formatRemaining(downloadProgress['openclaw'].remaining)
+                }}</span>
               </div>
             </div>
           </div>
@@ -391,17 +415,26 @@ onUnmounted(() => {
           </span>
 
           <!-- Installing state -->
-          <span v-else-if="openclawStatus?.installing" class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+          <span
+            v-else-if="openclawStatus?.installing"
+            class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
+          >
             <Loader2 class="size-3 animate-spin" />
             {{ t('settings.general.toolchain.installing') }}
           </span>
 
           <!-- Install / Update button -->
           <template v-else>
-            <span v-if="openclawInstallError" class="text-xs text-destructive">{{ t('settings.general.toolchain.installFailed') }}</span>
+            <span v-if="openclawInstallError" class="text-xs text-destructive">{{
+              t('settings.general.toolchain.installFailed')
+            }}</span>
             <Button size="sm" variant="outline" @click="handleInstallOpenClaw">
               <Download class="size-3.5" />
-              {{ openclawStatus?.installed ? t('settings.general.toolchain.install') : t('settings.general.toolchain.install') }}
+              {{
+                openclawStatus?.installed
+                  ? t('settings.general.toolchain.install')
+                  : t('settings.general.toolchain.install')
+              }}
             </Button>
           </template>
         </div>

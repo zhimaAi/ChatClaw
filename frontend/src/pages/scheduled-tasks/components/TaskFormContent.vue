@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { onClickOutside, useEventListener } from '@vueuse/core'
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3 } from 'lucide-vue-next'
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+} from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { Badge } from '@/components/ui/badge'
 import CustomScheduleBuilder from '@/components/schedule/CustomScheduleBuilder.vue'
@@ -54,9 +61,7 @@ const scheduleTypeOptions = [
   { value: 'cron', labelKey: 'scheduledTasks.dialog.scheduleType.cron' },
 ] as const
 
-const calendarWeekdayLabels = computed(() =>
-  WEEKDAY_OPTIONS.map((item) => t(item.shortLabelKey))
-)
+const calendarWeekdayLabels = computed(() => WEEKDAY_OPTIONS.map((item) => t(item.shortLabelKey)))
 
 type CalendarDay = {
   key: string
@@ -87,7 +92,8 @@ function parseDateKey(value: string) {
   const day = Number(match[3])
   if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null
   const date = createSafeDate(year, month - 1, day)
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
+    return null
   return date
 }
 
@@ -100,11 +106,19 @@ function formatCalendarTitle(date: Date) {
 
 function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): CalendarDay[] {
   const monthStart = startOfExpirationMonth(monthAnchor)
-  const gridStart = createSafeDate(monthStart.getFullYear(), monthStart.getMonth(), 1 - monthStart.getDay())
+  const gridStart = createSafeDate(
+    monthStart.getFullYear(),
+    monthStart.getMonth(),
+    1 - monthStart.getDay()
+  )
   const todayKey = formatDateKey(new Date())
 
   return Array.from({ length: 42 }, (_, index) => {
-    const current = createSafeDate(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index)
+    const current = createSafeDate(
+      gridStart.getFullYear(),
+      gridStart.getMonth(),
+      gridStart.getDate() + index
+    )
     const isoDate = formatDateKey(current)
     return {
       key: isoDate,
@@ -141,7 +155,9 @@ const expirationDisplayValue = computed(() => {
   return `${year} / ${month} / ${day}`
 })
 
-const expirationYearOptions = computed(() => buildExpirationYearOptions(visibleExpirationMonth.value))
+const expirationYearOptions = computed(() =>
+  buildExpirationYearOptions(visibleExpirationMonth.value)
+)
 const visibleExpirationYear = computed(() => visibleExpirationMonth.value.getFullYear())
 const visibleExpirationMonthValue = computed(() => visibleExpirationMonth.value.getMonth() + 1)
 const expirationCalendarWeeks = computed(() => {
@@ -276,7 +292,8 @@ const selectedNotificationChannelValue = computed(() =>
 
 const notificationChannelTriggerLabel = computed(() => {
   if (!props.form.notificationPlatform) return t('scheduledTasks.notification.selectTypeFirst')
-  if (!selectedNotificationChannels.value.length) return t('scheduledTasks.notification.selectChannel')
+  if (!selectedNotificationChannels.value.length)
+    return t('scheduledTasks.notification.selectChannel')
   return ''
 })
 
@@ -512,7 +529,9 @@ useEventListener(window, 'keydown', (event) => {
                     <select
                       :value="visibleExpirationYear"
                       class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                      @change="handleExpirationYearChange(($event.target as HTMLSelectElement).value)"
+                      @change="
+                        handleExpirationYearChange(($event.target as HTMLSelectElement).value)
+                      "
                     >
                       <option v-for="year in expirationYearOptions" :key="year" :value="year">
                         {{ t('scheduledTasks.form.yearOption', { year }) }}
@@ -526,13 +545,11 @@ useEventListener(window, 'keydown', (event) => {
                     <select
                       :value="visibleExpirationMonthValue"
                       class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                      @change="handleExpirationMonthChange(($event.target as HTMLSelectElement).value)"
+                      @change="
+                        handleExpirationMonthChange(($event.target as HTMLSelectElement).value)
+                      "
                     >
-                      <option
-                        v-for="month in expirationMonthOptions"
-                        :key="month"
-                        :value="month"
-                      >
+                      <option v-for="month in expirationMonthOptions" :key="month" :value="month">
                         {{ t('scheduledTasks.form.monthOption', { month }) }}
                       </option>
                     </select>
@@ -574,7 +591,7 @@ useEventListener(window, 'keydown', (event) => {
                             ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
                             : day.inCurrentMonth
                               ? 'border-transparent bg-white text-[#334155] hover:border-[#dbe3ec] hover:bg-[#f8fafc]'
-                              : 'border-transparent bg-transparent text-[#c0cad6] hover:bg-[#f8fafc]',
+                              : 'border-transparent bg-transparent text-[#c0cad6] hover:bg-[#f8fafc]'
                       )
                     "
                     @click="selectExpirationDate(day.isoDate)"
@@ -585,7 +602,9 @@ useEventListener(window, 'keydown', (event) => {
               </div>
             </div>
 
-            <div class="flex items-center justify-between border-t border-[#e5eef8] bg-white/80 px-4 py-3">
+            <div
+              class="flex items-center justify-between border-t border-[#e5eef8] bg-white/80 px-4 py-3"
+            >
               <button
                 type="button"
                 class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#2563eb] transition-colors hover:bg-[#eff6ff]"

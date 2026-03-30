@@ -280,10 +280,7 @@ async function openGuide() {
           <p class="mt-3 max-w-sm text-center text-xs text-muted-foreground">
             {{ t('channels.wecomAdd.line3') }}
           </p>
-          <p
-            v-if="registering"
-            class="mt-2 flex items-center gap-2 text-sm text-muted-foreground"
-          >
+          <p v-if="registering" class="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
             <LoaderCircle class="size-4 animate-spin text-muted-foreground" />
             {{ t('channels.wecomAdd.registering') }}
           </p>

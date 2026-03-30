@@ -79,7 +79,7 @@ function buildTimeZoneDate(
 ) {
   const normalizedTimezone = normalizeScheduledTaskTimezone(timezone)
   const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second)
-  let offset = getTimeZoneOffsetMilliseconds(new Date(utcGuess), normalizedTimezone)
+  const offset = getTimeZoneOffsetMilliseconds(new Date(utcGuess), normalizedTimezone)
   let timestamp = utcGuess - offset
   const adjustedOffset = getTimeZoneOffsetMilliseconds(new Date(timestamp), normalizedTimezone)
   if (adjustedOffset !== offset) {

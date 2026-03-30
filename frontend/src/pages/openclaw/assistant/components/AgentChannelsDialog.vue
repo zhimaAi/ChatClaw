@@ -294,8 +294,8 @@ async function handleCreateChannel() {
     })
 
     const platformId = selectedPlatformMeta.value.id
-    if (platformId === 'feishu' || platformId === 'dingtalk') {
-      await OpenClawChannelService.CreateChannel(
+    if (platformId === 'feishu' || platformId === 'dingtalk' || platformId === 'qq') {
+      const channel = await OpenClawChannelService.CreateChannel(
         new CreateChannelInput({
           platform: platformId,
           name: inlineFormName.value.trim(),
@@ -304,6 +304,9 @@ async function handleCreateChannel() {
           agent_id: props.agent.id,
         })
       )
+      if (platformId === 'qq' && channel) {
+        await OpenClawChannelService.ConnectChannel(channel.id)
+      }
     } else {
       const channel = await ChannelService.CreateChannel({
         platform: platformId,
@@ -425,7 +428,10 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    if (selectedPlatformMeta.value.id === 'feishu' || selectedPlatformMeta.value.id === 'dingtalk') {
+    if (
+      selectedPlatformMeta.value.id === 'feishu' ||
+      selectedPlatformMeta.value.id === 'dingtalk'
+    ) {
       await OpenClawChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     } else {
       await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)

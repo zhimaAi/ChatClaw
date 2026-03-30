@@ -79,141 +79,146 @@ const cardClass = (interactive: boolean) =>
         </p>
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2">
-        <!-- Smart sidebar -->
-        <div
-          role="button"
-          tabindex="0"
-          :class="cardClass(appStore.isGUIMode)"
-          @click="openSnapSettings"
-          @keydown.enter="openSnapSettings"
-        >
-          <div class="flex gap-3">
-            <div
-              class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400"
-            >
-              <PanelLeft class="size-6" stroke-width="1.75" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-foreground">
-                {{ t('toolsPage.smartSidebar.title') }}
+          <!-- Smart sidebar -->
+          <div
+            role="button"
+            tabindex="0"
+            :class="cardClass(appStore.isGUIMode)"
+            @click="openSnapSettings"
+            @keydown.enter="openSnapSettings"
+          >
+            <div class="flex gap-3">
+              <div
+                class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400"
+              >
+                <PanelLeft class="size-6" stroke-width="1.75" />
               </div>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {{ t('toolsPage.smartSidebar.description') }}
-              </p>
-            </div>
-          </div>
-          <div class="mt-4 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="gap-1.5"
-              :disabled="!appStore.isGUIMode"
-              @click.stop="openSnapSettings"
-            >
-              <Settings2 class="size-4" stroke-width="1.75" />
-              {{ t('nav.settings') }}
-            </Button>
-          </div>
-        </div>
-
-        <!-- Selection search -->
-        <div
-          role="button"
-          tabindex="0"
-          :class="cardClass(appStore.isGUIMode)"
-          @click="openToolsSettings"
-          @keydown.enter="openToolsSettings"
-        >
-          <div class="flex gap-3">
-            <div
-              class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-            >
-              <Search class="size-6" stroke-width="1.75" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-foreground">
-                {{ t('toolsPage.selectionSearch.title') }}
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-foreground">
+                  {{ t('toolsPage.smartSidebar.title') }}
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  {{ t('toolsPage.smartSidebar.description') }}
+                </p>
               </div>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {{ t('toolsPage.selectionSearch.description') }}
-              </p>
             </div>
-          </div>
-          <div class="mt-4 flex justify-end">
-            <div @click.stop>
-              <Switch
+            <div class="mt-4 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="gap-1.5"
                 :disabled="!appStore.isGUIMode"
-                :model-value="enableSelectionSearch"
-                @update:model-value="toolsGuiStore.setSelectionSearch"
-              />
+                @click.stop="openSnapSettings"
+              >
+                <Settings2 class="size-4" stroke-width="1.75" />
+                {{ t('nav.settings') }}
+              </Button>
             </div>
           </div>
-        </div>
 
-        <!-- Floating icon -->
-        <div
-          role="button"
-          tabindex="0"
-          :class="cardClass(appStore.isGUIMode)"
-          @click="openToolsSettings"
-          @keydown.enter="openToolsSettings"
-        >
-          <div class="flex gap-3">
-            <div
-              class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400"
-            >
-              <Send class="size-6" stroke-width="1.75" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-foreground">
-                {{ t('toolsPage.floatingIcon.title') }}
+          <!-- Selection search -->
+          <div
+            role="button"
+            tabindex="0"
+            :class="cardClass(appStore.isGUIMode)"
+            @click="openToolsSettings"
+            @keydown.enter="openToolsSettings"
+          >
+            <div class="flex gap-3">
+              <div
+                class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              >
+                <Search class="size-6" stroke-width="1.75" />
               </div>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {{ t('toolsPage.floatingIcon.description') }}
-              </p>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-foreground">
+                  {{ t('toolsPage.selectionSearch.title') }}
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  {{ t('toolsPage.selectionSearch.description') }}
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <div @click.stop>
+                <Switch
+                  :disabled="!appStore.isGUIMode"
+                  :model-value="enableSelectionSearch"
+                  @update:model-value="toolsGuiStore.setSelectionSearch"
+                />
+              </div>
             </div>
           </div>
-          <div class="mt-4 flex justify-end">
-            <div @click.stop @click.capture="toolsGuiStore.handleFloatingWindowClickCapture">
-              <Switch v-model="showFloatingWindow" :disabled="!appStore.isGUIMode" />
-            </div>
-          </div>
-        </div>
 
-        <!-- Multiask -->
-        <div
-          role="button"
-          tabindex="0"
-          :class="cardClass(true)"
-          @click="goMultiask"
-          @keydown.enter="goMultiask"
-        >
-          <div class="flex gap-3">
-            <div
-              class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400"
-            >
-              <MessageCircle class="size-6" stroke-width="1.75" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-foreground">
-                {{ t('toolsPage.multiask.title') }}
+          <!-- Floating icon -->
+          <div
+            role="button"
+            tabindex="0"
+            :class="cardClass(appStore.isGUIMode)"
+            @click="openToolsSettings"
+            @keydown.enter="openToolsSettings"
+          >
+            <div class="flex gap-3">
+              <div
+                class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400"
+              >
+                <Send class="size-6" stroke-width="1.75" />
               </div>
-              <p class="mt-1 text-sm text-muted-foreground">
-                {{ t('toolsPage.multiask.description') }}
-              </p>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-foreground">
+                  {{ t('toolsPage.floatingIcon.title') }}
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  {{ t('toolsPage.floatingIcon.description') }}
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <div @click.stop @click.capture="toolsGuiStore.handleFloatingWindowClickCapture">
+                <Switch v-model="showFloatingWindow" :disabled="!appStore.isGUIMode" />
+              </div>
             </div>
           </div>
-          <div class="mt-4 flex justify-end">
-            <Button type="button" variant="outline" size="sm" @click.stop="toggleMultiaskInSidebar">
-              {{
-                appStore.showMultiaskInNav
-                  ? t('toolsPage.removeFromMenuBar')
-                  : t('toolsPage.addToMenuBar')
-              }}
-            </Button>
+
+          <!-- Multiask -->
+          <div
+            role="button"
+            tabindex="0"
+            :class="cardClass(true)"
+            @click="goMultiask"
+            @keydown.enter="goMultiask"
+          >
+            <div class="flex gap-3">
+              <div
+                class="flex size-11 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400"
+              >
+                <MessageCircle class="size-6" stroke-width="1.75" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-foreground">
+                  {{ t('toolsPage.multiask.title') }}
+                </div>
+                <p class="mt-1 text-sm text-muted-foreground">
+                  {{ t('toolsPage.multiask.description') }}
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                @click.stop="toggleMultiaskInSidebar"
+              >
+                {{
+                  appStore.showMultiaskInNav
+                    ? t('toolsPage.removeFromMenuBar')
+                    : t('toolsPage.addToMenuBar')
+                }}
+              </Button>
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </div>

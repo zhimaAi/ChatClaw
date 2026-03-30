@@ -47,7 +47,7 @@ const allMenuItems: MenuItem[] = [
 const menuItems = computed(() =>
   allMenuItems.filter((item) => {
     if (item.guiOnly && !appStore.isGUIMode) return false
-    if ( appStore.currentSystem === 'openclaw' && item.id === 'mcp') {
+    if (appStore.currentSystem === 'openclaw' && item.id === 'mcp') {
       return false
     }
     return true

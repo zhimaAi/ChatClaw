@@ -32,10 +32,7 @@ import {
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import { LibraryService, type Library } from '@bindings/chatclaw/internal/services/library'
-import {
-  ChatWikiService,
-  TeamChatInput,
-} from '@bindings/chatclaw/internal/services/chatwiki'
+import { ChatWikiService, TeamChatInput } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import {
   AlertDialog,

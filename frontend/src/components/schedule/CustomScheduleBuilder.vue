@@ -124,10 +124,7 @@ function selectMonthlyDay(value: number) {
             @click="selectWeeklyDay(item.value)"
           >
             <span>{{ t(item.labelKey) }}</span>
-            <Check
-              v-if="selectedWeeklyDay === item.value"
-              class="size-4 shrink-0 text-[#2563eb]"
-            />
+            <Check v-if="selectedWeeklyDay === item.value" class="size-4 shrink-0 text-[#2563eb]" />
           </button>
         </div>
 

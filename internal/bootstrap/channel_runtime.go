@@ -198,26 +198,8 @@ func handleChannelMessage(
 		}
 	}
 
-	// Build display name: prefer resolved ChatName/SenderName;
-	// WeCom groups often omit ChatName — use the first message body as the session title.
-	// Otherwise fall back to "「<platform><type>」<excerpt>" when unavailable.
-	displayName := msg.ChatName
-	if displayName == "" && msg.IsGroup {
-		if msg.Platform == channels.PlatformWeCom {
-			if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
-				displayName = t
-			}
-		}
-		if displayName == "" {
-			displayName = channelDisplayName(msg.Platform, true, textContent)
-		}
-	}
-	if displayName == "" {
-		displayName = msg.SenderName
-	}
-	if displayName == "" {
-		displayName = channelDisplayName(msg.Platform, false, textContent)
-	}
+	// Build display name from conversation content for better conversation list readability.
+	displayName := assistantConversationDisplayName(msg, textContent)
 
 	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, legacyExternalIDs, displayName, agentType)
 	if err != nil {
@@ -225,15 +207,13 @@ func handleChannelMessage(
 		return
 	}
 
-	// Upgrade legacy placeholder titles (e.g. "group:chatid" from sync) once we have first text.
-	if msg.Platform == channels.PlatformWeCom && msg.IsGroup && strings.TrimSpace(msg.ChatName) == "" {
-		if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
-			if channels.IsWeComGroupPlaceholderConversationName(conv.Name) && t != strings.TrimSpace(conv.Name) {
-				_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
-					Name: &t,
-				})
-				conv.Name = t
-			}
+	// Upgrade legacy placeholder titles once we have the first actual message content.
+	if nextName := assistantConversationDisplayName(msg, textContent); nextName != "" {
+		if shouldReplaceAssistantConversationName(conv.Name, nextName, msg) {
+			_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
+				Name: &nextName,
+			})
+			conv.Name = nextName
 		}
 	}
 
@@ -1265,4 +1245,40 @@ func channelDisplayName(platform string, isGroup bool, content string) string {
 		excerpt = string(rs[:20]) + "…"
 	}
 	return "「" + label + suffix + "」" + excerpt
+}
+
+func assistantConversationDisplayName(msg channels.IncomingMessage, textContent string) string {
+	title := channels.ConversationTitleFromFirstMessage(textContent)
+	if title != "" {
+		if msg.IsGroup {
+			return "「群聊」" + title
+		}
+		return title
+	}
+	if msg.IsGroup {
+		return "「群聊」" + channelDisplayName(msg.Platform, true, textContent)
+	}
+	if strings.TrimSpace(msg.SenderName) != "" {
+		return strings.TrimSpace(msg.SenderName)
+	}
+	return channelDisplayName(msg.Platform, false, textContent)
+}
+
+func shouldReplaceAssistantConversationName(currentName string, nextName string, msg channels.IncomingMessage) bool {
+	currentName = strings.TrimSpace(currentName)
+	nextName = strings.TrimSpace(nextName)
+	if nextName == "" || currentName == nextName {
+		return false
+	}
+	if currentName == "" {
+		return true
+	}
+	if strings.HasPrefix(currentName, "group:") || channels.IsWeComGroupPlaceholderConversationName(currentName) {
+		return true
+	}
+	if msg.IsGroup {
+		fallback := "「群聊」" + channelDisplayName(msg.Platform, true, "")
+		return currentName == fallback
+	}
+	return false
 }

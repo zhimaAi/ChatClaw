@@ -1,8 +1,5 @@
 import { formatUtcDateTime } from '@/composables/useDateTime'
-import {
-  buildTimeZoneDateTime,
-  toDateTimeInputValue,
-} from '@/pages/scheduled-tasks/expirationDate'
+import { buildTimeZoneDateTime, toDateTimeInputValue } from '@/pages/scheduled-tasks/expirationDate'
 import {
   CreateOpenClawCronJobInput,
   UpdateOpenClawCronJobInput,
@@ -282,7 +279,9 @@ export function formatDurationMs(ms?: number | null) {
   return `${(ms / 3600000).toFixed(1)}h`
 }
 
-export function describeOpenClawSchedule(job: Pick<OpenClawCronJob, 'schedule_kind' | 'cron_expr' | 'every_ms' | 'at_iso'>) {
+export function describeOpenClawSchedule(
+  job: Pick<OpenClawCronJob, 'schedule_kind' | 'cron_expr' | 'every_ms' | 'at_iso'>
+) {
   if (job.schedule_kind === 'every' && job.every_ms) {
     return `${SCHEDULE_PREFIX_EVERY} ${formatEvery(job.every_ms)}`
   }
@@ -453,7 +452,10 @@ function parseCronExprToCustom(cronExpr?: string | null) {
   }
 
   if (dayOfMonth === '*' && dayOfWeek !== '*') {
-    const weekdays = dayOfWeek.split(',').map((item) => Number(item)).filter((item) => !Number.isNaN(item))
+    const weekdays = dayOfWeek
+      .split(',')
+      .map((item) => Number(item))
+      .filter((item) => !Number.isNaN(item))
     if (weekdays.length === 1) {
       return {
         customMode: 'weekly' as OpenClawCronCustomMode,

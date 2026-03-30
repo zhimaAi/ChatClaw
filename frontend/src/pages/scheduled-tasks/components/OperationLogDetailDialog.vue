@@ -46,7 +46,6 @@ function handleOpenAutoFocus(event: Event) {
     titleRef.value?.focus()
   })
 }
-
 </script>
 
 <template>
@@ -62,15 +61,15 @@ function handleOpenAutoFocus(event: Event) {
       </DialogHeader>
 
       <div v-if="detail && snapshot && readonlyForm" class="flex-1 overflow-y-auto px-7">
-          <TaskFormContent
-            :form="readonlyForm"
-            :agents="[]"
-            :channels="[]"
-            :readonly="true"
-            :agent-label-override="snapshot.agent_name || String(snapshot.agent_id || '')"
-            :notification-platform-label-override="readonlyNotificationPlatformLabel"
-            :notification-channel-label-overrides="readonlyChannelLabels"
-          />
+        <TaskFormContent
+          :form="readonlyForm"
+          :agents="[]"
+          :channels="[]"
+          :readonly="true"
+          :agent-label-override="snapshot.agent_name || String(snapshot.agent_id || '')"
+          :notification-platform-label-override="readonlyNotificationPlatformLabel"
+          :notification-channel-label-overrides="readonlyChannelLabels"
+        />
       </div>
     </DialogContent>
   </Dialog>

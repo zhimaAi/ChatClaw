@@ -166,7 +166,10 @@ export function taskToForm(task: ScheduledTask): ScheduledTaskFormState {
   return form
 }
 
-export function taskToCopyForm(task: ScheduledTask, copySuffix: string = TASK_COPY_NAME_SUFFIX): ScheduledTaskFormState {
+export function taskToCopyForm(
+  task: ScheduledTask,
+  copySuffix: string = TASK_COPY_NAME_SUFFIX
+): ScheduledTaskFormState {
   const form = taskToForm(task)
 
   // A copied task must be created as a brand-new record instead of overwriting the source task.
