@@ -16,9 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  OpenClawChannelService,
-} from '@bindings/chatclaw/internal/services/openclaw/channels'
+import { OpenClawChannelService } from '@bindings/chatclaw/internal/services/openclaw/channels'
 import { UpdateChannelInput } from '@bindings/chatclaw/internal/services/channels'
 import type { Channel, PlatformMeta } from '@bindings/chatclaw/internal/services/channels'
 import { getPlatformIcon } from '@/pages/common/channelUtils'
@@ -123,7 +121,9 @@ const appSecretLabelKey = computed(() =>
   isWeComPlatform.value ? 'channels.config.wecomSecret' : 'channels.config.appSecret'
 )
 const appIdPlaceholderKey = computed(() =>
-  isWeComPlatform.value ? 'channels.config.wecomAppIdPlaceholder' : 'channels.config.appIdPlaceholder'
+  isWeComPlatform.value
+    ? 'channels.config.wecomAppIdPlaceholder'
+    : 'channels.config.appIdPlaceholder'
 )
 const appSecretPlaceholderKey = computed(() =>
   isWeComPlatform.value
@@ -156,9 +156,7 @@ const handlePickIcon = async () => {
       ],
     })
     if (!path) return
-    const { OpenClawAgentsService } = await import(
-      '@bindings/chatclaw/internal/openclaw/agents'
-    )
+    const { OpenClawAgentsService } = await import('@bindings/chatclaw/internal/openclaw/agents')
     avatar.value = await OpenClawAgentsService.ReadIconFile(path)
   } catch (error) {
     if (String(error).includes('cancelled by user')) return
@@ -225,9 +223,8 @@ async function handleSave() {
           variant: 'default',
           duration: 6000,
         })
-      } else {
-        toast.success(t('channels.config.success'))
       }
+      // Success / provisioning toast is shown by the parent (OpenClawChannelsPage / AgentChannelsDialog).
     }
 
     open.value = false
@@ -330,12 +327,7 @@ async function handleOpenExternalLink(url: string) {
             <span class="text-destructive" aria-hidden="true">*</span>
             {{ t(appIdLabelKey) }}
           </Label>
-          <Input
-            id="app-id"
-            v-model="appId"
-            :placeholder="t(appIdPlaceholderKey)"
-            maxlength="60"
-          />
+          <Input id="app-id" v-model="appId" :placeholder="t(appIdPlaceholderKey)" maxlength="60" />
         </div>
         <div class="mt-4 space-y-1">
           <Label

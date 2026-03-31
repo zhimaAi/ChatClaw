@@ -34,7 +34,9 @@ const initialAgentId = computed(() => {
 })
 const hasValidConversationId = computed(() => Number.isFinite(initialConversationId.value))
 const iframeTabId = computed(() =>
-  hasValidConversationId.value ? `history-run-${initialConversationId.value}` : 'history-run-invalid'
+  hasValidConversationId.value
+    ? `history-run-${initialConversationId.value}`
+    : 'history-run-invalid'
 )
 const chatStore = useChatStore()
 let pendingReloadTimer: ReturnType<typeof setTimeout> | null = null

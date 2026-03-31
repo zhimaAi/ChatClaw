@@ -25,6 +25,24 @@ func NormalizeChannelConversationTargetID(targetID string) string {
 	return strings.ToLower(strings.TrimSpace(targetID))
 }
 
+// NormalizeQQChannelConversationTargetID strips QQ adapter chat id prefixes ("user:", "group:") so
+// keys align with OpenClaw qqbot plugin session targets (bare id after scope in session keys).
+func NormalizeQQChannelConversationTargetID(targetID string) string {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return ""
+	}
+	lower := strings.ToLower(targetID)
+	switch {
+	case strings.HasPrefix(lower, "user:"):
+		return NormalizeChannelConversationTargetID(targetID[len("user:"):])
+	case strings.HasPrefix(lower, "group:"):
+		return NormalizeChannelConversationTargetID(targetID[len("group:"):])
+	default:
+		return NormalizeChannelConversationTargetID(targetID)
+	}
+}
+
 func normalizeChannelConversationTargetID(targetID string) string {
 	return NormalizeChannelConversationTargetID(targetID)
 }

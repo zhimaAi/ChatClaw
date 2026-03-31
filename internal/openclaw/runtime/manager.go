@@ -794,16 +794,7 @@ func (m *Manager) dispatchEvent(ev GatewayEventFrame) {
 	for _, fn := range m.eventListeners {
 		listeners = append(listeners, fn)
 	}
-	listenerCount := len(m.eventListeners)
 	m.eventListenersMu.RUnlock()
-
-	if ev.Event != "tick" && ev.Event != "health" {
-		fmt.Printf("[openclaw-gateway] event received: %s (listeners=%d, payloadLen=%d)\n",
-			ev.Event, listenerCount, len(ev.Payload))
-		if ev.Event == "chat" || ev.Event == "agent" {
-			fmt.Printf("[openclaw-gateway] payload: %s\n", string(ev.Payload))
-		}
-	}
 
 	for _, fn := range listeners {
 		fn(ev.Event, ev.Payload)

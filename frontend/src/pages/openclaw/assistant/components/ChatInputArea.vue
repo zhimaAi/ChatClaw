@@ -36,12 +36,12 @@ import {
   SelectItem as SelectItemRaw,
   SelectItemIndicator,
   SelectItemText,
-  SelectSeparator,
 } from 'reka-ui'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import IconKnowledge from '@/assets/icons/knowledge-icon.svg'
 import IconUpload from '@/assets/icons/upload-icon.svg'
+import IconClean from '@/assets/icons/clean-icon.svg'
 import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import ChatModeSelector from './ChatModeSelector.vue'
 import {
@@ -227,6 +227,15 @@ const visibleTeamLibraries = computed(() => selectedTeamLibraries.value.slice(0,
 const teamOverflowCount = computed(() =>
   Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
 )
+
+const selectedKnowledgeCount = computed(
+  () => props.selectedLibraryIds.length + (props.assistantSelectedTeamLibraryIds?.length ?? 0)
+)
+const knowledgeLibraryTab = ref<'personal' | 'team'>('personal')
+/** OpenClaw: team knowledge tab is disabled until the feature ships; always open on personal. */
+const resetKnowledgeLibraryTab = () => {
+  knowledgeLibraryTab.value = 'personal'
+}
 
 // Control knowledge select dropdown open state (so "更多" 菜单可以复用同一套选择逻辑)
 const knowledgeSelectOpen = ref(false)
@@ -915,142 +924,177 @@ onUnmounted(() => {
               @change="handleDocFilesSelected"
             />
 
-            <!-- Knowledge base select: same slot for personal (multi-select) and team (single from current category); position unchanged -->
-            <SelectRoot
-              v-if="!isTeamMode && !selectedTeamLibrary"
-              :model-value="selectedLibraryIds"
-              :open="knowledgeSelectOpen"
-              multiple
-              @update:model-value="
-                (v: any) => {
-                  emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v])
-                  handleLibrarySelectionChange()
-                }
-              "
-              @update:open="
-                (open: boolean) => {
-                  knowledgeSelectOpen = open
-                  open && emit('loadLibraries')
-                }
-              "
-            >
-              <SelectTriggerRaw
-                as-child
-                :title="
-                  assistantSelectedTeamLibraryIds && assistantSelectedTeamLibraryIds.length > 0
-                    ? assistantSelectedTeamLibraryIds.length === 1
-                      ? (assistantTeamLibraries.find(
-                          (l) => l.id === assistantSelectedTeamLibraryIds[0]
-                        )?.name ?? '')
-                      : t('assistant.chat.selectedCount', {
-                          count: assistantSelectedTeamLibraryIds.length,
-                        })
-                    : selectedLibraryIds.length > 0
-                      ? t('assistant.chat.selectedCount', { count: selectedLibraryIds.length })
-                      : t('assistant.chat.selectKnowledge')
-                "
-              >
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  :class="
-                    cn(
-                      'size-8 rounded-full border border-transparent bg-muted text-muted-foreground shadow-none',
-                      (assistantSelectedTeamLibraryIds &&
-                        assistantSelectedTeamLibraryIds.length > 0) ||
-                        selectedLibraryIds.length > 0
-                        ? 'text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95'
-                        : 'hover:bg-muted/80 hover:text-foreground active:bg-muted/90 active:scale-95',
-                      useCompactToolbar &&
-                        'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
-                    )
-                  "
-                >
-                  <IconKnowledge class="size-4 pointer-events-none" />
-                </Button>
-              </SelectTriggerRaw>
-              <SelectPortal>
-                <SelectContentRaw
-                  class="z-50 max-h-[300px] min-w-[200px] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-                  position="popper"
-                  :side-offset="5"
-                >
-                  <SelectViewport>
-                    <!-- Clear selection option - use a div with click handler since SelectItem would add it to selection -->
-                    <div
-                      class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground"
-                      @click.stop="handleClearLibrarySelection"
-                    >
-                      {{ t('assistant.chat.clearSelected') }}
-                    </div>
-                    <SelectSeparator
-                      v-if="
-                        libraries.length > 0 ||
-                        (assistantTeamLibraries && assistantTeamLibraries.length > 0)
+            <!-- Knowledge base select: icon-only like upload file/image; tooltip shows "选择知识库" -->
+            <TooltipProvider v-if="!isTeamMode && !selectedTeamLibrary">
+              <Tooltip>
+                <TooltipTrigger as-child>
+                  <span class="inline-flex">
+                    <SelectRoot
+                      :model-value="selectedLibraryIds"
+                      :open="knowledgeSelectOpen"
+                      multiple
+                      @update:model-value="
+                        (v: any) => {
+                          emit('update:selectedLibraryIds', Array.isArray(v) ? v : [v])
+                          handleLibrarySelectionChange()
+                        }
                       "
-                      class="mx-1 my-1 h-px bg-muted"
-                    />
-                    <!-- Personal libraries (multi-select) -->
-                    <template v-if="libraries.length > 0">
-                      <div
-                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
-                      >
-                        {{ t('assistant.chat.personalKnowledgeSection') }}
-                      </div>
-                      <SelectItemRaw
-                        v-for="lib in libraries"
-                        :key="lib.id"
-                        :value="Number(lib.id)"
-                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
-                      >
-                        <SelectItemIndicator
-                          class="absolute left-2 flex size-4 items-center justify-center"
-                        >
-                          <Check class="size-4 text-primary" />
-                        </SelectItemIndicator>
-                        <SelectItemText>{{ lib.name }}</SelectItemText>
-                      </SelectItemRaw>
-                    </template>
-                    <template
-                      v-else-if="!(assistantTeamLibraries && assistantTeamLibraries.length > 0)"
+                      @update:open="
+                        (open: boolean) => {
+                          knowledgeSelectOpen = open
+                          if (open) {
+                            resetKnowledgeLibraryTab()
+                            emit('loadLibraries')
+                          }
+                        }
+                      "
                     >
-                      <div class="px-2 py-1.5 text-sm text-muted-foreground">
-                        {{ t('assistant.chat.noKnowledge') }}
-                      </div>
-                    </template>
-                    <!-- ChatWiki team libraries: multi-select like personal; recall id = comma-separated -->
-                    <template v-if="assistantTeamLibraries && assistantTeamLibraries.length > 0">
-                      <SelectSeparator
-                        v-if="libraries.length > 0"
-                        class="mx-1 my-1 h-px bg-muted"
-                      />
-                      <div
-                        class="px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"
-                      >
-                        {{ t('assistant.chat.chatwikiSection') }}
-                      </div>
-                      <div
-                        v-for="lib in assistantTeamLibraries"
-                        :key="`team-${lib.id}`"
-                        class="relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground"
-                        @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
-                      >
-                        <span
-                          v-if="
-                            assistantSelectedTeamLibraryIds &&
-                            assistantSelectedTeamLibraryIds.includes(lib.id)
+                      <SelectTriggerRaw as-child>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          :class="
+                            cn(
+                              'relative size-8 rounded-full border border-transparent bg-muted shadow-none',
+                              (assistantSelectedTeamLibraryIds &&
+                                assistantSelectedTeamLibraryIds.length > 0) ||
+                                selectedLibraryIds.length > 0
+                                ? 'text-foreground hover:bg-muted/85 active:bg-muted/90 active:scale-95'
+                                : 'text-muted-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95',
+                              useCompactToolbar &&
+                                'w-0 p-0 border-none bg-transparent shadow-none overflow-hidden'
+                            )
                           "
-                          class="absolute left-2 flex size-4 items-center justify-center"
                         >
-                          <Check class="size-4 text-primary" />
-                        </span>
-                        <span class="pl-0">{{ lib.name }}</span>
-                      </div>
-                    </template>
-                  </SelectViewport>
-                </SelectContentRaw>
-              </SelectPortal>
-            </SelectRoot>
+                          <IconKnowledge class="size-4 shrink-0 pointer-events-none" />
+                          <span
+                            v-if="selectedKnowledgeCount > 0"
+                            class="pointer-events-none absolute -top-1 -right-1 inline-flex min-w-4 items-center justify-center rounded-full border border-border bg-background px-1 text-[10px] leading-4 text-foreground/80"
+                          >
+                            {{ selectedKnowledgeCount }}
+                          </span>
+                        </Button>
+                      </SelectTriggerRaw>
+                      <SelectPortal>
+                        <SelectContentRaw
+                          class="z-50 w-[300px] overflow-hidden rounded-[6px] border border-border bg-popover p-1.5 text-popover-foreground shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)]"
+                          position="popper"
+                          :side-offset="5"
+                        >
+                          <div class="mb-1 flex items-center justify-between gap-1 px-0.5">
+                            <div class="flex items-center gap-0.5 rounded-[6px] bg-muted/70 p-0.5">
+                              <button
+                                class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
+                                :class="
+                                  knowledgeLibraryTab === 'personal'
+                                    ? 'bg-foreground text-background'
+                                    : 'text-foreground hover:bg-background/70'
+                                "
+                                @click.stop="knowledgeLibraryTab = 'personal'"
+                              >
+                                {{ t('knowledge.tabs.personal') }}
+                              </button>
+                              <Tooltip>
+                                <TooltipTrigger as-child>
+                                  <span class="inline-flex cursor-not-allowed rounded-[6px]">
+                                    <button
+                                      type="button"
+                                      disabled
+                                      class="h-8 cursor-not-allowed rounded-[6px] px-3 text-sm font-medium text-muted-foreground opacity-60"
+                                      @click.stop.prevent
+                                    >
+                                      {{ t('knowledge.tabs.team') }}
+                                    </button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{{ t('channels.comingSoon') }}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                            <button
+                              class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              :title="t('assistant.chat.clearSelected')"
+                              @click.stop="handleClearLibrarySelection"
+                            >
+                              <IconClean class="size-4" />
+                            </button>
+                          </div>
+                          <SelectViewport
+                            class="max-h-[260px] space-y-0.5 overflow-y-auto rounded-[4px]"
+                          >
+                            <!-- Personal libraries (multi-select) -->
+                            <template v-if="knowledgeLibraryTab === 'personal'">
+                              <template v-if="libraries.length > 0">
+                                <SelectItemRaw
+                                  v-for="lib in libraries"
+                                  :key="lib.id"
+                                  :value="Number(lib.id)"
+                                  class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors data-highlighted:bg-muted data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
+                                >
+                                  <span
+                                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
+                                  >
+                                    <IconKnowledge class="size-4" />
+                                  </span>
+                                  <SelectItemText class="flex-1 truncate">{{
+                                    lib.name
+                                  }}</SelectItemText>
+                                  <SelectItemIndicator
+                                    class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
+                                  >
+                                    <Check class="size-4" />
+                                  </SelectItemIndicator>
+                                </SelectItemRaw>
+                              </template>
+                              <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
+                                {{ t('assistant.chat.noKnowledge') }}
+                              </div>
+                            </template>
+
+                            <!-- Team libraries (multi-select) -->
+                            <template
+                              v-else-if="
+                                assistantTeamLibraries && assistantTeamLibraries.length > 0
+                              "
+                            >
+                              <div
+                                v-for="lib in assistantTeamLibraries"
+                                :key="`team-${lib.id}`"
+                                class="relative flex h-8 cursor-pointer select-none items-center gap-2 rounded-md px-2 text-sm text-foreground outline-none transition-colors hover:bg-muted"
+                                @click.stop="() => emit('toggleAssistantTeamLibrary', lib.id)"
+                              >
+                                <span
+                                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground"
+                                >
+                                  <IconKnowledge class="size-4" />
+                                </span>
+                                <span class="flex-1 truncate">{{ lib.name }}</span>
+                                <span
+                                  v-if="
+                                    assistantSelectedTeamLibraryIds &&
+                                    assistantSelectedTeamLibraryIds.includes(lib.id)
+                                  "
+                                  class="ml-auto flex h-5 w-5 items-center justify-center text-foreground"
+                                >
+                                  <Check class="size-4" />
+                                </span>
+                              </div>
+                            </template>
+                            <div v-else class="px-2 py-1.5 text-sm text-muted-foreground">
+                              {{ t('assistant.chat.noKnowledge') }}
+                            </div>
+                          </SelectViewport>
+                        </SelectContentRaw>
+                      </SelectPortal>
+                    </SelectRoot>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{{ t('assistant.chat.selectKnowledge') }}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             <!-- Team tab: same icon position as personal, opens current category team library list.
                  Rendered whenever selectedTeamLibrary is set; disabled when list is empty so the
@@ -1178,7 +1222,7 @@ onUnmounted(() => {
                   }}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  class="gap-2"
+                  class="flex items-center justify-between gap-2"
                   @select="
                     () => {
                       knowledgeSelectOpen = true
@@ -1186,10 +1230,18 @@ onUnmounted(() => {
                     }
                   "
                 >
-                  <IconKnowledge class="size-4 text-muted-foreground" />
-                  <span class="text-xs text-foreground">{{
-                    t('assistant.chat.selectKnowledge')
-                  }}</span>
+                  <div class="flex min-w-0 items-center gap-2">
+                    <IconKnowledge class="size-4 text-muted-foreground" />
+                    <span class="truncate text-xs text-foreground">{{
+                      t('assistant.chat.selectKnowledge')
+                    }}</span>
+                  </div>
+                  <span
+                    v-if="selectedKnowledgeCount > 0"
+                    class="inline-flex min-w-4 items-center justify-center rounded-full border border-border px-1.5 text-[10px] text-muted-foreground"
+                  >
+                    {{ selectedKnowledgeCount }}
+                  </span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

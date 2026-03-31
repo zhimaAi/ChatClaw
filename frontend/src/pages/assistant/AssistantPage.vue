@@ -1375,7 +1375,8 @@ watch(activeTeamRobotId, (newId, oldId) => {
 // 当前标签页是否激活
 // For snap/embedded mode, always consider it active since it does not follow main tab visibility.
 const isTabActive = computed(
-  () => isSnapMode.value || isIsolatedIframeMode.value || navigationStore.activeTabId === props.tabId
+  () =>
+    isSnapMode.value || isIsolatedIframeMode.value || navigationStore.activeTabId === props.tabId
 )
 
 async function initializeEmbeddedConversation() {
@@ -1918,7 +1919,10 @@ onUnmounted(() => {
           </div>
 
           <!-- Agent list empty state (personal tab, no agents) -->
-          <div v-if="isAgentEmpty && !showHistoryConversationShell" class="flex h-full items-center justify-center px-8">
+          <div
+            v-if="isAgentEmpty && !showHistoryConversationShell"
+            class="flex h-full items-center justify-center px-8"
+          >
             <div class="flex flex-col items-center gap-4">
               <div class="grid size-10 place-items-center rounded-lg bg-muted">
                 <IconAssistant class="size-4 text-muted-foreground" />

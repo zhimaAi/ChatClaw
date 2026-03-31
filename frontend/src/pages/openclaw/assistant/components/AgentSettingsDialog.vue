@@ -421,6 +421,7 @@ const handleSave = async () => {
     emit('updated', updated)
     toast.success(t('assistant.toasts.updated'))
     modelChanged.value = false
+    emit('update:open', false)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.updateFailed'))
   } finally {

@@ -3,7 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import CustomScheduleBuilder from '@/components/schedule/CustomScheduleBuilder.vue'
 import { Input } from '@/components/ui/input'
@@ -110,9 +116,18 @@ const canSubmit = computed(() => {
   if (!props.form.name.trim()) return false
   if (!props.form.message.trim() && !props.form.systemEvent.trim()) return false
   if (props.form.scheduleKind === 'cron' && !props.form.cronExpr.trim()) return false
-  if (props.form.scheduleKind === 'every' && (!Number.isFinite(props.form.everyValue) || props.form.everyValue < 1)) return false
+  if (
+    props.form.scheduleKind === 'every' &&
+    (!Number.isFinite(props.form.everyValue) || props.form.everyValue < 1)
+  )
+    return false
   if (props.form.scheduleKind === 'at' && !props.form.oneTimeDate.trim()) return false
-  if (props.form.scheduleKind === 'custom' && props.form.customMode === 'weekly' && !props.form.customWeekdays.length) return false
+  if (
+    props.form.scheduleKind === 'custom' &&
+    props.form.customMode === 'weekly' &&
+    !props.form.customWeekdays.length
+  )
+    return false
   return true
 })
 
@@ -131,7 +146,10 @@ async function refreshLatestDeliveryTarget() {
 
   const requestToken = ++latestDeliveryTargetRequestToken.value
   try {
-    const latestTargetID = await OpenClawCronService.GetLatestDeliveryTarget(props.form.agentId, platform)
+    const latestTargetID = await OpenClawCronService.GetLatestDeliveryTarget(
+      props.form.agentId,
+      platform
+    )
     if (requestToken !== latestDeliveryTargetRequestToken.value) return
     props.form.deliveryTargetId = String(latestTargetID || '').trim()
   } catch {
@@ -214,17 +232,26 @@ function parseDateKey(value: string) {
   const day = Number(match[3])
   if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null
   const date = createSafeDate(year, month - 1, day)
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
+    return null
   return date
 }
 
 function buildCalendarDays(monthAnchor: Date, selectedDateKey: string): CalendarDay[] {
   const monthStart = startOfExpirationMonth(monthAnchor)
-  const gridStart = createSafeDate(monthStart.getFullYear(), monthStart.getMonth(), 1 - monthStart.getDay())
+  const gridStart = createSafeDate(
+    monthStart.getFullYear(),
+    monthStart.getMonth(),
+    1 - monthStart.getDay()
+  )
   const todayKey = formatDateKey(new Date())
 
   return Array.from({ length: 42 }, (_, index) => {
-    const current = createSafeDate(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index)
+    const current = createSafeDate(
+      gridStart.getFullYear(),
+      gridStart.getMonth(),
+      gridStart.getDate() + index
+    )
     const isoDate = formatDateKey(current)
     return {
       key: isoDate,
@@ -257,10 +284,14 @@ const oneTimeDisplayValue = computed(() => {
 })
 const systemTimezone = resolveSystemTimezone()
 const timezoneOptions = computed(() => {
-  const allValues = typeof Intl.supportedValuesOf === 'function'
-    ? Intl.supportedValuesOf('timeZone')
-    : []
-  const merged = new Set<string>([systemTimezone, ...COMMON_TIMEZONE_OPTIONS, ...allValues, props.form.timezone])
+  const allValues =
+    typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
+  const merged = new Set<string>([
+    systemTimezone,
+    ...COMMON_TIMEZONE_OPTIONS,
+    ...allValues,
+    props.form.timezone,
+  ])
   return Array.from(merged).filter(Boolean)
 })
 
@@ -337,15 +368,17 @@ watch(
   () => [props.open, props.form.agentId, props.form.channelPlatform] as const,
   ([open, agentId, platform], previousValue) => {
     const [previousOpen, previousAgentID, previousPlatform] = previousValue ?? [false, '', '']
-    if (!shouldRefreshLatestDeliveryTarget(
-      open,
-      previousOpen,
-      agentId,
-      previousAgentID,
-      platform,
-      previousPlatform,
-      props.form.deliveryTargetId
-    )) {
+    if (
+      !shouldRefreshLatestDeliveryTarget(
+        open,
+        previousOpen,
+        agentId,
+        previousAgentID,
+        platform,
+        previousPlatform,
+        props.form.deliveryTargetId
+      )
+    ) {
       return
     }
     void refreshLatestDeliveryTarget()
@@ -372,7 +405,9 @@ useEventListener(window, 'keydown', (event) => {
       :show-close-button="true"
       class="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 !max-w-[780px] shadow-lg dark:shadow-none dark:ring-1 dark:ring-white/10"
     >
-      <DialogHeader class="flex shrink-0 flex-row items-baseline gap-2 border-b border-border px-6 pb-3 pt-4">
+      <DialogHeader
+        class="flex shrink-0 flex-row items-baseline gap-2 border-b border-border px-6 pb-3 pt-4"
+      >
         <DialogTitle class="text-xl font-semibold text-[#0a0a0a] dark:text-foreground">
           {{ title }}
         </DialogTitle>
@@ -388,14 +423,22 @@ useEventListener(window, 'keydown', (event) => {
               <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
                 {{ t('openclawCron.dialog.name', '任务名称') }}
               </Label>
-              <Input v-model="form.name" :placeholder="t('openclawCron.dialog.namePlaceholder', '例如：日报总结')" class="h-10" />
+              <Input
+                v-model="form.name"
+                :placeholder="t('openclawCron.dialog.namePlaceholder', '例如：日报总结')"
+                class="h-10"
+              />
             </div>
 
             <div class="space-y-1.5">
               <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
                 {{ t('openclawCron.dialog.description', '描述') }}
               </Label>
-              <Input v-model="form.description" :placeholder="t('openclawCron.dialog.descriptionPlaceholder', '可选，用于补充说明')" class="h-10" />
+              <Input
+                v-model="form.description"
+                :placeholder="t('openclawCron.dialog.descriptionPlaceholder', '可选，用于补充说明')"
+                class="h-10"
+              />
             </div>
 
             <div class="space-y-1.5">
@@ -405,7 +448,12 @@ useEventListener(window, 'keydown', (event) => {
               <textarea
                 v-model="form.message"
                 class="min-h-[118px] w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm leading-6 text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-                :placeholder="t('openclawCron.dialog.messagePlaceholder', 'AI 应该做什么？例如：给我一份今天的新闻和天气摘要')"
+                :placeholder="
+                  t(
+                    'openclawCron.dialog.messagePlaceholder',
+                    'AI 应该做什么？例如：给我一份今天的新闻和天气摘要'
+                  )
+                "
               />
             </div>
 
@@ -418,7 +466,9 @@ useEventListener(window, 'keydown', (event) => {
                   v-model="form.agentId"
                   class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                 >
-                  <option value="">{{ t('openclawCron.dialog.useDefaultAgent', '未指定（使用默认助手）') }}</option>
+                  <option value="">
+                    {{ t('openclawCron.dialog.useDefaultAgent', '未指定（使用默认助手）') }}
+                  </option>
                   <option
                     v-for="agent in agentOptions"
                     :key="agent.openclaw_agent_id"
@@ -427,7 +477,9 @@ useEventListener(window, 'keydown', (event) => {
                     {{ agent.name }}
                   </option>
                 </select>
-                <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <ChevronDown
+                  class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                />
               </div>
             </div>
           </section>
@@ -459,7 +511,9 @@ useEventListener(window, 'keydown', (event) => {
               </button>
             </div>
 
-            <div class="rounded-lg border border-border bg-muted/20 p-4 dark:border-white/10 dark:bg-white/5">
+            <div
+              class="rounded-lg border border-border bg-muted/20 p-4 dark:border-white/10 dark:bg-white/5"
+            >
               <div v-if="form.scheduleKind === 'cron'" class="space-y-2">
                 <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
                   {{ t('openclawCron.dialog.scheduleKinds.cron', 'Cron 表达式') }}
@@ -545,7 +599,10 @@ useEventListener(window, 'keydown', (event) => {
                       </div>
                       <div class="min-w-0">
                         <p class="truncate font-medium text-[#111827]">
-                          {{ oneTimeDisplayValue || t('openclawCron.dialog.selectOneTime', '选择一次性时间') }}
+                          {{
+                            oneTimeDisplayValue ||
+                            t('openclawCron.dialog.selectOneTime', '选择一次性时间')
+                          }}
                         </p>
                       </div>
                     </div>
@@ -582,7 +639,9 @@ useEventListener(window, 'keydown', (event) => {
                             <select
                               :value="visibleOneTimeYear"
                               class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                              @change="handleOneTimeYearChange(($event.target as HTMLSelectElement).value)"
+                              @change="
+                                handleOneTimeYearChange(($event.target as HTMLSelectElement).value)
+                              "
                             >
                               <option v-for="year in oneTimeYearOptions" :key="year" :value="year">
                                 {{ year }} 年
@@ -596,9 +655,15 @@ useEventListener(window, 'keydown', (event) => {
                             <select
                               :value="visibleOneTimeMonthValue"
                               class="h-9 appearance-none rounded-full border border-[#dbe3ec] bg-white pl-4 pr-9 text-sm font-medium text-[#111827] outline-none transition-[border-color,box-shadow] focus:border-[#2563eb] focus:ring-4 focus:ring-[#dbeafe]"
-                              @change="handleOneTimeMonthChange(($event.target as HTMLSelectElement).value)"
+                              @change="
+                                handleOneTimeMonthChange(($event.target as HTMLSelectElement).value)
+                              "
                             >
-                              <option v-for="month in oneTimeMonthOptions" :key="month" :value="month">
+                              <option
+                                v-for="month in oneTimeMonthOptions"
+                                :key="month"
+                                :value="month"
+                              >
                                 {{ month }} 月
                               </option>
                             </select>
@@ -640,7 +705,7 @@ useEventListener(window, 'keydown', (event) => {
                                     ? 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
                                     : day.inCurrentMonth
                                       ? 'border-transparent bg-white text-[#334155] hover:border-[#dbe3ec] hover:bg-[#f8fafc]'
-                                      : 'border-transparent bg-transparent text-[#c0cad6] hover:bg-[#f8fafc]',
+                                      : 'border-transparent bg-transparent text-[#c0cad6] hover:bg-[#f8fafc]'
                               )
                             "
                             @click="selectOneTimeDate(day.isoDate)"
@@ -660,7 +725,11 @@ useEventListener(window, 'keydown', (event) => {
                               v-model.number="form.oneTimeHour"
                               class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                             >
-                              <option v-for="hour in ONE_TIME_HOUR_OPTIONS" :key="hour" :value="hour">
+                              <option
+                                v-for="hour in ONE_TIME_HOUR_OPTIONS"
+                                :key="hour"
+                                :value="hour"
+                              >
                                 {{ padDatePart(hour) }}
                               </option>
                             </select>
@@ -716,7 +785,9 @@ useEventListener(window, 'keydown', (event) => {
                       </div>
                     </div>
 
-                    <div class="flex items-center justify-end border-t border-[#e5eef8] bg-white/80 px-4 py-3">
+                    <div
+                      class="flex items-center justify-end border-t border-[#e5eef8] bg-white/80 px-4 py-3"
+                    >
                       <button
                         type="button"
                         class="inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium text-[#64748b] transition-colors hover:bg-[#f1f5f9]"
@@ -751,7 +822,12 @@ useEventListener(window, 'keydown', (event) => {
                       class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                     >
                       <option v-for="timezone in timezoneOptions" :key="timezone" :value="timezone">
-                        {{ timezone }}{{ timezone === systemTimezone ? ` (${t('openclawCron.dialog.systemTimezone', '系统默认')})` : '' }}
+                        {{ timezone
+                        }}{{
+                          timezone === systemTimezone
+                            ? ` (${t('openclawCron.dialog.systemTimezone', '系统默认')})`
+                            : ''
+                        }}
                       </option>
                     </select>
                     <ChevronDown
@@ -759,28 +835,42 @@ useEventListener(window, 'keydown', (event) => {
                     />
                   </div>
                 </div>
-                <div class="flex items-end justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
+                <div
+                  class="flex items-end justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                >
                   <div>
                     <div class="text-sm font-medium text-foreground">
                       {{ t('openclawCron.dialog.exact', '精确执行') }}
                     </div>
                     <div class="text-xs text-muted-foreground">
-                      {{ t('openclawCron.dialog.exactHint', '启用 OpenClaw exact 模式，尽量按设定时刻触发') }}
+                      {{
+                        t(
+                          'openclawCron.dialog.exactHint',
+                          '启用 OpenClaw exact 模式，尽量按设定时刻触发'
+                        )
+                      }}
                     </div>
                   </div>
-                  <Switch :model-value="form.exact" @update:model-value="(value) => (form.exact = !!value)" />
+                  <Switch
+                    :model-value="form.exact"
+                    @update:model-value="(value) => (form.exact = !!value)"
+                  />
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="space-y-4 rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10">
+          <section
+            class="space-y-4 rounded-lg border border-border bg-card px-4 py-4 dark:border-white/10"
+          >
             <div class="space-y-1">
               <h3 class="text-sm font-semibold text-[#0a0a0a] dark:text-foreground">
                 {{ t('openclawCron.dialog.deliveryTitle', '结果投递') }}
               </h3>
               <p class="text-sm text-muted-foreground">
-                {{ t('openclawCron.dialog.deliveryHint', '选择已配置频道的平台，并设置投递目标。') }}
+                {{
+                  t('openclawCron.dialog.deliveryHint', '选择已配置频道的平台，并设置投递目标。')
+                }}
               </p>
             </div>
 
@@ -794,16 +884,25 @@ useEventListener(window, 'keydown', (event) => {
                     v-model="form.channelPlatform"
                     class="h-10 w-full appearance-none rounded-md border border-input bg-transparent px-3 pr-10 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
                   >
-                    <option value="">{{ t('openclawCron.dialog.channelPlatformPlaceholder', '请选择已配置频道') }}</option>
+                    <option value="">
+                      {{ t('openclawCron.dialog.channelPlatformPlaceholder', '请选择已配置频道') }}
+                    </option>
                     <option
                       v-for="platform in deliveryPlatforms"
                       :key="platform.platform"
                       :value="platform.platform"
                     >
-                      {{ t(`channels.platforms.${platform.platform}`, platform.label || platform.platform) }}
+                      {{
+                        t(
+                          `channels.platforms.${platform.platform}`,
+                          platform.label || platform.platform
+                        )
+                      }}
                     </option>
                   </select>
-                  <ChevronDown class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <ChevronDown
+                    class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  />
                 </div>
               </div>
 
@@ -813,7 +912,9 @@ useEventListener(window, 'keydown', (event) => {
                 </Label>
                 <Input
                   v-model="form.deliveryTargetId"
-                  :placeholder="t('openclawCron.dialog.deliveryTargetIdPlaceholder', '请输入目标会话或用户 ID')"
+                  :placeholder="
+                    t('openclawCron.dialog.deliveryTargetIdPlaceholder', '请输入目标会话或用户 ID')
+                  "
                   class="h-10"
                 />
               </div>
@@ -824,18 +925,32 @@ useEventListener(window, 'keydown', (event) => {
                 {{ t('openclawCron.dialog.deliveryTargetHintTitle', '默认目标') }}
               </Label>
               <p class="text-xs text-muted-foreground">
-                {{ t('openclawCron.dialog.deliveryTargetFixedHint', '默认会带出该助手在当前频道类型下最近一次投递的目标 ID，可继续手动调整。') }}
+                {{
+                  t(
+                    'openclawCron.dialog.deliveryTargetFixedHint',
+                    '默认会带出该助手在当前频道类型下最近一次投递的目标 ID，可继续手动调整。'
+                  )
+                }}
               </p>
             </div>
 
-            <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
+            <label
+              class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+            >
               <div>
-                <span class="text-sm text-foreground">{{ t('openclawCron.dialog.bestEffortDeliver', '尽力投递') }}</span>
+                <span class="text-sm text-foreground">{{
+                  t('openclawCron.dialog.bestEffortDeliver', '尽力投递')
+                }}</span>
                 <div class="text-xs text-muted-foreground">
-                  {{ t('openclawCron.dialog.bestEffortDeliverHint', '投递失败时，不让整个任务失败') }}
+                  {{
+                    t('openclawCron.dialog.bestEffortDeliverHint', '投递失败时，不让整个任务失败')
+                  }}
                 </div>
               </div>
-              <Switch :model-value="form.bestEffortDeliver" @update:model-value="(value) => (form.bestEffortDeliver = !!value)" />
+              <Switch
+                :model-value="form.bestEffortDeliver"
+                @update:model-value="(value) => (form.bestEffortDeliver = !!value)"
+              />
             </label>
           </section>
 
@@ -850,7 +965,10 @@ useEventListener(window, 'keydown', (event) => {
                 {{ t('openclawCron.dialog.enableNowHint', '创建后立即开始运行此任务') }}
               </p>
             </div>
-            <Switch :model-value="form.enabled" @update:model-value="(value) => (form.enabled = !!value)" />
+            <Switch
+              :model-value="form.enabled"
+              @update:model-value="(value) => (form.enabled = !!value)"
+            />
           </section>
 
           <section
@@ -872,7 +990,9 @@ useEventListener(window, 'keydown', (event) => {
               <ChevronDown class="size-4 text-muted-foreground" />
             </button>
 
-            <div class="grid gap-4 border-t border-border px-4 py-4 md:grid-cols-2 dark:border-white/10">
+            <div
+              class="grid gap-4 border-t border-border px-4 py-4 md:grid-cols-2 dark:border-white/10"
+            >
               <div class="space-y-1.5">
                 <Label class="text-sm font-medium text-[#0a0a0a] dark:text-foreground">
                   {{ t('openclawCron.dialog.thinking', '思考强度') }}
@@ -907,7 +1027,9 @@ useEventListener(window, 'keydown', (event) => {
                 </Label>
                 <Input
                   v-model="form.sessionKey"
-                  :placeholder="t('openclawCron.dialog.sessionKeyPlaceholder', '例如：agent:main:my-session')"
+                  :placeholder="
+                    t('openclawCron.dialog.sessionKeyPlaceholder', '例如：agent:main:my-session')
+                  "
                   class="h-10"
                 />
               </div>
@@ -930,32 +1052,73 @@ useEventListener(window, 'keydown', (event) => {
                 <Input v-model.number="form.timeoutMs" type="number" min="1000" class="h-10" />
               </div>
 
-
               <div class="space-y-3 md:col-span-2">
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.announce', '发送公告') }}</span>
-                    <Switch :model-value="form.announce" @update:model-value="(value) => (form.announce = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.announce', '发送公告')
+                    }}</span>
+                    <Switch
+                      :model-value="form.announce"
+                      @update:model-value="(value) => (form.announce = !!value)"
+                    />
                   </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.expectFinal', '等待最终结果') }}</span>
-                    <Switch :model-value="form.expectFinal" @update:model-value="(value) => (form.expectFinal = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.expectFinal', '等待最终结果')
+                    }}</span>
+                    <Switch
+                      :model-value="form.expectFinal"
+                      @update:model-value="(value) => (form.expectFinal = !!value)"
+                    />
                   </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.lightContext', '轻量上下文') }}</span>
-                    <Switch :model-value="form.lightContext" @update:model-value="(value) => (form.lightContext = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.lightContext', '轻量上下文')
+                    }}</span>
+                    <Switch
+                      :model-value="form.lightContext"
+                      @update:model-value="(value) => (form.lightContext = !!value)"
+                    />
                   </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.bestEffortDeliver', '尽力投递') }}</span>
-                    <Switch :model-value="form.bestEffortDeliver" @update:model-value="(value) => (form.bestEffortDeliver = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.bestEffortDeliver', '尽力投递')
+                    }}</span>
+                    <Switch
+                      :model-value="form.bestEffortDeliver"
+                      @update:model-value="(value) => (form.bestEffortDeliver = !!value)"
+                    />
                   </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.deleteAfterRun', '运行后删除') }}</span>
-                    <Switch :model-value="form.deleteAfterRun" @update:model-value="(value) => (form.deleteAfterRun = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.deleteAfterRun', '运行后删除')
+                    }}</span>
+                    <Switch
+                      :model-value="form.deleteAfterRun"
+                      @update:model-value="(value) => (form.deleteAfterRun = !!value)"
+                    />
                   </label>
-                  <label class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10">
-                    <span class="text-sm text-foreground">{{ t('openclawCron.dialog.keepAfterRun', '运行后保留') }}</span>
-                    <Switch :model-value="form.keepAfterRun" @update:model-value="(value) => (form.keepAfterRun = !!value)" />
+                  <label
+                    class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 dark:border-white/10"
+                  >
+                    <span class="text-sm text-foreground">{{
+                      t('openclawCron.dialog.keepAfterRun', '运行后保留')
+                    }}</span>
+                    <Switch
+                      :model-value="form.keepAfterRun"
+                      @update:model-value="(value) => (form.keepAfterRun = !!value)"
+                    />
                   </label>
                 </div>
               </div>

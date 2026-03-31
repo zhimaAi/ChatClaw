@@ -89,7 +89,9 @@ async function selectRun(run: ScheduledTaskRun) {
         <div
           class="shrink-0 overflow-y-auto overflow-x-hidden rounded-lg border border-border sm:w-[248px]"
         >
-          <div v-if="loading" class="p-4 text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+          <div v-if="loading" class="p-4 text-sm text-muted-foreground">
+            {{ t('common.loading') }}
+          </div>
           <div v-else-if="runs.length === 0" class="p-4 text-sm text-muted-foreground">
             {{ t('scheduledTasks.noRuns') }}
           </div>

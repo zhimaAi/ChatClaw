@@ -29,7 +29,9 @@ const ChannelsPage = defineAsyncComponent(() => import('@/pages/channels/Channel
 const OpenClawChannelsPage = defineAsyncComponent(
   () => import('@/pages/openclaw/channels/OpenClawChannelsPage.vue')
 )
-const OpenClawPage = defineAsyncComponent(() => import('@/pages/openclaw/assistant/OpenClawPage.vue'))
+const OpenClawPage = defineAsyncComponent(
+  () => import('@/pages/openclaw/assistant/OpenClawPage.vue')
+)
 const OpenClawRuntimePage = defineAsyncComponent(
   () => import('@/pages/openclaw/OpenClawRuntimePage.vue')
 )
@@ -178,8 +180,7 @@ watch(
   () => navigationStore.tabs.length,
   (len) => {
     if (len === 0) {
-      const module: NavModule =
-        appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant'
+      const module: NavModule = appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant'
       navigationStore.navigateToModule(module, appStore.currentSystem)
     }
   },

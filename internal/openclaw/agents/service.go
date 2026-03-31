@@ -42,6 +42,9 @@ type GatewayAgentOps interface {
 	OnAgentCreated(agent OpenClawAgent)
 	OnAgentUpdated(agent OpenClawAgent)
 	OnAgentDeleted(openclawAgentID string)
+	// EnsureAgentSynced creates the agent on the OpenClaw gateway if it is missing
+	// (e.g. gateway was offline when the row was inserted).
+	EnsureAgentSynced(agent OpenClawAgent) error
 }
 
 type OpenClawAgentsService struct {
@@ -77,6 +80,15 @@ func (s *OpenClawAgentsService) getGateway() GatewayAgentOps {
 	s.gatewayMu.RLock()
 	defer s.gatewayMu.RUnlock()
 	return s.gateway
+}
+
+// EnsureAgentSyncedWithGateway provisions the agent on the running OpenClaw gateway when connected.
+func (s *OpenClawAgentsService) EnsureAgentSyncedWithGateway(agent OpenClawAgent) error {
+	gw := s.getGateway()
+	if gw == nil {
+		return nil
+	}
+	return gw.EnsureAgentSynced(agent)
 }
 
 func newOpenClawAgentModel(name, openclawAgentID, icon string) *openClawAgentModel {
