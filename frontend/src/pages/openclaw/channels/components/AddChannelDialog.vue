@@ -50,9 +50,9 @@ function getPlatformDisplayName(platformId: string, fallbackName?: string): stri
   return fallbackName || platformId
 }
 
-/** OpenClaw: Feishu, WeCom, DingTalk, and QQ are available; others show coming soon. */
+/** OpenClaw: Feishu, WeCom, DingTalk, WeChat (QR), and QQ are available; others show coming soon. */
 function isChannelPlatformSelectable(platformId: string) {
-  return ['feishu', 'wecom', 'dingtalk', 'qq'].includes(platformId)
+  return ['feishu', 'wecom', 'dingtalk', 'wechat', 'qq'].includes(platformId)
 }
 </script>
 
