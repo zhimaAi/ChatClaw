@@ -749,7 +749,9 @@ func (m *Manager) ExecNpx(ctx context.Context, args ...string) ([]byte, error) {
 	setCmdHideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return out, fmt.Errorf("npx %v: %w\n%s", args, err, string(out))
+		// Return the raw output to the caller so it can log or display it;
+		// keep the error message concise for structured logging.
+		return out, fmt.Errorf("npx %v: %w", args, err)
 	}
 	return out, nil
 }

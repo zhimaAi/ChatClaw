@@ -237,7 +237,13 @@ func (s *OpenClawChannelService) purgeWechatChannelOpenClawIntegration(m *channe
 		return err
 	}
 	nativeID := strings.TrimSpace(extractWechatAccountID(m.ExtraConfig))
-	if err := s.removeWechatCredentialFiles(nativeID); err != nil {
+	if nativeID == "" {
+		// Channel was created without an account_id (e.g. during early testing).
+		// Bindings are cleaned up by purgeWechatChannelFromOpenClawJSON; credential
+		// files cannot be identified without the native account ID so they are skipped.
+		s.app.Logger.Warn("openclaw: wechat channel has no account_id; credential files not cleaned up",
+			"channel_id", m.ID)
+	} else if err := s.removeWechatCredentialFiles(nativeID); err != nil {
 		s.app.Logger.Warn("openclaw: wechat credential file cleanup incomplete", "accountId", nativeID, "error", err)
 	}
 	if s.openclawManager != nil {

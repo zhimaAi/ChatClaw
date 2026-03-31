@@ -49,7 +49,8 @@ watch(open, (val) => {
   }
 })
 
-async function handleGenerateQRCode() {
+/** Core QR generation: fetches a new code, updates state, and kicks off polling. Returns true on success. */
+async function doGenerateQRCode(): Promise<boolean> {
   step.value = 'generating'
   try {
     const result = await OpenClawChannelService.GenerateWechatQRCode()
@@ -58,10 +59,16 @@ async function handleGenerateQRCode() {
     sessionKey.value = result.session_key
     step.value = 'qrcode'
     void startWaitingForScan(result.session_key)
+    return true
   } catch (error) {
     toast.error(getErrorMessage(error))
-    step.value = 'initial'
+    return false
   }
+}
+
+async function handleGenerateQRCode() {
+  const ok = await doGenerateQRCode()
+  if (!ok) step.value = 'initial'
 }
 
 async function startWaitingForScan(key: string) {
@@ -70,13 +77,15 @@ async function startWaitingForScan(key: string) {
   try {
     const result = await OpenClawChannelService.WaitForWechatLogin(key, '')
     if (!result) return
+    // Guard: if the user closed the dialog before scanning, discard the result.
+    if (!open.value) return
     if (result.connected) {
       const cid = wechatResultChannelId(result)
       emit('connected', cid)
       open.value = false
     }
   } catch {
-    // On error or timeout, stay on qrcode step
+    // On error or timeout, stay on qrcode step so the user can refresh.
   } finally {
     isPolling.value = false
   }
@@ -85,17 +94,9 @@ async function startWaitingForScan(key: string) {
 async function handleRefreshQRCode() {
   if (refreshing.value) return
   refreshing.value = true
-  step.value = 'generating'
   try {
-    const result = await OpenClawChannelService.GenerateWechatQRCode()
-    if (!result) throw new Error('No result returned')
-    qrcodeDataUrl.value = result.qrcode_data_url
-    sessionKey.value = result.session_key
-    step.value = 'qrcode'
-    void startWaitingForScan(result.session_key)
-  } catch (error) {
-    toast.error(getErrorMessage(error))
-    step.value = 'qrcode'
+    const ok = await doGenerateQRCode()
+    if (!ok) step.value = 'qrcode' // stay on qrcode step on refresh error
   } finally {
     refreshing.value = false
   }

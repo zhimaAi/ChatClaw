@@ -1602,7 +1602,6 @@ export default {
       configSubtitle: '通过腾讯官方 OpenClaw 插件扫码连接个人微信',
       howToConnect: '如何连接',
       step1: '通过腾讯官方 OpenClaw 插件扫码连接个人微信',
-      step2: '查看文档',
       step3: '点击生成二维码，ClawX 会在 OpenClaw 中安装并启用官方微信插件',
       step4: '使用微信扫描下方二维码，并在手机上确认连接',
       step5: '连接成功后，微信里会自动出现新的「微信 ClawBot」对话，之后可再次通过扫码流程添加更多微信账号，或重新连接已有账号',
