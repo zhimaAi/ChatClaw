@@ -1176,11 +1176,20 @@ export default {
         toolsProfile_coding: 'Coding — fs/runtime/sessions/memory',
         toolsProfile_messaging: 'Messaging — messaging/sessions',
         toolsProfile_full: 'Full — unrestricted',
+        builtinTools: 'Built-in Tools',
+        builtinToolsHint:
+          'Select OpenClaw built-in tools here. Custom or plugin tools can still be entered manually below.',
+        builtinToolsLoading: 'Loading OpenClaw built-in tools…',
+        builtinToolsUnavailable:
+          'Could not load the OpenClaw built-in tool catalog. You can still enter tool names manually.',
+        toolModeAllow: 'Allow',
+        toolModeDeny: 'Deny',
         toolsAllow: 'Allowed Tools',
         toolsAllowPlaceholder: 'e.g. browser, file_search',
         toolsDeny: 'Denied Tools',
         toolsDenyPlaceholder: 'e.g. canvas',
-        toolsHint: 'Control which tools the agent can use. Press Enter to confirm each entry',
+        toolsHint:
+          'Deny takes precedence over allow. Press Enter to confirm manual entries for custom or plugin tools.',
         heartbeat: 'Heartbeat Interval',
         heartbeat_off: 'Off',
         heartbeat_custom: 'Custom',
