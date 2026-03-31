@@ -577,26 +577,23 @@ func (s *OpenClawCronService) OnGatewayReady() {
 	s.manager.AddEventListener(globalCronTrackerListenerKey, func(event string, payload json.RawMessage) {
 		// 注释掉 Cron 网关事件自动绑定 conversations 并向助手页转发消息的入口。
 		// 当前定时任务执行结果仅用于历史记录，不再同步回 conversations。
-		_ = event
-		_ = payload
+		runID, sessionKey := extractGatewayRunContext(event, payload)
+		if runID == "" || sessionKey == "" {
+			return
+		}
+		conversationID := s.bindRunSession(runID, sessionKey)
+		if conversationID <= 0 || s.app == nil {
+			return
+		}
 
-		// runID, sessionKey := extractGatewayRunContext(event, payload)
-		// if runID == "" || sessionKey == "" {
-		// 	return
-		// }
-		// conversationID := s.bindRunSession(runID, sessionKey)
-		// if conversationID <= 0 || s.app == nil {
-		// 	return
-		// }
-		//
-		// forwardState := s.ensureCronForwardState(sessionKey, runID, conversationID)
-		// forwardedEvents := buildCronForwardEvents(conversationID, sessionKey, runID, forwardState, event, payload)
-		// for _, item := range forwardedEvents {
-		// 	s.app.Event.Emit(item.Name, item.Payload)
-		// }
-		// if forwardState.Finished {
-		// 	s.clearCronForwardState(sessionKey)
-		// }
+		forwardState := s.ensureCronForwardState(sessionKey, runID, conversationID)
+		forwardedEvents := buildCronForwardEvents(conversationID, sessionKey, runID, forwardState, event, payload)
+		for _, item := range forwardedEvents {
+			s.app.Event.Emit(item.Name, item.Payload)
+		}
+		if forwardState.Finished {
+			s.clearCronForwardState(sessionKey)
+		}
 	})
 }
 
@@ -738,15 +735,12 @@ func (s *OpenClawCronService) bindRunSession(runID string, sessionKey string) in
 		s.app.Logger.Warn("[openclaw-cron] find job by session key failed", "job_id", jobID, "run_id", runID, "error", err)
 	}
 
-	conversationID, conversationAgentID, err := s.ensureConversationForSession(jobID, job, sessionKey, runID, time.Now().UnixMilli())
+	conversationID, _, err := s.ensureConversationForSession(jobID, job, sessionKey, runID, time.Now().UnixMilli())
 	if err != nil {
 		if s.app != nil {
 			s.app.Logger.Warn("[openclaw-cron] ensure conversation from gateway event failed", "job_id", jobID, "run_id", runID, "error", err)
 		}
 		return 0
-	}
-	if conversationID > 0 {
-		s.emitConversationActivated(conversationAgentID, conversationID)
 	}
 	return conversationID
 }
@@ -1782,8 +1776,8 @@ func appendAgentTurnCommonPayload(payload map[string]any, model, thinking string
 	if thinking != "" {
 		payload["thinking"] = thinking
 	}
-	if timeoutSeconds, ok := timeoutMsToSeconds(timeoutMs); ok {
-		payload["timeoutSeconds"] = timeoutSeconds
+	if timeoutMs > 0 {
+		payload["timeoutMs"] = timeoutMs
 	}
 	if lightContext {
 		payload["lightContext"] = true
@@ -1802,10 +1796,8 @@ func appendAgentTurnCommonPatch(payload map[string]any, input UpdateOpenClawCron
 	if input.Thinking != nil && strings.TrimSpace(*input.Thinking) != "" {
 		payload["thinking"] = strings.TrimSpace(*input.Thinking)
 	}
-	if input.TimeoutMs != nil {
-		if timeoutSeconds, ok := timeoutMsToSeconds(*input.TimeoutMs); ok {
-			payload["timeoutSeconds"] = timeoutSeconds
-		}
+	if input.TimeoutMs != nil && *input.TimeoutMs > 0 {
+		payload["timeoutMs"] = *input.TimeoutMs
 	}
 	if input.LightContext != nil {
 		payload["lightContext"] = *input.LightContext
@@ -2737,15 +2729,7 @@ func buildCronConversationName(jobName string, primaryTimeMs int64, fallbackTime
 	if trimmedJobName == "" {
 		trimmedJobName = openClawCronDefaultConversationName
 	}
-
-	runTimeMs := primaryTimeMs
-	if runTimeMs <= 0 {
-		runTimeMs = fallbackTimeMs
-	}
-	if runTimeMs <= 0 {
-		runTimeMs = time.Now().UnixMilli()
-	}
-	return fmt.Sprintf("%s / %s", trimmedJobName, time.UnixMilli(runTimeMs).Local().Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("[定时任务] %s", trimmedJobName)
 }
 
 func chooseRunTimestamp(primaryTimeMs int64, fallbackTimeMs int64) int64 {

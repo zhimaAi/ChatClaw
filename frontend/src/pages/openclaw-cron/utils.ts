@@ -180,6 +180,8 @@ export function buildCreateInput(form: OpenClawCronFormState) {
   // OpenClaw default / OpenClaw 默认：agentTurn cron tasks should use isolated sessions unless caller overrides it.
   const sessionTarget = form.sessionTarget || DEFAULT_OPENCLAW_SESSION_TARGET
   const deliveryConfig = resolveDeliveryConfig(form)
+  const trimmedMessage = form.message.trim()
+  const trimmedSystemEvent = form.systemEvent.trim()
   return new CreateOpenClawCronJobInput({
     name: form.name,
     description: form.description,
@@ -190,8 +192,8 @@ export function buildCreateInput(form: OpenClawCronFormState) {
     at: schedulePayload.at,
     timezone: form.timezone,
     exact: form.exact,
-    message: form.message,
-    system_event: form.systemEvent,
+    message: trimmedMessage,
+    system_event: trimmedMessage ? '' : trimmedSystemEvent,
     model: '',
     thinking: form.thinking,
     expect_final: form.expectFinal,
@@ -217,6 +219,8 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
   // OpenClaw default / OpenClaw 默认：keep update payload aligned with create payload for isolated-session cron jobs.
   const sessionTarget = form.sessionTarget || DEFAULT_OPENCLAW_SESSION_TARGET
   const deliveryConfig = resolveDeliveryConfig(form)
+  const trimmedMessage = form.message.trim()
+  const trimmedSystemEvent = form.systemEvent.trim()
   return new UpdateOpenClawCronJobInput({
     name: form.name,
     description: form.description,
@@ -227,8 +231,8 @@ export function buildUpdateInput(form: OpenClawCronFormState) {
     at: schedulePayload.scheduleKind === 'at' ? schedulePayload.at : undefined,
     timezone: form.timezone || undefined,
     exact: form.exact,
-    message: form.message,
-    system_event: form.systemEvent,
+    message: trimmedMessage || undefined,
+    system_event: trimmedMessage ? undefined : trimmedSystemEvent || undefined,
     model: clearedModel,
     thinking: form.thinking || undefined,
     expect_final: form.expectFinal,
