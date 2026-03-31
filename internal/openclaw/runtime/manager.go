@@ -31,9 +31,9 @@ type ToolchainServiceIF interface {
 }
 
 type Manager struct {
-	app             *application.App
-	store           *configStore
-	toolchainSvc    ToolchainServiceIF
+	app          *application.App
+	store        *configStore
+	toolchainSvc ToolchainServiceIF
 
 	opMu sync.Mutex
 	mu   sync.RWMutex
@@ -129,8 +129,8 @@ func (m *Manager) InstallAndStartRuntime() (*RuntimeUpgradeResult, error) {
 
 	// Broadcast installing state
 	m.broadcastStatus(RuntimeStatus{
-		Phase:       PhaseUpgrading,
-		Message:     "Downloading OpenClaw runtime from OSS...",
+		Phase:      PhaseUpgrading,
+		Message:    "Downloading OpenClaw runtime from OSS...",
 		GatewayURL: gatewayURL(cfg.GatewayPort),
 	})
 	m.closeClient()
@@ -225,8 +225,8 @@ func (m *Manager) reconcileLocked(restart bool) error {
 		// No bundled runtime found — try installing from OSS as a fallback
 		m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
 		m.broadcastStatus(RuntimeStatus{
-			Phase:       PhaseUpgrading,
-			Message:     "No OpenClaw runtime found, downloading from OSS...",
+			Phase:      PhaseUpgrading,
+			Message:    "No OpenClaw runtime found, downloading from OSS...",
 			GatewayURL: gatewayURL(cfg.GatewayPort),
 		})
 		if m.toolchainSvc == nil {
@@ -240,6 +240,14 @@ func (m *Manager) reconcileLocked(restart bool) error {
 		if err != nil {
 			return fail("resolveBundledRuntime after OSS install", err, "", 0)
 		}
+	}
+
+	if patched, err := applyBundledRuntimeHotfixes(bundle); err != nil {
+		m.app.Logger.Warn("openclaw: runtime hotfix apply failed",
+			"runtimePath", bundle.Root, "error", err)
+	} else if patched > 0 {
+		m.app.Logger.Info("openclaw: runtime hotfix applied",
+			"runtimePath", bundle.Root, "patchedFiles", patched)
 	}
 
 	if restart {
@@ -328,6 +336,8 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, insta
 	if err != nil {
 		return err
 	}
+	rawStreamPath := gatewayRawStreamLogPath(bundle.LogsDir)
+	_ = os.Remove(rawStreamPath)
 
 	cmd := exec.Command(bundle.CLIPath,
 		"gateway", "run",
@@ -343,6 +353,8 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, insta
 	cmd.Stderr = logFile
 	cmd.Dir = bundle.Root
 	setCmdHideWindow(cmd)
+
+	m.app.Logger.Info("openclaw: raw stream debug enabled", "path", rawStreamPath)
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
@@ -884,10 +896,15 @@ func buildGatewayEnv(cfg OpenClawConfig, bundle *bundledRuntime) []string {
 			envMap[k] = v
 		}
 	}
+	rawStreamPath := gatewayRawStreamLogPath(bundle.LogsDir)
 	envMap["OPENCLAW_STATE_DIR"] = bundle.StateDir
 	envMap["OPENCLAW_CONFIG_PATH"] = bundle.ConfigPath
 	envMap["OPENCLAW_SKIP_CANVAS_HOST"] = "1"
 	envMap["OPENCLAW_EMBEDDED_IN"] = "ChatClaw"
+	envMap["OPENCLAW_RAW_STREAM"] = "1"
+	envMap["OPENCLAW_RAW_STREAM_PATH"] = rawStreamPath
+	_ = os.Setenv("OPENCLAW_RAW_STREAM", "1")
+	_ = os.Setenv("OPENCLAW_RAW_STREAM_PATH", rawStreamPath)
 
 	var pathKey, nodeBin string
 	if runtime.GOOS == "windows" {
@@ -906,6 +923,10 @@ func buildGatewayEnv(cfg OpenClawConfig, bundle *bundledRuntime) []string {
 		result = append(result, k+"="+v)
 	}
 	return result
+}
+
+func gatewayRawStreamLogPath(logsDir string) string {
+	return filepath.Join(logsDir, "openclaw-raw-stream.jsonl")
 }
 
 func openGatewayLogFile(logsDir string) (*os.File, error) {
