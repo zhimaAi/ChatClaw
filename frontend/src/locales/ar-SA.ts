@@ -1,7 +1,7 @@
 export default {
   app: {
     title: 'ChatClaw',
-    theme: 'Tema',
+    theme: 'Tema'
   },
   common: {
     all: 'الكل',
@@ -16,111 +16,111 @@ export default {
     detail: 'التفاصيل',
     hide: 'طي',
     retry: 'إعادة المحاولة',
-    close: 'إغلاق',
+    close: 'إغلاق'
   },
   tools: {
     calculator: {
       name: 'الآلة الحاسبة',
-      description: 'تنفيذ الحسابات الرياضية',
+      description: 'تنفيذ الحسابات الرياضية'
     },
     duckduckgo: {
       name: 'البحث على الويب',
-      description: 'البحث على الإنترنت باستخدام DuckDuckGo',
+      description: 'البحث على الإنترنت باستخدام DuckDuckGo'
     },
     libraryRetriever: {
       name: 'استرجاع قاعدة المعرفة',
-      description: 'استرجاع المحتوى ذي الصلة من قاعدة المعرفة',
+      description: 'استرجاع المحتوى ذي الصلة من قاعدة المعرفة'
     },
     memoryRetriever: {
-      name: '记忆检索',
-      description: '从长期记忆中检索相关事实',
+      name: 'استرجاع الذاكرة',
+      description: 'استرجاع الحقائق ذات الصلة من الذاكرة طويلة المدى'
     },
     execute: {
       name: 'تنفيذ الأمر',
-      description: 'Execute shell commands on the system',
+      description: 'نفّذ أوامر shell على النظام'
     },
     httpRequest: {
       name: 'طلب HTTP',
-      description: 'إرسال طلب HTTP إلى عنوان URL محدد',
+      description: 'إرسال طلب HTTP إلى عنوان URL محدد'
     },
     sequentialThinking: {
       name: 'التفكير خطوة بخطوة',
-      description: 'تقسيم المشاكل المعقدة إلى خطوات متسلسلة للتحليل',
+      description: 'تقسيم المشاكل المعقدة إلى خطوات متسلسلة للتحليل'
     },
     wikipedia: {
       name: 'ويكيبيديا',
-      description: 'البحث في ويكيبيديا للمعرفة والمعلومات',
+      description: 'البحث في ويكيبيديا للمعرفة والمعلومات'
     },
     browserUse: {
       name: 'المتصفح',
-      description: 'تصفح صفحات الويب والتفاعل معها',
+      description: 'تصفح صفحات الويب والتفاعل معها'
     },
     skillSearch: {
-      name: 'بحث المهارة',
+      name: 'بحث المهارة'
     },
     skillList: {
-      name: 'قائمة المهارات',
+      name: 'قائمة المهارات'
     },
     skillInstall: {
-      name: 'تثبيت المهارة',
+      name: 'تثبيت المهارة'
     },
     skillUninstall: {
-      name: 'إلغاء تثبيت المهارة',
+      name: 'إلغاء تثبيت المهارة'
     },
     skillEnable: {
-      name: 'تفعيل المهارة',
+      name: 'تفعيل المهارة'
     },
     skillDisable: {
-      name: 'تعطيل المهارة',
+      name: 'تعطيل المهارة'
     },
     skillOpenFolder: {
-      name: 'فتح مجلد المهارة',
+      name: 'فتح مجلد المهارة'
     },
     ls: {
-      name: 'سرد المجلد',
+      name: 'سرد المجلد'
     },
     readFile: {
-      name: 'قراءة الملف',
+      name: 'قراءة الملف'
     },
     writeFile: {
-      name: 'كتابة الملف',
+      name: 'كتابة الملف'
     },
     editFile: {
-      name: 'تعديل الملف',
+      name: 'تعديل الملف'
     },
     patchFile: {
-      name: 'ملف التصحيح',
+      name: 'ملف التصحيح'
     },
     glob: {
-      name: 'مطابقة الملفات',
+      name: 'مطابقة الملفات'
     },
     grep: {
-      name: 'البحث في النص',
+      name: 'البحث في النص'
     },
     executeBackground: {
-      name: 'التنفيذ في الخلفية',
+      name: 'التنفيذ في الخلفية'
     },
     taskCreate: {
-      name: 'إنشاء مهمة',
+      name: 'إنشاء مهمة'
     },
     taskGet: {
-      name: 'الحصول على مهمة',
+      name: 'الحصول على مهمة'
     },
     taskUpdate: {
-      name: 'تحديث المهمة',
+      name: 'تحديث المهمة'
     },
     taskList: {
-      name: 'قائمة المهام',
+      name: 'قائمة المهام'
     },
     skill: {
-      name: 'تحميل المهارة',
+      name: 'تحميل المهارة'
     },
     writeTodos: {
-      name: 'تخطيط المهام',
+      name: 'تخطيط المهام'
     },
     task: {
-      name: 'مهمة فرعية (قد تستغرق وقتًا)',
-    },
+      name: 'مهمة فرعية (قد تستغرق وقتًا)'
+    }
   },
   winsnap: {
     title: 'ChatClaw',
@@ -133,7 +133,7 @@ export default {
     actions: {
       sendAndTrigger: 'إرسال وتشغيل',
       sendToEdit: 'إرسال إلى صندوق التحرير',
-      copyToClipboard: 'نسخ إلى الحافظة',
+      copyToClipboard: 'نسخ إلى الحافظة'
     },
     findSnap: 'التقاط',
     toast: {
@@ -144,28 +144,28 @@ export default {
       pasteFailed: 'فشل اللصق',
       noTarget: 'لم يتم الالتقاء بأي تطبيق',
       noSnapTarget: 'لم يتم العثور على تطبيق للالتقاط',
-      attachFailed: 'فشل الالتقاء',
-    },
+      attachFailed: 'فشل الالتقاء'
+    }
   },
   selection: {
     aiChat: 'اسأل ChatClaw AI',
-    disableSelectionSearch: 'إغلاق',
+    disableSelectionSearch: 'إغلاق'
   },
   floatingball: {
     menu: {
-      settings: 'Settings',
-      restart: 'Restart',
-      hide: 'Hide',
-    },
+      settings: 'الإعدادات',
+      restart: 'إعادة التشغيل',
+      hide: 'طي'
+    }
   },
   nav: {
-    assistant: 'Task Assistant',
+    assistant: 'مساعد المهام',
     openclaw: 'مساعد OpenClaw',
-    openclawDashboard: 'OpenClaw Dashboard',
+    openclawDashboard: 'لوحة تحكم OpenClaw',
     knowledge: 'قاعدة المعرفة',
     scheduledTasks: 'المهام المجدولة',
     skills: 'المهارات',
-    openclawSkills: 'OpenClaw Skills',
+    openclawSkills: 'مهارات OpenClaw',
     channels: 'القنوات',
     multiask: 'سؤال متعدد',
     memory: 'الذاكرة',
@@ -173,29 +173,29 @@ export default {
     settings: 'الإعدادات',
     document: 'الوثيقة',
     systemChatClaw: 'ChatClaw',
-    systemOpenClaw: 'OpenClaw',
+    systemOpenClaw: 'مساعد OpenClaw'
   },
   toolsPage: {
-    subtitle: 'Quick access to featured tools',
+    subtitle: 'وصول سريع إلى الأدوات المميزة',
     smartSidebar: {
-      title: 'Smart Sidebar',
-      description: 'Dock beside WeCom, QQ, and other chat apps for live AI queries',
+      title: 'الشريط الجانبي الذكي',
+      description: 'ثبّتْه بجانب WeCom وQQ وتطبيقات الدردشة الأخرى لطرح استفسارات الذكاء الاصطناعي مباشرة.'
     },
     selectionSearch: {
-      title: 'Selection Search',
-      description: 'Show an AI query after you copy text via right-click',
+      title: 'البحث بالتمييز',
+      description: 'اعرض استعلامًا للذكاء الاصطناعي بعد نسخ النص بالنقر بزر الفأرة الأيمن.'
     },
     floatingIcon: {
-      title: 'Desktop Floating Icon',
-      description: 'Floating shortcut on the desktop',
+      title: 'أيقونة عائمة على سطح المكتب',
+      description: 'اختصار عائم على سطح المكتب'
     },
     multiask: {
-      title: 'Multi Ask',
-      description: 'Open multiple AIs in the browser at once',
+      title: 'سؤال متعدد',
+      description: 'افتح عدة نماذج ذكاء اصطناعي في المتصفح في الوقت نفسه.'
     },
-    addToMenuBar: 'Add to sidebar',
-    removeFromMenuBar: 'Remove from sidebar',
-    desktopOnlyHint: 'The features below are available in the desktop app only',
+    addToMenuBar: 'إضافة إلى الشريط الجانبي',
+    removeFromMenuBar: 'إزالة من الشريط الجانبي',
+    desktopOnlyHint: 'الميزات التالية متاحة فقط في تطبيق سطح المكتب.'
   },
   multiask: {
     title: 'سؤال متعدد',
@@ -221,16 +221,16 @@ export default {
     modelName: 'اسم النموذج',
     hideOrShow: 'إظهار / إخفاء',
     expand: 'توسيع',
-    collapse: 'طي',
+    collapse: 'طي'
   },
   tabs: {
-    newTab: 'علامة تبويب جديدة',
+    newTab: 'علامة تبويب جديدة'
   },
   tab: {
     close: 'إغلاق علامة التبويب',
     closeOthers: 'إغلاق علامات التبويب الأخرى',
     closeRight: 'إغلاق علامات التبويب على اليمين',
-    closeAll: 'إغلاق جميع علامات التبويب',
+    closeAll: 'إغلاق جميع علامات التبويب'
   },
   hello: {
     inputPlaceholder: 'الرجاء إدخال اسمك أدناه 👇',
@@ -239,7 +239,7 @@ export default {
     showSettings: 'إظهار الإعدادات',
     hideSettings: 'إخفاء الإعدادات',
     learnMore: 'انقر على شعار Wails لمعرفة المزيد',
-    listeningEvent: 'جار الاستماع لحدث الوقت...',
+    listeningEvent: 'جار الاستماع لحدث الوقت...'
   },
   settings: {
     title: 'الإعدادات',
@@ -254,47 +254,47 @@ export default {
       snapSettings: 'إعدادات الالتقاط',
       tools: 'أدوات الوظائف',
       chatwiki: 'إدارة الحساب',
-      about: 'About Us',
-      openclawRuntime: 'OpenClaw Service',
+      about: 'من نحن',
+      openclawRuntime: 'خدمة OpenClaw'
     },
     openclawRuntime: {
-      title: 'OpenClaw Service',
-      gatewayConnection: 'Gateway Connection',
-      runtimeStatus: 'Runtime Status',
-      gatewayEndpoint: 'Gateway Endpoint',
-      version: 'Installed Version',
-      runtimeSource: 'Runtime Source',
-      runtimePath: 'Runtime Path',
-      upgradeButton: 'Upgrade OpenClaw',
-      restartButton: 'Restart Service',
-      upgrading: 'Upgrading...',
-      restarting: 'Restarting...',
+      title: 'خدمة OpenClaw',
+      gatewayConnection: 'اتصال البوابة',
+      runtimeStatus: 'حالة بيئة التشغيل',
+      gatewayEndpoint: 'عنوان البوابة',
+      version: 'الإصدار المثبت',
+      runtimeSource: 'مصدر بيئة التشغيل',
+      runtimePath: 'مسار بيئة التشغيل',
+      upgradeButton: 'ترقية OpenClaw',
+      restartButton: 'إعادة تشغيل الخدمة',
+      upgrading: 'جارٍ الترقية...',
+      restarting: 'جارٍ إعادة التشغيل...',
       phase: {
-        idle: 'Idle',
-        starting: 'Starting',
-        connecting: 'Connecting',
-        connected: 'Connected',
-        restarting: 'Restarting',
-        upgrading: 'Upgrading',
-        error: 'Error',
+        idle: 'خامل',
+        starting: 'جارٍ البدء',
+        connecting: 'جارٍ الاتصال',
+        connected: 'متصل',
+        restarting: 'جارٍ إعادة التشغيل',
+        upgrading: 'جارٍ الترقية',
+        error: 'خطأ'
       },
       gateway: {
-        connected: 'Connected',
-        authenticated: 'Authenticated',
-        reconnecting: 'Reconnecting',
-        disconnected: 'Disconnected',
+        connected: 'متصل',
+        authenticated: 'تمت المصادقة',
+        reconnecting: 'جارٍ إعادة الاتصال',
+        disconnected: 'غير متصل'
       },
       source: {
-        user: 'User Override',
-        embedded: 'Embedded Bundle',
-        development: 'Development Bundle',
+        user: 'تجاوز المستخدم',
+        embedded: 'حزمة مضمّنة',
+        development: 'حزمة التطوير'
       },
-      notInstalled: 'Runtime not found',
+      notInstalled: 'لم يتم العثور على بيئة التشغيل',
       openDashboard: 'فتح لوحة التحكم',
       dashboardError: 'فشل في تحميل لوحة تحكم OpenClaw',
-      alreadyLatest: 'Already on the latest version',
-      upgradeSuccess: 'OpenClaw upgraded to {version}',
-      upgradeFailed: 'Failed to upgrade OpenClaw',
+      alreadyLatest: 'أنت تستخدم أحدث إصدار بالفعل',
+      upgradeSuccess: 'تمت ترقية OpenClaw إلى {version}',
+      upgradeFailed: 'فشلت ترقية OpenClaw'
     },
     general: {
       title: 'الإعدادات العامة',
@@ -330,33 +330,30 @@ export default {
           failed: 'فشل',
           success: 'نجح',
           version: 'الإصدار',
-          methodUsed: 'الطريقة المستخدمة',
+          methodUsed: 'الطريقة المستخدمة'
         },
         uv: {
           name: 'بيئة تشغيل Python',
-          description: 'تمكين مساعد الذكاء الاصطناعي من كتابة وتشغيل نصوص Python للمهام المعقدة.',
+          description: 'تمكين مساعد الذكاء الاصطناعي من كتابة وتشغيل نصوص Python للمهام المعقدة.'
         },
         bun: {
           name: 'بيئة تشغيل JavaScript',
-          description:
-            'Allows AI assistant to write and run JavaScript scripts to complete complex tasks.',
+          description: 'يسمح لمساعد الذكاء الاصطناعي بكتابة وتشغيل نصوص JavaScript لإكمال المهام المعقدة.'
         },
         codex: {
           name: 'صندوق رمل آمن',
-          description: 'تنفيذ الأوامر في بيئة معزولة لحماية النظام ومنع التغييرات غير المقصودة.',
+          description: 'تنفيذ الأوامر في بيئة معزولة لحماية النظام ومنع التغييرات غير المقصودة.'
         },
         openclaw: {
-          name: 'OpenClaw Runtime',
-          description:
-            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
-        },
-      },
+          name: 'بيئة تشغيل OpenClaw',
+          description: 'بيئة Node.js الخاصة بوكيل OpenClaw، وتشمل openclaw CLI وGateway. تُنزَّل من OSS وتُثبَّت في ~/.chatclaw/openclaw/runtime/.'
+        }
+      }
     },
     memory: {
       title: 'الذاكرة طويلة المدى',
       enable: 'تفعيل الذاكرة طويلة المدى',
-      enableHint:
-        'When enabled, AI will automatically extract and remember your preferences, habits, and important facts in conversations.',
+      enableHint: 'عند التفعيل، سيستخرج الذكاء الاصطناعي تفضيلاتك وعاداتك والحقائق المهمة في المحادثات ويتذكرها تلقائيًا.',
       extractModel: 'نموذج استخراج الذاكرة',
       extractModelHint: 'يُستخدم لتلخيص واستخراج معلومات الذاكرة القيمة بعد كل محادثة.',
       embeddingModel: 'نموذج تضمين الذاكرة',
@@ -366,22 +363,19 @@ export default {
       save: 'حفظ الإعدادات',
       saved: 'تم حفظ الإعدادات',
       saveFailed: 'فشل حفظ الإعدادات',
-      rebuildWarning:
-        'After changing the vector model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuildWarning: 'بعد تغيير نموذج المتجهات أو أبعادها، ستُعاد إعادة بناء جميع بيانات متجهات الذاكرة الحالية بشكل غير متزامن.',
       rebuilding: 'جار إعادة بناء متجهات الذاكرة...',
       rebuildSuccess: 'تم إعادة بناء متجهات الذاكرة بنجاح',
       rebuildFailed: 'فشل إعادة بناء متجهات الذاكرة',
-      confirmRebuildTitle: 'تأكيد إعادة بناء متجهات الذاكرة',
+      confirmRebuildTitle: 'تأكيد إعادة بناء متجهات الذاكرة'
     },
     skills: {
       title: 'المهارات',
       enable: 'تفعيل المهارات',
-      enableHint:
-        'When enabled, AI assistant will automatically load and use installed skills during conversations.',
+      enableHint: 'عند التفعيل، سيحمّل مساعد الذكاء الاصطناعي المهارات المثبتة ويستخدمها تلقائيًا أثناء المحادثات.',
       pageDesc: 'تصفح وإدارة قدرات الذكاء الاصطناعي',
       directory: 'دليل تحميل المهارات',
-      directoryHint:
-        'Place downloaded skill folders in this directory. They will be automatically detected and loaded during AI conversations.',
+      directoryHint: 'ضع مجلدات المهارات التي تم تنزيلها في هذا الدليل. سيتم اكتشافها وتحميلها تلقائيًا أثناء محادثات الذكاء الاصطناعي.',
       tabInstalled: 'مثبت',
       tabMarket: 'السوق',
       filterAll: 'الكل',
@@ -399,7 +393,7 @@ export default {
       uninstall: 'إلغاء التثبيت',
       uninstallConfirm: 'هل أنت متأكد من إلغاء تثبيت هذه المهارة؟',
       noSkills: 'لا توجد مهارات مثبتة',
-      noSkillsHint: 'تصفح وتثبيت المهارات من علامة تبويب ',
+      noSkillsHint: 'تصفح المهارات وثبّتها من علامة تبويب السوق.',
       noLocalSkills: 'لا توجد مهارات',
       addLocalSkill: 'إضافة',
       searchPlaceholder: 'البحث عن مهارات...',
@@ -429,69 +423,63 @@ export default {
       selectFile: 'حدد ملفًا من اليسار لعرض محتواه',
       binaryFile: 'ملف ثنائي، لا يمكن المعاينة',
       rateLimited: 'طلبات كثيرة جدًا، يرجى المحاولة لاحقًا',
-      loadFailed: 'فشل التحميل، يرجى المحاولة لاحقًا',
+      loadFailed: 'فشل التحميل، يرجى المحاولة لاحقًا'
     },
     openclawSkills: {
-      title: 'OpenClaw Skills',
-      listHeading: 'Skills',
-      listSubheading: 'Browse and manage AI capabilities',
-      refreshCta: 'Refresh',
-      addSkillCta: 'Add skill',
-      pageDesc:
-        'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
-      filterAll: 'All',
-      filterBuiltin: 'Built-in',
-      filterInstalled: 'Installed',
-      builtinCannotDelete: 'Built-in skills cannot be deleted',
-      openSkillFolderToRemove: 'Open the folder in your file manager to remove this skill',
-      filterShared: 'Shared',
-      filterWorkspace: 'Workspace',
-      locationShared: 'Shared',
-      locationWorkspace: 'Workspace',
-      diskLocationsTitle: 'On-disk locations',
-      locationCount: '{count} copies',
+      title: 'مهارات OpenClaw',
+      listHeading: 'المهارات',
+      listSubheading: 'تصفح قدرات الذكاء الاصطناعي وأدرها',
+      refreshCta: 'تحديث',
+      addSkillCta: 'إضافة مهارة',
+      pageDesc: 'عند الاتصال، يستخدم OpenClaw Gateway skills.status؛ وإلا فيفحص البنية نفسها على القرص كما في OpenClaw ‏(managed وworkspace وbundled وextraDirs).',
+      filterAll: 'الكل',
+      filterBuiltin: 'مدمج',
+      filterInstalled: 'مثبت',
+      builtinCannotDelete: 'لا يمكن حذف المهارات المدمجة',
+      openSkillFolderToRemove: 'افتح المجلد في مدير الملفات لإزالة هذه المهارة.',
+      filterShared: 'مشترك',
+      filterWorkspace: 'مساحة العمل',
+      locationShared: 'مشترك',
+      locationWorkspace: 'مساحة العمل',
+      diskLocationsTitle: 'المواقع على القرص',
+      locationCount: '{count} نُسخ',
       searchPlaceholder: 'Search skills, paths, agent, or permissions…',
-      noSkills: 'No OpenClaw skills found',
-      noSkillsHint:
-        'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
-      openSharedDir: 'Open main workspace skills folder',
-      openMainWorkspaceSkillsDir: 'Open main workspace skills (workspace-main/skills)',
-      openManagedSkillsDir: 'Open managed skills folder (openclaw/skills)',
-      permissionLabel: 'Permission',
-      scopeLabel: 'Scope',
-      agentBinding: 'Agent',
-      gatewayOfflineHint:
-        'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
-      backToList: 'Back to list',
-      loadFailed: 'Failed to load OpenClaw skills',
-      dataSourceLabel: 'Source',
-      dataSourceGateway: 'Gateway',
-      dataSourceManaged: 'Managed',
-      dataSourceBundled: 'Bundled',
-      dataSourceExtra: 'extraDirs',
-      dataSourceWorkspace: 'Workspace',
-      eligibleLabel: 'Eligible',
-      eligibleYes: 'Yes',
-      eligibleNo: 'No',
-      eligibleUnknown: 'Unknown',
-      gateHintLabel: 'Gateway note',
-      previewNoLocalPath:
-        'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      noSkills: 'لم يتم العثور على مهارات OpenClaw',
+      noSkillsHint: 'اتصل بالبوابة للحصول على القائمة المباشرة؛ وفي وضع عدم الاتصال، اتبع وثائق OpenClaw ‏(state dir skills/ وworkspace-*/skills/ والحزمة المضمنة وskills.load.extraDirs).',
+      openSharedDir: 'افتح مجلد مهارات مساحة العمل الرئيسية',
+      openMainWorkspaceSkillsDir: 'افتح مهارات مساحة العمل الرئيسية (workspace-main/skills)',
+      openManagedSkillsDir: 'افتح مجلد المهارات المُدارة (openclaw/skills)',
+      permissionLabel: 'الإذن',
+      scopeLabel: 'النطاق',
+      agentBinding: 'المساعد',
+      gatewayOfflineHint: 'البوابة غير متصلة: تُبنى القائمة من بنية OpenClaw على القرص. وعند الاتصال، يُفضَّل استخدام skills.status.',
+      backToList: 'العودة إلى القائمة',
+      loadFailed: 'فشل تحميل مهارات OpenClaw',
+      dataSourceLabel: 'المصدر',
+      dataSourceGateway: 'البوابة',
+      dataSourceManaged: 'مُدار',
+      dataSourceBundled: 'مُضمّن',
+      dataSourceExtra: 'أدلة إضافية',
+      dataSourceWorkspace: 'مساحة العمل',
+      eligibleLabel: 'مؤهل',
+      eligibleYes: 'نعم',
+      eligibleNo: 'لا',
+      eligibleUnknown: 'غير معروف',
+      gateHintLabel: 'ملاحظة البوابة',
+      previewNoLocalPath: 'هذا الصف وارد من البوابة فقط، ولا يوجد مجلد محلي لتصفحه. يظهر المسار عندما توجد مهارة مطابقة على القرص.',
       add: {
-        title: 'Add',
-        createViaChatTitle: 'Create via chat',
+        title: 'إضافة',
+        createViaChatTitle: 'الإنشاء عبر الدردشة',
         createViaChatDesc: 'Describe what you need and let AI scaffold an OpenClaw skill',
-        choosePackageTitle: 'Choose skill package',
+        choosePackageTitle: 'اختر حزمة المهارة',
         choosePackageDesc: 'Open the skills folder and place the skill package there',
-        createViaChatPrompt:
-          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
-      },
+        createViaChatPrompt: 'ساعدني في إنشاء مهارة OpenClaw. اسألني أولاً عن الوظيفة التي أحتاجها، ثم أنشئ ملف SKILL.md ‏(مع frontmatter) وهيكل المجلدات اللازم ونموذج الشيفرة. أخبرني أخيرًا أن أضع مجلد المهارة تحت workspace-main/skills لتفعيلها.'
+      }
     },
     mcp: {
       title: 'MCP',
       enable: 'تفعيل MCP',
-      enableHint:
-        'عند التفعيل، سيقوم مساعد الذكاء الاصطناعي بالاتصال واستخدام خوادم MCPالمكونة تلقائيًا.',
+      enableHint: 'عند التفعيل، سيقوم مساعد الذكاء الاصطناعي بالاتصال واستخدام خوادم MCPالمكونة تلقائيًا.',
       directory: 'دليل تكوين MCP',
       directoryHint: 'ضع ملفات تكوين خادم MCPفي هذا الدليل. سيتم اكتشافها والاتصال بها تلقائيًا.',
       tabServers: 'MCP',
@@ -517,12 +505,12 @@ export default {
       args: 'المعاملات',
       argsPlaceholder: 'معامل واحد في كل سطر',
       envVars: 'متغيرات البيئة',
-      envVarsPlaceholder: 'انقر على ',
+      envVarsPlaceholder: 'انقر على "إضافة" لإضافة متغيرات البيئة',
       addRow: 'إضافة',
-      serverUrl: 'URL',
+      serverUrl: 'عنوان URL',
       serverUrlPlaceholder: 'مثال: https://example.com/mcp',
       httpHeaders: 'الترويسات',
-      httpHeadersPlaceholder: 'انقر على ',
+      httpHeadersPlaceholder: 'انقر على "إضافة" لإضافة الترويسات',
       timeout: 'المهلة',
       timeoutUnit: 'ثواني',
       testing: 'جار التحقق...',
@@ -536,7 +524,7 @@ export default {
       noPrompts: 'لا يوفر هذا الخادم تعليمات',
       noResources: 'لا يوفر هذا الخادم موارد',
       noServers: 'لا توجد خوادم MCPمكونة',
-      noServersHint: 'انقر على زر ',
+      noServersHint: 'انقر على زر "إضافة" لتكوين خادم MCP',
       deleteConfirm: 'هل أنت متأكد من حذف خادم MCPهذا؟',
       deleteSuccess: 'تم الحذف بنجاح',
       deleteFailed: 'فشل الحذف',
@@ -544,10 +532,10 @@ export default {
       addFailed: 'فشل الإضافة',
       updateSuccess: 'تم التحديث بنجاح',
       updateFailed: 'فشل التحديث',
-      tabAssistantMcp: 'Assistant MCP',
+      tabAssistantMcp: 'MCP المساعد',
       assistantMcpAdd: 'إضافة',
-      assistantMcpAddTitle: 'إضافة Assistant MCP',
-      assistantMcpEditTitle: 'تعديل Assistant MCP',
+      assistantMcpAddTitle: 'إضافة MCP المساعد',
+      assistantMcpEditTitle: 'تعديل MCP المساعد',
       assistantMcpName: 'اسم مكوّن MCP',
       assistantMcpNamePlaceholder: 'أدخل اسم مكوّن MCP، بحد أقصى 20 حرفًا',
       assistantMcpDescription: 'الوصف',
@@ -555,14 +543,14 @@ export default {
       assistantMcpUrl: 'عنوان URL',
       assistantMcpAuth: 'التفويض',
       assistantMcpAutoPort: 'يتم تعيين المنفذ تلقائيًا بعد الإنشاء',
-      assistantMcpAuthNone: 'Bearer Token',
-      assistantMcpNoItems: 'لا يوجد أي Assistant MCP مُكوَّن',
+      assistantMcpAuthNone: 'رمز Bearer',
+      assistantMcpNoItems: 'لا يوجد MCP مساعد مُكوَّن',
       assistantMcpNoItemsHint: 'انقر على "إضافة" لتكوين خدمة MCP',
       assistantMcpCreateSuccess: 'تمت الإضافة بنجاح',
       assistantMcpCreateFailed: 'فشل في الإضافة',
       assistantMcpUpdateSuccess: 'تم التحديث بنجاح',
       assistantMcpUpdateFailed: 'فشل التحديث',
-      assistantMcpDeleteConfirm: 'هل أنت متأكد من حذف هذا الـ Assistant MCP؟',
+      assistantMcpDeleteConfirm: 'هل أنت متأكد من حذف MCP المساعد هذا؟',
       assistantMcpDeleteSuccess: 'تم الحذف بنجاح',
       assistantMcpDeleteFailed: 'فشل في الحذف',
       assistantMcpAddTool: 'إضافة أداة',
@@ -574,7 +562,7 @@ export default {
       assistantMcpToolCount: '{count} أداة',
       assistantMcpToolName: 'اسم الأداة',
       assistantMcpToolNamePlaceholder: 'أدخل اسم دالة صالح',
-      assistantMcpToolDesc: 'وصف الأداة',
+      assistantMcpToolDesc: 'وصف الأداة'
     },
     snap: {
       title: 'الإعدادات',
@@ -584,7 +572,7 @@ export default {
       appsTitle: 'تطبيقات الالتقاط',
       sendKeyOptions: {
         enter: 'اضغط Enter للإرسال',
-        ctrlEnter: 'اضغط Ctrl+Enter للإرسال',
+        ctrlEnter: 'اضغط Ctrl+Enter للإرسال'
       },
       apps: {
         wechat: 'وي تشات',
@@ -592,13 +580,13 @@ export default {
         qq: 'QQ',
         dingtalk: 'دينغ توك',
         feishu: 'في شو',
-        douyin: 'دوين',
+        douyin: 'دوين'
       },
       clickOffset: {
         labelX: 'من اليسار',
         labelY: 'من الأسفل',
         placeholderX: 'المركز',
-        hint: 'بكسل لتحديد موقع صندوق الإدخال',
+        hint: 'بكسل لتحديد موقع صندوق الإدخال'
       },
       noClickMode: 'وضع التحديد اليدوي (يحدد المستخدم صندوق الإدخال يدويًا)',
       clickMode: 'وضع التحديد التلقائي (يضغط تلقائيًا على الموقع المحدد لاختيار صندوق الإدخال)',
@@ -614,9 +602,9 @@ export default {
       customAppExistsBuiltIn: 'توجد تكوينات افتراضية لهذه العملية ({app})',
       customAppExistsCustom: 'توجد تكوينات مخصصة لهذه العملية ({name})',
       deleteCustomConfirmTitle: 'حذف التطبيق المخصص',
-      deleteCustomConfirmDesc: 'هل تريد حذف تكوين الالتقاط لـ ',
+      deleteCustomConfirmDesc: 'هل تريد حذف إعداد الالتقاط للتطبيق ',
       confirmDeleteCustomApp: 'حذف',
-      cancel: 'إلغاء',
+      cancel: 'إلغاء'
     },
     chatwiki: {
       title: 'ChatWiki',
@@ -627,8 +615,7 @@ export default {
       reauthBind: 'إعادة التفويض',
       unbind: 'إلغاء الربط',
       unbindConfirmTitle: 'تأكيد إلغاء الربط',
-      unbindConfirmDesc:
-        'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
+      unbindConfirmDesc: 'بعد إلغاء الربط، لن تتمكن بعد الآن من استخدام تطبيقات ChatWiki وقواعد المعرفة الخاصة بها. هل تريد المتابعة؟',
       addBinding: 'إضافة ربط',
       applications: 'التطبيقات',
       knowledgeBases: 'قواعد المعرفة',
@@ -641,12 +628,12 @@ export default {
       loadFailed: 'فشل التحميل',
       robotType: {
         chat: 'روبوت محادثة',
-        workflow: 'سير العمل',
+        workflow: 'سير العمل'
       },
       libraryType: {
         normal: 'قاعدة معرفة عادية',
         qa: 'قاعدة معرفة سؤال وجواب',
-        wechat: 'قاعدة معرفة الحساب الرسمي',
+        wechat: 'قاعدة معرفة الحساب الرسمي'
       },
       enabledHint: 'يظهر في السؤال المتعدد عند التفعيل',
       libraryEnabledHint: 'مزامنة قاعدة معرفة ChatWiki؛ يظهر في قواعد معرفة الفريق عند التفعيل',
@@ -667,12 +654,11 @@ export default {
       timeoutReason: 'انتهت المهلة',
       retry: 'إعادة المحاولة',
       authSuccess: 'تم التفويض بنجاح',
-      authExpiredPleaseReauth: 'Login expired or not found, please re-authorize.',
+      authExpiredPleaseReauth: 'انتهت صلاحية تسجيل الدخول أو لم يتم العثور عليه، يرجى إعادة التفويض.',
       startUsingHint: 'انقر على ',
       startUsing: 'ابدأ الاستخدام',
       freeVersion: 'مجاني',
-      modelServiceDesc:
-        'بعد ربط ChatWiki، يمكنك عرض النماذج المتاحة والرصيد مباشرةً في خدمة النماذج.',
+      modelServiceDesc: 'بعد ربط ChatWiki، يمكنك عرض النماذج المتاحة والرصيد مباشرةً في خدمة النماذج.',
       notLoggedInTitle: 'لم تسجل الدخول إلى ChatWiki',
       notLoggedInDesc: 'سجّل الدخول لمزامنة قائمة نماذج ChatWiki Cloud ورصيدك المتبقي.',
       loginNow: 'سجل الدخول الآن',
@@ -687,37 +673,36 @@ export default {
       openBillingFailed: 'فشل فتح صفحة الشحن',
       modelBoundHint: 'تعرض هذه القائمة النماذج المتاحة حالياً للحساب المرتبط في ChatWiki.',
       modelUnboundHint: 'سجّل الدخول أولاً لتحميل قائمة النماذج المتاحة للربط الحالي.',
-      modelLoginHint:
-        'يرجى أولاً تسجيل الدخول وربط حساب ChatWiki الخاص بك. ستظهر هنا بعد ذلك أحدث قائمة بالنماذج.',
+      modelLoginHint: 'يرجى أولاً تسجيل الدخول وربط حساب ChatWiki الخاص بك. ستظهر هنا بعد ذلك أحدث قائمة بالنماذج.',
       providerStatus: {
         unbound: '{label} (غير مسجل الدخول)',
-        nonCloud: '{label} (غير مسجل الدخول)',
+        nonCloud: '{label} (غير مسجل الدخول)'
       },
       region: {
         all: 'كل المناطق',
         cn: 'الصين',
-        global: 'عالمي',
-      },
+        global: 'عالمي'
+      }
     },
     tools: {
       tray: {
         title: 'صينية النظام',
         showIcon: 'أظهر أيقونةالصينية',
-        minimizeOnClose: 'تصغير إلىالصينية عند الإغلاق',
+        minimizeOnClose: 'تصغير إلىالصينية عند الإغلاق'
       },
       floatingWindow: {
         title: 'النافذة العائمة',
-        show: 'إظهار النافذة العائمة',
+        show: 'إظهار النافذة العائمة'
       },
       selectionSearch: {
         title: 'البحث بالتمييز',
-        enable: 'البحث بالتمييز',
-      },
+        enable: 'البحث بالتمييز'
+      }
     },
     themes: {
       light: 'فاتح',
       dark: 'داكن',
-      system: 'النظام',
+      system: 'النظام'
     },
     modelService: {
       enabled: 'مفعل',
@@ -769,12 +754,12 @@ export default {
       capabilityAudio: 'صوت',
       capabilityVideo: 'فيديو',
       capabilityFile: 'ملف',
-      disableBlockedByEmbedding: 'هذا المزود قيد الاستخدام كنموذج تضمين عام، يرجى التغيير في ',
+      disableBlockedByEmbedding: 'هذا المزود قيد الاستخدام كنموذج تضمين عام، يرجى التغيير في '
     },
     about: {
-      title: 'About Us',
+      title: 'من نحن',
       appName: 'ChatClaw',
-      copyright: '© 2026 ChatClaw Sesame Network Technology  All rights reserved',
+      copyright: '© 2026 ChatClaw Sesame Network Technology. جميع الحقوق محفوظة',
       officialWebsite: 'الموقع الرسمي',
       view: 'عرض',
       checkUpdate: 'التحقق من التحديثات',
@@ -794,8 +779,8 @@ export default {
       installing: 'جار التثبيت...',
       updatedTitle: 'تم التحديث إلى {version}',
       updatedSubtitle: 'تم التحديث بنجاح إلى أحدث إصدار',
-      gotIt: 'حسنًا',
-    },
+      gotIt: 'حسنًا'
+    }
   },
   assistant: {
     imageMessage: 'رسالة صورة',
@@ -804,11 +789,11 @@ export default {
       pickTitle: 'اختر ملف أيقونة',
       filterImages: 'الصور',
       defaultAvatars: 'الصور الافتراضية',
-      uploadCustom: 'تحميل صورة مخصصة',
+      uploadCustom: 'تحميل صورة مخصصة'
     },
     modes: {
       personal: 'شخصي',
-      team: 'فريق',
+      team: 'فريق'
     },
     teamNeedsBinding: 'مطلوب ربط الحساب',
     teamNeedsBindingDesc: 'لم يتم ربط الحساب. المساعدون المتوفرون غير متاحين.',
@@ -817,10 +802,10 @@ export default {
     emptyState: {
       title: 'لا يوجد مساعدون',
       desc: 'الرجاء إضافة مساعد',
-      createBtn: 'إنشاء مساعد',
+      createBtn: 'إنشاء مساعد'
     },
     create: {
-      title: 'إنشاء مساعد',
+      title: 'إنشاء مساعد'
     },
     fields: {
       name: 'الاسم',
@@ -832,13 +817,13 @@ export default {
       identityEmojiChange: 'تغيير الرمز التعبيري',
       identityEmojiHint: 'أحرف الرموز التعبيرية فقط',
       identityTheme: 'موضوع الهوية',
-      identityThemePlaceholder: 'مثال: helpful sloth',
+      identityThemePlaceholder: 'مثال: helpful sloth'
     },
     actions: {
       cancel: 'إلغاء',
       create: 'إنشاء',
       save: 'حفظ',
-      settings: 'إعدادات المساعد',
+      settings: 'إعدادات المساعد'
     },
     placeholders: {
       noAgentSelected: 'اختر مساعدًا',
@@ -846,18 +831,18 @@ export default {
       selectModelFirst: 'اختر نموذجًا أولاً',
       chatComingSoon: 'سيتم عرض محتوى المحادثة هنا (قائمة المواضيع غير منفذة بعد).',
       inputPlaceholder: 'اسأل سؤالاً...',
-      enterToSend: 'الرجاء إدخال المحتوى',
+      enterToSend: 'الرجاء إدخال المحتوى'
     },
     sidebar: {
       collapse: 'طي',
       expand: 'توسيع',
-      newConversation: 'محادثة جديدة',
+      newConversation: 'محادثة جديدة'
     },
     chatMode: {
       chat: 'وضع المحادثة',
       task: 'وضع المهمة',
       chatDesc: 'متعدد الأدوار سؤال وجواب أو استدلال عبر السيناريوهات',
-      taskDesc: 'التعامل مع المهام المعقدة وتسليم النتائج بشكل مستقل',
+      taskDesc: 'التعامل مع المهام المعقدة وتسليم النتائج بشكل مستقل'
     },
     chat: {
       selectModel: 'اختر النموذج',
@@ -902,7 +887,7 @@ export default {
       taskAgentResult: 'نتيجة الوكيل الفرعي',
       subAgentPrefix: 'مهمة فرعية',
       subAgentGeneralPurpose: 'مهمة فرعية · وكيل',
-      subAgentBash: 'Subtask · Terminal',
+      subAgentBash: 'مهمة فرعية · الطرفية',
       subAgentRunning: 'قيد التنفيذ',
       subAgentCompleted: 'مكتمل',
       subAgentStopped: 'متوقف',
@@ -913,7 +898,7 @@ export default {
       tokenUsage: 'إدخال {input} · مخرج {output}',
       uploadFile: 'رفع ملف',
       selectFiles: 'اختيار ملفات',
-      fileMessage: 'رسالة ملف',
+      fileMessage: 'رسالة ملف'
     },
     menu: {
       settings: 'إعدادات المساعد',
@@ -922,19 +907,19 @@ export default {
       rename: 'إعادة تسمية',
       delete: 'حذف',
       pin: 'تثبيت',
-      unpin: 'إلغاء التثبيت',
+      unpin: 'إلغاء التثبيت'
     },
     teamRobot: {
-      infoTitle: 'معلومات روبوت الفريق',
+      infoTitle: 'معلومات روبوت الفريق'
     },
     channels: {
       title: 'قنوات المساعد',
-      subtitle: 'أضف وربط قنوات المراسلة لـ ',
+      subtitle: 'أضف واربط قنوات المراسلة لهذا المساعد ',
       currentAgent: 'المساعد الحالي',
       unknownAgent: 'مساعد غير معروف',
       noPlatforms: 'لا توجد قنوات متاحة',
       createTitle: 'إضافة بوت {platform}',
-      createDesc: 'أعد استخدام تدفق إنشاء القناة وربط النتيجة بالمساعد الحالي تلقائيًا.',
+      createDesc: 'اتبع مسار الإضافة في صفحة القنوات. بعد الإنشاء، سيتم ربطها تلقائيًا بالمساعد الحالي.',
       addChannel: 'إضافة قناة',
       addAndBind: 'إضافة وربط',
       showExisting: 'عرض القنوات المضافة',
@@ -953,7 +938,7 @@ export default {
       addBot: 'إضافة بوت',
       addBotHint: 'يمكن ربط كل بوت بمساعد ذكاء اصطناعي واحد فقط. يتم عرض البوتات غير المرتبطة فقط.',
       noUnboundBot: 'لا توجد بوتات غير المرتبطة متاحة',
-      selectBot: 'الرجاء تحديد بوت للربط',
+      selectBot: 'الرجاء تحديد بوت للربط'
     },
     conversation: {
       empty: 'لا يوجد سجل محادثة',
@@ -961,15 +946,15 @@ export default {
         title: 'إعادة تسمية المحادثة',
         placeholder: 'أدخل اسمًا جديدًا',
         confirm: 'حفظ',
-        success: 'تمت إعادة التسمية',
+        success: 'تمت إعادة التسمية'
       },
       delete: {
         title: 'تأكيد الحذف',
         desc: 'حذف المحادثة ',
         cancel: 'إلغاء',
         confirm: 'حذف',
-        success: 'تم الحذف',
-      },
+        success: 'تم الحذف'
+      }
     },
     errors: {
       loadFailed: 'فشل تحميل المساعدين',
@@ -993,44 +978,41 @@ export default {
       teamImageNotSupported: 'إرسال الصور غير مدعوم في وضع الفريق بعد',
       selectTeamRobotFirst: 'الرجاء تحديد روبوت الفريق أولاً',
       teamRobotMissingKey: ' robot_key مفقود من الروبوت الحالي، يرجى المزامنة مرة أخرى',
-      modelNotSupportVision:
-        'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
+      modelNotSupportVision: 'النموذج الحالي لا يدعم التعرّف على الصور. يرجى التبديل إلى نموذج متعدد الوسائط يدعم الرؤية.',
       modelNotSupportVisionHint: 'نماذج مثل GPT-4o وClaude وGemini تدعم التعرف على الصور',
       fileTooLarge: 'حجم الملف يتجاوز الحد (الحد الأقصى {max})',
       tooManyFiles: 'يمكن رفع {max} ملفات كحد أقصى',
       invalidFileType: 'نوع ملف غير مدعوم',
       fileReadFailed: 'فشل في قراءة الملف',
-      fileOpenFailed: 'فشل في فتح الملف',
+      fileOpenFailed: 'فشل في فتح الملف'
     },
     toasts: {
       created: 'تم إنشاء المساعد',
       updated: 'تم تحديث المساعد',
-      deleted: 'تم حذف المساعد',
+      deleted: 'تم حذف المساعد'
     },
     settings: {
       title: 'إعدادات المساعد',
       tabs: {
         general: 'عام',
         advanced: 'متقدم',
-        model: '模型设置',
-        prompt: '提示词设置',
-        workspace: '工作区',
-        retrieval: '知识库检索',
-        delete: 'حذف',
+        model: 'إعدادات النموذج',
+        prompt: 'إعدادات الموجّه',
+        workspace: 'مساحة العمل',
+        retrieval: 'استرجاع قاعدة المعرفة',
+        delete: 'حذف'
       },
       workspace: {
         sandboxMode: 'وضع التنفيذ',
         modeCodex: 'صندوق رمل Codex',
         modeNative: 'التنفيذ الأصلي',
-        nativeDesc:
-          'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
+        nativeDesc: 'نفّذ الأوامر مباشرة على الجهاز المحلي بدون عزل sandbox. وستمتلك الأوامر كامل صلاحيات المستخدم الحالي.',
         networkAccess: 'السماح بالوصول إلى الشبكة',
         workDir: 'دليل العمل',
-        workDirHint:
-          'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
+        workDirHint: 'البنية: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: 'تغيير',
         resetDir: 'إعادة التعيين إلى الافتراضي',
-        selectDir: 'اختر دليل العمل',
+        selectDir: 'اختر دليل العمل'
       },
       model: {
         defaultModel: 'النموذج الافتراضي',
@@ -1044,61 +1026,61 @@ export default {
         topPHint: 'تحكم في نطاق أخذ العينات',
         contextCount: 'عدد السياق',
         maxTokens: 'أقصىTokens',
-        unlimited: 'غير محدود',
+        unlimited: 'غير محدود'
       },
       retrieval: {
         matchThreshold: 'عتبة المطابقة',
         topK: 'عدد الشرائح',
-        default: 'افتراضي',
+        default: 'افتراضي'
       },
       delete: {
         title: 'حذف المساعد',
         hint: 'حذف المساعد سيزيل جميع المحادثات ذات الصلة. لا يمكن التراجع عن هذا.',
-        protected: 'The default assistant is a system agent and cannot be deleted.',
+        protected: 'المساعد الافتراضي هو وكيل نظام ولا يمكن حذفه.',
         action: 'حذف',
         confirmTitle: 'تأكيد الحذف',
-        confirmDesc: 'هل أنت متأكد من حذف ',
+        confirmDesc: 'هل أنت متأكد من حذف '
       },
-      "advanced": {
-        "sandboxMode": "وضع الحماية",
-        "sandbox_off": "معطّل",
-        "sandbox_non-main": "المساعدون غير الافتراضيين فقط",
-        "sandbox_all": "جميع المساعدين",
-        "sandboxModeHint": "يعزل sandbox تنفيذ الأوامر لمنع المساعدين من تعديل النظام المضيف مباشرة",
-        "groupChatMentionPatterns": "أنماط الإشارة في المجموعة",
-        "groupChatMentionPatternsPlaceholder": "{'@'}assistant, {'@'}bot",
-        "groupChatInsertPreset": "إدراج قالب",
-        "groupChatMentionPatternsHint": "أنماط لتفعيل استجابة الوكيل، مفصولة بفواصل",
-        "tools": "تكوين الأدوات",
-        "toolsProfile": "ملف الأدوات",
-        "toolsProfile_default": "غير محدد (وراثة عام)",
-        "toolsProfile_minimal": "Minimal — الحالة فقط",
-        "toolsProfile_coding": "Coding — ملفات/وقت التشغيل/جلسات/ذاكرة",
-        "toolsProfile_messaging": "Messaging — مراسلة/جلسات",
-        "toolsProfile_full": "Full — بدون قيود",
-        "builtinTools": "الأدوات المضمنة",
-        "builtinToolsHint": "يمكنك اختيار أدوات OpenClaw المضمنة هنا مباشرة. ما زال بإمكانك إدخال أدوات الإضافات أو الأدوات المخصصة يدويًا أدناه.",
-        "builtinToolsLoading": "جارٍ تحميل الأدوات المضمنة في OpenClaw…",
-        "builtinToolsUnavailable": "تعذر تحميل قائمة الأدوات المضمنة في OpenClaw حاليًا. ما زال بإمكانك إدخال أسماء الأدوات يدويًا.",
-        "toolModeAllow": "سماح",
-        "toolModeDeny": "حظر",
-        "toolsAllow": "الأدوات المسموحة",
-        "toolsAllowPlaceholder": "مثال: browser, file_search",
-        "toolsDeny": "الأدوات المرفوضة",
-        "toolsDenyPlaceholder": "مثال: canvas",
-        "toolsHint": "الرفض له أولوية على السماح. يمكن متابعة إدخال أدوات الإضافات أو الأدوات المخصصة يدويًا، ثم اضغط Enter للتأكيد.",
-        "heartbeat": "فترة نبض القلب",
-        "heartbeat_off": "إيقاف",
-        "heartbeat_custom": "مخصص",
-        "heartbeatPlaceholder": "مثال: 10m",
-        "heartbeatFormatError": "تنسيق غير صالح. استخدم رقم + وحدة، مثال: 10m, 1h, 30s, 500ms",
-        "heartbeatHint": "فترة فحص نبض القلب الدورية (ms/s/m/h)",
-        "params": "تجاوز معلمات النموذج",
-        "paramsTemperature": "Temperature",
-        "paramsTemperaturePlaceholder": "اتركه فارغاً للقيمة الافتراضية",
-        "paramsMaxTokens": "الحد الأقصى للرموز",
-        "paramsMaxTokensPlaceholder": "اتركه فارغاً للقيمة الافتراضية",
-        "paramsHint": "تجاوز معلمات agents.defaults.models لهذا الوكيل"
+      advanced: {
+        sandboxMode: 'وضع الحماية',
+        sandbox_off: 'معطّل',
+        'sandbox_non-main': 'المساعدون غير الافتراضيين فقط',
+        sandbox_all: 'جميع المساعدين',
+        sandboxModeHint: 'يعزل sandbox تنفيذ الأوامر لمنع المساعدين من تعديل النظام المضيف مباشرة',
+        groupChatMentionPatterns: 'أنماط الإشارة في المجموعة',
+        groupChatMentionPatternsPlaceholder: '{\'@\'}assistant, {\'@\'}bot',
+        groupChatInsertPreset: 'إدراج قالب',
+        groupChatMentionPatternsHint: 'أنماط لتفعيل استجابة الوكيل، مفصولة بفواصل',
+        tools: 'تكوين الأدوات',
+        toolsProfile: 'ملف الأدوات',
+        toolsProfile_default: 'غير محدد (وراثة عام)',
+        toolsProfile_minimal: 'Minimal — الحالة فقط',
+        toolsProfile_coding: 'Coding — ملفات/وقت التشغيل/جلسات/ذاكرة',
+        toolsProfile_messaging: 'Messaging — مراسلة/جلسات',
+        toolsProfile_full: 'Full — بدون قيود',
+        builtinTools: 'الأدوات المضمنة',
+        builtinToolsHint: 'يمكنك اختيار أدوات OpenClaw المضمنة هنا مباشرة. ما زال بإمكانك إدخال أدوات الإضافات أو الأدوات المخصصة يدويًا أدناه.',
+        builtinToolsLoading: 'جارٍ تحميل الأدوات المضمنة في OpenClaw…',
+        builtinToolsUnavailable: 'تعذر تحميل قائمة الأدوات المضمنة في OpenClaw حاليًا. ما زال بإمكانك إدخال أسماء الأدوات يدويًا.',
+        toolModeAllow: 'سماح',
+        toolModeDeny: 'حظر',
+        toolsAllow: 'الأدوات المسموحة',
+        toolsAllowPlaceholder: 'مثال: browser, file_search',
+        toolsDeny: 'الأدوات المرفوضة',
+        toolsDenyPlaceholder: 'مثال: canvas',
+        toolsHint: 'الرفض له أولوية على السماح. يمكن متابعة إدخال أدوات الإضافات أو الأدوات المخصصة يدويًا، ثم اضغط Enter للتأكيد.',
+        heartbeat: 'فترة نبض القلب',
+        heartbeat_off: 'إيقاف',
+        heartbeat_custom: 'مخصص',
+        heartbeatPlaceholder: 'مثال: 10m',
+        heartbeatFormatError: 'تنسيق غير صالح. استخدم رقم + وحدة، مثال: 10m, 1h, 30s, 500ms',
+        heartbeatHint: 'فترة فحص نبض القلب الدورية (ms/s/m/h)',
+        params: 'تجاوز معلمات النموذج',
+        paramsTemperature: 'درجة الحرارة',
+        paramsTemperaturePlaceholder: 'اتركه فارغاً للقيمة الافتراضية',
+        paramsMaxTokens: 'الحد الأقصى للرموز',
+        paramsMaxTokensPlaceholder: 'اتركه فارغاً للقيمة الافتراضية',
+        paramsHint: 'تجاوز معلمات agents.defaults.models لهذا الوكيل'
       }
     },
     workspaceDrawer: {
@@ -1128,28 +1110,27 @@ export default {
       mcpDeselectAll: 'إلغاء تحديد الكل',
       mcpGlobalDisabled: 'MCPمعطل عالميًا.فعّله في الإعدادات.',
       mcpGoToSettings: 'إضافة MCPجديد',
-      mcpGoToSettingsHint: 'انتقل إلى صفحة الإعدادات لإضافة خادم MCPجديد',
-    },
+      mcpGoToSettingsHint: 'انتقل إلى صفحة الإعدادات لإضافة خادم MCPجديد'
+    }
   },
   knowledge: {
     help: {
       name: 'اسم للتمييز بين قواعد المعرفة المختلفة (بحد أقصى 30 حرفًا).',
-      chunkSize:
-        'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
+      chunkSize: 'حجم الشريحة (بعدد الأحرف، من 500 إلى 5000). تمنح الشرائح الأكبر سياقًا أكمل ولكن بدقة استرجاع أقل.',
       chunkOverlap: 'حجم التداخل (بالأحرف، 0~1000) بين الشرائح المتجاورة لتقليل فقدان المعلومات.',
       matchThreshold: 'ستتم تصفية النتائج ذات التشابه الأقل من هذه العتبة (0~1).',
       embeddingModel: 'نموذج التضمين المستخدم لتحويل النص إلى ناقلات.',
       embeddingDimension: 'يجب أن يتطابق بُعد متجه التضمين مع مخرجات النموذج المحدد.',
-      embeddingModelHint: 'يُستخدم لتحويل نص الذاكرة إلى متجهات لاسترجاع الدلالي أثناء المحادثات.',
+      embeddingModelHint: 'يُستخدم لتحويل نص الذاكرة إلى متجهات لاسترجاع الدلالي أثناء المحادثات.'
     },
     tabs: {
       personal: 'شخصي',
       team: 'فريق',
-      teamDisabledTip: 'قاعدة معرفة الفريق غير متاحة بعد',
+      teamDisabledTip: 'قاعدة معرفة الفريق غير متاحة بعد'
     },
     sidebar: {
       collapse: 'طي',
-      expand: 'توسيع',
+      expand: 'توسيع'
     },
     loading: 'جار التحميل...',
     loadFailed: 'فشل تحميل قواعد المعرفة',
@@ -1171,47 +1152,47 @@ export default {
         question: 'السؤال',
         answer: 'الإجابة',
         total: 'الإجمالي: {count}',
-        searchPlaceholder: 'البحث عن سؤال',
+        searchPlaceholder: 'البحث عن سؤال'
       },
       fields: {
         id: 'معرف قاعدة المعرفة',
         type: 'النوع',
         status: 'الحالة',
-        scope: 'النطاق',
+        scope: 'النطاق'
       },
       status: {
         enabled: 'مفعل',
-        disabled: 'معطل',
+        disabled: 'معطل'
       },
-      scopeChatwiki: 'قاعدة معرفة فريق ChatWiki',
+      scopeChatwiki: 'قاعدة معرفة فريق ChatWiki'
     },
     selectOne: 'الرجاء تحديد قاعدة معرفة',
     empty: {
       title: 'قاعدة المعرفة فارغة',
       desc: 'الرجاء إضافة قاعدة معرفة',
-      createBtn: 'إنشاء قاعدة معرفة',
+      createBtn: 'إنشاء قاعدة معرفة'
     },
     item: {
       menu: 'المزيد من الإجراءات',
       rename: 'إعادة تسمية',
       settings: 'الإعدادات',
-      delete: 'حذف',
+      delete: 'حذف'
     },
     rename: {
       title: 'إعادة تسمية قاعدة المعرفة',
       placeholder: 'أدخل اسمًا جديدًا',
       confirm: 'حفظ',
       success: 'تمت إعادة التسمية',
-      failed: 'فشل إعادة التسمية',
+      failed: 'فشل إعادة التسمية'
     },
     settingsDialog: {
-      title: 'إعدادات قاعدة المعرفة',
+      title: 'إعدادات قاعدة المعرفة'
     },
     settings: {
       title: 'إعدادات قاعدة المعرفة',
       save: 'حفظ',
       saved: 'تم الحفظ',
-      saveFailed: 'فشل الحفظ',
+      saveFailed: 'فشل الحفظ'
     },
     delete: {
       title: 'تأكيد الحذف',
@@ -1219,7 +1200,7 @@ export default {
       cancel: 'إلغاء',
       confirm: 'حفظ',
       success: 'تم الحذف',
-      failed: 'فشل الحذف',
+      failed: 'فشل الحذف'
     },
     create: {
       title: 'إضافة قاعدة معرفة',
@@ -1239,7 +1220,7 @@ export default {
       cancel: 'إلغاء',
       confirm: 'إنشاء',
       success: 'تم إنشاء قاعدة المعرفة',
-      failed: 'فشل إنشاء قاعدة المعرفة',
+      failed: 'فشل إنشاء قاعدة المعرفة'
     },
     embeddingSettings: {
       title: 'إعدادات نموذج التضمين',
@@ -1249,10 +1230,10 @@ export default {
       required: 'الرجاء تحديد نموذج التضمين في إعدادات نموذج التضمين أولاً',
       save: 'حفظ',
       saved: 'تم الحفظ',
-      saveFailed: 'فشل الحفظ',
+      saveFailed: 'فشل الحفظ'
     },
     chat: {
-      selectAgent: 'اختر المساعد',
+      selectAgent: 'اختر المساعد'
     },
     content: {
       searchPlaceholder: 'بحث',
@@ -1262,38 +1243,38 @@ export default {
       noMore: 'لا مزيد',
       sort: {
         createdDesc: 'الأحدث أولاً',
-        createdAsc: 'الأقدم أولاً',
+        createdAsc: 'الأقدم أولاً'
       },
       fileTypes: {
         documents: 'ملفات الوثائق',
-        all: 'جميع الملفات',
+        all: 'جميع الملفات'
       },
       empty: {
         title: 'لا توجد وثائق بعد',
-        desc: 'يدعم تنسيقات PDF وWord وExcel وTXT وMarkdown وCSV وHTML وOFD',
+        desc: 'يدعم تنسيقات PDF وWord وExcel وTXT وMarkdown وCSV وHTML وOFD'
       },
       status: {
         completed: 'اكتمل',
         learning: 'يتعلم',
         parsing: 'يحلل',
         failed: 'فشل',
-        pending: 'معلق',
+        pending: 'معلق'
       },
       fileMissing: 'الملف الأصلي مفقود',
       menu: {
         rename: 'إعادة تسمية',
         relearn: 'إعادة التعلم',
-        delete: 'حذف',
+        delete: 'حذف'
       },
       upload: {
         success: 'تم رفع الوثائق',
         failed: 'فشل رفع الوثائق',
         count: 'تم رفع {count} وثيقة',
-        uploading: 'جار الرفع {done}/{total}',
+        uploading: 'جار الرفع {done}/{total}'
       },
       drop: {
         hint: 'اسحب الملفات هنا للرفع',
-        formats: 'يدعم تنسيقات PDF وWord وExcel وTXT وMarkdown وCSV وHTML وOFD',
+        formats: 'يدعم تنسيقات PDF وWord وExcel وTXT وMarkdown وCSV وHTML وOFD'
       },
       rename: {
         title: 'إعادة تسمية الوثيقة',
@@ -1302,11 +1283,11 @@ export default {
         cancel: 'إلغاء',
         confirm: 'حفظ',
         success: 'تمت إعادة التسمية',
-        failed: 'فشل إعادة التسمية',
+        failed: 'فشل إعادة التسمية'
       },
       relearn: {
         success: 'بدأ إعادة التعلم',
-        failed: 'فشل إعادة التعلم',
+        failed: 'فشل إعادة التعلم'
       },
       delete: {
         title: 'تأكيد الحذف',
@@ -1314,7 +1295,7 @@ export default {
         cancel: 'إلغاء',
         confirm: 'حذف',
         success: 'تم الحذف',
-        failed: 'فشل الحذف',
+        failed: 'فشل الحذف'
       },
       moveToFolder: {
         title: 'نقل إلى مجلد',
@@ -1325,10 +1306,10 @@ export default {
         uncategorized: 'غير مصنف',
         empty: 'لا توجد مجلدات فرعية في هذا المجلد',
         success: 'تم النقل بنجاح',
-        failed: 'فشل النقل',
+        failed: 'فشل النقل'
       },
       navigateToFolder: 'الانتقال إلى المجلد',
-      openFailed: 'فشل فتح الوثيقة',
+      openFailed: 'فشل فتح الوثيقة'
     },
     folder: {
       all: 'جميع الملفات',
@@ -1355,7 +1336,7 @@ export default {
         selectFolder: 'اختر المجلد المستهدف',
         moveToHere: 'نقل إلى هنا',
         success: 'تم النقل بنجاح',
-        failed: 'فشل النقل',
+        failed: 'فشل النقل'
       },
       deleteFailed: 'فشل الحذف',
       nameRequired: 'لا يمكن أن يكون اسم المجلد فارغًا',
@@ -1364,7 +1345,7 @@ export default {
       nameHelp: 'اسم المجلد (بحد أقصى 50 حرفًا).',
       parentFolder: 'المجلد الأصل',
       parentFolderHelp: 'اختر مجلدًا أصل لإنشاء مجلد متداخل. اتركه فارغًا للإنشاء في الجذر.',
-      rootFolder: 'الجذر (بدون أصل)',
+      rootFolder: 'الجذر (بدون أصل)'
     },
     detail: {
       title: 'تفاصيل الوثيقة',
@@ -1379,21 +1360,21 @@ export default {
         source: 'المصدر',
         folder: 'المجلد',
         wordTotal: 'عدد الكلمات',
-        splitTotal: 'عدد الشرائح',
+        splitTotal: 'عدد الشرائح'
       },
       status: {
         parsing: 'التحليل',
-        embedding: 'التضمين',
+        embedding: 'التضمين'
       },
       actions: {
         relearn: 'إعادة تعلم الوثيقة',
         moveToFolder: 'نقل إلى مجلد',
         rename: 'إعادة تسمية',
-        delete: 'حذف الوثيقة',
+        delete: 'حذف الوثيقة'
       },
       uncategorized: 'غير مصنف',
       local: 'ملف محلي',
-      web: 'ويب',
+      web: 'ويب'
     },
     viewer: {
       title: 'عارض الوثائق',
@@ -1403,29 +1384,29 @@ export default {
       contentNotAvailable: 'المحتوى غير متاح للمعاينة. يرجى الفتح خارجيًا.',
       unsupported: 'نوع الملف ',
       localFileNote: 'يحتاج هذا الملف إلى فتح بتطبيق خارجي.',
-      loadFailedUseExternal: 'فشل التحميل. يرجى الفتح خارجيًا',
-    },
+      loadFailedUseExternal: 'فشل التحميل. يرجى الفتح خارجيًا'
+    }
   },
   memory: {
     title: 'الذاكرة',
     selectAgent: 'اختر مساعدًا لعرض ذاكرته',
-    noWorkspace: 'This agent has no OpenClaw workspace configured',
-    files: 'Files',
-    selectFile: 'Select a file to view its content',
-    noFiles: 'No memory files yet',
-    newFile: 'New File',
-    newFileDesc: 'Enter a file name (.md suffix added automatically)',
-    newFilePlaceholder: 'e.g. MEMORY',
-    create: 'Create',
+    noWorkspace: 'لا توجد مساحة عمل OpenClaw مكوّنة لهذا المساعد.',
+    files: 'الملفات',
+    selectFile: 'اختر ملفًا لعرض محتواه',
+    noFiles: 'لا توجد ملفات ذاكرة بعد',
+    newFile: 'ملف جديد',
+    newFileDesc: 'أدخل اسم ملف (ستُضاف اللاحقة .md تلقائيًا)',
+    newFilePlaceholder: 'مثال: MEMORY',
+    create: 'إنشاء',
     edit: 'تعديل',
     delete: 'حذف',
     save: 'حفظ',
     cancel: 'إلغاء',
-    saveSuccess: 'Saved successfully',
+    saveSuccess: 'تم الحفظ بنجاح',
     deleteSuccess: 'تم الحذف بنجاح',
     deleteConfirmTitle: 'تأكيد الحذف',
-    deleteFileConfirm: 'Are you sure you want to delete {name}? This action cannot be undone.',
-    unsavedChangesConfirm: 'You have unsaved changes. Switch anyway?',
+    deleteFileConfirm: 'هل أنت متأكد من حذف {name}؟ لا يمكن التراجع عن هذا الإجراء.',
+    unsavedChangesConfirm: 'لديك تغييرات غير محفوظة. هل تريد التبديل على أي حال؟',
     basicInfo: 'المعلومات الأساسية',
     basicInfoDesc: 'أهم معلومات الملف الشخصي للمستخدم',
     basicInfoEmpty: 'لا توجد معلومات أساسية بعد',
@@ -1433,11 +1414,9 @@ export default {
     conversationLog: 'سجل المحادثة',
     conversationLogDesc: 'حقائق المحادثة ترتيبًا زمنيًا',
     conversationLogEmpty: 'لا توجد سجلات محادثة بعد',
-    deleteEventStreamConfirm:
-      'Are you sure you want to delete this conversation log? This action cannot be undone.',
+    deleteEventStreamConfirm: 'هل أنت متأكد من حذف سجل المحادثة هذا؟ لا يمكن التراجع عن هذا الإجراء.',
     deleteFailed: 'فشل الحذف',
-    deleteThematicFactConfirm:
-      'Are you sure you want to delete this topic summary? This action cannot be undone.',
+    deleteThematicFactConfirm: 'هل أنت متأكد من حذف ملخص هذا الموضوع؟ لا يمكن التراجع عن هذا الإجراء.',
     editCoreProfile: 'تعديل المعلومات الأساسية',
     editEventStream: 'تعديل سجل المحادثة',
     editThematicFact: 'تعديل ملخص الموضوع',
@@ -1449,7 +1428,7 @@ export default {
     topicSummaryDesc: 'ملخصات طويلة المدى منظمة حسب الموضوع',
     topicSummaryEmpty: 'لا توجد ملخصات مواضيع بعد',
     updateFailed: 'فشل التحديث',
-    updateSuccess: 'تم التحديث بنجاح',
+    updateSuccess: 'تم التحديث بنجاح'
   },
   channels: {
     title: 'قنوات المراسلة',
@@ -1459,7 +1438,7 @@ export default {
     stats: {
       total: 'إجمالي القنوات',
       connected: 'متصل',
-      disconnected: 'غير متصل',
+      disconnected: 'غير متصل'
     },
     configured: {
       title: 'مُكوَّنة',
@@ -1467,46 +1446,47 @@ export default {
       empty: 'لا توجد قنوات مُكوَّنة بعد',
       connected: 'متصل',
       disconnected: 'غير متصل',
-      error: 'خطأ',
+      error: 'خطأ'
     },
     available: {
       title: 'القنوات المتاحة',
-      desc: 'الاتصال بقناة جديدة',
+      desc: 'الاتصال بقناة جديدة'
     },
     add: {
       title: 'إضافة قناة',
-      desc: 'اختر نوع القناة للتكوين',
+      desc: 'اختر نوع القناة للتكوين'
     },
     wecomAdd: {
-      title: 'Configure WeCom',
-      subtitle: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      howTitle: 'How to connect',
-      tipsIntro: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      stepsLabel: 'Steps:',
-      step1: 'Tap Generate QR code to install and enable the official WeCom plugin in OpenClaw',
-      step2: 'Scan the QR code below with WeCom and confirm on your phone',
-      tipsOrManual: 'Or connect existing bot credentials',
-      scanHint: 'Scan the QR code below with WeCom and confirm on your phone',
-      manualEntry: 'I already have a bot',
-      generateQr: 'Generate QR code',
-      refreshQr: 'Refresh',
-      generating: 'Generating…',
-      registering: 'Registering channel…',
-      generateFailed: 'Failed to generate QR code',
-      missingCredentials: 'Authorized but bot credentials are missing',
-      registerFailed: 'Failed to register channel',
-      authFailed: 'Authorization failed or expired. Refresh and try again',
-      defaultName: 'WeCom Bot',
-      openScanAdd: 'Add via QR scan',
-      qrExpired: 'QR code expired (valid for 5 minutes)',
-      qrExpiredHint: 'Tap Refresh to generate a new QR code and scan again.',
+      title: 'إعداد WeCom',
+      subtitle: 'اربط WeCom عبر المسح باستخدام الإضافة الرسمية من Tencent OpenClaw.',
+      howTitle: 'كيفية الاتصال',
+      tipsIntro: 'اربط WeCom عبر المسح باستخدام الإضافة الرسمية من Tencent OpenClaw.',
+      stepsLabel: 'الخطوات:',
+      step1: 'اضغط على "إنشاء رمز QR" لتثبيت الإضافة الرسمية لـ WeCom في OpenClaw وتفعيلها.',
+      step2: 'امسح رمز QR أدناه باستخدام WeCom ثم أكّد على هاتفك.',
+      tipsOrManual: 'أو اربط بيانات اعتماد بوت موجودة.',
+      scanHint: 'امسح رمز QR أدناه باستخدام WeCom ثم أكّد على هاتفك.',
+      manualEntry: 'لديّ بوت بالفعل',
+      generateQr: 'إنشاء رمز QR',
+      refreshQr: 'تحديث',
+      generating: 'جارٍ الإنشاء…',
+      registering: 'جارٍ تسجيل القناة…',
+      generateFailed: 'فشل إنشاء رمز QR',
+      missingCredentials: 'تم التفويض ولكن بيانات اعتماد البوت مفقودة.',
+      registerFailed: 'فشل تسجيل القناة',
+      authFailed: 'فشل التفويض أو انتهت صلاحيته. حدّث وحاول مرة أخرى.',
+      defaultName: 'بوت WeCom',
+      openScanAdd: 'إضافة عبر مسح QR',
+      qrExpired: 'انتهت صلاحية رمز QR (صالح لمدة 5 دقائق)',
+      qrExpiredHint: 'اضغط على "تحديث" لإنشاء رمز QR جديد ثم امسحه مرة أخرى.'
     },
     platforms: {
-      dingtalk: 'DingTalk',
-      feishu: 'Feishu',
-      wecom: 'WeCom',
+      dingtalk: 'دينغ توك',
+      feishu: 'في شو',
+      wecom: 'وي كوم',
+      wechat: 'ويتشات',
       qq: 'QQ',
-      twitter: 'X (Twitter)',
+      twitter: 'X (Twitter)'
     },
     config: {
       title: 'تكوين بوت {platform}',
@@ -1524,91 +1504,90 @@ export default {
       appSecret: 'سر التطبيق',
       appSecretPlaceholder: 'أدخل سر التطبيق الخاص بك',
       wecomAppSecretPlaceholder: 'أدخل السر الخاص بك',
-      token: 'Token',
+      token: 'الرمز المميز',
       tokenPlaceholder: 'أدخل Token',
       save: 'موافق',
       cancel: 'إلغاء',
       success: 'تم إنشاء القناة بنجاح',
       failed: 'فشل إنشاء القناة',
       dingtalkPluginInstalling: 'جارٍ تثبيت مكوّن DingTalk',
-      dingtalkPluginInstallingDesc:
-        'يتم تثبيت مكوّن DingTalk Connector في الخلفية. يمكنك الآن المتابعة لربط مساعد والتحقق من حالة الاتصال لاحقاً.',
+      dingtalkPluginInstallingDesc: 'يتم تثبيت مكوّن DingTalk Connector في الخلفية. يمكنك الآن المتابعة لربط مساعد والتحقق من حالة الاتصال لاحقاً.',
       avatarHint: 'انقر للاستبدال، يوصى بـ 100*100 بكسل، بحد أقصى 100KB',
       feishuTipPrefix: 'تسجيل الدخول إلى',
       feishuTipMiddle: 'لإنشاء بوت، اتبع',
       feishuTipSuffix: 'للتكوين',
       feishuPlatformLink: 'منصة Feishu المفتوحة',
       feishuGuideLink: 'دليل التكوين',
-      dingtalkTipPrefix: 'Login to',
-      dingtalkTipMiddle: 'to create a bot, follow',
-      dingtalkTipSuffix: 'to complete setup',
-      dingtalkPlatformLink: 'DingTalk Open Platform',
-      dingtalkGuideLink: 'configuration guide',
-      qqTipPrefix: 'Login to',
-      qqTipMiddle: 'to create a bot, follow',
-      qqTipSuffix: 'to configure',
-      qqPlatformLink: 'QQ Open Platform',
-      qqGuideLink: 'configuration guide',
-      wecomTipPrefix: 'Login to',
-      wecomTipMiddle: 'to create a bot, follow',
-      wecomTipSuffix: 'to configure',
-      wecomPlatformLink: 'WeCom Open Platform',
-      wecomGuideLink: 'configuration guide',
+      dingtalkTipPrefix: 'تسجيل الدخول إلى',
+      dingtalkTipMiddle: 'لإنشاء بوت، اتبع',
+      dingtalkTipSuffix: 'لإكمال الإعداد',
+      dingtalkPlatformLink: 'منصة DingTalk المفتوحة',
+      dingtalkGuideLink: 'دليل التكوين',
+      qqTipPrefix: 'تسجيل الدخول إلى',
+      qqTipMiddle: 'لإنشاء بوت، اتبع',
+      qqTipSuffix: 'للتكوين',
+      qqPlatformLink: 'منصة QQ المفتوحة',
+      qqGuideLink: 'دليل التكوين',
+      wecomTipPrefix: 'تسجيل الدخول إلى',
+      wecomTipMiddle: 'لإنشاء بوت، اتبع',
+      wecomTipSuffix: 'للتكوين',
+      wecomPlatformLink: 'منصة WeCom المفتوحة',
+      wecomGuideLink: 'دليل التكوين'
     },
     delete: {
       title: 'تأكيد الحذف',
       desc: 'هل أنت متأكد من حذف القناة ',
       success: 'تم الحذف بنجاح',
-      failed: 'فشل الحذف',
+      failed: 'فشل الحذف'
     },
     connect: {
       success: 'تم الاتصال بنجاح',
-      failed: 'فشل الاتصال',
+      failed: 'فشل الاتصال'
     },
     disconnect: {
       success: 'تم قطع الاتصال',
-      failed: 'فشل قطع الاتصال',
+      failed: 'فشل قطع الاتصال'
     },
     meta: {
       feishu: {
         name: 'Feishu / Lark',
-        botName: 'Feishu',
-        description: 'بوت Feishu/Lark عبر اتصال طويل',
+        botName: 'في شو',
+        description: 'بوت Feishu/Lark عبر اتصال طويل'
       },
       telegram: {
         name: 'Telegram',
         botName: 'Telegram',
-        description: 'بوت Telegram عبر Bot API',
+        description: 'بوت Telegram عبر Bot API'
       },
       discord: {
         name: 'Discord',
         botName: 'Discord',
-        description: 'بوت Discord عبر Gateway',
+        description: 'بوت Discord عبر Gateway'
       },
       whatsapp: {
         name: 'WhatsApp',
         botName: 'WhatsApp',
-        description: 'WhatsApp Business API',
+        description: 'WhatsApp Business API'
       },
       dingtalk: {
-        name: 'DingTalk',
-        botName: 'DingTalk',
-        description: 'بوت DingTalk عبر Stream',
+        name: 'دينغ توك',
+        botName: 'دينغ توك',
+        description: 'بوت DingTalk عبر Stream'
       },
       wecom: {
-        name: 'WeCom',
-        botName: 'WeCom',
-        description: 'بوت WeChat المؤسسي',
+        name: 'وي كوم',
+        botName: 'وي كوم',
+        description: 'بوت WeChat المؤسسي'
       },
       qq: {
         name: 'QQ',
         botName: 'QQ',
-        description: 'بوت QQ منصة مفتوحة عبر WebSocket',
-      },
+        description: 'بوت QQ منصة مفتوحة عبر WebSocket'
+      }
     },
     authType: {
-      token: 'Token',
-      qrcode: 'رمز QR',
+      token: 'الرمز',
+      qrcode: 'رمز QR'
     },
     comingSoon: 'قريبًا',
     agentFallback: 'مساعد الذكاء الاصطناعي',
@@ -1618,15 +1597,17 @@ export default {
     bindSuccess: 'تم ربط المساعد بنجاح',
     card: {
       appId: 'معرف التطبيق',
+      applicationId: 'معرّف التطبيق',
       bind: 'ربط',
       switchBind: 'تبديل الربط',
       unbind: 'إلغاء الربط',
       bound: 'مرتبط',
       unbound: 'غير مرتبط',
+      provisioning: 'جارٍ الإنشاء'
     },
     empty: {
       title: 'لا توجد قنوات بعد',
-      desc: 'لم تقم بتكوين أي قنوات. انقر على الزر أعلاه لإضافة واحدة.',
+      desc: 'لم تقم بتكوين أي قنوات. انقر على الزر أعلاه لإضافة واحدة.'
     },
     inline: {
       avatarName: 'صورة رمزية / اسم البوت',
@@ -1637,24 +1618,22 @@ export default {
       verifying: 'جار التحقق…',
       verifyConfig: 'التحقق من التكوين',
       save: 'حفظ وإضافة',
-      configSteps: 'خطوات التكوين',
+      configSteps: 'خطوات التكوين'
     },
     toggle: {
       enableSuccess: 'تم التمكين بنجاح',
-      dingtalkPluginNotReady:
-        'إضافة موصل DingTalk لا تزال قيد التثبيت أو غير جاهزة. يرجى المحاولة لاحقًا.',
+      dingtalkPluginNotReady: 'إضافة موصل DingTalk لا تزال قيد التثبيت أو غير جاهزة. يرجى المحاولة لاحقًا.',
       disableSuccess: 'تم التعطيل بنجاح',
       enableTitle: 'هل تريد تمكين هذه القناة؟',
       disableTitle: 'هل تريد تعطيل هذه القناة؟',
-      enableDesc:
-        'When enabled, the system will attempt to connect to this channel to receive and process messages.',
-      disableDesc:
-        'When disabled, the connection to this channel will be disconnected and the system will no longer receive messages from it.',
+      enableDesc: 'عند التفعيل، سيحاول النظام الاتصال بهذه القناة لاستقبال الرسائل ومعالجتها.',
+      disableDesc: 'عند التعطيل، سيتم قطع الاتصال بهذه القناة ولن يستقبل النظام أي رسائل منها بعد ذلك.'
     },
     status: {
       online: 'متصل',
       error: 'خطأ',
       offline: 'غير متصل',
+      provisioning: 'جارٍ الإنشاء'
     },
     bindAgent: {
       title: 'اختر مساعدًا',
@@ -1664,21 +1643,55 @@ export default {
       autoGenerateSuccess: 'تم إنشاء المساعد والاتصال بالقناة',
       empty: 'لا يوجد مساعدون. أنشئ واحدًا أولاً.',
       noDesc: 'لا يوجد وصف',
-      confirm: 'تأكيد الربط',
+      confirm: 'تأكيد الربط'
     },
+    provisioning: {
+      toastTitle: 'قيد المعالجة في الخلفية',
+      toastDescription: 'لا يزال يتم إنشاء القناة والبوابة أو مزامنتهما. سيتم تحديث حالة الاتصال تلقائيًا، يرجى الانتظار.',
+      toastDescriptionWithAgent: 'لا يزال يتم إنشاء القناة أو المساعد أو البوابة أو مزامنتهما. يرجى الانتظار.'
+    },
+    wechat: {
+      emptyTitle: 'لم تتم إضافة WeChat بعد',
+      emptyDesc: 'امسح رمز الاستجابة السريعة عبر الإضافة الرسمية من Tencent OpenClaw لربط WeChat الشخصي والبدء في استقبال رسائل WeChat ومعالجتها.',
+      addNow: 'أضف الآن',
+      configTitle: 'إعداد WeChat',
+      configSubtitle: 'اربط WeChat الشخصي عبر مسح رمز الاستجابة السريعة باستخدام الإضافة الرسمية من Tencent OpenClaw',
+      howToConnect: 'كيفية الاتصال',
+      step1: 'اربط WeChat الشخصي عبر مسح رمز الاستجابة السريعة باستخدام الإضافة الرسمية من Tencent OpenClaw',
+      step3: 'انقر على إنشاء رمز الاستجابة السريعة ليقوم ChatClaw بتثبيت الإضافة الرسمية لـ WeChat وتمكينها في OpenClaw',
+      step4: 'استخدم WeChat لمسح رمز الاستجابة السريعة أدناه ثم أكّد الاتصال على هاتفك',
+      step5: 'بعد نجاح الاتصال، ستظهر محادثة جديدة باسم "WeChat ClawBot" تلقائيًا داخل WeChat. ويمكنك لاحقًا إضافة المزيد من حسابات WeChat عبر نفس عملية المسح، أو إعادة ربط حساب موجود.',
+      configStepsLink: 'خطوات الإعداد',
+      generateQRCode: 'إنشاء رمز QR',
+      generating: 'جارٍ الإنشاء…',
+      scanHint: 'يرجى استخدام WeChat لمسح رمز الاستجابة السريعة أدناه ثم تأكيد الاتصال على هاتفك',
+      waitingForScan: 'بانتظار المسح…',
+      refresh: 'تحديث',
+      loginSuccess: 'تم الاتصال بـ WeChat بنجاح!',
+      assistantPromptTitle: 'ربط المساعد',
+      assistantPromptDesc: 'هذه القناة مرتبطة افتراضيًا بالمساعد الرئيسي (main)، وستتم معالجة الرسائل بواسطة المساعد الرئيسي. إذا أردت استخدام مساعد آخر، يمكنك ربط مساعد موجود أو إنشاء مساعد جديد وربطه تلقائيًا بقناة WeChat هذه.',
+      useMainAssistant: 'تم (استخدام المساعد الرئيسي)',
+      bindExistingAssistant: 'ربط مساعد موجود',
+      createAssistantManually: 'إنشاء مساعد جديد',
+      createAssistantHint: 'عند إنشاء مساعد جديد ستحتاج إلى إدخال الاسم والمعلومات الأخرى يدويًا. بعد الإنشاء سيتم ربطه تلقائيًا وتحديث الاتصال.',
+      missingChannelId: 'تعذّر الحصول على معلومات القناة. أغلق هذه النافذة وحدّث قائمة القنوات ثم حاول مرة أخرى.',
+      missingChannelIdHint: 'تعذّر الحصول على معرّف القناة. أغلق هذه النافذة ثم اربط المساعد يدويًا من قائمة القنوات.',
+      channelNotFound: 'تعذّر العثور على القناة المطابقة. حدّث ثم حاول مرة أخرى.',
+      pluginInstallTryLater: 'تتم الآن عملية تثبيت أو تفعيل الإضافة الرسمية لـ WeChat في الخلفية. يرجى المحاولة لاحقًا.',
+      editNotSupported: 'يتم ربط WeChat عبر مسح الرمز، لذلك لا يمكن تعديله هنا. إذا أردت تبديل الحساب، احذف القناة من صفحة القنوات ثم أعد إضافتها عبر المسح.'
+    }
   },
   scheduledTasks: {
     title: 'المهام المجدولة',
     subtitle: 'أتمتة مهام الذكاء الاصطناعي بالمهام المجدولة',
     listTitle: 'قائمة المهام',
-    copySuffix: ' Copy',
+    copySuffix: ' نسخة',
     create: 'إنشاء مهمة',
     addTask: 'إضافة مهمة',
     refresh: 'تحديث',
     edit: 'تحرير المهمة',
     empty: 'لا توجد مهام مجدولة بعد',
-    emptyDescription:
-      '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
+    emptyDescription: 'أنشئ مهام مجدولة لأتمتة سير عمل الذكاء الاصطناعي. يمكن للمهام إرسال الرسائل أو تشغيل الاستعلامات أو تنفيذ الإجراءات في أوقات محددة.',
     errorReason: 'عرض سبب الخطأ',
     actionsMenu: 'فتح قائمة الإجراءات',
     total: 'إجمالي المهام',
@@ -1687,11 +1700,11 @@ export default {
     failed: 'فشل',
     runNow: 'تشغيل الآن',
     history: 'السجل',
-    runHistoryTitle: 'Run History',
-    copy: 'Copy',
+    runHistoryTitle: 'سجل التشغيل',
+    copy: 'نسخ',
     delete: 'حذف',
     deleteConfirmTitle: 'تأكيد الحذف',
-    deleteConfirmDescription: 'Are you sure you want to delete task ',
+    deleteConfirmDescription: 'هل أنت متأكد من حذف المهمة "{name}"؟ لا يمكن التراجع عن هذا الإجراء.',
     confirmDelete: 'حذف',
     enabled: 'مفعل',
     disabled: 'متوقف',
@@ -1699,8 +1712,8 @@ export default {
     statusFailed: 'فشل',
     statusSuccess: 'نجاح',
     statusPending: 'معلق',
-    statusExpired: 'Ended',
-    expiredCannotEnable: 'This task has expired and can no longer be enabled.',
+    statusExpired: 'انتهت',
+    expiredCannotEnable: 'انتهت صلاحية هذه المهمة ولم يعد بالإمكان تفعيلها.',
     runTriggerSchedule: 'جدول',
     runTriggerManual: 'يدوي',
     lastRunPrefix: 'السابق: ',
@@ -1713,7 +1726,7 @@ export default {
       nextRun: 'التشغيل التالي',
       agent: 'المساعد',
       status: 'الحالة',
-      actions: 'الإجراءات',
+      actions: 'الإجراءات'
     },
     conversationEmpty: 'لا يوجد محتوى محادثة',
     dialog: {
@@ -1722,8 +1735,7 @@ export default {
       nameLabel: 'اسم المهمة',
       namePlaceholder: 'مثال: الملخص الصباحي',
       promptLabel: 'المطالبة',
-      promptPlaceholder:
-        'ما الذي يجب أن يفعله الذكاء الاصطناعي؟ مثال: أعطني ملخصاً لأخبار اليوم والطقس.',
+      promptPlaceholder: 'ما الذي يجب أن يفعله الذكاء الاصطناعي؟ مثال: أعطني ملخصاً لأخبار اليوم والطقس.',
       agentLabel: 'المساعد المرتبط',
       selectAgent: 'اختر مساعداً',
       scheduleTitle: 'ضبط الجدول',
@@ -1732,75 +1744,73 @@ export default {
       scheduleType: {
         preset: 'إعداد سريع',
         custom: 'وقت مخصص',
-        cron: 'Linux crontab',
+        cron: 'كرون لينكس'
       },
       customMode: {
         interval: 'كل',
         daily: 'يومياً',
         weekly: 'أسبوعياً',
-        monthly: 'شهرياً',
+        monthly: 'شهرياً'
       },
       monthlyDay: 'اليوم {day}',
       minutes: 'دقيقة',
-      cronLabel: 'Linux crontab',
+      cronLabel: 'كرون لينكس',
       cronPlaceholder: 'مثال: 0 9 * * *',
       enableNowTitle: 'تفعيل فوراً',
       enableNowHint: 'ابدأ تشغيل هذه المهمة فور إنشائها',
-      submitting: 'جارٍ الإرسال...',
+      submitting: 'جارٍ الإرسال...'
     },
     operationLog: {
-      title: 'Operation Log',
-      detailTitle: 'Operation Log Details',
-      empty: 'No operation logs yet',
-      viewDetail: 'View details',
+      title: 'سجل العمليات',
+      detailTitle: 'تفاصيل سجل العمليات',
+      empty: 'لا توجد سجلات عمليات بعد',
+      viewDetail: 'عرض التفاصيل',
       columns: {
-        task: 'Task',
-        operationType: 'Operation Type',
-        operationSource: 'Operation Source',
-        changedField: 'Changed Field',
-        before: 'Before',
-        after: 'After',
-        time: 'Operation Time',
-        action: 'Action',
+        task: 'المهمة',
+        operationType: 'نوع العملية',
+        operationSource: 'مصدر العملية',
+        changedField: 'الحقل المتغير',
+        before: 'قبل',
+        after: 'بعد',
+        time: 'وقت العملية',
+        action: 'الإجراء'
       },
       types: {
-        create: 'Create Task',
-        delete: 'Delete Task',
-        update: 'Update Task',
+        create: 'إنشاء مهمة',
+        delete: 'حذف المهمة',
+        update: 'تحديث المهمة'
       },
       sources: {
-        ai: 'AI Assistant',
-        manual: 'Manual',
+        ai: 'مساعد الذكاء الاصطناعي',
+        manual: 'يدوي'
       },
       notification: {
-        onDemand: 'On demand',
+        onDemand: 'عند الطلب'
       },
       status: {
-        enabled: 'Enabled',
-        disabled: 'Disabled',
+        enabled: 'مفعل',
+        disabled: 'معطل'
       },
       fields: {
-        status: 'Status',
-        name: 'Name',
-        prompt: 'Prompt',
-        agent: 'Assistant',
-        notificationChannels: 'Notification Channels',
-        scheduleTime: 'Schedule Time',
-      },
+        status: 'الحالة',
+        name: 'الاسم',
+        prompt: 'المطالبة',
+        agent: 'المساعد',
+        notificationChannels: 'قنوات الإشعارات',
+        scheduleTime: 'وقت الجدولة'
+      }
     },
     notification: {
-      label: 'Notification',
-      optional: 'Optional',
-      none: 'Do not send notifications',
-      channelsLabel: 'Select channels',
-      selectTypeFirst: 'Please select a notification type first',
-      selectChannel: 'Please select channels',
-      emptyChannels: 'No channels are available for the current notification type',
-      hintSelected:
-        'You can select multiple channels. Results will be sent there after the task completes.',
-      hintUnselected:
-        'Choose a notification type first, then select one or more channels from that platform.',
-      channelFallback: 'Channel {id}',
+      label: 'الإشعار',
+      optional: 'اختياري',
+      none: 'لا ترسل إشعارات',
+      channelsLabel: 'اختر القنوات',
+      selectTypeFirst: 'يرجى اختيار نوع إشعار أولاً.',
+      selectChannel: 'يرجى اختيار القنوات.',
+      emptyChannels: 'لا توجد قنوات متاحة لنوع الإشعار الحالي.',
+      hintSelected: 'يمكنك اختيار عدة قنوات. ستُرسل النتائج إليها بعد اكتمال المهمة.',
+      hintUnselected: 'اختر نوع إشعار أولاً، ثم حدد قناة واحدة أو أكثر من تلك المنصة.',
+      channelFallback: 'القناة {id}'
     },
     presets: {
       everyMinute: 'كل دقيقة',
@@ -1811,7 +1821,7 @@ export default {
       everyDay1800: 'كل يوم الساعة 6:00 مساءً',
       weekdays0900: 'أيام الأسبوع الساعة 9:00 صباحاً',
       everyMonday0900: 'كل يوم اثنين الساعة 9:00 صباحاً',
-      everyMonth10900: 'اليوم الأول من كل شهر الساعة 9:00 صباحاً',
+      everyMonth10900: 'اليوم الأول من كل شهر الساعة 9:00 صباحاً'
     },
     weekdays: {
       sunday: 'الأحد',
@@ -1820,7 +1830,7 @@ export default {
       wednesday: 'الأربعاء',
       thursday: 'الخميس',
       friday: 'الجمعة',
-      saturday: 'السبت',
+      saturday: 'السبت'
     },
     weekdaysShort: {
       sunday: 'أحد',
@@ -1829,13 +1839,13 @@ export default {
       wednesday: 'أرب',
       thursday: 'خم',
       friday: 'جمع',
-      saturday: 'سبت',
+      saturday: 'سبت'
     },
     describe: {
       interval: 'كل {value} دقائق',
       monthly: 'اليوم {day} {time}',
       weekly: 'أسبوعياً {labels} {time}',
-      daily: 'يومياً {time}',
+      daily: 'يومياً {time}'
     },
     form: {
       name: 'اسم المهمة',
@@ -1847,9 +1857,8 @@ export default {
       chatMode: 'وضع المحادثة',
       thinking: 'التفكير',
       enabled: 'تمكين المهمة',
-      expiresAt: 'Expiration Date',
-      expiredHint:
-        'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
+      expiresAt: 'تاريخ الانتهاء',
+      expiredHint: 'انتهت صلاحية هذه المهمة ولن تعمل مرة أخرى. لاستئنافها، انقل وقت الانتهاء إلى تاريخ مستقبلي.',
       scheduleType: 'نوع الجدولة',
       schedulePreset: 'إعداد مسبق',
       scheduleCustom: 'وقت مخصص',
@@ -1858,7 +1867,7 @@ export default {
       time: 'وقت التشغيل',
       weekdays: 'أيام الأسبوع',
       dayOfMonth: 'يوم الشهر',
-      cronExpr: 'Cron',
+      cronExpr: 'كرون',
       interval: 'كل X دقيقة',
       namePlaceholder: 'أدخل اسم المهمة',
       promptPlaceholder: 'أدخل التعليمات المرسلة في كل تشغيل تلقائي',
@@ -1870,122 +1879,120 @@ export default {
       daily: 'يومي',
       weekly: 'أسبوعي',
       monthly: 'شهري',
-      selectExpirationDate: 'Select expiration date',
-      today: 'Today',
-      clear: 'Clear',
+      selectExpirationDate: 'اختر تاريخ الانتهاء',
+      today: 'اليوم',
+      clear: 'مسح',
       calendarTitle: '{year} / {month}',
       yearOption: '{year}',
-      monthOption: '{month}',
-    },
+      monthOption: '{month}'
+    }
   },
   openclawCron: {
-    title: 'Scheduled Tasks',
-    subtitle: 'Automate AI tasks with scheduled tasks',
-    create: 'Create Task',
-    addTask: 'Add Task',
-    edit: 'Edit Task',
-    delete: 'Delete',
-    deleteTitle: 'Delete Task',
-    confirmDelete: 'Confirm Delete',
-    refresh: 'Refresh',
-    empty: 'No scheduled tasks',
-    emptyDescription: 'After creation, tasks will run automatically at the configured time.',
-    enabled: 'Enabled',
-    disabled: 'Paused',
-    runNow: 'Run Now',
-    historyAction: 'History',
-    actionsMenu: 'Actions',
-    errorReason: 'View error reason',
-    statusRunning: 'Running',
-    lastRunPrefix: 'Last: ',
+    title: 'المهام المجدولة',
+    subtitle: 'أتمتة مهام الذكاء الاصطناعي باستخدام المهام المجدولة',
+    create: 'إنشاء مهمة',
+    addTask: 'إضافة مهمة',
+    edit: 'تحرير المهمة',
+    delete: 'حذف',
+    deleteTitle: 'حذف المهمة',
+    confirmDelete: 'تأكيد الحذف',
+    refresh: 'تحديث',
+    empty: 'لا توجد مهام مجدولة',
+    emptyDescription: 'بعد الإنشاء، ستعمل المهام تلقائيًا في الوقت المحدد.',
+    enabled: 'مفعل',
+    disabled: 'متوقف',
+    runNow: 'تشغيل الآن',
+    historyAction: 'السجل',
+    actionsMenu: 'الإجراءات',
+    errorReason: 'عرض سبب الخطأ',
+    statusRunning: 'قيد التشغيل',
+    lastRunPrefix: 'السابق: ',
     summary: {
-      total: 'Total',
-      enabled: 'Running',
-      disabled: 'Paused',
-      failed: 'Failed',
-      failedRuns: 'Failed',
+      total: 'الإجمالي',
+      enabled: 'قيد التشغيل',
+      disabled: 'متوقف',
+      failed: 'فشل',
+      failedRuns: 'فشل'
     },
     columns: {
-      title: 'Task',
-      schedule: 'Schedule',
-      agent: 'Agent',
-      status: 'Status',
-      actions: 'Actions',
+      title: 'المهمة',
+      schedule: 'الجدول',
+      agent: 'المساعد',
+      status: 'الحالة',
+      actions: 'الإجراءات'
     },
     dialog: {
-      subtitle: 'Schedule an automated AI task',
-      name: 'Task Name',
-      namePlaceholder: 'For example: Morning briefing',
-      description: 'Description',
-      descriptionPlaceholder: 'Optional, used for extra context',
-      agent: 'Linked Assistant',
-      defaultAgent: 'Default Assistant',
-      useDefaultAgent: 'Unspecified (use default assistant)',
-      scheduleTitle: 'Set the schedule',
-      scheduleHint: 'Choose how the task should run and set the execution time.',
+      subtitle: 'جدولة مهمة ذكاء اصطناعي تلقائية',
+      name: 'اسم المهمة',
+      namePlaceholder: 'مثال: الملخص الصباحي',
+      description: 'الوصف',
+      descriptionPlaceholder: 'اختياري، يُستخدم لتقديم سياق إضافي',
+      agent: 'المساعد المرتبط',
+      defaultAgent: 'المساعد الافتراضي',
+      useDefaultAgent: 'غير محدد (استخدم المساعد الافتراضي)',
+      scheduleTitle: 'ضبط الجدول',
+      scheduleHint: 'اختر كيفية تشغيل المهمة وحدد وقت التنفيذ.',
       scheduleKinds: {
-        cron: 'Cron',
-        every: 'Interval',
-        custom: 'Custom Time',
-        at: 'One-Time',
+        cron: 'كرون',
+        every: 'فاصل زمني',
+        custom: 'وقت مخصص',
+        at: 'مرة واحدة'
       },
-      cronPlaceholder: 'For example: 0 9 * * *',
-      everyPlaceholder: 'For example: 10m / 1h / 30s',
-      everyHint: 'For example: 30 seconds, 10 minutes, 2 hours, 1 day',
+      cronPlaceholder: 'مثال: 0 9 * * *',
+      everyPlaceholder: 'مثال: 10m / 1h / 30s',
+      everyHint: 'مثال: 30 ثانية، 10 دقائق، ساعتان، يوم واحد',
       everyUnits: {
-        seconds: 'Seconds',
-        minutes: 'Minutes',
-        hours: 'Hours',
-        days: 'Days',
+        seconds: 'ثوانٍ',
+        minutes: 'دقائق',
+        hours: 'ساعات',
+        days: 'أيام'
       },
-      atPlaceholder: 'For example: 2026-03-25T21:00:00+08:00 or +20m',
-      timezone: 'Timezone',
-      systemTimezone: 'System Default',
-      exact: 'Exact Execution',
-      exactHint:
-        'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
-      enableNowTitle: 'Enable immediately',
-      enableNowHint: 'Start running this task immediately after creation',
-      message: 'Message',
-      messagePlaceholder: 'Message sent when the assistant runs on schedule',
-      systemEvent: 'System Event',
-      systemEventPlaceholder: 'Optional system event payload',
-      advanced: 'Advanced Settings',
-      advancedHint: 'Extra options for model, delivery, session, timeout, and more',
-      model: 'Model',
-      modelPlaceholder: 'For example: provider/model or alias',
-      thinking: 'Thinking',
-      sessionTarget: 'Session Target',
-      sessionKey: 'Session Key',
-      sessionKeyPlaceholder: 'For example: agent:main:my-session',
-      wakeMode: 'Wake Mode',
-      timeoutMs: 'Timeout (ms)',
-      channelPlatform: 'Channel Type',
-      channelPlatformPlaceholder: 'Select a configured channel',
-      deliveryTitle: 'Result Delivery',
-      deliveryHint: 'Choose a configured channel platform and confirm the target ID.',
-      deliveryTargetMode: 'Delivery Target',
-      deliveryTargetId: 'Target ID',
-      deliveryTargetIdPlaceholder: 'Enter a conversation or user ID',
-      deliveryTargetHintTitle: 'Default Target',
-      deliveryTargetFixedHint:
-        'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
+      atPlaceholder: 'مثال: 2026-03-25T21:00:00+08:00 أو +20m',
+      timezone: 'المنطقة الزمنية',
+      systemTimezone: 'إعداد النظام الافتراضي',
+      exact: 'تنفيذ دقيق',
+      exactHint: 'فعّل وضع OpenClaw الدقيق لاستهداف اللحظة المحددة بأكبر قدر ممكن من الدقة.',
+      enableNowTitle: 'تفعيل فوراً',
+      enableNowHint: 'ابدأ تشغيل هذه المهمة فور إنشائها',
+      message: 'الرسالة',
+      messagePlaceholder: 'الرسالة التي تُرسل عند تشغيل المساعد وفق الجدول',
+      systemEvent: 'حدث النظام',
+      systemEventPlaceholder: 'حمولة حدث النظام الاختيارية',
+      advanced: 'الإعدادات المتقدمة',
+      advancedHint: 'خيارات إضافية للنموذج والتسليم والجلسة والمهلة وغيرها',
+      model: 'النموذج',
+      modelPlaceholder: 'مثال: provider/model أو alias',
+      thinking: 'التفكير',
+      sessionTarget: 'هدف الجلسة',
+      sessionKey: 'مفتاح الجلسة',
+      sessionKeyPlaceholder: 'مثال: agent:main:my-session',
+      wakeMode: 'وضع التنبيه',
+      timeoutMs: 'المهلة (مللي ثانية)',
+      channelPlatform: 'نوع القناة',
+      channelPlatformPlaceholder: 'اختر قناة مُكوّنة',
+      deliveryTitle: 'تسليم النتيجة',
+      deliveryHint: 'اختر منصة قناة مُكوّنة ثم أكّد معرّف الهدف.',
+      deliveryTargetMode: 'هدف التسليم',
+      deliveryTargetId: 'معرّف الهدف',
+      deliveryTargetIdPlaceholder: 'أدخل معرّف المحادثة أو المستخدم',
+      deliveryTargetHintTitle: 'الهدف الافتراضي',
+      deliveryTargetFixedHint: 'يُملأ تلقائيًا أحدث معرّف هدف تم التسليم إليه للمساعد ونوع القناة المحددين، وما زال بإمكانك تعديله يدويًا.',
       deliveryTargetModes: {
-        lastActive: 'Last Active Target',
-        targetId: 'Enter Target ID',
+        lastActive: 'آخر هدف نشط',
+        targetId: 'أدخل معرّف الهدف'
       },
-      selectOneTime: 'Select one-time datetime',
-      hour: 'Hour',
-      minute: 'Minute',
-      second: 'Second',
-      announce: 'Announce',
-      expectFinal: 'Expect Final',
-      lightContext: 'Light Context',
-      bestEffortDeliver: 'Best Effort Deliver',
-      bestEffortDeliverHint: 'Do not fail the whole task when delivery fails',
-      deleteAfterRun: 'Delete After Run',
-      keepAfterRun: 'Keep After Run',
-      enabled: 'Enable Task',
-    },
-  },
+      selectOneTime: 'اختر تاريخًا ووقتًا لمرة واحدة',
+      hour: 'الساعة',
+      minute: 'الدقيقة',
+      second: 'الثانية',
+      announce: 'إعلان',
+      expectFinal: 'توقع النتيجة النهائية',
+      lightContext: 'سياق خفيف',
+      bestEffortDeliver: 'محاولة التسليم بأفضل جهد',
+      bestEffortDeliverHint: 'لا تجعل فشل التسليم يؤدي إلى فشل المهمة كلها.',
+      deleteAfterRun: 'احذف بعد التشغيل',
+      keepAfterRun: 'أبقِ بعد التشغيل',
+      enabled: 'تمكين المهمة'
+    }
+  }
 }

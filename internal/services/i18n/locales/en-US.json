@@ -193,6 +193,7 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw configuration sync timed out. Retry later or verify the OpenClaw Gateway is running.",
   "error.channel_update_failed": "failed to update channel",
   "error.dingtalk_plugin_not_ready": "DingTalk connector plugin is still installing or not ready. Please try again later.",
+  "error.wechat_plugin_not_ready": "WeChat OpenClaw plugin is still installing or not ready. Please try again later.",
   "error.channel_delete_failed": "failed to delete channel",
   "error.channel_read_failed": "failed to read channel",
   "error.channel_not_found": "channel '{{.ID}}' not found",

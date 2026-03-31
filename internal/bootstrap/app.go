@@ -390,7 +390,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	})
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
-	openclawManager.RegisterReadyHook(openClawChannelService.OnGatewayReadyDingTalkSessionSync)
+	openclawManager.RegisterReadyHook(openClawChannelService.OnGatewayReadyOpenClawPluginSessionSync)
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	openClawCronService := openclawcron.NewOpenClawCronService(app, openclawManager, openClawAgentsService, conversationsService, chatService)

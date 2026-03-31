@@ -187,6 +187,11 @@ func openClawSyncAccountID(ch channels.Channel) string {
 	switch strings.TrimSpace(ch.Platform) {
 	case channels.PlatformDingTalk:
 		return openClawChannelAccountKey(ch.ID, ch.ExtraConfig)
+	case channels.PlatformWechat:
+		if id := extractWechatAccountID(ch.ExtraConfig); id != "" {
+			return id
+		}
+		return openClawWechatAccountID(ch.ID)
 	default:
 		return openClawManagedAccountID(ch.Platform, ch.ID, ch.ExtraConfig)
 	}
@@ -260,7 +265,13 @@ func (s *OpenClawChannelService) syncSessionConversation(
 		Table("conversations").
 		Set("updated_at = ?", updateAt).
 		Where("id = ?", convID)
-	if shouldUpdateSyncedConversationName(currentName, name, scope, targetID) {
+	var allowNameUpdate bool
+	if strings.TrimSpace(ch.Platform) == channels.PlatformWechat {
+		allowNameUpdate = shouldUpdateWechatSyncedConversationName(currentName, name, scope, targetID)
+	} else {
+		allowNameUpdate = shouldUpdateSyncedConversationName(currentName, name, scope, targetID)
+	}
+	if allowNameUpdate {
 		q = q.Set("name = ?", name)
 	}
 	if lastMessage != "" {
@@ -295,9 +306,12 @@ func parseOpenClawPluginSessionKey(agentID string, sessionKey string, entry open
 		return openClawPluginSessionSource{}, false
 	}
 	platform := strings.TrimSpace(parts[2])
-	if p := strings.ToLower(platform); p == "dingtalk-connector" {
+	switch strings.ToLower(platform) {
+	case "dingtalk-connector":
 		platform = channels.PlatformDingTalk
-	} else if p == openClawQQChannelID {
+	case "openclaw-weixin", "weixin":
+		platform = channels.PlatformWechat
+	case openClawQQChannelID:
 		platform = channels.PlatformQQ
 	}
 	scope := strings.TrimSpace(parts[3])
@@ -378,6 +392,9 @@ func normalizePluginConversationScope(platform string, scope string, targetID st
 	case channels.PlatformFeishu:
 		return normalizeFeishuPluginConversationScope(scope, targetID, chatType)
 	case channels.PlatformDingTalk:
+		return normalizeDingTalkPluginConversationScope(scope, targetID, chatType)
+	case channels.PlatformWechat:
+		// Weixin OpenClaw plugin uses the same scope/chatType conventions as DingTalk.
 		return normalizeDingTalkPluginConversationScope(scope, targetID, chatType)
 	case channels.PlatformQQ:
 		return normalizeQQPluginConversationScope(scope, targetID, chatType)
@@ -487,11 +504,24 @@ func normalizeFeishuPluginConversationScope(scope string, targetID string, chatT
 	}
 }
 
-func (s *OpenClawChannelService) buildSyncedConversationName(_ channels.Channel, entry openClawSessionStoreEntry, scope string, targetID string) string {
+func (s *OpenClawChannelService) buildSyncedConversationName(ch channels.Channel, entry openClawSessionStoreEntry, scope string, targetID string) string {
 	title := channels.ConversationTitleFromFirstMessage(extractFirstSessionUserMessageText(entry.SessionFile))
 	if title == "" {
 		title = channels.ConversationTitleFromFirstMessage(extractLastSessionMessage(entry.SessionFile))
 	}
+
+	// WeChat: prefer the first user message as the conversation title (single and group).
+	if ch.Platform == channels.PlatformWechat {
+		if t := extractFirstSessionUserMessageText(entry.SessionFile); t != "" {
+			return channels.ConversationTitleFromFirstMessage(t)
+		}
+	}
+
+	name := strings.TrimSpace(entry.Origin.Label)
+	if name != "" && !isSyncedConversationPlaceholderName(name, scope, targetID) {
+		return name
+	}
+
 	if title != "" {
 		return formatAssistantConversationName(scope, title)
 	}
@@ -530,6 +560,24 @@ func shouldUpdateSyncedConversationName(currentName, nextName, scope, targetID s
 		return false
 	}
 	return true
+}
+
+// shouldUpdateWechatSyncedConversationName applies the WeChat title from the first user message only
+// while the row still has an empty or system-generated placeholder name. After the client sets a
+// custom title (any non-placeholder), sync must not overwrite it on refresh.
+func shouldUpdateWechatSyncedConversationName(currentName, nextName, scope, targetID string) bool {
+	currentName = strings.TrimSpace(currentName)
+	nextName = strings.TrimSpace(nextName)
+	if nextName == "" || currentName == nextName {
+		return false
+	}
+	if currentName == "" {
+		return true
+	}
+	if !isSyncedConversationPlaceholderName(currentName, scope, targetID) {
+		return false
+	}
+	return shouldUpdateSyncedConversationName(currentName, nextName, scope, targetID)
 }
 
 func isSyncedConversationPlaceholderName(name, scope, targetID string) bool {
