@@ -115,16 +115,16 @@ const agentNameMap = computed(() => {
 async function reloadAll() {
   loading.value = true
   try {
-    const [jobList, summaryValue, agentList, deliveryPlatformList] = await Promise.all([
+    const [jobList, summaryValue, dialogOptions] = await Promise.all([
       OpenClawCronService.ListJobs(),
       OpenClawCronService.GetSummary(),
-      OpenClawCronService.ListAgents(),
-      OpenClawCronService.ListDeliveryPlatforms(),
+      loadDialogOptions(),
     ])
+    const [agentList, deliveryPlatformList] = dialogOptions
     jobs.value = jobList || []
     summary.value = summaryValue
-    agents.value = agentList || []
-    deliveryPlatforms.value = deliveryPlatformList || []
+    agents.value = agentList
+    deliveryPlatforms.value = deliveryPlatformList
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -132,26 +132,46 @@ async function reloadAll() {
   }
 }
 
+async function loadDialogOptions() {
+  const [agentList, deliveryPlatformList] = await Promise.all([
+    OpenClawCronService.ListAgents(),
+    OpenClawCronService.ListDeliveryPlatforms(),
+  ])
+  return [agentList || [], deliveryPlatformList || []] as const
+}
+
+function applySingleDeliveryPlatformDefault() {
+  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
+    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+  }
+}
+
 onMounted(() => {
   void reloadAll()
 })
 
-function openCreateDialog() {
-  editingJob.value = null
-  form.value = createEmptyOpenClawCronForm()
-  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
-    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+async function openCreateDialog() {
+  try {
+    editingJob.value = null
+    form.value = createEmptyOpenClawCronForm()
+    ;[agents.value, deliveryPlatforms.value] = await loadDialogOptions()
+    applySingleDeliveryPlatformDefault()
+    createDialogOpen.value = true
+  } catch (error) {
+    toast.error(getErrorMessage(error))
   }
-  createDialogOpen.value = true
 }
 
-function openEditDialog(job: OpenClawCronJob) {
-  editingJob.value = job
-  form.value = jobToForm(job)
-  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
-    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+async function openEditDialog(job: OpenClawCronJob) {
+  try {
+    editingJob.value = job
+    form.value = jobToForm(job)
+    ;[agents.value, deliveryPlatforms.value] = await loadDialogOptions()
+    applySingleDeliveryPlatformDefault()
+    createDialogOpen.value = true
+  } catch (error) {
+    toast.error(getErrorMessage(error))
   }
-  createDialogOpen.value = true
 }
 
 function displayAgentName(job: OpenClawCronJob) {
