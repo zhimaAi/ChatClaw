@@ -410,9 +410,6 @@ func (c *GatewayClient) readLoop() {
 		case "event":
 			var event GatewayEventFrame
 			if json.Unmarshal(payload, &event) == nil {
-				if event.Event != "tick" && event.Event != "health" {
-					fmt.Printf("[gateway-client] raw event: %s\n", string(payload))
-				}
 				if c.opts.OnEvent != nil {
 					c.opts.OnEvent(event)
 				}

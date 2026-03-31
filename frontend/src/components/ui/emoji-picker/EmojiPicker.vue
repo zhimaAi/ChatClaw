@@ -421,7 +421,7 @@ const clearEmoji = () => {
                   ? 'bg-accent text-accent-foreground'
                   : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
               "
-              @click="activeCategory = cat as string; search = ''"
+              @click="activeCategory = cat; search = ''"
             >
               {{ icon }}
             </button>

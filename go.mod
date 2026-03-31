@@ -7,7 +7,7 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.7-alpha.2
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
-	github.com/cloudwego/eino v0.8.0
+	github.com/cloudwego/eino v0.8.5
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/markdown v0.0.0-20260302070227-13ce9b3fa975
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20260302070227-13ce9b3fa975

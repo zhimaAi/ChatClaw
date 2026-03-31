@@ -33,6 +33,10 @@ import {
   type OpenClawAgent,
 } from '@bindings/chatclaw/internal/openclaw/agents'
 import {
+  OpenClawRuntimeService,
+  type BuiltinToolCatalog,
+} from '@bindings/chatclaw/internal/openclaw/runtime'
+import {
   ProvidersService,
   type ProviderWithModels,
 } from '@bindings/chatclaw/internal/services/providers'
@@ -81,6 +85,9 @@ const toolsAllowTags = ref<string[]>([])
 const toolsAllowInput = ref('')
 const toolsDenyTags = ref<string[]>([])
 const toolsDenyInput = ref('')
+const builtinToolCatalog = ref<BuiltinToolCatalog | null>(null)
+const builtinToolCatalogLoading = ref(false)
+const builtinToolCatalogError = ref('')
 const heartbeatEvery = ref(HEARTBEAT_OFF)
 const paramsTemperature = ref('')
 const paramsMaxTokens = ref('')
@@ -94,7 +101,10 @@ watch(
       props.initialTab && validTabs.includes(props.initialTab as TabKey)
         ? (props.initialTab as TabKey)
         : 'general'
+    deleteConfirmOpen.value = false
+    if (props.agent) syncFormFromAgent(props.agent)
     void loadModels()
+    void loadBuiltinToolCatalog()
   }
 )
 
@@ -102,43 +112,14 @@ watch(
   () => props.agent,
   (agent) => {
     if (!agent) return
-    name.value = agent.name ?? ''
-    identityEmoji.value = agent.identity_emoji ?? ''
-    identityTheme.value = agent.identity_theme ?? ''
-
-    modelProviderId.value = agent.default_llm_provider_id ?? ''
-    modelId.value = agent.default_llm_model_id ?? ''
-    modelName.value = ''
-    modelChanged.value = false
-    modelKey.value =
-      modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : ''
-
-    sandboxMode.value = agent.sandbox_mode || 'off'
-
-    const parseJsonArray = (v: string | undefined): string => {
-      if (!v || v === '[]') return ''
-      try {
-        const arr = JSON.parse(v)
-        return Array.isArray(arr) ? arr.join(', ') : ''
-      } catch {
-        return ''
-      }
-    }
-    groupChatMentionPatterns.value = parseJsonArray(agent.group_chat_mention_patterns)
-    toolsProfile.value = agent.tools_profile || TOOLS_PROFILE_DEFAULT
-    toolsAllowTags.value = parseJsonArrayToList(agent.tools_allow)
-    toolsAllowInput.value = ''
-    toolsDenyTags.value = parseJsonArrayToList(agent.tools_deny)
-    toolsDenyInput.value = ''
-    heartbeatEvery.value = agent.heartbeat_every || HEARTBEAT_OFF
-    paramsTemperature.value = agent.params_temperature ?? ''
-    paramsMaxTokens.value = agent.params_max_tokens ?? ''
+    syncFormFromAgent(agent)
   },
   { immediate: true }
 )
 
 const hasDefaultModel = computed(() => modelProviderId.value !== '' && modelId.value !== '')
 const isMainAgent = computed(() => props.agent?.openclaw_agent_id === 'main')
+const builtinToolSections = computed(() => builtinToolCatalog.value?.sections ?? [])
 
 const selectedProviderIsFree = computed(() => {
   if (!modelProviderId.value || !providersWithModels.value.length) return false
@@ -184,6 +165,21 @@ const loadModels = async () => {
   }
 }
 
+const loadBuiltinToolCatalog = async () => {
+  if (builtinToolCatalogLoading.value || builtinToolCatalog.value) return
+  builtinToolCatalogLoading.value = true
+  builtinToolCatalogError.value = ''
+  try {
+    builtinToolCatalog.value = await OpenClawRuntimeService.GetBuiltinToolCatalog()
+  } catch (error: unknown) {
+    console.warn('Failed to load OpenClaw builtin tool catalog:', error)
+    builtinToolCatalogError.value =
+      getErrorMessage(error) || t('assistant.settings.advanced.builtinToolsUnavailable')
+  } finally {
+    builtinToolCatalogLoading.value = false
+  }
+}
+
 const onModelKeyChange = (val: any) => {
   if (typeof val !== 'string') return
   modelKey.value = val
@@ -226,7 +222,17 @@ const toJsonArray = (csv: string): string => {
   return JSON.stringify(items)
 }
 
-const parseJsonArrayToList = (v: string | undefined): string[] => {
+function parseJsonArrayToCsv(v: string | undefined): string {
+  if (!v || v === '[]') return ''
+  try {
+    const arr = JSON.parse(v)
+    return Array.isArray(arr) ? arr.join(', ') : ''
+  } catch {
+    return ''
+  }
+}
+
+function parseJsonArrayToList(v: string | undefined): string[] {
   if (!v || v === '[]') return []
   try {
     const arr = JSON.parse(v)
@@ -234,6 +240,30 @@ const parseJsonArrayToList = (v: string | undefined): string[] => {
   } catch {
     return []
   }
+}
+
+function syncFormFromAgent(agent: OpenClawAgent) {
+  name.value = agent.name ?? ''
+  identityEmoji.value = agent.identity_emoji ?? ''
+  identityTheme.value = agent.identity_theme ?? ''
+
+  modelProviderId.value = agent.default_llm_provider_id ?? ''
+  modelId.value = agent.default_llm_model_id ?? ''
+  modelName.value = ''
+  modelChanged.value = false
+  modelKey.value =
+    modelProviderId.value && modelId.value ? `${modelProviderId.value}::${modelId.value}` : ''
+
+  sandboxMode.value = agent.sandbox_mode || 'off'
+  groupChatMentionPatterns.value = parseJsonArrayToCsv(agent.group_chat_mention_patterns)
+  toolsProfile.value = agent.tools_profile || TOOLS_PROFILE_DEFAULT
+  toolsAllowTags.value = parseJsonArrayToList(agent.tools_allow)
+  toolsAllowInput.value = ''
+  toolsDenyTags.value = parseJsonArrayToList(agent.tools_deny)
+  toolsDenyInput.value = ''
+  heartbeatEvery.value = agent.heartbeat_every || HEARTBEAT_OFF
+  paramsTemperature.value = agent.params_temperature ?? ''
+  paramsMaxTokens.value = agent.params_max_tokens ?? ''
 }
 
 const addToolsAllowTag = () => {
@@ -258,6 +288,26 @@ const addToolsDenyTag = () => {
 
 const removeToolsDenyTag = (i: number) => {
   toolsDenyTags.value.splice(i, 1)
+}
+
+type BuiltinToolMode = 'allow' | 'deny' | ''
+
+const builtinToolMode = (toolId: string): BuiltinToolMode => {
+  if (toolsDenyTags.value.includes(toolId)) return 'deny'
+  if (toolsAllowTags.value.includes(toolId)) return 'allow'
+  return ''
+}
+
+const toggleBuiltinToolMode = (toolId: string, mode: Exclude<BuiltinToolMode, ''>) => {
+  const current = builtinToolMode(toolId)
+  toolsAllowTags.value = toolsAllowTags.value.filter((tag) => tag !== toolId)
+  toolsDenyTags.value = toolsDenyTags.value.filter((tag) => tag !== toolId)
+  if (current === mode) return
+  if (mode === 'allow') {
+    toolsAllowTags.value.push(toolId)
+  } else {
+    toolsDenyTags.value.push(toolId)
+  }
 }
 
 const isHeartbeatCustom = computed(
@@ -371,6 +421,7 @@ const handleSave = async () => {
     emit('updated', updated)
     toast.success(t('assistant.toasts.updated'))
     modelChanged.value = false
+    emit('update:open', false)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.updateFailed'))
   } finally {
@@ -594,6 +645,91 @@ const handleDelete = async () => {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div class="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="space-y-1">
+                        <div class="text-xs font-medium text-muted-foreground">
+                          {{ t('assistant.settings.advanced.builtinTools') }}
+                        </div>
+                        <p class="text-[11px] leading-5 text-muted-foreground">
+                          {{ t('assistant.settings.advanced.builtinToolsHint') }}
+                        </p>
+                      </div>
+                      <span
+                        v-if="builtinToolCatalog?.runtime_version"
+                        class="shrink-0 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      >
+                        OpenClaw {{ builtinToolCatalog.runtime_version }}
+                      </span>
+                    </div>
+
+                    <div
+                      v-if="builtinToolCatalogLoading"
+                      class="rounded-md border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground"
+                    >
+                      {{ t('assistant.settings.advanced.builtinToolsLoading') }}
+                    </div>
+
+                    <div
+                      v-else-if="builtinToolCatalogError"
+                      class="rounded-md border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground"
+                    >
+                      {{ builtinToolCatalogError }}
+                    </div>
+
+                    <div
+                      v-else-if="builtinToolSections.length"
+                      class="max-h-[250px] overflow-y-auto rounded-md border border-border bg-background p-3"
+                    >
+                      <div class="flex flex-col gap-4">
+                        <div v-for="section in builtinToolSections" :key="section.id" class="space-y-2">
+                          <div
+                            class="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
+                          >
+                            {{ section.label }}
+                          </div>
+                          <div class="flex flex-col gap-2">
+                            <div
+                              v-for="tool in section.tools"
+                              :key="tool.id"
+                              class="flex flex-col gap-2 rounded-md border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div class="min-w-0">
+                                <div class="truncate text-xs font-medium text-foreground">
+                                  {{ tool.label }}
+                                </div>
+                                <div class="text-[11px] leading-5 text-muted-foreground">
+                                  {{ tool.description }}
+                                </div>
+                              </div>
+                              <div class="flex shrink-0 items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  :variant="
+                                    builtinToolMode(tool.id) === 'allow' ? 'default' : 'outline'
+                                  "
+                                  class="h-7 px-2 text-xs"
+                                  @click="toggleBuiltinToolMode(tool.id, 'allow')"
+                                >
+                                  {{ t('assistant.settings.advanced.toolModeAllow') }}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  :variant="
+                                    builtinToolMode(tool.id) === 'deny' ? 'destructive' : 'outline'
+                                  "
+                                  class="h-7 px-2 text-xs"
+                                  @click="toggleBuiltinToolMode(tool.id, 'deny')"
+                                >
+                                  {{ t('assistant.settings.advanced.toolModeDeny') }}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div class="flex flex-col gap-1.5">
                     <label class="text-xs font-medium text-muted-foreground">

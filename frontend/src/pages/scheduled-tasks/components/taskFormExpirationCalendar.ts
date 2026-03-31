@@ -35,7 +35,10 @@ export function buildExpirationYearOptions(visibleMonth: Date) {
   const currentYear = visibleMonth.getFullYear()
   const startYear = currentYear - YEAR_RANGE_OFFSET
   const endYear = currentYear + YEAR_RANGE_OFFSET
-  return Array.from({ length: endYear - startYear + MONTH_INDEX_OFFSET }, (_, index) => startYear + index)
+  return Array.from(
+    { length: endYear - startYear + MONTH_INDEX_OFFSET },
+    (_, index) => startYear + index
+  )
 }
 
 export function setVisibleMonthYear(visibleMonth: Date, year?: number, month?: number) {

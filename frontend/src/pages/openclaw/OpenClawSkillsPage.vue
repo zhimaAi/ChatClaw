@@ -603,7 +603,11 @@ onMounted(() => {
                       variant="secondary"
                       class="shrink-0 bg-[#f0f0f0] px-2 py-0.5 text-[10px] text-[#595959] dark:bg-muted dark:text-muted-foreground"
                     >
-                      {{ isWorkspaceSkill(s) ? t('settings.openclawSkills.filterInstalled') : t('settings.openclawSkills.filterBuiltin') }}
+                      {{
+                        isWorkspaceSkill(s)
+                          ? t('settings.openclawSkills.filterInstalled')
+                          : t('settings.openclawSkills.filterBuiltin')
+                      }}
                     </Badge>
                   </div>
                   <div class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/60">
@@ -635,7 +639,9 @@ onMounted(() => {
                   </Badge>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span v-if="s.version" class="text-[11px] text-muted-foreground">v{{ s.version }}</span>
+                  <span v-if="s.version" class="text-[11px] text-muted-foreground"
+                    >v{{ s.version }}</span
+                  >
                   <Tooltip>
                     <TooltipTrigger as-child>
                       <button
@@ -648,7 +654,11 @@ onMounted(() => {
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="top" class="max-w-[240px] text-center">
-                      {{ isWorkspaceSkill(s) ? t('settings.openclawSkills.openSkillFolderToRemove') : t('settings.openclawSkills.builtinCannotDelete') }}
+                      {{
+                        isWorkspaceSkill(s)
+                          ? t('settings.openclawSkills.openSkillFolderToRemove')
+                          : t('settings.openclawSkills.builtinCannotDelete')
+                      }}
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -675,7 +685,9 @@ onMounted(() => {
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-base font-semibold">{{ activeSkill.name || activeSkill.slug }}</span>
+                <span class="text-base font-semibold">{{
+                  activeSkill.name || activeSkill.slug
+                }}</span>
                 <Badge
                   variant="secondary"
                   class="bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
@@ -697,7 +709,9 @@ onMounted(() => {
               {{ t('settings.skills.openDir') }}
             </button>
           </div>
-          <dl class="grid gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2">
+          <dl
+            class="grid gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs sm:grid-cols-2"
+          >
             <div>
               <dt class="font-medium text-foreground/90">
                 {{ t('settings.openclawSkills.permissionLabel') }}
@@ -707,27 +721,41 @@ onMounted(() => {
               </dd>
             </div>
             <div>
-              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.scopeLabel') }}</dt>
-              <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.scope || t('common.na') }}</dd>
+              <dt class="font-medium text-foreground/90">
+                {{ t('settings.openclawSkills.scopeLabel') }}
+              </dt>
+              <dd class="mt-0.5 text-muted-foreground">
+                {{ activeSkill.scope || t('common.na') }}
+              </dd>
             </div>
             <div v-if="activeSkill.location === 'workspace'">
-              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.agentBinding') }}</dt>
-              <dd class="mt-0.5 text-muted-foreground">{{ agentBindingLabel(activeSkill) || t('common.na') }}</dd>
+              <dt class="font-medium text-foreground/90">
+                {{ t('settings.openclawSkills.agentBinding') }}
+              </dt>
+              <dd class="mt-0.5 text-muted-foreground">
+                {{ agentBindingLabel(activeSkill) || t('common.na') }}
+              </dd>
             </div>
             <div v-if="activeSkill.version">
               <dt class="font-medium text-foreground/90">{{ t('settings.skills.version') }}</dt>
               <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.version }}</dd>
             </div>
             <div>
-              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.dataSourceLabel') }}</dt>
+              <dt class="font-medium text-foreground/90">
+                {{ t('settings.openclawSkills.dataSourceLabel') }}
+              </dt>
               <dd class="mt-0.5 text-muted-foreground">{{ dataSourceLabel(activeSkill) }}</dd>
             </div>
             <div v-if="activeSkill.dataSource === 'gateway'">
-              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.eligibleLabel') }}</dt>
+              <dt class="font-medium text-foreground/90">
+                {{ t('settings.openclawSkills.eligibleLabel') }}
+              </dt>
               <dd class="mt-0.5 text-muted-foreground">{{ eligibleLabelText(activeSkill) }}</dd>
             </div>
             <div v-if="activeSkill.dataSource === 'gateway' && activeSkill.ineligibleReason">
-              <dt class="font-medium text-foreground/90">{{ t('settings.openclawSkills.gateHintLabel') }}</dt>
+              <dt class="font-medium text-foreground/90">
+                {{ t('settings.openclawSkills.gateHintLabel') }}
+              </dt>
               <dd class="mt-0.5 text-muted-foreground">{{ activeSkill.ineligibleReason }}</dd>
             </div>
           </dl>
@@ -747,9 +775,15 @@ onMounted(() => {
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <div class="min-w-0 flex-1 space-y-1">
                     <div class="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
-                      <span class="font-medium text-foreground/90">{{ installationAgentLine(ins) }}</span>
-                      <span class="rounded bg-muted px-1 py-0 font-mono text-[10px]">{{ installationLayerLabel(ins.layer) }}</span>
-                      <span class="rounded bg-muted px-1 py-0 text-[10px]">{{ diskLocationBadge(ins.location) }}</span>
+                      <span class="font-medium text-foreground/90">{{
+                        installationAgentLine(ins)
+                      }}</span>
+                      <span class="rounded bg-muted px-1 py-0 font-mono text-[10px]">{{
+                        installationLayerLabel(ins.layer)
+                      }}</span>
+                      <span class="rounded bg-muted px-1 py-0 text-[10px]">{{
+                        diskLocationBadge(ins.location)
+                      }}</span>
                     </div>
                     <div class="break-all font-mono text-[10px] text-muted-foreground">
                       {{ ins.skillRoot }}
@@ -769,8 +803,12 @@ onMounted(() => {
           </div>
         </div>
         <div v-if="activeSkill.skillRoot" class="flex min-h-0 flex-1 overflow-hidden">
-          <aside class="flex w-52 shrink-0 flex-col overflow-hidden border-r border-border bg-muted/20">
-            <div class="border-b border-border px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
+          <aside
+            class="flex w-52 shrink-0 flex-col overflow-hidden border-r border-border bg-muted/20"
+          >
+            <div
+              class="border-b border-border px-2 py-1.5 text-[11px] font-medium text-muted-foreground"
+            >
               {{ t('settings.skills.selectFile') }}
             </div>
             <div class="min-h-0 flex-1 overflow-auto p-1">
@@ -838,7 +876,9 @@ onMounted(() => {
             class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
             @click="handleCreateViaChat"
           >
-            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <div
+              class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+            >
               <Plus class="size-4" />
             </div>
             <div class="min-w-0">
@@ -856,7 +896,9 @@ onMounted(() => {
             class="flex w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-accent/30"
             @click="handleChooseSkillPackage"
           >
-            <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <div
+              class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+            >
               <FolderOpen class="size-4" />
             </div>
             <div class="min-w-0">

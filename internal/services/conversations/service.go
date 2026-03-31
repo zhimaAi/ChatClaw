@@ -147,7 +147,9 @@ func (s *ConversationsService) GetConversation(id int64) (*Conversation, error) 
 
 // FindOrCreateByExternalID looks up a conversation by agent_id + external_id.
 // If none exists, it creates one with the given name and returns the ID.
-func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalID, name, agentType string) (int64, error) {
+// Optional legacyExternalIDs are alternate external_id values (e.g. older QQ keys without dm scope)
+// that should resolve to the same row; when matched, the row is migrated to externalID.
+func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalID, name, agentType string, legacyExternalIDs ...string) (int64, error) {
 	db, err := s.db()
 	if err != nil {
 		return 0, err
@@ -181,6 +183,33 @@ func (s *ConversationsService) FindOrCreateByExternalID(agentID int64, externalI
 				Exec(ctx)
 		}
 		return m.ID, nil
+	}
+
+	for _, legacyID := range legacyExternalIDs {
+		legacyID = strings.TrimSpace(legacyID)
+		if c := channels.CanonicalChannelConversationExternalID(legacyID); c != "" {
+			legacyID = c
+		}
+		if legacyID == "" || strings.EqualFold(legacyID, externalID) {
+			continue
+		}
+		m = conversationModel{}
+		legErr := db.NewSelect().
+			Model(&m).
+			Where("agent_id = ?", agentID).
+			Where("LOWER(TRIM(external_id)) = LOWER(TRIM(?))", legacyID).
+			OrderExpr("id ASC").
+			Limit(1).
+			Scan(ctx)
+		if legErr == nil && m.ID > 0 {
+			_, _ = db.NewUpdate().
+				Table("conversations").
+				Set("external_id = ?", externalID).
+				Set("updated_at = ?", sqlite.NowUTC()).
+				Where("id = ?", m.ID).
+				Exec(ctx)
+			return m.ID, nil
+		}
 	}
 
 	if agentType == "" {

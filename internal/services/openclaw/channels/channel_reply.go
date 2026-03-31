@@ -20,6 +20,26 @@ type feishuStreamingAdapter interface {
 	UpdateStreamCardMessage(ctx context.Context, handle *channels.FeishuStreamCardHandle, text string, finish bool) error
 }
 
+// SyncOpenClawChannelIncomingPreview updates local conversation preview and UI
+// refresh signals for a channel-originated user turn without starting chat.run.
+//
+// OpenClaw QQ uses the @tencent-connect/openclaw-qqbot plugin on the Gateway for
+// ingest + outbound delivery. ChatClaw also connects a QQ WebSocket adapter to the
+// same bot credentials, so the same @-mention would otherwise be processed twice:
+// the plugin sends the real reply, then RunChannelReply runs a second generation
+// and often posts "empty response" as a follow-up. Call this instead of
+// RunChannelReply for that platform.
+func SyncOpenClawChannelIncomingPreview(
+	app *application.App,
+	convService *conversations.ConversationsService,
+	conversationID int64,
+	agentID int64,
+	aiContent string,
+	senderName string,
+) {
+	syncChannelIncomingState(app, convService, conversationID, agentID, aiContent, senderName)
+}
+
 // RunChannelReply handles channel messages for OpenClaw agents.
 // It requires the OpenClaw Gateway to be running.
 // When the Feishu channel has streaming enabled, it creates a streaming card

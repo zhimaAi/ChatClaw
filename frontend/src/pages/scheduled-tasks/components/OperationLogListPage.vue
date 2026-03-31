@@ -6,10 +6,7 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import type { ScheduledTaskOperationLog, ScheduledTaskOperationLogDetail } from '../types'
 import { formatTaskTime } from '../utils'
-import {
-  buildOperationLogDisplayRows,
-  OPERATION_LOG_EMPTY_FIELD_VALUE,
-} from '../operationLogTable'
+import { buildOperationLogDisplayRows, OPERATION_LOG_EMPTY_FIELD_VALUE } from '../operationLogTable'
 import {
   createScheduleTextFormatter,
   getOperationLogFieldLabel,
@@ -26,10 +23,8 @@ const detailOpen = ref(false)
 const selectedDetail = ref<ScheduledTaskOperationLogDetail | null>(null)
 const scheduleFormatter = computed(() => createScheduleTextFormatter(t))
 const displayRows = computed(() =>
-  buildOperationLogDisplayRows(
-    logs.value as any,
-    scheduleFormatter.value,
-    (fieldKey, fieldLabel) => getOperationLogFieldLabel(fieldKey, fieldLabel, t)
+  buildOperationLogDisplayRows(logs.value as any, scheduleFormatter.value, (fieldKey, fieldLabel) =>
+    getOperationLogFieldLabel(fieldKey, fieldLabel, t)
   )
 )
 
@@ -79,7 +74,9 @@ function handleViewDetail(logId: number) {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white">
+  <div
+    class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white"
+  >
     <div class="overflow-auto">
       <div
         v-if="loading"
@@ -111,13 +108,27 @@ function handleViewDetail(logId: number) {
             <th class="min-w-[100px] max-w-[200px] px-4 py-3 font-semibold">
               {{ t('scheduledTasks.operationLog.columns.task') }}
             </th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationType') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.operationSource') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.changedField') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.before') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.after') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.time') }}</th>
-            <th class="px-4 py-3 font-semibold">{{ t('scheduledTasks.operationLog.columns.action') }}</th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.operationType') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.operationSource') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.changedField') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.before') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.after') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.time') }}
+            </th>
+            <th class="px-4 py-3 font-semibold">
+              {{ t('scheduledTasks.operationLog.columns.action') }}
+            </th>
           </tr>
         </thead>
         <tbody>

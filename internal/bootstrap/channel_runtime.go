@@ -198,26 +198,8 @@ func handleChannelMessage(
 		}
 	}
 
-	// Build display name: prefer resolved ChatName/SenderName;
-	// WeCom groups often omit ChatName — use the first message body as the session title.
-	// Otherwise fall back to "「<platform><type>」<excerpt>" when unavailable.
-	displayName := msg.ChatName
-	if displayName == "" && msg.IsGroup {
-		if msg.Platform == channels.PlatformWeCom {
-			if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
-				displayName = t
-			}
-		}
-		if displayName == "" {
-			displayName = channelDisplayName(msg.Platform, true, textContent)
-		}
-	}
-	if displayName == "" {
-		displayName = msg.SenderName
-	}
-	if displayName == "" {
-		displayName = channelDisplayName(msg.Platform, false, textContent)
-	}
+	// Build display name from conversation content for better conversation list readability.
+	displayName := assistantConversationDisplayName(msg, textContent)
 
 	conv, err := findOrCreateConversation(ctx, db, convService, agentID, externalID, legacyExternalIDs, displayName, agentType)
 	if err != nil {
@@ -225,15 +207,13 @@ func handleChannelMessage(
 		return
 	}
 
-	// Upgrade legacy placeholder titles (e.g. "group:chatid" from sync) once we have first text.
-	if msg.Platform == channels.PlatformWeCom && msg.IsGroup && strings.TrimSpace(msg.ChatName) == "" {
-		if t := channels.ConversationTitleFromFirstMessage(textContent); t != "" {
-			if channels.IsWeComGroupPlaceholderConversationName(conv.Name) && t != strings.TrimSpace(conv.Name) {
-				_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
-					Name: &t,
-				})
-				conv.Name = t
-			}
+	// Upgrade legacy placeholder titles once we have the first actual message content.
+	if nextName := assistantConversationDisplayName(msg, textContent); nextName != "" {
+		if shouldReplaceAssistantConversationName(conv.Name, nextName, msg) {
+			_, _ = convService.UpdateConversation(conv.ID, conversations.UpdateConversationInput{
+				Name: &nextName,
+			})
+			conv.Name = nextName
 		}
 	}
 
@@ -272,6 +252,15 @@ func handleChannelMessage(
 	// OpenClaw agents: route through the OpenClaw Gateway when available,
 	// fall back to standard eino pipeline only if the gateway is down.
 	if agentType == conversations.AgentTypeOpenClaw {
+		// QQ: OpenClaw qqbot plugin already handles the same WS events and sends
+		// the reply. Avoid a second SendOpenClawMessage + sendReply (duplicate /
+		// empty-final-response error bubble).
+		if msg.Platform == channels.PlatformQQ {
+			app.Logger.Info("openclaw channel: qq reply handled by gateway qqbot plugin, skipping RunChannelReply",
+				"conv", conv.ID, "channel_id", msg.ChannelID)
+			openclawchannels.SyncOpenClawChannelIncomingPreview(app, convService, conv.ID, agentID, aiContent, msg.SenderName)
+			return
+		}
 		openclawchannels.RunChannelReply(app, chatService, convService, gateway, conv.ID, agentID, aiContent, msg, replyTarget, channelRow.ExtraConfig, useQuickMode, sendReply)
 		return
 	}
@@ -1159,7 +1148,7 @@ func lockChannelConversation(agentID int64, externalIDs ...string) func() {
 func buildChannelConversationExternalIDs(msg channels.IncomingMessage) (string, []string) {
 	scope := ""
 	switch msg.Platform {
-	case channels.PlatformWeCom, channels.PlatformFeishu:
+	case channels.PlatformWeCom, channels.PlatformFeishu, channels.PlatformQQ:
 		if msg.IsGroup {
 			scope = channels.ChannelConversationScopeGroup
 		} else {
@@ -1198,12 +1187,24 @@ func buildChannelConversationExternalIDs(msg channels.IncomingMessage) (string, 
 		}
 	}
 
+	if msg.Platform == channels.PlatformQQ && targetID != "" {
+		targetID = channels.NormalizeQQChannelConversationTargetID(targetID)
+	}
+
 	if targetID == "" {
 		return "", legacyIDs
 	}
 
 	externalID := channels.BuildChannelConversationExternalID(msg.ChannelID, scope, targetID)
 	appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", targetID))
+	if msg.Platform == channels.PlatformQQ {
+		switch scope {
+		case channels.ChannelConversationScopeDM:
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", "user:"+targetID))
+		case channels.ChannelConversationScopeGroup:
+			appendLegacy(channels.BuildChannelConversationExternalID(msg.ChannelID, "", "group:"+targetID))
+		}
+	}
 	return externalID, legacyIDs
 }
 
@@ -1265,4 +1266,40 @@ func channelDisplayName(platform string, isGroup bool, content string) string {
 		excerpt = string(rs[:20]) + "…"
 	}
 	return "「" + label + suffix + "」" + excerpt
+}
+
+func assistantConversationDisplayName(msg channels.IncomingMessage, textContent string) string {
+	title := channels.ConversationTitleFromFirstMessage(textContent)
+	if title != "" {
+		if msg.IsGroup {
+			return "「群聊」" + title
+		}
+		return title
+	}
+	if msg.IsGroup {
+		return "「群聊」" + channelDisplayName(msg.Platform, true, textContent)
+	}
+	if strings.TrimSpace(msg.SenderName) != "" {
+		return strings.TrimSpace(msg.SenderName)
+	}
+	return channelDisplayName(msg.Platform, false, textContent)
+}
+
+func shouldReplaceAssistantConversationName(currentName string, nextName string, msg channels.IncomingMessage) bool {
+	currentName = strings.TrimSpace(currentName)
+	nextName = strings.TrimSpace(nextName)
+	if nextName == "" || currentName == nextName {
+		return false
+	}
+	if currentName == "" {
+		return true
+	}
+	if strings.HasPrefix(currentName, "group:") || channels.IsWeComGroupPlaceholderConversationName(currentName) {
+		return true
+	}
+	if msg.IsGroup {
+		fallback := "「群聊」" + channelDisplayName(msg.Platform, true, "")
+		return currentName == fallback
+	}
+	return false
 }

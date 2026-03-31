@@ -60,9 +60,7 @@ const canSubmit = computed(() => {
   return true
 })
 
-const submitActionDisabled = computed(
-  () => !canSubmit.value || props.saving || submitLocked.value
-)
+const submitActionDisabled = computed(() => !canSubmit.value || props.saving || submitLocked.value)
 
 function closeDialog() {
   submitLock.reset()
@@ -127,9 +125,7 @@ watch(
         <TaskFormContent :form="form" :agents="agents" :channels="channels" />
       </div>
 
-      <DialogFooter
-        class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end"
-      >
+      <DialogFooter class="shrink-0 gap-2 border-t border-border px-6 py-4 sm:justify-end">
         <Button type="button" variant="outline" @click="closeDialog">
           {{ t('common.cancel') }}
         </Button>

@@ -1177,11 +1177,20 @@ export default {
         toolsProfile_coding: 'Coding — fs/runtime/sessions/memory',
         toolsProfile_messaging: 'Messaging — messaging/sessions',
         toolsProfile_full: 'Full — unrestricted',
+        builtinTools: 'Built-in Tools',
+        builtinToolsHint:
+          'Select OpenClaw built-in tools here. Custom or plugin tools can still be entered manually below.',
+        builtinToolsLoading: 'Loading OpenClaw built-in tools…',
+        builtinToolsUnavailable:
+          'Could not load the OpenClaw built-in tool catalog. You can still enter tool names manually.',
+        toolModeAllow: 'Allow',
+        toolModeDeny: 'Deny',
         toolsAllow: 'Allowed Tools',
         toolsAllowPlaceholder: 'e.g. browser, file_search',
         toolsDeny: 'Denied Tools',
         toolsDenyPlaceholder: 'e.g. canvas',
-        toolsHint: 'Control which tools the agent can use. Press Enter to confirm each entry',
+        toolsHint:
+          'Deny takes precedence over allow. Press Enter to confirm manual entries for custom or plugin tools.',
         heartbeat: 'Heartbeat Interval',
         heartbeat_off: 'Off',
         heartbeat_custom: 'Custom',
@@ -1553,6 +1562,30 @@ export default {
       title: 'Add Channel',
       desc: 'Select the channel type to configure',
     },
+    wecomAdd: {
+      title: 'Configure WeCom',
+      subtitle: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
+      howTitle: 'How to connect',
+      tipsIntro: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
+      stepsLabel: 'Steps:',
+      step1: 'Tap Generate QR code to install and enable the official WeCom plugin in OpenClaw',
+      step2: 'Scan the QR code below with WeCom and confirm on your phone',
+      tipsOrManual: 'Or connect existing bot credentials',
+      scanHint: 'Scan the QR code below with WeCom and confirm on your phone',
+      manualEntry: 'I already have a bot',
+      generateQr: 'Generate QR code',
+      refreshQr: 'Refresh',
+      generating: 'Generating…',
+      registering: 'Registering channel…',
+      generateFailed: 'Failed to generate QR code',
+      missingCredentials: 'Authorized but bot credentials are missing',
+      registerFailed: 'Failed to register channel',
+      authFailed: 'Authorization failed or expired. Refresh and try again',
+      defaultName: 'WeCom Bot',
+      openScanAdd: 'Add via QR scan',
+      qrExpired: 'QR code expired (valid for 5 minutes)',
+      qrExpiredHint: 'Tap Refresh to generate a new QR code and scan again.',
+    },
     platforms: {
       dingtalk: 'DingTalk',
       feishu: 'Feishu',
@@ -1669,6 +1702,13 @@ export default {
       'Unbind the assistant from channel "{name}"? You must bind again for the assistant to handle messages on this channel.',
     unbindSuccess: 'Assistant unbound',
     bindSuccess: 'Assistant bound successfully',
+    provisioning: {
+      toastTitle: 'Working in the background',
+      toastDescription:
+        'The channel and gateway are still being created or synced. Connection status will update automatically—please wait.',
+      toastDescriptionWithAgent:
+        'The channel, assistant, or gateway is still being created or synced. Please wait.',
+    },
     card: {
       appId: 'App ID',
       bind: 'Bind',
@@ -1676,6 +1716,7 @@ export default {
       unbind: 'Unbind',
       bound: 'Bound',
       unbound: 'Not bound',
+      provisioning: 'Creating…',
     },
     empty: {
       title: 'No channels yet',
@@ -1695,7 +1736,7 @@ export default {
     toggle: {
       enableSuccess: 'Enabled successfully',
       dingtalkPluginNotReady:
-        "DingTalk connector plugin is still installing or not ready. Please try again later.",
+        'DingTalk connector plugin is still installing or not ready. Please try again later.',
       disableSuccess: 'Disabled successfully',
       enableTitle: 'Enable this channel?',
       disableTitle: 'Disable this channel?',
@@ -1708,6 +1749,7 @@ export default {
       online: 'Connected',
       error: 'Error',
       offline: 'Disconnected',
+      provisioning: 'Creating…',
     },
     bindAgent: {
       title: 'Select assistant',

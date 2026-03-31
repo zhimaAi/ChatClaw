@@ -439,7 +439,12 @@ func buildSummarizationHandler(ctx context.Context, chatModel model.BaseChatMode
 	mw, err := summarization.New(ctx, &summarization.Config{
 		Model: chatModel,
 		Trigger: &summarization.TriggerCondition{
-			ContextTokens: 100000,
+			ContextTokens:   100000,
+			ContextMessages: 200,
+		},
+		PreserveUserMessages: &summarization.PreserveUserMessages{
+			Enabled: true,
+			Filter:  summarizationUserMessageFilter,
 		},
 		TranscriptFilePath: transcriptPath,
 		Callback: func(_ context.Context, before, _ adk.ChatModelAgentState) error {
@@ -454,6 +459,62 @@ func buildSummarizationHandler(ctx context.Context, chatModel model.BaseChatMode
 		return nil
 	}
 	return mw
+}
+
+func summarizationUserMessageFilter(_ context.Context, msg adk.Message) (bool, error) {
+	return !isInterruptDecisionMessage(messageTextForSummarizationFilter(msg)), nil
+}
+
+func messageTextForSummarizationFilter(msg adk.Message) string {
+	if text := strings.TrimSpace(msg.Content); text != "" {
+		return text
+	}
+
+	var sb strings.Builder
+	for _, part := range msg.UserInputMultiContent {
+		if part.Type != schema.ChatMessagePartTypeText {
+			continue
+		}
+		text := strings.TrimSpace(part.Text)
+		if text == "" {
+			continue
+		}
+		if sb.Len() > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString(text)
+	}
+	return strings.TrimSpace(sb.String())
+}
+
+func isInterruptDecisionMessage(content string) bool {
+	lower := strings.ToLower(strings.TrimSpace(content))
+	if lower == "" {
+		return false
+	}
+
+	decisions := map[string]struct{}{
+		"确认":      {},
+		"confirm": {},
+		"yes":     {},
+		"y":       {},
+		"ok":      {},
+		"approve": {},
+		"是":       {},
+		"好":       {},
+		"继续":      {},
+		"执行":      {},
+		"拒绝":      {},
+		"reject":  {},
+		"no":      {},
+		"n":       {},
+		"cancel":  {},
+		"取消":      {},
+		"停止":      {},
+	}
+
+	_, ok := decisions[lower]
+	return ok
 }
 
 // buildBackend creates the unified filesystem backend.

@@ -538,11 +538,7 @@ onMounted(loadData)
               : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
             !isChannelPlatformSelectable(platform.id) ? 'opacity-50 cursor-not-allowed' : '',
           ]"
-          @click="
-            isChannelPlatformSelectable(platform.id)
-              ? (selectedFilter = platform.id)
-              : toast.default(t('channels.comingSoon'))
-          "
+          @click="isChannelPlatformSelectable(platform.id) ? (selectedFilter = platform.id) : toast.default(t('channels.comingSoon'))"
         >
           {{ getPlatformName(platform.id) }}
         </button>

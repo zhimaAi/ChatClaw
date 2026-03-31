@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import ConfigChannelDialog from '@/pages/openclaw/channels/components/ConfigChannelDialog.vue'
+import WecomAddDialog from '@/pages/openclaw/channels/components/WecomAddDialog.vue'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,12 @@ import { toast, useToast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { platformIconMap } from '@/assets/icons/snap/platformIcons'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/channels/platformDocs'
+import {
+  addPendingGatewayProvisioning,
+  syncPendingFromChannels,
+  isGatewayProvisioning,
+  isBindProvisioning,
+} from '@/composables/useOpenClawChannelProvisioning'
 
 const props = defineProps<{
   agent: OpenClawAgent | null
@@ -53,11 +60,6 @@ const open = defineModel<boolean>('open', { required: true })
 
 const { t, te } = useI18n()
 const { toast: addToast } = useToast()
-
-/** Platforms that support create/bind in UI (feishu + wecom + dingtalk). */
-function isChannelPlatformSelectable(platformId: string) {
-  return platformId === 'feishu' || platformId === 'wecom' || platformId === 'dingtalk'
-}
 
 const channels = ref<Channel[]>([])
 const platforms = ref<PlatformMeta[]>([])
@@ -79,6 +81,7 @@ const showAddBotDialog = ref(false)
 const selectedBotId = ref<number | null>(null)
 const addBotLoading = ref(false)
 const showConfigChannelDialog = ref(false)
+const showWecomAddDialog = ref(false)
 const channelToEdit = ref<Channel | null>(null)
 
 const currentAgentId = computed(() => props.agent?.id ?? 0)
@@ -174,6 +177,7 @@ function getAgentName(agentId: number): string {
 }
 
 function getBindStatusText(channel: Channel): string {
+  if (isBindProvisioning(channel)) return t('channels.card.provisioning')
   if (channel.agent_id === currentAgentId.value) return t('assistant.channels.boundCurrent')
   if (channel.agent_id === 0) return t('assistant.channels.unbound')
   return t('assistant.channels.boundOther')
@@ -186,6 +190,7 @@ function getBindActionText(channel: Channel): string {
 }
 
 function getChannelStatusText(channel: Channel): string {
+  if (isGatewayProvisioning(channel)) return t('channels.status.provisioning')
   if (channel.status === 'online') return t('assistant.channels.statusOnline', '已连接')
   if (channel.status === 'error') return t('assistant.channels.statusError', '错误')
   return t('assistant.channels.statusOffline', '未连接')
@@ -216,6 +221,7 @@ async function loadData() {
     ])
 
     channels.value = channelList || []
+    syncPendingFromChannels(channels.value)
     platforms.value = platformList || []
     agents.value = agentList || []
 
@@ -297,8 +303,9 @@ async function handleCreateChannel() {
     })
 
     const platformId = selectedPlatformMeta.value.id
-    if (platformId === 'feishu' || platformId === 'dingtalk') {
-      await OpenClawChannelService.CreateChannel(
+    let createdChannel: Channel | null = null
+    if (platformId === 'feishu' || platformId === 'dingtalk' || platformId === 'qq') {
+      const channel = await OpenClawChannelService.CreateChannel(
         new CreateChannelInput({
           platform: platformId,
           name: inlineFormName.value.trim(),
@@ -307,6 +314,13 @@ async function handleCreateChannel() {
           agent_id: props.agent.id,
         })
       )
+      createdChannel = channel
+      if (
+        channel &&
+        (platformId === 'qq' || platformId === 'feishu' || platformId === 'dingtalk')
+      ) {
+        await OpenClawChannelService.ConnectChannel(channel.id)
+      }
     } else {
       const channel = await ChannelService.CreateChannel({
         platform: platformId,
@@ -316,11 +330,18 @@ async function handleCreateChannel() {
         extra_config: extraConfig,
         openclaw_scope: true,
       })
+      createdChannel = channel
       if (channel) {
         await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
+        if (platformId === 'wecom') {
+          await OpenClawChannelService.ConnectChannel(channel.id)
+        }
       }
     }
 
+    if (createdChannel?.id) {
+      addPendingGatewayProvisioning(createdChannel.id)
+    }
     if (platformId === 'dingtalk') {
       addToast({
         title: t('channels.config.dingtalkPluginInstalling'),
@@ -329,7 +350,12 @@ async function handleCreateChannel() {
         duration: 6000,
       })
     } else {
-      toast.success(t('assistant.channels.createAndBindSuccess'))
+      addToast({
+        title: t('channels.provisioning.toastTitle'),
+        description: t('channels.provisioning.toastDescription'),
+        variant: 'default',
+        duration: 8000,
+      })
     }
     resetInlineForm()
     await loadData()
@@ -428,7 +454,10 @@ async function handleInlineVerify() {
   })
   inlineFormVerifying.value = true
   try {
-    if (selectedPlatformMeta.value.id === 'feishu' || selectedPlatformMeta.value.id === 'dingtalk') {
+    if (
+      selectedPlatformMeta.value.id === 'feishu' ||
+      selectedPlatformMeta.value.id === 'dingtalk'
+    ) {
       await OpenClawChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
     } else {
       await ChannelService.VerifyChannelConfig(selectedPlatformMeta.value.id, extraConfig)
@@ -476,14 +505,38 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
 
   try {
     if (!isEdit) {
+      addPendingGatewayProvisioning(channel.id)
+      addToast({
+        title: t('channels.provisioning.toastTitle'),
+        description: t('channels.provisioning.toastDescription'),
+        variant: 'default',
+        duration: 8000,
+      })
       await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
-      toast.success(t('assistant.channels.createAndBindSuccess'))
+      if (['feishu', 'wecom', 'dingtalk', 'qq'].includes(channel.platform)) {
+        await OpenClawChannelService.ConnectChannel(channel.id)
+      }
     }
     channelToEdit.value = null
     await loadData()
   } catch (error) {
     toast.error(getErrorMessage(error))
   }
+}
+
+function handleOpenNewChannelFromAddBotDialog() {
+  showAddBotDialog.value = false
+  if (selectedPlatformMeta.value?.id === 'wecom') {
+    showWecomAddDialog.value = true
+  } else {
+    showConfigChannelDialog.value = true
+  }
+}
+
+function handleWecomManualFromQr() {
+  showWecomAddDialog.value = false
+  channelToEdit.value = null
+  showConfigChannelDialog.value = true
 }
 </script>
 
@@ -526,11 +579,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                     !isSelectableChannelPlatform(platform.id) && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="
-                  isSelectableChannelPlatform(platform.id)
-                    ? handleSelectPlatform(platform.id)
-                    : toast.default(t('channels.comingSoon'))
-                "
+                @click="isSelectableChannelPlatform(platform.id) ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
                 <span class="truncate">{{
                   getPlatformDisplayName(platform.id, platform.name)
@@ -778,11 +827,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             class="gap-2 rounded px-4 py-[5px]"
-                            @click="
-                              channel.agent_id === currentAgentId
-                                ? handleUnbindChannel(channel)
-                                : handleBindChannel(channel)
-                            "
+                            @click="channel.agent_id === currentAgentId ? handleUnbindChannel(channel) : handleBindChannel(channel)"
                           >
                             <Unlink v-if="channel.agent_id === currentAgentId" class="size-4" />
                             <Link2 v-else class="size-4" />
@@ -797,7 +842,12 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                     <div
                       class="inline-flex items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
                     >
+                      <LoaderCircle
+                        v-if="isGatewayProvisioning(channel)"
+                        class="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                      />
                       <div
+                        v-else
                         class="h-2 w-2 rounded-full"
                         :class="{
                           'bg-green-500': channel.status === 'online',
@@ -813,8 +863,12 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
                     <div
                       class="inline-flex items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
                     >
+                      <LoaderCircle
+                        v-if="isBindProvisioning(channel)"
+                        class="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                      />
                       <Check
-                        v-if="channel.agent_id !== 0"
+                        v-else-if="channel.agent_id !== 0"
                         class="size-3.5 text-[#595959] dark:text-muted-foreground"
                       />
                       <Unlink v-else class="size-3.5 text-[#595959] dark:text-muted-foreground" />
@@ -881,7 +935,7 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
         <Button
           class="mb-4 h-10 w-full shrink-0 gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="addBotLoading"
-          @click="showConfigChannelDialog = true; showAddBotDialog = false"
+          @click="handleOpenNewChannelFromAddBotDialog"
         >
           <Plus class="size-4 shrink-0" />
           {{ t('assistant.channels.addBot') }}
@@ -973,6 +1027,12 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
       </div>
     </DialogContent>
   </Dialog>
+
+  <WecomAddDialog
+    v-model:open="showWecomAddDialog"
+    @saved="handleConfigChannelSaved"
+    @manual="handleWecomManualFromQr"
+  />
 
   <!-- Config Channel Dialog -->
   <ConfigChannelDialog
