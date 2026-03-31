@@ -32,8 +32,8 @@ export default {
       description: 'Search relevant content from knowledge base',
     },
     memoryRetriever: {
-      name: '记忆检索',
-      description: '从长期记忆中检索相关事实',
+      name: 'メモリ検索',
+      description: '長期記憶から関連する事実を検索します',
     },
     execute: {
       name: 'Execute Command',
@@ -334,44 +334,36 @@ export default {
         },
         uv: {
           name: 'Pythonランタイム',
-          description:
-            'Allows AI assistant to write and run Python scripts to complete complex tasks.',
+          description: 'Allows AI assistant to write and run Python scripts to complete complex tasks.',
         },
         bun: {
           name: 'JavaScriptランタイム',
-          description:
-            'Allows AI assistant to write and run JavaScript scripts to complete complex tasks.',
+          description: 'Allows AI assistant to write and run JavaScript scripts to complete complex tasks.',
         },
         codex: {
           name: 'セキュリティサンドボックス',
-          description:
-            'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
+          description: 'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
         },
         openclaw: {
           name: 'OpenClaw Runtime',
-          description:
-            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
+          description: 'OpenClaw Agent\'s Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/',
         },
       },
     },
     memory: {
       title: 'Long-term Memory',
       enable: 'Enable Long-term Memory',
-      enableHint:
-        'When enabled, AI will automatically extract and remember your preferences, habits, and important facts in conversations.',
+      enableHint: 'When enabled, AI will automatically extract and remember your preferences, habits, and important facts in conversations.',
       extractModel: 'Memory Extraction Model',
-      extractModelHint:
-        'Used to summarize and extract valuable memory information after each conversation.',
+      extractModelHint: 'Used to summarize and extract valuable memory information after each conversation.',
       embeddingModel: 'メモリベクトルモデル',
-      embeddingModelHint:
-        'Used to convert memory text into vectors for semantic retrieval during conversations.',
+      embeddingModelHint: 'Used to convert memory text into vectors for semantic retrieval during conversations.',
       embeddingDimension: 'Embedding Dimension',
       embeddingDimensionHint: 'Embedding vector dimension must match the selected model output.',
       save: 'Save Settings',
       saved: 'Settings saved',
       saveFailed: 'Failed to save settings',
-      rebuildWarning:
-        'After changing the vector model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuildWarning: 'After changing the vector model or dimension, all existing memory vector data will be rebuilt asynchronously.',
       rebuilding: 'Rebuilding memory vectors...',
       rebuildSuccess: 'Memory vectors rebuilt successfully',
       rebuildFailed: 'Failed to rebuild memory vectors',
@@ -380,12 +372,10 @@ export default {
     skills: {
       title: 'スキル',
       enable: 'Enable Skills',
-      enableHint:
-        'When enabled, AI assistant will automatically load and use installed skills during conversations.',
+      enableHint: 'When enabled, AI assistant will automatically load and use installed skills during conversations.',
       pageDesc: 'Browse and manage AI capabilities',
       directory: 'Skills Directory',
-      directoryHint:
-        'Place downloaded skill folders in this directory. They will be automatically detected and loaded during AI conversations.',
+      directoryHint: 'Place downloaded skill folders in this directory. They will be automatically detected and loaded during AI conversations.',
       tabInstalled: 'Installed',
       tabMarket: 'マーケット',
       filterAll: 'すべて',
@@ -441,8 +431,7 @@ export default {
       listSubheading: 'Browse and manage AI capabilities',
       refreshCta: 'Refresh',
       addSkillCta: 'Add skill',
-      pageDesc:
-        'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
+      pageDesc: 'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
       filterAll: 'All',
       filterBuiltin: 'Built-in',
       filterInstalled: 'Installed',
@@ -456,16 +445,14 @@ export default {
       locationCount: '{count} copies',
       searchPlaceholder: 'Search skills, paths, agent, or permissions…',
       noSkills: 'No OpenClaw skills found',
-      noSkillsHint:
-        'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
+      noSkillsHint: 'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
       openSharedDir: 'Open main workspace skills folder',
       openMainWorkspaceSkillsDir: 'Open main workspace skills (workspace-main/skills)',
       openManagedSkillsDir: 'Open managed skills folder (openclaw/skills)',
       permissionLabel: 'Permission',
       scopeLabel: 'Scope',
       agentBinding: 'Agent',
-      gatewayOfflineHint:
-        'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
+      gatewayOfflineHint: 'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
       backToList: 'Back to list',
       loadFailed: 'Failed to load OpenClaw skills',
       dataSourceLabel: 'Source',
@@ -479,26 +466,22 @@ export default {
       eligibleNo: 'No',
       eligibleUnknown: 'Unknown',
       gateHintLabel: 'Gateway note',
-      previewNoLocalPath:
-        'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      previewNoLocalPath: 'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
       add: {
         title: 'Add',
         createViaChatTitle: 'Create via chat',
         createViaChatDesc: 'Describe what you need and let AI scaffold an OpenClaw skill',
         choosePackageTitle: 'Choose skill package',
         choosePackageDesc: 'Open the skills folder and place the skill package there',
-        createViaChatPrompt:
-          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
+        createViaChatPrompt: 'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
       },
     },
     mcp: {
       title: 'MCP',
       enable: 'Enable MCP',
-      enableHint:
-        'When enabled, the AI assistant will automatically connect to and use configured MCPservers during conversations.',
+      enableHint: 'When enabled, the AI assistant will automatically connect to and use configured MCPservers during conversations.',
       directory: 'MCPConfig Directory',
-      directoryHint:
-        'Place MCPserver configuration files into this directory. They will be automatically detected and connected during AI conversations.',
+      directoryHint: 'Place MCPserver configuration files into this directory. They will be automatically detected and connected during AI conversations.',
       tabServers: 'MCP',
       tabSettings: 'Settings',
       tabInstalled: 'Installed',
@@ -632,8 +615,7 @@ export default {
       reauthBind: 'Re-authorize',
       unbind: 'Unbind',
       unbindConfirmTitle: 'Confirm Unbind',
-      unbindConfirmDesc:
-        'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
+      unbindConfirmDesc: 'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
       addBinding: 'Add binding',
       applications: 'アプリケーション',
       knowledgeBases: 'ナレッジベース',
@@ -654,8 +636,7 @@ export default {
         wechat: 'WeChat Official',
       },
       enabledHint: 'Show in Multi Ask when enabled',
-      libraryEnabledHint:
-        'Sync ChatWiki knowledge base. When enabled, it will appear in team knowledge base when asking questions.',
+      libraryEnabledHint: 'Sync ChatWiki knowledge base. When enabled, it will appear in team knowledge base when asking questions.',
       emptyRobots: 'アプリケーションがありません',
       emptyLibraries: 'ナレッジベースがありません',
       loginCloud: 'ChatWiki Cloudにログイン',
@@ -677,11 +658,9 @@ export default {
       startUsingHint: 'Click ',
       startUsing: 'Start using',
       freeVersion: 'Free',
-      modelServiceDesc:
-        'ChatWiki を連携すると、モデルサービスで利用可能なモデルとクレジットを直接確認できます。',
+      modelServiceDesc: 'ChatWiki を連携すると、モデルサービスで利用可能なモデルとクレジットを直接確認できます。',
       notLoggedInTitle: 'ChatWiki にログインしていません',
-      notLoggedInDesc:
-        'ChatWiki Cloud のモデル一覧とクレジット残高を同期するにはサインインしてください。',
+      notLoggedInDesc: 'ChatWiki Cloud のモデル一覧とクレジット残高を同期するにはサインインしてください。',
       loginNow: '今すぐログイン',
       accountIdPrefix: 'アカウント ID: ',
       buyCredits: 'クレジットを購入',
@@ -692,12 +671,9 @@ export default {
       pricePerKToken: '{price} クレジット / 1K トークン',
       modelLoadFailed: 'モデル一覧の読み込みに失敗しました',
       openBillingFailed: '課金ページを開けませんでした',
-      modelBoundHint:
-        'この一覧には、現在連携中の ChatWiki アカウントで利用可能なモデルが表示されます。',
-      modelUnboundHint:
-        '現在の連携で利用可能なモデル一覧を読み込むには、先にサインインしてください。',
-      modelLoginHint:
-        '先に ChatWiki アカウントへサインインして連携してください。完了後、ここに最新のモデル一覧が表示されます。',
+      modelBoundHint: 'この一覧には、現在連携中の ChatWiki アカウントで利用可能なモデルが表示されます。',
+      modelUnboundHint: '現在の連携で利用可能なモデル一覧を読み込むには、先にサインインしてください。',
+      modelLoginHint: '先に ChatWiki アカウントへサインインして連携してください。完了後、ここに最新のモデル一覧が表示されます。',
       providerStatus: {
         unbound: '{label}（未ログイン）',
         nonCloud: '{label}（未ログイン）',
@@ -730,10 +706,8 @@ export default {
     },
     modelService: {
       enabled: 'Enabled',
-      disableBlockedByAgent:
-        'This provider is being used as the default by assistant "{name}". Please change the assistant settings first before disabling.',
-      deleteBlockedByAgent:
-        'This model is being used as the default by assistant "{name}". Please change the assistant settings first before deleting.',
+      disableBlockedByAgent: 'This provider is being used as the default by assistant "{name}". Please change the assistant settings first before disabling.',
+      deleteBlockedByAgent: 'This model is being used as the default by assistant "{name}". Please change the assistant settings first before deleting.',
       apiKey: 'APIキー',
       apiKeyPlaceholder: 'Enter API Key',
       apiKeyRequired: 'Please enter API Key first',
@@ -771,8 +745,7 @@ export default {
       modelUpdated: 'Model updated successfully',
       modelDeleted: 'Model deleted successfully',
       deleteConfirmTitle: 'Confirm Delete',
-      deleteConfirmMessage:
-        'Are you sure you want to delete model "{name}"? This action cannot be undone.',
+      deleteConfirmMessage: 'Are you sure you want to delete model "{name}"? This action cannot be undone.',
       confirmDelete: 'Delete',
       deleting: 'Deleting...',
       supportedInputs: 'Supported Input Types',
@@ -945,8 +918,7 @@ export default {
       unknownAgent: 'Unknown agent',
       noPlatforms: 'No channels available',
       createTitle: 'Add {platform} bot',
-      createDesc:
-        'Follow the add flow on the channel page. After creation, it will be automatically bound to the current assistant.',
+      createDesc: 'Follow the add flow on the channel page. After creation, it will be automatically bound to the current assistant.',
       addChannel: 'Add Channel',
       addAndBind: 'Add and Bind',
       showExisting: 'View Added Channels',
@@ -1005,8 +977,7 @@ export default {
       teamImageNotSupported: 'Image sending is not supported in team mode yet',
       selectTeamRobotFirst: 'Please select a team robot first',
       teamRobotMissingKey: 'Current robot is missing robot_key, please sync again',
-      modelNotSupportVision:
-        'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
+      modelNotSupportVision: 'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
       modelNotSupportVisionHint: 'Models like GPT-4o, Claude, Gemini support image recognition',
       fileTooLarge: 'File size exceeds limit (max {max})',
       tooManyFiles: 'Upload up to {max} files',
@@ -1024,22 +995,20 @@ export default {
       tabs: {
         general: '基本情報',
         advanced: '詳細設定',
-        model: '模型设置',
-        prompt: '提示词设置',
-        workspace: '工作区',
-        retrieval: '知识库检索',
+        model: 'モデル設定',
+        prompt: 'プロンプト設定',
+        workspace: 'ワークスペース',
+        retrieval: 'ナレッジ検索',
         delete: 'Delete',
       },
       workspace: {
         sandboxMode: 'Execution Mode',
         modeCodex: 'Codexサンドボックス',
         modeNative: 'Native Execution',
-        nativeDesc:
-          'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
+        nativeDesc: 'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
         networkAccess: 'Allow Network Access',
         workDir: 'Working Directory',
-        workDirHint:
-          'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
+        workDirHint: 'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: 'Change',
         resetDir: 'デフォルトにリセット',
         selectDir: 'Select Working Directory',
@@ -1071,47 +1040,47 @@ export default {
         confirmTitle: 'Confirm Delete',
         confirmDesc: 'Are you sure you want to delete ',
       },
-      "advanced": {
-        "sandboxMode": "サンドボックスモード",
-        "sandbox_off": "無効",
-        "sandbox_non-main": "デフォルト以外のみ",
-        "sandbox_all": "すべてのエージェント",
-        "sandboxModeHint": "サンドボックスはコマンド実行を隔離し、エージェントがホストシステムを直接操作するのを防ぎます",
-        "groupChatMentionPatterns": "グループチャットメンションパターン",
-        "groupChatMentionPatternsPlaceholder": "{'@'}assistant, {'@'}bot",
-        "groupChatInsertPreset": "プリセットを挿入",
-        "groupChatMentionPatternsHint": "メッセージ内のメンションパターンを一致させてエージェントの応答をトリガー（カンマ区切り）",
-        "tools": "ツール設定",
-        "toolsProfile": "ツールプリセット",
-        "toolsProfile_default": "未設定（グローバル継承）",
-        "toolsProfile_minimal": "Minimal — ステータスのみ",
-        "toolsProfile_coding": "Coding — FS/ランタイム/セッション/メモリ",
-        "toolsProfile_messaging": "Messaging — メッセージング/セッション",
-        "toolsProfile_full": "Full — 制限なし",
-        "builtinTools": "内蔵ツール",
-        "builtinToolsHint": "ここで OpenClaw の内蔵ツールを直接選択できます。プラグインツールやカスタムツールは引き続き下で手動入力できます。",
-        "builtinToolsLoading": "OpenClaw の内蔵ツールを読み込み中…",
-        "builtinToolsUnavailable": "OpenClaw の内蔵ツール一覧を読み込めませんでした。ツール名は引き続き手動入力できます。",
-        "toolModeAllow": "許可",
-        "toolModeDeny": "禁止",
-        "toolsAllow": "許可するツール",
-        "toolsAllowPlaceholder": "例：browser, file_search",
-        "toolsDeny": "禁止するツール",
-        "toolsDenyPlaceholder": "例：canvas",
-        "toolsHint": "禁止は許可より優先されます。プラグインツールやカスタムツールは引き続き手動入力し、Enter で確定できます。",
-        "heartbeat": "ハートビート間隔",
-        "heartbeat_off": "オフ",
-        "heartbeat_custom": "カスタム",
-        "heartbeatPlaceholder": "例：10m",
-        "heartbeatFormatError": "形式が正しくありません。数字+単位で入力してください（例：10m、1h、30s、500ms）",
-        "heartbeatHint": "定期ハートビート確認間隔（ms/s/m/h対応）",
-        "params": "モデルパラメータ上書き",
-        "paramsTemperature": "Temperature",
-        "paramsTemperaturePlaceholder": "空欄でグローバルデフォルト",
-        "paramsMaxTokens": "最大トークン数",
-        "paramsMaxTokensPlaceholder": "空欄でグローバルデフォルト",
-        "paramsHint": "このエージェントの agents.defaults.models のパラメータを上書き"
-      }
+      advanced: {
+        sandboxMode: 'サンドボックスモード',
+        sandbox_off: '無効',
+        'sandbox_non-main': 'デフォルト以外のみ',
+        sandbox_all: 'すべてのエージェント',
+        sandboxModeHint: 'サンドボックスはコマンド実行を隔離し、エージェントがホストシステムを直接操作するのを防ぎます',
+        groupChatMentionPatterns: 'グループチャットメンションパターン',
+        groupChatMentionPatternsPlaceholder: '{\'@\'}assistant, {\'@\'}bot',
+        groupChatInsertPreset: 'プリセットを挿入',
+        groupChatMentionPatternsHint: 'メッセージ内のメンションパターンを一致させてエージェントの応答をトリガー（カンマ区切り）',
+        tools: 'ツール設定',
+        toolsProfile: 'ツールプリセット',
+        toolsProfile_default: '未設定（グローバル継承）',
+        toolsProfile_minimal: 'Minimal — ステータスのみ',
+        toolsProfile_coding: 'Coding — FS/ランタイム/セッション/メモリ',
+        toolsProfile_messaging: 'Messaging — メッセージング/セッション',
+        toolsProfile_full: 'Full — 制限なし',
+        builtinTools: '内蔵ツール',
+        builtinToolsHint: 'ここで OpenClaw の内蔵ツールを直接選択できます。プラグインツールやカスタムツールは引き続き下で手動入力できます。',
+        builtinToolsLoading: 'OpenClaw の内蔵ツールを読み込み中…',
+        builtinToolsUnavailable: 'OpenClaw の内蔵ツール一覧を読み込めませんでした。ツール名は引き続き手動入力できます。',
+        toolModeAllow: '許可',
+        toolModeDeny: '禁止',
+        toolsAllow: '許可するツール',
+        toolsAllowPlaceholder: '例：browser, file_search',
+        toolsDeny: '禁止するツール',
+        toolsDenyPlaceholder: '例：canvas',
+        toolsHint: '禁止は許可より優先されます。プラグインツールやカスタムツールは引き続き手動入力し、Enter で確定できます。',
+        heartbeat: 'ハートビート間隔',
+        heartbeat_off: 'オフ',
+        heartbeat_custom: 'カスタム',
+        heartbeatPlaceholder: '例：10m',
+        heartbeatFormatError: '形式が正しくありません。数字+単位で入力してください（例：10m、1h、30s、500ms）',
+        heartbeatHint: '定期ハートビート確認間隔（ms/s/m/h対応）',
+        params: 'モデルパラメータ上書き',
+        paramsTemperature: 'Temperature',
+        paramsTemperaturePlaceholder: '空欄でグローバルデフォルト',
+        paramsMaxTokens: '最大トークン数',
+        paramsMaxTokensPlaceholder: '空欄でグローバルデフォルト',
+        paramsHint: 'このエージェントの agents.defaults.models のパラメータを上書き',
+      },
     },
     workspaceDrawer: {
       title: 'ワークスペース',
@@ -1146,10 +1115,8 @@ export default {
   knowledge: {
     help: {
       name: 'A name to distinguish different knowledge bases (max 30 characters).',
-      chunkSize:
-        'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
-      chunkOverlap:
-        'Overlap size between adjacent chunks (in characters, 0~1000), to reduce information loss from cross-chunk sentence breaks.',
+      chunkSize: 'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
+      chunkOverlap: 'Overlap size between adjacent chunks (in characters, 0~1000), to reduce information loss from cross-chunk sentence breaks.',
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding model used to convert text into vectors.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
@@ -1357,8 +1324,7 @@ export default {
       renameSuccess: '名前を変更しました',
       renameFailed: '名前変更に失敗しました',
       deleteTitle: '削除の確認',
-      deleteDesc:
-        'After deleting folder "{name}", documents under it will be moved to "Uncategorized". This action cannot be undone.',
+      deleteDesc: 'After deleting folder "{name}", documents under it will be moved to "Uncategorized". This action cannot be undone.',
       deleteCancel: 'キャンセル',
       deleteConfirm: '削除',
       deleteSuccess: '削除しました',
@@ -1376,8 +1342,7 @@ export default {
       nameDuplicate: 'Folder name already exists',
       nameHelp: 'Folder name (max 50 characters).',
       parentFolder: 'Parent Folder',
-      parentFolderHelp:
-        'Select a parent folder to create nested folders. Leave empty to create at root.',
+      parentFolderHelp: 'Select a parent folder to create nested folders. Leave empty to create at root.',
       rootFolder: 'Root (No Parent)',
     },
     detail: {
@@ -1447,11 +1412,9 @@ export default {
     conversationLog: 'Conversation Log',
     conversationLogDesc: 'Chronological conversation facts',
     conversationLogEmpty: 'No conversation logs yet',
-    deleteEventStreamConfirm:
-      'Are you sure you want to delete this conversation log? This action cannot be undone.',
+    deleteEventStreamConfirm: 'Are you sure you want to delete this conversation log? This action cannot be undone.',
     deleteFailed: 'Failed to delete',
-    deleteThematicFactConfirm:
-      'Are you sure you want to delete this topic summary? This action cannot be undone.',
+    deleteThematicFactConfirm: 'Are you sure you want to delete this topic summary? This action cannot be undone.',
     editCoreProfile: 'Edit Basic Info',
     editEventStream: 'Edit Conversation Log',
     editThematicFact: 'Edit Topic Summary',
@@ -1519,6 +1482,7 @@ export default {
       dingtalk: 'DingTalk',
       feishu: 'Feishu',
       wecom: 'WeCom',
+      wechat: 'WeChat',
       qq: 'QQ',
       twitter: 'X（Twitter）',
     },
@@ -1545,8 +1509,7 @@ export default {
       success: 'Channel created successfully',
       failed: 'Failed to create channel',
       dingtalkPluginInstalling: 'DingTalkプラグインインストール中',
-      dingtalkPluginInstallingDesc:
-        'DingTalkコネクタープラグインをバックグラウンドでインストール中です。接続状態は後で確認できます。今すぐアシスタントのバインドに進めます。',
+      dingtalkPluginInstallingDesc: 'DingTalkコネクタープラグインをバックグラウンドでインストール中です。接続状態は後で確認できます。今すぐアシスタントのバインドに進めます。',
       avatarHint: 'Click to replace, recommended size 100*100px, max 100kb',
       feishuTipPrefix: 'ログイン',
       feishuTipMiddle: 'to create a bot, follow',
@@ -1627,19 +1590,17 @@ export default {
     comingSoon: 'Coming soon',
     agentFallback: 'AIアシスタント',
     unbindConfirmTitle: 'Confirm unbind',
-    unbindConfirmDesc:
-      'Unbind the assistant from channel "{name}"? You must bind again for the assistant to handle messages on this channel.',
+    unbindConfirmDesc: 'Unbind the assistant from channel "{name}"? You must bind again for the assistant to handle messages on this channel.',
     unbindSuccess: 'Assistant unbound',
     bindSuccess: 'アシスタントがバインドされました',
     provisioning: {
       toastTitle: 'バックグラウンドで処理中',
-      toastDescription:
-        'チャンネルとゲートウェイを作成または同期しています。接続状態は自動で更新されます。しばらくお待ちください。',
-      toastDescriptionWithAgent:
-        'チャンネル、アシスタント、またはゲートウェイを作成または同期しています。しばらくお待ちください。',
+      toastDescription: 'チャンネルと Gateway はまだ作成または同期中です。接続状態は自動的に更新されます。しばらくお待ちください。',
+      toastDescriptionWithAgent: 'チャンネル、アシスタント、または Gateway はまだ作成または同期中です。しばらくお待ちください。',
     },
     card: {
       appId: 'APP ID',
+      applicationId: 'アプリケーション ID',
       bind: 'バインド',
       switchBind: 'Switch binding',
       unbind: 'Unbind',
@@ -1664,15 +1625,12 @@ export default {
     },
     toggle: {
       enableSuccess: 'Enabled successfully',
-      dingtalkPluginNotReady:
-        'DingTalk コネクタープラグインはインストール中か未準備です。しばらくしてから再試行してください。',
+      dingtalkPluginNotReady: 'DingTalk コネクタープラグインはインストール中か未準備です。しばらくしてから再試行してください。',
       disableSuccess: 'Disabled successfully',
       enableTitle: 'Enable this channel?',
       disableTitle: 'Disable this channel?',
-      enableDesc:
-        'When enabled, the system will attempt to connect to this channel to receive and process messages.',
-      disableDesc:
-        'When disabled, the connection to this channel will be disconnected and the system will no longer receive messages from it.',
+      enableDesc: 'When enabled, the system will attempt to connect to this channel to receive and process messages.',
+      disableDesc: 'When disabled, the connection to this channel will be disconnected and the system will no longer receive messages from it.',
     },
     status: {
       online: 'Connected',
@@ -1690,6 +1648,36 @@ export default {
       noDesc: 'No description',
       confirm: 'Confirm binding',
     },
+    wechat: {
+      emptyTitle: 'WeChat はまだ追加されていません',
+      emptyDesc: 'Tencent 公式の OpenClaw プラグインで QR コードをスキャンして個人 WeChat を接続し、WeChat メッセージの受信と処理を開始します。',
+      addNow: '今すぐ追加',
+      configTitle: 'WeChat を設定',
+      configSubtitle: 'Tencent 公式の OpenClaw プラグインで QR コードをスキャンして個人 WeChat を接続します',
+      howToConnect: '接続方法',
+      step1: 'Tencent 公式の OpenClaw プラグインで QR コードをスキャンして個人 WeChat を接続します',
+      step3: 'QR コードを生成 をクリックすると、ClawX が OpenClaw に公式 WeChat プラグインをインストールして有効化します',
+      step4: '下の QR コードを WeChat でスキャンし、スマートフォンで接続を確認してください',
+      step5: '接続に成功すると、WeChat 内に新しい「WeChat ClawBot」会話が自動で表示されます。その後、同じスキャン手順でさらに WeChat アカウントを追加したり、既存アカウントを再接続したりできます。',
+      configStepsLink: '設定手順',
+      generateQRCode: 'QR コードを生成',
+      generating: '生成中…',
+      scanHint: '下の QR コードを WeChat でスキャンし、スマートフォンで接続を確認してください',
+      waitingForScan: 'スキャン待ち…',
+      refresh: '更新',
+      loginSuccess: 'WeChat の接続に成功しました',
+      assistantPromptTitle: 'アシスタントを関連付け',
+      assistantPromptDesc: 'このチャンネルは現在、既定でメインアシスタント (main) に関連付けられており、メッセージはメインアシスタントが処理します。別のアシスタントを使いたい場合は、既存のアシスタントを関連付けるか、新しいアシスタントを作成してこの WeChat チャンネルに自動で関連付けることができます。',
+      useMainAssistant: '完了 (メインアシスタントを使用)',
+      bindExistingAssistant: '既存のアシスタントを関連付け',
+      createAssistantManually: '新しいアシスタントを作成',
+      createAssistantHint: '新しいアシスタントを作成する際は、名前などの情報を手動で入力する必要があります。作成後は自動で関連付けられ、接続も更新されます。',
+      missingChannelId: 'チャンネル情報を取得できませんでした。このウィンドウを閉じてチャンネル一覧を更新し、もう一度お試しください。',
+      missingChannelIdHint: 'チャンネル ID を取得できませんでした。このウィンドウを閉じて、チャンネル一覧から手動でアシスタントを関連付けてください。',
+      channelNotFound: '対応するチャンネルが見つかりません。更新してからもう一度お試しください。',
+      pluginInstallTryLater: '公式 WeChat プラグインは現在バックグラウンドでインストールまたは有効化されています。しばらくしてからもう一度お試しください。',
+      editNotSupported: 'WeChat は QR コードのスキャンで接続するため、ここでは編集できません。アカウントを切り替えるには、チャンネルページでこのチャンネルを削除してから再度スキャンして追加してください。',
+    },
   },
   scheduledTasks: {
     title: 'スケジュールタスク',
@@ -1701,8 +1689,7 @@ export default {
     refresh: 'Refresh',
     edit: 'Edit Task',
     empty: 'スケジュールタスクがありません',
-    emptyDescription:
-      '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
+    emptyDescription: 'スケジュールタスクを作成して AI ワークフローを自動化します。タスクは指定した時刻にメッセージ送信、クエリ実行、操作実行を行えます。',
     errorReason: 'View error reason',
     actionsMenu: 'Open actions menu',
     total: 'Total Tasks',
@@ -1819,10 +1806,8 @@ export default {
       selectTypeFirst: 'Please select a notification type first',
       selectChannel: 'Please select channels',
       emptyChannels: 'No channels are available for the current notification type',
-      hintSelected:
-        'You can select multiple channels. Results will be sent there after the task completes.',
-      hintUnselected:
-        'Choose a notification type first, then select one or more channels from that platform.',
+      hintSelected: 'You can select multiple channels. Results will be sent there after the task completes.',
+      hintUnselected: 'Choose a notification type first, then select one or more channels from that platform.',
       channelFallback: 'Channel {id}',
     },
     presets: {
@@ -1871,8 +1856,7 @@ export default {
       thinking: 'Thinking',
       enabled: 'Enable Task',
       expiresAt: 'Expiration Date',
-      expiredHint:
-        'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
+      expiredHint: 'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
       scheduleType: 'スケジュールタイプ',
       schedulePreset: 'プリセット',
       scheduleCustom: 'Custom Time',
@@ -1965,8 +1949,7 @@ export default {
       timezone: 'Timezone',
       systemTimezone: 'System Default',
       exact: 'Exact Execution',
-      exactHint:
-        'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
+      exactHint: 'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
       enableNowTitle: 'Enable immediately',
       enableNowHint: 'Start running this task immediately after creation',
       message: 'Message',
@@ -1991,8 +1974,7 @@ export default {
       deliveryTargetId: 'Target ID',
       deliveryTargetIdPlaceholder: 'Enter a conversation or user ID',
       deliveryTargetHintTitle: 'Default Target',
-      deliveryTargetFixedHint:
-        'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
+      deliveryTargetFixedHint: 'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
       deliveryTargetModes: {
         lastActive: 'Last Active Target',
         targetId: 'Enter Target ID',

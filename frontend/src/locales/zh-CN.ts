@@ -1468,7 +1468,7 @@ export default {
       wecom: '企微',
       wechat: '微信',
       qq: 'QQ',
-      twitter: 'X-Twitter',
+      twitter: 'X（Twitter）',
     },
     config: {
       title: '配置{platform}机器人',

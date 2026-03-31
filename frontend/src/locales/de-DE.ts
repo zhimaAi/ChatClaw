@@ -32,8 +32,8 @@ export default {
       description: 'Relevante Inhalte aus der Wissensdatenbank abrufen',
     },
     memoryRetriever: {
-      name: '记忆检索',
-      description: '从长期记忆中检索相关事实',
+      name: 'Speicherabruf',
+      description: 'Ruft relevante Fakten aus dem Langzeitgedächtnis ab',
     },
     execute: {
       name: 'Befehl ausführen',
@@ -334,13 +334,11 @@ export default {
         },
         uv: {
           name: 'Python-Laufzeitumgebung',
-          description:
-            'Ermöglicht dem KI-Assistenten das Schreiben und Ausführen von Python-Skripten für komplexe Aufgaben.',
+          description: 'Ermöglicht dem KI-Assistenten das Schreiben und Ausführen von Python-Skripten für komplexe Aufgaben.',
         },
         bun: {
           name: 'JavaScript-Laufzeitumgebung',
-          description:
-            'Ermöglicht dem KI-Assistenten das Schreiben und Ausführen von JavaScript-Skripten für komplexe Aufgaben.',
+          description: 'Ermöglicht dem KI-Assistenten das Schreiben und Ausführen von JavaScript-Skripten für komplexe Aufgaben.',
         },
         codex: {
           name: 'Sichere Sandbox',
@@ -348,30 +346,24 @@ export default {
         },
         openclaw: {
           name: 'OpenClaw Runtime',
-          description:
-            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
+          description: 'OpenClaw Agent\'s Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/',
         },
       },
     },
     memory: {
       title: 'Langzeiterinnerung',
       enable: 'Langzeiterinnerung aktivieren',
-      enableHint:
-        'Wenn aktiviert, extrahiert und speichert die KI automatisch Ihre Präferenzen, Gewohnheiten und wichtigen Fakten in Gesprächen.',
+      enableHint: 'Wenn aktiviert, extrahiert und speichert die KI automatisch Ihre Präferenzen, Gewohnheiten und wichtigen Fakten in Gesprächen.',
       extractModel: 'Erinnerungs-Extraktionsmodell',
-      extractModelHint:
-        'Wird verwendet, um nach jeder Konversation wertvolle Gedächtnisinformationen zusammenzufassen und zu extrahieren.',
+      extractModelHint: 'Wird verwendet, um nach jeder Konversation wertvolle Gedächtnisinformationen zusammenzufassen und zu extrahieren.',
       embeddingModel: 'Erinnerungs-Embedding-Modell',
-      embeddingModelHint:
-        'Wird verwendet, um Gedächtnistext in Vektoren zu konvertieren, um semantische Suche während der Konversation zu ermöglichen.',
+      embeddingModelHint: 'Wird verwendet, um Gedächtnistext in Vektoren zu konvertieren, um semantische Suche während der Konversation zu ermöglichen.',
       embeddingDimension: 'Embedding-Dimension',
-      embeddingDimensionHint:
-        'Die Vektor dimension muss mit der Ausgabe des ausgewählten Modells übereinstimmen.',
+      embeddingDimensionHint: 'Die Vektor dimension muss mit der Ausgabe des ausgewählten Modells übereinstimmen.',
       save: 'Einstellungen speichern',
       saved: 'Einstellungen gespeichert',
       saveFailed: 'Speichern der Einstellungen fehlgeschlagen',
-      rebuildWarning:
-        'Nach Änderung des Vektormodells oder der Dimension werden alle bestehenden Gedächtnisvektordaten asynchron neu aufgebaut.',
+      rebuildWarning: 'Nach Änderung des Vektormodells oder der Dimension werden alle bestehenden Gedächtnisvektordaten asynchron neu aufgebaut.',
       rebuilding: 'Erinnerungsvektoren werden neu erstellt...',
       rebuildSuccess: 'Erinnerungsvektoren erfolgreich neu erstellt',
       rebuildFailed: 'Neuerstellung der Erinnerungsvektoren fehlgeschlagen',
@@ -380,12 +372,10 @@ export default {
     skills: {
       title: 'Fähigkeiten',
       enable: 'Fähigkeiten aktivieren',
-      enableHint:
-        'Wenn aktiviert, lädt der KI-Assistent während der Konversation automatisch installierte Skills und nutzt diese.',
+      enableHint: 'Wenn aktiviert, lädt der KI-Assistent während der Konversation automatisch installierte Skills und nutzt diese.',
       pageDesc: 'KI-Fähigkeiten durchsuchen und verwalten',
       directory: 'Fähigkeiten-Ladeverzeichnis',
-      directoryHint:
-        'Legen Sie heruntergeladene Skill-Ordner in dieses Verzeichnis. Sie werden während der KI-Konversation automatisch erkannt und geladen.',
+      directoryHint: 'Legen Sie heruntergeladene Skill-Ordner in dieses Verzeichnis. Sie werden während der KI-Konversation automatisch erkannt und geladen.',
       tabInstalled: 'Installiert',
       tabMarket: 'Markt',
       filterAll: 'Alle',
@@ -441,8 +431,7 @@ export default {
       listSubheading: 'Browse and manage AI capabilities',
       refreshCta: 'Refresh',
       addSkillCta: 'Add skill',
-      pageDesc:
-        'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
+      pageDesc: 'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
       filterAll: 'All',
       filterBuiltin: 'Built-in',
       filterInstalled: 'Installed',
@@ -456,16 +445,14 @@ export default {
       locationCount: '{count} copies',
       searchPlaceholder: 'Search skills, paths, agent, or permissions…',
       noSkills: 'No OpenClaw skills found',
-      noSkillsHint:
-        'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
+      noSkillsHint: 'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
       openSharedDir: 'Open main workspace skills folder',
       openMainWorkspaceSkillsDir: 'Open main workspace skills (workspace-main/skills)',
       openManagedSkillsDir: 'Open managed skills folder (openclaw/skills)',
       permissionLabel: 'Permission',
       scopeLabel: 'Scope',
       agentBinding: 'Agent',
-      gatewayOfflineHint:
-        'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
+      gatewayOfflineHint: 'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
       backToList: 'Back to list',
       loadFailed: 'Failed to load OpenClaw skills',
       dataSourceLabel: 'Source',
@@ -479,26 +466,22 @@ export default {
       eligibleNo: 'No',
       eligibleUnknown: 'Unknown',
       gateHintLabel: 'Gateway note',
-      previewNoLocalPath:
-        'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      previewNoLocalPath: 'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
       add: {
         title: 'Add',
         createViaChatTitle: 'Create via chat',
         createViaChatDesc: 'Describe what you need and let AI scaffold an OpenClaw skill',
         choosePackageTitle: 'Choose skill package',
         choosePackageDesc: 'Open the skills folder and place the skill package there',
-        createViaChatPrompt:
-          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
+        createViaChatPrompt: 'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
       },
     },
     mcp: {
       title: 'MCP',
       enable: 'MCPaktivieren',
-      enableHint:
-        'Aktiviert, wird der KI-Assistent automatisch eine Verbindung zu konfigurierten MCP-Servern herstellen und diese nutzen.',
+      enableHint: 'Aktiviert, wird der KI-Assistent automatisch eine Verbindung zu konfigurierten MCP-Servern herstellen und diese nutzen.',
       directory: 'MCP-Konfigurationsverzeichnis',
-      directoryHint:
-        'Legen Sie MCP-Server-Konfigurationsdateien in dieses Verzeichnis. Sie werden automatisch erkannt und verbunden.',
+      directoryHint: 'Legen Sie MCP-Server-Konfigurationsdateien in dieses Verzeichnis. Sie werden automatisch erkannt und verbunden.',
       tabServers: 'MCP',
       tabSettings: 'Einstellungen',
       tabInstalled: 'Installiert',
@@ -574,8 +557,7 @@ export default {
       assistantMcpEdit: 'Bearbeiten',
       assistantMcpDelete: 'Löschen',
       assistantMcpLinkAgentsTitle: 'Assistenten verknüpfen',
-      assistantMcpLinkAgentsDesc:
-        'Wählen Sie KI-Assistenten, die als Tools für diesen MCP verwendet werden sollen',
+      assistantMcpLinkAgentsDesc: 'Wählen Sie KI-Assistenten, die als Tools für diesen MCP verwendet werden sollen',
       assistantMcpNoAgents: 'Keine KI-Assistenten verfügbar',
       assistantMcpToolCount: '{count} Tool(s)',
       assistantMcpToolName: 'Tool-Name',
@@ -618,8 +600,7 @@ export default {
       customAppsNoResult: 'Keine passenden Apps',
       confirmAddCustomApp: 'Hinzufügen',
       customAppExistsBuiltIn: 'Standardkonfiguration existiert bereits für diesen Prozess ({app})',
-      customAppExistsCustom:
-        'Dieser Prozess hat bereits eine benutzerdefinierte Konfiguration ({name})',
+      customAppExistsCustom: 'Dieser Prozess hat bereits eine benutzerdefinierte Konfiguration ({name})',
       deleteCustomConfirmTitle: 'Benutzerdefinierte App löschen',
       deleteCustomConfirmDesc: 'Andock-Konfiguration für ',
       confirmDeleteCustomApp: 'Löschen',
@@ -634,8 +615,7 @@ export default {
       reauthBind: 'Neu autorisieren',
       unbind: 'Bindung aufheben',
       unbindConfirmTitle: 'Bindung aufheben bestätigen',
-      unbindConfirmDesc:
-        'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
+      unbindConfirmDesc: 'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
       addBinding: 'Bindung hinzufügen',
       applications: 'Anwendungen',
       knowledgeBases: 'Wissensdatenbanken',
@@ -656,8 +636,7 @@ export default {
         wechat: 'Offizielles WeChat-Konto',
       },
       enabledHint: 'Wird in Mehrfachfrage angezeigt, wenn aktiviert',
-      libraryEnabledHint:
-        'Sync ChatWiki knowledge base. When enabled, it will appear in team knowledge base when asking questions.',
+      libraryEnabledHint: 'Sync ChatWiki knowledge base. When enabled, it will appear in team knowledge base when asking questions.',
       emptyRobots: 'Keine Anwendungen',
       emptyLibraries: 'Keine Wissensdatenbanken',
       loginCloud: 'Bei ChatWiki Cloud anmelden',
@@ -679,11 +658,9 @@ export default {
       startUsingHint: 'Klicken Sie unten auf ',
       startUsing: 'Jetzt starten',
       freeVersion: 'Kostenlos',
-      modelServiceDesc:
-        'Nach dem Binden von ChatWiki können verfügbare Modelle und Guthaben direkt im Modelldienst angezeigt werden.',
+      modelServiceDesc: 'Nach dem Binden von ChatWiki können verfügbare Modelle und Guthaben direkt im Modelldienst angezeigt werden.',
       notLoggedInTitle: 'Nicht bei ChatWiki angemeldet',
-      notLoggedInDesc:
-        'Melden Sie sich an, um die Modellliste und das Guthaben von ChatWiki Cloud zu synchronisieren.',
+      notLoggedInDesc: 'Melden Sie sich an, um die Modellliste und das Guthaben von ChatWiki Cloud zu synchronisieren.',
       loginNow: 'Jetzt anmelden',
       accountIdPrefix: 'Konto-ID: ',
       buyCredits: 'Guthaben kaufen',
@@ -694,12 +671,9 @@ export default {
       pricePerKToken: '{price} Credits / 1K Token',
       modelLoadFailed: 'Modellliste konnte nicht geladen werden',
       openBillingFailed: 'Abrechnungsseite konnte nicht geöffnet werden',
-      modelBoundHint:
-        'Diese Liste zeigt die aktuell für das gebundene ChatWiki-Konto verfügbaren Modelle an.',
-      modelUnboundHint:
-        'Melden Sie sich zuerst an, um die verfügbaren Modelle für die aktuelle Bindung zu laden.',
-      modelLoginHint:
-        'Bitte melden Sie sich zuerst an und binden Sie Ihr ChatWiki-Konto. Danach wird hier die aktuelle Modellliste angezeigt.',
+      modelBoundHint: 'Diese Liste zeigt die aktuell für das gebundene ChatWiki-Konto verfügbaren Modelle an.',
+      modelUnboundHint: 'Melden Sie sich zuerst an, um die verfügbaren Modelle für die aktuelle Bindung zu laden.',
+      modelLoginHint: 'Bitte melden Sie sich zuerst an und binden Sie Ihr ChatWiki-Konto. Danach wird hier die aktuelle Modellliste angezeigt.',
       providerStatus: {
         unbound: '{label} (Nicht angemeldet)',
         nonCloud: '{label} (Nicht angemeldet)',
@@ -874,8 +848,7 @@ export default {
       freeBadge: 'Kostenlos',
       noModel: 'Kein Modell verfügbar',
       selectKnowledge: 'Wissensdatenbank auswählen',
-      openclawTeamKnowledgeDisabled:
-        'Team-Wissensdatenbanken sind in OpenClaw noch nicht verfügbar',
+      openclawTeamKnowledgeDisabled: 'Team-Wissensdatenbanken sind in OpenClaw noch nicht verfügbar',
       knowledgeChipRemoveNotSupported: 'In diesem Modus ist das Entfernen nicht möglich',
       selectImages: 'Bilder auswählen',
       selectImagesDisabled: 'Wählen Sie ein Modell, das Bildeingabe unterstützt',
@@ -945,8 +918,7 @@ export default {
       unknownAgent: 'Unbekannter Assistent',
       noPlatforms: 'Keine Kanäle verfügbar',
       createTitle: '{platform} Bot hinzufügen',
-      createDesc:
-        'Folgen Sie dem Hinzufügen-Ablauf auf der Kanalseite. Nach der Erstellung wird der Bot automatisch an den aktuellen Assistenten gebunden.',
+      createDesc: 'Folgen Sie dem Hinzufügen-Ablauf auf der Kanalseite. Nach der Erstellung wird der Bot automatisch an den aktuellen Assistenten gebunden.',
       addChannel: 'Kanal hinzufügen',
       addAndBind: 'Hinzufügen und binden',
       showExisting: 'Hinzugefügte Kanäle anzeigen',
@@ -963,8 +935,7 @@ export default {
       bindSuccess: 'Erfolgreich gebunden',
       unbindSuccess: 'Erfolgreich gelöst',
       addBot: 'Bot hinzufügen',
-      addBotHint:
-        'Jeder Bot kann nur an einen KI-Assistenten gebunden werden. Es werden nur ungebundene Bots angezeigt.',
+      addBotHint: 'Jeder Bot kann nur an einen KI-Assistenten gebunden werden. Es werden nur ungebundene Bots angezeigt.',
       noUnboundBot: 'Keine ungebundenen Bots verfügbar',
       selectBot: 'Bitte wählen Sie einen Bot zum Binden',
     },
@@ -1006,8 +977,7 @@ export default {
       teamImageNotSupported: 'Bilder senden im Team-Modus noch nicht unterstützt',
       selectTeamRobotFirst: 'Bitte wählen Sie zuerst einen Team-Roboter',
       teamRobotMissingKey: 'Aktueller Roboter hat kein robot_key, bitte erneut synchronisieren',
-      modelNotSupportVision:
-        'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
+      modelNotSupportVision: 'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
       modelNotSupportVisionHint: 'Modelle wie GPT-4o, Claude, Gemini unterstützen Bilderkennung',
       fileTooLarge: 'Dateigröße überschreitet Limit (max {max})',
       tooManyFiles: 'Maximal {max} Dateien hochladen',
@@ -1025,22 +995,20 @@ export default {
       tabs: {
         general: 'Allgemein',
         advanced: 'Erweitert',
-        model: '模型设置',
-        prompt: '提示词设置',
-        workspace: '工作区',
-        retrieval: '知识库检索',
+        model: 'Modelleinstellungen',
+        prompt: 'Prompt-Einstellungen',
+        workspace: 'Arbeitsbereich',
+        retrieval: 'Wissensabruf',
         delete: 'Löschen',
       },
       workspace: {
         sandboxMode: 'Ausführungsmodus',
         modeCodex: 'Codex-Sandbox',
         modeNative: 'Native Ausführung',
-        nativeDesc:
-          'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
+        nativeDesc: 'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
         networkAccess: 'Netzwerkzugriff erlauben',
         workDir: 'Arbeitsverzeichnis',
-        workDirHint:
-          'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
+        workDirHint: 'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: 'Ändern',
         resetDir: 'Auf Standard zurücksetzen',
         selectDir: 'Arbeitsverzeichnis auswählen',
@@ -1072,47 +1040,47 @@ export default {
         confirmTitle: 'Löschen bestätigen',
         confirmDesc: 'Möchten Sie ',
       },
-      "advanced": {
-        "sandboxMode": "Sandbox-Modus",
-        "sandbox_off": "Deaktiviert",
-        "sandbox_non-main": "Nur Nicht-Standard-Agenten",
-        "sandbox_all": "Alle Agenten",
-        "sandboxModeHint": "Die Sandbox isoliert die Befehlsausführung und verhindert, dass Agenten das Hostsystem direkt ändern",
-        "groupChatMentionPatterns": "Gruppenchat-Erwähnungsmuster",
-        "groupChatMentionPatternsPlaceholder": "{'@'}assistant, {'@'}bot",
-        "groupChatInsertPreset": "Vorlage einfügen",
-        "groupChatMentionPatternsHint": "Muster zum Auslösen der Agentenantwort, durch Komma getrennt",
-        "tools": "Werkzeugkonfiguration",
-        "toolsProfile": "Werkzeugprofil",
-        "toolsProfile_default": "Nicht gesetzt (global erben)",
-        "toolsProfile_minimal": "Minimal — nur Status",
-        "toolsProfile_coding": "Coding — FS/Runtime/Sitzungen/Speicher",
-        "toolsProfile_messaging": "Messaging — Nachrichten/Sitzungen",
-        "toolsProfile_full": "Full — unbeschränkt",
-        "builtinTools": "Integrierte Werkzeuge",
-        "builtinToolsHint": "Wählen Sie hier direkt die integrierten OpenClaw-Werkzeuge aus. Benutzerdefinierte oder Plugin-Werkzeuge können darunter weiterhin manuell eingegeben werden.",
-        "builtinToolsLoading": "Integrierte OpenClaw-Werkzeuge werden geladen…",
-        "builtinToolsUnavailable": "Der Katalog der integrierten OpenClaw-Werkzeuge konnte nicht geladen werden. Werkzeugnamen können weiterhin manuell eingegeben werden.",
-        "toolModeAllow": "Erlauben",
-        "toolModeDeny": "Verbieten",
-        "toolsAllow": "Erlaubte Werkzeuge",
-        "toolsAllowPlaceholder": "z.B. browser, file_search",
-        "toolsDeny": "Verbotene Werkzeuge",
-        "toolsDenyPlaceholder": "z.B. canvas",
-        "toolsHint": "Verbieten hat Vorrang vor Erlauben. Plugin- oder benutzerdefinierte Werkzeuge können weiterhin manuell eingegeben und mit Enter bestätigt werden.",
-        "heartbeat": "Heartbeat-Intervall",
-        "heartbeat_off": "Aus",
-        "heartbeat_custom": "Benutzerdefiniert",
-        "heartbeatPlaceholder": "z.B. 10m",
-        "heartbeatFormatError": "Ungültiges Format. Zahl + Einheit verwenden, z.B. 10m, 1h, 30s, 500ms",
-        "heartbeatHint": "Periodisches Heartbeat-Prüfintervall (ms/s/m/h)",
-        "params": "Modellparameter überschreiben",
-        "paramsTemperature": "Temperature",
-        "paramsTemperaturePlaceholder": "Leer für globalen Standard",
-        "paramsMaxTokens": "Maximale Token",
-        "paramsMaxTokensPlaceholder": "Leer für globalen Standard",
-        "paramsHint": "agents.defaults.models-Parameter für diesen Agenten überschreiben"
-      }
+      advanced: {
+        sandboxMode: 'Sandbox-Modus',
+        sandbox_off: 'Deaktiviert',
+        'sandbox_non-main': 'Nur Nicht-Standard-Agenten',
+        sandbox_all: 'Alle Agenten',
+        sandboxModeHint: 'Die Sandbox isoliert die Befehlsausführung und verhindert, dass Agenten das Hostsystem direkt ändern',
+        groupChatMentionPatterns: 'Gruppenchat-Erwähnungsmuster',
+        groupChatMentionPatternsPlaceholder: '{\'@\'}assistant, {\'@\'}bot',
+        groupChatInsertPreset: 'Vorlage einfügen',
+        groupChatMentionPatternsHint: 'Muster zum Auslösen der Agentenantwort, durch Komma getrennt',
+        tools: 'Werkzeugkonfiguration',
+        toolsProfile: 'Werkzeugprofil',
+        toolsProfile_default: 'Nicht gesetzt (global erben)',
+        toolsProfile_minimal: 'Minimal — nur Status',
+        toolsProfile_coding: 'Coding — FS/Runtime/Sitzungen/Speicher',
+        toolsProfile_messaging: 'Messaging — Nachrichten/Sitzungen',
+        toolsProfile_full: 'Full — unbeschränkt',
+        builtinTools: 'Integrierte Werkzeuge',
+        builtinToolsHint: 'Wählen Sie hier direkt die integrierten OpenClaw-Werkzeuge aus. Benutzerdefinierte oder Plugin-Werkzeuge können darunter weiterhin manuell eingegeben werden.',
+        builtinToolsLoading: 'Integrierte OpenClaw-Werkzeuge werden geladen…',
+        builtinToolsUnavailable: 'Der Katalog der integrierten OpenClaw-Werkzeuge konnte nicht geladen werden. Werkzeugnamen können weiterhin manuell eingegeben werden.',
+        toolModeAllow: 'Erlauben',
+        toolModeDeny: 'Verbieten',
+        toolsAllow: 'Erlaubte Werkzeuge',
+        toolsAllowPlaceholder: 'z.B. browser, file_search',
+        toolsDeny: 'Verbotene Werkzeuge',
+        toolsDenyPlaceholder: 'z.B. canvas',
+        toolsHint: 'Verbieten hat Vorrang vor Erlauben. Plugin- oder benutzerdefinierte Werkzeuge können weiterhin manuell eingegeben und mit Enter bestätigt werden.',
+        heartbeat: 'Heartbeat-Intervall',
+        heartbeat_off: 'Aus',
+        heartbeat_custom: 'Benutzerdefiniert',
+        heartbeatPlaceholder: 'z.B. 10m',
+        heartbeatFormatError: 'Ungültiges Format. Zahl + Einheit verwenden, z.B. 10m, 1h, 30s, 500ms',
+        heartbeatHint: 'Periodisches Heartbeat-Prüfintervall (ms/s/m/h)',
+        params: 'Modellparameter überschreiben',
+        paramsTemperature: 'Temperature',
+        paramsTemperaturePlaceholder: 'Leer für globalen Standard',
+        paramsMaxTokens: 'Maximale Token',
+        paramsMaxTokensPlaceholder: 'Leer für globalen Standard',
+        paramsHint: 'agents.defaults.models-Parameter für diesen Agenten überschreiben',
+      },
     },
     workspaceDrawer: {
       title: 'Arbeitsbereich',
@@ -1147,10 +1115,8 @@ export default {
   knowledge: {
     help: {
       name: 'Ein Name um verschiedene Wissensdatenbanken zu unterscheiden (max 30 Zeichen).',
-      chunkSize:
-        'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
-      chunkOverlap:
-        'Overlap size between adjacent chunks (in characters, 0~1000), to reduce information loss from cross-chunk sentence breaks.',
+      chunkSize: 'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
+      chunkOverlap: 'Overlap size between adjacent chunks (in characters, 0~1000), to reduce information loss from cross-chunk sentence breaks.',
       matchThreshold: 'Results with similarity lower than this threshold will be filtered (0~1).',
       embeddingModel: 'Embedding-Modell zur Umwandlung von Text in Vektoren.',
       embeddingDimension: 'Embedding vector dimension must match the selected model output.',
@@ -1376,8 +1342,7 @@ export default {
       nameDuplicate: 'Ordnername existiert bereits',
       nameHelp: 'Ordnername (max 50 Zeichen).',
       parentFolder: 'Übergeordneter Ordner',
-      parentFolderHelp:
-        'Select a parent folder to create nested folders. Leave empty to create at root.',
+      parentFolderHelp: 'Select a parent folder to create nested folders. Leave empty to create at root.',
       rootFolder: 'Stammverzeichnis (kein übergeordneter)',
     },
     detail: {
@@ -1447,11 +1412,9 @@ export default {
     conversationLog: 'Gesprächsprotokoll',
     conversationLogDesc: 'Chronologische Gesprächstatsachen',
     conversationLogEmpty: 'Noch keine Gesprächsprotokolle',
-    deleteEventStreamConfirm:
-      'Are you sure you want to delete this conversation log? This action cannot be undone.',
+    deleteEventStreamConfirm: 'Are you sure you want to delete this conversation log? This action cannot be undone.',
     deleteFailed: 'Löschen fehlgeschlagen',
-    deleteThematicFactConfirm:
-      'Are you sure you want to delete this topic summary? This action cannot be undone.',
+    deleteThematicFactConfirm: 'Are you sure you want to delete this topic summary? This action cannot be undone.',
     editCoreProfile: 'Grundinformationen bearbeiten',
     editEventStream: 'Gesprächsprotokoll bearbeiten',
     editThematicFact: 'Themenzusammenfassung bearbeiten',
@@ -1519,6 +1482,7 @@ export default {
       dingtalk: 'DingTalk',
       feishu: 'Feishu',
       wecom: 'WeCom',
+      wechat: 'WeChat',
       qq: 'QQ',
       twitter: 'X (Twitter)',
     },
@@ -1545,8 +1509,7 @@ export default {
       success: 'Kanal erfolgreich erstellt',
       failed: 'Kanalerstellung fehlgeschlagen',
       dingtalkPluginInstalling: 'DingTalk-Plugin wird installiert',
-      dingtalkPluginInstallingDesc:
-        'Das DingTalk-Connector-Plugin wird im Hintergrund installiert. Sie können jetzt mit der Bindung eines Assistenten fortfahren und den Verbindungsstatus später prüfen.',
+      dingtalkPluginInstallingDesc: 'Das DingTalk-Connector-Plugin wird im Hintergrund installiert. Sie können jetzt mit der Bindung eines Assistenten fortfahren und den Verbindungsstatus später prüfen.',
       avatarHint: 'Klicken zum Ersetzen, empfohlen 100*100px, max 100KB',
       feishuTipPrefix: 'Anmelden bei',
       feishuTipMiddle: 'um einen Bot zu erstellen, folgen Sie',
@@ -1627,25 +1590,23 @@ export default {
     comingSoon: 'Demnächst',
     agentFallback: 'KI-Assistent',
     unbindConfirmTitle: 'Bindung aufheben bestätigen',
-    unbindConfirmDesc:
-      'Assistent vom Kanal "{name}" lösen? Nachrichten werden erst wieder verarbeitet, wenn Sie neu binden.',
+    unbindConfirmDesc: 'Assistent vom Kanal "{name}" lösen? Nachrichten werden erst wieder verarbeitet, wenn Sie neu binden.',
     unbindSuccess: 'Assistent gelöst',
     bindSuccess: 'Assistent erfolgreich gebunden',
     provisioning: {
       toastTitle: 'Wird im Hintergrund verarbeitet',
-      toastDescription:
-        'Kanal und Gateway werden noch erstellt oder synchronisiert. Der Verbindungsstatus aktualisiert sich automatisch – bitte warten.',
-      toastDescriptionWithAgent:
-        'Kanal, Assistent oder Gateway wird noch erstellt oder synchronisiert. Bitte warten.',
+      toastDescription: 'Kanal und Gateway werden noch erstellt oder synchronisiert. Der Verbindungsstatus wird automatisch aktualisiert. Bitte warten.',
+      toastDescriptionWithAgent: 'Kanal, Assistent oder Gateway werden noch erstellt oder synchronisiert. Bitte warten.',
     },
     card: {
       appId: 'App-ID',
+      applicationId: 'Anwendungs-ID',
       bind: 'Binden',
       switchBind: 'Bindung wechseln',
       unbind: 'Lösen',
       bound: 'Gebunden',
       unbound: 'Nicht gebunden',
-      provisioning: 'Wird erstellt…',
+      provisioning: 'Wird erstellt',
     },
     empty: {
       title: 'Noch keine Kanäle',
@@ -1664,20 +1625,17 @@ export default {
     },
     toggle: {
       enableSuccess: 'Erfolgreich aktiviert',
-      dingtalkPluginNotReady:
-        'Das DingTalk-Connector-Plugin wird noch installiert oder ist nicht bereit. Bitte versuchen Sie es später erneut.',
+      dingtalkPluginNotReady: 'Das DingTalk-Connector-Plugin wird noch installiert oder ist nicht bereit. Bitte versuchen Sie es später erneut.',
       disableSuccess: 'Erfolgreich deaktiviert',
       enableTitle: 'Diesen Kanal aktivieren?',
       disableTitle: 'Diesen Kanal deaktivieren?',
-      enableDesc:
-        'When enabled, the system will attempt to connect to this channel to receive and process messages.',
-      disableDesc:
-        'When disabled, the connection to this channel will be disconnected and the system will no longer receive messages from it.',
+      enableDesc: 'When enabled, the system will attempt to connect to this channel to receive and process messages.',
+      disableDesc: 'When disabled, the connection to this channel will be disconnected and the system will no longer receive messages from it.',
     },
     status: {
       online: 'Verbunden',
       error: 'Fehler',
-      provisioning: 'Wird erstellt…',
+      provisioning: 'Wird erstellt',
       offline: 'Getrennt',
     },
     bindAgent: {
@@ -1690,6 +1648,36 @@ export default {
       noDesc: 'Keine Beschreibung',
       confirm: 'Bindung bestätigen',
     },
+    wechat: {
+      emptyTitle: 'WeChat noch nicht hinzugefügt',
+      emptyDesc: 'Verbinden Sie Ihr persönliches WeChat per QR-Code-Scan mit dem offiziellen Tencent OpenClaw-Plugin und beginnen Sie damit, WeChat-Nachrichten zu empfangen und zu verarbeiten.',
+      addNow: 'Jetzt hinzufügen',
+      configTitle: 'WeChat konfigurieren',
+      configSubtitle: 'Verbinden Sie Ihr persönliches WeChat per QR-Code-Scan mit dem offiziellen Tencent OpenClaw-Plugin',
+      howToConnect: 'So verbinden Sie es',
+      step1: 'Verbinden Sie Ihr persönliches WeChat per QR-Code-Scan mit dem offiziellen Tencent OpenClaw-Plugin',
+      step3: 'Klicken Sie auf QR-Code generieren. ClawX installiert und aktiviert dann das offizielle WeChat-Plugin in OpenClaw',
+      step4: 'Scannen Sie den QR-Code unten mit WeChat und bestätigen Sie die Verbindung auf Ihrem Telefon',
+      step5: 'Nach erfolgreicher Verbindung erscheint in WeChat automatisch ein neuer Chat namens "WeChat ClawBot". Danach können Sie über denselben Scanvorgang weitere WeChat-Konten hinzufügen oder ein bestehendes Konto erneut verbinden.',
+      configStepsLink: 'Einrichtungsschritte',
+      generateQRCode: 'QR-Code generieren',
+      generating: 'Wird generiert…',
+      scanHint: 'Scannen Sie den QR-Code unten mit WeChat und bestätigen Sie die Verbindung auf Ihrem Telefon',
+      waitingForScan: 'Warte auf Scan…',
+      refresh: 'Aktualisieren',
+      loginSuccess: 'WeChat erfolgreich verbunden!',
+      assistantPromptTitle: 'Assistent verknüpfen',
+      assistantPromptDesc: 'Dieser Kanal ist derzeit standardmäßig mit dem Hauptassistenten (main) verknüpft, und Nachrichten werden vom Hauptassistenten verarbeitet. Wenn Sie einen anderen Assistenten verwenden möchten, können Sie einen vorhandenen Assistenten verknüpfen oder einen neuen erstellen und automatisch mit diesem WeChat-Kanal verbinden.',
+      useMainAssistant: 'Fertig (Hauptassistent verwenden)',
+      bindExistingAssistant: 'Vorhandenen Assistenten verknüpfen',
+      createAssistantManually: 'Neuen Assistenten erstellen',
+      createAssistantHint: 'Beim Erstellen eines neuen Assistenten müssen Name und weitere Informationen manuell eingegeben werden. Nach erfolgreicher Erstellung wird er automatisch verknüpft und die Verbindung aktualisiert.',
+      missingChannelId: 'Kanalinformationen konnten nicht abgerufen werden. Schließen Sie dieses Fenster, aktualisieren Sie die Kanalliste und versuchen Sie es erneut.',
+      missingChannelIdHint: 'Kanal-ID konnte nicht abgerufen werden. Schließen Sie dieses Fenster und verknüpfen Sie den Assistenten manuell in der Kanalliste.',
+      channelNotFound: 'Der entsprechende Kanal wurde nicht gefunden. Aktualisieren Sie die Liste und versuchen Sie es erneut.',
+      pluginInstallTryLater: 'Das offizielle WeChat-Plugin wird gerade im Hintergrund installiert oder aktiviert. Bitte versuchen Sie es später erneut.',
+      editNotSupported: 'WeChat wird per QR-Code-Scan verbunden und kann hier nicht bearbeitet werden. Wenn Sie das Konto wechseln möchten, löschen Sie diesen Kanal auf der Kanalseite und fügen Sie ihn erneut per Scan hinzu.',
+    },
   },
   scheduledTasks: {
     title: 'Geplante Aufgaben',
@@ -1701,8 +1689,7 @@ export default {
     refresh: 'Aktualisieren',
     edit: 'Aufgabe bearbeiten',
     empty: 'Noch keine geplanten Aufgaben',
-    emptyDescription:
-      '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
+    emptyDescription: 'Erstellen Sie geplante Aufgaben, um KI-Workflows zu automatisieren. Aufgaben können zu festgelegten Zeiten Nachrichten senden, Abfragen ausführen oder Aktionen durchführen.',
     errorReason: 'Fehlergrund anzeigen',
     actionsMenu: 'Aktionsmenü öffnen',
     total: 'Gesamtaufgaben',
@@ -1746,8 +1733,7 @@ export default {
       nameLabel: 'Aufgabenname',
       namePlaceholder: 'Zum Beispiel: Morgenbriefing',
       promptLabel: 'Prompt',
-      promptPlaceholder:
-        'Was soll die KI tun? Zum Beispiel: Gib mir eine Zusammenfassung der heutigen Nachrichten und des Wetters.',
+      promptPlaceholder: 'Was soll die KI tun? Zum Beispiel: Gib mir eine Zusammenfassung der heutigen Nachrichten und des Wetters.',
       agentLabel: 'Verknüpfter KI-Assistent',
       selectAgent: 'Assistent auswählen',
       scheduleTitle: 'Zeitplan festlegen',
@@ -1820,10 +1806,8 @@ export default {
       selectTypeFirst: 'Please select a notification type first',
       selectChannel: 'Please select channels',
       emptyChannels: 'No channels are available for the current notification type',
-      hintSelected:
-        'You can select multiple channels. Results will be sent there after the task completes.',
-      hintUnselected:
-        'Choose a notification type first, then select one or more channels from that platform.',
+      hintSelected: 'You can select multiple channels. Results will be sent there after the task completes.',
+      hintUnselected: 'Choose a notification type first, then select one or more channels from that platform.',
       channelFallback: 'Channel {id}',
     },
     presets: {
@@ -1872,8 +1856,7 @@ export default {
       thinking: 'Denken',
       enabled: 'Aufgabe aktivieren',
       expiresAt: 'Expiration Date',
-      expiredHint:
-        'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
+      expiredHint: 'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
       scheduleType: 'Zeitplantyp',
       schedulePreset: 'Voreinstellung',
       scheduleCustom: 'Benutzerdefinierte Zeit',
@@ -1966,8 +1949,7 @@ export default {
       timezone: 'Timezone',
       systemTimezone: 'System Default',
       exact: 'Exact Execution',
-      exactHint:
-        'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
+      exactHint: 'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
       enableNowTitle: 'Enable immediately',
       enableNowHint: 'Start running this task immediately after creation',
       message: 'Message',
@@ -1992,8 +1974,7 @@ export default {
       deliveryTargetId: 'Target ID',
       deliveryTargetIdPlaceholder: 'Enter a conversation or user ID',
       deliveryTargetHintTitle: 'Default Target',
-      deliveryTargetFixedHint:
-        'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
+      deliveryTargetFixedHint: 'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
       deliveryTargetModes: {
         lastActive: 'Last Active Target',
         targetId: 'Enter Target ID',
