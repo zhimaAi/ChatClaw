@@ -1164,13 +1164,7 @@ onUnmounted(() => {
                 item.index === breadcrumbPath.length - 1 ? 'font-medium' : 'text-muted-foreground'
               "
               :title="item.name"
-              @click="
-                () => {
-                  // id=null 表示知识库根目录，点击返回根目录
-                  activeFolderId = item.id
-                  emit('folder-selected', item.id)
-                }
-              "
+              @click="activeFolderId = item.id; emit('folder-selected', item.id)"
             >
               {{ item.name }}
             </button>

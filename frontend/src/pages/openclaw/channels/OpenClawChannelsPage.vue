@@ -348,7 +348,11 @@ async function handleBindAgent(agentId: number) {
   const channel = channelToBind.value
   try {
     await OpenClawChannelService.BindAgent(channel.id, agentId)
-    if (bindFromCreate.value && channel.platform === 'qq') {
+    // Match QQ: after create→bind, enable OpenClaw plugin config + local enabled (Feishu/WeCom/DingTalk were missing).
+    const connectAfterCreateBind =
+      bindFromCreate.value &&
+      ['qq', 'feishu', 'wecom', 'dingtalk'].includes(channel.platform)
+    if (connectAfterCreateBind) {
       await OpenClawChannelService.ConnectChannel(channel.id)
     }
     toast.success(t('channels.bindSuccess'))
@@ -643,11 +647,7 @@ onMounted(loadData)
               : 'text-[#0a0a0a] hover:bg-white/50 dark:text-foreground dark:hover:bg-background/50',
             !isChannelPlatformSelectable(platform.id) ? 'opacity-50 cursor-not-allowed' : '',
           ]"
-          @click="
-            isChannelPlatformSelectable(platform.id)
-              ? (selectedFilter = platform.id)
-              : toast.default(t('channels.comingSoon'))
-          "
+          @click="isChannelPlatformSelectable(platform.id) ? (selectedFilter = platform.id) : toast.default(t('channels.comingSoon'))"
         >
           {{ getPlatformName(platform.id) }}
         </button>
@@ -802,11 +802,7 @@ onMounted(loadData)
                 'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors':
                   channel.agent_id === 0 && !isBindProvisioning(channel),
               }"
-              @click="
-                channel.agent_id === 0 && !isBindProvisioning(channel)
-                  ? handleOpenBind(channel)
-                  : undefined
-              "
+              @click="channel.agent_id === 0 && !isBindProvisioning(channel) ? handleOpenBind(channel) : undefined"
             >
               <LoaderCircle
                 v-if="isBindProvisioning(channel)"

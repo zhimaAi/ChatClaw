@@ -83,11 +83,7 @@ function isChannelPlatformSelectable(platformId: string) {
                   : 'cursor-pointer border-[#d4d4d4] bg-white hover:border-[#171717]/50 dark:border-border dark:hover:border-primary/50'
                 : 'cursor-not-allowed border-border bg-muted/25 opacity-50 dark:bg-muted/20'
             "
-            @click="
-              isChannelPlatformSelectable(platform.id)
-                ? handleSelect(platform)
-                : toast.default(t('channels.comingSoon'))
-            "
+            @click="isChannelPlatformSelectable(platform.id) ? handleSelect(platform) : toast.default(t('channels.comingSoon'))"
           >
             <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-[11px]">
               <div

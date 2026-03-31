@@ -592,8 +592,15 @@ func (s *OpenClawChannelService) syncChannelRoutingBinding(channelID int64, agen
 	if err != nil {
 		return err
 	}
+	openclawAgentKey := strings.TrimSpace(agent.OpenClawAgentID)
+	if openclawAgentKey == "" {
+		return fmt.Errorf("openclaw channel bind: empty openclaw_agent_id for local agent %d", agentID)
+	}
+	if err := s.agentsSvc.EnsureAgentSyncedWithGateway(*agent); err != nil {
+		return err
+	}
 	accountID := openClawManagedAccountID(platform, channelID, m.ExtraConfig)
-	if err := s.upsertManagedRouteBinding(openClawManagedRouteChannel(platform), accountID, strings.TrimSpace(agent.OpenClawAgentID)); err != nil {
+	if err := s.upsertManagedRouteBinding(openClawManagedRouteChannel(platform), accountID, openclawAgentKey); err != nil {
 		return err
 	}
 	return s.restartOpenClawGateway()

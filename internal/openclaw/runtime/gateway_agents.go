@@ -82,8 +82,44 @@ func (s *AgentService) OnAgentUpdated(agent openclawagents.OpenClawAgent) {
 	}
 }
 
+// EnsureAgentSynced creates the agent on the gateway if agents.list does not include it.
+func (s *AgentService) EnsureAgentSynced(agent openclawagents.OpenClawAgent) error {
+	if s.manager == nil || !s.manager.IsReady() {
+		return nil
+	}
+	agentID := strings.TrimSpace(agent.OpenClawAgentID)
+	if agentID == "" {
+		return fmt.Errorf("openclaw agent local id %d: empty openclaw_agent_id", agent.ID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var gatewayList agentsListResult
+	if err := s.manager.Request(ctx, "agents.list", map[string]any{}, &gatewayList); err != nil {
+		return fmt.Errorf("agents.list: %w", err)
+	}
+	normalized := strings.ToLower(agentID)
+	for _, entry := range gatewayList.Agents {
+		if strings.ToLower(entry.ID) == normalized {
+			wsDir := s.resolveAgentWorkspace(agent)
+			return ensureLongTermMemoryFile(wsDir)
+		}
+	}
+
+	if err := s.createAgent(ctx, agent); err != nil {
+		return fmt.Errorf("agents.create %s: %w", agentID, err)
+	}
+	if err := s.configSvc.Sync(ctx); err != nil {
+		return fmt.Errorf("config sync after agents.create: %w", err)
+	}
+	wsDir := s.resolveAgentWorkspace(agent)
+	return ensureLongTermMemoryFile(wsDir)
+}
+
 // OnAgentDeleted is called directly after an agent is deleted from DB.
-// It calls agents.delete on Gateway to remove the agent.
+// It calls agents.delete on Gateway, then config.patch so agents.list matches DB
+// (same as OnAgentUpdated which syncs after RPC).
 func (s *AgentService) OnAgentDeleted(openclawAgentID string) {
 	if !s.manager.IsReady() {
 		return
@@ -93,6 +129,9 @@ func (s *AgentService) OnAgentDeleted(openclawAgentID string) {
 
 	if err := s.deleteAgent(ctx, openclawAgentID); err != nil {
 		s.app.Logger.Warn("openclaw: agents.delete failed", "error", err)
+	}
+	if err := s.configSvc.Sync(ctx); err != nil {
+		s.app.Logger.Warn("openclaw: config sync after delete failed", "error", err)
 	}
 }
 

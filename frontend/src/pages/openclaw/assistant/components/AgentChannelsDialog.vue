@@ -315,7 +315,10 @@ async function handleCreateChannel() {
         })
       )
       createdChannel = channel
-      if (platformId === 'qq' && channel) {
+      if (
+        channel &&
+        (platformId === 'qq' || platformId === 'feishu' || platformId === 'dingtalk')
+      ) {
         await OpenClawChannelService.ConnectChannel(channel.id)
       }
     } else {
@@ -330,6 +333,9 @@ async function handleCreateChannel() {
       createdChannel = channel
       if (channel) {
         await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
+        if (platformId === 'wecom') {
+          await OpenClawChannelService.ConnectChannel(channel.id)
+        }
       }
     }
 
@@ -507,6 +513,9 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
         duration: 8000,
       })
       await OpenClawChannelService.BindAgent(channel.id, props.agent.id)
+      if (['feishu', 'wecom', 'dingtalk', 'qq'].includes(channel.platform)) {
+        await OpenClawChannelService.ConnectChannel(channel.id)
+      }
     }
     channelToEdit.value = null
     await loadData()
@@ -570,11 +579,7 @@ function handleWecomManualFromQr() {
                     !isSelectableChannelPlatform(platform.id) && 'opacity-50 cursor-not-allowed'
                   )
                 "
-                @click="
-                  isSelectableChannelPlatform(platform.id)
-                    ? handleSelectPlatform(platform.id)
-                    : toast.default(t('channels.comingSoon'))
-                "
+                @click="isSelectableChannelPlatform(platform.id) ? handleSelectPlatform(platform.id) : toast.default(t('channels.comingSoon'))"
               >
                 <span class="truncate">{{
                   getPlatformDisplayName(platform.id, platform.name)
@@ -822,11 +827,7 @@ function handleWecomManualFromQr() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             class="gap-2 rounded px-4 py-[5px]"
-                            @click="
-                              channel.agent_id === currentAgentId
-                                ? handleUnbindChannel(channel)
-                                : handleBindChannel(channel)
-                            "
+                            @click="channel.agent_id === currentAgentId ? handleUnbindChannel(channel) : handleBindChannel(channel)"
                           >
                             <Unlink v-if="channel.agent_id === currentAgentId" class="size-4" />
                             <Link2 v-else class="size-4" />

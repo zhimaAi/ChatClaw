@@ -249,10 +249,7 @@ const handleFolderClick = (folder: Folder) => {
             type="button"
             :disabled="saving"
             class="flex h-10 w-full items-center justify-between rounded-md border border-border bg-background px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="
-              location = selectedParent
-              showFolderBrowser = true
-            "
+            @click="location = selectedParent; showFolderBrowser = true"
           >
             <div class="flex min-w-0 flex-1 items-center gap-2">
               <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
@@ -304,10 +301,7 @@ const handleFolderClick = (folder: Folder) => {
                   :disabled="saving"
                   class="flex h-10 items-center gap-3 px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
                   :class="isSelectedParent({ kind: 'root' }) && 'bg-accent/30'"
-                  @click="
-                    selectedParent = { kind: 'root' }
-                    showFolderBrowser = false
-                  "
+                  @click="selectedParent = { kind: 'root' }; showFolderBrowser = false"
                 >
                   <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
                   <span class="min-w-0 flex-1 truncate" :title="t('knowledge.folder.rootFolder')">
@@ -326,10 +320,7 @@ const handleFolderClick = (folder: Folder) => {
                   :disabled="saving"
                   class="flex h-10 items-center gap-3 px-3 text-left text-sm text-foreground transition-colors hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-50 border-b border-border"
                   :class="isSelectedParent({ kind: 'folder', id: location.id }) && 'bg-accent/30'"
-                  @click="
-                    selectedParent = { kind: 'folder', id: location.id }
-                    showFolderBrowser = false
-                  "
+                  @click="selectedParent = { kind: 'folder', id: location.id }; showFolderBrowser = false"
                 >
                   <FolderIcon class="size-4 shrink-0 text-muted-foreground" />
                   <span class="min-w-0 flex-1 truncate" :title="currentFolder.name">
