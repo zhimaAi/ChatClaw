@@ -1548,6 +1548,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Erfolgreich aktiviert",
+      "dingtalkPluginNotReady": "Das DingTalk-Connector-Plugin wird noch installiert oder ist nicht bereit. Bitte versuchen Sie es später erneut.",
       "disableSuccess": "Erfolgreich deaktiviert",
       "enableTitle": "Diesen Kanal aktivieren?",
       "disableTitle": "Diesen Kanal deaktivieren?",

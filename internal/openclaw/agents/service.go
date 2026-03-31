@@ -222,6 +222,37 @@ func (s *OpenClawAgentsService) GetAgent(id int64) (*OpenClawAgent, error) {
 	return &dto, nil
 }
 
+// ResolveLocalIDByOpenClawAgentID returns the local openclaw_agents row id for the given
+// OpenClaw gateway agent id string (e.g. "main" or a managed UUID). Returns 0 when not found.
+func (s *OpenClawAgentsService) ResolveLocalIDByOpenClawAgentID(openclawAgentID string) (int64, error) {
+	openclawAgentID = strings.TrimSpace(openclawAgentID)
+	if openclawAgentID == "" {
+		return 0, nil
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return 0, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var id int64
+	if err := db.NewSelect().
+		Table("openclaw_agents").
+		Column("id").
+		Where("openclaw_agent_id = ?", openclawAgentID).
+		Limit(1).
+		Scan(ctx, &id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, errs.Wrap("error.agent_read_failed", err)
+	}
+	return id, nil
+}
+
 func (s *OpenClawAgentsService) CreateAgent(input CreateOpenClawAgentInput) (*OpenClawAgent, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

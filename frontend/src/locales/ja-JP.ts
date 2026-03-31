@@ -1548,6 +1548,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Enabled successfully",
+      "dingtalkPluginNotReady": "DingTalk コネクタープラグインはインストール中か未準備です。しばらくしてから再試行してください。",
       "disableSuccess": "Disabled successfully",
       "enableTitle": "Enable this channel?",
       "disableTitle": "Disable this channel?",

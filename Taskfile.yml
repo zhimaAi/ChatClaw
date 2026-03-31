@@ -59,8 +59,14 @@ tasks:
         vars:
           PLATFORM: '{{.PLATFORM}}'
 
+  bundle:openclaw:runtime:
+    summary: Exports Linux OpenClaw runtime packages
+    cmds:
+      - task: common:bundle:openclaw:runtime
+        vars:
+          PLATFORM: '{{.PLATFORM}}'
+
   run:docker:
     summary: Builds and runs the Docker image
     cmds:
       - task: common:run:docker
-

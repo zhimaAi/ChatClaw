@@ -1550,6 +1550,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "Uspešno omogočeno",
+      "dingtalkPluginNotReady": "Vtičnik povezovalnika DingTalk se še namešča ali ni pripravljen. Poskusite znova pozneje.",
       "disableSuccess": "Uspešno onemogočeno",
       "enableTitle": "Omogočite ta kanal?",
       "disableTitle": "Onemogočite ta kanal?",

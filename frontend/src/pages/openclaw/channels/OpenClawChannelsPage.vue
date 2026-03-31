@@ -148,6 +148,7 @@ async function loadData() {
     stats.value = channelStats || { total: 0, connected: 0, disconnected: 0 }
     platforms.value = platformList || []
     agents.value = agentsList || []
+    void OpenClawChannelService.EnsureDingTalkPluginIfNeeded()
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -233,6 +234,20 @@ async function handleDisableChannel(channel: Channel) {
 }
 
 async function handleToggleConnection(channel: Channel, val: boolean) {
+  if (channel.platform === 'dingtalk') {
+    try {
+      const installed = await OpenClawChannelService.IsDingTalkPluginInstalled()
+      if (!installed) {
+        toast.error(t('channels.toggle.dingtalkPluginNotReady'))
+        await loadData()
+        return
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+      await loadData()
+      return
+    }
+  }
   channelToToggle.value = { channel, val }
   toggleDialogOpen.value = true
 }
@@ -309,7 +324,7 @@ async function handleAutoGenerate() {
     const baseName = ch.name.trim() || t('channels.agentFallback')
     const created = await OpenClawAgentsService.CreateAgent(
       new CreateOpenClawAgentInput({
-        name: `${baseName} Agent`,
+        name: baseName,
         icon: '',
         identity_emoji: '',
       })

@@ -370,6 +370,20 @@ async function handleUnbindChannel(channel: Channel) {
 }
 
 async function handleToggleChannel(channel: Channel, enabled: boolean) {
+  if (channel.platform === 'dingtalk') {
+    try {
+      const installed = await OpenClawChannelService.IsDingTalkPluginInstalled()
+      if (!installed) {
+        toast.error(t('channels.toggle.dingtalkPluginNotReady'))
+        await loadData()
+        return
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+      await loadData()
+      return
+    }
+  }
   actionLoadingId.value = channel.id
   try {
     await OpenClawChannelService.UpdateChannel(channel.id, new UpdateChannelInput({ enabled }))

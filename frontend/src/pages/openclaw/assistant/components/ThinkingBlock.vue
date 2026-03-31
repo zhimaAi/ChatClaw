@@ -11,7 +11,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const isExpanded = ref(false)
+const isExpanded = ref(true)
 </script>
 
 <template>

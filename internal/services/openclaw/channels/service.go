@@ -13,6 +13,7 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
+	"chatclaw/internal/services/i18n"
 	openclawagents "chatclaw/internal/openclaw/agents"
 	openclawruntime "chatclaw/internal/openclaw/runtime"
 	"chatclaw/internal/services/channels"
@@ -268,7 +269,7 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 
 	if platform == channels.PlatformDingTalk {
 		if !s.isDingTalkPluginInstalledLocally() {
-			if enabled {
+			if input.Enabled != nil {
 				return nil, errs.New("error.dingtalk_plugin_not_ready")
 			}
 		} else {
@@ -461,6 +462,9 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	}
 
 	if m.Platform == channels.PlatformDingTalk {
+		if !s.isDingTalkPluginInstalledLocally() {
+			return errs.New("error.dingtalk_plugin_not_ready")
+		}
 		accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
 		openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
 		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, false); err != nil {
@@ -719,8 +723,12 @@ func (s *OpenClawChannelService) EnsureAgentForChannel(channelID int64) (int64, 
 		return m.AgentID, nil
 	}
 
+	agentName := strings.TrimSpace(m.Name)
+	if agentName == "" {
+		agentName = define.DefaultAgentNameForLocale(i18n.GetLocale())
+	}
 	agent, err := s.agentsSvc.CreateAgent(openclawagents.CreateOpenClawAgentInput{
-		Name: fmt.Sprintf("%s Agent", m.Name),
+		Name: agentName,
 	})
 	if err != nil {
 		return 0, errs.Wrap("error.channel_agent_create_failed", err)

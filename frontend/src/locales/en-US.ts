@@ -1694,6 +1694,8 @@ export default {
     },
     toggle: {
       enableSuccess: 'Enabled successfully',
+      dingtalkPluginNotReady:
+        "DingTalk connector plugin is still installing or not ready. Please try again later.",
       disableSuccess: 'Disabled successfully',
       enableTitle: 'Enable this channel?',
       disableTitle: 'Disable this channel?',

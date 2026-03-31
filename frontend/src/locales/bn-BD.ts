@@ -1550,6 +1550,7 @@ export default {
     },
     "toggle": {
       "enableSuccess": "সফলভাবে সক্রিয় হয়েছে",
+      "dingtalkPluginNotReady": "DingTalk কানেক্টর প্লাগইন এখনও ইনস্টল হচ্ছে বা প্রস্তুত নয়। পরে আবার চেষ্টা করুন।",
       "disableSuccess": "সফলভাবে নিষ্ক্রিয় হয়েছে",
       "enableTitle": "এই চ্যানেল সক্রিয় করতে চান?",
       "disableTitle": "এই চ্যানেল নিষ্ক্রিয় করতে চান?",

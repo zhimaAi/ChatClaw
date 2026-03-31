@@ -17,6 +17,7 @@ import (
 
 const (
 	dingTalkPluginName             = "@dingtalk-real-ai/dingtalk-connector"
+	dingTalkPluginChannelID        = "dingtalk-connector" // channel identifier used in openclaw.json bindings
 	dingTalkPluginInstallTimeout   = 3 * time.Minute
 	dingTalkPluginExtensionSubdir  = "extensions/dingtalk-connector"
 )
@@ -96,6 +97,92 @@ func (s *OpenClawChannelService) isDingTalkPluginInstalledLocally() bool {
 	return err == nil && info.IsDir()
 }
 
+// IsDingTalkPluginInstalled reports whether the dingtalk-connector extension directory exists (Wails UI).
+func (s *OpenClawChannelService) IsDingTalkPluginInstalled() bool {
+	return s.isDingTalkPluginInstalledLocally()
+}
+
+// EnsureDingTalkPluginIfNeeded runs in the background: if OpenClaw has at least one visible DingTalk channel
+// but the dingtalk-connector extension is missing, installs the plugin and syncs account config (Wails: channels page).
+func (s *OpenClawChannelService) EnsureDingTalkPluginIfNeeded() {
+	go s.compensateDingTalkPluginInstall()
+}
+
+func (s *OpenClawChannelService) compensateDingTalkPluginInstall() {
+	ctx, cancel := context.WithTimeout(context.Background(), dingTalkPluginInstallTimeout)
+	defer cancel()
+
+	if err := s.ensureOpenClawReady(); err != nil {
+		s.app.Logger.Debug("openclaw: skip dingtalk plugin compensate", "reason", "openclaw_not_ready", "error", err)
+		return
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return
+	}
+
+	listCtx, listCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer listCancel()
+	var probe []channelModel
+	if err := db.NewSelect().Model(&probe).
+		Where("ch.platform = ?", channels.PlatformDingTalk).
+		Where(openClawChannelVisibilitySQL).
+		Limit(1).
+		Scan(listCtx); err != nil {
+		s.app.Logger.Warn("openclaw: dingtalk compensate probe failed", "error", err)
+		return
+	}
+	if len(probe) == 0 {
+		return
+	}
+	if s.isDingTalkPluginInstalledLocally() {
+		return
+	}
+
+	s.app.Logger.Info("openclaw: compensating dingtalk-connector plugin install (has DingTalk channels, extension missing)")
+
+	if err := s.ensureDingTalkPluginInstalled(ctx); err != nil {
+		s.app.Logger.Warn("openclaw: dingtalk compensate install failed", "error", err)
+		return
+	}
+	if !s.isDingTalkPluginInstalledLocally() {
+		return
+	}
+
+	s.syncDingTalkAccountsAfterPluginInstall(ctx)
+}
+
+func (s *OpenClawChannelService) syncDingTalkAccountsAfterPluginInstall(ctx context.Context) {
+	db, err := s.db()
+	if err != nil {
+		return
+	}
+
+	listCtx, listCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer listCancel()
+	var models []channelModel
+	if err := db.NewSelect().Model(&models).
+		Where("ch.platform = ?", channels.PlatformDingTalk).
+		Where(openClawChannelVisibilitySQL).
+		Scan(listCtx); err != nil {
+		s.app.Logger.Warn("openclaw: dingtalk compensate list channels failed", "error", err)
+		return
+	}
+
+	for i := range models {
+		m := &models[i]
+		accountKey := openClawChannelAccountKey(m.ID, m.ExtraConfig)
+		openclawAgentID := s.lookupOpenClawAgentID(ctx, m.AgentID)
+		if err := s.setOpenClawDingTalkAccount(ctx, accountKey, m.Name, m.ExtraConfig, openclawAgentID, m.Enabled); err != nil {
+			s.app.Logger.Warn("openclaw: dingtalk compensate sync account failed", "channelId", m.ID, "error", err)
+		}
+	}
+	if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
+		s.app.Logger.Warn("openclaw: dingtalk compensate sync default failed", "error", err)
+	}
+}
+
 func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context, accountKey, name, extraConfig, openclawAgentID string, enabled bool) error {
 	appID, appSecret := parseAppCredentialsPair(extraConfig)
 	if appID == "" {
@@ -130,6 +217,14 @@ func (s *OpenClawChannelService) setOpenClawDingTalkAccount(ctx context.Context,
 	if _, err := s.openclawManager.ExecCLI(ctx, "config", "set", "--batch-json", string(batchJSON)); err != nil {
 		return fmt.Errorf("openclaw config set dingtalk-connector account %s: %w", accountKey, err)
 	}
+
+	// Sync route binding so the dingtalk-connector plugin routes messages to the correct agent.
+	// The plugin reads cfg.bindings (not the account-level agentId field) for per-account routing.
+	if openclawAgentID != "" {
+		if err := s.upsertManagedRouteBinding(dingTalkPluginChannelID, accountKey, openclawAgentID); err != nil {
+			s.app.Logger.Warn("openclaw: failed to upsert dingtalk route binding", "accountKey", accountKey, "error", err)
+		}
+	}
 	return nil
 }
 
@@ -155,6 +250,10 @@ func (s *OpenClawChannelService) removeOpenClawDingTalkAccount(ctx context.Conte
 	path := "channels.dingtalk-connector.accounts." + accountKey
 	if _, err := s.openclawManager.ExecCLI(ctx, "config", "unset", path); err != nil {
 		return fmt.Errorf("openclaw config unset dingtalk-connector account %s: %w", accountKey, err)
+	}
+	// Remove the corresponding route binding.
+	if err := s.removeManagedRouteBinding(dingTalkPluginChannelID, accountKey); err != nil {
+		s.app.Logger.Warn("openclaw: failed to remove dingtalk route binding", "accountKey", accountKey, "error", err)
 	}
 	return nil
 }
