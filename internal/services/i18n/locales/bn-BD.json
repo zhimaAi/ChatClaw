@@ -192,7 +192,7 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw কনফিগারেশন সিঙ্কের সময় শেষ। পরে আবার চেষ্টা করুন বা OpenClaw Gateway চালু আছে কিনা দেখুন।",
   "error.channel_update_failed": "চ্যানেল আপডেট ব্যর্থ",
   "error.dingtalk_plugin_not_ready": "DingTalk কানেক্টর প্লাগইন এখনও ইনস্টল হচ্ছে বা প্রস্তুত নয়। পরে আবার চেষ্টা করুন।",
-  "error.wechat_plugin_not_ready": "WeChat OpenClaw প্লাগইন এখনও ইনস্টল হচ্ছে বা প্রস্তুত নয়। পরে আবার চেষ্টা করুন।",
+  "error.wechat_plugin_not_ready": "অফিসিয়াল WeChat OpenClaw প্লাগইনটি এখনও ইনস্টল হচ্ছে বা প্রস্তুত নয়। অনুগ্রহ করে পরে আবার চেষ্টা করুন।",
   "error.channel_delete_failed": "চ্যানেল ডিলিট ব্যর্থ",
   "error.channel_read_failed": "চ্যানেল পড়তে ব্যর্থ",
   "error.channel_not_found": "চ্যানেল '{{.ID}}' পাওয়া যায়নি",

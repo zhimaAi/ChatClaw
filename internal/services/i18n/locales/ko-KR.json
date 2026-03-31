@@ -192,7 +192,7 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw 설정 동기화 시간이 초과되었습니다. 잠시 후 다시 시도하거나 OpenClaw Gateway 상태를 확인하세요.",
   "error.channel_update_failed": "채널 업데이트 실패",
   "error.dingtalk_plugin_not_ready": "딩톡 커넥터 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
-  "error.wechat_plugin_not_ready": "WeChat OpenClaw 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
+  "error.wechat_plugin_not_ready": "공식 WeChat OpenClaw 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
   "error.channel_delete_failed": "채널 삭제 실패",
   "error.channel_read_failed": "채널 읽기 실패",
   "error.channel_not_found": "채널 '{{.ID}}'을(를) 찾을 수 없습니다",

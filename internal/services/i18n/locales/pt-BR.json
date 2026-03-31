@@ -192,7 +192,7 @@
   "error.channel_openclaw_sync_timeout": "Tempo esgotado ao sincronizar a configuração do OpenClaw. Tente novamente mais tarde ou verifique se o OpenClaw Gateway está em execução.",
   "error.channel_update_failed": "Falha ao atualizar canal",
   "error.dingtalk_plugin_not_ready": "O plugin do conector DingTalk ainda está instalando ou não está pronto. Tente novamente mais tarde.",
-  "error.wechat_plugin_not_ready": "O plugin WeChat OpenClaw ainda está instalando ou não está pronto. Tente novamente mais tarde.",
+  "error.wechat_plugin_not_ready": "O plugin oficial do WeChat OpenClaw ainda está sendo instalado ou não está pronto. Tente novamente mais tarde.",
   "error.channel_delete_failed": "Falha ao excluir canal",
   "error.channel_read_failed": "Falha ao ler canal",
   "error.channel_not_found": "Canal '{{.ID}}' não encontrado",
