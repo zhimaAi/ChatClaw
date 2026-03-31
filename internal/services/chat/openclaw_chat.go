@@ -1,14 +1,18 @@
 package chat
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -62,6 +66,20 @@ type openClawTranscriptMsg struct {
 	MediaTypes []string `json:"MediaTypes,omitempty"`
 }
 
+type openClawRawStreamRecord struct {
+	Ts          int64  `json:"ts"`
+	Event       string `json:"event"`
+	RunID       string `json:"runId"`
+	SessionID   string `json:"sessionId"`
+	EvtType     string `json:"evtType"`
+	Delta       string `json:"delta"`
+	Content     string `json:"content"`
+	RawText     string `json:"rawText"`
+	RawThinking string `json:"rawThinking"`
+}
+
+const openClawSyntheticResumePrompt = "Continue where you left off. The previous model attempt failed or timed out."
+
 // openClawSessionKey builds the Gateway session key for a conversation.
 // The key uses the canonical "agent:<agentId>:<rest>" format so that the
 // Gateway correctly associates the session with the specified agent.
@@ -94,6 +112,174 @@ func dedupeStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func normalizeOpenClawMessageText(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
+}
+
+func stripOpenClawFinalWrapper(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	lower := strings.ToLower(s)
+	if !strings.HasPrefix(lower, "<final>") || !strings.HasSuffix(lower, "</final>") {
+		return s
+	}
+	start := strings.Index(lower, "<final>")
+	end := strings.LastIndex(lower, "</final>")
+	if start == -1 || end == -1 || end <= start+len("<final>") {
+		return s
+	}
+	return strings.TrimSpace(s[start+len("<final>") : end])
+}
+
+func isOpenClawSyntheticResumeUserMessage(s string) bool {
+	normalized := normalizeOpenClawMessageText(s)
+	if normalized == "" {
+		return false
+	}
+	return strings.EqualFold(normalized, normalizeOpenClawMessageText(openClawSyntheticResumePrompt))
+}
+
+func sortedKeysFromCounts(counts map[string]int) []string {
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func openClawRawStreamPath() string {
+	return strings.TrimSpace(os.Getenv("OPENCLAW_RAW_STREAM_PATH"))
+}
+
+func openClawRawStreamCurrentOffset(rawPath string) int64 {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return -1
+	}
+	info, err := os.Stat(rawPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0
+		}
+		return -1
+	}
+	return info.Size()
+}
+
+func (s *ChatService) logOpenClawRawStreamSummary(conversationID int64, runID string) {
+	runID = strings.TrimSpace(runID)
+	rawPath := openClawRawStreamPath()
+	if runID == "" || rawPath == "" {
+		return
+	}
+
+	file, err := os.Open(rawPath)
+	if err != nil {
+		s.app.Logger.Warn("[openclaw-chat] raw stream debug: open failed",
+			"conv", conversationID,
+			"runId", runID,
+			"path", rawPath,
+			"error", err)
+		return
+	}
+	defer file.Close()
+
+	const maxBytes = int64(8 << 20)
+	if info, statErr := file.Stat(); statErr == nil && info.Size() > maxBytes {
+		start := info.Size() - maxBytes
+		if _, seekErr := file.Seek(start, io.SeekStart); seekErr == nil {
+			if start > 0 {
+				discardPartialJSONLLine(file)
+			}
+		} else {
+			_, _ = file.Seek(0, io.SeekStart)
+		}
+	} else {
+		_, _ = file.Seek(0, io.SeekStart)
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	eventCounts := make(map[string]int)
+	thinkingEvtTypes := make(map[string]int)
+	textEvtTypes := make(map[string]int)
+	lastRawThinking := ""
+	lastRawText := ""
+	matched := 0
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var record openClawRawStreamRecord
+		if json.Unmarshal(line, &record) != nil {
+			continue
+		}
+		if strings.TrimSpace(record.RunID) != runID {
+			continue
+		}
+		matched++
+		eventCounts[record.Event]++
+		switch record.Event {
+		case "assistant_thinking_stream":
+			thinkingEvtTypes[strings.TrimSpace(record.EvtType)]++
+		case "assistant_text_stream":
+			textEvtTypes[strings.TrimSpace(record.EvtType)]++
+		case "assistant_message_end":
+			if strings.TrimSpace(record.RawThinking) != "" {
+				lastRawThinking = record.RawThinking
+			}
+			if strings.TrimSpace(record.RawText) != "" {
+				lastRawText = record.RawText
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] raw stream debug: scan failed",
+			"conv", conversationID,
+			"runId", runID,
+			"path", rawPath,
+			"error", err)
+		return
+	}
+
+	s.app.Logger.Info("[openclaw-chat] raw stream summary",
+		"conv", conversationID,
+		"runId", runID,
+		"path", rawPath,
+		"matchedRecords", matched,
+		"events", sortedKeysFromCounts(eventCounts),
+		"thinkingEventTypes", sortedKeysFromCounts(thinkingEvtTypes),
+		"textEventTypes", sortedKeysFromCounts(textEvtTypes),
+		"assistantThinkingStreamCount", eventCounts["assistant_thinking_stream"],
+		"assistantTextStreamCount", eventCounts["assistant_text_stream"],
+		"assistantMessageEndCount", eventCounts["assistant_message_end"],
+		"finalRawThinkingLen", len(lastRawThinking),
+		"finalRawTextLen", len(lastRawText),
+		"finalRawThinkingPreview", lastRawThinking[:min(120, len(lastRawThinking))])
+}
+
+func discardPartialJSONLLine(file *os.File) {
+	buf := make([]byte, 1)
+	for {
+		n, err := file.Read(buf)
+		if n > 0 {
+			if buf[0] == '\n' {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 // resolveOpenClawSessionKeys returns candidate session keys for a conversation.
@@ -455,6 +641,10 @@ func buildOpenClawMessagesFromTranscript(conversationID int64, transcriptMessage
 			blocks, ok := m.Content.([]any)
 			if !ok {
 				if s, ok := m.Content.(string); ok && s != "" {
+					s = stripOpenClawFinalWrapper(s)
+					if s == "" {
+						continue
+					}
 					if group.contentAll.Len() > 0 {
 						group.contentAll.WriteString("\n")
 					}
@@ -472,6 +662,10 @@ func buildOpenClawMessagesFromTranscript(conversationID int64, transcriptMessage
 				switch blockType {
 				case "text":
 					if text, _ := bm["text"].(string); text != "" {
+						text = stripOpenClawFinalWrapper(text)
+						if text == "" {
+							continue
+						}
 						if group.contentAll.Len() > 0 {
 							group.contentAll.WriteString("\n")
 						}
@@ -518,6 +712,11 @@ func buildOpenClawMessagesFromTranscript(conversationID int64, transcriptMessage
 		)
 		if m.Role == "user" {
 			contentStr = cleanOpenClawUserMessage(contentStr)
+			if len(attachments) == 0 && (contentStr == "" || isOpenClawSyntheticResumeUserMessage(contentStr)) {
+				continue
+			}
+		} else if m.Role == "assistant" {
+			contentStr = stripOpenClawFinalWrapper(contentStr)
 		}
 
 		msg := Message{
@@ -1205,8 +1404,24 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	}
 	s.app.Logger.Info("[openclaw-chat] chat.history picked session key",
 		"conv", conversationID, "session_key", chosenSessionKey, "message_count", len(result.Messages))
+	messages := buildOpenClawMessagesFromTranscript(conversationID, result.Messages)
+	assistantCount := 0
+	assistantThinkingCount := 0
+	for _, msg := range messages {
+		if msg.Role != "assistant" {
+			continue
+		}
+		assistantCount++
+		if strings.TrimSpace(msg.ThinkingContent) != "" {
+			assistantThinkingCount++
+		}
+	}
+	s.app.Logger.Info("[openclaw-chat] chat.history transcript summary",
+		"conv", conversationID,
+		"assistantMessages", assistantCount,
+		"assistantMessagesWithThinking", assistantThinkingCount)
 
-	return buildOpenClawMessagesFromTranscript(conversationID, result.Messages), nil
+	return messages, nil
 }
 
 // SendOpenClawMessage sends a message via the OpenClaw WebSocket chat.run API.
@@ -1402,14 +1617,113 @@ type openClawChatRunState struct {
 	seq             int32
 	// Cumulative content already emitted, used to compute deltas from
 	// the cumulative message object in chat events.
-	emittedThinking string
-	emittedContent  string
-	seenToolCalls   map[string]bool
-	seenToolResults map[string]bool
+	emittedThinking  string
+	emittedContent   string
+	seenToolCalls    map[string]bool
+	seenToolResults  map[string]bool
+	thinkingMu       sync.Mutex
+	rawBridgeMu      sync.RWMutex
+	rawThinkingFlush func()
 }
 
 func (st *openClawChatRunState) nextSeq() int {
 	return int(atomic.AddInt32(&st.seq, 1))
+}
+
+func (st *openClawChatRunState) applyThinkingDelta(delta, text string) (resolvedDelta string, next string) {
+	st.thinkingMu.Lock()
+	defer st.thinkingMu.Unlock()
+
+	current := st.emittedThinking
+	resolvedDelta, next = normalizeOpenClawThinkingDelta(current, delta, text)
+	if resolvedDelta == "" {
+		return "", current
+	}
+
+	st.thinkingBuilder.Reset()
+	st.thinkingBuilder.WriteString(next)
+	st.emittedThinking = next
+	return resolvedDelta, next
+}
+
+func (st *openClawChatRunState) currentThinkingLen() int {
+	st.thinkingMu.Lock()
+	defer st.thinkingMu.Unlock()
+	return len(st.emittedThinking)
+}
+
+func (st *openClawChatRunState) setRawThinkingFlush(fn func()) {
+	st.rawBridgeMu.Lock()
+	defer st.rawBridgeMu.Unlock()
+	st.rawThinkingFlush = fn
+}
+
+func (st *openClawChatRunState) flushRawThinking() {
+	st.rawBridgeMu.RLock()
+	fn := st.rawThinkingFlush
+	st.rawBridgeMu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+func normalizeOpenClawReasoningText(text string) string {
+	if text == "" {
+		return ""
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.TrimPrefix(text, "Reasoning:\n")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if len(line) >= 2 && strings.HasPrefix(line, "_") && strings.HasSuffix(line, "_") {
+			lines[i] = line[1 : len(line)-1]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// normalizeOpenClawThinkingDelta prefers the cumulative "text" payload when it
+// cleanly extends the current emitted thinking. This makes the ChatClaw bridge
+// tolerant of OpenClaw builds that incorrectly send delta=text for every
+// thinking event after the first one.
+func normalizeOpenClawThinkingDelta(current, delta, text string) (resolvedDelta string, next string) {
+	if normalizedText := normalizeOpenClawReasoningText(text); normalizedText != "" {
+		if strings.HasPrefix(normalizedText, current) {
+			suffix := normalizedText[len(current):]
+			return suffix, normalizedText
+		}
+		if current == "" {
+			return normalizedText, normalizedText
+		}
+	}
+	if normalizedDelta := normalizeOpenClawReasoningText(delta); normalizedDelta != "" {
+		delta = normalizedDelta
+	}
+	if delta != "" && strings.HasPrefix(delta, current) {
+		suffix := delta[len(current):]
+		return suffix, current + suffix
+	}
+	if delta == "" {
+		return "", current
+	}
+	return delta, current + delta
+}
+
+func openClawRawThinkingText(record openClawRawStreamRecord) (delta string, text string, ok bool) {
+	switch strings.TrimSpace(record.Event) {
+	case "assistant_thinking_stream":
+		if strings.TrimSpace(record.Delta) == "" && strings.TrimSpace(record.Content) == "" {
+			return "", "", false
+		}
+		return record.Delta, record.Content, true
+	case "assistant_message_end":
+		if strings.TrimSpace(record.RawThinking) == "" {
+			return "", "", false
+		}
+		return "", record.RawThinking, true
+	default:
+		return "", "", false
+	}
 }
 
 func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID string, messageID ...int64) ChatEvent {
@@ -1425,6 +1739,186 @@ func (st *openClawChatRunState) chatEvent(conversationID int64, tabID, requestID
 		MessageID:      mid,
 		Ts:             time.Now().UnixMilli(),
 	}
+}
+
+func (s *ChatService) bridgeOpenClawRawThinkingRecord(
+	conversationID int64,
+	record openClawRawStreamRecord,
+	st *openClawChatRunState,
+	ce func() ChatEvent,
+	emit func(string, any),
+) bool {
+	rawDelta, rawText, ok := openClawRawThinkingText(record)
+	if !ok {
+		return false
+	}
+
+	resolvedDelta, nextThinking := st.applyThinkingDelta(rawDelta, rawText)
+	if resolvedDelta == "" {
+		return false
+	}
+
+	s.app.Logger.Info("[openclaw-chat] raw stream thinking delta bridged",
+		"conv", conversationID,
+		"runId", strings.TrimSpace(record.RunID),
+		"event", strings.TrimSpace(record.Event),
+		"evtType", strings.TrimSpace(record.EvtType),
+		"deltaLen", len(resolvedDelta),
+		"thinkingLen", len(nextThinking),
+		"deltaPreview", resolvedDelta[:min(100, len(resolvedDelta))])
+
+	emit(EventChatThinking, ChatThinkingEvent{
+		ChatEvent: ce(),
+		Delta:     resolvedDelta,
+	})
+	return true
+}
+
+func (s *ChatService) bridgeOpenClawRawThinkingStream(
+	ctx context.Context,
+	conversationID int64,
+	rawPath string,
+	startOffset int64,
+	activeRunID *atomic.Value,
+	st *openClawChatRunState,
+	done <-chan struct{},
+	ce func() ChatEvent,
+	emit func(string, any),
+) {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" || startOffset < 0 {
+		return
+	}
+
+	s.app.Logger.Info("[openclaw-chat] raw thinking bridge enabled",
+		"conv", conversationID,
+		"path", rawPath,
+		"startOffset", startOffset)
+
+	go func() {
+		var drainMu sync.Mutex
+		offset := startOffset
+		pending := make([]openClawRawStreamRecord, 0, 64)
+
+		processRecord := func(record openClawRawStreamRecord) {
+			s.bridgeOpenClawRawThinkingRecord(conversationID, record, st, ce, emit)
+		}
+
+		flushPending := func(runID string) {
+			runID = strings.TrimSpace(runID)
+			if runID == "" || len(pending) == 0 {
+				return
+			}
+			for _, record := range pending {
+				if strings.TrimSpace(record.RunID) == runID {
+					processRecord(record)
+				}
+			}
+			pending = pending[:0]
+		}
+
+		drain := func() {
+			info, err := os.Stat(rawPath)
+			if err != nil {
+				return
+			}
+			if info.Size() < offset {
+				offset = info.Size()
+			}
+			if info.Size() == offset {
+				flushPending(strings.TrimSpace(func() string {
+					runID, _ := activeRunID.Load().(string)
+					return runID
+				}()))
+				return
+			}
+
+			file, err := os.Open(rawPath)
+			if err != nil {
+				return
+			}
+			defer file.Close()
+
+			if _, err := file.Seek(offset, io.SeekStart); err != nil {
+				return
+			}
+
+			reader := bufio.NewReader(file)
+			for {
+				line, err := reader.ReadBytes('\n')
+				if len(line) == 0 && err != nil {
+					break
+				}
+				if len(line) == 0 {
+					continue
+				}
+				if line[len(line)-1] != '\n' {
+					break
+				}
+				offset += int64(len(line))
+
+				trimmed := strings.TrimSpace(string(line))
+				if trimmed == "" {
+					if err != nil {
+						break
+					}
+					continue
+				}
+
+				var record openClawRawStreamRecord
+				if json.Unmarshal([]byte(trimmed), &record) != nil {
+					if err != nil {
+						break
+					}
+					continue
+				}
+
+				runID, _ := activeRunID.Load().(string)
+				runID = strings.TrimSpace(runID)
+				if runID == "" {
+					pending = append(pending, record)
+					if len(pending) > 512 {
+						pending = pending[len(pending)-512:]
+					}
+				} else if strings.TrimSpace(record.RunID) == runID {
+					processRecord(record)
+				}
+
+				if err != nil {
+					break
+				}
+			}
+
+			runID, _ := activeRunID.Load().(string)
+			flushPending(runID)
+		}
+
+		lockedDrain := func() {
+			drainMu.Lock()
+			defer drainMu.Unlock()
+			drain()
+		}
+
+		st.setRawThinkingFlush(lockedDrain)
+		defer st.setRawThinkingFlush(nil)
+
+		lockedDrain()
+		ticker := time.NewTicker(40 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				lockedDrain()
+				return
+			case <-done:
+				lockedDrain()
+				return
+			case <-ticker.C:
+				lockedDrain()
+			}
+		}
+	}()
 }
 
 // handleOpenClawAgentEvent processes "agent" events from the Gateway.
@@ -1482,6 +1976,11 @@ func (s *ChatService) handleOpenClawAgentEvent(
 			return
 		}
 
+		// Raw thinking is bridged from a file-backed stream, so it can lag slightly
+		// behind the websocket assistant chunks. Flush pending reasoning first so
+		// the UI keeps the final thinking tail ahead of the answer body.
+		st.flushRawThinking()
+
 		st.contentBuilder.WriteString(d.Delta)
 		st.emittedContent = st.contentBuilder.String()
 		s.appendGenerationContent(conversationID, st.requestID, d.Delta)
@@ -1496,18 +1995,25 @@ func (s *ChatService) handleOpenClawAgentEvent(
 	case "thinking":
 		var d struct {
 			Delta string `json:"delta"`
+			Text  string `json:"text"`
 		}
-		if json.Unmarshal(frame.Data, &d) != nil || d.Delta == "" {
+		if json.Unmarshal(frame.Data, &d) != nil {
+			return
+		}
+		resolvedDelta, _ := st.applyThinkingDelta(d.Delta, d.Text)
+		if resolvedDelta == "" {
 			return
 		}
 		s.app.Logger.Info("[openclaw-chat] >>> THINKING stream event received",
-			"conv", conversationID, "deltaLen", len(d.Delta),
-			"deltaPreview", d.Delta[:min(100, len(d.Delta))])
-		st.thinkingBuilder.WriteString(d.Delta)
-		st.emittedThinking = st.thinkingBuilder.String()
+			"conv", conversationID,
+			"deltaLen", len(resolvedDelta),
+			"rawDeltaLen", len(d.Delta),
+			"rawTextLen", len(d.Text),
+			"usedTextPrefixFix", d.Text != "" && resolvedDelta != normalizeOpenClawReasoningText(d.Delta),
+			"deltaPreview", resolvedDelta[:min(100, len(resolvedDelta))])
 		emit(EventChatThinking, ChatThinkingEvent{
 			ChatEvent: ce(),
-			Delta:     d.Delta,
+			Delta:     resolvedDelta,
 		})
 
 	case "tool":
@@ -1572,6 +2078,7 @@ func (s *ChatService) handleOpenClawAgentEvent(
 			"conv", conversationID, "phase", d.Phase)
 		switch d.Phase {
 		case "end":
+			st.flushRawThinking()
 			st.finishReason = "stop"
 			select {
 			case <-done:
@@ -1579,6 +2086,7 @@ func (s *ChatService) handleOpenClawAgentEvent(
 				close(done)
 			}
 		case "error":
+			st.flushRawThinking()
 			emitError("error.chat_generation_failed", map[string]any{"Error": d.Error})
 			select {
 			case <-done:
@@ -1691,10 +2199,37 @@ func (s *ChatService) handleOpenClawChatEvent(
 			for i, b := range blocks {
 				blockTypes[i] = b.Type
 			}
-			s.app.Logger.Debug("[openclaw-chat] chat event content blocks",
+			thinkingBlocks := 0
+			textBlocks := 0
+			toolCallBlocks := 0
+			toolResultBlocks := 0
+			thinkingLen := 0
+			textLen := 0
+			for _, b := range blocks {
+				switch b.Type {
+				case "thinking":
+					thinkingBlocks++
+					thinkingLen += len(b.Thinking)
+				case "text":
+					textBlocks++
+					textLen += len(b.Text)
+				case "toolCall":
+					toolCallBlocks++
+				case "toolResult":
+					toolResultBlocks++
+				}
+			}
+			s.app.Logger.Info("[openclaw-chat] chat event content blocks",
 				"conv", conversationID,
+				"state", chatEvt.State,
 				"blockCount", len(blocks),
-				"types", blockTypes)
+				"types", blockTypes,
+				"thinkingBlocks", thinkingBlocks,
+				"thinkingLen", thinkingLen,
+				"textBlocks", textBlocks,
+				"textLen", textLen,
+				"toolCallBlocks", toolCallBlocks,
+				"toolResultBlocks", toolResultBlocks)
 			s.processOpenClawContentBlocks(conversationID, blocks, st, ce, emit)
 		} else {
 			s.app.Logger.Warn("[openclaw-chat] chat event: content parse failed",
@@ -1794,14 +2329,10 @@ func (s *ChatService) processOpenClawContentBlocks(
 		s.app.Logger.Info("[openclaw-chat] >>> THINKING from chat event content blocks",
 			"conv", conversationID,
 			"newThinkingLen", len(newThinking),
-			"emittedThinkingLen", len(st.emittedThinking),
+			"emittedThinkingLen", st.currentThinkingLen(),
 			"thinkingPreview", newThinking[:min(100, len(newThinking))])
 	}
-	if newThinking != "" && len(newThinking) > len(st.emittedThinking) {
-		delta := newThinking[len(st.emittedThinking):]
-		st.emittedThinking = newThinking
-		st.thinkingBuilder.Reset()
-		st.thinkingBuilder.WriteString(newThinking)
+	if delta, _ := st.applyThinkingDelta("", newThinking); delta != "" {
 		emit(EventChatThinking, ChatThinkingEvent{
 			ChatEvent: ce(),
 			Delta:     delta,
@@ -1862,6 +2393,8 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	sessionKey := resolveOpenClawSessionKey(cfg, conversationID)
 	idempotencyKey := requestID
 	listenerKey := fmt.Sprintf("openclaw-chat-%d-%s", conversationID, requestID)
+	rawPath := openClawRawStreamPath()
+	rawStartOffset := openClawRawStreamCurrentOffset(rawPath)
 
 	s.app.Logger.Info("[openclaw-chat] runOpenClawChatRun config",
 		"conv", conversationID,
@@ -1872,8 +2405,51 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 		"caps", cfg.Capabilities,
 		"enableThinking", cfg.EnableThinking)
 
+	// OpenClaw session-store mutations may wait on a file lock for up to ~10s.
+	// Use the dedicated query connection and a slightly longer timeout so we do
+	// not self-cancel before the gateway's normal lock window expires.
+	patchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	var patchResp struct {
+		Key   string `json:"key"`
+		Entry *struct {
+			ReasoningLevel string `json:"reasoningLevel"`
+			SessionID      string `json:"sessionId"`
+		} `json:"entry"`
+	}
+	if err := s.openclawGateway.QueryRequest(patchCtx, "sessions.patch", map[string]any{
+		"key":            sessionKey,
+		"reasoningLevel": "stream",
+	}, &patchResp); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] failed to request reasoning stream for session",
+			"conv", conversationID,
+			"sessionKey", sessionKey,
+			"enableThinking", cfg.EnableThinking,
+			"error", err)
+	} else {
+		s.app.Logger.Info("[openclaw-chat] reasoning stream requested for session",
+			"conv", conversationID,
+			"sessionKey", sessionKey,
+			"resolvedKey", strings.TrimSpace(patchResp.Key),
+			"resolvedReasoningLevel", strings.TrimSpace(func() string {
+				if patchResp.Entry == nil {
+					return ""
+				}
+				return patchResp.Entry.ReasoningLevel
+			}()),
+			"resolvedSessionID", strings.TrimSpace(func() string {
+				if patchResp.Entry == nil {
+					return ""
+				}
+				return patchResp.Entry.SessionID
+			}()),
+			"enableThinking", cfg.EnableThinking)
+	}
+	cancel()
+
 	done := make(chan struct{})
 	var activeRunID atomic.Value
+
+	s.bridgeOpenClawRawThinkingStream(ctx, conversationID, rawPath, rawStartOffset, &activeRunID, st, done, ce, emit)
 
 	// Listen for all gateway events and route accordingly.
 	s.openclawGateway.AddEventListener(listenerKey, func(event string, payload json.RawMessage) {
@@ -2013,6 +2589,11 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	if st.finishReason == "" {
 		st.finishReason = "stop"
 	}
+	rid, _ := activeRunID.Load().(string)
+	if rid == "" {
+		rid = runResult.RunID
+	}
+	s.logOpenClawRawStreamSummary(conversationID, rid)
 	emit(EventChatComplete, ChatCompleteEvent{
 		ChatEvent:    ce(),
 		Status:       StatusSuccess,
