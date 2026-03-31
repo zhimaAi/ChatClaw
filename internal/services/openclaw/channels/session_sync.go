@@ -54,9 +54,9 @@ type syncedChannelTarget struct {
 }
 
 type syncedSessionCandidate struct {
-	source          openClawPluginSessionSource
-	entry           openClawSessionStoreEntry
-	rawSessionKey   string
+	source        openClawPluginSessionSource
+	entry         openClawSessionStoreEntry
+	rawSessionKey string
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.
@@ -239,6 +239,60 @@ func (s *OpenClawChannelService) syncSessionConversation(
 		return fmt.Errorf("update synced conversation: %w", err)
 	}
 	return nil
+}
+
+func (s *OpenClawChannelService) updateSyncedChannelLastReplyTarget(channelID int64, scope string, targetID string) error {
+	db, err := s.db()
+	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Warn("openclaw sync: db unavailable for channel last reply target",
+				"channel_id", channelID,
+				"scope", scope,
+				"target_id", targetID,
+				"error", err,
+			)
+		}
+		return err
+	}
+
+	chatID, senderID := syncedChannelReplyTarget(scope, targetID)
+	if chatID == "" && senderID == "" {
+		if s.app != nil {
+			s.app.Logger.Info("openclaw sync: empty channel last reply target resolved",
+				"channel_id", channelID,
+				"scope", scope,
+				"target_id", targetID,
+			)
+		}
+		return nil
+	}
+	if s.app != nil {
+		s.app.Logger.Info("openclaw sync: resolved channel last reply target",
+			"channel_id", channelID,
+			"scope", scope,
+			"target_id", targetID,
+			"chat_id", chatID,
+			"sender_id", senderID,
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return channels.UpdateChannelLastReplyTarget(ctx, db, channelID, chatID, senderID)
+}
+
+func syncedChannelReplyTarget(scope string, targetID string) (chatID string, senderID string) {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return "", ""
+	}
+
+	switch strings.TrimSpace(scope) {
+	case channels.ChannelConversationScopeGroup:
+		return targetID, ""
+	default:
+		return "", targetID
+	}
 }
 
 type openClawPluginSessionSource struct {
