@@ -59,10 +59,15 @@ func isOpenClawUnknownQQChannelErr(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "unknown channel: "+openClawQQChannelID)
 }
 
-func (s *OpenClawChannelService) addOpenClawQQChannel(ctx context.Context, name, token string) error {
+func (s *OpenClawChannelService) addOpenClawQQChannel(ctx context.Context, accountID, name, token string) error {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return fmt.Errorf("qq openclaw account id is required")
+	}
 	args := []string{
 		"channels", "add",
 		"--channel", openClawQQChannelID,
+		"--account", accountID,
 		"--token", token,
 	}
 	if name = strings.TrimSpace(name); name != "" {
@@ -85,7 +90,7 @@ func (s *OpenClawChannelService) addOpenClawQQChannel(ctx context.Context, name,
 	return nil
 }
 
-func (s *OpenClawChannelService) setOpenClawQQChannel(ctx context.Context, name, extraConfig string) error {
+func (s *OpenClawChannelService) setOpenClawQQChannel(ctx context.Context, channelID int64, name, extraConfig string) error {
 	if err := s.ensureOpenClawQQPluginInstalled(ctx); err != nil {
 		return err
 	}
@@ -103,10 +108,11 @@ func (s *OpenClawChannelService) setOpenClawQQChannel(ctx context.Context, name,
 		return fmt.Errorf("qq appId and appSecret are required")
 	}
 
-	return s.addOpenClawQQChannel(ctx, name, appID+":"+appSecret)
+	accountID := openClawChannelAccountKey(channelID, extraConfig)
+	return s.addOpenClawQQChannel(ctx, accountID, name, appID+":"+appSecret)
 }
 
-func (s *OpenClawChannelService) removeOpenClawQQChannel(ctx context.Context) error {
+func (s *OpenClawChannelService) removeOpenClawQQChannel(ctx context.Context, channelID int64, extraConfig string) error {
 	installed, err := s.isOpenClawQQPluginInstalled(ctx)
 	if err != nil {
 		return fmt.Errorf("list plugins before removing %s channel: %w", openClawQQChannelID, err)
@@ -114,8 +120,18 @@ func (s *OpenClawChannelService) removeOpenClawQQChannel(ctx context.Context) er
 	if !installed {
 		return nil
 	}
-	if _, err := s.execOpenClawCLIWithRetry(ctx, "channels", "remove", "--channel", openClawQQChannelID, "--delete"); err != nil {
-		return fmt.Errorf("openclaw channels remove --channel %s --delete: %w", openClawQQChannelID, err)
+	accountID := strings.TrimSpace(openClawChannelAccountKey(channelID, extraConfig))
+	if accountID == "" {
+		return fmt.Errorf("qq openclaw account id is required")
+	}
+	args := []string{
+		"channels", "remove",
+		"--channel", openClawQQChannelID,
+		"--account", accountID,
+		"--delete",
+	}
+	if _, err := s.execOpenClawCLIWithRetry(ctx, args...); err != nil {
+		return fmt.Errorf("openclaw channels remove --channel %s --account %s --delete: %w", openClawQQChannelID, accountID, err)
 	}
 	return nil
 }
@@ -128,23 +144,32 @@ func (s *OpenClawChannelService) connectQQViaPlugin(id int64, m *channelModel) e
 	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 
-	if err := s.setOpenClawQQChannel(ctx, m.Name, m.ExtraConfig); err != nil {
+	if err := s.setOpenClawQQChannel(ctx, id, m.Name, m.ExtraConfig); err != nil {
 		return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
 	}
 	if err := s.syncChannelRoutingBinding(id, m.AgentID); err != nil {
 		return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
 	}
 
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	if extraConfigWithID, encodeErr := withOpenClawChannelID(m.ExtraConfig, accountKey); encodeErr == nil {
+		if _, updateErr := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{ExtraConfig: &extraConfigWithID}); updateErr != nil {
+			return updateErr
+		}
+	}
+
 	enabled := true
-	_, err := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
-	return err
+	if _, err := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
+		return err
+	}
+	return s.setOpenClawPluginChannelStatus(ctx, id, true)
 }
 
 func (s *OpenClawChannelService) disconnectQQViaPlugin(id int64, m *channelModel) error {
 	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 	defer cancel()
 
-	if err := s.removeOpenClawQQChannel(ctx); err != nil {
+	if err := s.removeOpenClawQQChannel(ctx, id, m.ExtraConfig); err != nil {
 		return wrapOpenClawSyncErr(err, "error.channel_disconnect_failed", nil)
 	}
 	accountID := openClawManagedAccountID(channels.PlatformQQ, id, m.ExtraConfig)
@@ -156,6 +181,8 @@ func (s *OpenClawChannelService) disconnectQQViaPlugin(id int64, m *channelModel
 	}
 
 	enabled := false
-	_, err := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
-	return err
+	if _, err := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
+		return err
+	}
+	return s.setOpenClawPluginChannelStatus(ctx, id, false)
 }
