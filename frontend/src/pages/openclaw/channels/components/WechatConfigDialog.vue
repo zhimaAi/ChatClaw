@@ -132,10 +132,13 @@ async function handleRefreshQRCode() {
           class="rounded-lg bg-muted/50 border border-border p-4 space-y-1.5 text-sm text-foreground"
         >
           <p class="font-medium text-muted-foreground">{{ t('channels.wechat.howToConnect') }}</p>
-          <p>{{ t('channels.wechat.step1') }}</p>
-          <p>{{ t('channels.wechat.step3') }}</p>
-          <p>{{ t('channels.wechat.step4') }}</p>
-          <p>{{ t('channels.wechat.step5') }}</p>
+          <p class="mt-2">{{ t('channels.wechat.tipsIntro') }}</p>
+          <p class="mt-2 font-medium text-muted-foreground">{{ t('channels.wechat.stepsLabel') }}</p>
+          <ol class="mt-2 list-decimal space-y-2 pl-5 [list-style-position:outside]">
+            <li>{{ t('channels.wechat.step1') }}</li>
+            <li>{{ t('channels.wechat.step2') }}</li>
+            <li>{{ t('channels.wechat.step3') }}</li>
+          </ol>
         </div>
 
         <div class="flex justify-end">
