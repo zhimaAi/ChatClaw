@@ -81,7 +81,12 @@ ManifestDPIAware true
 #!finalize 'signtool --file "%1"'
 
 Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\..\bin\${INFO_PROJECTNAME}_windows_${ARCH}_installer.exe" # Name of the installer's file.
+; Output filename: ChatClaw_windows_<arch>[_full]_installer.exe
+!ifdef BUNDLE_OPENCLAW
+    OutFile "..\..\..\bin\${INFO_PROJECTNAME}_windows_${ARCH}_full_installer.exe"
+!else
+    OutFile "..\..\..\bin\${INFO_PROJECTNAME}_windows_${ARCH}_installer.exe"
+!endif
 InstallDir "$LOCALAPPDATA\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Per-user install so auto-update works without UAC elevation.
 ShowInstDetails show # This will always show the installation details.
 
