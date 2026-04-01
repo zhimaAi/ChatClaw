@@ -64,9 +64,6 @@ const deliveryPlatforms = ref<OpenClawCronDeliveryPlatformOption[]>([])
 const createDialogOpen = ref(false)
 const editingJob = ref<OpenClawCronJob | null>(null)
 const historyJob = ref<OpenClawCronJob | null>(null)
-const historyTriggerAtMs = ref<number | null>(null)
-const historyRunId = ref<string | null>(null)
-const historyConversationId = ref<number | null>(null)
 const form = ref<OpenClawCronFormState>(createEmptyOpenClawCronForm())
 const deleteDialogOpen = ref(false)
 const deleting = ref(false)
@@ -118,16 +115,16 @@ const agentNameMap = computed(() => {
 async function reloadAll() {
   loading.value = true
   try {
-    const [jobList, summaryValue, agentList, deliveryPlatformList] = await Promise.all([
+    const [jobList, summaryValue, dialogOptions] = await Promise.all([
       OpenClawCronService.ListJobs(),
       OpenClawCronService.GetSummary(),
-      OpenClawCronService.ListAgents(),
-      OpenClawCronService.ListDeliveryPlatforms(),
+      loadDialogOptions(),
     ])
+    const [agentList, deliveryPlatformList] = dialogOptions
     jobs.value = jobList || []
     summary.value = summaryValue
-    agents.value = agentList || []
-    deliveryPlatforms.value = deliveryPlatformList || []
+    agents.value = agentList
+    deliveryPlatforms.value = deliveryPlatformList
   } catch (error) {
     toast.error(getErrorMessage(error))
   } finally {
@@ -135,26 +132,38 @@ async function reloadAll() {
   }
 }
 
+async function loadDialogOptions() {
+  const [agentList, deliveryPlatformList] = await Promise.all([
+    OpenClawCronService.ListAgents(),
+    OpenClawCronService.ListDeliveryPlatforms(),
+  ])
+  return [agentList || [], deliveryPlatformList || []] as const
+}
+
 onMounted(() => {
   void reloadAll()
 })
 
-function openCreateDialog() {
-  editingJob.value = null
-  form.value = createEmptyOpenClawCronForm()
-  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
-    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+async function openCreateDialog() {
+  try {
+    editingJob.value = null
+    form.value = createEmptyOpenClawCronForm()
+    ;[agents.value, deliveryPlatforms.value] = await loadDialogOptions()
+    createDialogOpen.value = true
+  } catch (error) {
+    toast.error(getErrorMessage(error))
   }
-  createDialogOpen.value = true
 }
 
-function openEditDialog(job: OpenClawCronJob) {
-  editingJob.value = job
-  form.value = jobToForm(job)
-  if (!form.value.channelPlatform && deliveryPlatforms.value.length === 1) {
-    form.value.channelPlatform = deliveryPlatforms.value[0].platform
+async function openEditDialog(job: OpenClawCronJob) {
+  try {
+    editingJob.value = job
+    form.value = jobToForm(job)
+    ;[agents.value, deliveryPlatforms.value] = await loadDialogOptions()
+    createDialogOpen.value = true
+  } catch (error) {
+    toast.error(getErrorMessage(error))
   }
-  createDialogOpen.value = true
 }
 
 function displayAgentName(job: OpenClawCronJob) {
@@ -231,11 +240,8 @@ async function handleToggle(job: OpenClawCronJob, enabled: boolean) {
 
 async function handleRun(job: OpenClawCronJob) {
   try {
-    const result = await OpenClawCronService.RunJobNow(job.id)
-    historyJob.value = job
-    historyConversationId.value = Number(result?.conversation_id || 0) || null
-    historyTriggerAtMs.value = Number(result?.trigger_at_ms || Date.now())
-    historyRunId.value = result?.run_id || null
+    await OpenClawCronService.RunJobNow(job.id)
+    toast.default(t('openclawCron.runNowQueued', '任务已开始执行，请稍后在历史中查看结果'))
   } catch (error) {
     toast.error(getErrorMessage(error))
   }
@@ -390,7 +396,7 @@ async function confirmDelete() {
                     <template v-if="showLastRun(job)">
                       <div class="space-y-1 text-sm">
                         <div class="font-medium leading-6 text-[#171717]">
-                          {{ describeOpenClawSchedule(job) }}
+                          {{ describeOpenClawSchedule(job, t) }}
                         </div>
                         <div class="flex items-center gap-1.5 text-[#8c8c8c]">
                           <TooltipProvider
@@ -432,7 +438,7 @@ async function confirmDelete() {
                     </template>
                     <div v-else class="space-y-1 text-sm">
                       <div class="font-medium leading-6 text-[#171717]">
-                        {{ describeOpenClawSchedule(job) }}
+                        {{ describeOpenClawSchedule(job, t) }}
                       </div>
                     </div>
                   </td>
@@ -512,16 +518,10 @@ async function confirmDelete() {
     <OpenClawCronHistoryDialog
       :open="!!historyJob"
       :job="historyJob"
-      :conversation-id="historyConversationId"
-      :trigger-at-ms="historyTriggerAtMs"
-      :run-id="historyRunId"
       @update:open="
         (value) => {
           if (!value) {
             historyJob = null
-            historyConversationId = null
-            historyTriggerAtMs = null
-            historyRunId = null
           }
         }
       "

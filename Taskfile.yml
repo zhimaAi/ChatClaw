@@ -26,6 +26,7 @@ tasks:
       - task: "{{OS}}:package"
         vars:
           ARCH: '{{.ARCH}}'
+          BUNDLE_OPENCLAW: '{{.BUNDLE_OPENCLAW}}'
 
   run:
     summary: Runs the application

@@ -54,9 +54,67 @@ type syncedChannelTarget struct {
 }
 
 type syncedSessionCandidate struct {
-	source          openClawPluginSessionSource
-	entry           openClawSessionStoreEntry
-	rawSessionKey   string
+	source        openClawPluginSessionSource
+	entry         openClawSessionStoreEntry
+	rawSessionKey string
+}
+
+func (s *OpenClawChannelService) updateChannelLastReplyTargetBySessionKey(localAgentID int64, sessionKey string) error {
+	sessionKey = strings.TrimSpace(sessionKey)
+	if localAgentID <= 0 || sessionKey == "" {
+		return nil
+	}
+
+	_, platform, ok := parseOpenClawPluginSessionKeyPrefix(sessionKey)
+	if !ok || strings.TrimSpace(platform) == "" {
+		return nil
+	}
+	// 统一平台别名，确保 dingtalk-connector / qqbot 也能命中本地渠道和 scope 规则。
+	// Normalize platform aliases so dingtalk-connector / qqbot can match local channels and scope rules.
+	platform = canonicalOpenClawLastReplyTargetPlatform(platform)
+
+	parts := strings.Split(sessionKey, ":")
+	if len(parts) < 5 {
+		return nil
+	}
+
+	rawScope := strings.TrimSpace(parts[3])
+	targetID := strings.TrimSpace(strings.Join(parts[4:], ":"))
+	if targetID == "" {
+		return nil
+	}
+
+	scope := normalizePluginConversationScope(platform, rawScope, targetID, "")
+	if scope == "" {
+		return nil
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var rows []channelModel
+	if err := db.NewSelect().
+		Model(&rows).
+		Where(openClawChannelVisibilitySQL).
+		Where("ch.agent_id = ?", localAgentID).
+		Where("ch.enabled = ?", true).
+		Where("LOWER(TRIM(ch.platform)) = LOWER(TRIM(?))", platform).
+		OrderExpr("ch.id DESC").
+		Scan(ctx); err != nil {
+		return err
+	}
+
+	for i := range rows {
+		if err := s.updateSyncedChannelLastReplyTarget(rows[i].ID, scope, targetID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SyncAgentConversations mirrors plugin-managed OpenClaw channel sessions into ChatClaw conversations.
@@ -284,6 +342,60 @@ func (s *OpenClawChannelService) syncSessionConversation(
 		return fmt.Errorf("update synced conversation: %w", err)
 	}
 	return nil
+}
+
+func (s *OpenClawChannelService) updateSyncedChannelLastReplyTarget(channelID int64, scope string, targetID string) error {
+	db, err := s.db()
+	if err != nil {
+		if s.app != nil {
+			s.app.Logger.Warn("openclaw sync: db unavailable for channel last reply target",
+				"channel_id", channelID,
+				"scope", scope,
+				"target_id", targetID,
+				"error", err,
+			)
+		}
+		return err
+	}
+
+	chatID, senderID := syncedChannelReplyTarget(scope, targetID)
+	if chatID == "" && senderID == "" {
+		if s.app != nil {
+			s.app.Logger.Info("openclaw sync: empty channel last reply target resolved",
+				"channel_id", channelID,
+				"scope", scope,
+				"target_id", targetID,
+			)
+		}
+		return nil
+	}
+	if s.app != nil {
+		s.app.Logger.Info("openclaw sync: resolved channel last reply target",
+			"channel_id", channelID,
+			"scope", scope,
+			"target_id", targetID,
+			"chat_id", chatID,
+			"sender_id", senderID,
+		)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return channels.UpdateChannelLastReplyTarget(ctx, db, channelID, chatID, senderID)
+}
+
+func syncedChannelReplyTarget(scope string, targetID string) (chatID string, senderID string) {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return "", ""
+	}
+
+	switch strings.TrimSpace(scope) {
+	case channels.ChannelConversationScopeGroup:
+		return targetID, ""
+	default:
+		return "", targetID
+	}
 }
 
 type openClawPluginSessionSource struct {

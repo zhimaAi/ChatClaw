@@ -83,6 +83,8 @@ wails3 task run:server
 wails3 task windows:build ARCH=amd64 DEV=false
 cd bin && 7z a ChatClaw_windows_amd64.zip ChatClaw.exe && cd ..
 wails3 task windows:package ARCH=amd64 DEV=false
+# 包含 openclaw的包 最好自己弄zip压缩包 build\openclaw-runtime\windows-amd64内的文件 压缩到build\openclaw-runtime\windows-amd64.zip中，方便直接导出
+wails3 task windows:package ARCH=amd64 DEV=false BUNDLE_OPENCLAW=true
 ```
 
 ## macos 多架构打包

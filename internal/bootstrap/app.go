@@ -13,9 +13,9 @@ import (
 	"chatclaw/internal/deeplink"
 	"chatclaw/internal/define"
 	"chatclaw/internal/logger"
-	"chatclaw/internal/openclaw/agents"
-	"chatclaw/internal/openclaw/cron"
-	"chatclaw/internal/openclaw/runtime"
+	openclawagents "chatclaw/internal/openclaw/agents"
+	openclawcron "chatclaw/internal/openclaw/cron"
+	openclawruntime "chatclaw/internal/openclaw/runtime"
 	openclawskills "chatclaw/internal/openclaw/skills"
 	"chatclaw/internal/services/agents"
 	appservice "chatclaw/internal/services/app"
@@ -391,6 +391,9 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
 	openclawManager.RegisterReadyHook(openClawChannelService.OnGatewayReadyOpenClawPluginSessionSync)
+	// 统一注册 OpenClaw 渠道 reply target 同步钩子。
+	// Register one unified OpenClaw channel reply-target sync hook.
+	openclawManager.RegisterReadyHook(openClawChannelService.OnGatewayReadyOpenClawLastReplyTargetSync)
 	openClawAgentsService.SetGateway(agentGWSvc)
 	chatService.SetOpenClawGateway(openclawManager)
 	openClawCronService := openclawcron.NewOpenClawCronService(app, openclawManager, openClawAgentsService, conversationsService, chatService)
