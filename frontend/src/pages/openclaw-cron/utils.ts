@@ -135,7 +135,7 @@ export function jobToForm(job: OpenClawCronJob): OpenClawCronFormState {
         ? 'every'
         : job.schedule_kind === 'at'
           ? 'at'
-          : parsedCustom
+          : job.schedule_kind === 'custom'
             ? 'custom'
             : 'cron',
     cronExpr: job.cron_expr || '0 9 * * *',
@@ -297,6 +297,9 @@ export function describeOpenClawSchedule(
   if (job.schedule_kind === 'at' && job.at_iso) {
     const prefix = t?.('openclawCron.schedule.atPrefix', SCHEDULE_PREFIX_AT) || SCHEDULE_PREFIX_AT
     return `${prefix} ${job.at_iso}`
+  }
+  if (job.schedule_kind === 'cron') {
+    return String(job.cron_expr || '').trim() || '-'
   }
   const parsedCustom = parseCronExprToCustom(job.cron_expr)
   if (parsedCustom) {

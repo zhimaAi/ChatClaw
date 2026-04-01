@@ -2903,6 +2903,7 @@ type openClawJobStoreItem struct {
 	WakeMode      string `json:"wakeMode"`
 	Schedule      struct {
 		Kind     string `json:"kind"`
+		Expr     string `json:"expr"`
 		CronExpr string `json:"cronExpr"`
 		EveryMs  int64  `json:"everyMs"`
 		At       string `json:"at"`
@@ -2961,7 +2962,7 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 		SessionKey:         item.SessionKey,
 		WakeMode:           item.WakeMode,
 		ScheduleKind:       item.Schedule.Kind,
-		CronExpr:           item.Schedule.CronExpr,
+		CronExpr:           firstNonEmpty(item.Schedule.Expr, item.Schedule.CronExpr),
 		EveryMs:            item.Schedule.EveryMs,
 		AtISO:              item.Schedule.At,
 		Timezone:           item.Schedule.Timezone,
