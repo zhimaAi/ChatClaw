@@ -11,7 +11,7 @@ info:
   description: "ChatClaw" # The application description
   copyright: "Copyright © 2016- 2026 Sesame Small Customer Service Network Technology Co., Ltd." # Copyright text
   comments: "ChatClaw" # Comments
-  version: "0.8.0" # The application version
+  version: "0.9.0" # The application version
 
 # iOS build configuration (uncomment to customise iOS project generation)
 # Note: Keys under `ios` OVERRIDE values under `info` when set.
