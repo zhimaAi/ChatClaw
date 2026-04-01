@@ -101,9 +101,7 @@ func (s *OpenClawChannelService) ListChannels() ([]channels.Channel, error) {
 	out := make([]channels.Channel, 0, len(models))
 	for i := range models {
 		ch := models[i].toDTO()
-		if s.gateway.IsConnected(ch.ID) || s.isPluginManagedChannelOnline(ch) {
-			ch.Status = channels.StatusOnline
-		}
+		ch.Status = s.effectiveOpenClawListStatus(ch)
 		out = append(out, ch)
 	}
 	return out, nil
@@ -137,9 +135,7 @@ func (s *OpenClawChannelService) listAllChannelsByPlatform(platform string) ([]c
 	out := make([]channels.Channel, 0, len(models))
 	for i := range models {
 		ch := models[i].toDTO()
-		if s.gateway.IsConnected(ch.ID) || s.isPluginManagedChannelOnline(ch) {
-			ch.Status = channels.StatusOnline
-		}
+		ch.Status = s.effectiveOpenClawListStatus(ch)
 		out = append(out, ch)
 	}
 	return out, nil
@@ -298,14 +294,14 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 			if m.AgentID == 0 {
 				return nil, errs.New("error.channel_connect_requires_agent")
 			}
-			if err := s.setOpenClawQQChannel(ctx, name, extraConfig); err != nil {
+			if err := s.setOpenClawQQChannel(ctx, id, name, extraConfig); err != nil {
 				return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 			}
 			if err := s.syncChannelRoutingBinding(id, m.AgentID); err != nil {
 				return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 			}
 		} else if input.Enabled != nil && !enabled {
-			if err := s.removeOpenClawQQChannel(ctx); err != nil {
+			if err := s.removeOpenClawQQChannel(ctx, id, extraConfig); err != nil {
 				return nil, wrapOpenClawSyncErr(err, "error.channel_update_failed", nil)
 			}
 			accountID := openClawManagedAccountID(platform, id, extraConfig)
@@ -330,6 +326,16 @@ func (s *OpenClawChannelService) UpdateChannel(id int64, input channels.UpdateCh
 	if err != nil {
 		return nil, err
 	}
+	if input.Enabled != nil && isPluginManagedOpenClawPlatform(platform) {
+		if err := s.setOpenClawPluginChannelStatus(ctx, id, *input.Enabled); err != nil {
+			return nil, err
+		}
+		if *input.Enabled {
+			updated.Status = channels.StatusOnline
+		} else {
+			updated.Status = channels.StatusOffline
+		}
+	}
 	return updated, nil
 }
 
@@ -350,6 +356,9 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 	if platform == "" {
 		platform = channels.PlatformFeishu
 	}
+    if err := s.ensureOpenClawReady(); err != nil {
+        return err
+    }
 
 	if platform == channels.PlatformWechat {
 		// Remove openclaw.json bindings + channels.openclaw-weixin.accounts, plugin credential files, restart gateway.
@@ -366,7 +375,7 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 				s.app.Logger.Warn("openclaw config unset dingtalk account failed, proceeding with local delete", "account", accountKey, "error", err)
 			}
 		} else if platform == channels.PlatformQQ {
-			if err := s.removeOpenClawQQChannel(ctx); err != nil {
+			if err := s.removeOpenClawQQChannel(ctx, id, m.ExtraConfig); err != nil {
 				s.app.Logger.Warn("openclaw qq channel remove failed, proceeding with local delete", "error", err)
 			}
 			accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
@@ -525,8 +534,10 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		}
 		_ = s.gateway.DisconnectChannel(context.Background(), id)
 		enabled := true
-		_, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
-		return err
+		if _, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
+			return err
+		}
+		return s.setOpenClawPluginChannelStatus(ctx, id, true)
 	}
 
 	return s.channelSvc.ConnectChannel(id)
@@ -580,21 +591,57 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 	if isPluginManagedOpenClawPlatform(platform) {
 		_ = s.gateway.DisconnectChannel(context.Background(), id)
 		enabled := false
-		_, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled})
-		return err
+		if _, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
+			return err
+		}
+		return s.setOpenClawPluginChannelStatus(ctx, id, false)
 	}
 
 	return s.channelSvc.DisconnectChannel(id)
 }
 
-func (s *OpenClawChannelService) isPluginManagedChannelOnline(ch channels.Channel) bool {
-	if !isPluginManagedOpenClawPlatform(ch.Platform) {
-		return false
+// effectiveOpenClawListStatus derives list UI status without treating "OpenClaw runtime ready"
+// as per-channel online (that incorrectly showed 已连接 for every enabled Feishu/WeCom/QQ row).
+func (s *OpenClawChannelService) effectiveOpenClawListStatus(ch channels.Channel) string {
+	if !ch.Enabled {
+		return channels.StatusOffline
 	}
-	if !ch.OpenClawScope || !ch.Enabled {
-		return false
+	if s.gateway.IsConnected(ch.ID) {
+		return channels.StatusOnline
 	}
-	return s.openclawManager != nil && s.openclawManager.IsReady()
+	st := strings.TrimSpace(ch.Status)
+	if st == channels.StatusOnline || st == channels.StatusOffline || st == channels.StatusError {
+		return st
+	}
+	if st == "" {
+		return channels.StatusOffline
+	}
+	return st
+}
+
+// setOpenClawPluginChannelStatus persists connection status for OpenClaw plugin-managed rows
+// (Feishu/WeCom/QQ list uses DB status; gateway adapters are not used for those platforms).
+func (s *OpenClawChannelService) setOpenClawPluginChannelStatus(ctx context.Context, channelID int64, online bool) error {
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+	status := channels.StatusOffline
+	if online {
+		status = channels.StatusOnline
+	}
+	q := db.NewUpdate().
+		Model((*channelModel)(nil)).
+		Where("id = ?", channelID).
+		Set("status = ?", status).
+		Set("updated_at = ?", sqlite.NowUTC())
+	if online {
+		q = q.Set("last_connected_at = ?", sqlite.NowUTC())
+	}
+	if _, err = q.Exec(ctx); err != nil {
+		return errs.Wrap("error.channel_update_failed", err)
+	}
+	return nil
 }
 
 func isPluginManagedOpenClawPlatform(platform string) bool {
@@ -813,12 +860,15 @@ func configBindings(cfg map[string]any) []any {
 	if bindings == nil {
 		return []any{}
 	}
+	if len(bindings) == 0 {
+		return []any{}
+	}
 	return append([]any(nil), bindings...)
 }
 
 func removeManagedBindings(bindings []any, platform string, accountID string) []any {
 	if len(bindings) == 0 {
-		return bindings
+		return []any{}
 	}
 	out := make([]any, 0, len(bindings))
 	for _, item := range bindings {
@@ -881,6 +931,10 @@ func openClawManagedAccountID(platform string, channelID int64, extraConfig stri
 			return fmt.Sprintf("channel_%d", channelID)
 		}
 		return ""
+	case channels.PlatformQQ:
+		// Must match OpenClaw `channels add/remove --account` for this row so multiple QQ bots
+		// do not overwrite each other and route bindings stay per-channel.
+		return openClawChannelAccountKey(channelID, extraConfig)
 	default:
 		return "default"
 	}

@@ -296,6 +296,28 @@ async function handleDisableChannel(channel: Channel) {
   }
 }
 
+/** Connection pill: disabled channel is never "online" even if API status is stale. */
+function channelConnDisplay(ch: Channel): 'provisioning' | 'online' | 'error' | 'offline' {
+  if (isGatewayProvisioning(ch)) return 'provisioning'
+  if (!ch.enabled) return 'offline'
+  if (ch.status === 'online') return 'online'
+  if (ch.status === 'error') return 'error'
+  return 'offline'
+}
+
+function channelConnStatusI18nKey(ch: Channel) {
+  switch (channelConnDisplay(ch)) {
+    case 'provisioning':
+      return 'channels.status.provisioning'
+    case 'online':
+      return 'channels.status.online'
+    case 'error':
+      return 'channels.status.error'
+    default:
+      return 'channels.status.offline'
+  }
+}
+
 async function handleToggleConnection(channel: Channel, val: boolean) {
   if (channel.platform === 'wechat' && val) {
     try {
@@ -824,48 +846,37 @@ onMounted(loadData)
               class="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
             >
               <LoaderCircle
-                v-if="isGatewayProvisioning(channel)"
+                v-if="channelConnDisplay(channel) === 'provisioning'"
                 class="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground"
               />
               <div
                 v-else
                 class="h-2 w-2 shrink-0 rounded-full"
                 :class="{
-                  'bg-green-500': channel.status === 'online',
-                  'bg-red-500': channel.status === 'error',
-                  'bg-gray-400': channel.status === 'offline' || !channel.status,
+                  'bg-green-500': channelConnDisplay(channel) === 'online',
+                  'bg-red-500': channelConnDisplay(channel) === 'error',
+                  'bg-gray-400': channelConnDisplay(channel) === 'offline',
                 }"
               />
               <span
                 class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
-                :title="
-                  isGatewayProvisioning(channel)
-                    ? t('channels.status.provisioning')
-                    : channel.status === 'online'
-                      ? t('channels.status.online')
-                      : channel.status === 'error'
-                        ? t('channels.status.error')
-                        : t('channels.status.offline')
-                "
+                :title="t(channelConnStatusI18nKey(channel))"
               >
-                {{
-                  isGatewayProvisioning(channel)
-                    ? t('channels.status.provisioning')
-                    : channel.status === 'online'
-                      ? t('channels.status.online')
-                      : channel.status === 'error'
-                        ? t('channels.status.error')
-                        : t('channels.status.offline')
-                }}
+                {{ t(channelConnStatusI18nKey(channel)) }}
               </span>
             </div>
-            <!-- Bind Status -->
+            <!-- Bind status: unbound = label + click to bind; bound = check + agent name -->
             <div
-              class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
-              :class="{
-                'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors':
-                  channel.agent_id === 0 && !isBindProvisioning(channel),
-              }"
+              class="inline-flex min-w-0 items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
+              :class="[
+                channel.agent_id !== 0 && !isBindProvisioning(channel)
+                  ? 'max-w-[12rem]'
+                  : 'max-w-full',
+                {
+                  'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors':
+                    channel.agent_id === 0 && !isBindProvisioning(channel),
+                },
+              ]"
               @click="channel.agent_id === 0 && !isBindProvisioning(channel) ? handleOpenBind(channel) : undefined"
             >
               <LoaderCircle
@@ -886,7 +897,7 @@ onMounted(loadData)
                   isBindProvisioning(channel)
                     ? t('channels.card.provisioning')
                     : channel.agent_id !== 0
-                      ? t('channels.card.bound')
+                      ? getAgentName(channel.agent_id)
                       : t('channels.card.unbound')
                 "
               >
@@ -894,21 +905,9 @@ onMounted(loadData)
                   isBindProvisioning(channel)
                     ? t('channels.card.provisioning')
                     : channel.agent_id !== 0
-                      ? t('channels.card.bound')
+                      ? getAgentName(channel.agent_id)
                       : t('channels.card.unbound')
                 }}
-              </span>
-            </div>
-            <!-- Agent name: background wraps text only; long names truncate with max-width -->
-            <div
-              v-if="channel.agent_id !== 0"
-              class="inline-flex min-w-0 max-w-[12rem] w-fit items-center rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
-            >
-              <span
-                class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
-                :title="getAgentName(channel.agent_id)"
-              >
-                {{ getAgentName(channel.agent_id) }}
               </span>
             </div>
           </div>
@@ -917,7 +916,7 @@ onMounted(loadData)
 
       <!-- Empty State - All platforms -->
       <div
-        v-else-if="selectedFilter === 'all'"
+        v-else-if="selectedFilter === 'all' || selectedFilter === 'wecom'"
         class="flex flex-col items-center justify-center py-12 text-center"
       >
         <div
