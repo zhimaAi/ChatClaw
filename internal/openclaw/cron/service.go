@@ -195,25 +195,57 @@ func (s *OpenClawCronService) ListDeliveryPlatforms() ([]OpenClawCronDeliveryPla
 		return nil, err
 	}
 
-	seen := make(map[string]struct{})
-	out := make([]OpenClawCronDeliveryPlatformOption, 0, len(options))
+	agentIDByRowID, err := s.openClawAgentIDByRowID()
+	if err != nil {
+		return nil, err
+	}
+
+	outByPlatform := make(map[string]*OpenClawCronDeliveryPlatformOption)
 	for _, option := range options {
 		platform := strings.TrimSpace(option.Platform)
 		if platform == "" {
 			continue
 		}
-		if _, exists := seen[platform]; exists {
-			continue
+		entry, exists := outByPlatform[platform]
+		if !exists {
+			entry = &OpenClawCronDeliveryPlatformOption{
+				Platform:         platform,
+				Label:            platform,
+				OpenClawAgentIDs: []string{},
+			}
+			outByPlatform[platform] = entry
 		}
-		seen[platform] = struct{}{}
-		out = append(out, OpenClawCronDeliveryPlatformOption{
-			Platform: platform,
-			Label:    platform,
-		})
+		if openClawAgentID := strings.TrimSpace(agentIDByRowID[option.AgentRowID]); openClawAgentID != "" && !slices.Contains(entry.OpenClawAgentIDs, openClawAgentID) {
+			entry.OpenClawAgentIDs = append(entry.OpenClawAgentIDs, openClawAgentID)
+		}
+	}
+
+	out := make([]OpenClawCronDeliveryPlatformOption, 0, len(outByPlatform))
+	for _, option := range outByPlatform {
+		slices.Sort(option.OpenClawAgentIDs)
+		out = append(out, *option)
 	}
 	slices.SortFunc(out, func(left, right OpenClawCronDeliveryPlatformOption) int {
 		return strings.Compare(left.Platform, right.Platform)
 	})
+	return out, nil
+}
+
+func (s *OpenClawCronService) openClawAgentIDByRowID() (map[int64]string, error) {
+	items, err := s.agentsSvc.ListAgents()
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[int64]string, len(items))
+	for _, item := range items {
+		if item.ID <= 0 {
+			continue
+		}
+		if openClawAgentID := strings.TrimSpace(item.OpenClawAgentID); openClawAgentID != "" {
+			out[item.ID] = openClawAgentID
+		}
+	}
 	return out, nil
 }
 
@@ -326,7 +358,7 @@ func (s *OpenClawCronService) UpdateJob(jobID string, input UpdateOpenClawCronJo
 		return s.findJobByID(jobID)
 	}
 	if err := s.gatewayRequest(openClawCronMethodUpdate, map[string]any{
-		"id":    strings.TrimSpace(jobID),
+		"jobId": strings.TrimSpace(jobID),
 		"patch": patch,
 	}, nil); err != nil {
 		return nil, err
@@ -336,13 +368,13 @@ func (s *OpenClawCronService) UpdateJob(jobID string, input UpdateOpenClawCronJo
 
 func (s *OpenClawCronService) DeleteJob(jobID string) error {
 	return s.gatewayRequest(openClawCronMethodRemove, map[string]any{
-		"id": strings.TrimSpace(jobID),
+		"jobId": strings.TrimSpace(jobID),
 	}, nil)
 }
 
 func (s *OpenClawCronService) EnableJob(jobID string) (*OpenClawCronJob, error) {
 	if err := s.gatewayRequest(openClawCronMethodUpdate, map[string]any{
-		"id": strings.TrimSpace(jobID),
+		"jobId": strings.TrimSpace(jobID),
 		"patch": map[string]any{
 			"enabled": true,
 		},
@@ -354,7 +386,7 @@ func (s *OpenClawCronService) EnableJob(jobID string) (*OpenClawCronJob, error) 
 
 func (s *OpenClawCronService) DisableJob(jobID string) (*OpenClawCronJob, error) {
 	if err := s.gatewayRequest(openClawCronMethodUpdate, map[string]any{
-		"id": strings.TrimSpace(jobID),
+		"jobId": strings.TrimSpace(jobID),
 		"patch": map[string]any{
 			"enabled": false,
 		},
@@ -372,21 +404,16 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 		return nil, fmt.Errorf("openclaw cron id is required")
 	}
 
-	job, err := s.findJobByID(jobID)
-	if err != nil {
-		return nil, err
-	}
 	triggeredAt := time.Now()
 	var payload struct {
 		Enqueued bool   `json:"enqueued"`
 		Ran      bool   `json:"ran"`
 		RunID    string `json:"runId"`
 	}
-	err = s.gatewayRequest(openClawCronMethodRun, map[string]any{
-		"id":   jobID,
-		"mode": openClawCronRunModeForce,
-	}, &payload)
-	if err != nil {
+	if err := s.gatewayRequest(openClawCronMethodRun, map[string]any{
+		"jobId": jobID,
+		"mode":  openClawCronRunModeForce,
+	}, &payload); err != nil {
 		return nil, fmt.Errorf("openclaw cron run %s failed: %w", jobID, err)
 	}
 	result := &OpenClawCronRunNowResult{
@@ -394,20 +421,22 @@ func (s *OpenClawCronService) RunJobNow(jobID string) (*OpenClawCronRunNowResult
 		TriggerAtMs: triggeredAt.UnixMilli(),
 		Enqueued:    payload.Enqueued || payload.Ran,
 	}
-	if result.RunID == "" {
-		return result, nil
-	}
-
-	if fixedSessionKey := strings.TrimSpace(job.SessionKey); fixedSessionKey != "" {
-		conversationID, conversationAgentID, ensureErr := s.ensureConversationForSession(jobID, *job, fixedSessionKey, result.RunID, result.TriggerAtMs)
-		if ensureErr != nil {
-			s.app.Logger.Warn("[openclaw-cron] ensure fixed-session conversation failed", "job_id", jobID, "run_id", result.RunID, "error", ensureErr)
-		} else if conversationID > 0 {
-			s.emitConversationActivated(conversationAgentID, conversationID)
-		}
-		return result, nil
-	}
-
+	// 注释掉 Cron 立即运行后自动创建/激活 conversations 的入口。
+	// 当前定时任务结果只保留在历史记录页查看，不再回显到任务助手会话列表。
+	//
+	// if result.RunID == "" {
+	// 	return result, nil
+	// }
+	//
+	// if fixedSessionKey := strings.TrimSpace(job.SessionKey); fixedSessionKey != "" {
+	// 	conversationID, conversationAgentID, ensureErr := s.ensureConversationForSession(jobID, *job, fixedSessionKey, result.RunID, result.TriggerAtMs)
+	// 	if ensureErr != nil {
+	// 		s.app.Logger.Warn("[openclaw-cron] ensure fixed-session conversation failed", "job_id", jobID, "run_id", result.RunID, "error", ensureErr)
+	// 	} else if conversationID > 0 {
+	// 		s.emitConversationActivated(conversationAgentID, conversationID)
+	// 	}
+	// 	return result, nil
+	// }
 	return result, nil
 }
 
@@ -422,7 +451,7 @@ func (s *OpenClawCronService) ListRuns(jobID string, limit int) ([]OpenClawCronR
 		Entries []openClawRunEntryCLI `json:"entries"`
 	}
 	err := s.gatewayQuery(openClawCronMethodRuns, map[string]any{
-		"id":    strings.TrimSpace(jobID),
+		"jobId": strings.TrimSpace(jobID),
 		"limit": limit,
 	}, &result)
 	if err == nil {
@@ -578,6 +607,8 @@ func (s *OpenClawCronService) StopRunStream(watchID string) {
 func (s *OpenClawCronService) OnGatewayReady() {
 	s.manager.RemoveEventListener(globalCronTrackerListenerKey)
 	s.manager.AddEventListener(globalCronTrackerListenerKey, func(event string, payload json.RawMessage) {
+		// 注释掉 Cron 网关事件自动绑定 conversations 并向助手页转发消息的入口。
+		// 当前定时任务执行结果仅用于历史记录，不再同步回 conversations。
 		runID, sessionKey := extractGatewayRunContext(event, payload)
 		if runID == "" || sessionKey == "" {
 			return
@@ -736,15 +767,12 @@ func (s *OpenClawCronService) bindRunSession(runID string, sessionKey string) in
 		s.app.Logger.Warn("[openclaw-cron] find job by session key failed", "job_id", jobID, "run_id", runID, "error", err)
 	}
 
-	conversationID, conversationAgentID, err := s.ensureConversationForSession(jobID, job, sessionKey, runID, time.Now().UnixMilli())
+	conversationID, _, err := s.ensureConversationForSession(jobID, job, sessionKey, runID, time.Now().UnixMilli())
 	if err != nil {
 		if s.app != nil {
 			s.app.Logger.Warn("[openclaw-cron] ensure conversation from gateway event failed", "job_id", jobID, "run_id", runID, "error", err)
 		}
 		return 0
-	}
-	if conversationID > 0 {
-		s.emitConversationActivated(conversationAgentID, conversationID)
 	}
 	return conversationID
 }
@@ -1389,7 +1417,7 @@ func (s *OpenClawCronService) resolveDeliverySelection(input cronDeliverySelecti
 	if err != nil {
 		return "", "", "", err
 	}
-	return platform, resolvedTarget, deriveCronDeliveryAccountID(matchedChannel), nil
+	return deriveCronDeliveryChannelID(matchedChannel), resolvedTarget, resolveCronDeliveryAccountID(), nil
 }
 
 func (s *OpenClawCronService) resolveDeliveryAgentRowID(openClawAgentID string) (int64, error) {
@@ -1454,6 +1482,29 @@ func deriveCronDeliveryAccountID(option cronDeliveryChannelOption) string {
 		return ""
 	}
 	return fmt.Sprintf("channel_%d", option.ID)
+}
+
+// resolveCronDeliveryAccountID intentionally clears delivery.accountId for cron jobs.
+// resolveCronDeliveryAccountID 明确将定时任务的 delivery.accountId 置空，交给 OpenClaw 自行走默认账号匹配，兼容单实例和多实例配置。
+func resolveCronDeliveryAccountID() string {
+	return ""
+}
+
+// deriveCronDeliveryChannelID maps local platform ids to the OpenClaw delivery.channel value.
+// deriveCronDeliveryChannelID 将本地平台标识映射为 OpenClaw delivery.channel，避免把 accountId 或本地别名误写进 channel 字段。
+func deriveCronDeliveryChannelID(option cronDeliveryChannelOption) string {
+	switch strings.ToLower(strings.TrimSpace(option.Platform)) {
+	case "qq":
+		return "qqbot"
+	case "dingtalk":
+		return "dingtalk-connector"
+	case "feishu":
+		return "feishu"
+	case "wecom":
+		return "wecom"
+	default:
+		return strings.TrimSpace(option.Platform)
+	}
 }
 
 func extractOpenClawChannelIDFromExtraConfig(extraConfig string) string {
@@ -1992,8 +2043,10 @@ func buildUpdateArgs(jobID string, input UpdateOpenClawCronJobInput) ([]string, 
 	appendOptionalStringArg(&args, "--thinking", input.Thinking)
 	appendOptionalBoolArg(&args, "--expect-final", input.ExpectFinal)
 	appendOptionalBoolArg(&args, "--light-context", input.LightContext)
-	if input.TimeoutMs != nil && *input.TimeoutMs > 0 {
-		args = append(args, "--timeout", strconv.FormatInt(*input.TimeoutMs, 10))
+	if input.TimeoutMs != nil {
+		if timeoutSeconds, ok := timeoutMsToSeconds(*input.TimeoutMs); ok {
+			args = append(args, "--timeout-seconds", strconv.FormatInt(timeoutSeconds, 10))
+		}
 	}
 	appendOptionalStringArg(&args, "--session", input.SessionTarget)
 	if input.ClearSessionKey {
@@ -2112,8 +2165,8 @@ func appendCommonArgs(
 	if lightContext {
 		*args = append(*args, "--light-context")
 	}
-	if timeoutMs > 0 {
-		*args = append(*args, "--timeout", strconv.FormatInt(timeoutMs, 10))
+	if timeoutSeconds, ok := timeoutMsToSeconds(timeoutMs); ok {
+		*args = append(*args, "--timeout-seconds", strconv.FormatInt(timeoutSeconds, 10))
 	}
 	if sessionTarget != "" {
 		*args = append(*args, "--session", sessionTarget)
@@ -2735,15 +2788,7 @@ func buildCronConversationName(jobName string, primaryTimeMs int64, fallbackTime
 	if trimmedJobName == "" {
 		trimmedJobName = openClawCronDefaultConversationName
 	}
-
-	runTimeMs := primaryTimeMs
-	if runTimeMs <= 0 {
-		runTimeMs = fallbackTimeMs
-	}
-	if runTimeMs <= 0 {
-		runTimeMs = time.Now().UnixMilli()
-	}
-	return fmt.Sprintf("%s / %s", trimmedJobName, time.UnixMilli(runTimeMs).Local().Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("[定时任务] %s", trimmedJobName)
 }
 
 func chooseRunTimestamp(primaryTimeMs int64, fallbackTimeMs int64) int64 {
@@ -2858,6 +2903,7 @@ type openClawJobStoreItem struct {
 	WakeMode      string `json:"wakeMode"`
 	Schedule      struct {
 		Kind     string `json:"kind"`
+		Expr     string `json:"expr"`
 		CronExpr string `json:"cronExpr"`
 		EveryMs  int64  `json:"everyMs"`
 		At       string `json:"at"`
@@ -2865,15 +2911,17 @@ type openClawJobStoreItem struct {
 		Exact    bool   `json:"exact"`
 	} `json:"schedule"`
 	Payload struct {
-		Kind         string `json:"kind"`
-		AgentID      string `json:"agentId"`
-		Message      string `json:"message"`
-		SystemEvent  string `json:"systemEvent"`
-		Model        string `json:"model"`
-		Thinking     string `json:"thinking"`
-		ExpectFinal  bool   `json:"expectFinal"`
-		LightContext bool   `json:"lightContext"`
-		TimeoutMs    int64  `json:"timeoutMs"`
+		Kind           string `json:"kind"`
+		AgentID        string `json:"agentId"`
+		Message        string `json:"message"`
+		Text           string `json:"text"`
+		SystemEvent    string `json:"systemEvent"`
+		Model          string `json:"model"`
+		Thinking       string `json:"thinking"`
+		ExpectFinal    bool   `json:"expectFinal"`
+		LightContext   bool   `json:"lightContext"`
+		TimeoutSeconds int64  `json:"timeoutSeconds"`
+		TimeoutMs      int64  `json:"timeoutMs"`
 	} `json:"payload"`
 	Delivery struct {
 		Mode      string `json:"mode"`
@@ -2914,21 +2962,23 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 		SessionKey:         item.SessionKey,
 		WakeMode:           item.WakeMode,
 		ScheduleKind:       item.Schedule.Kind,
-		CronExpr:           item.Schedule.CronExpr,
+		CronExpr:           firstNonEmpty(item.Schedule.Expr, item.Schedule.CronExpr),
 		EveryMs:            item.Schedule.EveryMs,
 		AtISO:              item.Schedule.At,
 		Timezone:           item.Schedule.Timezone,
 		Exact:              item.Schedule.Exact,
 		PayloadKind:        item.Payload.Kind,
 		Message:            item.Payload.Message,
-		SystemEvent:        item.Payload.SystemEvent,
+		SystemEvent:        firstNonEmpty(item.Payload.SystemEvent, item.Payload.Text),
 		Model:              item.Payload.Model,
 		Thinking:           item.Payload.Thinking,
 		ExpectFinal:        item.Payload.ExpectFinal,
 		LightContext:       item.Payload.LightContext,
-		TimeoutMs:          item.Payload.TimeoutMs,
+		TimeoutMs:          firstNonZero(item.Payload.TimeoutMs, item.Payload.TimeoutSeconds*1000),
 		DeliveryMode:       firstNonEmpty(item.Delivery.Mode, "announce"),
-		DeliveryChannel:    item.Delivery.Channel,
+		// Surface UI-friendly platform aliases so the cron edit form can keep using configured local channel options.
+		// 返回前端时保留 UI 友好的平台别名，避免编辑弹窗拿到插件 channel id 后无法匹配本地已配置频道。
+		DeliveryChannel:    normalizeCronDeliveryChannelForUI(item.Delivery.Channel),
 		DeliveryTo:         item.Delivery.To,
 		DeliveryAccountID:  item.Delivery.AccountID,
 		Announce:           item.Delivery.Mode == "announce" || item.Delivery.Announce,
@@ -2948,6 +2998,19 @@ func flattenJob(item openClawJobStoreItem) OpenClawCronJob {
 	}
 }
 
+// normalizeCronDeliveryChannelForUI maps OpenClaw plugin channel ids back to local platform aliases.
+// normalizeCronDeliveryChannelForUI 将 OpenClaw 插件 channel id 映射回本地平台别名，保持前端表单和历史任务兼容。
+func normalizeCronDeliveryChannelForUI(channel string) string {
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case "qqbot":
+		return "qq"
+	case "dingtalk-connector":
+		return "dingtalk"
+	default:
+		return strings.TrimSpace(channel)
+	}
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -2955,6 +3018,15 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func firstNonZero(values ...int64) int64 {
+	for _, value := range values {
+		if value != 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func inferCronDeliveryTargetMode(deliveryTo string) string {
