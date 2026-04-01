@@ -35,6 +35,18 @@ function displayRunStatusLabel(status: string) {
     : t('scheduledTasks.statusSuccess')
 }
 
+function displayDeliveryStatus(status: string) {
+  const normalized = String(status || '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return ''
+  return (
+    t(`openclawCron.history.deliveryStatus.${normalized}`, '') ||
+    t(`openclawCron.history.deliveryStatus.${normalized.replace(/-/g, '_')}`, '') ||
+    status
+  )
+}
+
 function displayRoleLabel(role: string) {
   if (role === 'assistant') return t('chat.role.assistant', 'Assistant')
   if (role === 'user') return t('chat.role.user', 'User')
@@ -131,7 +143,7 @@ function metadataItems(detail: OpenClawCronRunDetail) {
     items.push({
       key: 'delivery',
       label: t('openclawCron.history.delivery', '投递状态'),
-      value: detail.run.delivery_status,
+      value: displayDeliveryStatus(detail.run.delivery_status),
     })
   }
 
