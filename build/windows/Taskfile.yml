@@ -148,12 +148,12 @@ tasks:
         {{if eq OS "windows"}}
         makensis \
           -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" \
-          {{if eq .BUNDLE_OPENCLAW "true"}}-DARG_OPENCLAW_RUNTIME="{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH}}.zip" -DARG_OPENCLAW_RUNTIME_TARGET="windows-{{.ARCH}}"{{end}} \
+          {{if eq .BUNDLE_OPENCLAW "true"}}-DARG_OPENCLAW_RUNTIME="{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH}}.zip" -DARG_OPENCLAW_RUNTIME_TARGET="windows-{{.ARCH}}" -DBUNDLE_OPENCLAW=1{{end}} \
           project.nsi
         {{else}}
         makensis \
           -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" \
-          {{if eq .BUNDLE_OPENCLAW "true"}}-DARG_OPENCLAW_RUNTIME="{{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH}}.zip" -DARG_OPENCLAW_RUNTIME_TARGET="windows-{{.ARCH}}"{{end}} \
+          {{if eq .BUNDLE_OPENCLAW "true"}}-DARG_OPENCLAW_RUNTIME="{{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH}}.zip" -DARG_OPENCLAW_RUNTIME_TARGET="windows-{{.ARCH}}" -DBUNDLE_OPENCLAW=1{{end}} \
           project.nsi
         {{end}}
     vars:
