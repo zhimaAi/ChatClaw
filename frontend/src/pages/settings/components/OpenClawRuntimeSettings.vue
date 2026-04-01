@@ -63,6 +63,14 @@ const displayGatewayURL = computed(() => {
   return status.value.gatewayURL || 'http://127.0.0.1'
 })
 
+const upgradeProgress = computed(() => {
+  return status.value.progress || 0
+})
+
+const showUpgradeProgress = computed(() => {
+  return upgrading.value && status.value.phase === 'upgrading'
+})
+
 const loadStatus = async () => {
   try {
     status.value = await OpenClawRuntimeService.GetStatus()
@@ -219,6 +227,26 @@ onUnmounted(() => {
         class="border-t border-border px-4 py-3 dark:border-white/10"
       >
         <p class="text-xs text-muted-foreground">{{ status.message }}</p>
+      </div>
+
+      <!-- Upgrade Progress -->
+      <div
+        v-if="showUpgradeProgress"
+        class="border-t border-border px-4 py-3 dark:border-white/10"
+      >
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-xs font-medium text-foreground">
+            {{ t('settings.openclawRuntime.upgradeProgress') }}
+          </span>
+          <span class="text-xs text-muted-foreground">{{ upgradeProgress }}%</span>
+        </div>
+        <div class="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            class="h-full bg-primary transition-all duration-300"
+            :style="{ width: upgradeProgress + '%' }"
+          />
+        </div>
+        <p class="mt-2 text-xs text-muted-foreground">{{ status.message }}</p>
       </div>
 
       <!-- Actions -->

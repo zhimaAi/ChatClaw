@@ -18,6 +18,7 @@ const (
 type RuntimeStatus struct {
 	Phase            string `json:"phase"`
 	Message          string `json:"message,omitempty"`
+	Progress         int    `json:"progress,omitempty"` // 0-100, only meaningful during upgrade
 	InstalledVersion string `json:"installedVersion,omitempty"`
 	RuntimeSource    string `json:"runtimeSource,omitempty"`
 	RuntimePath      string `json:"runtimePath,omitempty"`
