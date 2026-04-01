@@ -1,7 +1,7 @@
 export default {
   app: {
     title: 'ChatClaw',
-    theme: 'थीम',
+    theme: 'थीम'
   },
   common: {
     all: 'सभी',
@@ -16,111 +16,111 @@ export default {
     detail: 'विवरण',
     hide: 'छुपाएं',
     retry: 'पुनः प्रयास करें',
-    close: 'बंद करें',
+    close: 'बंद करें'
   },
   tools: {
     calculator: {
       name: 'कैलकुलेटर',
-      description: 'गणितीय गणनाएं करें',
+      description: 'गणितीय गणनाएं करें'
     },
     duckduckgo: {
       name: 'वेब सर्च',
-      description: 'DuckDuckGo का उपयोग करके वेब पर सर्च करें',
+      description: 'DuckDuckGo का उपयोग करके वेब पर सर्च करें'
     },
     libraryRetriever: {
       name: 'नॉलेज सर्च',
-      description: 'नॉलेज बेस से प्रासंगिक सामग्री खोजें',
+      description: 'नॉलेज बेस से प्रासंगिक सामग्री खोजें'
     },
     memoryRetriever: {
-      name: '记忆检索',
-      description: '从长期记忆中检索相关事实',
+      name: 'मेमोरी खोज',
+      description: 'दीर्घकालिक स्मृति से संबंधित तथ्यों को खोजता है'
     },
     execute: {
       name: 'कमांड एक्जीक्यूट करें',
-      description: 'सिस्टम टर्मिनल में शेल कमांड एक्जीक्यूट करें',
+      description: 'सिस्टम टर्मिनल में शेल कमांड एक्जीक्यूट करें'
     },
     httpRequest: {
       name: 'HTTP अनुरोध',
-      description: 'URL पर HTTP अनुरोध भेजें',
+      description: 'URL पर HTTP अनुरोध भेजें'
     },
     sequentialThinking: {
       name: 'कदम-दर-कदम सोच',
-      description: 'जटिल समस्याओं को क्रमिक विश्लेषण चरणों में विभाजित करें',
+      description: 'जटिल समस्याओं को क्रमिक विश्लेषण चरणों में विभाजित करें'
     },
     wikipedia: {
       name: 'विकिपीडिया',
-      description: 'ज्ञान और जानकारी के लिए विकिपीडिया खोजें',
+      description: 'ज्ञान और जानकारी के लिए विकिपीडिया खोजें'
     },
     browserUse: {
       name: 'ब्राउज़र',
-      description: 'वेब पेज ब्राउज़ करें और इंटरैक्ट करें',
+      description: 'वेब पेज ब्राउज़ करें और इंटरैक्ट करें'
     },
     skillSearch: {
-      name: 'स्किल सर्च',
+      name: 'स्किल सर्च'
     },
     skillList: {
-      name: 'स्किल लिस्ट',
+      name: 'स्किल लिस्ट'
     },
     skillInstall: {
-      name: 'स्किल इंस्टॉल',
+      name: 'स्किल इंस्टॉल'
     },
     skillUninstall: {
-      name: 'स्किल अनइंस्टॉल',
+      name: 'स्किल अनइंस्टॉल'
     },
     skillEnable: {
-      name: 'स्किल सक्षम करें',
+      name: 'स्किल सक्षम करें'
     },
     skillDisable: {
-      name: 'स्किल अक्षम करें',
+      name: 'स्किल अक्षम करें'
     },
     skillOpenFolder: {
-      name: 'स्किल फोल्डर खोलें',
+      name: 'स्किल फोल्डर खोलें'
     },
     ls: {
-      name: 'डायरेक्टरी लिस्ट',
+      name: 'डायरेक्टरी लिस्ट'
     },
     readFile: {
-      name: 'फाइल पढ़ें',
+      name: 'फाइल पढ़ें'
     },
     writeFile: {
-      name: 'फाइल लिखें',
+      name: 'फाइल लिखें'
     },
     editFile: {
-      name: 'फाइल संपादित करें',
+      name: 'फाइल संपादित करें'
     },
     patchFile: {
-      name: 'फाइल पैच करें',
+      name: 'फाइल पैच करें'
     },
     glob: {
-      name: 'ग्लोब मैच',
+      name: 'ग्लोब मैच'
     },
     grep: {
-      name: 'टेक्स्ट सर्च',
+      name: 'टेक्स्ट सर्च'
     },
     executeBackground: {
-      name: 'बैकग्राउंड में एक्जीक्यूट',
+      name: 'बैकग्राउंड में एक्जीक्यूट'
     },
     taskCreate: {
-      name: 'टास्क बनाएं',
+      name: 'टास्क बनाएं'
     },
     taskGet: {
-      name: 'टास्क प्राप्त करें',
+      name: 'टास्क प्राप्त करें'
     },
     taskUpdate: {
-      name: 'टास्क अपडेट करें',
+      name: 'टास्क अपडेट करें'
     },
     taskList: {
-      name: 'टास्क लिस्ट',
+      name: 'टास्क लिस्ट'
     },
     skill: {
-      name: 'स्किल लोड करें',
+      name: 'स्किल लोड करें'
     },
     writeTodos: {
-      name: 'टास्क प्लानिंग',
+      name: 'टास्क प्लानिंग'
     },
     task: {
-      name: 'सब-टास्क (समय लग सकता है)',
-    },
+      name: 'सब-टास्क (समय लग सकता है)'
+    }
   },
   winsnap: {
     title: 'ChatClaw',
@@ -133,7 +133,7 @@ export default {
     actions: {
       sendAndTrigger: 'भेजें और ट्रिगर करें',
       sendToEdit: 'एडिट बॉक्स में भेजें',
-      copyToClipboard: 'क्लिपबोर्ड में कॉपी करें',
+      copyToClipboard: 'क्लिपबोर्ड में कॉपी करें'
     },
     findSnap: 'स्नैप',
     toast: {
@@ -144,28 +144,28 @@ export default {
       pasteFailed: 'पेस्ट करने में विफल',
       noTarget: 'किसी ऐप से स्नैप नहीं है',
       noSnapTarget: 'कोई स्नैप करने योग्य ऐप नहीं मिला',
-      attachFailed: 'स्नैप करने में विफल',
-    },
+      attachFailed: 'स्नैप करने में विफल'
+    }
   },
   selection: {
     aiChat: 'ChatClaw AI से पूछें',
-    disableSelectionSearch: 'बंद करें',
+    disableSelectionSearch: 'बंद करें'
   },
   floatingball: {
     menu: {
-      settings: 'Settings',
-      restart: 'Restart',
-      hide: 'Hide',
-    },
+      settings: 'सेटिंग्स',
+      restart: 'पुनः आरंभ करें',
+      hide: 'छुपाएं'
+    }
   },
   nav: {
-    assistant: 'Task Assistant',
+    assistant: 'टास्क सहायक',
     openclaw: 'OpenClaw सहायक',
-    openclawDashboard: 'OpenClaw Dashboard',
+    openclawDashboard: 'OpenClaw डैशबोर्ड',
     knowledge: 'नॉलेज बेस',
     scheduledTasks: 'शेड्यूल्ड टास्क',
     skills: 'स्किल्स',
-    openclawSkills: 'OpenClaw Skills',
+    openclawSkills: 'OpenClaw स्किल्स',
     channels: 'चैनल',
     multiask: 'मल्टी आस्क',
     memory: 'मेमोरी',
@@ -173,29 +173,29 @@ export default {
     settings: 'सेटिंग्स',
     document: 'डॉक्यूमेंट',
     systemChatClaw: 'ChatClaw',
-    systemOpenClaw: 'OpenClaw',
+    systemOpenClaw: 'OpenClaw सहायक'
   },
   toolsPage: {
-    subtitle: 'Quick access to featured tools',
+    subtitle: 'चुने हुए टूल्स तक त्वरित पहुंच',
     smartSidebar: {
-      title: 'Smart Sidebar',
-      description: 'Dock beside WeCom, QQ, and other chat apps for live AI queries',
+      title: 'स्मार्ट साइडबार',
+      description: 'WeCom, QQ और अन्य चैट ऐप्स के बगल में डॉक होकर लाइव AI प्रश्न पूछें।'
     },
     selectionSearch: {
-      title: 'Selection Search',
-      description: 'Show an AI query after you copy text via right-click',
+      title: 'चयन सर्च',
+      description: 'राइट-क्लिक से टेक्स्ट कॉपी करने के बाद AI प्रश्न दिखाएं।'
     },
     floatingIcon: {
-      title: 'Desktop Floating Icon',
-      description: 'Floating shortcut on the desktop',
+      title: 'डेस्कटॉप फ्लोटिंग आइकन',
+      description: 'डेस्कटॉप पर तैरता हुआ शॉर्टकट'
     },
     multiask: {
-      title: 'Multi Ask',
-      description: 'Open multiple AIs in the browser at once',
+      title: 'मल्टी आस्क',
+      description: 'ब्राउज़र में एक साथ कई AI खोलें।'
     },
-    addToMenuBar: 'Add to sidebar',
-    removeFromMenuBar: 'Remove from sidebar',
-    desktopOnlyHint: 'The features below are available in the desktop app only',
+    addToMenuBar: 'साइडबार में जोड़ें',
+    removeFromMenuBar: 'साइडबार से हटाएं',
+    desktopOnlyHint: 'नीचे दिए गए फीचर केवल डेस्कटॉप ऐप में उपलब्ध हैं।'
   },
   multiask: {
     title: 'मल्टी आस्क',
@@ -221,16 +221,16 @@ export default {
     modelName: 'मॉडल नाम',
     hideOrShow: 'दिखाएं / छुपाएं',
     expand: 'विस्तार करें',
-    collapse: 'संकुचित करें',
+    collapse: 'संकुचित करें'
   },
   tabs: {
-    newTab: 'नया टैब',
+    newTab: 'नया टैब'
   },
   tab: {
     close: 'टैब बंद करें',
     closeOthers: 'अन्य टैब बंद करें',
     closeRight: 'दाईं टैब बंद करें',
-    closeAll: 'सभी टैब बंद करें',
+    closeAll: 'सभी टैब बंद करें'
   },
   hello: {
     inputPlaceholder: 'कृपया नीचे अपना नाम दर्ज करें 👇',
@@ -239,7 +239,7 @@ export default {
     showSettings: 'सेटिंग्स दिखाएं',
     hideSettings: 'सेटिंग्स छुपाएं',
     learnMore: 'अधिक जानने के लिए Wails लोगो पर क्लिक करें',
-    listeningEvent: 'Time इवेंट सुन रहा है...',
+    listeningEvent: 'Time इवेंट सुन रहा है...'
   },
   settings: {
     title: 'सेटिंग्स',
@@ -250,51 +250,51 @@ export default {
       modelService: 'मॉडल सर्विस',
       generalSettings: 'सामान्य सेटिंग्स',
       skills: 'स्किल सेटिंग्स',
-      mcp: 'MCPसेटिंग्स',
+      mcp: 'MCP सेटिंग्स',
       snapSettings: 'स्नैप सेटिंग्स',
       tools: 'टूल्स',
       chatwiki: 'अकाउंट',
       about: 'हमारे बारे में',
-      openclawRuntime: 'OpenClaw Service',
+      openclawRuntime: 'OpenClaw सेवा'
     },
     openclawRuntime: {
-      title: 'OpenClaw Service',
-      gatewayConnection: 'Gateway Connection',
-      runtimeStatus: 'Runtime Status',
-      gatewayEndpoint: 'Gateway Endpoint',
-      version: 'Installed Version',
-      runtimeSource: 'Runtime Source',
-      runtimePath: 'Runtime Path',
-      upgradeButton: 'Upgrade OpenClaw',
-      restartButton: 'Restart Service',
-      upgrading: 'Upgrading...',
-      restarting: 'Restarting...',
+      title: 'OpenClaw सेवा',
+      gatewayConnection: 'गेटवे कनेक्शन',
+      runtimeStatus: 'रनटाइम स्थिति',
+      gatewayEndpoint: 'गेटवे एंडपॉइंट',
+      version: 'इंस्टॉल किया गया संस्करण',
+      runtimeSource: 'रनटाइम स्रोत',
+      runtimePath: 'रनटाइम पथ',
+      upgradeButton: 'OpenClaw अपग्रेड करें',
+      restartButton: 'सेवा पुनः आरंभ करें',
+      upgrading: 'अपग्रेड हो रहा है...',
+      restarting: 'पुनः आरंभ हो रहा है...',
       phase: {
-        idle: 'Idle',
-        starting: 'Starting',
-        connecting: 'Connecting',
-        connected: 'Connected',
-        restarting: 'Restarting',
-        upgrading: 'Upgrading',
-        error: 'Error',
+        idle: 'निष्क्रिय',
+        starting: 'शुरू हो रहा है',
+        connecting: 'कनेक्ट हो रहा है',
+        connected: 'कनेक्टेड',
+        restarting: 'पुनः आरंभ हो रहा है',
+        upgrading: 'अपग्रेड हो रहा है',
+        error: 'त्रुटि'
       },
       gateway: {
-        connected: 'Connected',
-        authenticated: 'Authenticated',
-        reconnecting: 'Reconnecting',
-        disconnected: 'Disconnected',
+        connected: 'कनेक्टेड',
+        authenticated: 'प्रमाणित',
+        reconnecting: 'फिर से कनेक्ट हो रहा है',
+        disconnected: 'डिस्कनेक्टेड'
       },
       source: {
-        user: 'User Override',
-        embedded: 'Embedded Bundle',
-        development: 'Development Bundle',
+        user: 'उपयोगकर्ता ओवरराइड',
+        embedded: 'एम्बेडेड बंडल',
+        development: 'डेवलपमेंट बंडल'
       },
-      notInstalled: 'Runtime not found',
+      notInstalled: 'रनटाइम नहीं मिला',
       openDashboard: 'डैशबोर्ड खोलें',
       dashboardError: 'OpenClaw डैशबोर्ड लोड करने में विफल',
-      alreadyLatest: 'Already on the latest version',
-      upgradeSuccess: 'OpenClaw upgraded to {version}',
-      upgradeFailed: 'Failed to upgrade OpenClaw',
+      alreadyLatest: 'पहले से नवीनतम संस्करण पर है',
+      upgradeSuccess: 'OpenClaw को {version} तक अपग्रेड किया गया',
+      upgradeFailed: 'OpenClaw अपग्रेड करने में विफल'
     },
     general: {
       title: 'सामान्य सेटिंग्स',
@@ -330,62 +330,52 @@ export default {
           failed: 'विफल',
           success: 'सफल',
           version: 'संस्करण',
-          methodUsed: 'उपयोग की गई विधि',
+          methodUsed: 'उपयोग की गई विधि'
         },
         uv: {
           name: 'Python रनटाइम',
-          description:
-            'Allows AI assistant to write and run Python scripts to complete complex tasks.',
+          description: 'AI सहायक को जटिल कार्य पूरे करने के लिए Python स्क्रिप्ट लिखने और चलाने देता है।'
         },
         bun: {
           name: 'JavaScript रनटाइम',
-          description:
-            'Allows AI assistant to write and run JavaScript scripts to complete complex tasks.',
+          description: 'AI सहायक को जटिल कार्य पूरे करने के लिए JavaScript स्क्रिप्ट लिखने और चलाने देता है।'
         },
         codex: {
           name: 'सिक्योरिटी सैंडबॉक्स',
-          description:
-            'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
+          description: 'सिस्टम सुरक्षा के लिए अलग वातावरण में कमांड चलाता है और अनजाने बदलावों को लोकल फाइलों पर असर डालने से रोकता है।'
         },
         openclaw: {
-          name: 'OpenClaw Runtime',
-          description:
-            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
-        },
-      },
+          name: 'OpenClaw रनटाइम',
+          description: 'OpenClaw Agent का Node.js रनटाइम वातावरण, जिसमें openclaw CLI और Gateway शामिल हैं। यह OSS से डाउनलोड होकर ~/.chatclaw/openclaw/runtime/ में इंस्टॉल होता है।'
+        }
+      }
     },
     memory: {
       title: 'दीर्घकालिक मेमोरी',
       enable: 'दीर्घकालिक मेमोरी सक्षम करें',
-      enableHint:
-        'When enabled, AI will automatically extract and remember your preferences, habits, and important facts in conversations.',
+      enableHint: 'सक्षम होने पर, AI बातचीत में आपकी पसंद, आदतें और महत्वपूर्ण तथ्यों को अपने आप निकालकर याद रखेगा।',
       extractModel: 'मेमोरी एक्सट्रैक्शन मॉडल',
-      extractModelHint:
-        'Used to summarize and extract valuable memory information after each conversation.',
+      extractModelHint: 'हर बातचीत के बाद मूल्यवान मेमोरी जानकारी का सार निकालने और उसे संकलित करने के लिए उपयोग होता है।',
       embeddingModel: 'मेमोरी एम्बेडिंग मॉडल',
-      embeddingModelHint:
-        'Used to convert memory text into vectors for semantic retrieval during conversations.',
+      embeddingModelHint: 'बातचीत के दौरान सिमैंटिक खोज के लिए मेमोरी टेक्स्ट को वेक्टर में बदलने हेतु उपयोग होता है।',
       embeddingDimension: 'एम्बेडिंग डाइमेंशन',
       embeddingDimensionHint: 'एम्बेडिंग वेक्टर डाइमेंशन चुने गए मॉडल आउटपुट से मेल खाना चाहिए।',
       save: 'सेटिंग्स सहेजें',
       saved: 'सेटिंग्स सहेजी गईं',
       saveFailed: 'सेटिंग्स सहेजने में विफल',
-      rebuildWarning:
-        'After changing the vector model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuildWarning: 'वेक्टर मॉडल या डाइमेंशन बदलने के बाद, सभी मौजूदा मेमोरी वेक्टर डेटा को असिंक्रोनस रूप से फिर से बनाया जाएगा।',
       rebuilding: 'मेमोरी वेक्टर रीबिल्ड हो रहे हैं...',
       rebuildSuccess: 'मेमोरी वेक्टर सफलतापूर्वक रीबिल्ड हुए',
       rebuildFailed: 'मेमोरी वेक्टर रीबिल्ड करने में विफल',
-      confirmRebuildTitle: 'मेमोरी वेक्टर रीबिल्ड की पुष्टि करें',
+      confirmRebuildTitle: 'मेमोरी वेक्टर रीबिल्ड की पुष्टि करें'
     },
     skills: {
       title: 'स्किल्स',
       enable: 'स्किल्स सक्षम करें',
-      enableHint:
-        'When enabled, AI assistant will automatically load and use installed skills during conversations.',
+      enableHint: 'सक्षम होने पर, AI सहायक बातचीत के दौरान इंस्टॉल किए गए स्किल्स को अपने आप लोड और उपयोग करेगा।',
       pageDesc: 'AI क्षमताओं को ब्राउज़ और प्रबंधित करें',
       directory: 'स्किल लोड डायरेक्टरी',
-      directoryHint:
-        'Place downloaded skill folders in this directory. They will be automatically detected and loaded during AI conversations.',
+      directoryHint: 'डाउनलोड किए गए स्किल फोल्डर इस डायरेक्टरी में रखें। AI बातचीत के दौरान इन्हें अपने आप पहचान कर लोड किया जाएगा।',
       tabInstalled: 'इंस्टॉल',
       tabMarket: 'मार्केट',
       filterAll: 'सभी',
@@ -403,7 +393,7 @@ export default {
       uninstall: 'अनइंस्टॉल करें',
       uninstallConfirm: 'क्या आप इस स्किल को अनइंस्टॉल करना चाहते हैं?',
       noSkills: 'कोई स्किल इंस्टॉल नहीं',
-      noSkillsHint: '',
+      noSkillsHint: 'मार्केट टैब से स्किल्स ब्राउज़ करें और इंस्टॉल करें।',
       noLocalSkills: 'कोई स्किल नहीं',
       addLocalSkill: 'जोड़ें',
       searchPlaceholder: 'स्किल खोजें...',
@@ -433,87 +423,80 @@ export default {
       selectFile: 'सामग्री देखने के लिए बाईं ओर फाइल चुनें',
       binaryFile: 'बाइनरी फाइल, प्रीव्यू नहीं हो सकता',
       rateLimited: 'बहुत सारे अनुरोध, कृपया बाद में पुनः प्रयास करें',
-      loadFailed: 'लोड विफल, कृपया बाद में पुनः प्रयास करें',
+      loadFailed: 'लोड विफल, कृपया बाद में पुनः प्रयास करें'
     },
     openclawSkills: {
-      title: 'OpenClaw Skills',
-      listHeading: 'Skills',
-      listSubheading: 'Browse and manage AI capabilities',
-      refreshCta: 'Refresh',
-      addSkillCta: 'Add skill',
-      pageDesc:
-        'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
-      filterAll: 'All',
-      filterBuiltin: 'Built-in',
-      filterInstalled: 'Installed',
-      builtinCannotDelete: 'Built-in skills cannot be deleted',
-      openSkillFolderToRemove: 'Open the folder in your file manager to remove this skill',
-      filterShared: 'Shared',
-      filterWorkspace: 'Workspace',
-      locationShared: 'Shared',
-      locationWorkspace: 'Workspace',
-      diskLocationsTitle: 'On-disk locations',
-      locationCount: '{count} copies',
+      title: 'OpenClaw स्किल्स',
+      listHeading: 'स्किल्स',
+      listSubheading: 'AI क्षमताओं को ब्राउज़ करें और प्रबंधित करें',
+      refreshCta: 'रीफ्रेश',
+      addSkillCta: 'स्किल जोड़ें',
+      pageDesc: 'कनेक्ट होने पर OpenClaw Gateway के skills.status का उपयोग करता है; अन्यथा OpenClaw की वही ऑन-डिस्क संरचना (managed, workspace, bundled, extraDirs) स्कैन करता है।',
+      filterAll: 'सभी',
+      filterBuiltin: 'बिल्ट-इन',
+      filterInstalled: 'इंस्टॉल किया गया',
+      builtinCannotDelete: 'अंतर्निहित स्किल्स हटाई नहीं जा सकतीं',
+      openSkillFolderToRemove: 'इस स्किल को हटाने के लिए फाइल मैनेजर में इसका फोल्डर खोलें।',
+      filterShared: 'साझा',
+      filterWorkspace: 'वर्कस्पेस',
+      locationShared: 'साझा',
+      locationWorkspace: 'वर्कस्पेस',
+      diskLocationsTitle: 'डिस्क पर स्थान',
+      locationCount: '{count} प्रतियां',
       searchPlaceholder: 'Search skills, paths, agent, or permissions…',
-      noSkills: 'No OpenClaw skills found',
-      noSkillsHint:
-        'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
-      openSharedDir: 'Open main workspace skills folder',
-      openMainWorkspaceSkillsDir: 'Open main workspace skills (workspace-main/skills)',
-      openManagedSkillsDir: 'Open managed skills folder (openclaw/skills)',
-      permissionLabel: 'Permission',
-      scopeLabel: 'Scope',
-      agentBinding: 'Agent',
-      gatewayOfflineHint:
-        'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
-      backToList: 'Back to list',
-      loadFailed: 'Failed to load OpenClaw skills',
-      dataSourceLabel: 'Source',
-      dataSourceGateway: 'Gateway',
-      dataSourceManaged: 'Managed',
-      dataSourceBundled: 'Bundled',
-      dataSourceExtra: 'extraDirs',
-      dataSourceWorkspace: 'Workspace',
-      eligibleLabel: 'Eligible',
-      eligibleYes: 'Yes',
-      eligibleNo: 'No',
-      eligibleUnknown: 'Unknown',
-      gateHintLabel: 'Gateway note',
-      previewNoLocalPath:
-        'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      noSkills: 'कोई OpenClaw स्किल नहीं मिली',
+      noSkillsHint: 'लाइव सूची के लिए Gateway से कनेक्ट करें; ऑफलाइन होने पर OpenClaw दस्तावेज़ों का पालन करें (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs)।',
+      openSharedDir: 'मुख्य वर्कस्पेस स्किल फोल्डर खोलें',
+      openMainWorkspaceSkillsDir: 'मुख्य वर्कस्पेस स्किल्स खोलें (workspace-main/skills)',
+      openManagedSkillsDir: 'प्रबंधित स्किल फोल्डर खोलें (openclaw/skills)',
+      permissionLabel: 'अनुमति',
+      scopeLabel: 'स्कोप',
+      agentBinding: 'एजेंट',
+      gatewayOfflineHint: 'Gateway ऑफलाइन है: सूची OpenClaw की ऑन-डिस्क संरचना से बनाई जाती है। कनेक्ट होने पर skills.status को प्राथमिकता दी जाती है।',
+      backToList: 'सूची पर वापस जाएं',
+      loadFailed: 'OpenClaw स्किल्स लोड करने में विफल',
+      dataSourceLabel: 'स्रोत',
+      dataSourceGateway: 'गेटवे',
+      dataSourceManaged: 'प्रबंधित',
+      dataSourceBundled: 'बंडल किया हुआ',
+      dataSourceExtra: 'अतिरिक्त डायरेक्टरी',
+      dataSourceWorkspace: 'वर्कस्पेस',
+      eligibleLabel: 'योग्य',
+      eligibleYes: 'हाँ',
+      eligibleNo: 'नहीं',
+      eligibleUnknown: 'अज्ञात',
+      gateHintLabel: 'गेटवे नोट',
+      previewNoLocalPath: 'यह पंक्ति केवल Gateway से आई है; देखने के लिए कोई लोकल फोल्डर नहीं है। डिस्क पर मेल खाती स्किल होने पर पाथ दिखाई देगा।',
       add: {
-        title: 'Add',
-        createViaChatTitle: 'Create via chat',
+        title: 'जोड़ें',
+        createViaChatTitle: 'चैट के माध्यम से बनाएं',
         createViaChatDesc: 'Describe what you need and let AI scaffold an OpenClaw skill',
-        choosePackageTitle: 'Choose skill package',
+        choosePackageTitle: 'स्किल पैकेज चुनें',
         choosePackageDesc: 'Open the skills folder and place the skill package there',
-        createViaChatPrompt:
-          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
-      },
+        createViaChatPrompt: 'मुझे एक OpenClaw स्किल बनाने में मदद करें। पहले मुझसे पूछें कि मुझे किस प्रकार की कार्यक्षमता चाहिए, फिर एक SKILL.md (frontmatter सहित), आवश्यक फोल्डर संरचना और नमूना कोड तैयार करें। अंत में बताएं कि स्किल फोल्डर को workspace-main/skills के अंतर्गत रखकर इसे सक्रिय किया जा सकता है।'
+      }
     },
     mcp: {
       title: 'MCP',
-      enable: 'MCPसक्षम करें',
-      enableHint:
-        'सक्षम होने पर, AI असिस्टेंट बातचीत के दौरान स्वचालित रूप से कॉन्फ़िगर MCPसर्वर से कनेक्ट और उपयोग करेगा।',
-      directory: 'MCPकॉन्फ़िग डायरेक्टरी',
-      directoryHint:
-        'MCPसर्वर कॉन्फ़िगरेशन फाइलें इस डायरेक्टरी में रखें। AI बातचीत के दौरान वे स्वचालित रूप से पहचाने और कनेक्ट होंगे।',
+      enable: 'MCP सक्षम करें',
+      enableHint: 'सक्षम होने पर, AI सहायक बातचीत के दौरान कॉन्फ़िगर किए गए MCP सर्वरों से अपने आप कनेक्ट होकर उनका उपयोग करेगा।',
+      directory: 'MCP कॉन्फ़िग डायरेक्टरी',
+      directoryHint: 'MCP सर्वर कॉन्फ़िगरेशन फाइलें इस डायरेक्टरी में रखें। AI बातचीत के दौरान इन्हें अपने आप पहचाना और कनेक्ट किया जाएगा।',
       tabServers: 'MCP',
       tabSettings: 'सेटिंग्स',
       tabInstalled: 'इंस्टॉल',
       tabMarket: 'मार्केट',
       marketComingSoon: 'मार्केट जल्द आ रहा है',
       addServer: 'जोड़ें',
-      validateAll: 'सभी सक्षम MCPसर्वर की जांच करें',
-      validateAllPassed: 'सभी सक्षम MCPसर्वर पास हुए',
-      validateDisabled: '{count} अनुपलब्ध MCPसर्वर अक्षम कर दिए गए हैं',
-      editServer: 'MCPसर्वर संपादित करें',
-      addServerTitle: 'MCPसर्वर जोड़ें',
+      validateAll: 'सभी सक्षम MCP सर्वरों की जाँच करें',
+      validateAllPassed: 'सभी सक्षम MCP सर्वर जाँच में पास हुए',
+      validateDisabled: '{count} अनुपलब्ध MCP सर्वर अक्षम कर दिए गए हैं',
+      editServer: 'MCP सर्वर संपादित करें',
+      addServerTitle: 'MCP सर्वर जोड़ें',
       serverName: 'नाम',
       serverNamePlaceholder: 'सर्वर नाम दर्ज करें',
       description: 'विवरण',
-      descriptionPlaceholder: 'इस MCPसर्वर का संक्षिप्त विवरण',
+      descriptionPlaceholder: 'इस MCP सर्वर का संक्षिप्त विवरण दर्ज करें',
       transportType: 'ट्रांसपोर्ट',
       transportStdio: 'लोकल कमांड (stdio)',
       transportHttp: 'HTTP (स्ट्रीमेबल)',
@@ -522,26 +505,26 @@ export default {
       args: 'तर्क',
       argsPlaceholder: 'प्रति पंक्ति एक तर्क',
       envVars: 'एनवायरनमेंट वेरिएबल्स',
-      envVarsPlaceholder: 'एनवायरनमेंट वेरिएबल जोड़ने के लिए ',
+      envVarsPlaceholder: 'एनवायरनमेंट वेरिएबल जोड़ने के लिए "जोड़ें" पर क्लिक करें',
       addRow: 'जोड़ें',
       serverUrl: 'URL',
       serverUrlPlaceholder: 'उदा: https://example.com/mcp',
       httpHeaders: 'हेडर्स',
-      httpHeadersPlaceholder: 'हेडर्स जोड़ने के लिए ',
+      httpHeadersPlaceholder: 'हेडर जोड़ने के लिए "जोड़ें" पर क्लिक करें',
       timeout: 'टाइमआउट',
       timeoutUnit: 'सेकंड',
       testing: 'जांच हो रही है...',
-      testFailed: 'MCPसर्वर कनेक्शन विफल',
+      testFailed: 'MCP सर्वर कनेक्शन विफल',
       backToList: 'इंस्टॉल',
       tabTools: 'टूल्स',
       tabPrompts: 'प्रॉम्प्ट्स',
       tabResources: 'रिसोर्सेस',
-      inspectFailed: 'MCPसर्वर की जांच विफल',
+      inspectFailed: 'MCP सर्वर की जाँच करने में विफल',
       noTools: 'कोई टूल उपलब्ध नहीं',
       noPrompts: 'कोई प्रॉम्प्ट उपलब्ध नहीं',
       noResources: 'कोई रिसोर्स उपलब्ध नहीं',
-      noServers: 'कोई MCPसर्वर कॉन्फ़िगर नहीं',
-      noServersHint: 'MCPसर्वर कॉन्फ़िगर करने के लिए ',
+      noServers: 'कोई MCP सर्वर कॉन्फ़िगर नहीं है',
+      noServersHint: 'MCP सर्वर कॉन्फ़िगर करने के लिए "जोड़ें" पर क्लिक करें',
       deleteConfirm: 'क्या आप इस MCPसर्वर को हटाना चाहते हैं?',
       deleteSuccess: 'सफलतापूर्वक हटाया गया',
       deleteFailed: 'हटाने में विफल',
@@ -549,10 +532,10 @@ export default {
       addFailed: 'जोड़ने में विफल',
       updateSuccess: 'सफलतापूर्वक अपडेट किया गया',
       updateFailed: 'अपडेट करने में विफल',
-      tabAssistantMcp: 'Assistant MCP',
+      tabAssistantMcp: 'असिस्टेंट MCP',
       assistantMcpAdd: 'जोड़ें',
-      assistantMcpAddTitle: 'Assistant MCP जोड़ें',
-      assistantMcpEditTitle: 'Assistant MCP संपादित करें',
+      assistantMcpAddTitle: 'असिस्टेंट MCP जोड़ें',
+      assistantMcpEditTitle: 'असिस्टेंट MCP संपादित करें',
       assistantMcpName: 'MCP प्लगइन नाम',
       assistantMcpNamePlaceholder: 'MCP प्लगइन नाम दर्ज करें, अधिकतम 20 अक्षर',
       assistantMcpDescription: 'विवरण',
@@ -560,14 +543,14 @@ export default {
       assistantMcpUrl: 'URL',
       assistantMcpAuth: 'प्राधिकरण',
       assistantMcpAutoPort: 'बनाने के बाद पोर्ट स्वचालित रूप से असाइन होगा',
-      assistantMcpAuthNone: 'Bearer Token',
-      assistantMcpNoItems: 'कोई Assistant MCP कॉन्फ़िगर नहीं है',
+      assistantMcpAuthNone: 'Bearer टोकन',
+      assistantMcpNoItems: 'कोई असिस्टेंट MCP कॉन्फ़िगर नहीं है',
       assistantMcpNoItemsHint: 'MCP सेवा कॉन्फ़िगर करने के लिए "जोड़ें" पर क्लिक करें',
       assistantMcpCreateSuccess: 'सफलतापूर्वक जोड़ा गया',
       assistantMcpCreateFailed: 'जोड़ने में विफल',
       assistantMcpUpdateSuccess: 'सफलतापूर्वक अपडेट हुआ',
       assistantMcpUpdateFailed: 'अपडेट विफल',
-      assistantMcpDeleteConfirm: 'क्या आप वाकई इस Assistant MCP को हटाना चाहते हैं?',
+      assistantMcpDeleteConfirm: 'क्या आप वाकई इस असिस्टेंट MCP को हटाना चाहते हैं?',
       assistantMcpDeleteSuccess: 'सफलतापूर्वक हटाया गया',
       assistantMcpDeleteFailed: 'हटाने में विफल',
       assistantMcpAddTool: 'टूल जोड़ें',
@@ -579,7 +562,7 @@ export default {
       assistantMcpToolCount: '{count} टूल',
       assistantMcpToolName: 'टूल नाम',
       assistantMcpToolNamePlaceholder: 'एक वैध फ़ंक्शन नाम दर्ज करें',
-      assistantMcpToolDesc: 'टूल विवरण',
+      assistantMcpToolDesc: 'टूल विवरण'
     },
     snap: {
       title: 'सेटिंग्स',
@@ -589,7 +572,7 @@ export default {
       appsTitle: 'स्नैप ऐप्स',
       sendKeyOptions: {
         enter: 'भेजने के लिए एंटर दबाएं',
-        ctrlEnter: 'भेजने के लिए Ctrl+एंटर दबाएं',
+        ctrlEnter: 'भेजने के लिए Ctrl+एंटर दबाएं'
       },
       apps: {
         wechat: 'WeChat',
@@ -597,13 +580,13 @@ export default {
         qq: 'QQ',
         dingtalk: 'DingTalk',
         feishu: 'Feishu',
-        douyin: 'Douyin',
+        douyin: 'Douyin'
       },
       clickOffset: {
         labelX: 'बाईं से',
         labelY: 'नीचे से',
         placeholderX: 'केंद्र',
-        hint: 'इनपुट बॉक्स खोजने के लिए पिक्सल',
+        hint: 'इनपुट बॉक्स खोजने के लिए पिक्सल'
       },
       noClickMode: 'मैन्युअल चयन मोड (इनपुट बॉक्स मैन्युअल रूप से चुनें)',
       clickMode: 'ऑटो चयन मोड (इनपुट बॉक्स चुनने के लिए ऑटो-क्लिक)',
@@ -619,9 +602,9 @@ export default {
       customAppExistsBuiltIn: 'इस प्रोसेस के लिए पहले से डिफ़ॉल्ट कॉन्फ़िग है ({app})',
       customAppExistsCustom: 'इस प्रोसेस के लिए पहले से कस्टम कॉन्फ़िग है ({name})',
       deleteCustomConfirmTitle: 'कस्टम ऐप हटाएं',
-      deleteCustomConfirmDesc: '',
+      deleteCustomConfirmDesc: 'इस ऐप के लिए स्नैप कॉन्फ़िग हटाएं ',
       confirmDeleteCustomApp: 'हटाएं',
-      cancel: 'रद्द करें',
+      cancel: 'रद्द करें'
     },
     chatwiki: {
       title: 'ChatWiki',
@@ -632,8 +615,7 @@ export default {
       reauthBind: 'पुनः प्राधिकृत करें',
       unbind: 'अनबाइंड करें',
       unbindConfirmTitle: 'अनबाइंड की पुष्टि करें',
-      unbindConfirmDesc:
-        'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
+      unbindConfirmDesc: 'अनबाइंड करने के बाद आप ChatWiki एप्लिकेशन और नॉलेज बेस का उपयोग नहीं कर पाएंगे। क्या जारी रखना है?',
       addBinding: 'बाइंडिंग जोड़ें',
       applications: 'ऐप्लिकेशन्स',
       knowledgeBases: 'नॉलेज बेस',
@@ -646,12 +628,12 @@ export default {
       loadFailed: 'लोड करने में विफल',
       robotType: {
         chat: 'चैट बॉट',
-        workflow: 'वर्कफ़्लो',
+        workflow: 'वर्कफ़्लो'
       },
       libraryType: {
         normal: 'सामान्य',
         qa: 'QA',
-        wechat: 'WeChat आधिकारिक',
+        wechat: 'WeChat आधिकारिक'
       },
       enabledHint: 'सक्षम होने पर मल्टी आस्क में दिखाएं',
       libraryEnabledHint: 'ChatWiki नॉलेज बेस सिंक करें; सक्षम होने पर टीम नॉलेज बेस में दिखाएं',
@@ -676,11 +658,9 @@ export default {
       startUsingHint: 'ChatClaw Desktop का उपयोग जारी रखने के लिए नीचे ',
       startUsing: 'उपयोग शुरू करें',
       freeVersion: 'मुफ्त',
-      modelServiceDesc:
-        'ChatWiki को bind करने के बाद, आप Model Service में उपलब्ध मॉडल और क्रेडिट सीधे देख सकते हैं।',
+      modelServiceDesc: 'ChatWiki को bind करने के बाद, आप Model Service में उपलब्ध मॉडल और क्रेडिट सीधे देख सकते हैं।',
       notLoggedInTitle: 'ChatWiki में लॉग इन नहीं है',
-      notLoggedInDesc:
-        'ChatWiki Cloud की मॉडल सूची और क्रेडिट बैलेंस सिंक करने के लिए साइन इन करें।',
+      notLoggedInDesc: 'ChatWiki Cloud की मॉडल सूची और क्रेडिट बैलेंस सिंक करने के लिए साइन इन करें।',
       loginNow: 'अभी लॉग इन करें',
       accountIdPrefix: 'खाता आईडी: ',
       buyCredits: 'क्रेडिट खरीदें',
@@ -693,42 +673,41 @@ export default {
       openBillingFailed: 'बिलिंग पेज नहीं खोला जा सका',
       modelBoundHint: 'यह सूची वर्तमान में बंधे ChatWiki खाते के लिए उपलब्ध मॉडल दिखाती है।',
       modelUnboundHint: 'वर्तमान binding के लिए उपलब्ध मॉडल सूची लोड करने हेतु पहले साइन इन करें।',
-      modelLoginHint:
-        'कृपया पहले अपने ChatWiki खाते में साइन इन करें और उसे bind करें। उसके बाद यहाँ नवीनतम मॉडल सूची दिखाई देगी।',
+      modelLoginHint: 'कृपया पहले अपने ChatWiki खाते में साइन इन करें और उसे bind करें। उसके बाद यहाँ नवीनतम मॉडल सूची दिखाई देगी।',
       providerStatus: {
         unbound: '{label} (लॉग इन नहीं)',
-        nonCloud: '{label} (लॉग इन नहीं)',
+        nonCloud: '{label} (लॉग इन नहीं)'
       },
       region: {
         all: 'सभी क्षेत्र',
         cn: 'चीन',
-        global: 'ग्लोबल',
-      },
+        global: 'ग्लोबल'
+      }
     },
     tools: {
       tray: {
         title: 'सिस्टम ट्रे',
         showIcon: 'ट्रे आइकन दिखाएं',
-        minimizeOnClose: 'बंद करने पर ट्रे में छोटा करें',
+        minimizeOnClose: 'बंद करने पर ट्रे में छोटा करें'
       },
       floatingWindow: {
         title: 'फ्लोटिंग विंडो',
-        show: 'फ्लोटिंग विंडो दिखाएं',
+        show: 'फ्लोटिंग विंडो दिखाएं'
       },
       selectionSearch: {
         title: 'चयन सर्च',
-        enable: 'चयन सर्च',
-      },
+        enable: 'चयन सर्च'
+      }
     },
     themes: {
       light: 'लाइट',
       dark: 'डार्क',
-      system: 'सिस्टम',
+      system: 'सिस्टम'
     },
     modelService: {
       enabled: 'सक्षम',
-      disableBlockedByAgent: 'यह प्रोवाइडर एजेंट ',
-      deleteBlockedByAgent: 'यह मॉडल एजेंट ',
+      disableBlockedByAgent: 'यह प्रोवाइडर सहायक "{name}" के डिफ़ॉल्ट के रूप में उपयोग हो रहा है। अक्षम करने से पहले कृपया पहले सहायक की सेटिंग्स बदलें।',
+      deleteBlockedByAgent: 'यह मॉडल सहायक "{name}" के डिफ़ॉल्ट के रूप में उपयोग हो रहा है। हटाने से पहले कृपया पहले सहायक की सेटिंग्स बदलें।',
       apiKey: 'API कुंजी',
       apiKeyPlaceholder: 'API कुंजी दर्ज करें',
       apiKeyRequired: 'कृपया पहले API कुंजी दर्ज करें',
@@ -774,12 +753,12 @@ export default {
       capabilityImage: 'इमेज',
       capabilityAudio: 'ऑडियो',
       capabilityVideo: 'वीडियो',
-      capabilityFile: 'फाइल',
+      capabilityFile: 'फाइल'
     },
     about: {
       title: 'हमारे बारे में',
       appName: 'ChatClaw',
-      copyright: '© 2026 ChatClaw Sesame Network Technology  All rights reserved',
+      copyright: '© 2026 ChatClaw Sesame Network Technology. सर्वाधिकार सुरक्षित',
       officialWebsite: 'आधिकारिक वेबसाइट',
       view: 'देखें',
       checkUpdate: 'अपडेट जांचें',
@@ -799,7 +778,7 @@ export default {
       installing: 'इंस्टॉल हो रहा है...',
       updatedTitle: '{version} में अपडेट किया गया',
       updatedSubtitle: 'नवीनतम संस्करण में सफलतापूर्वक अपडेट किया गया।',
-      gotIt: 'समझ गया',
+      gotIt: 'समझ गया'
     },
     languages: {
       arSA: 'अरबी',
@@ -818,8 +797,8 @@ export default {
       trTR: 'तुर्की',
       viVN: 'वियतनामी',
       zhCN: 'चीनी',
-      zhTW: 'पारंपरिक चीनी',
-    },
+      zhTW: 'पारंपरिक चीनी'
+    }
   },
   assistant: {
     imageMessage: 'इमेज मैसेज',
@@ -828,11 +807,11 @@ export default {
       pickTitle: 'आइकन फाइल चुनें',
       filterImages: 'इमेजेस',
       defaultAvatars: 'डिफ़ॉल्ट अवतार',
-      uploadCustom: 'कस्टम अवतार अपलोड करें',
+      uploadCustom: 'कस्टम अवतार अपलोड करें'
     },
     modes: {
       personal: 'व्यक्तिगत',
-      team: 'टीम',
+      team: 'टीम'
     },
     teamNeedsBinding: 'अकाउंट बाइंडिंग आवश्यक',
     teamNeedsBindingDesc: 'अकाउंट बाइंड नहीं है। टीम असिस्टेंट उपलब्ध नहीं हैं।',
@@ -841,10 +820,10 @@ export default {
     emptyState: {
       title: 'कोई एजेंट नहीं',
       desc: 'कृपया एक एजेंट जोड़ें',
-      createBtn: 'एजेंट बनाएं',
+      createBtn: 'एजेंट बनाएं'
     },
     create: {
-      title: 'एजेंट बनाएं',
+      title: 'एजेंट बनाएं'
     },
     fields: {
       name: 'नाम',
@@ -856,13 +835,13 @@ export default {
       identityEmojiChange: 'इमोजी बदलें',
       identityEmojiHint: 'केवल इमोजी वर्ण',
       identityTheme: 'पहचान थीम',
-      identityThemePlaceholder: 'उदा. helpful sloth',
+      identityThemePlaceholder: 'उदा. helpful sloth'
     },
     actions: {
       cancel: 'रद्द करें',
       create: 'बनाएं',
       save: 'सहेजें',
-      settings: 'एजेंट सेटिंग्स',
+      settings: 'एजेंट सेटिंग्स'
     },
     placeholders: {
       noAgentSelected: 'एजेंट चुनें',
@@ -870,18 +849,18 @@ export default {
       selectModelFirst: 'पहले मॉडल चुनें',
       chatComingSoon: 'चैट सामग्री यहां दिखाई जाएगी (विषय सूची अभी तक लागू नहीं है)।',
       inputPlaceholder: 'प्रश्न पूछें...',
-      enterToSend: 'कृपया सामग्री दर्ज करें',
+      enterToSend: 'कृपया सामग्री दर्ज करें'
     },
     sidebar: {
       collapse: 'संकुचित करें',
       expand: 'विस्तार करें',
-      newConversation: 'नई बातचीत',
+      newConversation: 'नई बातचीत'
     },
     chatMode: {
       chat: 'चैट मोड',
       task: 'टास्क मोड',
       chatDesc: 'परिदृश्यों में बहु-turn Q&A या तर्क',
-      taskDesc: 'जटिल कार्यों को संभालें और स्वायत्त रूप से परिणाम दें',
+      taskDesc: 'जटिल कार्यों को संभालें और स्वायत्त रूप से परिणाम दें'
     },
     chat: {
       selectModel: 'मॉडल चुनें',
@@ -937,7 +916,7 @@ export default {
       tokenUsage: 'इन {input} · आउट {output}',
       uploadFile: 'फ़ाइल अपलोड करें',
       selectFiles: 'फ़ाइलें चुनें',
-      fileMessage: 'फ़ाइल संदेश',
+      fileMessage: 'फ़ाइल संदेश'
     },
     menu: {
       settings: 'एजेंट सेटिंग्स',
@@ -946,20 +925,19 @@ export default {
       rename: 'नाम बदलें',
       delete: 'हटाएं',
       pin: 'पिन करें',
-      unpin: 'अनपिन करें',
+      unpin: 'अनपिन करें'
     },
     teamRobot: {
-      infoTitle: 'टीम रोबोट जानकारी',
+      infoTitle: 'टीम रोबोट जानकारी'
     },
     channels: {
       title: 'एजेंट चैनल',
-      subtitle: '',
+      subtitle: 'इस सहायक के लिए मैसेजिंग चैनल जोड़ें और लिंक करें ',
       currentAgent: 'वर्तमान एजेंट',
       unknownAgent: 'अज्ञात एजेंट',
       noPlatforms: 'कोई चैनल उपलब्ध नहीं',
       createTitle: '{platform} बॉट जोड़ें',
-      createDesc:
-        'Follow the add flow on the channel page. After creation, it will be automatically bound to the current assistant.',
+      createDesc: 'चैनल पेज का add flow पूरा करें। बन जाने के बाद यह अपने आप वर्तमान सहायक से बंध जाएगा।',
       addChannel: 'चैनल जोड़ें',
       addAndBind: 'जोड़ें और बाइंड करें',
       showExisting: 'जोड़े गए चैनल देखें',
@@ -976,9 +954,9 @@ export default {
       bindSuccess: 'बाइंड सफल',
       unbindSuccess: 'अनबाइंड सफल',
       addBot: 'बॉट जोड़ें',
-      addBotHint: 'Each bot can only be bound to one AI assistant. Only unbound bots are shown.',
+      addBotHint: 'प्रत्येक बॉट केवल एक AI सहायक से बंध सकता है। केवल अनबाइंड बॉट ही दिखाए जाते हैं।',
       noUnboundBot: 'कोई अनबाइंड बॉट उपलब्ध नहीं',
-      selectBot: 'कृपया बाइंड करने के लिए एक बॉट चुनें',
+      selectBot: 'कृपया बाइंड करने के लिए एक बॉट चुनें'
     },
     conversation: {
       empty: 'कोई चैट इतिहास नहीं',
@@ -986,15 +964,15 @@ export default {
         title: 'बातचीत का नाम बदलें',
         placeholder: 'नया नाम दर्ज करें',
         confirm: 'सहेजें',
-        success: 'नाम बदला गया',
+        success: 'नाम बदला गया'
       },
       delete: {
         title: 'हटाने की पुष्टि करें',
         desc: 'बातचीत ',
         cancel: 'रद्द करें',
         confirm: 'हटाएं',
-        success: 'हटाया गया',
-      },
+        success: 'हटाया गया'
+      }
     },
     errors: {
       loadFailed: 'एजेंट लोड करने में विफल',
@@ -1018,44 +996,41 @@ export default {
       teamImageNotSupported: 'टीम मोड में इमेज भेजना अभी तक सपोर्ट नहीं है',
       selectTeamRobotFirst: 'कृपया पहले एक टीम रोबोट चुनें',
       teamRobotMissingKey: 'वर्तमान रोबोट में robot_key गायब है, कृपया फिर से सिंक करें',
-      modelNotSupportVision:
-        'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
+      modelNotSupportVision: 'वर्तमान मॉडल इमेज पहचान को सपोर्ट नहीं करता। कृपया विज़न-समर्थित मल्टीमॉडल मॉडल पर स्विच करें।',
       modelNotSupportVisionHint: 'GPT-4o, Claude, Gemini जैसे मॉडल इमेज रिकग्निशन सपोर्ट करते हैं',
       fileTooLarge: 'फ़ाइल का आकार सीमा से अधिक है (अधिकतम {max})',
       tooManyFiles: 'अधिकतम {max} फ़ाइलें अपलोड की जा सकती हैं',
       invalidFileType: 'असमर्थित फ़ाइल प्रकार',
       fileReadFailed: 'फ़ाइल पढ़ने में विफल',
-      fileOpenFailed: 'फ़ाइल खोलने में विफल',
+      fileOpenFailed: 'फ़ाइल खोलने में विफल'
     },
     toasts: {
       created: 'एजेंट बनाया गया',
       updated: 'एजेंट अपडेट किया गया',
-      deleted: 'एजेंट हटाया गया',
+      deleted: 'एजेंट हटाया गया'
     },
     settings: {
       title: 'एजेंट सेटिंग्स',
       tabs: {
         general: 'सामान्य',
         advanced: 'उन्नत',
-        model: '模型设置',
-        prompt: '提示词设置',
-        workspace: '工作区',
-        retrieval: '知识库检索',
-        delete: 'हटाएं',
+        model: 'मॉडल सेटिंग्स',
+        prompt: 'प्रॉम्प्ट सेटिंग्स',
+        workspace: 'वर्कस्पेस',
+        retrieval: 'ज्ञान खोज',
+        delete: 'हटाएं'
       },
       workspace: {
         sandboxMode: 'एक्जीक्यूशन मोड',
         modeCodex: 'Codex सैंडबॉक्स',
         modeNative: 'नेटिव एक्जीक्यूशन',
-        nativeDesc:
-          'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
+        nativeDesc: 'सैंडबॉक्स अलगाव के बिना सीधे लोकल मशीन पर कमांड चलाएं। कमांड्स को वर्तमान उपयोगकर्ता की पूरी अनुमति मिलेगी।',
         networkAccess: 'नेटवर्क एक्सेस की अनुमति दें',
         workDir: 'वर्किंग डायरेक्टरी',
-        workDirHint:
-          'Structure: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
+        workDirHint: 'संरचना: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: 'बदलें',
         resetDir: 'डिफ़ॉल्ट पर रीसेट करें',
-        selectDir: 'वर्किंग डायरेक्टरी चुनें',
+        selectDir: 'वर्किंग डायरेक्टरी चुनें'
       },
       model: {
         defaultModel: 'डिफ़ॉल्ट मॉडल',
@@ -1069,61 +1044,61 @@ export default {
         topPHint: 'सैंपलिंग रेंज नियंत्रित करता है',
         contextCount: 'संदर्भ संख्या',
         maxTokens: 'अधिकतम टोकन',
-        unlimited: 'असीमित',
+        unlimited: 'असीमित'
       },
       retrieval: {
         matchThreshold: 'मैच थ्रेशोल्ड',
         topK: 'चंक संख्या',
-        default: 'डिफ़ॉल्ट',
+        default: 'डिफ़ॉल्ट'
       },
       delete: {
         title: 'एजेंट हटाएं',
         hint: 'एजेंट हटाने से सभी संबंधित बातचीत हट जाएंगी। यह क्रिया पूर्ववत नहीं की जा सकती।',
-        protected: 'The default assistant is a system agent and cannot be deleted.',
+        protected: 'डिफ़ॉल्ट सहायक एक सिस्टम एजेंट है और इसे हटाया नहीं जा सकता।',
         action: 'हटाएं',
         confirmTitle: 'हटाने की पुष्टि करें',
-        confirmDesc: 'क्या आप ',
+        confirmDesc: 'क्या आप '
       },
-      "advanced": {
-        "sandboxMode": "सैंडबॉक्स मोड",
-        "sandbox_off": "अक्षम",
-        "sandbox_non-main": "केवल गैर-डिफ़ॉल्ट एजेंट",
-        "sandbox_all": "सभी एजेंट",
-        "sandboxModeHint": "सैंडबॉक्स कमांड निष्पादन को अलग करता है, एजेंटों को सीधे होस्ट सिस्टम को संशोधित करने से रोकता है",
-        "groupChatMentionPatterns": "समूह चैट मेंशन पैटर्न",
-        "groupChatMentionPatternsPlaceholder": "{'@'}assistant, {'@'}bot",
-        "groupChatInsertPreset": "प्रीसेट डालें",
-        "groupChatMentionPatternsHint": "एजेंट प्रतिक्रिया ट्रिगर करने के लिए मेंशन पैटर्न, अल्पविराम से अलग",
-        "tools": "टूल कॉन्फ़िगरेशन",
-        "toolsProfile": "टूल प्रोफ़ाइल",
-        "toolsProfile_default": "सेट नहीं (ग्लोबल इनहेरिट)",
-        "toolsProfile_minimal": "Minimal — केवल स्थिति",
-        "toolsProfile_coding": "Coding — फ़ाइल/रनटाइम/सत्र/मेमोरी",
-        "toolsProfile_messaging": "Messaging — मैसेजिंग/सत्र",
-        "toolsProfile_full": "Full — अप्रतिबंधित",
-        "builtinTools": "अंतर्निहित टूल",
-        "builtinToolsHint": "यहां OpenClaw के अंतर्निहित टूल सीधे चुन सकते हैं। प्लगइन या कस्टम टूल नीचे अभी भी मैन्युअली दर्ज किए जा सकते हैं।",
-        "builtinToolsLoading": "OpenClaw के अंतर्निहित टूल लोड हो रहे हैं…",
-        "builtinToolsUnavailable": "OpenClaw की अंतर्निहित टूल सूची अभी लोड नहीं हो सकी। आप अभी भी टूल नाम मैन्युअली दर्ज कर सकते हैं।",
-        "toolModeAllow": "अनुमति दें",
-        "toolModeDeny": "प्रतिबंधित करें",
-        "toolsAllow": "अनुमत टूल",
-        "toolsAllowPlaceholder": "उदा. browser, file_search",
-        "toolsDeny": "अस्वीकृत टूल",
-        "toolsDenyPlaceholder": "उदा. canvas",
-        "toolsHint": "प्रतिबंध को अनुमति पर प्राथमिकता मिलेगी। प्लगइन या कस्टम टूल मैन्युअली जोड़ने के बाद Enter दबाकर पुष्टि करें।",
-        "heartbeat": "हार्टबीट अंतराल",
-        "heartbeat_off": "बंद",
-        "heartbeat_custom": "कस्टम",
-        "heartbeatPlaceholder": "उदा. 10m",
-        "heartbeatFormatError": "अमान्य प्रारूप। संख्या + इकाई दर्ज करें, जैसे: 10m, 1h, 30s, 500ms",
-        "heartbeatHint": "आवधिक हार्टबीट जांच अंतराल (ms/s/m/h)",
-        "params": "मॉडल पैरामीटर ओवरराइड",
-        "paramsTemperature": "Temperature",
-        "paramsTemperaturePlaceholder": "वैश्विक डिफ़ॉल्ट के लिए खाली छोड़ें",
-        "paramsMaxTokens": "अधिकतम टोकन",
-        "paramsMaxTokensPlaceholder": "वैश्विक डिफ़ॉल्ट के लिए खाली छोड़ें",
-        "paramsHint": "इस एजेंट के लिए agents.defaults.models पैरामीटर ओवरराइड करें"
+      advanced: {
+        sandboxMode: 'सैंडबॉक्स मोड',
+        sandbox_off: 'अक्षम',
+        'sandbox_non-main': 'केवल गैर-डिफ़ॉल्ट एजेंट',
+        sandbox_all: 'सभी एजेंट',
+        sandboxModeHint: 'सैंडबॉक्स कमांड निष्पादन को अलग करता है, एजेंटों को सीधे होस्ट सिस्टम को संशोधित करने से रोकता है',
+        groupChatMentionPatterns: 'समूह चैट मेंशन पैटर्न',
+        groupChatMentionPatternsPlaceholder: '{\'@\'}assistant, {\'@\'}bot',
+        groupChatInsertPreset: 'प्रीसेट डालें',
+        groupChatMentionPatternsHint: 'एजेंट प्रतिक्रिया ट्रिगर करने के लिए मेंशन पैटर्न, अल्पविराम से अलग',
+        tools: 'टूल कॉन्फ़िगरेशन',
+        toolsProfile: 'टूल प्रोफ़ाइल',
+        toolsProfile_default: 'सेट नहीं (ग्लोबल इनहेरिट)',
+        toolsProfile_minimal: 'Minimal — केवल स्थिति',
+        toolsProfile_coding: 'Coding — फ़ाइल/रनटाइम/सत्र/मेमोरी',
+        toolsProfile_messaging: 'Messaging — मैसेजिंग/सत्र',
+        toolsProfile_full: 'Full — अप्रतिबंधित',
+        builtinTools: 'अंतर्निहित टूल',
+        builtinToolsHint: 'यहां OpenClaw के अंतर्निहित टूल सीधे चुन सकते हैं। प्लगइन या कस्टम टूल नीचे अभी भी मैन्युअली दर्ज किए जा सकते हैं।',
+        builtinToolsLoading: 'OpenClaw के अंतर्निहित टूल लोड हो रहे हैं…',
+        builtinToolsUnavailable: 'OpenClaw की अंतर्निहित टूल सूची अभी लोड नहीं हो सकी। आप अभी भी टूल नाम मैन्युअली दर्ज कर सकते हैं।',
+        toolModeAllow: 'अनुमति दें',
+        toolModeDeny: 'प्रतिबंधित करें',
+        toolsAllow: 'अनुमत टूल',
+        toolsAllowPlaceholder: 'उदा. browser, file_search',
+        toolsDeny: 'अस्वीकृत टूल',
+        toolsDenyPlaceholder: 'उदा. canvas',
+        toolsHint: 'प्रतिबंध को अनुमति पर प्राथमिकता मिलेगी। प्लगइन या कस्टम टूल मैन्युअली जोड़ने के बाद Enter दबाकर पुष्टि करें।',
+        heartbeat: 'हार्टबीट अंतराल',
+        heartbeat_off: 'बंद',
+        heartbeat_custom: 'कस्टम',
+        heartbeatPlaceholder: 'उदा. 10m',
+        heartbeatFormatError: 'अमान्य प्रारूप। संख्या + इकाई दर्ज करें, जैसे: 10m, 1h, 30s, 500ms',
+        heartbeatHint: 'आवधिक हार्टबीट जांच अंतराल (ms/s/m/h)',
+        params: 'मॉडल पैरामीटर ओवरराइड',
+        paramsTemperature: 'टेम्परेचर',
+        paramsTemperaturePlaceholder: 'वैश्विक डिफ़ॉल्ट के लिए खाली छोड़ें',
+        paramsMaxTokens: 'अधिकतम टोकन',
+        paramsMaxTokensPlaceholder: 'वैश्विक डिफ़ॉल्ट के लिए खाली छोड़ें',
+        paramsHint: 'इस एजेंट के लिए agents.defaults.models पैरामीटर ओवरराइड करें'
       }
     },
     workspaceDrawer: {
@@ -1146,34 +1121,33 @@ export default {
       mcpAddFromGlobal: 'ग्लोबल MCPलिस्ट से जोड़ें',
       mcpEmptyHint: 'ग्लोबल MCPलिस्ट से जोड़ने के लिए + क्लिक करें',
       mcpPickerHint: 'इस एजेंट के लिए MCPसर्वर जोड़ने या हटाने के लिए टॉगल करें',
-      mcpNoAvailableToAdd: 'No MCPservers available to add. Enable some in Settings first.',
+      mcpNoAvailableToAdd: 'जोड़ने के लिए कोई MCP सर्वर उपलब्ध नहीं है। पहले सेटिंग्स में कुछ सक्षम करें।',
       mcpSearchPlaceholder: 'MCPसर्वर खोजें',
       mcpNoSearchResults: 'कोई मैचिंग परिणाम नहीं',
       mcpSelectAll: 'सभी चुनें',
       mcpDeselectAll: 'सभी अचयनित करें',
       mcpGlobalDisabled: 'MCPग्लोबल अक्षम है। सेटिंग्स में सक्षम करें।',
       mcpGoToSettings: 'नया MCPजोड़ें',
-      mcpGoToSettingsHint: 'नया MCPसर्वर जोड़ने के लिए सेटिंग्स पर जाएं',
-    },
+      mcpGoToSettingsHint: 'नया MCPसर्वर जोड़ने के लिए सेटिंग्स पर जाएं'
+    }
   },
   knowledge: {
     help: {
       name: 'विभिन्न नॉलेज बेस को अलग करने के लिए नाम (अधिकतम 30 अक्षर)।',
-      chunkSize:
-        'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
+      chunkSize: 'चंक आकार (अक्षरों में, 500~5000)। बड़े चंक अधिक पूरा संदर्भ देते हैं, लेकिन खोज की सूक्ष्मता कम कर देते हैं।',
       chunkOverlap: 'सूचना हानि कम करने के लिए आसन्न चंक के बीच ओवरलैप साइज (अक्षरों में, 0~1000)।',
       matchThreshold: 'इस थ्रेशोल्ड से कम समानता वाले परिणाम फ़िल्टर किए जाएंगे (0~1)।',
       embeddingModel: 'टेक्स्ट को वेक्टर में बदलने के लिए उपयोग किया जाने वाला एम्बेडिंग मॉडल।',
-      embeddingDimension: 'एम्बेडिंग वेक्टर डाइमेंशन चुने गए मॉडल आउटपुट से मेल खाना चाहिए।',
+      embeddingDimension: 'एम्बेडिंग वेक्टर डाइमेंशन चुने गए मॉडल आउटपुट से मेल खाना चाहिए।'
     },
     tabs: {
       personal: 'व्यक्तिगत',
       team: 'टीम',
-      teamDisabledTip: 'टीम नॉलेज बेस अभी तक उपलब्ध नहीं है',
+      teamDisabledTip: 'टीम नॉलेज बेस अभी तक उपलब्ध नहीं है'
     },
     sidebar: {
       collapse: 'संकुचित करें',
-      expand: 'विस्तार करें',
+      expand: 'विस्तार करें'
     },
     loading: 'लोड हो रहा है...',
     loadFailed: 'नॉलेज बेस लोड करने में विफल',
@@ -1195,47 +1169,47 @@ export default {
         question: 'प्रश्न',
         answer: 'उत्तर',
         total: 'कुल: {count}',
-        searchPlaceholder: 'प्रश्न खोजें',
+        searchPlaceholder: 'प्रश्न खोजें'
       },
       fields: {
         id: 'नॉलेज बेस ID',
         type: 'प्रकार',
         status: 'स्थिति',
-        scope: 'स्कोप',
+        scope: 'स्कोप'
       },
       status: {
         enabled: 'सक्षम',
-        disabled: 'अक्षम',
+        disabled: 'अक्षम'
       },
-      scopeChatwiki: 'ChatWiki टीम नॉलेज बेस',
+      scopeChatwiki: 'ChatWiki टीम नॉलेज बेस'
     },
     selectOne: 'कृपया एक नॉलेज बेस चुनें',
     empty: {
       title: 'नॉलेज बेस खाली है',
       desc: 'कृपया एक नॉलेज बेस जोड़ें',
-      createBtn: 'नॉलेज बेस बनाएं',
+      createBtn: 'नॉलेज बेस बनाएं'
     },
     item: {
       menu: 'अधिक कार्रवाई',
       rename: 'नाम बदलें',
       settings: 'सेटिंग्स',
-      delete: 'हटाएं',
+      delete: 'हटाएं'
     },
     rename: {
       title: 'नॉलेज बेस का नाम बदलें',
       placeholder: 'नया नाम दर्ज करें',
       confirm: 'सहेजें',
       success: 'नाम बदला गया',
-      failed: 'नाम बदलने में विफल',
+      failed: 'नाम बदलने में विफल'
     },
     settingsDialog: {
-      title: 'ज्ञान आधार सेटिंग्स',
+      title: 'ज्ञान आधार सेटिंग्स'
     },
     settings: {
       title: 'नॉलेज बेस सेटिंग्स',
       save: 'सहेजें',
       saved: 'सहेजा गया',
-      saveFailed: 'सहेजने में विफल',
+      saveFailed: 'सहेजने में विफल'
     },
     delete: {
       title: 'हटाने की पुष्टि करें',
@@ -1243,7 +1217,7 @@ export default {
       cancel: 'रद्द करें',
       confirm: 'हटाएं',
       success: 'हटाया गया',
-      failed: 'हटाने में विफल',
+      failed: 'हटाने में विफल'
     },
     create: {
       title: 'नॉलेज बेस जोड़ें',
@@ -1263,7 +1237,7 @@ export default {
       cancel: 'रद्द करें',
       confirm: 'बनाएं',
       success: 'नॉलेज बेस बनाया गया',
-      failed: 'नॉलेज बेस बनाने में विफल',
+      failed: 'नॉलेज बेस बनाने में विफल'
     },
     embeddingSettings: {
       title: 'एम्बेडिंग मॉडल सेटिंग्स',
@@ -1273,10 +1247,10 @@ export default {
       required: 'कृपया पहले एम्बेडिंग मॉडल सेटिंग्स में एक एम्बेडिंग मॉडल चुनें',
       save: 'सहेजें',
       saved: 'सहेजा गया',
-      saveFailed: 'सहेजने में विफल',
+      saveFailed: 'सहेजने में विफल'
     },
     chat: {
-      selectAgent: 'एजेंट चुनें',
+      selectAgent: 'एजेंट चुनें'
     },
     content: {
       searchPlaceholder: 'खोजें',
@@ -1286,38 +1260,38 @@ export default {
       noMore: 'और नहीं',
       sort: {
         createdDesc: 'नवीनतम पहले',
-        createdAsc: 'पुराना पहले',
+        createdAsc: 'पुराना पहले'
       },
       fileTypes: {
         documents: 'डॉक्यूमेंट फाइलें',
-        all: 'सभी फाइलें',
+        all: 'सभी फाइलें'
       },
       empty: {
         title: 'अभी तक कोई डॉक्यूमेंट नहीं',
-        desc: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD प्रारूप सपोर्ट करता है',
+        desc: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD प्रारूप सपोर्ट करता है'
       },
       status: {
         completed: 'पूर्ण',
         learning: 'सीख रहा है',
         parsing: 'पार्स कर रहा है',
         failed: 'विफल',
-        pending: 'लंबित',
+        pending: 'लंबित'
       },
       fileMissing: 'फाइल गायब',
       menu: {
         rename: 'नाम बदलें',
         relearn: 'फिर से सीखें',
-        delete: 'हटाएं',
+        delete: 'हटाएं'
       },
       upload: {
         success: 'डॉक्यूमेंट अपलोड हुए',
         failed: 'डॉक्यूमेंट अपलोड करने में विफल',
         count: '{count} डॉक्यूमेंट अपलोड हुए',
-        uploading: 'अपलोड हो रहा है {done}/{total}',
+        uploading: 'अपलोड हो रहा है {done}/{total}'
       },
       drop: {
         hint: 'अपलोड करने के लिए फाइलें यहां छोड़ें',
-        formats: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD सपोर्ट करता है',
+        formats: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD सपोर्ट करता है'
       },
       rename: {
         title: 'डॉक्यूमेंट का नाम बदलें',
@@ -1326,11 +1300,11 @@ export default {
         cancel: 'रद्द करें',
         confirm: 'सहेजें',
         success: 'नाम बदला गया',
-        failed: 'नाम बदलने में विफल',
+        failed: 'नाम बदलने में विफल'
       },
       relearn: {
         success: 'फिर से सीखना शुरू हुआ',
-        failed: 'फिर से सीखने में विफल',
+        failed: 'फिर से सीखने में विफल'
       },
       delete: {
         title: 'हटाने की पुष्टि करें',
@@ -1338,7 +1312,7 @@ export default {
         cancel: 'रद्द करें',
         confirm: 'हटाएं',
         success: 'हटाया गया',
-        failed: 'हटाने में विफल',
+        failed: 'हटाने में विफल'
       },
       moveToFolder: {
         title: 'फोल्डर में ले जाएं',
@@ -1349,10 +1323,10 @@ export default {
         uncategorized: 'अवर्गीकृत',
         empty: 'इस फोल्डर में कोई सबफोल्डर नहीं',
         success: 'सफलतापूर्वक ले जाया गया',
-        failed: 'ले जाने में विफल',
+        failed: 'ले जाने में विफल'
       },
       navigateToFolder: 'फोल्डर पर जाएं',
-      openFailed: 'डॉक्यूमेंट खोलने में विफल',
+      openFailed: 'डॉक्यूमेंट खोलने में विफल'
     },
     folder: {
       all: 'सभी फाइलें',
@@ -1379,7 +1353,7 @@ export default {
         selectFolder: 'लक्ष्य फोल्डर चुनें',
         moveToHere: 'यहां ले जाएं',
         success: 'सफलतापूर्वक ले जाया गया',
-        failed: 'ले जाने में विफल',
+        failed: 'ले जाने में विफल'
       },
       deleteFailed: 'हटाने में विफल',
       nameRequired: 'फोल्डर का नाम खाली नहीं हो सकता',
@@ -1387,9 +1361,8 @@ export default {
       nameDuplicate: 'फोल्डर का नाम पहले से मौजूद है',
       nameHelp: 'फोल्डर का नाम (अधिकतम 50 अक्षर)।',
       parentFolder: 'पैरेंट फोल्डर',
-      parentFolderHelp:
-        'Select a parent folder to create nested folders. Leave empty to create at root.',
-      rootFolder: 'रूट (कोई पैरेंट नहीं)',
+      parentFolderHelp: 'नेस्टेड फोल्डर बनाने के लिए एक पैरेंट फोल्डर चुनें। रूट में बनाने के लिए इसे खाली छोड़ दें।',
+      rootFolder: 'रूट (कोई पैरेंट नहीं)'
     },
     detail: {
       title: 'डॉक्यूमेंट विवरण',
@@ -1404,21 +1377,21 @@ export default {
         source: 'स्रोत',
         folder: 'फोल्डर',
         wordTotal: 'शब्द गिनती',
-        splitTotal: 'विभाजन गिनती',
+        splitTotal: 'विभाजन गिनती'
       },
       status: {
         parsing: 'पार्स कर रहा है',
-        embedding: 'एम्बेड कर रहा है',
+        embedding: 'एम्बेड कर रहा है'
       },
       actions: {
         relearn: 'डॉक्यूमेंट फिर से सीखें',
         moveToFolder: 'फोल्डर में ले जाएं',
         rename: 'नाम बदलें',
-        delete: 'डॉक्यूमेंट हटाएं',
+        delete: 'डॉक्यूमेंट हटाएं'
       },
       uncategorized: 'अवर्गीकृत',
       local: 'लोकल फाइल',
-      web: 'वेब',
+      web: 'वेब'
     },
     viewer: {
       title: 'डॉक्यूमेंट व्यूअर',
@@ -1428,29 +1401,29 @@ export default {
       contentNotAvailable: 'सामग्री देखने के लिए उपलब्ध नहीं है। कृपया बाहरी रूप से खोलें।',
       unsupported: 'फाइल प्रकार ',
       localFileNote: 'इस फाइल को बाहरी एप्लिकेशन से खोलने की आवश्यकता है।',
-      loadFailedUseExternal: 'लोड विफल। कृपया बाहरी रूप से खोलें।',
-    },
+      loadFailedUseExternal: 'लोड विफल। कृपया बाहरी रूप से खोलें।'
+    }
   },
   memory: {
     title: 'मेमोरी',
     selectAgent: 'इसकी मेमोरी देखने के लिए एक एजेंट चुनें',
-    noWorkspace: 'This agent has no OpenClaw workspace configured',
-    files: 'Files',
-    selectFile: 'Select a file to view its content',
-    noFiles: 'No memory files yet',
-    newFile: 'New File',
-    newFileDesc: 'Enter a file name (.md suffix added automatically)',
-    newFilePlaceholder: 'e.g. MEMORY',
-    create: 'Create',
+    noWorkspace: 'इस एजेंट के लिए कोई OpenClaw वर्कस्पेस कॉन्फ़िगर नहीं है।',
+    files: 'फाइलें',
+    selectFile: 'उसकी सामग्री देखने के लिए एक फाइल चुनें',
+    noFiles: 'अभी तक कोई मेमोरी फाइल नहीं है',
+    newFile: 'नई फाइल',
+    newFileDesc: 'एक फाइल नाम दर्ज करें (.md suffix अपने आप जुड़ जाएगा)',
+    newFilePlaceholder: 'उदा. MEMORY',
+    create: 'बनाएं',
     edit: 'संपादित करें',
     delete: 'हटाएं',
     save: 'सहेजें',
     cancel: 'रद्द करें',
-    saveSuccess: 'Saved successfully',
+    saveSuccess: 'सहेजा गया',
     deleteSuccess: 'सफलतापूर्वक हटाया गया',
     deleteConfirmTitle: 'हटाने की पुष्टि करें',
-    deleteFileConfirm: 'Are you sure you want to delete {name}? This action cannot be undone.',
-    unsavedChangesConfirm: 'You have unsaved changes. Switch anyway?',
+    deleteFileConfirm: 'क्या आप वाकई {name} हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।',
+    unsavedChangesConfirm: 'आपके पास असहेजे परिवर्तन हैं। फिर भी बदलना है?',
     basicInfo: 'बुनियादी जानकारी',
     basicInfoDesc: 'कोर यूज़र प्रोफाइल जानकारी',
     basicInfoEmpty: 'अभी तक कोई बुनियादी जानकारी नहीं',
@@ -1458,11 +1431,9 @@ export default {
     conversationLog: 'बातचीत लॉग',
     conversationLogDesc: 'कालानुक्रमिक बातचीत तथ्य',
     conversationLogEmpty: 'अभी तक कोई बातचीत लॉग नहीं',
-    deleteEventStreamConfirm:
-      'Are you sure you want to delete this conversation log? This action cannot be undone.',
+    deleteEventStreamConfirm: 'Are you sure you want to delete this conversation log? This action cannot be undone.',
     deleteFailed: 'हटाने में विफल',
-    deleteThematicFactConfirm:
-      'Are you sure you want to delete this topic summary? This action cannot be undone.',
+    deleteThematicFactConfirm: 'Are you sure you want to delete this topic summary? This action cannot be undone.',
     editCoreProfile: 'बुनियादी जानकारी संपादित करें',
     editEventStream: 'बातचीत लॉग संपादित करें',
     editThematicFact: 'विषय सारांश संपादित करें',
@@ -1474,7 +1445,7 @@ export default {
     topicSummaryDesc: 'विषय द्वारा व्यवस्थित दीर्घकालिक सारांश',
     topicSummaryEmpty: 'अभी तक कोई विषय सारांश नहीं',
     updateFailed: 'अपडेट करने में विफल',
-    updateSuccess: 'सफलतापूर्वक अपडेट किया गया',
+    updateSuccess: 'सफलतापूर्वक अपडेट किया गया'
   },
   channels: {
     title: 'चैनल',
@@ -1484,7 +1455,7 @@ export default {
     stats: {
       total: 'कुल चैनल',
       connected: 'कनेक्टेड',
-      disconnected: 'डिस्कनेक्टेड',
+      disconnected: 'डिस्कनेक्टेड'
     },
     configured: {
       title: 'कॉन्फ़िगर',
@@ -1492,46 +1463,47 @@ export default {
       empty: 'अभी तक कोई कॉन्फ़िगर चैनल नहीं',
       connected: 'कनेक्टेड',
       disconnected: 'डिस्कनेक्टेड',
-      error: 'त्रुटि',
+      error: 'त्रुटि'
     },
     available: {
       title: 'उपलब्ध चैनल',
-      desc: 'एक नया चैनल कनेक्ट करें',
+      desc: 'एक नया चैनल कनेक्ट करें'
     },
     add: {
       title: 'चैनल जोड़ें',
-      desc: 'कॉन्फ़िगर करने के लिए चैनल प्रकार चुनें',
+      desc: 'कॉन्फ़िगर करने के लिए चैनल प्रकार चुनें'
     },
     wecomAdd: {
-      title: 'Configure WeCom',
-      subtitle: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      howTitle: 'How to connect',
-      tipsIntro: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      stepsLabel: 'Steps:',
-      step1: 'Tap Generate QR code to install and enable the official WeCom plugin in OpenClaw',
-      step2: 'Scan the QR code below with WeCom and confirm on your phone',
-      tipsOrManual: 'Or connect existing bot credentials',
-      scanHint: 'Scan the QR code below with WeCom and confirm on your phone',
-      manualEntry: 'I already have a bot',
-      generateQr: 'Generate QR code',
-      refreshQr: 'Refresh',
-      generating: 'Generating…',
-      registering: 'Registering channel…',
-      generateFailed: 'Failed to generate QR code',
-      missingCredentials: 'Authorized but bot credentials are missing',
-      registerFailed: 'Failed to register channel',
-      authFailed: 'Authorization failed or expired. Refresh and try again',
-      defaultName: 'WeCom Bot',
-      openScanAdd: 'Add via QR scan',
-      qrExpired: 'QR code expired (valid for 5 minutes)',
-      qrExpiredHint: 'Tap Refresh to generate a new QR code and scan again.',
+      title: 'WeCom कॉन्फ़िगर करें',
+      subtitle: 'Tencent के आधिकारिक OpenClaw प्लगइन से स्कैन करके WeCom कनेक्ट करें।',
+      howTitle: 'कैसे कनेक्ट करें',
+      tipsIntro: 'Tencent के आधिकारिक OpenClaw प्लगइन से स्कैन करके WeCom कनेक्ट करें।',
+      stepsLabel: 'चरण:',
+      step1: 'OpenClaw में आधिकारिक WeCom प्लगइन इंस्टॉल और सक्षम करने के लिए "QR कोड जनरेट करें" दबाएं।',
+      step2: 'नीचे दिया गया QR कोड WeCom से स्कैन करें और अपने फोन पर पुष्टि करें।',
+      tipsOrManual: 'या मौजूदा बॉट क्रेडेंशियल से कनेक्ट करें।',
+      scanHint: 'नीचे दिया गया QR कोड WeCom से स्कैन करें और अपने फोन पर पुष्टि करें।',
+      manualEntry: 'मेरे पास पहले से एक बॉट है',
+      generateQr: 'QR कोड जनरेट करें',
+      refreshQr: 'रीफ्रेश',
+      generating: 'जनरेट हो रहा है…',
+      registering: 'चैनल पंजीकृत किया जा रहा है…',
+      generateFailed: 'QR कोड जनरेट करने में विफल',
+      missingCredentials: 'प्राधिकरण सफल हुआ, लेकिन बॉट क्रेडेंशियल मौजूद नहीं हैं।',
+      registerFailed: 'चैनल पंजीकृत करने में विफल',
+      authFailed: 'प्राधिकरण विफल हुआ या इसकी अवधि समाप्त हो गई। रीफ्रेश करके फिर से कोशिश करें।',
+      defaultName: 'WeCom बॉट',
+      openScanAdd: 'QR स्कैन से जोड़ें',
+      qrExpired: 'QR कोड की अवधि समाप्त हो गई (5 मिनट तक मान्य)',
+      qrExpiredHint: 'नया QR कोड जनरेट करने के लिए "रीफ्रेश" दबाएं और फिर से स्कैन करें।'
     },
     platforms: {
       dingtalk: 'DingTalk',
       feishu: 'Feishu',
       wecom: 'WeCom',
+      wechat: 'WeChat',
       qq: 'QQ',
-      twitter: 'X (Twitter)',
+      twitter: 'X (Twitter)'
     },
     config: {
       title: '{platform} बॉट कॉन्फ़िगर करें',
@@ -1556,103 +1528,103 @@ export default {
       success: 'चैनल सफलतापूर्वक बनाया गया',
       failed: 'चैनल बनाने में विफल',
       dingtalkPluginInstalling: 'DingTalk प्लगइन इंस्टॉल हो रहा है',
-      dingtalkPluginInstallingDesc:
-        'DingTalk कनेक्टर प्लगइन पृष्ठभूमि में इंस्टॉल हो रहा है। आप अभी सहायक को बाइंड करना जारी रख सकते हैं और बाद में कनेक्शन स्थिति जांच सकते हैं।',
+      dingtalkPluginInstallingDesc: 'DingTalk कनेक्टर प्लगइन पृष्ठभूमि में इंस्टॉल हो रहा है। आप अभी सहायक को बाइंड करना जारी रख सकते हैं और बाद में कनेक्शन स्थिति जांच सकते हैं।',
       avatarHint: 'बदलने के लिए क्लिक करें, अनुशंसित आकार 100*100px, अधिकतम 100kb',
       feishuTipPrefix: 'लॉगिन करें',
       feishuTipMiddle: 'बॉट बनाने के लिए, अनुसरण करें',
       feishuTipSuffix: 'कॉन्फ़िगर करने के लिए',
-      feishuPlatformLink: 'Feishu Open Platform',
+      feishuPlatformLink: 'Feishu ओपन प्लेटफ़ॉर्म',
       feishuGuideLink: 'कॉन्फ़िगरेशन गाइड',
-      dingtalkTipPrefix: 'Login to',
-      dingtalkTipMiddle: 'to create a bot, follow',
-      dingtalkTipSuffix: 'to complete setup',
-      dingtalkPlatformLink: 'DingTalk Open Platform',
-      dingtalkGuideLink: 'configuration guide',
-      qqTipPrefix: 'Login to',
-      qqTipMiddle: 'to create a bot, follow',
-      qqTipSuffix: 'to configure',
-      qqPlatformLink: 'QQ Open Platform',
-      qqGuideLink: 'configuration guide',
-      wecomTipPrefix: 'Login to',
-      wecomTipMiddle: 'to create a bot, follow',
-      wecomTipSuffix: 'to configure',
-      wecomPlatformLink: 'WeCom Open Platform',
-      wecomGuideLink: 'configuration guide',
+      dingtalkTipPrefix: 'लॉगिन करें',
+      dingtalkTipMiddle: 'बॉट बनाने के लिए, अनुसरण करें',
+      dingtalkTipSuffix: 'सेटअप पूरा करने के लिए',
+      dingtalkPlatformLink: 'DingTalk ओपन प्लेटफ़ॉर्म',
+      dingtalkGuideLink: 'कॉन्फ़िगरेशन गाइड',
+      qqTipPrefix: 'लॉगिन करें',
+      qqTipMiddle: 'बॉट बनाने के लिए, अनुसरण करें',
+      qqTipSuffix: 'कॉन्फ़िगर करने के लिए',
+      qqPlatformLink: 'QQ ओपन प्लेटफ़ॉर्म',
+      qqGuideLink: 'कॉन्फ़िगरेशन गाइड',
+      wecomTipPrefix: 'लॉगिन करें',
+      wecomTipMiddle: 'बॉट बनाने के लिए, अनुसरण करें',
+      wecomTipSuffix: 'कॉन्फ़िगर करने के लिए',
+      wecomPlatformLink: 'WeCom ओपन प्लेटफ़ॉर्म',
+      wecomGuideLink: 'कॉन्फ़िगरेशन गाइड'
     },
     delete: {
       title: 'हटाने की पुष्टि करें',
       desc: 'क्या आप चैनल ',
       success: 'सफलतापूर्वक हटाया गया',
-      failed: 'हटाने में विफल',
+      failed: 'हटाने में विफल'
     },
     connect: {
       success: 'सफलतापूर्वक कनेक्ट किया गया',
-      failed: 'कनेक्ट करने में विफल',
+      failed: 'कनेक्ट करने में विफल'
     },
     disconnect: {
       success: 'डिस्कनेक्ट किया गया',
-      failed: 'डिस्कनेक्ट करने में विफल',
+      failed: 'डिस्कनेक्ट करने में विफल'
     },
     meta: {
       feishu: {
         name: 'Feishu / Lark',
         botName: 'Feishu',
-        description: 'लॉंग कनेक्शन के माध्यम से Feishu/Lark बॉट',
+        description: 'लॉंग कनेक्शन के माध्यम से Feishu/Lark बॉट'
       },
       telegram: {
         name: 'Telegram',
         botName: 'Telegram',
-        description: 'Bot API के माध्यम से Telegram बॉट',
+        description: 'Bot API के माध्यम से Telegram बॉट'
       },
       discord: {
         name: 'Discord',
         botName: 'Discord',
-        description: 'Gateway के माध्यम से Discord बॉट',
+        description: 'Gateway के माध्यम से Discord बॉट'
       },
       whatsapp: {
         name: 'WhatsApp',
         botName: 'WhatsApp',
-        description: 'WhatsApp Business API',
+        description: 'WhatsApp Business API'
       },
       dingtalk: {
         name: 'DingTalk',
         botName: 'DingTalk',
-        description: 'Stream के माध्यम से DingTalk बॉट',
+        description: 'Stream के माध्यम से DingTalk बॉट'
       },
       wecom: {
         name: 'WeCom',
         botName: 'WeCom',
-        description: 'एंटरप्राइज WeChat बॉट',
+        description: 'एंटरप्राइज WeChat बॉट'
       },
       qq: {
         name: 'QQ',
         botName: 'QQ',
-        description: 'QQ ओपन प्लेटफ़ॉर्म बॉट, WebSocket के माध्यम से',
-      },
+        description: 'QQ ओपन प्लेटफ़ॉर्म बॉट, WebSocket के माध्यम से'
+      }
     },
     authType: {
       token: 'टोकन',
-      qrcode: 'QR कोड',
+      qrcode: 'QR कोड'
     },
     comingSoon: 'जल्द आ रहा है',
     agentFallback: 'AI असिस्टेंट',
     unbindConfirmTitle: 'अनबाइंड की पुष्टि',
-    unbindConfirmDesc:
-      'चैनल "{name}" से असिस्टेंट अनबाइंड करें? फिर से बाइंड किए बिना संदेश संसाधित नहीं होंगे।',
+    unbindConfirmDesc: 'चैनल "{name}" से असिस्टेंट अनबाइंड करें? फिर से बाइंड किए बिना संदेश संसाधित नहीं होंगे।',
     unbindSuccess: 'असिस्टेंट अनबाइंड',
     bindSuccess: 'असिस्टेंट सफलतापूर्वक बाइंड',
     card: {
       appId: 'APP ID',
+      applicationId: 'एप्लिकेशन आईडी',
       bind: 'बाइंड करें',
       switchBind: 'बाइंड स्विच करें',
       unbind: 'अनबाइंड करें',
       bound: 'बाइंड',
       unbound: 'बाइंड नहीं',
+      provisioning: 'बनाया जा रहा है'
     },
     empty: {
       title: 'अभी तक कोई चैनल नहीं',
-      desc: 'आपने कोई चैनल कॉन्फ़िगर नहीं किया है। जोड़ने के लिए ऊपर बटन क्लिक करें।',
+      desc: 'आपने कोई चैनल कॉन्फ़िगर नहीं किया है। जोड़ने के लिए ऊपर बटन क्लिक करें।'
     },
     inline: {
       avatarName: 'बॉट अवतार / नाम',
@@ -1663,23 +1635,22 @@ export default {
       verifying: 'वेरिफाई हो रहा है…',
       verifyConfig: 'कॉन्फ़िग वेरिफाई करें',
       save: 'सहेजें और जोड़ें',
-      configSteps: 'सेटअप चरण',
+      configSteps: 'सेटअप चरण'
     },
     toggle: {
       enableSuccess: 'सफलतापूर्वक सक्षम किया गया',
-      dingtalkPluginNotReady:
-        'DingTalk कनेक्टर प्लगइन अभी स्थापित हो रहा है या तैयार नहीं है। कृपया बाद में पुनः प्रयास करें।',
+      dingtalkPluginNotReady: 'DingTalk कनेक्टर प्लगइन अभी स्थापित हो रहा है या तैयार नहीं है। कृपया बाद में पुनः प्रयास करें।',
       disableSuccess: 'सफलतापूर्वक अक्षम किया गया',
       enableTitle: 'इस चैनल को सक्षम करें?',
       disableTitle: 'इस चैनल को अक्षम करें?',
-      enableDesc:
-        'When enabled, the system will attempt to connect to this channel to receive and process messages.',
-      disableDesc: 'अक्षम होने पर, कनेक्शन बंद हो जाएगा और इस चैनल के मैसेज अब प्राप्त नहीं होंगे।',
+      enableDesc: 'सक्षम होने पर, सिस्टम इस चैनल से कनेक्ट होकर संदेश प्राप्त और संसाधित करने का प्रयास करेगा।',
+      disableDesc: 'अक्षम होने पर, कनेक्शन बंद हो जाएगा और इस चैनल के मैसेज अब प्राप्त नहीं होंगे।'
     },
     status: {
       online: 'कनेक्टेड',
       error: 'त्रुटि',
       offline: 'डिस्कनेक्टेड',
+      provisioning: 'बनाया जा रहा है'
     },
     bindAgent: {
       title: 'असिस्टेंट चुनें',
@@ -1689,21 +1660,55 @@ export default {
       autoGenerateSuccess: 'असिस्टेंट बनाया गया और चैनल कनेक्ट हुआ',
       empty: 'अभी तक कोई असिस्टेंट नहीं। पहले एक बनाएं।',
       noDesc: 'कोई विवरण नहीं',
-      confirm: 'बाइंड की पुष्टि करें',
+      confirm: 'बाइंड की पुष्टि करें'
     },
+    provisioning: {
+      toastTitle: 'पृष्ठभूमि में प्रक्रिया चल रही है',
+      toastDescription: 'चैनल और गेटवे अभी बनाए या सिंक किए जा रहे हैं। कनेक्शन की स्थिति अपने आप अपडेट हो जाएगी। कृपया प्रतीक्षा करें।',
+      toastDescriptionWithAgent: 'चैनल, सहायक या गेटवे अभी बनाए या सिंक किए जा रहे हैं। कृपया प्रतीक्षा करें।'
+    },
+    wechat: {
+      emptyTitle: 'अभी तक WeChat नहीं जोड़ा गया',
+      emptyDesc: 'Tencent के आधिकारिक OpenClaw प्लगइन से QR कोड स्कैन करके अपना व्यक्तिगत WeChat कनेक्ट करें और WeChat संदेश प्राप्त व संसाधित करना शुरू करें।',
+      addNow: 'अभी जोड़ें',
+      configTitle: 'WeChat कॉन्फ़िगर करें',
+      configSubtitle: 'Tencent के आधिकारिक OpenClaw प्लगइन से QR कोड स्कैन करके अपना व्यक्तिगत WeChat कनेक्ट करें',
+      howToConnect: 'कैसे कनेक्ट करें',
+      step1: 'Tencent के आधिकारिक OpenClaw प्लगइन से QR कोड स्कैन करके अपना व्यक्तिगत WeChat कनेक्ट करें',
+      step3: 'QR कोड जनरेट करें पर क्लिक करें। ChatClaw OpenClaw में आधिकारिक WeChat प्लगइन को इंस्टॉल और सक्षम करेगा',
+      step4: 'नीचे दिया गया QR कोड WeChat से स्कैन करें और अपने फोन पर कनेक्शन की पुष्टि करें',
+      step5: 'कनेक्शन सफल होने के बाद WeChat में अपने आप "WeChat ClawBot" नाम से नई बातचीत दिखाई देगी। बाद में आप इसी स्कैन प्रक्रिया से और WeChat खाते जोड़ सकते हैं या किसी मौजूदा खाते को फिर से कनेक्ट कर सकते हैं।',
+      configStepsLink: 'कॉन्फ़िगरेशन चरण',
+      generateQRCode: 'QR कोड जनरेट करें',
+      generating: 'जनरेट हो रहा है…',
+      scanHint: 'नीचे दिया गया QR कोड WeChat से स्कैन करें और अपने फोन पर कनेक्शन की पुष्टि करें',
+      waitingForScan: 'स्कैन की प्रतीक्षा में…',
+      refresh: 'रिफ्रेश',
+      loginSuccess: 'WeChat सफलतापूर्वक कनेक्ट हो गया',
+      assistantPromptTitle: 'सहायक लिंक करें',
+      assistantPromptDesc: 'यह चैनल डिफ़ॉल्ट रूप से मुख्य सहायक (main) से जुड़ा है और संदेश मुख्य सहायक द्वारा संभाले जाएंगे। यदि आप किसी दूसरे सहायक का उपयोग करना चाहते हैं, तो किसी मौजूदा सहायक को लिंक कर सकते हैं या नया सहायक बनाकर उसे इस WeChat चैनल से स्वतः जोड़ सकते हैं।',
+      useMainAssistant: 'पूर्ण करें (मुख्य सहायक का उपयोग करें)',
+      bindExistingAssistant: 'मौजूदा सहायक लिंक करें',
+      createAssistantManually: 'नया सहायक बनाएं',
+      createAssistantHint: 'नया सहायक बनाते समय आपको नाम और अन्य जानकारी हाथ से भरनी होगी। बनने के बाद यह स्वतः लिंक होगा और कनेक्शन रिफ्रेश हो जाएगा।',
+      missingChannelId: 'चैनल की जानकारी प्राप्त नहीं हुई। यह विंडो बंद करें, चैनल सूची रिफ्रेश करें और फिर से कोशिश करें।',
+      missingChannelIdHint: 'चैनल ID प्राप्त नहीं हुई। यह विंडो बंद करें और चैनल सूची से सहायक को हाथ से लिंक करें।',
+      channelNotFound: 'संबंधित चैनल नहीं मिला। रिफ्रेश करके फिर से कोशिश करें।',
+      pluginInstallTryLater: 'आधिकारिक WeChat प्लगइन पृष्ठभूमि में इंस्टॉल या सक्षम किया जा रहा है। कृपया थोड़ी देर बाद फिर कोशिश करें।',
+      editNotSupported: 'WeChat QR कोड स्कैन से कनेक्ट होता है, इसलिए इसे यहां संपादित नहीं किया जा सकता। खाता बदलने के लिए चैनल पेज पर इस चैनल को हटाएं और फिर दोबारा स्कैन करके जोड़ें।'
+    }
   },
   scheduledTasks: {
     title: 'शेड्यूल्ड टास्क',
     subtitle: 'शेड्यूल्ड टास्क के साथ AI वर्कफ़्लो को ऑटोमेट करें',
     listTitle: 'टास्क लिस्ट',
-    copySuffix: ' Copy',
+    copySuffix: ' कॉपी',
     create: 'टास्क बनाएं',
     addTask: 'टास्क जोड़ें',
     refresh: 'रीफ्रेश',
     edit: 'टास्क संपादित करें',
     empty: 'अभी तक कोई शेड्यूल्ड टास्क नहीं',
-    emptyDescription:
-      '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
+    emptyDescription: 'AI वर्कफ़्लो को स्वचालित करने के लिए शेड्यूल्ड टास्क बनाएं। टास्क तय समय पर संदेश भेज सकते हैं, क्वेरी चला सकते हैं या कार्रवाइयाँ कर सकते हैं।',
     errorReason: 'त्रुटि कारण देखें',
     actionsMenu: 'कार्रवाई मेनू खोलें',
     total: 'कुल टास्क',
@@ -1712,11 +1717,11 @@ export default {
     failed: 'विफल',
     runNow: 'अभी चलाएं',
     history: 'इतिहास',
-    runHistoryTitle: 'Run History',
-    copy: 'Copy',
+    runHistoryTitle: 'रन इतिहास',
+    copy: 'कॉपी करें',
     delete: 'हटाएं',
     deleteConfirmTitle: 'हटाने की पुष्टि',
-    deleteConfirmDescription: 'Are you sure you want to delete task ',
+    deleteConfirmDescription: 'क्या आप वाकई टास्क "{name}" हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।',
     confirmDelete: 'हटाएं',
     enabled: 'सक्षम',
     disabled: 'रुका हुआ',
@@ -1724,8 +1729,8 @@ export default {
     statusFailed: 'विफल',
     statusSuccess: 'सफल',
     statusPending: 'लंबित',
-    statusExpired: 'Ended',
-    expiredCannotEnable: 'This task has expired and can no longer be enabled.',
+    statusExpired: 'समाप्त',
+    expiredCannotEnable: 'इस टास्क की अवधि समाप्त हो गई है और अब इसे सक्षम नहीं किया जा सकता।',
     runTriggerSchedule: 'शेड्यूल',
     runTriggerManual: 'मैन्युअल',
     lastRunPrefix: 'पिछला: ',
@@ -1738,7 +1743,7 @@ export default {
       nextRun: 'अगला रन',
       agent: 'असिस्टेंट',
       status: 'स्थिति',
-      actions: 'कार्रवाई',
+      actions: 'कार्रवाई'
     },
     conversationEmpty: 'कोई बातचीत सामग्री नहीं',
     dialog: {
@@ -1756,75 +1761,73 @@ export default {
       scheduleType: {
         preset: 'त्वरित सेटअप',
         custom: 'कस्टम समय',
-        cron: 'Linux crontab',
+        cron: 'लिनक्स crontab'
       },
       customMode: {
         interval: 'हर',
         daily: 'दैनिक',
         weekly: 'साप्ताहिक',
-        monthly: 'मासिक',
+        monthly: 'मासिक'
       },
       monthlyDay: 'दिन {day}',
       minutes: 'मिनट',
-      cronLabel: 'Linux crontab',
+      cronLabel: 'लिनक्स crontab',
       cronPlaceholder: 'उदाहरण: 0 9 * * *',
       enableNowTitle: 'तुरंत सक्रिय करें',
       enableNowHint: 'बनाने के तुरंत बाद यह कार्य शुरू करें',
-      submitting: 'सबमिट किया जा रहा है...',
+      submitting: 'सबमिट किया जा रहा है...'
     },
     operationLog: {
-      title: 'Operation Log',
-      detailTitle: 'Operation Log Details',
-      empty: 'No operation logs yet',
-      viewDetail: 'View details',
+      title: 'ऑपरेशन लॉग',
+      detailTitle: 'ऑपरेशन लॉग विवरण',
+      empty: 'अभी तक कोई ऑपरेशन लॉग नहीं है',
+      viewDetail: 'विवरण देखें',
       columns: {
-        task: 'Task',
-        operationType: 'Operation Type',
-        operationSource: 'Operation Source',
-        changedField: 'Changed Field',
-        before: 'Before',
-        after: 'After',
-        time: 'Operation Time',
-        action: 'Action',
+        task: 'टास्क',
+        operationType: 'ऑपरेशन प्रकार',
+        operationSource: 'ऑपरेशन स्रोत',
+        changedField: 'बदला गया फ़ील्ड',
+        before: 'पहले',
+        after: 'बाद में',
+        time: 'ऑपरेशन समय',
+        action: 'कार्रवाई'
       },
       types: {
-        create: 'Create Task',
-        delete: 'Delete Task',
-        update: 'Update Task',
+        create: 'टास्क बनाएं',
+        delete: 'टास्क हटाएं',
+        update: 'टास्क अपडेट करें'
       },
       sources: {
-        ai: 'AI Assistant',
-        manual: 'Manual',
+        ai: 'AI असिस्टेंट',
+        manual: 'मैन्युअल'
       },
       notification: {
-        onDemand: 'On demand',
+        onDemand: 'मांग पर'
       },
       status: {
-        enabled: 'Enabled',
-        disabled: 'Disabled',
+        enabled: 'सक्षम',
+        disabled: 'अक्षम'
       },
       fields: {
-        status: 'Status',
-        name: 'Name',
-        prompt: 'Prompt',
-        agent: 'Assistant',
-        notificationChannels: 'Notification Channels',
-        scheduleTime: 'Schedule Time',
-      },
+        status: 'स्थिति',
+        name: 'नाम',
+        prompt: 'प्रॉम्प्ट',
+        agent: 'असिस्टेंट',
+        notificationChannels: 'सूचना चैनल',
+        scheduleTime: 'शेड्यूल समय'
+      }
     },
     notification: {
-      label: 'Notification',
-      optional: 'Optional',
-      none: 'Do not send notifications',
-      channelsLabel: 'Select channels',
-      selectTypeFirst: 'Please select a notification type first',
-      selectChannel: 'Please select channels',
-      emptyChannels: 'No channels are available for the current notification type',
-      hintSelected:
-        'You can select multiple channels. Results will be sent there after the task completes.',
-      hintUnselected:
-        'Choose a notification type first, then select one or more channels from that platform.',
-      channelFallback: 'Channel {id}',
+      label: 'सूचना',
+      optional: 'वैकल्पिक',
+      none: 'सूचनाएँ न भेजें',
+      channelsLabel: 'चैनल चुनें',
+      selectTypeFirst: 'कृपया पहले एक सूचना प्रकार चुनें।',
+      selectChannel: 'कृपया चैनल चुनें।',
+      emptyChannels: 'वर्तमान सूचना प्रकार के लिए कोई चैनल उपलब्ध नहीं है।',
+      hintSelected: 'आप कई चैनल चुन सकते हैं। टास्क पूरा होने के बाद परिणाम वहां भेजे जाएंगे।',
+      hintUnselected: 'पहले एक सूचना प्रकार चुनें, फिर उस प्लेटफ़ॉर्म से एक या अधिक चैनल चुनें।',
+      channelFallback: 'चैनल {id}'
     },
     presets: {
       everyMinute: 'हर मिनट',
@@ -1835,7 +1838,7 @@ export default {
       everyDay1800: 'हर दिन शाम 6:00 बजे',
       weekdays0900: 'कार्यदिवसों में सुबह 9:00 बजे',
       everyMonday0900: 'हर सोमवार सुबह 9:00 बजे',
-      everyMonth10900: 'हर महीने की 1 तारीख को सुबह 9:00 बजे',
+      everyMonth10900: 'हर महीने की 1 तारीख को सुबह 9:00 बजे'
     },
     weekdays: {
       sunday: 'रविवार',
@@ -1844,7 +1847,7 @@ export default {
       wednesday: 'बुधवार',
       thursday: 'गुरुवार',
       friday: 'शुक्रवार',
-      saturday: 'शनिवार',
+      saturday: 'शनिवार'
     },
     weekdaysShort: {
       sunday: 'रवि',
@@ -1853,13 +1856,13 @@ export default {
       wednesday: 'बुध',
       thursday: 'गुरु',
       friday: 'शुक्र',
-      saturday: 'शनि',
+      saturday: 'शनि'
     },
     describe: {
       interval: 'हर {value} मिनट',
       monthly: 'दिन {day} {time}',
       weekly: 'साप्ताहिक {labels} {time}',
-      daily: 'दैनिक {time}',
+      daily: 'दैनिक {time}'
     },
     form: {
       name: 'टास्क नाम',
@@ -1871,9 +1874,8 @@ export default {
       chatMode: 'चैट मोड',
       thinking: 'सोच',
       enabled: 'टास्क सक्षम करें',
-      expiresAt: 'Expiration Date',
-      expiredHint:
-        'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
+      expiresAt: 'समाप्ति तिथि',
+      expiredHint: 'इस टास्क की अवधि समाप्त हो गई है और यह फिर नहीं चलेगा। इसे फिर से चालू करने के लिए समाप्ति समय को भविष्य की किसी तिथि पर ले जाएं।',
       scheduleType: 'शेड्यूल प्रकार',
       schedulePreset: 'प्रीसेट',
       scheduleCustom: 'कस्टम समय',
@@ -1882,7 +1884,7 @@ export default {
       time: 'रन समय',
       weekdays: 'वार्कडे',
       dayOfMonth: 'महीने का दिन',
-      cronExpr: 'Cron',
+      cronExpr: 'क्रोन',
       interval: 'हर X मिनट में',
       namePlaceholder: 'टास्क नाम दर्ज करें',
       promptPlaceholder: 'प्रत्येक ऑटो रन पर भेजे जाने वाले प्रॉम्प्ट दर्ज करें',
@@ -1894,122 +1896,120 @@ export default {
       daily: 'प्रतिदिन',
       weekly: 'साप्ताहिक',
       monthly: 'मासिक',
-      selectExpirationDate: 'Select expiration date',
-      today: 'Today',
-      clear: 'Clear',
+      selectExpirationDate: 'समाप्ति तिथि चुनें',
+      today: 'आज',
+      clear: 'साफ़ करें',
       calendarTitle: '{year} / {month}',
       yearOption: '{year}',
-      monthOption: '{month}',
-    },
+      monthOption: '{month}'
+    }
   },
   openclawCron: {
-    title: 'Scheduled Tasks',
-    subtitle: 'Automate AI tasks with scheduled tasks',
-    create: 'Create Task',
-    addTask: 'Add Task',
-    edit: 'Edit Task',
-    delete: 'Delete',
-    deleteTitle: 'Delete Task',
-    confirmDelete: 'Confirm Delete',
-    refresh: 'Refresh',
-    empty: 'No scheduled tasks',
-    emptyDescription: 'After creation, tasks will run automatically at the configured time.',
-    enabled: 'Enabled',
-    disabled: 'Paused',
-    runNow: 'Run Now',
-    historyAction: 'History',
-    actionsMenu: 'Actions',
-    errorReason: 'View error reason',
-    statusRunning: 'Running',
-    lastRunPrefix: 'Last: ',
+    title: 'शेड्यूल्ड टास्क',
+    subtitle: 'शेड्यूल्ड टास्क के साथ AI कार्यों को स्वचालित करें',
+    create: 'टास्क बनाएं',
+    addTask: 'टास्क जोड़ें',
+    edit: 'टास्क संपादित करें',
+    delete: 'हटाएं',
+    deleteTitle: 'टास्क हटाएं',
+    confirmDelete: 'हटाने की पुष्टि करें',
+    refresh: 'रीफ्रेश',
+    empty: 'कोई शेड्यूल्ड टास्क नहीं',
+    emptyDescription: 'बनाने के बाद, टास्क निर्धारित समय पर अपने आप चलेंगे।',
+    enabled: 'सक्षम',
+    disabled: 'रुका हुआ',
+    runNow: 'अभी चलाएं',
+    historyAction: 'इतिहास',
+    actionsMenu: 'कार्रवाई',
+    errorReason: 'त्रुटि कारण देखें',
+    statusRunning: 'चल रहा है',
+    lastRunPrefix: 'पिछला: ',
     summary: {
-      total: 'Total',
-      enabled: 'Running',
-      disabled: 'Paused',
-      failed: 'Failed',
-      failedRuns: 'Failed',
+      total: 'कुल',
+      enabled: 'चल रहा है',
+      disabled: 'रुका हुआ',
+      failed: 'विफल',
+      failedRuns: 'विफल'
     },
     columns: {
-      title: 'Task',
-      schedule: 'Schedule',
-      agent: 'Agent',
-      status: 'Status',
-      actions: 'Actions',
+      title: 'टास्क',
+      schedule: 'शेड्यूल',
+      agent: 'एजेंट',
+      status: 'स्थिति',
+      actions: 'कार्रवाई'
     },
     dialog: {
-      subtitle: 'Schedule an automated AI task',
-      name: 'Task Name',
-      namePlaceholder: 'For example: Morning briefing',
-      description: 'Description',
-      descriptionPlaceholder: 'Optional, used for extra context',
-      agent: 'Linked Assistant',
-      defaultAgent: 'Default Assistant',
-      useDefaultAgent: 'Unspecified (use default assistant)',
-      scheduleTitle: 'Set the schedule',
-      scheduleHint: 'Choose how the task should run and set the execution time.',
+      subtitle: 'एक स्वचालित AI कार्य निर्धारित करें',
+      name: 'टास्क नाम',
+      namePlaceholder: 'उदाहरण: मॉर्निंग ब्रीफ़िंग',
+      description: 'विवरण',
+      descriptionPlaceholder: 'वैकल्पिक, अतिरिक्त संदर्भ के लिए उपयोगी',
+      agent: 'लिंक किया गया सहायक',
+      defaultAgent: 'डिफ़ॉल्ट सहायक',
+      useDefaultAgent: 'निर्दिष्ट नहीं (डिफ़ॉल्ट सहायक का उपयोग करें)',
+      scheduleTitle: 'समय-सारणी सेट करें',
+      scheduleHint: 'चुनें कि टास्क कैसे चले और उसका समय निर्धारित करें।',
       scheduleKinds: {
-        cron: 'Cron',
-        every: 'Interval',
-        custom: 'Custom Time',
-        at: 'One-Time',
+        cron: 'क्रोन',
+        every: 'अंतराल',
+        custom: 'कस्टम समय',
+        at: 'एक बार'
       },
-      cronPlaceholder: 'For example: 0 9 * * *',
-      everyPlaceholder: 'For example: 10m / 1h / 30s',
-      everyHint: 'For example: 30 seconds, 10 minutes, 2 hours, 1 day',
+      cronPlaceholder: 'उदाहरण: 0 9 * * *',
+      everyPlaceholder: 'उदाहरण: 10m / 1h / 30s',
+      everyHint: 'उदाहरण: 30 सेकंड, 10 मिनट, 2 घंटे, 1 दिन',
       everyUnits: {
-        seconds: 'Seconds',
-        minutes: 'Minutes',
-        hours: 'Hours',
-        days: 'Days',
+        seconds: 'सेकंड',
+        minutes: 'मिनट',
+        hours: 'घंटे',
+        days: 'दिन'
       },
-      atPlaceholder: 'For example: 2026-03-25T21:00:00+08:00 or +20m',
-      timezone: 'Timezone',
-      systemTimezone: 'System Default',
-      exact: 'Exact Execution',
-      exactHint:
-        'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
-      enableNowTitle: 'Enable immediately',
-      enableNowHint: 'Start running this task immediately after creation',
-      message: 'Message',
-      messagePlaceholder: 'Message sent when the assistant runs on schedule',
-      systemEvent: 'System Event',
-      systemEventPlaceholder: 'Optional system event payload',
-      advanced: 'Advanced Settings',
-      advancedHint: 'Extra options for model, delivery, session, timeout, and more',
-      model: 'Model',
-      modelPlaceholder: 'For example: provider/model or alias',
-      thinking: 'Thinking',
-      sessionTarget: 'Session Target',
-      sessionKey: 'Session Key',
-      sessionKeyPlaceholder: 'For example: agent:main:my-session',
-      wakeMode: 'Wake Mode',
-      timeoutMs: 'Timeout (ms)',
-      channelPlatform: 'Channel Type',
-      channelPlatformPlaceholder: 'Select a configured channel',
-      deliveryTitle: 'Result Delivery',
-      deliveryHint: 'Choose a configured channel platform and confirm the target ID.',
-      deliveryTargetMode: 'Delivery Target',
-      deliveryTargetId: 'Target ID',
-      deliveryTargetIdPlaceholder: 'Enter a conversation or user ID',
-      deliveryTargetHintTitle: 'Default Target',
-      deliveryTargetFixedHint:
-        'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
+      atPlaceholder: 'उदाहरण: 2026-03-25T21:00:00+08:00 या +20m',
+      timezone: 'समय क्षेत्र',
+      systemTimezone: 'सिस्टम डिफ़ॉल्ट',
+      exact: 'सटीक निष्पादन',
+      exactHint: 'निर्धारित समय को यथासंभव सटीक रूप से पाने के लिए OpenClaw exact mode सक्षम करें।',
+      enableNowTitle: 'तुरंत सक्रिय करें',
+      enableNowHint: 'बनाने के तुरंत बाद यह कार्य शुरू करें',
+      message: 'संदेश',
+      messagePlaceholder: 'शेड्यूल के अनुसार सहायक चलने पर भेजा जाने वाला संदेश',
+      systemEvent: 'सिस्टम इवेंट',
+      systemEventPlaceholder: 'वैकल्पिक सिस्टम इवेंट payload',
+      advanced: 'उन्नत सेटिंग्स',
+      advancedHint: 'मॉडल, डिलीवरी, सेशन, टाइमआउट और अन्य विकल्प',
+      model: 'मॉडल',
+      modelPlaceholder: 'उदाहरण: provider/model या alias',
+      thinking: 'सोच',
+      sessionTarget: 'सेशन लक्ष्य',
+      sessionKey: 'सेशन कुंजी',
+      sessionKeyPlaceholder: 'उदाहरण: agent:main:my-session',
+      wakeMode: 'वेक मोड',
+      timeoutMs: 'टाइमआउट (ms)',
+      channelPlatform: 'चैनल प्रकार',
+      channelPlatformPlaceholder: 'एक कॉन्फ़िगर किया गया चैनल चुनें',
+      deliveryTitle: 'परिणाम प्रेषण',
+      deliveryHint: 'एक कॉन्फ़िगर किया गया चैनल प्लेटफ़ॉर्म चुनें और लक्ष्य ID की पुष्टि करें।',
+      deliveryTargetMode: 'प्रेषण लक्ष्य',
+      deliveryTargetId: 'लक्ष्य ID',
+      deliveryTargetIdPlaceholder: 'एक बातचीत या उपयोगकर्ता ID दर्ज करें',
+      deliveryTargetHintTitle: 'डिफ़ॉल्ट लक्ष्य',
+      deliveryTargetFixedHint: 'चुने गए सहायक और चैनल प्रकार के लिए हाल का प्रेषित लक्ष्य ID पहले से भर दिया जाएगा, और आप चाहें तो इसे मैन्युअली बदल सकते हैं।',
       deliveryTargetModes: {
-        lastActive: 'Last Active Target',
-        targetId: 'Enter Target ID',
+        lastActive: 'अंतिम सक्रिय लक्ष्य',
+        targetId: 'लक्ष्य ID दर्ज करें'
       },
-      selectOneTime: 'Select one-time datetime',
-      hour: 'Hour',
-      minute: 'Minute',
-      second: 'Second',
-      announce: 'Announce',
-      expectFinal: 'Expect Final',
-      lightContext: 'Light Context',
-      bestEffortDeliver: 'Best Effort Deliver',
-      bestEffortDeliverHint: 'Do not fail the whole task when delivery fails',
-      deleteAfterRun: 'Delete After Run',
-      keepAfterRun: 'Keep After Run',
-      enabled: 'Enable Task',
-    },
-  },
+      selectOneTime: 'एक-बार की तारीख-समय चुनें',
+      hour: 'घंटा',
+      minute: 'मिनट',
+      second: 'सेकंड',
+      announce: 'घोषणा',
+      expectFinal: 'अंतिम परिणाम अपेक्षित',
+      lightContext: 'हल्का संदर्भ',
+      bestEffortDeliver: 'सर्वोत्तम प्रयास से प्रेषण',
+      bestEffortDeliverHint: 'प्रेषण विफल होने पर पूरे टास्क को विफल न मानें।',
+      deleteAfterRun: 'चलने के बाद हटाएं',
+      keepAfterRun: 'चलने के बाद रखें',
+      enabled: 'टास्क सक्षम करें'
+    }
+  }
 }

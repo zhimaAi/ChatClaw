@@ -742,6 +742,42 @@ func (m *Manager) ExecCLI(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+// ExecNpx runs an npx command using the bundled Node.js runtime with the same
+// isolated environment as the OpenClaw gateway process.
+func (m *Manager) ExecNpx(ctx context.Context, args ...string) ([]byte, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("resolve openclaw runtime for npx exec: %w", err)
+	}
+	var npxPath string
+	if runtime.GOOS == "windows" {
+		npxPath = filepath.Join(bundle.Root, "tools", "node", "npx.cmd")
+	} else {
+		npxPath = filepath.Join(bundle.Root, "tools", "node", "bin", "npx")
+	}
+	cmd := exec.CommandContext(ctx, npxPath, args...)
+	cmd.Env = buildGatewayEnv(m.store.Get(), bundle)
+	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Return the raw output to the caller so it can log or display it;
+		// keep the error message concise for structured logging.
+		return out, fmt.Errorf("npx %v: %w", args, err)
+	}
+	return out, nil
+}
+
+// BundleStateDir returns the state directory (OPENCLAW_STATE_DIR) used by the bundled OpenClaw runtime.
+// This is the root for the openclaw.json config, extensions directory, etc.
+func (m *Manager) BundleStateDir() (string, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return "", fmt.Errorf("resolve openclaw runtime: %w", err)
+	}
+	return bundle.StateDir, nil
+}
+
 // AddEventListener registers a listener for gateway events with the given key.
 // The caller is responsible for removing it when done via RemoveEventListener.
 func (m *Manager) AddEventListener(key string, fn func(event string, payload json.RawMessage)) {
@@ -903,10 +939,13 @@ func buildGatewayEnv(cfg OpenClawConfig, bundle *bundledRuntime) []string {
 	} else {
 		pathKey, nodeBin = "PATH", filepath.Join(bundle.Root, "tools", "node", "bin")
 	}
+	// Also expose the bundled openclaw CLI itself so that plugin installers
+	// (e.g. npx @tencent-weixin/openclaw-weixin-cli install) can invoke `openclaw`.
+	cliBin := filepath.Join(bundle.Root, "bin")
 	if cur := envMap[pathKey]; cur != "" {
-		envMap[pathKey] = nodeBin + string(os.PathListSeparator) + cur
+		envMap[pathKey] = cliBin + string(os.PathListSeparator) + nodeBin + string(os.PathListSeparator) + cur
 	} else {
-		envMap[pathKey] = nodeBin
+		envMap[pathKey] = cliBin + string(os.PathListSeparator) + nodeBin
 	}
 
 	result := make([]string, 0, len(envMap))

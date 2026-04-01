@@ -193,6 +193,7 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw の設定同期がタイムアウトしました。しばらくしてから再試行するか、OpenClaw Gateway が動作しているか確認してください。",
   "error.channel_update_failed": "チャンネルの更新に失敗しました",
   "error.dingtalk_plugin_not_ready": "DingTalk コネクタープラグインはインストール中か未準備です。しばらくしてから再試行してください。",
+  "error.wechat_plugin_not_ready": "公式 WeChat OpenClaw プラグインは現在インストール中、またはまだ利用できません。しばらくしてから再試行してください。",
   "error.channel_delete_failed": "チャンネルの削除に失敗しました",
   "error.channel_read_failed": "チャンネルの読み込みに失敗しました",
   "error.channel_not_found": "チャンネル'{{.ID}}'が見つかりません",

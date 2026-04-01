@@ -8,22 +8,23 @@ import (
 	"chatclaw/internal/services/channels"
 )
 
-const dingTalkOpenClawSessionSyncListenerKey = "openclaw-dingtalk-session-sync"
+const openClawPluginSessionSyncListenerKey = "openclaw-plugin-session-sync"
 
-// OnGatewayReadyDingTalkSessionSync registers a gateway listener so that when a DingTalk
-// plugin-managed OpenClaw run finishes, we mirror sessions.json into local conversations.
-func (s *OpenClawChannelService) OnGatewayReadyDingTalkSessionSync() {
+// OnGatewayReadyOpenClawPluginSessionSync registers a gateway listener so that when an
+// OpenClaw plugin-managed run finishes (DingTalk, WeChat/weixin, etc.), we mirror
+// sessions.json into local conversations.
+func (s *OpenClawChannelService) OnGatewayReadyOpenClawPluginSessionSync() {
 	if s == nil || s.openclawManager == nil {
 		return
 	}
 	m := s.openclawManager
-	m.RemoveEventListener(dingTalkOpenClawSessionSyncListenerKey)
-	m.AddEventListener(dingTalkOpenClawSessionSyncListenerKey, func(event string, payload json.RawMessage) {
-		s.handleGatewayEventForDingTalkSessionSync(event, payload)
+	m.RemoveEventListener(openClawPluginSessionSyncListenerKey)
+	m.AddEventListener(openClawPluginSessionSyncListenerKey, func(event string, payload json.RawMessage) {
+		s.handleGatewayEventForOpenClawPluginSessionSync(event, payload)
 	})
 }
 
-func (s *OpenClawChannelService) handleGatewayEventForDingTalkSessionSync(event string, payload json.RawMessage) {
+func (s *OpenClawChannelService) handleGatewayEventForOpenClawPluginSessionSync(event string, payload json.RawMessage) {
 	sessionKey := ""
 	switch strings.TrimSpace(event) {
 	case "agent":
@@ -67,7 +68,7 @@ func (s *OpenClawChannelService) handleGatewayEventForDingTalkSessionSync(event 
 	}
 
 	openclawAgentStr, platform, ok := parseOpenClawPluginSessionKeyPrefix(sessionKey)
-	if !ok || !isDingTalkSessionPlatform(platform) {
+	if !ok || !isOpenClawPluginSessionSyncPlatform(platform) {
 		return
 	}
 
@@ -81,7 +82,7 @@ func (s *OpenClawChannelService) handleGatewayEventForDingTalkSessionSync(event 
 		time.Sleep(400 * time.Millisecond)
 		if err := s.SyncAgentConversations(agentID); err != nil {
 			if s.app != nil {
-				s.app.Logger.Warn("openclaw: dingtalk session sync after gateway completion failed",
+				s.app.Logger.Warn("openclaw: plugin session sync after gateway completion failed",
 					"agentId", agentID, "error", err)
 			}
 			return
@@ -107,9 +108,11 @@ func parseOpenClawPluginSessionKeyPrefix(sessionKey string) (openclawAgentID, pl
 	return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2]), true
 }
 
-func isDingTalkSessionPlatform(platform string) bool {
+func isOpenClawPluginSessionSyncPlatform(platform string) bool {
 	switch strings.ToLower(strings.TrimSpace(platform)) {
 	case strings.ToLower(channels.PlatformDingTalk), "dingtalk-connector":
+		return true
+	case strings.ToLower(channels.PlatformWechat), "openclaw-weixin", "weixin":
 		return true
 	default:
 		return false

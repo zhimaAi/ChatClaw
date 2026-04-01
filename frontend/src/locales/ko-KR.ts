@@ -1,11 +1,11 @@
 export default {
   app: {
     title: 'ChatClaw',
-    theme: '테마',
+    theme: '테마'
   },
   common: {
     all: '전체',
-    na: 'N/A',
+    na: '없음',
     loading: '로딩 중...',
     cancel: '취소',
     confirm: '확인',
@@ -16,111 +16,111 @@ export default {
     detail: '상세',
     hide: '숨기기',
     retry: '재시도',
-    close: '닫기',
+    close: '닫기'
   },
   tools: {
     calculator: {
       name: '계산기',
-      description: '수학적 계산 수행',
+      description: '수학적 계산 수행'
     },
     duckduckgo: {
       name: '웹 검색',
-      description: 'DuckDuckGo로 인터넷 검색',
+      description: 'DuckDuckGo로 인터넷 검색'
     },
     libraryRetriever: {
       name: '지식베이스 검색',
-      description: '지식베이스에서 관련 콘텐츠 검색',
+      description: '지식베이스에서 관련 콘텐츠 검색'
     },
     memoryRetriever: {
-      name: '记忆检索',
-      description: '从长期记忆中检索相关事实',
+      name: '메모리 검색',
+      description: '장기 기억에서 관련 사실을 검색합니다'
     },
     execute: {
       name: '명령 실행',
-      description: '시스템 터미널에서 셸 명령 실행',
+      description: '시스템 터미널에서 셸 명령 실행'
     },
     httpRequest: {
       name: 'HTTP 요청',
-      description: '특정 URL로 HTTP 요청 전송',
+      description: '특정 URL로 HTTP 요청 전송'
     },
     sequentialThinking: {
       name: '단계별 사고',
-      description: '복잡한 문제를 순차적 분석 단계로 분할',
+      description: '복잡한 문제를 순차적 분석 단계로 분할'
     },
     wikipedia: {
       name: '위키피디아',
-      description: '지식과 정보를 위해 위키피디아 검색',
+      description: '지식과 정보를 위해 위키피디아 검색'
     },
     browserUse: {
       name: '브라우저',
-      description: '웹 페이지 탐색 및 상호작용',
+      description: '웹 페이지 탐색 및 상호작용'
     },
     skillSearch: {
-      name: '스킬 설치 해제',
+      name: '스킬 검색'
     },
     skillList: {
-      name: '스킬 목록',
+      name: '스킬 목록'
     },
     skillInstall: {
-      name: '스킬 설치',
+      name: '스킬 설치'
     },
     skillUninstall: {
-      name: '스킬 제거',
+      name: '스킬 제거'
     },
     skillEnable: {
-      name: '스킬 폴더 열기',
+      name: '스킬 활성화'
     },
     skillDisable: {
-      name: '스킬 비활성화',
+      name: '스킬 비활성화'
     },
     skillOpenFolder: {
-      name: '스킬 디렉토리 열기',
+      name: '스킬 폴더 열기'
     },
     ls: {
-      name: '파일 편집',
+      name: '디렉터리 목록'
     },
     readFile: {
-      name: '파일 읽기',
+      name: '파일 읽기'
     },
     writeFile: {
-      name: '파일 쓰기',
+      name: '파일 쓰기'
     },
     editFile: {
-      name: '파일 편집',
+      name: '파일 편집'
     },
     patchFile: {
-      name: '백그라운드 실행',
+      name: '파일 패치'
     },
     glob: {
-      name: '파일 매칭',
+      name: '파일 매칭'
     },
     grep: {
-      name: '텍스트 검색',
+      name: '텍스트 검색'
     },
     executeBackground: {
-      name: '백그라운드 실행',
+      name: '백그라운드 실행'
     },
     taskCreate: {
-      name: '태스크 목록',
+      name: '작업 생성'
     },
     taskGet: {
-      name: '작업 가져오기',
+      name: '작업 가져오기'
     },
     taskUpdate: {
-      name: '작업 업데이트',
+      name: '작업 업데이트'
     },
     taskList: {
-      name: '작업 목록',
+      name: '작업 목록'
     },
     skill: {
-      name: '하위 태스크 (시간 소요)',
+      name: '스킬 로드'
     },
     writeTodos: {
-      name: '작업 계획',
+      name: '작업 계획'
     },
     task: {
-      name: '하위 작업 (시간 소요)',
-    },
+      name: '하위 작업 (시간 소요)'
+    }
   },
   winsnap: {
     title: 'ChatClaw',
@@ -133,7 +133,7 @@ export default {
     actions: {
       sendAndTrigger: '전송 및 트리거',
       sendToEdit: '편집 상자로 전송',
-      copyToClipboard: '클립보드에 복사',
+      copyToClipboard: '클립보드에 복사'
     },
     findSnap: '스냅',
     toast: {
@@ -144,7 +144,7 @@ export default {
       pasteFailed: '붙여넣기 실패',
       noTarget: '어떤 앱에도 스냅되지 않음',
       noSnapTarget: '스냅 가능한 앱을 찾을 수 없음',
-      attachFailed: '스냅 실패',
+      attachFailed: '스냅 실패'
     },
     attachFailed: '스냅 실패',
     copied: '클립보드에 복사됨',
@@ -156,18 +156,18 @@ export default {
     sendAndTrigger: '전송 및 트리거',
     sendFailed: '전송 실패',
     sendToEdit: '편집 상자로 전송',
-    sent: '전송됨',
+    sent: '전송됨'
   },
   selection: {
     aiChat: 'ChatClaw AI에게 물어보기',
-    disableSelectionSearch: '닫기',
+    disableSelectionSearch: '닫기'
   },
   floatingball: {
     menu: {
-      settings: 'Settings',
-      restart: 'Restart',
-      hide: 'Hide',
-    },
+      settings: '설정',
+      restart: '다시 시작',
+      hide: '숨기기'
+    }
   },
   nav: {
     assistant: '태스크 어시스턴트',
@@ -176,7 +176,7 @@ export default {
     knowledge: '지식베이스',
     scheduledTasks: '예약된 작업',
     skills: '스킬',
-    openclawSkills: 'OpenClaw Skills',
+    openclawSkills: 'OpenClaw 스킬',
     channels: '채널',
     multiask: '다중 질문',
     memory: '메모리',
@@ -184,29 +184,29 @@ export default {
     settings: '설정',
     document: '문서',
     systemChatClaw: 'ChatClaw',
-    systemOpenClaw: 'OpenClaw',
+    systemOpenClaw: 'OpenClaw 어시스턴트'
   },
   toolsPage: {
-    subtitle: 'Quick access to featured tools',
+    subtitle: '추천 도구에 빠르게 접근',
     smartSidebar: {
-      title: 'Smart Sidebar',
-      description: 'Dock beside WeCom, QQ, and other chat apps for live AI queries',
+      title: '스마트 사이드바',
+      description: 'WeCom, QQ 및 기타 채팅 앱 옆에 붙여 두고 실시간으로 AI에게 질문하세요'
     },
     selectionSearch: {
-      title: 'Selection Search',
-      description: 'Show an AI query after you copy text via right-click',
+      title: '선택 텍스트 검색',
+      description: '오른쪽 클릭으로 텍스트를 복사하면 AI 질문을 표시합니다'
     },
     floatingIcon: {
-      title: 'Desktop Floating Icon',
-      description: 'Floating shortcut on the desktop',
+      title: '데스크톱 플로팅 아이콘',
+      description: '데스크톱의 플로팅 바로가기'
     },
     multiask: {
-      title: 'Multi Ask',
-      description: 'Open multiple AIs in the browser at once',
+      title: '다중 질문',
+      description: '브라우저에서 여러 AI를 한 번에 엽니다'
     },
-    addToMenuBar: 'Add to sidebar',
-    removeFromMenuBar: 'Remove from sidebar',
-    desktopOnlyHint: 'The features below are available in the desktop app only',
+    addToMenuBar: '사이드바에 추가',
+    removeFromMenuBar: '사이드바에서 제거',
+    desktopOnlyHint: '아래 기능은 데스크톱 앱에서만 사용할 수 있습니다'
   },
   multiask: {
     title: '다중 질문',
@@ -232,16 +232,16 @@ export default {
     modelName: '모델 이름',
     hideOrShow: '표시/숨기기',
     expand: '펼치기',
-    collapse: '접기',
+    collapse: '접기'
   },
   tabs: {
-    newTab: '새 탭',
+    newTab: '새 탭'
   },
   tab: {
     close: '탭 닫기',
     closeOthers: '다른 탭 닫기',
     closeRight: '오른쪽 탭 닫기',
-    closeAll: '모든 탭 닫기',
+    closeAll: '모든 탭 닫기'
   },
   hello: {
     inputPlaceholder: '아래에 이름을 입력하세요 👇',
@@ -250,7 +250,7 @@ export default {
     showSettings: '설정 표시',
     hideSettings: '설정 숨기기',
     learnMore: 'Wails 로고를 클릭하여 자세히 알아보기',
-    listeningEvent: 'Time 이벤트 감시 중...',
+    listeningEvent: 'Time 이벤트 감시 중...'
   },
   settings: {
     title: '설정',
@@ -261,51 +261,51 @@ export default {
       modelService: '모델 서비스',
       generalSettings: '일반 설정',
       skills: '스킬 설정',
-      mcp: 'MCP설정',
+      mcp: 'MCP 설정',
       snapSettings: '스냅 설정',
       tools: '기능 도구',
       chatwiki: '계정 관리',
       about: '정보',
-      openclawRuntime: 'OpenClaw Service',
+      openclawRuntime: 'OpenClaw 서비스'
     },
     openclawRuntime: {
-      title: 'OpenClaw Service',
-      gatewayConnection: 'Gateway Connection',
-      runtimeStatus: 'Runtime Status',
-      gatewayEndpoint: 'Gateway Endpoint',
-      version: 'Installed Version',
-      runtimeSource: 'Runtime Source',
-      runtimePath: 'Runtime Path',
-      upgradeButton: 'Upgrade OpenClaw',
-      restartButton: 'Restart Service',
-      upgrading: 'Upgrading...',
-      restarting: 'Restarting...',
+      title: 'OpenClaw 서비스',
+      gatewayConnection: 'Gateway 연결',
+      runtimeStatus: '런타임 상태',
+      gatewayEndpoint: 'Gateway 엔드포인트',
+      version: '설치된 버전',
+      runtimeSource: '런타임 소스',
+      runtimePath: '런타임 경로',
+      upgradeButton: 'OpenClaw 업그레이드',
+      restartButton: '서비스 다시 시작',
+      upgrading: '업그레이드 중...',
+      restarting: '재시작 중...',
       phase: {
-        idle: 'Idle',
-        starting: 'Starting',
-        connecting: 'Connecting',
-        connected: 'Connected',
-        restarting: 'Restarting',
-        upgrading: 'Upgrading',
-        error: 'Error',
+        idle: '대기 중',
+        starting: '시작 중',
+        connecting: '연결 중',
+        connected: '연결됨',
+        restarting: '재시작 중',
+        upgrading: '업그레이드 중',
+        error: '오류'
       },
       gateway: {
-        connected: 'Connected',
-        authenticated: 'Authenticated',
-        reconnecting: 'Reconnecting',
-        disconnected: 'Disconnected',
+        connected: '연결됨',
+        authenticated: '인증됨',
+        reconnecting: '재연결 중',
+        disconnected: '연결 끊김'
       },
       source: {
-        user: 'User Override',
-        embedded: 'Embedded Bundle',
-        development: 'Development Bundle',
+        user: '사용자 지정',
+        embedded: '내장 번들',
+        development: '개발 번들'
       },
-      notInstalled: 'Runtime not found',
+      notInstalled: '런타임을 찾을 수 없습니다',
       openDashboard: '대시보드 열기',
       dashboardError: 'OpenClaw 대시보드를 로드할 수 없습니다',
-      alreadyLatest: 'Already on the latest version',
-      upgradeSuccess: 'OpenClaw upgraded to {version}',
-      upgradeFailed: 'Failed to upgrade OpenClaw',
+      alreadyLatest: '이미 최신 버전입니다',
+      upgradeSuccess: 'OpenClaw가 {version}(으)로 업그레이드되었습니다',
+      upgradeFailed: 'OpenClaw 업그레이드에 실패했습니다'
     },
     general: {
       title: '확장',
@@ -341,28 +341,24 @@ export default {
           failed: '실패',
           success: '성공',
           version: '버전',
-          methodUsed: '사용된 방식',
+          methodUsed: '사용된 방식'
         },
         uv: {
           name: 'Python 실행 환경',
-          description:
-            'Allows AI assistant to write and run Python scripts to complete complex tasks.',
+          description: 'AI 어시스턴트가 복잡한 작업을 완료할 수 있도록 Python 스크립트를 작성하고 실행하게 합니다'
         },
         bun: {
           name: 'JavaScript 실행 환경',
-          description:
-            'Allows AI assistant to write and run JavaScript scripts to complete complex tasks.',
+          description: 'AI 어시스턴트가 복잡한 작업을 완료할 수 있도록 JavaScript 스크립트를 작성하고 실행하게 합니다'
         },
         codex: {
           name: '보안 샌드박스',
-          description:
-            'Execute commands in an isolated environment to protect system security and prevent accidental operations from affecting local files.',
+          description: '시스템 보안을 보호하고 실수로 로컬 파일에 영향을 주는 일을 막기 위해 격리된 환경에서 명령을 실행합니다'
         },
         openclaw: {
-          name: 'OpenClaw Runtime',
-          description:
-            "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
-        },
+          name: 'OpenClaw 런타임',
+          description: 'openclaw CLI와 Gateway를 포함한 OpenClaw Agent의 Node.js 런타임 환경입니다. OSS에서 다운로드되어 ~/.chatclaw/openclaw/runtime/에 설치됩니다'
+        }
       },
       description: '시스템을 보호하기 위해 격리된 환경에서 명령을 실행합니다.',
       install: '설치',
@@ -370,7 +366,7 @@ export default {
       installed: '설치됨',
       installing: '설치 중...',
       name: '보안 샌드박스',
-      notInstalled: '설치되지 않음',
+      notInstalled: '설치되지 않음'
     },
     memory: {
       title: '장기 메모리',
@@ -379,19 +375,17 @@ export default {
       extractModel: '메모리 추출 모델',
       extractModelHint: '각 대화 후 값진 메모리 정보를 요약하고 추출하는 데 사용됩니다.',
       embeddingModel: '메모리 임베딩 모델',
-      embeddingModelHint:
-        'Used to convert memory text into vectors for semantic retrieval during conversations.',
+      embeddingModelHint: '대화 중 의미 기반 검색을 위해 메모리 텍스트를 벡터로 변환하는 데 사용됩니다',
       embeddingDimension: '임베딩 차원',
       embeddingDimensionHint: '임베딩 벡터 차원은 선택한 모델의 출력과 일치해야 합니다.',
       save: '설정 저장',
       saved: '설정이 저장되었습니다',
       saveFailed: '설정 저장 실패',
-      rebuildWarning:
-        'After changing the vector model or dimension, all existing memory vector data will be rebuilt asynchronously.',
+      rebuildWarning: '벡터 모델이나 차원을 변경하면 기존 메모리 벡터 데이터가 모두 비동기적으로 재구축됩니다',
       rebuilding: '메모리 벡터 재구축 중...',
       rebuildSuccess: '메모리 벡터가 성공적으로 재구축되었습니다',
       rebuildFailed: '메모리 벡터 재구축 실패',
-      confirmRebuildTitle: '메모리 벡터 재구축 확인',
+      confirmRebuildTitle: '메모리 벡터 재구축 확인'
     },
     skills: {
       title: '스킬',
@@ -449,69 +443,64 @@ export default {
       rateLimited: '요청이 너무 많습니다, 나중에 다시 시도하세요',
       loadFailed: '로드 실패, 나중에 다시 시도하세요',
       addLocalSkillHint: '스킬 디렉토리에 폴더를 만들고 SKILL.md를 추가하세요',
-      noLocalSkillsHint: '스킬 디렉토리에 폴더를 만들고 SKILL.md를 추가하세요',
+      noLocalSkillsHint: '스킬 디렉토리에 폴더를 만들고 SKILL.md를 추가하세요'
     },
     openclawSkills: {
-      title: 'OpenClaw Skills',
-      listHeading: 'Skills',
-      listSubheading: 'Browse and manage AI capabilities',
-      refreshCta: 'Refresh',
-      addSkillCta: 'Add skill',
-      pageDesc:
-        'Uses OpenClaw Gateway skills.status when connected; otherwise scans the same on-disk layout as OpenClaw (managed, workspace, bundled, extraDirs).',
-      filterAll: 'All',
-      filterBuiltin: 'Built-in',
-      filterInstalled: 'Installed',
-      builtinCannotDelete: 'Built-in skills cannot be deleted',
-      openSkillFolderToRemove: 'Open the folder in your file manager to remove this skill',
-      filterShared: 'Shared',
-      filterWorkspace: 'Workspace',
-      locationShared: 'Shared',
-      locationWorkspace: 'Workspace',
-      diskLocationsTitle: 'On-disk locations',
-      locationCount: '{count} copies',
-      searchPlaceholder: 'Search skills, paths, agent, or permissions…',
-      noSkills: 'No OpenClaw skills found',
-      noSkillsHint:
-        'Connect the Gateway for the live list; offline, follow OpenClaw docs (state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs).',
-      openSharedDir: 'Open main workspace skills folder',
-      openMainWorkspaceSkillsDir: 'Open main workspace skills (workspace-main/skills)',
-      openManagedSkillsDir: 'Open managed skills folder (openclaw/skills)',
-      permissionLabel: 'Permission',
-      scopeLabel: 'Scope',
-      agentBinding: 'Agent',
-      gatewayOfflineHint:
-        'Gateway offline: list is built from OpenClaw on-disk layout. When connected, skills.status is preferred.',
-      backToList: 'Back to list',
-      loadFailed: 'Failed to load OpenClaw skills',
-      dataSourceLabel: 'Source',
-      dataSourceGateway: 'Gateway',
-      dataSourceManaged: 'Managed',
-      dataSourceBundled: 'Bundled',
-      dataSourceExtra: 'extraDirs',
-      dataSourceWorkspace: 'Workspace',
-      eligibleLabel: 'Eligible',
-      eligibleYes: 'Yes',
-      eligibleNo: 'No',
-      eligibleUnknown: 'Unknown',
-      gateHintLabel: 'Gateway note',
-      previewNoLocalPath:
-        'This row comes from the Gateway only — there is no local folder to browse. A path appears when a matching skill exists on disk.',
+      title: 'OpenClaw 스킬',
+      listHeading: '스킬',
+      listSubheading: 'AI 기능을 둘러보고 관리합니다',
+      refreshCta: '새로고침',
+      addSkillCta: '스킬 추가',
+      pageDesc: '연결되면 OpenClaw Gateway의 skills.status를 사용하고, 그렇지 않으면 OpenClaw와 동일한 디스크 구조(managed, workspace, bundled, extraDirs)를 스캔합니다',
+      filterAll: '전체',
+      filterBuiltin: '기본 제공',
+      filterInstalled: '설치됨',
+      builtinCannotDelete: '기본 제공 스킬은 삭제할 수 없습니다',
+      openSkillFolderToRemove: '이 스킬을 제거하려면 파일 관리자에서 폴더를 여세요',
+      filterShared: '공유',
+      filterWorkspace: '워크스페이스',
+      locationShared: '공유',
+      locationWorkspace: '워크스페이스',
+      diskLocationsTitle: '디스크 위치',
+      locationCount: '{count}개 복사본',
+      searchPlaceholder: '스킬, 경로, 에이전트 또는 권한 검색…',
+      noSkills: 'OpenClaw 스킬을 찾을 수 없습니다',
+      noSkillsHint: '실시간 목록을 보려면 Gateway에 연결하세요. 오프라인에서는 OpenClaw 문서(state dir skills/, workspace-*/skills/, bundled package, skills.load.extraDirs)를 참고하세요',
+      openSharedDir: '메인 워크스페이스 스킬 폴더 열기',
+      openMainWorkspaceSkillsDir: '메인 워크스페이스 스킬 열기 (workspace-main/skills)',
+      openManagedSkillsDir: '관리 스킬 폴더 열기 (openclaw/skills)',
+      permissionLabel: '권한',
+      scopeLabel: '범위',
+      agentBinding: '에이전트',
+      gatewayOfflineHint: 'Gateway가 오프라인 상태이므로 목록은 OpenClaw 디스크 구조를 기준으로 생성됩니다. 연결 시에는 skills.status가 우선됩니다',
+      backToList: '목록으로 돌아가기',
+      loadFailed: 'OpenClaw 스킬을 불러오지 못했습니다',
+      dataSourceLabel: '소스',
+      dataSourceGateway: '게이트웨이',
+      dataSourceManaged: '관리됨',
+      dataSourceBundled: '번들 포함',
+      dataSourceExtra: '추가 디렉터리',
+      dataSourceWorkspace: '워크스페이스',
+      eligibleLabel: '사용 가능',
+      eligibleYes: '예',
+      eligibleNo: '아니오',
+      eligibleUnknown: '알 수 없음',
+      gateHintLabel: 'Gateway 참고',
+      previewNoLocalPath: '이 항목은 Gateway에서만 온 정보로, 둘러볼 수 있는 로컬 폴더가 없습니다. 디스크에 일치하는 스킬이 있을 때만 경로가 표시됩니다',
       add: {
-        title: 'Add',
-        createViaChatTitle: 'Create via chat',
-        createViaChatDesc: 'Describe what you need and let AI scaffold an OpenClaw skill',
-        choosePackageTitle: 'Choose skill package',
-        choosePackageDesc: 'Open the skills folder and place the skill package there',
-        createViaChatPrompt:
-          'Help me create an OpenClaw skill. First ask what functionality I need, then generate a SKILL.md (with frontmatter) and the necessary folder structure and sample code. Finally, tell me to place the skill folder under workspace-main/skills to activate it.',
-      },
+        title: '추가',
+        createViaChatTitle: '채팅으로 만들기',
+        createViaChatDesc: '필요한 기능을 설명하면 AI가 OpenClaw 스킬 골격을 만들어 줍니다',
+        choosePackageTitle: '스킬 패키지 선택',
+        choosePackageDesc: '스킬 폴더를 열고 그 안에 스킬 패키지를 넣습니다',
+        createViaChatPrompt: 'OpenClaw 스킬을 만드는 데 도움을 주세요. 먼저 어떤 기능이 필요한지 물어보고, 그런 다음 frontmatter가 포함된 SKILL.md와 필요한 폴더 구조, 샘플 코드를 생성해 주세요. 마지막으로 스킬 폴더를 workspace-main/skills 아래에 두면 활성화된다고 알려 주세요'
+      }
     },
     mcp: {
       title: 'MCP',
-      enable: 'MCP활성화',
+      enable: 'MCP 활성화',
       enableHint: '활성화되면 AI 어시스턴트가 구성된 MCP서버에 자동으로 연결하여 사용합니다.',
-      directory: 'MCP구성 디렉토리',
+      directory: 'MCP 구성 디렉터리',
       directoryHint: 'MCP서버 구성 파일을 이 디렉토리에 놓으면 자동으로 감지 및 연결됩니다.',
       tabServers: 'MCP',
       tabSettings: '설정',
@@ -565,8 +554,8 @@ export default {
       updateFailed: '업데이트 실패',
       tabAssistantMcp: '어시스턴트 MCP',
       assistantMcpAdd: '추가',
-      assistantMcpAddTitle: 'Assistant MCP 추가',
-      assistantMcpEditTitle: 'Assistant MCP 편집',
+      assistantMcpAddTitle: '어시스턴트 MCP 추가',
+      assistantMcpEditTitle: '어시스턴트 MCP 편집',
       assistantMcpName: 'MCP 플러그인 이름',
       assistantMcpNamePlaceholder: 'MCP 플러그인 이름을 입력하세요 (최대 20자)',
       assistantMcpDescription: '설명',
@@ -574,7 +563,7 @@ export default {
       assistantMcpUrl: 'URL',
       assistantMcpAuth: '인증',
       assistantMcpAutoPort: '생성 후 포트가 자동으로 할당됩니다',
-      assistantMcpAuthNone: 'Bearer Token',
+      assistantMcpAuthNone: 'Bearer 토큰',
       assistantMcpNoItems: '구성된 Assistant MCP가 없습니다',
       assistantMcpNoItemsHint: 'MCP 서비스를 구성하려면 "추가"를 클릭하세요',
       assistantMcpCreateSuccess: '추가 성공',
@@ -593,7 +582,7 @@ export default {
       assistantMcpToolCount: '도구 {count}개',
       assistantMcpToolName: '도구 이름',
       assistantMcpToolNamePlaceholder: '유효한 함수 이름을 입력하세요',
-      assistantMcpToolDesc: '도구 설명',
+      assistantMcpToolDesc: '도구 설명'
     },
     snap: {
       title: '설정',
@@ -603,21 +592,21 @@ export default {
       appsTitle: '스냅 앱',
       sendKeyOptions: {
         enter: 'Enter 키로 전송',
-        ctrlEnter: 'Ctrl+Enter 키로 전송',
+        ctrlEnter: 'Ctrl+Enter 키로 전송'
       },
       apps: {
         wechat: 'WeChat',
         wecom: 'WeCom',
         qq: 'QQ',
-        dingtalk: ' DingTalk',
+        dingtalk: 'DingTalk',
         feishu: 'Feishu',
-        douyin: 'Douyin',
+        douyin: 'Douyin'
       },
       clickOffset: {
         labelX: '왼쪽에서',
         labelY: '아래쪽에서',
         placeholderX: '중앙',
-        hint: '입력 상자 위치를 지정하기 위한 픽셀',
+        hint: '입력 상자 위치를 지정하기 위한 픽셀'
       },
       noClickMode: '수동 선택 모드 (사용자가 수동으로 입력 상자 선택)',
       clickMode: '자동 선택 모드 (설정된 위치를 자동으로 클릭하여 입력 상자 선택)',
@@ -647,7 +636,7 @@ export default {
       placeholderX: '중앙',
       qq: 'QQ',
       wechat: 'WeChat',
-      wecom: 'WeCom',
+      wecom: 'WeCom'
     },
     chatwiki: {
       title: 'ChatWiki',
@@ -658,8 +647,7 @@ export default {
       reauthBind: '재인증',
       unbind: '연결 해제',
       unbindConfirmTitle: '연결 해제 확인',
-      unbindConfirmDesc:
-        'After unbinding, you will no longer be able to use ChatWiki applications and knowledge bases. Continue?',
+      unbindConfirmDesc: '연결을 해제하면 ChatWiki 애플리케이션과 지식베이스를 더 이상 사용할 수 없습니다. 계속하시겠습니까?',
       addBinding: '연결 추가',
       applications: '앱',
       knowledgeBases: '지식베이스',
@@ -672,12 +660,12 @@ export default {
       loadFailed: '로드 실패',
       robotType: {
         chat: '채팅봇',
-        workflow: '워크플로',
+        workflow: '워크플로'
       },
       libraryType: {
         normal: '일반 지식베이스',
         qa: 'Q&A 지식베이스',
-        wechat: '공식 계정 지식베이스',
+        wechat: '공식 계정 지식베이스'
       },
       enabledHint: '활성화되면 다중 질문에 표시됩니다',
       libraryEnabledHint: 'ChatWiki 지식베이스 동기화; 활성화되면 팀 지식베이스에 표시됩니다',
@@ -702,8 +690,7 @@ export default {
       startUsingHint: '아래 ',
       startUsing: '지금 시작',
       freeVersion: '무료',
-      modelServiceDesc:
-        'ChatWiki를 연동하면 모델 서비스에서 사용 가능한 모델과 크레딧을 바로 확인할 수 있습니다.',
+      modelServiceDesc: 'ChatWiki를 연동하면 모델 서비스에서 사용 가능한 모델과 크레딧을 바로 확인할 수 있습니다.',
       notLoggedInTitle: 'ChatWiki에 로그인되지 않음',
       notLoggedInDesc: 'ChatWiki Cloud 모델 목록과 크레딧 잔액을 동기화하려면 로그인하세요.',
       loginNow: '지금 로그인',
@@ -718,48 +705,47 @@ export default {
       openBillingFailed: '결제 페이지를 열지 못했습니다',
       modelBoundHint: '이 목록에는 현재 연동된 ChatWiki 계정에서 사용할 수 있는 모델이 표시됩니다.',
       modelUnboundHint: '현재 연동에 사용할 수 있는 모델 목록을 불러오려면 먼저 로그인하세요.',
-      modelLoginHint:
-        '먼저 ChatWiki 계정에 로그인하고 연동하세요. 그러면 여기에서 최신 모델 목록을 볼 수 있습니다.',
+      modelLoginHint: '먼저 ChatWiki 계정에 로그인하고 연동하세요. 그러면 여기에서 최신 모델 목록을 볼 수 있습니다.',
       providerStatus: {
         unbound: '{label} (로그인 안 됨)',
-        nonCloud: '{label} (로그인 안 됨)',
+        nonCloud: '{label} (로그인 안 됨)'
       },
       region: {
         all: '모든 지역',
         cn: '중국',
-        global: '글로벌',
+        global: '글로벌'
       },
       chat: '채팅 로봇',
       normal: '일반 지식베이스',
       qa: 'Q&A 지식베이스',
       wechat: '공식 계정 지식베이스',
-      workflow: '워크플로',
+      workflow: '워크플로'
     },
     tools: {
       tray: {
         title: '트레이',
         showIcon: '트레이 아이콘 표시',
-        minimizeOnClose: '닫을 때 트레이로 최소화',
+        minimizeOnClose: '닫을 때 트레이로 최소화'
       },
       floatingWindow: {
         title: '플로팅 창',
-        show: '플로팅 창 표시',
+        show: '플로팅 창 표시'
       },
       selectionSearch: {
         title: '선택 텍스트 검색',
-        enable: '선택 텍스트 검색',
+        enable: '선택 텍스트 검색'
       },
       enable: '선택 검색',
       minimizeOnClose: '닫을 때 트레이로 최소화',
       name: '선택 검색',
       show: '플로팅 창 표시',
       showIcon: '트레이 아이콘 표시',
-      title: '선택 검색',
+      title: '선택 검색'
     },
     themes: {
       light: '라이트',
       dark: '다크',
-      system: '시스템',
+      system: '시스템'
     },
     modelService: {
       enabled: '활성화됨',
@@ -811,7 +797,7 @@ export default {
       capabilityAudio: '오디오',
       capabilityVideo: '비디오',
       capabilityFile: '파일',
-      disableBlockedByEmbedding: '이 공급자는 전역 임베딩 모델로 사용됩니다. 비활성화하기 전에 ',
+      disableBlockedByEmbedding: '이 공급자는 전역 임베딩 모델로 사용됩니다. 비활성화하기 전에 '
     },
     about: {
       title: '정보',
@@ -836,8 +822,8 @@ export default {
       installing: '설치 중...',
       updatedTitle: '{version}로 업데이트됨',
       updatedSubtitle: '최신 버전으로 성공적으로 업데이트됨',
-      gotIt: '알겠습니다',
-    },
+      gotIt: '알겠습니다'
+    }
   },
   assistant: {
     imageMessage: '이미지 메시지',
@@ -846,60 +832,60 @@ export default {
       pickTitle: '아이콘 파일 선택',
       filterImages: '이미지 파일',
       defaultAvatars: '기본 아바타',
-      uploadCustom: '사용자 정의 아바타 업로드',
+      uploadCustom: '사용자 정의 아바타 업로드'
     },
     modes: {
-      personal: 'Personal',
-      team: 'Team',
+      personal: '개인',
+      team: '팀'
     },
-    teamNeedsBinding: 'Account binding required',
-    teamNeedsBindingDesc: 'Account not bound. Team assistants are unavailable.',
-    teamEmpty: 'No team assistants',
-    empty: 'No agents yet',
+    teamNeedsBinding: '계정 연동이 필요합니다',
+    teamNeedsBindingDesc: '계정이 연동되지 않았습니다. 팀 어시스턴트를 사용할 수 없습니다',
+    teamEmpty: '팀 어시스턴트가 없습니다',
+    empty: '아직 에이전트가 없습니다',
     emptyState: {
-      title: 'No Agents',
-      desc: 'Please add an agent',
-      createBtn: 'Create Agent',
+      title: '에이전트가 없습니다',
+      desc: '에이전트를 추가하세요',
+      createBtn: '에이전트 만들기'
     },
     create: {
-      title: 'Create Agent',
+      title: '에이전트 만들기'
     },
     fields: {
-      name: 'Name',
-      namePlaceholder: 'Enter name',
-      prompt: 'Prompt',
-      promptPlaceholder: 'Enter your prompt here',
+      name: '이름',
+      namePlaceholder: '입력하세요',
+      prompt: '프롬프트',
+      promptPlaceholder: '여기에 프롬프트를 입력하세요',
       identityEmoji: '아이덴티티 이모지',
       identityEmojiPlaceholder: '이모지 선택',
       identityEmojiChange: '이모지 변경',
       identityEmojiHint: '이모지만 지원',
       identityTheme: '아이덴티티 테마',
-      identityThemePlaceholder: '예: helpful sloth',
+      identityThemePlaceholder: '예: helpful sloth'
     },
     actions: {
-      cancel: 'Cancel',
-      create: 'Create',
-      save: 'Save',
-      settings: 'Agent Settings',
+      cancel: '취소',
+      create: '만들기',
+      save: '저장',
+      settings: '에이전트 설정'
     },
     placeholders: {
-      noAgentSelected: 'Select an agent',
-      createAgentFirst: 'Create an agent first',
-      selectModelFirst: 'Select a model first',
-      chatComingSoon: 'Chat content will be shown here (topics list is not implemented yet).',
-      inputPlaceholder: 'Ask a question...',
-      enterToSend: 'Please enter content',
+      noAgentSelected: '에이전트를 선택하세요',
+      createAgentFirst: '먼저 에이전트를 만드세요',
+      selectModelFirst: '먼저 모델을 선택하세요',
+      chatComingSoon: '채팅 내용이 여기에 표시됩니다 (주제 목록은 아직 구현되지 않았습니다)',
+      inputPlaceholder: '질문하세요...',
+      enterToSend: '내용을 입력하세요'
     },
     sidebar: {
-      collapse: 'Collapse',
-      expand: 'Expand',
-      newConversation: 'New Conversation',
+      collapse: '접기',
+      expand: '펼치기',
+      newConversation: '새 대화'
     },
     chatMode: {
-      chat: 'Chat Mode',
-      task: 'Task Mode',
-      chatDesc: 'Multi-turn Q&A or reasoning across scenarios',
-      taskDesc: 'Handle complex tasks and deliver results autonomously',
+      chat: '채팅 모드',
+      task: '작업 모드',
+      chatDesc: '여러 차례의 질의응답 또는 상황별 추론',
+      taskDesc: '복잡한 작업을 처리하고 결과를 자율적으로 제공합니다'
     },
     chat: {
       selectModel: '모델 선택',
@@ -955,7 +941,7 @@ export default {
       tokenUsage: '입력 {input} · 출력 {output}',
       uploadFile: '파일 업로드',
       selectFiles: '파일 선택',
-      fileMessage: '파일 메시지',
+      fileMessage: '파일 메시지'
     },
     menu: {
       settings: '어시스턴트 설정',
@@ -965,10 +951,10 @@ export default {
       delete: '삭제',
       pin: '고정',
       unpin: '고정 해제',
-      infoTitle: '팀 로봇 정보',
+      infoTitle: '팀 로봇 정보'
     },
     teamRobot: {
-      infoTitle: 'Team Robot Info',
+      infoTitle: '팀 로봇 정보'
     },
     channels: {
       title: '어시스턴트 채널',
@@ -977,8 +963,7 @@ export default {
       unknownAgent: '알 수 없는 어시스턴트',
       noPlatforms: '사용 가능한 채널 없음',
       createTitle: '{platform} 봇 추가',
-      createDesc:
-        'Follow the add flow on the channel page. After creation, it will be automatically bound to the current assistant.',
+      createDesc: '채널 페이지의 추가 흐름을 따르면 됩니다. 생성 후 현재 어시스턴트에 자동으로 연결됩니다',
       addChannel: '채널 추가',
       addAndBind: '추가 및 연결',
       showExisting: '추가된 채널 보기',
@@ -995,9 +980,9 @@ export default {
       bindSuccess: '연결 성공',
       unbindSuccess: '연결 해제 성공',
       addBot: '봇 추가',
-      addBotHint: 'Each bot can only be bound to one AI assistant. Only unbound bots are shown.',
+      addBotHint: '각 봇은 하나의 AI 어시스턴트에만 연결할 수 있습니다. 연결되지 않은 봇만 표시됩니다',
       noUnboundBot: '연결 가능한 봇 없음',
-      selectBot: '연결할 봇을 선택하세요',
+      selectBot: '연결할 봇을 선택하세요'
     },
     conversation: {
       empty: '채팅 기록 없음',
@@ -1005,21 +990,21 @@ export default {
         title: '대화 이름 변경',
         placeholder: '새 이름 입력',
         confirm: '저장',
-        success: '이름 변경됨',
+        success: '이름 변경됨'
       },
       delete: {
         title: '삭제 확인',
         desc: '대화「{name}」을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.',
         cancel: '취소',
         confirm: '삭제',
-        success: '삭제됨',
+        success: '삭제됨'
       },
       cancel: '취소',
       confirm: '삭제',
       desc: '대화 ',
       placeholder: '새 이름 입력',
       success: '삭제됨',
-      title: '삭제 확인',
+      title: '삭제 확인'
     },
     errors: {
       loadFailed: '어시스턴트를 불러오지 못했습니다',
@@ -1043,43 +1028,41 @@ export default {
       teamImageNotSupported: '팀 모드에서 이미지 전송은 아직 지원되지 않습니다',
       selectTeamRobotFirst: '먼저 팀 로봇을 선택하세요',
       teamRobotMissingKey: '현재 로봇에 robot_key가 없습니다. 다시 동기화하세요',
-      modelNotSupportVision:
-        'The current model does not support image recognition. Please switch to a vision-capable multimodal model.',
+      modelNotSupportVision: '현재 모델은 이미지 인식을 지원하지 않습니다. 비전 기능이 있는 멀티모달 모델로 전환하세요',
       modelNotSupportVisionHint: 'GPT-4o, Claude, Gemini 같은 모델이 이미지 인식을 지원합니다',
       fileTooLarge: '파일 크기가 제한을 초과합니다 (최대 {max})',
       tooManyFiles: '최대 {max}개의 파일을 업로드할 수 있습니다',
       invalidFileType: '지원되지 않는 파일 유형',
       fileReadFailed: '파일을 읽지 못했습니다',
-      fileOpenFailed: '파일을 열지 못했습니다',
+      fileOpenFailed: '파일을 열지 못했습니다'
     },
     toasts: {
       created: '어시스턴트 생성됨',
       updated: '어시스턴트 업데이트됨',
-      deleted: '어시스턴트 삭제됨',
+      deleted: '어시스턴트 삭제됨'
     },
     settings: {
       title: '어시스턴트 삭제',
       tabs: {
         general: '기본 정보',
         advanced: '고급 설정',
-        model: '模型设置',
-        prompt: '提示词设置',
-        workspace: '工作区',
-        retrieval: '知识库检索',
-        delete: '어시스턴트 삭제',
+        model: '모델 설정',
+        prompt: '프롬프트 설정',
+        workspace: '워크스페이스',
+        retrieval: '지식 검색',
+        delete: '어시스턴트 삭제'
       },
       workspace: {
         sandboxMode: '실행 모드',
         modeCodex: 'Codex 샌드박스',
         modeNative: '네이티브 실행',
-        nativeDesc:
-          'Execute commands directly on the local machine without sandbox isolation. Commands have full permissions of the current user.',
+        nativeDesc: '샌드박스 격리 없이 로컬 머신에서 직접 명령을 실행합니다. 명령은 현재 사용자와 동일한 전체 권한을 가집니다',
         networkAccess: '네트워크 액세스 허용',
         workDir: '작업 디렉토리',
         workDirHint: '구조: {basePath}{sep}sessions{sep}<agent_hash>{sep}<conversation_hash>{sep}',
         changeDir: '변경',
         resetDir: '기본으로 재설정',
-        selectDir: '작업 디렉토리 선택',
+        selectDir: '작업 디렉토리 선택'
       },
       model: {
         defaultModel: '기본 모델',
@@ -1093,62 +1076,62 @@ export default {
         topPHint: '샘플링 범위 제어',
         contextCount: '컨텍스트 수',
         maxTokens: '최대 토큰 수',
-        unlimited: '무제한',
+        unlimited: '무제한'
       },
       retrieval: {
         matchThreshold: '일치 임계값',
         topK: '검색 청크 수',
-        default: '기본',
+        default: '기본'
       },
       delete: {
         title: '어시스턴트 삭제',
         hint: '어시스턴트를 삭제하면 모든 관련 대화가 제거됩니다. 이 작업은 취소할 수 없습니다.',
-        protected: 'The default assistant is a system agent and cannot be deleted.',
+        protected: '기본 어시스턴트는 시스템 에이전트이므로 삭제할 수 없습니다',
         action: '삭제',
         confirmTitle: '삭제 확인',
-        confirmDesc: '어시스턴트「{name}」을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.',
+        confirmDesc: '어시스턴트「{name}」을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.'
       },
-      "advanced": {
-        "sandboxMode": "샌드박스 모드",
-        "sandbox_off": "비활성화",
-        "sandbox_non-main": "기본 외 에이전트만",
-        "sandbox_all": "모든 에이전트",
-        "sandboxModeHint": "샌드박스는 명령 실행을 격리하여 에이전트가 호스트 시스템을 직접 수정하는 것을 방지합니다",
-        "groupChatMentionPatterns": "그룹 채팅 멘션 패턴",
-        "groupChatMentionPatternsPlaceholder": "{'@'}assistant, {'@'}bot",
-        "groupChatInsertPreset": "프리셋 삽입",
-        "groupChatMentionPatternsHint": "메시지에서 멘션 패턴을 매칭하여 에이전트 응답 트리거, 쉼표로 구분",
-        "tools": "도구 설정",
-        "toolsProfile": "도구 프리셋",
-        "toolsProfile_default": "미설정 (글로벌 상속)",
-        "toolsProfile_minimal": "Minimal — 상태만",
-        "toolsProfile_coding": "Coding — 파일/런타임/세션/메모리",
-        "toolsProfile_messaging": "Messaging — 메시징/세션",
-        "toolsProfile_full": "Full — 무제한",
-        "builtinTools": "내장 도구",
-        "builtinToolsHint": "여기에서 OpenClaw 내장 도구를 바로 선택할 수 있습니다. 플러그인 도구나 사용자 정의 도구는 아래에서 계속 수동 입력할 수 있습니다.",
-        "builtinToolsLoading": "OpenClaw 내장 도구를 불러오는 중…",
-        "builtinToolsUnavailable": "OpenClaw 내장 도구 목록을 불러오지 못했습니다. 도구 이름은 계속 수동으로 입력할 수 있습니다.",
-        "toolModeAllow": "허용",
-        "toolModeDeny": "금지",
-        "toolsAllow": "허용된 도구",
-        "toolsAllowPlaceholder": "예: browser, file_search",
-        "toolsDeny": "금지된 도구",
-        "toolsDenyPlaceholder": "예: canvas",
-        "toolsHint": "금지는 허용보다 우선합니다. 플러그인 도구나 사용자 정의 도구는 계속 수동으로 입력한 뒤 Enter로 확정할 수 있습니다.",
-        "heartbeat": "하트비트 간격",
-        "heartbeat_off": "끄기",
-        "heartbeat_custom": "사용자 정의",
-        "heartbeatPlaceholder": "예: 10m",
-        "heartbeatFormatError": "형식이 올바르지 않습니다. 숫자+단위를 입력하세요 (예: 10m, 1h, 30s, 500ms)",
-        "heartbeatHint": "정기 하트비트 확인 간격 (ms/s/m/h 지원)",
-        "params": "모델 파라미터 재정의",
-        "paramsTemperature": "Temperature",
-        "paramsTemperaturePlaceholder": "비워두면 글로벌 기본값 사용",
-        "paramsMaxTokens": "최대 토큰 수",
-        "paramsMaxTokensPlaceholder": "비워두면 글로벌 기본값 사용",
-        "paramsHint": "이 에이전트의 agents.defaults.models 파라미터를 재정의"
-      },
+      advanced: {
+        sandboxMode: '샌드박스 모드',
+        sandbox_off: '비활성화',
+        'sandbox_non-main': '기본 외 에이전트만',
+        sandbox_all: '모든 에이전트',
+        sandboxModeHint: '샌드박스는 명령 실행을 격리하여 에이전트가 호스트 시스템을 직접 수정하는 것을 방지합니다',
+        groupChatMentionPatterns: '그룹 채팅 멘션 패턴',
+        groupChatMentionPatternsPlaceholder: '{\'@\'}assistant, {\'@\'}bot',
+        groupChatInsertPreset: '프리셋 삽입',
+        groupChatMentionPatternsHint: '메시지에서 멘션 패턴을 매칭하여 에이전트 응답 트리거, 쉼표로 구분',
+        tools: '도구 설정',
+        toolsProfile: '도구 프리셋',
+        toolsProfile_default: '미설정 (글로벌 상속)',
+        toolsProfile_minimal: 'Minimal — 상태만',
+        toolsProfile_coding: 'Coding — 파일/런타임/세션/메모리',
+        toolsProfile_messaging: 'Messaging — 메시징/세션',
+        toolsProfile_full: 'Full — 무제한',
+        builtinTools: '내장 도구',
+        builtinToolsHint: '여기에서 OpenClaw 내장 도구를 바로 선택할 수 있습니다. 플러그인 도구나 사용자 정의 도구는 아래에서 계속 수동 입력할 수 있습니다.',
+        builtinToolsLoading: 'OpenClaw 내장 도구를 불러오는 중…',
+        builtinToolsUnavailable: 'OpenClaw 내장 도구 목록을 불러오지 못했습니다. 도구 이름은 계속 수동으로 입력할 수 있습니다.',
+        toolModeAllow: '허용',
+        toolModeDeny: '금지',
+        toolsAllow: '허용된 도구',
+        toolsAllowPlaceholder: '예: browser, file_search',
+        toolsDeny: '금지된 도구',
+        toolsDenyPlaceholder: '예: canvas',
+        toolsHint: '금지는 허용보다 우선합니다. 플러그인 도구나 사용자 정의 도구는 계속 수동으로 입력한 뒤 Enter로 확정할 수 있습니다.',
+        heartbeat: '하트비트 간격',
+        heartbeat_off: '끄기',
+        heartbeat_custom: '사용자 정의',
+        heartbeatPlaceholder: '예: 10m',
+        heartbeatFormatError: '형식이 올바르지 않습니다. 숫자+단위를 입력하세요 (예: 10m, 1h, 30s, 500ms)',
+        heartbeatHint: '정기 하트비트 확인 간격 (ms/s/m/h 지원)',
+        params: '모델 파라미터 재정의',
+        paramsTemperature: '온도',
+        paramsTemperaturePlaceholder: '비워두면 글로벌 기본값 사용',
+        paramsMaxTokens: '최대 토큰 수',
+        paramsMaxTokensPlaceholder: '비워두면 글로벌 기본값 사용',
+        paramsHint: '이 에이전트의 agents.defaults.models 파라미터를 재정의'
+      }
     },
     workspaceDrawer: {
       title: '작업 공간',
@@ -1177,18 +1160,17 @@ export default {
       mcpDeselectAll: '전체 선택 해제',
       mcpGlobalDisabled: 'MCP가 전역적으로 비활성화되어 있습니다. 설정에서 활성화하세요.',
       mcpGoToSettings: '새 MCP추가',
-      mcpGoToSettingsHint: '설정 페이지로 이동하여 새 MCP서버를 추가하세요',
-    },
+      mcpGoToSettingsHint: '설정 페이지로 이동하여 새 MCP서버를 추가하세요'
+    }
   },
   knowledge: {
     help: {
       name: '서로 다른 지식베이스를 구분하는 이름 (최대 30자).',
-      chunkSize:
-        'Chunk size (in characters, 500~5000). Larger chunks give more complete context but coarser retrieval granularity.',
+      chunkSize: '청크 크기(문자 수, 500~5000)입니다. 더 큰 청크는 더 완전한 문맥을 제공하지만 검색 세분성은 떨어집니다',
       chunkOverlap: '인접 청크 간 중첩 크기 (문자 수, 0~1000) 정보 손실을 줄이기 위함.',
       matchThreshold: '이 임계값보다 낮은 유사도의 결과는 필터링됩니다 (0~1).',
       embeddingModel: '텍스트를 벡터로 변환하는 데 사용되는 임베딩 모델.',
-      embeddingDimension: '임베딩 벡터 차원은 선택한 모델의 출력과 일치해야 합니다.',
+      embeddingDimension: '임베딩 벡터 차원은 선택한 모델의 출력과 일치해야 합니다.'
     },
     tabs: {
       personal: '개인',
@@ -1221,81 +1203,81 @@ export default {
       status: '상태',
       teamNotReady: '팀 지식베이스는 아직 제공되지 않습니다',
       total: '총계: {count}',
-      type: '유형',
+      type: '유형'
     },
     sidebar: {
-      collapse: 'Collapse',
-      expand: 'Expand',
+      collapse: '접기',
+      expand: '펼치기'
     },
-    loading: 'Loading...',
-    loadFailed: 'Failed to load knowledge bases',
-    providersLoadFailed: 'Failed to load providers',
-    teamNotReady: 'Team knowledge base is not available yet',
+    loading: '로딩 중...',
+    loadFailed: '지식베이스를 불러오지 못했습니다',
+    providersLoadFailed: '공급자를 불러오지 못했습니다',
+    teamNotReady: '팀 지식베이스는 아직 제공되지 않습니다',
     team: {
-      notBoundTitle: 'Account not bound',
-      needsBinding: 'Account not bound. Team knowledge base is unavailable.',
-      needsBindingShort: 'Not bound',
-      goBind: 'Go to bind',
-      empty: 'No team knowledge base',
-      noIntro: 'No introduction',
-      allGroups: 'All groups',
-      groupFileCount: '{count} files',
-      noFiles: 'No files',
-      noParagraphs: 'No QA paragraphs',
-      fileTotal: 'Total: {count}',
+      notBoundTitle: '계정이 연동되지 않음',
+      needsBinding: '계정이 연동되지 않아 팀 지식베이스를 사용할 수 없습니다',
+      needsBindingShort: '연결되지 않음',
+      goBind: '연동하러 가기',
+      empty: '팀 지식베이스가 없습니다',
+      noIntro: '소개 없음',
+      allGroups: '모든 그룹',
+      groupFileCount: '파일 {count}개',
+      noFiles: '파일 없음',
+      noParagraphs: 'Q&A 단락이 없습니다',
+      fileTotal: '총계: {count}',
       qa: {
-        question: 'Question',
-        answer: 'Answer',
-        total: 'Total : {count}',
-        searchPlaceholder: 'Search Question',
+        question: '질문',
+        answer: '답변',
+        total: '총계: {count}',
+        searchPlaceholder: '질문 검색'
       },
       fields: {
-        id: 'Knowledge Base ID',
-        type: 'Type',
-        status: 'Status',
-        scope: 'Scope',
+        id: '지식베이스 ID',
+        type: '유형',
+        status: '상태',
+        scope: '범위'
       },
       status: {
-        enabled: 'Enabled',
-        disabled: 'Disabled',
+        enabled: '활성화됨',
+        disabled: '비활성화됨'
       },
-      scopeChatwiki: 'ChatWiki team knowledge base',
+      scopeChatwiki: 'ChatWiki 팀 지식베이스'
     },
     selectOne: '지식베이스를 선택하세요',
     empty: {
-      title: 'Knowledge Base is Empty',
-      desc: 'Please add a knowledge base',
-      createBtn: 'Create Knowledge Base',
+      title: '지식베이스가 비어 있습니다',
+      desc: '지식베이스를 추가하세요',
+      createBtn: '지식베이스 만들기'
     },
     item: {
-      menu: 'More actions',
-      rename: 'Rename',
-      settings: 'Settings',
-      delete: 'Delete',
+      menu: '추가 작업',
+      rename: '이름 바꾸기',
+      settings: '설정',
+      delete: '삭제'
     },
     rename: {
-      title: 'Rename knowledge base',
-      placeholder: 'Enter a new name',
-      confirm: 'Save',
-      success: 'Renamed',
-      failed: 'Failed to rename',
+      title: '지식베이스 이름 바꾸기',
+      placeholder: '새 이름 입력',
+      confirm: '저장',
+      success: '이름이 변경되었습니다',
+      failed: '이름 변경 실패'
     },
     settingsDialog: {
-      title: 'Knowledge base settings',
+      title: '지식베이스 설정'
     },
     settings: {
-      title: 'Knowledge base settings',
-      save: 'Save',
-      saved: 'Saved',
-      saveFailed: 'Failed to save',
+      title: '지식베이스 설정',
+      save: '저장',
+      saved: '저장됨',
+      saveFailed: '저장 실패'
     },
     delete: {
-      title: 'Confirm delete',
-      desc: 'Delete knowledge base ',
-      cancel: 'Cancel',
-      confirm: 'Delete',
-      success: 'Deleted',
-      failed: 'Failed to delete',
+      title: '삭제 확인',
+      desc: '지식베이스 삭제 ',
+      cancel: '취소',
+      confirm: '삭제',
+      success: '삭제됨',
+      failed: '삭제하지 못했습니다'
     },
     create: {
       title: '지식베이스 추가',
@@ -1315,7 +1297,7 @@ export default {
       cancel: '취소',
       confirm: '만들기',
       success: '지식베이스가 만들어졌습니다',
-      failed: '지식베이스 만들기 실패',
+      failed: '지식베이스 만들기 실패'
     },
     embeddingSettings: {
       title: '임베딩 모델 설정',
@@ -1325,10 +1307,10 @@ export default {
       required: '먼저 임베딩 모델 설정에서 임베딩 모델을 선택하세요',
       save: '저장',
       saved: '저장됨',
-      saveFailed: '저장 실패',
+      saveFailed: '저장 실패'
     },
     chat: {
-      selectAgent: '어시스턴트 선택',
+      selectAgent: '어시스턴트 선택'
     },
     content: {
       searchPlaceholder: '검색',
@@ -1337,71 +1319,71 @@ export default {
       loadFailed: '문서 목록 로드 실패',
       noMore: '더 이상 없음',
       sort: {
-        createdDesc: 'Newest first',
-        createdAsc: 'Oldest first',
+        createdDesc: '최신순',
+        createdAsc: '오래된순'
       },
       fileTypes: {
-        documents: 'Document Files',
-        all: 'All Files',
+        documents: '문서 파일',
+        all: '모든 파일'
       },
       empty: {
-        title: 'No documents yet',
-        desc: 'Supports PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD formats',
+        title: '아직 문서가 없습니다',
+        desc: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD 형식을 지원합니다'
       },
       status: {
-        completed: 'Completed',
-        learning: 'Learning',
-        parsing: 'Parsing',
-        failed: 'Failed',
-        pending: 'Pending',
+        completed: '완료됨',
+        learning: '학습 중',
+        parsing: '분석 중',
+        failed: '실패',
+        pending: '대기 중'
       },
       fileMissing: '원본 파일 누락됨',
       menu: {
-        rename: 'Rename',
-        relearn: 'Relearn',
-        delete: 'Delete',
+        rename: '이름 바꾸기',
+        relearn: '다시 학습',
+        delete: '삭제'
       },
       upload: {
-        success: 'Documents uploaded',
-        failed: 'Failed to upload documents',
-        count: '{count} documents uploaded',
-        uploading: 'Uploading {done}/{total}',
+        success: '문서 업로드 완료',
+        failed: '문서 업로드 실패',
+        count: '문서 {count}개 업로드됨',
+        uploading: '업로드 중 {done}/{total}'
       },
       drop: {
-        hint: 'Drop files here to upload',
-        formats: 'Supports PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD',
+        hint: '여기에 파일을 드롭해 업로드하세요',
+        formats: 'PDF, Word, Excel, TXT, Markdown, CSV, HTML, OFD를 지원합니다'
       },
       rename: {
-        title: 'Rename Document',
-        desc: 'Enter a new name for the document',
-        placeholder: 'Enter new name',
-        cancel: 'Cancel',
-        confirm: 'Save',
-        success: 'Renamed',
-        failed: 'Failed to rename',
+        title: '문서 이름 바꾸기',
+        desc: '문서의 새 이름을 입력하세요',
+        placeholder: '새 이름 입력',
+        cancel: '취소',
+        confirm: '저장',
+        success: '이름이 변경되었습니다',
+        failed: '이름 변경 실패'
       },
       relearn: {
-        success: 'Relearning started',
-        failed: 'Failed to relearn',
+        success: '다시 학습을 시작했습니다',
+        failed: '다시 학습하지 못했습니다'
       },
       delete: {
-        title: 'Confirm Delete',
-        desc: 'Are you sure you want to delete ',
-        cancel: 'Cancel',
-        confirm: 'Delete',
-        success: 'Deleted',
-        failed: 'Failed to delete',
+        title: '삭제 확인',
+        desc: '이 문서를 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.',
+        cancel: '취소',
+        confirm: '삭제',
+        success: '삭제됨',
+        failed: '삭제하지 못했습니다'
       },
       moveToFolder: {
-        title: 'Move to Folder',
-        selectFolder: 'Select Folder',
-        root: 'Folders',
-        back: 'Back',
-        moveToHere: 'Move here',
-        uncategorized: 'Uncategorized',
-        empty: 'No subfolders in this folder',
-        success: 'Moved successfully',
-        failed: 'Failed to move',
+        title: '폴더로 이동',
+        selectFolder: '폴더 선택',
+        root: '폴더',
+        back: '뒤로',
+        moveToHere: '여기로 이동',
+        uncategorized: '미분류',
+        empty: '이 폴더에는 하위 폴더가 없습니다',
+        success: '이동 성공',
+        failed: '이동 실패'
       },
       navigateToFolder: '폴더로 이동',
       openFailed: '문서 열기 실패',
@@ -1428,7 +1410,7 @@ export default {
       success: '이동 성공',
       title: '폴더로 이동',
       uncategorized: '미분류',
-      uploading: '{done}/{total} 업로드 중',
+      uploading: '{done}/{total} 업로드 중'
     },
     folder: {
       all: '모든 파일',
@@ -1445,7 +1427,7 @@ export default {
       renameSuccess: '이름 변경 성공',
       renameFailed: '이름 변경 실패',
       deleteTitle: '삭제 확인',
-      deleteDesc: '폴더 ',
+      deleteDesc: '폴더 "{name}"를 삭제하면 그 안의 문서는 "미분류"로 이동합니다. 이 작업은 취소할 수 없습니다.',
       deleteCancel: '취소',
       deleteConfirm: '삭제',
       deleteSuccess: '삭제 성공',
@@ -1455,7 +1437,7 @@ export default {
         selectFolder: '대상 폴더 선택',
         moveToHere: '여기로 이동',
         success: '이동 성공',
-        failed: '이동 실패',
+        failed: '이동 실패'
       },
       deleteFailed: '삭제 실패',
       nameRequired: '폴더 이름은 비워둘 수 없습니다',
@@ -1464,7 +1446,7 @@ export default {
       nameHelp: '폴더 이름 (최대 50자).',
       parentFolder: '상위 폴더',
       parentFolderHelp: '중첩 폴더를 만들 상위 폴더를 선택하세요. 비워두면 루트에 생성됩니다.',
-      rootFolder: '루트 (상위 없음)',
+      rootFolder: '루트 (상위 없음)'
     },
     detail: {
       title: '문서 상세',
@@ -1472,24 +1454,24 @@ export default {
       processingInfo: '처리 상태',
       stats: '통계',
       field: {
-        filename: 'Filename',
-        size: 'File Size',
-        type: 'File Type',
-        createdAt: 'Upload Time',
-        source: 'Source',
-        folder: 'Folder',
-        wordTotal: 'Word Count',
-        splitTotal: 'Split Count',
+        filename: '파일명',
+        size: '파일 크기',
+        type: '파일 유형',
+        createdAt: '업로드 시간',
+        source: '소스',
+        folder: '폴더',
+        wordTotal: '단어 수',
+        splitTotal: '분할 수'
       },
       status: {
-        parsing: 'Parsing',
-        embedding: 'Embedding',
+        parsing: '분석 중',
+        embedding: '임베딩'
       },
       actions: {
-        relearn: 'Relearn Document',
-        moveToFolder: 'Move to Folder',
-        rename: 'Rename',
-        delete: 'Delete Document',
+        relearn: '문서 다시 학습',
+        moveToFolder: '폴더로 이동',
+        rename: '이름 바꾸기',
+        delete: '문서 삭제'
       },
       uncategorized: '미분류',
       local: '로컬 파일',
@@ -1507,7 +1489,7 @@ export default {
       source: '소스',
       splitTotal: '청크 수',
       type: '파일 유형',
-      wordTotal: '단어 수',
+      wordTotal: '단어 수'
     },
     viewer: {
       title: '문서 뷰어',
@@ -1517,35 +1499,35 @@ export default {
       contentNotAvailable: '콘텐츠를 볼 수 없습니다. 외부에서 여세요.',
       unsupported: '파일 유형 ',
       localFileNote: '이 파일은 외부 애플리케이션으로 열어야 합니다.',
-      loadFailedUseExternal: '로드 실패. 외부에서 여세요',
-    },
+      loadFailedUseExternal: '로드 실패. 외부에서 여세요'
+    }
   },
   memory: {
     title: '메모리',
     selectAgent: '메모리를 볼 어시스턴트를 선택하세요',
-    noWorkspace: 'This agent has no OpenClaw workspace configured',
-    files: 'Files',
-    selectFile: 'Select a file to view its content',
-    noFiles: 'No memory files yet',
-    newFile: 'New File',
-    newFileDesc: 'Enter a file name (.md suffix added automatically)',
-    newFilePlaceholder: 'e.g. MEMORY',
-    create: 'Create',
+    noWorkspace: '이 에이전트에는 OpenClaw 워크스페이스가 구성되어 있지 않습니다',
+    files: '파일',
+    selectFile: '내용을 볼 파일을 선택하세요',
+    noFiles: '아직 메모리 파일이 없습니다',
+    newFile: '새 파일',
+    newFileDesc: '파일 이름을 입력하세요 (.md 접미사는 자동으로 추가됩니다)',
+    newFilePlaceholder: '예: MEMORY',
+    create: '만들기',
     edit: '편집',
     delete: '삭제',
     save: '저장',
     cancel: '취소',
-    saveSuccess: 'Saved successfully',
+    saveSuccess: '편집 성공',
     deleteSuccess: '삭제 성공',
     deleteConfirmTitle: '삭제 확인',
-    deleteFileConfirm: 'Are you sure you want to delete {name}? This action cannot be undone.',
-    unsavedChangesConfirm: 'You have unsaved changes. Switch anyway?',
+    deleteFileConfirm: '{name}을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다',
+    unsavedChangesConfirm: '저장되지 않은 변경 사항이 있습니다. 그래도 전환하시겠습니까?',
     basicInfo: '기본 정보',
     basicInfoDesc: '사용자 프로필의 핵심 정보',
     basicInfoEmpty: '기본 정보 없음',
     content: '콘텐츠',
     conversationLog: '대화 로그',
-    conversationLogDesc: 'Chronological conversation facts',
+    conversationLogDesc: '시간순 대화 기록',
     conversationLogEmpty: '대화 로그 없음',
     deleteEventStreamConfirm: '이 대화 로그를 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.',
     deleteFailed: '삭제 실패',
@@ -1561,64 +1543,65 @@ export default {
     topicSummaryDesc: '주제별로 정리된 장기 요약',
     topicSummaryEmpty: '주제 요약 없음',
     updateFailed: '업데이트 실패',
-    updateSuccess: '업데이트 성공',
+    updateSuccess: '업데이트 성공'
   },
   channels: {
     title: '메시징 채널',
     subtitle: '메시지 채널과 연결을 관리합니다',
-    refresh: 'Refresh',
-    addChannel: 'Add Channel',
+    refresh: '새로고침',
+    addChannel: '채널 추가',
     stats: {
-      total: 'Total Channels',
-      connected: 'Connected',
-      disconnected: 'Disconnected',
+      total: '총 채널 수',
+      connected: '연결됨',
+      disconnected: '연결 끊김'
     },
     configured: {
-      title: 'Configured',
-      desc: 'Channels that have been added and configured',
-      empty: 'No configured channels yet',
-      connected: 'Connected',
-      disconnected: 'Disconnected',
-      error: 'Error',
+      title: '구성됨',
+      desc: '추가되고 구성된 채널',
+      empty: '아직 구성된 채널이 없습니다',
+      connected: '연결됨',
+      disconnected: '연결 끊김',
+      error: '오류'
     },
     available: {
-      title: 'Available Channels',
-      desc: 'Connect a new channel',
+      title: '사용 가능한 채널',
+      desc: '새 채널 연결'
     },
     add: {
-      title: 'Add Channel',
-      desc: 'Select the channel type to configure',
+      title: '채널 추가',
+      desc: '구성할 채널 유형을 선택하세요'
     },
     wecomAdd: {
-      title: 'Configure WeCom',
-      subtitle: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      howTitle: 'How to connect',
-      tipsIntro: 'Connect WeCom by scanning with the official Tencent OpenClaw plugin',
-      stepsLabel: 'Steps:',
-      step1: 'Tap Generate QR code to install and enable the official WeCom plugin in OpenClaw',
-      step2: 'Scan the QR code below with WeCom and confirm on your phone',
-      tipsOrManual: 'Or connect existing bot credentials',
-      scanHint: 'Scan the QR code below with WeCom and confirm on your phone',
-      manualEntry: 'I already have a bot',
-      generateQr: 'Generate QR code',
-      refreshQr: 'Refresh',
-      generating: 'Generating…',
-      registering: 'Registering channel…',
-      generateFailed: 'Failed to generate QR code',
-      missingCredentials: 'Authorized but bot credentials are missing',
-      registerFailed: 'Failed to register channel',
-      authFailed: 'Authorization failed or expired. Refresh and try again',
-      defaultName: 'WeCom Bot',
-      openScanAdd: 'Add via QR scan',
-      qrExpired: 'QR code expired (valid for 5 minutes)',
-      qrExpiredHint: 'Tap Refresh to generate a new QR code and scan again.',
+      title: 'WeCom 구성',
+      subtitle: 'Tencent 공식 OpenClaw 플러그인으로 스캔하여 WeCom을 연결합니다',
+      howTitle: '연결 방법',
+      tipsIntro: 'Tencent 공식 OpenClaw 플러그인으로 스캔하여 WeCom을 연결합니다',
+      stepsLabel: '단계:',
+      step1: 'OpenClaw에 공식 WeCom 플러그인을 설치하고 활성화하려면 "QR 코드 생성"을 누르세요',
+      step2: '아래 QR 코드를 WeCom으로 스캔하고 휴대폰에서 확인하세요',
+      tipsOrManual: '또는 기존 봇 자격 증명으로 연결하세요',
+      scanHint: '아래 QR 코드를 WeCom으로 스캔하고 휴대폰에서 확인하세요',
+      manualEntry: '이미 봇이 있습니다',
+      generateQr: 'QR 코드 생성',
+      refreshQr: '새로고침',
+      generating: '생성 중…',
+      registering: '채널 등록 중…',
+      generateFailed: 'QR 코드 생성 실패',
+      missingCredentials: '인증되었지만 봇 자격 증명이 없습니다',
+      registerFailed: '채널 등록 실패',
+      authFailed: '인증에 실패했거나 만료되었습니다. 새로고침 후 다시 시도하세요',
+      defaultName: 'WeCom 봇',
+      openScanAdd: 'QR 스캔으로 추가',
+      qrExpired: 'QR 코드가 만료되었습니다 (유효 시간 5분)',
+      qrExpiredHint: '"새로고침"을 눌러 새 QR 코드를 생성한 뒤 다시 스캔하세요'
     },
     platforms: {
       dingtalk: 'DingTalk',
       feishu: 'Feishu',
       wecom: 'WeCom',
+      wechat: 'WeChat',
       qq: 'QQ',
-      twitter: 'X（Twitter）',
+      twitter: 'X（Twitter）'
     },
     config: {
       title: '{platform} 봇 구성',
@@ -1626,16 +1609,16 @@ export default {
       editSuccess: '편집 성공',
       pickAvatar: '아바타 선택',
       filterImages: '이미지 파일',
-      wecomBotId: 'Bot ID',
-      wecomSecret: 'Secret',
+      wecomBotId: '봇 ID',
+      wecomSecret: '시크릿',
       name: '이름',
       namePlaceholder: '입력하세요',
-      appId: 'APPID',
+      appId: '앱 ID',
       appIdPlaceholder: 'AppId 입력',
-      wecomAppIdPlaceholder: 'Bot ID 입력',
-      appSecret: 'APP Secret',
-      appSecretPlaceholder: 'APP Secret 입력',
-      wecomAppSecretPlaceholder: 'Secret 입력',
+      wecomAppIdPlaceholder: '봇 ID 입력',
+      appSecret: '앱 시크릿',
+      appSecretPlaceholder: '앱 시크릿 입력',
+      wecomAppSecretPlaceholder: '시크릿 입력',
       token: '토큰',
       tokenPlaceholder: '토큰 입력',
       save: '확인',
@@ -1643,82 +1626,81 @@ export default {
       success: '채널이 성공적으로 생성되었습니다',
       failed: '채널 생성 실패',
       dingtalkPluginInstalling: 'DingTalk 플러그인 설치 중',
-      dingtalkPluginInstallingDesc:
-        'DingTalk 커넥터 플러그인이 백그라운드에서 설치 중입니다. 지금 어시스턴트 연결을 계속 진행하고 나중에 연결 상태를 확인할 수 있습니다.',
+      dingtalkPluginInstallingDesc: 'DingTalk 커넥터 플러그인이 백그라운드에서 설치 중입니다. 지금 어시스턴트 연결을 계속 진행하고 나중에 연결 상태를 확인할 수 있습니다.',
       avatarHint: '클릭하여 교체, 권장 100*100px, 최대 100KB',
       feishuTipPrefix: '로그인',
       feishuTipMiddle: '봇을 생성하려면',
       feishuTipSuffix: '구성하세요',
       feishuPlatformLink: 'Feishu Open Platform',
       feishuGuideLink: '구성 가이드',
-      dingtalkTipPrefix: 'Login to',
-      dingtalkTipMiddle: 'to create a bot, follow',
-      dingtalkTipSuffix: 'to complete setup',
+      dingtalkTipPrefix: '로그인',
+      dingtalkTipMiddle: '봇을 생성하려면',
+      dingtalkTipSuffix: '설정을 완료하세요',
       dingtalkPlatformLink: 'DingTalk Open Platform',
-      dingtalkGuideLink: 'configuration guide',
-      qqTipPrefix: 'Login to',
-      qqTipMiddle: 'to create a bot, follow',
-      qqTipSuffix: 'to configure',
+      dingtalkGuideLink: '구성 가이드',
+      qqTipPrefix: '로그인',
+      qqTipMiddle: '봇을 생성하려면',
+      qqTipSuffix: '구성하세요',
       qqPlatformLink: 'QQ Open Platform',
-      qqGuideLink: 'configuration guide',
-      wecomTipPrefix: 'Login to',
-      wecomTipMiddle: 'to create a bot, follow',
-      wecomTipSuffix: 'to configure',
+      qqGuideLink: '구성 가이드',
+      wecomTipPrefix: '로그인',
+      wecomTipMiddle: '봇을 생성하려면',
+      wecomTipSuffix: '구성하세요',
       wecomPlatformLink: 'WeCom Open Platform',
-      wecomGuideLink: 'configuration guide',
+      wecomGuideLink: '구성 가이드'
     },
     delete: {
       title: '삭제 확인',
-      desc: '채널 ',
-      success: '연결 끊김',
-      failed: '연결 끊기 실패',
+      desc: '채널을 삭제하시겠습니까 ',
+      success: '삭제 성공',
+      failed: '삭제 실패'
     },
     connect: {
-      success: 'Connected successfully',
-      failed: 'Connection failed',
+      success: '성공적으로 연결되었습니다',
+      failed: '연결 실패'
     },
     disconnect: {
-      success: 'Disconnected',
-      failed: 'Failed to disconnect',
+      success: '연결 끊김',
+      failed: '연결을 끊지 못했습니다'
     },
     meta: {
       feishu: {
         name: 'Feishu / Lark',
-        botName: 'Feishu',
+        botName: 'Feishu'
       },
       telegram: {
         name: 'Telegram',
         botName: 'Telegram',
-        description: 'Telegram bot via Bot API',
+        description: 'Bot API를 통한 Telegram 봇'
       },
       discord: {
         name: 'Discord',
         botName: 'Discord',
-        description: 'Discord bot via Gateway',
+        description: 'Gateway를 통한 Discord 봇'
       },
       whatsapp: {
         name: 'WhatsApp',
         botName: 'WhatsApp',
-        description: 'WhatsApp Business API',
+        description: 'WhatsApp 비즈니스 API'
       },
       dingtalk: {
         name: 'DingTalk',
         botName: 'DingTalk',
-        description: 'DingTalk bot via Stream',
+        description: 'Stream을 통한 DingTalk 봇'
       },
       wecom: {
         name: 'WeCom',
         botName: 'WeCom',
-        description: 'Enterprise WeChat bot',
+        description: '기업용 WeChat 봇'
       },
       qq: {
         name: 'QQ',
         botName: 'QQ',
-        description: 'QQ 오픈 플랫폼 봇, WebSocket 연동',
+        description: 'QQ 오픈 플랫폼 봇, WebSocket 연동'
       },
       botName: 'WeCom',
       description: '기업 위챗 봇',
-      name: 'WeCom',
+      name: 'WeCom'
     },
     authType: {
       token: '토큰',
@@ -1734,34 +1716,32 @@ export default {
       title: '채널 없음',
       unbind: '연결 해제',
       unbindSuccess: '어시스턴트 연결 해제됨',
-      unbound: '연결 안됨',
+      unbound: '연결 안됨'
     },
-    comingSoon: 'Coming soon',
-    agentFallback: 'AI Assistant',
+    comingSoon: '출시 예정',
+    agentFallback: 'AI 어시스턴트',
     unbindConfirmTitle: '연결 해제 확인',
-    unbindConfirmDesc:
-      '채널 "{name}"에서 어시스턴트 연결을 해제할까요? 다시 연결해야 메시지를 처리합니다.',
+    unbindConfirmDesc: '채널 "{name}"에서 어시스턴트 연결을 해제할까요? 다시 연결해야 메시지를 처리합니다.',
     unbindSuccess: '어시스턴트 연결이 해제되었습니다',
-    bindSuccess: 'Assistant bound successfully',
+    bindSuccess: '어시스턴트 연결 성공',
     provisioning: {
-      toastTitle: '백그라운드 처리 중',
-      toastDescription:
-        '채널과 게이트웨이를 생성하거나 동기화하는 중입니다. 연결 상태가 자동으로 업데이트됩니다. 잠시만 기다려 주세요.',
-      toastDescriptionWithAgent:
-        '채널, 어시스턴트 또는 게이트웨이를 생성하거나 동기화하는 중입니다. 잠시만 기다려 주세요.',
+      toastTitle: '백그라운드에서 처리 중',
+      toastDescription: '채널과 Gateway가 아직 생성되거나 동기화되고 있습니다. 연결 상태는 자동으로 업데이트됩니다. 잠시만 기다려 주세요.',
+      toastDescriptionWithAgent: '채널, 도우미 또는 Gateway가 아직 생성되거나 동기화되고 있습니다. 잠시만 기다려 주세요.'
     },
     card: {
-      appId: 'Appid',
-      bind: 'Bind',
-      switchBind: 'Switch binding',
-      unbind: 'Unbind',
-      bound: 'Bound',
-      unbound: 'Not bound',
-      provisioning: '생성 중',
+      appId: '앱 ID',
+      applicationId: '애플리케이션 ID',
+      bind: '연결',
+      switchBind: '연결 전환',
+      unbind: '연결 해제',
+      bound: '연결됨',
+      unbound: '연결되지 않음',
+      provisioning: '생성 중'
     },
     empty: {
-      title: 'No channels yet',
-      desc: 'You have not configured any channels. Click the button above to add one.',
+      title: '아직 채널이 없습니다',
+      desc: '아직 채널을 구성하지 않았습니다. 위 버튼을 눌러 추가하세요'
     },
     inline: {
       avatarName: '봇 아바타/이름',
@@ -1772,23 +1752,22 @@ export default {
       verifying: '인증 중…',
       verifyConfig: '구성 인증',
       save: '저장 및 추가',
-      configSteps: '구성 단계',
+      configSteps: '구성 단계'
     },
     toggle: {
       enableSuccess: '활성화 성공',
-      dingtalkPluginNotReady:
-        '딩톡 커넥터 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.',
+      dingtalkPluginNotReady: '딩톡 커넥터 플러그인이 아직 설치 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.',
       disableSuccess: '비활성화 성공',
       enableTitle: '이 채널을 활성화하시겠습니까?',
       disableTitle: '이 채널을 비활성화하시겠습니까?',
       enableDesc: '활성화되면 시스템이 연결을 시도하고 해당 채널의 메시지를 수신합니다.',
-      disableDesc: '비활성화되면 연결이 닫히고 해당 채널의 메시지를 더 이상 수신하지 않습니다.',
+      disableDesc: '비활성화되면 연결이 닫히고 해당 채널의 메시지를 더 이상 수신하지 않습니다.'
     },
     status: {
       online: '연결됨',
       error: '오류',
       offline: '연결 끊김',
-      provisioning: '생성 중',
+      provisioning: '생성 중'
     },
     bindAgent: {
       title: '어시스턴트 선택',
@@ -1798,21 +1777,50 @@ export default {
       autoGenerateSuccess: '어시스턴트가 생성되고 채널이 연결되었습니다',
       empty: '어시스턴트 없음, 먼저 만드세요',
       noDesc: '설명 없음',
-      confirm: '연결 확인',
+      confirm: '연결 확인'
     },
+    wechat: {
+      emptyTitle: '아직 WeChat이 추가되지 않았습니다',
+      emptyDesc: 'Tencent 공식 OpenClaw 플러그인으로 QR 코드를 스캔해 개인 WeChat을 연결하고 WeChat 메시지 수신 및 처리를 시작하세요.',
+      addNow: '지금 추가',
+      configTitle: 'WeChat 설정',
+      configSubtitle: 'Tencent 공식 OpenClaw 플러그인으로 QR 코드를 스캔해 개인 WeChat을 연결합니다',
+      howToConnect: '연결 방법',
+      step1: 'Tencent 공식 OpenClaw 플러그인으로 QR 코드를 스캔해 개인 WeChat을 연결합니다',
+      step3: 'QR 코드 생성 을 클릭하면 ChatClaw가 OpenClaw에 공식 WeChat 플러그인을 설치하고 활성화합니다',
+      step4: '아래 QR 코드를 WeChat으로 스캔하고 휴대폰에서 연결을 확인하세요',
+      step5: '연결에 성공하면 WeChat에 새로운 "WeChat ClawBot" 대화가 자동으로 표시됩니다. 이후 같은 스캔 절차로 더 많은 WeChat 계정을 추가하거나 기존 계정을 다시 연결할 수 있습니다.',
+      configStepsLink: '설정 단계',
+      generateQRCode: 'QR 코드 생성',
+      generating: '생성 중…',
+      scanHint: '아래 QR 코드를 WeChat으로 스캔하고 휴대폰에서 연결을 확인하세요',
+      waitingForScan: '스캔 대기 중…',
+      refresh: '새로고침',
+      loginSuccess: 'WeChat 연결 성공',
+      assistantPromptTitle: '도우미 연결',
+      assistantPromptDesc: '이 채널은 현재 기본적으로 메인 도우미(main)에 연결되어 있으며, 메시지는 메인 도우미가 처리합니다. 다른 도우미를 사용하려면 기존 도우미를 연결하거나 새 도우미를 만들어 이 WeChat 채널에 자동으로 연결할 수 있습니다.',
+      useMainAssistant: '완료 (메인 도우미 사용)',
+      bindExistingAssistant: '기존 도우미 연결',
+      createAssistantManually: '새 도우미 만들기',
+      createAssistantHint: '새 도우미를 만들 때는 이름 등의 정보를 직접 입력해야 합니다. 생성이 완료되면 자동으로 연결되고 연결 상태가 새로고침됩니다.',
+      missingChannelId: '채널 정보를 가져오지 못했습니다. 이 창을 닫고 채널 목록을 새로고친 후 다시 시도하세요.',
+      missingChannelIdHint: '채널 ID를 가져오지 못했습니다. 이 창을 닫고 채널 목록에서 도우미를 수동으로 연결하세요.',
+      channelNotFound: '해당 채널을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.',
+      pluginInstallTryLater: '공식 WeChat 플러그인이 백그라운드에서 설치되거나 활성화되는 중입니다. 잠시 후 다시 시도하세요.',
+      editNotSupported: 'WeChat은 QR 코드 스캔으로 연결되므로 여기서 편집할 수 없습니다. 계정을 바꾸려면 채널 페이지에서 이 채널을 삭제한 뒤 다시 스캔해서 추가하세요.'
+    }
   },
   scheduledTasks: {
-    title: '작업',
+    title: '예약 작업',
     subtitle: '예약된 작업으로 AI 워크플로 자동화',
     listTitle: '작업 목록',
-    copySuffix: ' Copy',
+    copySuffix: ' 사본',
     create: '작업 만들기',
     addTask: '작업 추가',
     refresh: '새로고침',
     edit: '작업 편집',
     empty: '예약된 작업 없음',
-    emptyDescription:
-      '创建定时任务以自动化 AI 工作流。任务可以在指定时间发送消息、运行查询或执行操作。',
+    emptyDescription: '예약 작업을 만들어 AI 워크플로를 자동화합니다. 작업은 지정된 시간에 메시지를 보내고, 쿼리를 실행하고, 작업을 수행할 수 있습니다.',
     errorReason: '오류 이유 보기',
     actionsMenu: '작업 메뉴 열기',
     total: '총 작업',
@@ -1821,33 +1829,33 @@ export default {
     failed: '실패',
     runNow: '지금 실행',
     history: '기록',
-    runHistoryTitle: 'Run History',
-    copy: 'Copy',
+    runHistoryTitle: '실행 기록',
+    copy: '복사',
     delete: '삭제',
-    deleteConfirmTitle: 'Confirm Delete',
-    deleteConfirmDescription: 'Are you sure you want to delete task ',
-    confirmDelete: 'Delete',
-    enabled: '작업 활성화',
+    deleteConfirmTitle: '삭제 확인',
+    deleteConfirmDescription: '작업 "{name}"을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.',
+    confirmDelete: '삭제',
+    enabled: '활성화됨',
     disabled: '일시 중지됨',
     statusRunning: '진행 중',
     statusFailed: '실패',
     statusSuccess: '성공',
     statusPending: '대기 중',
-    statusExpired: 'Ended',
-    expiredCannotEnable: 'This task has expired and can no longer be enabled.',
+    statusExpired: '종료됨',
+    expiredCannotEnable: '이 작업은 만료되어 더 이상 활성화할 수 없습니다',
     runTriggerSchedule: '예약',
     runTriggerManual: '수동',
     lastRunPrefix: '마지막: ',
     nextRunPrefix: '다음: ',
     noRuns: '실행 기록 없음',
     columns: {
-      title: 'Task',
-      schedule: 'Schedule',
-      lastRun: 'Last Run',
-      nextRun: 'Next Run',
-      agent: 'Assistant',
-      status: 'Status',
-      actions: 'Actions',
+      title: '작업',
+      schedule: '예약',
+      lastRun: '마지막 실행',
+      nextRun: '다음 실행',
+      agent: '어시스턴트',
+      status: '상태',
+      actions: '작업'
     },
     conversationEmpty: '대화 내용 없음',
     dialog: {
@@ -1865,13 +1873,13 @@ export default {
       scheduleType: {
         preset: '빠른 설정',
         custom: '사용자 지정 시간',
-        cron: 'Linux crontab',
+        cron: 'Linux crontab'
       },
       customMode: {
         interval: '매',
         daily: '매일',
         weekly: '매주',
-        monthly: '매월',
+        monthly: '매월'
       },
       monthlyDay: '{day}일',
       minutes: '분',
@@ -1879,61 +1887,59 @@ export default {
       cronPlaceholder: '예: 0 9 * * *',
       enableNowTitle: '즉시 활성화',
       enableNowHint: '생성 후 바로 이 작업을 시작합니다',
-      submitting: '제출 중...',
+      submitting: '제출 중...'
     },
     operationLog: {
-      title: 'Operation Log',
-      detailTitle: 'Operation Log Details',
-      empty: 'No operation logs yet',
-      viewDetail: 'View details',
+      title: '작업 로그',
+      detailTitle: '작업 로그 상세',
+      empty: '아직 작업 로그가 없습니다',
+      viewDetail: '상세 보기',
       columns: {
-        task: 'Task',
-        operationType: 'Operation Type',
-        operationSource: 'Operation Source',
-        changedField: 'Changed Field',
-        before: 'Before',
-        after: 'After',
-        time: 'Operation Time',
-        action: 'Action',
+        task: '작업',
+        operationType: '작업 유형',
+        operationSource: '작업 출처',
+        changedField: '변경된 항목',
+        before: '이전',
+        after: '이후',
+        time: '작업 시간',
+        action: '작업'
       },
       types: {
-        create: 'Create Task',
-        delete: 'Delete Task',
-        update: 'Update Task',
+        create: '작업 만들기',
+        delete: '작업 삭제',
+        update: '작업 업데이트'
       },
       sources: {
-        ai: 'AI Assistant',
-        manual: 'Manual',
+        ai: 'AI 어시스턴트',
+        manual: '수동'
       },
       notification: {
-        onDemand: 'On demand',
+        onDemand: '수동 실행'
       },
       status: {
-        enabled: 'Enabled',
-        disabled: 'Disabled',
+        enabled: '활성화됨',
+        disabled: '비활성화됨'
       },
       fields: {
-        status: 'Status',
-        name: 'Name',
-        prompt: 'Prompt',
-        agent: 'Assistant',
-        notificationChannels: 'Notification Channels',
-        scheduleTime: 'Schedule Time',
-      },
+        status: '상태',
+        name: '이름',
+        prompt: '프롬프트',
+        agent: '어시스턴트',
+        notificationChannels: '알림 채널',
+        scheduleTime: '예약 시간'
+      }
     },
     notification: {
-      label: 'Notification',
-      optional: 'Optional',
-      none: 'Do not send notifications',
-      channelsLabel: 'Select channels',
-      selectTypeFirst: 'Please select a notification type first',
-      selectChannel: 'Please select channels',
-      emptyChannels: 'No channels are available for the current notification type',
-      hintSelected:
-        'You can select multiple channels. Results will be sent there after the task completes.',
-      hintUnselected:
-        'Choose a notification type first, then select one or more channels from that platform.',
-      channelFallback: 'Channel {id}',
+      label: '알림',
+      optional: '선택 사항',
+      none: '알림을 보내지 않음',
+      channelsLabel: '채널 선택',
+      selectTypeFirst: '먼저 알림 유형을 선택하세요',
+      selectChannel: '채널을 선택하세요',
+      emptyChannels: '현재 알림 유형에 사용할 수 있는 채널이 없습니다',
+      hintSelected: '여러 채널을 선택할 수 있습니다. 작업이 완료되면 결과가 해당 채널로 전송됩니다',
+      hintUnselected: '먼저 알림 유형을 선택한 뒤 해당 플랫폼에서 하나 이상의 채널을 선택하세요',
+      channelFallback: '채널 {id}'
     },
     presets: {
       everyMinute: '매분',
@@ -1944,16 +1950,16 @@ export default {
       everyDay1800: '매일 오후 6:00',
       weekdays0900: '평일 오전 9:00',
       everyMonday0900: '매주 월요일 오전 9:00',
-      everyMonth10900: '매월 1일 오전 9:00',
+      everyMonth10900: '매월 1일 오전 9:00'
     },
     weekdays: {
-      sunday: 'Sunday',
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-      friday: 'Friday',
-      saturday: 'Saturday',
+      sunday: '일요일',
+      monday: '월요일',
+      tuesday: '화요일',
+      wednesday: '수요일',
+      thursday: '목요일',
+      friday: '금요일',
+      saturday: '토요일'
     },
     weekdaysShort: {
       sunday: '일',
@@ -1962,53 +1968,52 @@ export default {
       wednesday: '수',
       thursday: '목',
       friday: '금',
-      saturday: '토',
+      saturday: '토'
     },
     describe: {
       interval: '{value}분마다',
       monthly: '매월 {day}일 {time}',
       weekly: '매주 {labels} {time}',
-      daily: '매일 {time}',
+      daily: '매일 {time}'
     },
     form: {
-      name: 'Task Name',
-      prompt: 'Prompt',
-      agent: 'Agent',
-      provider: 'Provider',
-      model: 'Model',
-      libraries: 'Libraries',
-      chatMode: 'Chat Mode',
-      thinking: 'Thinking',
-      enabled: 'Enable Task',
-      expiresAt: 'Expiration Date',
-      expiredHint:
-        'This task has expired and will not run again. To resume it, move the expiration time to a future date.',
-      scheduleType: 'Schedule Type',
-      schedulePreset: 'Preset',
-      scheduleCustom: 'Custom Time',
-      scheduleCron: 'Cron Expression',
-      frequency: 'Frequency',
-      time: 'Run Time',
-      weekdays: 'Weekdays',
-      dayOfMonth: 'Day of Month',
+      name: '작업 이름',
+      prompt: '프롬프트',
+      agent: '에이전트',
+      provider: '공급자',
+      model: '모델',
+      libraries: '지식베이스',
+      chatMode: '채팅 모드',
+      thinking: '사고',
+      enabled: '작업 활성화',
+      expiresAt: '만료일',
+      expiredHint: '이 작업은 이미 만료되어 다시 실행되지 않습니다. 다시 시작하려면 만료 시간을 미래 시점으로 변경하세요.',
+      scheduleType: '예약 유형',
+      schedulePreset: '프리셋',
+      scheduleCustom: '사용자 지정 시간',
+      scheduleCron: 'Cron 표현식',
+      frequency: '빈도',
+      time: '실행 시간',
+      weekdays: '요일',
+      dayOfMonth: '매월 날짜',
       cronExpr: 'Cron',
-      interval: 'Every X Minutes',
-      namePlaceholder: 'Enter task name',
-      promptPlaceholder: 'Enter the prompt sent on each automatic run',
-      selectAgent: 'Select an agent',
-      selectProvider: 'Follow agent default',
-      selectModel: 'Follow agent/provider default',
-      noLibraries: 'No libraries selected',
-      allLibraries: '{count} libraries selected',
-      daily: 'Daily',
-      weekly: 'Weekly',
-      monthly: 'Monthly',
-      selectExpirationDate: 'Select expiration date',
-      today: 'Today',
-      clear: 'Clear',
+      interval: 'X분마다',
+      namePlaceholder: '작업 이름을 입력하세요',
+      promptPlaceholder: '자동 실행마다 전송할 프롬프트를 입력하세요',
+      selectAgent: '에이전트를 선택하세요',
+      selectProvider: '에이전트 기본값 따르기',
+      selectModel: '에이전트/공급자 기본값 따르기',
+      noLibraries: '선택된 지식베이스가 없습니다',
+      allLibraries: '{count}개의 지식베이스가 선택됨',
+      daily: '매일',
+      weekly: '매주',
+      monthly: '매월',
+      selectExpirationDate: '만료일 선택',
+      today: '오늘',
+      clear: '지우기',
       calendarTitle: '{year} / {month}',
       yearOption: '{year}',
-      monthOption: '{month}',
+      monthOption: '{month}'
     },
     actions: '작업',
     agent: '어시스턴트',
@@ -2040,116 +2045,114 @@ export default {
     status: '상태',
     thinking: '생각',
     time: '실행 시간',
-    weekly: '매주',
+    weekly: '매주'
   },
   openclawCron: {
-    title: 'Scheduled Tasks',
-    subtitle: 'Automate AI tasks with scheduled tasks',
-    create: 'Create Task',
-    addTask: 'Add Task',
-    edit: 'Edit Task',
-    delete: 'Delete',
-    deleteTitle: 'Delete Task',
-    confirmDelete: 'Confirm Delete',
-    refresh: 'Refresh',
-    empty: 'No scheduled tasks',
-    emptyDescription: 'After creation, tasks will run automatically at the configured time.',
-    enabled: 'Enabled',
-    disabled: 'Paused',
-    runNow: 'Run Now',
-    historyAction: 'History',
-    actionsMenu: 'Actions',
-    errorReason: 'View error reason',
-    statusRunning: 'Running',
-    lastRunPrefix: 'Last: ',
+    title: '예약 작업',
+    subtitle: '예약 작업으로 AI 작업을 자동화합니다',
+    create: '작업 만들기',
+    addTask: '작업 추가',
+    edit: '작업 편집',
+    delete: '삭제',
+    deleteTitle: '작업 삭제',
+    confirmDelete: '삭제 확인',
+    refresh: '새로고침',
+    empty: '예약된 작업이 없습니다',
+    emptyDescription: '생성 후 작업은 설정한 시간에 자동으로 실행됩니다.',
+    enabled: '활성화됨',
+    disabled: '일시 중지됨',
+    runNow: '지금 실행',
+    historyAction: '기록',
+    actionsMenu: '작업',
+    errorReason: '오류 이유 보기',
+    statusRunning: '실행 중',
+    lastRunPrefix: '마지막: ',
     summary: {
-      total: 'Total',
-      enabled: 'Running',
-      disabled: 'Paused',
-      failed: 'Failed',
-      failedRuns: 'Failed',
+      total: '총계',
+      enabled: '실행 중',
+      disabled: '일시 중지됨',
+      failed: '실패',
+      failedRuns: '실패'
     },
     columns: {
-      title: 'Task',
-      schedule: 'Schedule',
-      agent: 'Agent',
-      status: 'Status',
-      actions: 'Actions',
+      title: '작업',
+      schedule: '예약',
+      agent: '에이전트',
+      status: '상태',
+      actions: '작업'
     },
     dialog: {
-      subtitle: 'Schedule an automated AI task',
-      name: 'Task Name',
-      namePlaceholder: 'For example: Morning briefing',
-      description: 'Description',
-      descriptionPlaceholder: 'Optional, used for extra context',
-      agent: 'Linked Assistant',
-      defaultAgent: 'Default Assistant',
-      useDefaultAgent: 'Unspecified (use default assistant)',
-      scheduleTitle: 'Set the schedule',
-      scheduleHint: 'Choose how the task should run and set the execution time.',
+      subtitle: '자동화된 AI 작업 예약',
+      name: '작업 이름',
+      namePlaceholder: '예: 아침 브리핑',
+      description: '설명',
+      descriptionPlaceholder: '선택 사항이며, 추가 설명에 사용됩니다',
+      agent: '연결된 어시스턴트',
+      defaultAgent: '기본 어시스턴트',
+      useDefaultAgent: '지정 안 함 (기본 어시스턴트 사용)',
+      scheduleTitle: '일정 설정',
+      scheduleHint: '작업 실행 방식을 선택하고 실행 시간을 설정하세요.',
       scheduleKinds: {
-        cron: 'Cron',
-        every: 'Interval',
-        custom: 'Custom Time',
-        at: 'One-Time',
+        cron: 'Cron 표현식',
+        every: '간격',
+        custom: '사용자 지정 시간',
+        at: '일회성'
       },
-      cronPlaceholder: 'For example: 0 9 * * *',
-      everyPlaceholder: 'For example: 10m / 1h / 30s',
-      everyHint: 'For example: 30 seconds, 10 minutes, 2 hours, 1 day',
+      cronPlaceholder: '예: 0 9 * * *',
+      everyPlaceholder: '예: 10m / 1h / 30s',
+      everyHint: '예: 30초, 10분, 2시간, 1일',
       everyUnits: {
-        seconds: 'Seconds',
-        minutes: 'Minutes',
-        hours: 'Hours',
-        days: 'Days',
+        seconds: '초',
+        minutes: '분',
+        hours: '시간',
+        days: '일'
       },
-      atPlaceholder: 'For example: 2026-03-25T21:00:00+08:00 or +20m',
-      timezone: 'Timezone',
-      systemTimezone: 'System Default',
-      exact: 'Exact Execution',
-      exactHint:
-        'Enable OpenClaw exact mode to target the configured moment as closely as possible.',
-      enableNowTitle: 'Enable immediately',
-      enableNowHint: 'Start running this task immediately after creation',
-      message: 'Message',
-      messagePlaceholder: 'Message sent when the assistant runs on schedule',
-      systemEvent: 'System Event',
-      systemEventPlaceholder: 'Optional system event payload',
-      advanced: 'Advanced Settings',
-      advancedHint: 'Extra options for model, delivery, session, timeout, and more',
-      model: 'Model',
-      modelPlaceholder: 'For example: provider/model or alias',
-      thinking: 'Thinking',
-      sessionTarget: 'Session Target',
-      sessionKey: 'Session Key',
-      sessionKeyPlaceholder: 'For example: agent:main:my-session',
-      wakeMode: 'Wake Mode',
-      timeoutMs: 'Timeout (ms)',
-      channelPlatform: 'Channel Type',
-      channelPlatformPlaceholder: 'Select a configured channel',
-      deliveryTitle: 'Result Delivery',
-      deliveryHint: 'Choose a configured channel platform and confirm the target ID.',
-      deliveryTargetMode: 'Delivery Target',
-      deliveryTargetId: 'Target ID',
-      deliveryTargetIdPlaceholder: 'Enter a conversation or user ID',
-      deliveryTargetHintTitle: 'Default Target',
-      deliveryTargetFixedHint:
-        'The latest delivered target ID for the selected assistant and channel type is prefilled, and you can still adjust it manually.',
+      atPlaceholder: '예: 2026-03-25T21:00:00+08:00 또는 +20m',
+      timezone: '시간대',
+      systemTimezone: '시스템 기본값',
+      exact: '정확 실행',
+      exactHint: '설정한 시각에 최대한 정확히 맞추려면 OpenClaw exact 모드를 사용하세요',
+      enableNowTitle: '즉시 활성화',
+      enableNowHint: '생성 후 바로 이 작업을 시작합니다',
+      message: '메시지',
+      messagePlaceholder: '예약 실행 시 어시스턴트에 보낼 메시지',
+      systemEvent: '시스템 이벤트',
+      systemEventPlaceholder: '선택적인 시스템 이벤트 payload',
+      advanced: '고급 설정',
+      advancedHint: '모델, 전달, 세션, 타임아웃 등의 추가 옵션',
+      model: '모델',
+      modelPlaceholder: '예: provider/model 또는 alias',
+      thinking: '사고',
+      sessionTarget: '세션 대상',
+      sessionKey: '세션 키',
+      sessionKeyPlaceholder: '예: agent:main:my-session',
+      wakeMode: '웨이크 모드',
+      timeoutMs: '타임아웃 (ms)',
+      channelPlatform: '채널 유형',
+      channelPlatformPlaceholder: '구성된 채널 선택',
+      deliveryTitle: '결과 전달',
+      deliveryHint: '구성된 채널 플랫폼을 선택하고 대상 ID를 확인하세요.',
+      deliveryTargetMode: '전달 대상',
+      deliveryTargetId: '대상 ID',
+      deliveryTargetIdPlaceholder: '대화 또는 사용자 ID를 입력하세요',
+      deliveryTargetHintTitle: '기본 대상',
+      deliveryTargetFixedHint: '선택한 어시스턴트와 채널 유형에서 가장 최근에 전달된 대상 ID가 기본으로 채워지며, 필요하면 직접 수정할 수 있습니다.',
       deliveryTargetModes: {
-        lastActive: 'Last Active Target',
-        targetId: 'Enter Target ID',
+        lastActive: '마지막 활성 대상',
+        targetId: '대상 ID 입력'
       },
-      selectOneTime: 'Select one-time datetime',
-      hour: 'Hour',
-      minute: 'Minute',
-      second: 'Second',
-      announce: 'Announce',
-      expectFinal: 'Expect Final',
-      lightContext: 'Light Context',
-      bestEffortDeliver: 'Best Effort Deliver',
-      bestEffortDeliverHint: 'Do not fail the whole task when delivery fails',
-      deleteAfterRun: 'Delete After Run',
-      keepAfterRun: 'Keep After Run',
-      enabled: 'Enable Task',
-    },
-  },
+      selectOneTime: '일회성 실행 시간을 선택하세요',
+      hour: '시',
+      minute: '분',
+      second: '초',
+      announce: '알림',
+      expectFinal: '최종 결과 기대',
+      lightContext: '가벼운 컨텍스트',
+      bestEffortDeliver: '최선 전달',
+      bestEffortDeliverHint: '전달에 실패해도 전체 작업을 실패로 처리하지 않습니다',
+      deleteAfterRun: '실행 후 삭제',
+      keepAfterRun: '실행 후 유지',
+      enabled: '작업 활성화'
+    }
+  }
 }

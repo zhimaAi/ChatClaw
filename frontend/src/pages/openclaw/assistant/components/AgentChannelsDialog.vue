@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Plus,
   ShieldCheck,
+  SquareDashed,
   Unlink,
   Edit,
 } from 'lucide-vue-next'
@@ -31,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import ConfigChannelDialog from '@/pages/openclaw/channels/components/ConfigChannelDialog.vue'
+import WechatConfigDialog from '@/pages/openclaw/channels/components/WechatConfigDialog.vue'
 import WecomAddDialog from '@/pages/openclaw/channels/components/WecomAddDialog.vue'
 import {
   DropdownMenu,
@@ -83,6 +85,7 @@ const addBotLoading = ref(false)
 const showConfigChannelDialog = ref(false)
 const showWecomAddDialog = ref(false)
 const channelToEdit = ref<Channel | null>(null)
+const wechatConfigOpen = ref(false)
 
 const currentAgentId = computed(() => props.agent?.id ?? 0)
 const currentAgentName = computed(() => props.agent?.name || t('assistant.channels.currentAgent'))
@@ -122,9 +125,17 @@ const isInlineFormValid = computed(() => {
   return !!(inlineFormAppId.value.trim() && inlineFormAppSecret.value.trim())
 })
 
-const shouldShowCreateForm = computed(() => {
+/** Feishu / WeCom / DingTalk: inline credentials when this agent has no channel on platform. */
+const shouldShowCredentialInlineForm = computed(() => {
   if (!selectedPlatformMeta.value) return false
+  if (selectedPlatformMeta.value.id === 'wechat') return false
   return showCreateForm.value || selectedPlatformChannels.value.length === 0
+})
+
+/** WeChat: QR login flow when this agent has no bound WeChat channel. */
+const shouldShowWechatConnect = computed(() => {
+  if (!selectedPlatformMeta.value || selectedPlatformMeta.value.id !== 'wechat') return false
+  return selectedPlatformChannels.value.length === 0
 })
 
 const unboundPlatformChannels = computed(() => {
@@ -160,12 +171,30 @@ function getPlatformDescription(platformId: string): string {
   return t('assistant.channels.createDesc')
 }
 
-function getAppId(extraConfig: string): string {
+/** Same as OpenClawChannelsPage: WeChat uses account_id in extra_config; others use app_id / bot_id / token. */
+function getChannelCredentialLabel(platform: string): string {
+  return platform === 'wechat' ? t('channels.card.applicationId') : t('channels.card.appId')
+}
+
+function getChannelCredentialDisplay(platform: string, extraConfig: string): string {
+  const p = (platform || '').trim()
   try {
-    const config = JSON.parse(extraConfig)
-    return config.app_id || config.token || 'N/A'
+    const config = JSON.parse(extraConfig || '{}')
+    if (p === 'wechat') {
+      const aid =
+        typeof config.account_id === 'string'
+          ? config.account_id.trim()
+          : String(config.account_id || '').trim()
+      if (aid) return aid
+    }
+    const v =
+      config.app_id ||
+      config.bot_id ||
+      config.token ||
+      (typeof config.account_id === 'string' ? config.account_id.trim() : '')
+    return v ? String(v) : t('common.na')
   } catch {
-    return 'N/A'
+    return t('common.na')
   }
 }
 
@@ -197,7 +226,10 @@ function getChannelStatusText(channel: Channel): string {
 }
 
 function syncCreateFormVisibility(platformId: string) {
-  // Show create form if current agent has no bound channels on this platform
+  if (platformId === 'wechat') {
+    showCreateForm.value = false
+    return
+  }
   const hasBoundChannels = channels.value.some(
     (channel) => channel.platform === platformId && channel.agent_id === currentAgentId.value
   )
@@ -225,7 +257,7 @@ async function loadData() {
     platforms.value = platformList || []
     agents.value = agentList || []
 
-    const selectableIds = ['feishu', 'wecom', 'dingtalk', 'qq']
+    const selectableIds = ['feishu', 'wecom', 'dingtalk', 'qq', 'wechat']
     const hasSelectedPlatform = platforms.value.some(
       (platform) => platform.id === selectedPlatformId.value
     )
@@ -395,7 +427,34 @@ async function handleUnbindChannel(channel: Channel) {
   }
 }
 
+async function tryOpenWechatConfigDialog() {
+  try {
+    const prep = await OpenClawChannelService.PrepareWechatChannel()
+    if (prep?.ready) {
+      wechatConfigOpen.value = true
+      return
+    }
+    toast.default(t('channels.wechat.pluginInstallTryLater'))
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+  }
+}
+
 async function handleToggleChannel(channel: Channel, enabled: boolean) {
+  if (channel.platform === 'wechat' && enabled) {
+    try {
+      const prep = await OpenClawChannelService.PrepareWechatChannel()
+      if (!prep?.ready) {
+        toast.default(t('channels.wechat.pluginInstallTryLater'))
+        await loadData()
+        return
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error))
+      await loadData()
+      return
+    }
+  }
   if (channel.platform === 'dingtalk') {
     try {
       const installed = await OpenClawChannelService.IsDingTalkPluginInstalled()
@@ -433,7 +492,8 @@ function isSelectableChannelPlatform(platformId: string) {
     platformId === 'feishu' ||
     platformId === 'wecom' ||
     platformId === 'dingtalk' ||
-    platformId === 'qq'
+    platformId === 'qq' ||
+    platformId === 'wechat'
   )
 }
 
@@ -524,13 +584,36 @@ async function handleConfigChannelSaved(channel: Channel, isEdit: boolean) {
   }
 }
 
-function handleOpenNewChannelFromAddBotDialog() {
+/** After WeChat QR login: bind new channel to the assistant this dialog is for (same idea as channels page bind, but agent is fixed). */
+async function handleWechatConnected(channelId: number) {
+  if (!props.agent) return
+  await loadData()
+  const ch = channelId > 0 ? channels.value.find((c) => c.id === channelId) : undefined
+  if (!ch) {
+    toast.error(t('channels.wechat.channelNotFound'))
+    return
+  }
+  try {
+    await OpenClawChannelService.BindAgent(ch.id, props.agent.id)
+    toast.success(t('channels.wechat.loginSuccess'))
+    showCreateForm.value = false
+    await loadData()
+  } catch (error) {
+    toast.error(getErrorMessage(error))
+  }
+}
+
+async function handleAddNewChannelFromAddBotDialog() {
   showAddBotDialog.value = false
+  if (selectedPlatformMeta.value?.id === 'wechat') {
+    await tryOpenWechatConfigDialog()
+    return
+  }
   if (selectedPlatformMeta.value?.id === 'wecom') {
     showWecomAddDialog.value = true
-  } else {
-    showConfigChannelDialog.value = true
+    return
   }
+  showConfigChannelDialog.value = true
 }
 
 function handleWecomManualFromQr() {
@@ -638,7 +721,31 @@ function handleWecomManualFromQr() {
                 {{ t('assistant.channels.noPlatforms') }}
               </div>
 
-              <div v-else-if="shouldShowCreateForm">
+              <div
+                v-else-if="shouldShowWechatConnect"
+                class="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-border px-6 py-12 text-center"
+              >
+                <div
+                  class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#f5f5f5] dark:bg-muted"
+                >
+                  <SquareDashed class="size-6 text-[#737373] dark:text-muted-foreground" />
+                </div>
+                <h3 class="text-base font-medium text-[#262626] dark:text-foreground">
+                  {{ t('channels.wechat.emptyTitle') }}
+                </h3>
+                <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
+                  {{ t('channels.wechat.emptyDesc') }}
+                </p>
+                <Button
+                  class="mt-6 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                  @click="tryOpenWechatConfigDialog"
+                >
+                  <Plus class="size-4 shrink-0" />
+                  {{ t('channels.wechat.addNow') }}
+                </Button>
+              </div>
+
+              <div v-else-if="shouldShowCredentialInlineForm">
                 <div
                   class="rounded-[16px] border border-[#d9d9d9] bg-white p-4 shadow-sm dark:border-border dark:bg-card dark:shadow-none dark:ring-1 dark:ring-white/10"
                 >
@@ -789,7 +896,8 @@ function handleWecomManualFromQr() {
                       </div>
 
                       <p class="mt-2 text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
-                        Appid: {{ getAppId(channel.extra_config) }}
+                        {{ getChannelCredentialLabel(channel.platform) }}:
+                        {{ getChannelCredentialDisplay(channel.platform, channel.extra_config) }}
                       </p>
                     </div>
 
@@ -935,7 +1043,7 @@ function handleWecomManualFromQr() {
         <Button
           class="mb-4 h-10 w-full shrink-0 gap-2 rounded-lg bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
           :disabled="addBotLoading"
-          @click="handleOpenNewChannelFromAddBotDialog"
+          @click="handleAddNewChannelFromAddBotDialog"
         >
           <Plus class="size-4 shrink-0" />
           {{ t('assistant.channels.addBot') }}
@@ -985,7 +1093,8 @@ function handleWecomManualFromQr() {
                   {{ channel.name }}
                 </p>
                 <p class="text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
-                  Appid: {{ getAppId(channel.extra_config) }}
+                  {{ getChannelCredentialLabel(channel.platform) }}:
+                  {{ getChannelCredentialDisplay(channel.platform, channel.extra_config) }}
                 </p>
               </div>
             </div>
@@ -1046,4 +1155,6 @@ function handleWecomManualFromQr() {
       }
     "
   />
+
+  <WechatConfigDialog v-model:open="wechatConfigOpen" @connected="handleWechatConnected" />
 </template>
