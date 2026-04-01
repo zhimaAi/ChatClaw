@@ -36,6 +36,10 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 
+; When -DBUNDLE_OPENCLAW=1 is passed by makensis, !ifdef BUNDLE_OPENCLAW evaluates true.
+!ifdef BUNDLE_OPENCLAW
+!endif
+
 # Per-user install: register URL scheme under HKCU so browser can launch the app without admin.
 # SHELL_CONTEXT is used by wails macros and our chatclaw registration; must match REQUEST_EXECUTION_LEVEL.
 !define SHELL_CONTEXT HKCU

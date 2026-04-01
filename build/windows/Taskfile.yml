@@ -102,11 +102,11 @@ tasks:
     summary: Packages the application
     cmds:
       - task: '{{if eq (.FORMAT | default "nsis") "msix"}}create:msix:package{{else}}create:nsis:installer{{end}}'
+        vars:
+          BUNDLE_OPENCLAW: '{{.BUNDLE_OPENCLAW}}'
+          ARCH: '{{.ARCH}}'
     vars:
       FORMAT: '{{.FORMAT | default "nsis"}}'
-      # BUNDLE_OPENCLAW controls whether to include openclaw runtime in the installer
-      # "false" (default): excludes openclaw runtime (installer without bundled Node runtime)
-      # "true": includes openclaw runtime zip (full installer)
       BUNDLE_OPENCLAW: '{{.BUNDLE_OPENCLAW | default "false"}}'
 
   generate:syso:
@@ -124,11 +124,11 @@ tasks:
     summary: Bundles OpenClaw Node runtime under build/openclaw-runtime and zips it for NSIS
     internal: true
     cmds:
-      - go run ./internal/tools/openclawbundle -config build/runtime.yml -os windows -arch {{.ARCH | default ARCH}}
       - |
         {{if eq OS "windows"}}
-        powershell -Command "if (!(Test-Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip')) { Compress-Archive -Path '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}\*' -DestinationPath '{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip' -Force; Write-Host 'Zipped runtime.' } else { Write-Host 'Zip exists, skipping compression.' }"
+        powershell -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}\build\windows\bundle-check.ps1" -ZipPath "{{.ROOT_DIR}}\build\openclaw-runtime\windows-{{.ARCH | default ARCH}}.zip" -Arch "{{.ARCH | default ARCH}}" -ProjectRoot "{{.ROOT_DIR}}"
         {{else}}
+        test -f {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}}.zip && echo "Zip exists, skipping." || go run ./internal/tools/openclawbundle -config build/runtime.yml -os windows -arch {{.ARCH | default ARCH}}
         test -f {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}}.zip && echo "Zip exists, skipping." || (cd {{.ROOT_DIR}}/build/openclaw-runtime/windows-{{.ARCH | default ARCH}} && zip -r ../windows-{{.ARCH | default ARCH}}.zip .)
         {{end}}
 
