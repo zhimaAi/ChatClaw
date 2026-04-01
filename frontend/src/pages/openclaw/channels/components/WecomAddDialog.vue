@@ -230,8 +230,8 @@ function handleManualEntry() {
           <ol class="mt-2 list-decimal space-y-2 pl-5 [list-style-position:outside]">
             <li>{{ t('channels.wecomAdd.step1') }}</li>
             <li>{{ t('channels.wecomAdd.step2') }}</li>
+            <li>{{ t('channels.wecomAdd.step3') }}</li>
           </ol>
-          <p class="mt-2">{{ t('channels.wecomAdd.tipsOrManual') }}</p>
         </div>
 
         <!-- Scan state -->

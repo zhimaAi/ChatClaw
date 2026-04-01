@@ -12,8 +12,6 @@ import {
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import { OpenClawChannelService } from '@bindings/chatclaw/internal/services/openclaw/channels'
-import { openExternalLink } from '@/pages/common/platformDocs'
-
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{
   connected: [channelId: number]
@@ -28,6 +26,8 @@ const qrcodeDataUrl = ref('')
 const sessionKey = ref('')
 const refreshing = ref(false)
 const isPolling = ref(false)
+/** True after login wait ends without success (timeout, API expired, or error). */
+const qrExpired = ref(false)
 
 function wechatResultChannelId(result: unknown): number {
   if (!result || typeof result !== 'object') return 0
@@ -46,11 +46,13 @@ watch(open, (val) => {
     sessionKey.value = ''
     refreshing.value = false
     isPolling.value = false
+    qrExpired.value = false
   }
 })
 
 /** Core QR generation: fetches a new code, updates state, and kicks off polling. Returns true on success. */
 async function doGenerateQRCode(): Promise<boolean> {
+  qrExpired.value = false
   step.value = 'generating'
   try {
     const result = await OpenClawChannelService.GenerateWechatQRCode()
@@ -71,23 +73,34 @@ async function handleGenerateQRCode() {
   if (!ok) step.value = 'initial'
 }
 
+function isStalePoll(key: string) {
+  return sessionKey.value !== key
+}
+
 async function startWaitingForScan(key: string) {
   if (!key) return
   isPolling.value = true
   try {
     const result = await OpenClawChannelService.WaitForWechatLogin(key, '')
-    if (!result) return
+    if (isStalePoll(key)) return
+    if (!result) {
+      if (open.value) qrExpired.value = true
+      return
+    }
     // Guard: if the user closed the dialog before scanning, discard the result.
     if (!open.value) return
     if (result.connected) {
       const cid = wechatResultChannelId(result)
       emit('connected', cid)
       open.value = false
+    } else if (open.value) {
+      qrExpired.value = true
     }
   } catch {
     // On error or timeout, stay on qrcode step so the user can refresh.
+    if (open.value && !isStalePoll(key)) qrExpired.value = true
   } finally {
-    isPolling.value = false
+    if (!isStalePoll(key)) isPolling.value = false
   }
 }
 
@@ -102,9 +115,6 @@ async function handleRefreshQRCode() {
   }
 }
 
-function openConfigSteps() {
-  void openExternalLink('https://docs.openclaw.io/channels/wechat')
-}
 </script>
 
 <template>
@@ -125,15 +135,7 @@ function openConfigSteps() {
           class="rounded-lg bg-muted/50 border border-border p-4 space-y-1.5 text-sm text-foreground"
         >
           <p class="font-medium text-muted-foreground">{{ t('channels.wechat.howToConnect') }}</p>
-          <p>
-            {{ t('channels.wechat.step1') }}
-            <button
-              class="ml-1 text-primary underline-offset-2 hover:underline"
-              @click="openConfigSteps"
-            >
-              {{ t('channels.wechat.configStepsLink') }}
-            </button>
-          </p>
+          <p>{{ t('channels.wechat.step1') }}</p>
           <p>{{ t('channels.wechat.step3') }}</p>
           <p>{{ t('channels.wechat.step4') }}</p>
           <p>{{ t('channels.wechat.step5') }}</p>
@@ -160,18 +162,36 @@ function openConfigSteps() {
       <div v-else-if="step === 'qrcode'" class="px-6 pb-6 space-y-5">
         <p class="text-sm text-muted-foreground">{{ t('channels.wechat.scanHint') }}</p>
 
+        <div
+          v-if="qrExpired"
+          class="rounded-md border border-border border-l-[3px] border-l-muted-foreground bg-muted/30 px-3 py-2.5 text-center text-sm text-muted-foreground shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+        >
+          {{ t('channels.wechat.qrExpiredHint') }}
+        </div>
+
         <div class="flex justify-center">
           <div
-            class="flex h-[220px] w-[220px] items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+            class="relative flex h-[220px] w-[220px] items-center justify-center overflow-hidden rounded-xl border border-border bg-white shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
           >
             <img
               v-if="qrcodeDataUrl"
               :src="qrcodeDataUrl"
               alt="WeChat QR Code"
-              class="h-full w-full object-contain p-3"
+              class="h-full w-full object-contain p-3 transition-[filter,opacity] duration-200"
+              :class="{ 'grayscale opacity-[0.42]': qrExpired }"
             />
             <div v-else class="flex h-full w-full items-center justify-center">
               <LoaderCircle class="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+            <div
+              v-if="qrExpired && qrcodeDataUrl"
+              class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-background/55 dark:bg-background/50"
+            >
+              <span
+                class="rounded-md border border-border bg-popover px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+              >
+                {{ t('channels.wechat.qrExpired') }}
+              </span>
             </div>
           </div>
         </div>

@@ -56,6 +56,7 @@ import {
   isGatewayProvisioning,
   isBindProvisioning,
 } from '@/composables/useOpenClawChannelProvisioning'
+import { useNavigationStore } from '@/stores'
 import { OpenClawChannelService } from '@bindings/chatclaw/internal/services/openclaw/channels'
 import {
   OpenClawAgentsService,
@@ -68,7 +69,10 @@ import type {
 } from '@bindings/chatclaw/internal/services/channels'
 import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 
-defineProps<{ tabId: string }>()
+const props = defineProps<{ tabId: string }>()
+
+const navigationStore = useNavigationStore()
+const isTabActive = computed(() => navigationStore.activeTabId === props.tabId)
 
 const { t, te } = useI18n()
 const { toast: addToast } = useToast()
@@ -600,7 +604,19 @@ async function handleInlineVerify() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  console.info('[OpenClawChannelsPage] mounted, loading channel data', { tabId: props.tabId })
+  void loadData()
+})
+
+// Refresh when user switches back to this tab (component often stays mounted).
+watch(isTabActive, (active) => {
+  if (!active) return
+  console.info('[OpenClawChannelsPage] tab reactivated, refreshing channel data', {
+    tabId: props.tabId,
+  })
+  void loadData()
+})
 </script>
 
 <template>
