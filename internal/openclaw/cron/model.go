@@ -16,8 +16,9 @@ type OpenClawCronAgentOption struct {
 // OpenClawCronDeliveryPlatformOption is the configured delivery platform option for cron forms.
 // OpenClaw Cron 投递平台选项，来自已配置频道的平台集合。
 type OpenClawCronDeliveryPlatformOption struct {
-	Platform string `json:"platform"`
-	Label    string `json:"label"`
+	Platform         string   `json:"platform"`
+	Label            string   `json:"label"`
+	OpenClawAgentIDs []string `json:"openclaw_agent_ids"`
 }
 
 // OpenClawCronSummary is the page-level summary card model.
