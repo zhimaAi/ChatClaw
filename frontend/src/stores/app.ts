@@ -8,6 +8,14 @@ export type Theme = 'light' | 'dark' | 'system'
 export type RunMode = 'gui' | 'server'
 export type SystemOwner = 'chatclaw' | 'openclaw'
 
+function getInitialSystemOwner(): SystemOwner {
+  const stored = localStorage.getItem('currentSystemType')
+  if (stored === 'chatclaw' || stored === 'openclaw') {
+    return stored
+  }
+  return 'openclaw'
+}
+
 export const useAppStore = defineStore('app', () => {
   // 主题设置
   const theme = ref<Theme>('system')
@@ -22,13 +30,11 @@ export const useAppStore = defineStore('app', () => {
   // Whether a new version is available (used to show badge on "Check for Update" button)
   const hasAvailableUpdate = ref(false)
 
-  const currentSystem = ref<SystemOwner>(
-    (localStorage.getItem('currentSystem') as SystemOwner) || 'chatclaw'
-  )
+  const currentSystem = ref<SystemOwner>(getInitialSystemOwner())
 
   const setCurrentSystem = (system: SystemOwner) => {
     currentSystem.value = system
-    localStorage.setItem('currentSystem', system)
+    localStorage.setItem('currentSystemType', system)
     try {
       Events.Emit('system:changed', { system })
     } catch (e) {
