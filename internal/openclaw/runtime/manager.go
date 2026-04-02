@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 
 	"chatclaw/internal/services/settings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -597,19 +599,19 @@ func (m *Manager) broadcastStatus(s RuntimeStatus) {
 	// UI state stays stable during reconnects and errors.
 	if s.InstalledVersion == "" && m.status.InstalledVersion != "" {
 		switch s.Phase {
-		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError, PhaseUpgrading:
 			s.InstalledVersion = m.status.InstalledVersion
 		}
 	}
 	if s.RuntimeSource == "" && m.status.RuntimeSource != "" {
 		switch s.Phase {
-		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError, PhaseUpgrading:
 			s.RuntimeSource = m.status.RuntimeSource
 		}
 	}
 	if s.RuntimePath == "" && m.status.RuntimePath != "" {
 		switch s.Phase {
-		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError:
+		case PhaseStarting, PhaseConnecting, PhaseRestarting, PhaseConnected, PhaseError, PhaseUpgrading:
 			s.RuntimePath = m.status.RuntimePath
 		}
 	}
@@ -886,7 +888,63 @@ func ensureOpenClawStateDir(bundle *bundledRuntime) error {
 	if err := os.MkdirAll(bundle.StateDir, 0o700); err != nil {
 		return fmt.Errorf("create openclaw state dir: %w", err)
 	}
+	// Fix config version downgrade: if openclaw.json was written by a newer version,
+	// gateway will refuse to start ("Config was last written by a newer OpenClaw").
+	// Remove _config_version field to allow the older runtime to start.
+	if err := fixOpenClawConfigVersionIfNeeded(bundle.ConfigPath, bundle.Manifest.OpenClawVersion, slog.Default()); err != nil {
+		// Log but don't fail — gateway startup may still work if config is OK.
+		slog.Default().Warn("openclaw: fix config version failed", "error", err, "config", bundle.ConfigPath)
+	}
 	return nil
+}
+
+// fixOpenClawConfigVersionIfNeeded reads openclaw.json and removes _config_version
+// if it is newer than the runtime version. This prevents gateway startup failure
+// when rolling back to an older bundled runtime after a failed upgrade.
+func fixOpenClawConfigVersionIfNeeded(configPath, runtimeVersion string, log *slog.Logger) error {
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read config: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+	configVersion, _ := cfg["_config_version"].(string)
+	if configVersion == "" {
+		return nil
+	}
+	if isVersionNewerOrEqual(configVersion, runtimeVersion) {
+		// Config is from same or newer version — no action needed.
+		return nil
+	}
+	// Config is from a newer version but we're running an older runtime.
+	// Remove _config_version to allow gateway to start.
+	delete(cfg, "_config_version")
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(configPath, out, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	log.Info("openclaw: config version downgraded",
+		"from", configVersion, "to", runtimeVersion, "config", configPath)
+	return nil
+}
+
+// isVersionNewerOrEqual returns true if v1 >= v2 (semver comparison).
+func isVersionNewerOrEqual(v1, v2 string) bool {
+	a1, err1 := semver.NewVersion(strings.TrimSpace(v1))
+	a2, err2 := semver.NewVersion(strings.TrimSpace(v2))
+	if err1 != nil || err2 != nil {
+		// Non-semver: fallback to string comparison
+		return strings.TrimSpace(v1) >= strings.TrimSpace(v2)
+	}
+	return a1.GreaterThan(a2) || a1.Equal(a2)
 }
 
 func parseVersionOutput(output string) (string, error) {
@@ -1051,4 +1109,15 @@ func shouldRetryConnect(err error) bool {
 		}
 	}
 	return false
+}
+
+// broadcastUpgradeProgress sends a PhaseUpgrading status with a progress percentage (0-100)
+// and a descriptive message, preserving last known runtime metadata.
+func (m *Manager) broadcastUpgradeProgress(progress int, message string) {
+	s := RuntimeStatus{
+		Phase:    PhaseUpgrading,
+		Progress: progress,
+		Message:  message,
+	}
+	m.broadcastStatus(s)
 }

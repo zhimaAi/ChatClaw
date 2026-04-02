@@ -139,16 +139,10 @@ func bundledRuntimeCandidates(target string) ([]runtimeCandidate, error) {
 	cwd, _ := os.Getwd()
 
 	var candidates []runtimeCandidate
-	if current, err := openclaw.UserRuntimeCurrentDir(target); err == nil {
-		candidates = append(candidates, runtimeCandidate{Root: current, Source: runtimeSourceUser})
-	} else {
-		return nil, fmt.Errorf("resolve user runtime current dir: %w", err)
-	}
-	if userTarget, err := openclaw.UserRuntimeTargetDir(target); err == nil {
-		candidates = append(candidates, runtimeCandidate{Root: userTarget, Source: runtimeSourceUser})
-	} else {
-		return nil, fmt.Errorf("resolve user runtime target dir: %w", err)
-	}
+
+	// --- Embedded (bundled with installer / NSIS) — fallback priority ---
+	// Used when no user override exists. Bundled runtime is the authoritative
+	// version for production when the user has not initiated an upgrade.
 	if runtime.GOOS == "darwin" {
 		candidates = append(candidates, runtimeCandidate{
 			Root:   filepath.Clean(filepath.Join(execDir, "..", "Resources", "rt", target)),
@@ -159,14 +153,14 @@ func bundledRuntimeCandidates(target string) ([]runtimeCandidate, error) {
 		Root:   filepath.Join(execDir, "rt", target),
 		Source: runtimeSourceEmbedded,
 	})
+
+	// --- Development paths — only in dev builds ---
 	if cwd != "" {
 		candidates = append(candidates, runtimeCandidate{
 			Root:   filepath.Join(cwd, "build", "openclaw-runtime", target),
 			Source: runtimeSourceDevelopment,
 		})
 	}
-
-	// Walk up from exec dir looking for build/openclaw-runtime/<target>
 	for dir := filepath.Clean(execDir); ; {
 		candidates = append(candidates, runtimeCandidate{
 			Root:   filepath.Join(dir, "build", "openclaw-runtime", target),
@@ -177,6 +171,16 @@ func bundledRuntimeCandidates(target string) ([]runtimeCandidate, error) {
 			break
 		}
 		dir = parent
+	}
+
+	// --- User overrides (OSS install / UI upgrade) — highest priority ---
+	// These take precedence over bundled and development paths so that a
+	// user-initiated upgrade always wins over stale development or bundled runtimes.
+	if current, err := openclaw.UserRuntimeCurrentDir(target); err == nil {
+		candidates = append(candidates, runtimeCandidate{Root: current, Source: runtimeSourceUser})
+	}
+	if userTarget, err := openclaw.UserRuntimeTargetDir(target); err == nil {
+		candidates = append(candidates, runtimeCandidate{Root: userTarget, Source: runtimeSourceUser})
 	}
 
 	// Deduplicate

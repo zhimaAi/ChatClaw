@@ -293,6 +293,7 @@ export default {
       openDashboard: '打开控制台',
       dashboardError: '无法加载 OpenClaw 控制台',
       alreadyLatest: '已经是最新版本',
+      upgradeProgress: '升级进度',
       upgradeSuccess: 'OpenClaw 已升级到 {version}',
       upgradeFailed: 'OpenClaw 升级失败',
     },
