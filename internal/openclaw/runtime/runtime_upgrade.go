@@ -63,6 +63,36 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 	m.closeClient()
 	m.stopProcess()
 
+	// Fast path: if the user runtime current directory already contains the target
+	// version, skip downloading/building and just activate it directly.
+	target := runtime.GOOS + "-" + runtime.GOARCH
+	currentDir, err := openclaw.UserRuntimeCurrentDir(target)
+	if err != nil {
+		// Not fatal — fall through to full install flow
+	} else {
+		if skip, _ := checkUserRuntimeAlreadyHasVersion(currentDir, latestVersion); skip {
+			// Quick switch: point resolveBundledRuntime to currentDir as user candidate,
+			// then reconcile to activate. No download required.
+			m.app.Logger.Info("openclaw: runtime already at latest version, activating",
+				"version", latestVersion, "dir", currentDir)
+			if err := m.reconcileLocked(false); err != nil {
+				return nil, fmt.Errorf("activate existing runtime: %w", err)
+			}
+			status := m.GetStatus()
+			result.Upgraded = true
+			result.CurrentVersion = latestVersion
+			result.RuntimeSource = runtimeSourceUser
+			result.RuntimePath = currentDir
+			if status.RuntimeSource == "" {
+				result.RuntimeSource = status.RuntimeSource
+			}
+			if status.RuntimePath == "" {
+				result.RuntimePath = status.RuntimePath
+			}
+			return result, nil
+		}
+	}
+
 	stagedBundle, restore, cleanup, err := installUserRuntimeOverride(activeBundle, latestVersion, registryURL, func(progress int, msg string) {
 		m.broadcastUpgradeProgress(progress, msg)
 	})

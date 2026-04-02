@@ -14,7 +14,7 @@ import {
   FileText,
   Mic,
   Video,
-  File,
+  File as FileIcon,
   Plus,
   MoreHorizontal,
 } from 'lucide-vue-next'
@@ -55,6 +55,8 @@ import {
 import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { useThemeLogo } from '@/composables/useLogo'
+import { useOpenClawGatewayComposerGate } from '@/composables/useOpenClawGatewayComposerGate'
+import OpenClawGatewayComposerBanner from '@/components/openclaw/OpenClawGatewayComposerBanner.vue'
 
 interface PendingImage {
   id: string
@@ -161,7 +163,28 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
 
+const { blocksComposer, visualStatus } = useOpenClawGatewayComposerGate()
+
+const canSendEffective = computed(() => props.canSend && !blocksComposer.value)
+
+const sendTooltipText = computed(() => {
+  if (blocksComposer.value) {
+    return t('settings.openclawRuntime.composer.gatewayDisabledHint')
+  }
+  return props.sendDisabledReason || t('assistant.placeholders.enterToSend')
+})
+
+const composerInputPlaceholder = computed(() =>
+  blocksComposer.value
+    ? t('settings.openclawRuntime.composer.gatewayDisabledHint')
+    : t('assistant.placeholders.inputPlaceholder')
+)
+
 const handleChatEnter = (event: KeyboardEvent) => {
+  if (blocksComposer.value) {
+    event.preventDefault()
+    return
+  }
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
   // Some browsers report keyCode=229 during composition.
 
@@ -182,6 +205,7 @@ const handleChatEnter = (event: KeyboardEvent) => {
 }
 
 const handleSendClick = () => {
+  if (blocksComposer.value) return
   console.warn('[assistant][input] Send button clicked', {
     isTeamMode: props.isTeamMode,
     canSend: props.canSend,
@@ -292,7 +316,7 @@ const capabilityIcons: Record<string, any> = {
   image: ImageIcon,
   audio: Mic,
   video: Video,
-  file: File,
+  file: FileIcon,
 }
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -417,6 +441,7 @@ const ALLOWED_DOC_EXTENSIONS = new Set([
 
 // Handle paste event on textarea
 const handlePaste = async (event: ClipboardEvent) => {
+  if (blocksComposer.value) return
   const items = event.clipboardData?.items
   if (!items) return
 
@@ -457,6 +482,7 @@ const handlePaste = async (event: ClipboardEvent) => {
 
 // Handle drag and drop events
 const handleDragOver = (event: DragEvent) => {
+  if (blocksComposer.value) return
   event.preventDefault()
   event.stopPropagation()
   if (event.dataTransfer) {
@@ -466,6 +492,7 @@ const handleDragOver = (event: DragEvent) => {
 }
 
 const handleDragLeave = (event: DragEvent) => {
+  if (blocksComposer.value) return
   event.preventDefault()
   event.stopPropagation()
   // Only set isDragging to false if we're leaving the container
@@ -476,6 +503,7 @@ const handleDragLeave = (event: DragEvent) => {
 }
 
 const handleDrop = async (event: DragEvent) => {
+  if (blocksComposer.value) return
   event.preventDefault()
   event.stopPropagation()
   isDragging.value = false
@@ -576,7 +604,8 @@ onUnmounted(() => {
         ref="inputContainerRef"
         :class="
           cn(
-            'w-full max-w-[800px] rounded-2xl border border-border bg-background px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
+            'w-full max-w-[800px] rounded-2xl border border-border px-4 pt-4 pb-3 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10',
+            blocksComposer ? 'bg-muted' : 'bg-background',
             isDragging && 'ring-2 ring-primary/50 border-primary/50',
             currentMode === 'knowledge' && 'border-t'
           )
@@ -585,6 +614,11 @@ onUnmounted(() => {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
+        <OpenClawGatewayComposerBanner
+          v-if="blocksComposer"
+          :visual-status="visualStatus"
+        />
+        <div :class="cn(blocksComposer && 'pointer-events-none select-none opacity-50')">
         <!-- Image preview area -->
         <div v-if="pendingImages.length > 0" class="mb-3">
           <div class="flex flex-wrap gap-2">
@@ -707,8 +741,14 @@ onUnmounted(() => {
         <textarea
           ref="textareaRef"
           :value="chatInput"
-          :placeholder="t('assistant.placeholders.inputPlaceholder')"
-          class="min-h-[64px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          :disabled="blocksComposer"
+          :placeholder="composerInputPlaceholder"
+          :class="
+            cn(
+              'min-h-[64px] w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none',
+              blocksComposer && 'cursor-not-allowed'
+            )
+          "
           rows="2"
           @input="emit('update:chatInput', ($event.target as HTMLTextAreaElement).value)"
           @keydown.enter.exact="handleChatEnter"
@@ -1259,7 +1299,7 @@ onUnmounted(() => {
             </Button>
           </template>
           <template v-else>
-            <TooltipProvider v-if="!canSend">
+            <TooltipProvider v-if="!canSendEffective">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <!-- disabled button has pointer-events-none; use wrapper to keep tooltip hover -->
@@ -1274,7 +1314,7 @@ onUnmounted(() => {
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{{ sendDisabledReason || t('assistant.placeholders.enterToSend') }}</p>
+                  <p>{{ sendTooltipText }}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -1288,6 +1328,7 @@ onUnmounted(() => {
               <ArrowUp class="size-4" />
             </Button>
           </template>
+        </div>
         </div>
       </div>
     </div>

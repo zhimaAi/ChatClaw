@@ -1886,6 +1886,15 @@ export default {
       monthOption: "{month}",
     },
   },
+  openclawGateway: {
+    banner: {
+      channels:
+        "The gateway is not running. You cannot manage message channels until the gateway is enabled.",
+      scheduledTasks:
+        "The gateway is not running. You cannot manage scheduled tasks until the gateway is enabled.",
+      starting: "The gateway is starting. Please try again in a moment.",
+    },
+  },
   openclawCron: {
     title: "নির্ধারিত টাস্ক",
     subtitle: "নির্ধারিত টাস্ক দিয়ে AI কাজ স্বয়ংক্রিয় করুন",

@@ -4,8 +4,10 @@ import OpenClawRuntimeSettings from '@/pages/settings/components/OpenClawRuntime
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <main class="flex flex-1 flex-col items-center overflow-auto py-8">
-      <OpenClawRuntimeSettings />
+    <main class="flex flex-1 flex-col overflow-auto py-8">
+      <div class="mx-auto w-full max-w-3xl px-8">
+        <OpenClawRuntimeSettings />
+      </div>
     </main>
   </div>
 </template>

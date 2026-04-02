@@ -2046,6 +2046,15 @@ export default {
     time: "실행 시간",
     weekly: "매주",
   },
+  openclawGateway: {
+    banner: {
+      channels:
+        "게이트웨이가 실행 중이 아닙니다. 게이트웨이를 사용해야 메시지 채널을 관리할 수 있습니다.",
+      scheduledTasks:
+        "게이트웨이가 실행 중이 아닙니다. 게이트웨이를 사용해야 예약 작업을 관리할 수 있습니다.",
+      starting: "게이트웨이를 시작하는 중입니다. 잠시 후 다시 시도하세요.",
+    },
+  },
   openclawCron: {
     title: "예약 작업",
     subtitle: "예약 작업으로 AI 작업을 자동화합니다",

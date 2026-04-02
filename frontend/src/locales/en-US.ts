@@ -259,6 +259,21 @@ export default {
     },
     openclawRuntime: {
       title: "OpenClaw Service",
+      pageSubtitle: "Configure gateway and basic runtime settings",
+      gatewayStatusLabel: "Gateway status",
+      /** Short prefix for sidebar one-line gateway + status chip */
+      sidebarGatewayPrefix: "Gateway",
+      /** Between prefix and status in sidebar tag (e.g. "Gateway: running") */
+      sidebarGatewayLabelSeparator: ": ",
+      statusBadge: {
+        running: "running",
+        error: "error",
+        stop: "stop",
+        starting: "starting",
+      },
+      restart: "Restart",
+      logs: "Logs",
+      logsHint: "Gateway logs are under the runtime folder in logs/openclaw-gateway.log.",
       gatewayConnection: "Gateway Connection",
       runtimeStatus: "Runtime Status",
       gatewayEndpoint: "Gateway Endpoint",
@@ -296,6 +311,34 @@ export default {
       upgradeProgress: "Upgrade Progress",
       upgradeSuccess: "OpenClaw upgraded to {version}",
       upgradeFailed: "Failed to upgrade OpenClaw",
+      restartSuccess: "Gateway restarted",
+      restartFailed: "Failed to restart gateway",
+      stop: "Stop",
+      stopSuccess: "Gateway stopped",
+      stopFailed: "Failed to stop gateway",
+      composer: {
+        gatewayTagError: "Gateway error",
+        gatewayTagStop: "Gateway stopped",
+        gatewayTagStarting: "Gateway starting",
+        gatewayDisabledHint: "Gateway is not enabled.",
+      },
+      doctor: {
+        title: "OpenClaw Doctor",
+        run: "Run",
+        runAndFix: "Run & fix",
+        command: "Command",
+        workingDir: "Working directory",
+        stdout: "Standard output",
+        stderr: "Standard error",
+        noOutput: "No output",
+        noErrors: "No errors",
+        exitCode: "Exit code",
+        duration: "Duration",
+        running: "Running…",
+        success: "Finished successfully",
+        failed: "Finished with errors",
+        fixed: "Fixed",
+      },
     },
     general: {
       title: "General Settings",
@@ -1959,6 +2002,15 @@ export default {
     deleteConfirmDescription: "Are you sure you want to delete task \"{name}\"? This action cannot be undone.",
     copy: "Copy",
     emptyDescription: "Create scheduled tasks to automate AI workflows. Tasks can send messages, run queries, or perform actions at specified times.",
+  },
+  openclawGateway: {
+    banner: {
+      channels:
+        "The gateway is not running. You cannot manage message channels until the gateway is enabled.",
+      scheduledTasks:
+        "The gateway is not running. You cannot manage scheduled tasks until the gateway is enabled.",
+      starting: "The gateway is starting. Please try again in a moment.",
+    },
   },
   openclawCron: {
     title: "Scheduled Tasks",

@@ -1885,6 +1885,15 @@ export default {
       monthOption: "{month}",
     },
   },
+  openclawGateway: {
+    banner: {
+      channels:
+        "ゲートウェイが起動していません。ゲートウェイが有効になるまでメッセージチャネルを管理できません。",
+      scheduledTasks:
+        "ゲートウェイが起動していません。ゲートウェイが有効になるまでスケジュールタスクを管理できません。",
+      starting: "ゲートウェイを起動しています。しばらくしてから再度お試しください。",
+    },
+  },
   openclawCron: {
     title: "スケジュールタスク",
     subtitle: "スケジュールタスクで AI タスクを自動化",

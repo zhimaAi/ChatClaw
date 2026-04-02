@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { AcceptableValue } from 'reka-ui'
 import { Events } from '@wailsio/runtime'
@@ -11,18 +12,26 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useAppStore, type Theme } from '@/stores'
+import {
+  useAppStore,
+  useOpenClawGatewayStore,
+  isOpenClawRuntimeMutatingPhase,
+  type Theme,
+} from '@/stores'
 import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
+import { RuntimeStatus } from '@bindings/chatclaw/internal/openclaw/runtime/models'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 import TestInstallDialog from './TestInstallDialog.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const gatewayStore = useOpenClawGatewayStore()
+const { runtimePhase } = storeToRefs(gatewayStore)
 const { locale: currentLocale, switchLocale } = useLocale()
 const testInstallOpen = ref(false)
 
@@ -138,6 +147,12 @@ interface OpenClawStatus {
 const openclawStatus = ref<OpenClawStatus | null>(null)
 const openclawInstallError = ref(false)
 
+/** Install row busy: local OSS install or runtime dir mutation from OpenClaw 管家 upgrade. */
+const openclawExtensionRuntimeBusy = computed(
+  () =>
+    !!openclawStatus.value?.installing || isOpenClawRuntimeMutatingPhase(runtimePhase.value)
+)
+
 const isDevMode = ref(false)
 
 const loadOpenClawStatus = async () => {
@@ -170,6 +185,9 @@ const loadOpenClawStatus = async () => {
 }
 
 const handleInstallOpenClaw = async () => {
+  if (isOpenClawRuntimeMutatingPhase(runtimePhase.value) && !openclawStatus.value?.installing) {
+    return
+  }
   openclawInstallError.value = false
   if (openclawStatus.value) {
     openclawStatus.value = { ...openclawStatus.value, installing: true }
@@ -271,9 +289,17 @@ const handleInstall = async (toolId: string) => {
 
 let unsubscribeToolchain: (() => void) | null = null
 let unsubscribeProgress: (() => void) | null = null
+let unsubscribeOpenClawStatus: (() => void) | null = null
 
 onMounted(() => {
   void loadToolStatuses()
+  void gatewayStore.poll()
+  unsubscribeOpenClawStatus = Events.On('openclaw:status', (event: any) => {
+    const data = event?.data?.[0] ?? event?.data ?? event
+    if (data) {
+      gatewayStore.ingestRuntimeStatus(RuntimeStatus.createFrom(data))
+    }
+  })
   unsubscribeToolchain = Events.On('toolchain:status', async (event: any) => {
     const data = event?.data?.[0] ?? event?.data ?? event
     if (data && data.name) {
@@ -301,6 +327,8 @@ onUnmounted(() => {
   unsubscribeToolchain = null
   unsubscribeProgress?.()
   unsubscribeProgress = null
+  unsubscribeOpenClawStatus?.()
+  unsubscribeOpenClawStatus = null
 })
 </script>
 
@@ -407,20 +435,24 @@ onUnmounted(() => {
         <div class="flex shrink-0 flex-col items-end gap-2 pt-0.5">
           <!-- Installed badge (same width pattern as uv/bun/codex — no long version here) -->
           <span
-            v-if="openclawStatus?.installed && !openclawStatus?.installing"
+            v-if="openclawStatus?.installed && !openclawExtensionRuntimeBusy"
             class="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
           >
             <Check class="size-3 shrink-0" />
             {{ t('settings.general.toolchain.installed') }}
           </span>
 
-          <!-- Installing state -->
+          <!-- Installing / runtime dir busy (e.g. upgrade from OpenClaw manager) -->
           <span
-            v-else-if="openclawStatus?.installing"
+            v-else-if="openclawExtensionRuntimeBusy"
             class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
           >
             <Loader2 class="size-3 animate-spin" />
-            {{ t('settings.general.toolchain.installing') }}
+            {{
+              openclawStatus?.installing
+                ? t('settings.general.toolchain.installing')
+                : t('settings.openclawRuntime.upgrading')
+            }}
           </span>
 
           <!-- Install / Update button -->

@@ -1889,6 +1889,15 @@ export default {
       monthOption: "{month}",
     },
   },
+  openclawGateway: {
+    banner: {
+      channels:
+        "The gateway is not running. You cannot manage message channels until the gateway is enabled.",
+      scheduledTasks:
+        "The gateway is not running. You cannot manage scheduled tasks until the gateway is enabled.",
+      starting: "The gateway is starting. Please try again in a moment.",
+    },
+  },
   openclawCron: {
     title: "Tâches planifiées",
     subtitle: "Automatiser les taches IA avec des taches planifiees",

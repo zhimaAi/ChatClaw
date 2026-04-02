@@ -16,6 +16,8 @@
 
 type SvgComponent = any
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useOpenClawGatewayStore } from '@/stores'
+import OpenClawGatewaySidebarStatus from './OpenClawGatewaySidebarStatus.vue'
 import { useI18n } from 'vue-i18n'
 import { useNavigationStore, useAppStore, type NavModule, type SystemOwner } from '@/stores'
 import { cn } from '@/lib/utils'
@@ -37,6 +39,20 @@ import ChatWikiSidebarAccountCard from './ChatWikiSidebarAccountCard.vue'
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
+const gatewayStore = useOpenClawGatewayStore()
+
+watch(
+  () => appStore.currentSystem,
+  (sys) => {
+    if (sys === 'openclaw') {
+      void gatewayStore.poll()
+      gatewayStore.startHeartbeat()
+    } else {
+      gatewayStore.stopHeartbeat()
+    }
+  },
+  { immediate: true }
+)
 
 const switcherOpen = ref(false)
 const triggerRef = ref<HTMLButtonElement | null>(null)
@@ -366,6 +382,7 @@ const navIconClass = (item: NavItem) =>
 
     <!-- Bottom navigation area -->
     <div class="flex w-full flex-col gap-1">
+      <OpenClawGatewaySidebarStatus v-if="appStore.currentSystem === 'openclaw'" />
       <ChatWikiSidebarAccountCard v-if="!navigationStore.sidebarCollapsed" />
       <button
         v-for="item in bottomNavItems"
