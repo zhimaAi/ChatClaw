@@ -1682,6 +1682,8 @@ export default {
       scanHint: '请使用 WhatsApp 扫描下方二维码完成授权',
       waitingForScan: '等待扫码中…',
       refresh: '刷新',
+      qrExpired: '二维码已过期',
+      qrExpiredHint: '二维码已失效或等待超时，请点击下方「刷新」重新获取。',
       loginSuccess: 'WhatsApp 已连接',
       pluginInstallTryLater: 'WhatsApp 通道正在启用或尚未就绪，请稍后再试。',
       channelNotFound: '未找到对应频道，请刷新后重试。',

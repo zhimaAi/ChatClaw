@@ -20,10 +20,14 @@ const (
 	whatsappDefaultChannelName   = "WhatsApp"
 	whatsappLoginWaitTimeout     = 8 * time.Minute
 	whatsappLoginRetryDelay      = 1500 * time.Millisecond
-	whatsappQRReadTimeout        = 35 * time.Second
+	whatsappQRFastStartTimeout   = 8 * time.Second
 	whatsappQRStartTimeout       = 25 * time.Second
 	whatsappPluginInstallTimeout = 5 * time.Minute
 	whatsappDefaultAccountID     = "default"
+	whatsappConfigKeyEnabled     = "enabled"
+	whatsappConfigKeySelfChat    = "selfChatMode"
+	whatsappConfigKeyAccounts    = "accounts"
+	whatsappConfigKeyAgentID     = "agentId"
 )
 
 func normalizeWhatsappAccountID(accountID string) string {
@@ -74,14 +78,14 @@ func ensureWhatsappConfigEntry(entry map[string]any) (map[string]any, bool) {
 		entry = map[string]any{}
 	}
 
-	enabled, _ := entry["enabled"].(bool)
-	selfChatMode, _ := entry["selfChatMode"].(bool)
+	enabled, _ := entry[whatsappConfigKeyEnabled].(bool)
+	selfChatMode, _ := entry[whatsappConfigKeySelfChat].(bool)
 	if enabled && selfChatMode {
 		return entry, false
 	}
 
-	entry["enabled"] = true
-	entry["selfChatMode"] = true
+	entry[whatsappConfigKeyEnabled] = true
+	entry[whatsappConfigKeySelfChat] = true
 	return entry, true
 }
 
@@ -91,6 +95,99 @@ func ensureWhatsappAccountConfigEntry(entry map[string]any) (map[string]any, boo
 
 func ensureWhatsappChannelConfigEntry(entry map[string]any) (map[string]any, bool) {
 	return ensureWhatsappConfigEntry(entry)
+}
+
+func whatsappChannelConfigFromRoot(cfg map[string]any) map[string]any {
+	if cfg == nil {
+		return nil
+	}
+	channelsCfg, _ := cfg["channels"].(map[string]any)
+	if channelsCfg == nil {
+		return nil
+	}
+	whatsappCfg, _ := channelsCfg[openClawWhatsappChannelID].(map[string]any)
+	return whatsappCfg
+}
+
+func whatsappAccountConfigs(channelCfg map[string]any) map[string]any {
+	if channelCfg == nil {
+		return nil
+	}
+	accounts, _ := channelCfg[whatsappConfigKeyAccounts].(map[string]any)
+	return accounts
+}
+
+func whatsappAccountConfigFromChannel(channelCfg map[string]any, accountID string) map[string]any {
+	accountID = normalizeWhatsappAccountID(accountID)
+	accounts := whatsappAccountConfigs(channelCfg)
+	if accounts == nil {
+		return nil
+	}
+	entry, _ := accounts[accountID].(map[string]any)
+	return entry
+}
+
+func firstConfiguredWhatsappAccountID(channelCfg map[string]any) string {
+	accounts := whatsappAccountConfigs(channelCfg)
+	if len(accounts) == 0 {
+		return whatsappDefaultAccountID
+	}
+	if _, ok := accounts[whatsappDefaultAccountID]; ok {
+		return whatsappDefaultAccountID
+	}
+	for key := range accounts {
+		if accountID := strings.TrimSpace(key); accountID != "" {
+			return accountID
+		}
+	}
+	return whatsappDefaultAccountID
+}
+
+func whatsappConfiguredAgentIDFromChannel(channelCfg map[string]any, accountID string) string {
+	accountCfg := whatsappAccountConfigFromChannel(channelCfg, accountID)
+	if accountCfg == nil {
+		return ""
+	}
+	agentID, _ := accountCfg[whatsappConfigKeyAgentID].(string)
+	return strings.TrimSpace(agentID)
+}
+
+func whatsappConfiguredAgentIDFromBindings(cfg map[string]any, accountID string) string {
+	bindings, _ := cfg["bindings"].([]any)
+	for _, raw := range bindings {
+		binding, _ := raw.(map[string]any)
+		if binding == nil {
+			continue
+		}
+		if strings.TrimSpace(fmt.Sprint(binding["type"])) != "route" {
+			continue
+		}
+		match, _ := binding["match"].(map[string]any)
+		if match == nil {
+			continue
+		}
+		if strings.TrimSpace(fmt.Sprint(match["channel"])) != openClawWhatsappChannelID {
+			continue
+		}
+		if accountID != "" && strings.TrimSpace(fmt.Sprint(match["accountId"])) != accountID {
+			continue
+		}
+		if agentID := strings.TrimSpace(fmt.Sprint(binding["agentId"])); agentID != "" {
+			return agentID
+		}
+	}
+	return ""
+}
+
+func whatsappConfiguredAgentIDFromConfig(cfg map[string]any, accountID string) string {
+	if cfg == nil {
+		return ""
+	}
+	accountID = normalizeWhatsappAccountID(accountID)
+	if agentID := whatsappConfiguredAgentIDFromChannel(whatsappChannelConfigFromRoot(cfg), accountID); agentID != "" {
+		return agentID
+	}
+	return whatsappConfiguredAgentIDFromBindings(cfg, accountID)
 }
 
 func resolveWhatsappConfigBool(channelCfg map[string]any, accountCfg map[string]any, key string) (bool, bool) {
@@ -112,18 +209,13 @@ func isWhatsappConfigEnabledForAccount(channelCfg map[string]any, accountID stri
 		return false
 	}
 
-	accountID = normalizeWhatsappAccountID(accountID)
-	accounts, _ := channelCfg["accounts"].(map[string]any)
-	var entry map[string]any
-	if accounts != nil {
-		entry, _ = accounts[accountID].(map[string]any)
-	}
+	entry := whatsappAccountConfigFromChannel(channelCfg, accountID)
 
-	enabled, enabledConfigured := resolveWhatsappConfigBool(channelCfg, entry, "enabled")
+	enabled, enabledConfigured := resolveWhatsappConfigBool(channelCfg, entry, whatsappConfigKeyEnabled)
 	if !enabledConfigured {
 		enabled = true
 	}
-	selfChatMode, selfChatConfigured := resolveWhatsappConfigBool(channelCfg, entry, "selfChatMode")
+	selfChatMode, selfChatConfigured := resolveWhatsappConfigBool(channelCfg, entry, whatsappConfigKeySelfChat)
 	return enabled && selfChatConfigured && selfChatMode
 }
 
@@ -133,15 +225,7 @@ func (s *OpenClawChannelService) isWhatsappPluginConfigured(accountID string) bo
 	if err != nil {
 		return false
 	}
-	channelsCfg, _ := cfg["channels"].(map[string]any)
-	if channelsCfg == nil {
-		return false
-	}
-	whatsappCfg, _ := channelsCfg[openClawWhatsappChannelID].(map[string]any)
-	if whatsappCfg == nil {
-		return false
-	}
-	return isWhatsappConfigEnabledForAccount(whatsappCfg, accountID)
+	return isWhatsappConfigEnabledForAccount(whatsappChannelConfigFromRoot(cfg), accountID)
 }
 
 func (s *OpenClawChannelService) isWhatsappPluginReadyForUse() bool {
@@ -251,7 +335,7 @@ func (s *OpenClawChannelService) ensureWhatsappChannelEnabled(accountID string) 
 		whatsappCfg = map[string]any{}
 	}
 	whatsappCfg, channelChanged := ensureWhatsappChannelConfigEntry(whatsappCfg)
-	accounts, _ := whatsappCfg["accounts"].(map[string]any)
+	accounts := whatsappAccountConfigs(whatsappCfg)
 	if accounts == nil {
 		accounts = map[string]any{}
 	}
@@ -270,7 +354,7 @@ func (s *OpenClawChannelService) ensureWhatsappChannelEnabled(accountID string) 
 	}
 
 	accounts[accountID] = entry
-	whatsappCfg["accounts"] = accounts
+	whatsappCfg[whatsappConfigKeyAccounts] = accounts
 	channelsCfg[openClawWhatsappChannelID] = whatsappCfg
 	cfg["channels"] = channelsCfg
 	if err := saveOpenClawJSONConfig(configPath, cfg); err != nil {
@@ -351,6 +435,15 @@ func whatsappLoginWaitMessageSuggestsRetry(blob string) bool {
 		strings.Contains(b, "still waiting for the qr scan")
 }
 
+func whatsappQRStartMessageSuggestsRetry(blob string) bool {
+	b := strings.ToLower(strings.TrimSpace(blob))
+	if b == "" {
+		return true
+	}
+	return whatsappLoginOutputSuggestsQRTimeout(b) ||
+		whatsappLoginWaitMessageSuggestsRetry(b)
+}
+
 type whatsappGatewayLoginStartResult struct {
 	QRDataURL string `json:"qrDataUrl"`
 	Message   string `json:"message"`
@@ -361,11 +454,13 @@ type whatsappGatewayLoginWaitResult struct {
 	Message   string `json:"message"`
 }
 
-func buildWhatsappWebLoginStartParams(accountID string, timeout time.Duration) map[string]any {
+func buildWhatsappWebLoginStartParams(accountID string, timeout time.Duration, force bool) map[string]any {
 	params := map[string]any{
 		"timeoutMs": int(timeout / time.Millisecond),
-		"force":     true,
 		"verbose":   true,
+	}
+	if force {
+		params["force"] = true
 	}
 	if id := strings.TrimSpace(accountID); id != "" {
 		params["accountId"] = id
@@ -381,6 +476,30 @@ func buildWhatsappWebLoginWaitParams(accountID string, timeout time.Duration) ma
 		params["accountId"] = id
 	}
 	return params
+}
+
+func wrapWhatsappQRStartError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if whatsappLoginOutputSuggestsMissingPluginOrChannel(err.Error()) {
+		return errs.Wrap("error.whatsapp_plugin_not_ready", err)
+	}
+	return errs.Wrap("error.whatsapp_qr_not_found", err)
+}
+
+func whatsappQRStartResultError(start *whatsappGatewayLoginStartResult) error {
+	if start == nil {
+		return errs.New("error.whatsapp_qr_not_found")
+	}
+	msg := strings.TrimSpace(start.Message)
+	if msg == "" {
+		return errs.New("error.whatsapp_qr_not_found")
+	}
+	if whatsappLoginOutputSuggestsMissingPluginOrChannel(msg) {
+		return errs.Wrap("error.whatsapp_plugin_not_ready", errors.New(msg))
+	}
+	return errors.New(msg)
 }
 
 // GenerateWhatsappQRCode requests a QR data URL from the OpenClaw gateway's
@@ -405,7 +524,7 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 	s.cancelAllWhatsappLoginSessions()
 
 	accountID := normalizeWhatsappAccountID(s.readFirstWhatsappAccountIDFromOpenClawJSON())
-	startQRCode := func(resetSession bool) (*whatsappGatewayLoginStartResult, error) {
+	startQRCode := func(resetSession bool, force bool, qrTimeout time.Duration) (*whatsappGatewayLoginStartResult, error) {
 		if resetSession {
 			logoutCtx, logoutCancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer logoutCancel()
@@ -421,13 +540,14 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 			}
 		}
 
-		reqCtx, reqCancel := context.WithTimeout(context.Background(), whatsappQRReadTimeout)
+		requestTimeout := qrTimeout + 10*time.Second
+		reqCtx, reqCancel := context.WithTimeout(context.Background(), requestTimeout)
 		defer reqCancel()
-		params := buildWhatsappWebLoginStartParams(accountID, whatsappQRStartTimeout)
+		params := buildWhatsappWebLoginStartParams(accountID, qrTimeout, force)
 		s.app.Logger.Info("openclaw: requesting whatsapp qr code",
 			"accountId", accountID,
-			"request_timeout", whatsappQRReadTimeout.String(),
-			"qr_timeout", whatsappQRStartTimeout.String(),
+			"request_timeout", requestTimeout.String(),
+			"qr_timeout", qrTimeout.String(),
 			"force", params["force"],
 			"verbose", params["verbose"],
 			"resetSession", resetSession)
@@ -451,41 +571,35 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 		return &start, nil
 	}
 
-	start, startErr := startQRCode(false)
+	start, startErr := startQRCode(false, false, whatsappQRFastStartTimeout)
 	if startErr != nil {
-		if whatsappLoginOutputSuggestsMissingPluginOrChannel(startErr.Error()) {
-			return nil, errs.Wrap("error.whatsapp_plugin_not_ready", startErr)
+		if !whatsappLoginOutputSuggestsMissingPluginOrChannel(startErr.Error()) {
+			s.app.Logger.Warn("openclaw: fast whatsapp qr request failed, retrying with reset",
+				"accountId", accountID,
+				"duration", time.Since(startedAt).String(),
+				"error", startErr)
+			start, startErr = startQRCode(true, true, whatsappQRStartTimeout)
 		}
-		return nil, errs.Wrap("error.whatsapp_qr_not_found", startErr)
 	}
-	if start != nil && strings.TrimSpace(start.QRDataURL) == "" && whatsappLoginOutputSuggestsQRTimeout(start.Message) {
-		s.app.Logger.Warn("openclaw: whatsapp qr not received in time, retrying after logout",
+	if startErr != nil {
+		return nil, wrapWhatsappQRStartError(startErr)
+	}
+	if start != nil && strings.TrimSpace(start.QRDataURL) == "" && whatsappQRStartMessageSuggestsRetry(start.Message) {
+		s.app.Logger.Warn("openclaw: whatsapp qr start returned transient state, retrying after reset",
 			"accountId", accountID,
 			"duration", time.Since(startedAt).String(),
 			"message", strings.TrimSpace(start.Message))
-		start, startErr = startQRCode(true)
+		start, startErr = startQRCode(true, true, whatsappQRStartTimeout)
 		if startErr != nil {
-			if whatsappLoginOutputSuggestsMissingPluginOrChannel(startErr.Error()) {
-				return nil, errs.Wrap("error.whatsapp_plugin_not_ready", startErr)
-			}
-			return nil, errs.Wrap("error.whatsapp_qr_not_found", startErr)
+			return nil, wrapWhatsappQRStartError(startErr)
 		}
 	}
-	if start == nil {
-		return nil, errs.New("error.whatsapp_qr_not_found")
-	}
-	if strings.TrimSpace(start.QRDataURL) == "" {
+	if start == nil || strings.TrimSpace(start.QRDataURL) == "" {
 		s.app.Logger.Warn("openclaw: whatsapp qr response missing qr data url",
 			"accountId", accountID,
 			"duration", time.Since(startedAt).String(),
 			"message", strings.TrimSpace(start.Message))
-		if msg := strings.TrimSpace(start.Message); msg != "" {
-			if whatsappLoginOutputSuggestsMissingPluginOrChannel(msg) {
-				return nil, errs.Wrap("error.whatsapp_plugin_not_ready", fmt.Errorf("%s", msg))
-			}
-			return nil, fmt.Errorf("%s", msg)
-		}
-		return nil, errs.New("error.whatsapp_qr_not_found")
+		return nil, whatsappQRStartResultError(start)
 	}
 
 	sessionKey := uuid.NewString()
@@ -613,10 +727,7 @@ func (s *OpenClawChannelService) WaitForWhatsappLogin(sessionKey string, channel
 			retryDelay = left
 		}
 		if retryDelay > 0 {
-			timer := time.NewTimer(retryDelay)
-			select {
-			case <-timer.C:
-			}
+			time.Sleep(retryDelay)
 		}
 	}
 
@@ -681,27 +792,7 @@ func (s *OpenClawChannelService) readFirstWhatsappAccountIDFromOpenClawJSON() st
 	if err != nil {
 		return whatsappDefaultAccountID
 	}
-	chans, _ := cfg["channels"].(map[string]any)
-	if chans == nil {
-		return whatsappDefaultAccountID
-	}
-	wa, _ := chans["whatsapp"].(map[string]any)
-	if wa == nil {
-		return whatsappDefaultAccountID
-	}
-	accts, _ := wa["accounts"].(map[string]any)
-	if accts == nil || len(accts) == 0 {
-		return whatsappDefaultAccountID
-	}
-	if _, ok := accts[whatsappDefaultAccountID]; ok {
-		return whatsappDefaultAccountID
-	}
-	for k := range accts {
-		if id := strings.TrimSpace(k); id != "" {
-			return id
-		}
-	}
-	return whatsappDefaultAccountID
+	return firstConfiguredWhatsappAccountID(whatsappChannelConfigFromRoot(cfg))
 }
 
 func (s *OpenClawChannelService) readWhatsappConfiguredOpenClawAgentID(accountID string) string {
@@ -709,46 +800,7 @@ func (s *OpenClawChannelService) readWhatsappConfiguredOpenClawAgentID(accountID
 	if err != nil {
 		return ""
 	}
-
-	accountID = strings.TrimSpace(accountID)
-	chans, _ := cfg["channels"].(map[string]any)
-	if chans != nil {
-		if wa, _ := chans["whatsapp"].(map[string]any); wa != nil {
-			if accts, _ := wa["accounts"].(map[string]any); accts != nil {
-				if acct, _ := accts[accountID].(map[string]any); acct != nil {
-					if agentID, _ := acct["agentId"].(string); strings.TrimSpace(agentID) != "" {
-						return strings.TrimSpace(agentID)
-					}
-				}
-			}
-		}
-	}
-
-	bindings, _ := cfg["bindings"].([]any)
-	for _, raw := range bindings {
-		binding, _ := raw.(map[string]any)
-		if binding == nil {
-			continue
-		}
-		if strings.TrimSpace(fmt.Sprint(binding["type"])) != "route" {
-			continue
-		}
-		match, _ := binding["match"].(map[string]any)
-		if match == nil {
-			continue
-		}
-		if strings.TrimSpace(fmt.Sprint(match["channel"])) != openClawWhatsappChannelID {
-			continue
-		}
-		if accountID != "" && strings.TrimSpace(fmt.Sprint(match["accountId"])) != accountID {
-			continue
-		}
-		if agentID := strings.TrimSpace(fmt.Sprint(binding["agentId"])); agentID != "" {
-			return agentID
-		}
-	}
-
-	return ""
+	return whatsappConfiguredAgentIDFromConfig(cfg, accountID)
 }
 
 func (s *OpenClawChannelService) findWhatsappChannelByAccountID(accountID string) (*channelModel, error) {

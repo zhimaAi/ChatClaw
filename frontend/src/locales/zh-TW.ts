@@ -1674,6 +1674,8 @@ export default {
       scanHint: "請使用 WhatsApp 掃描下方 QR 碼完成授權",
       waitingForScan: "等待掃描中…",
       refresh: "重新整理",
+      qrExpired: "QR 碼已過期",
+      qrExpiredHint: "QR 碼已失效或等待逾時，請點擊下方「重新整理」重新取得。",
       loginSuccess: "WhatsApp 已連線",
       pluginInstallTryLater: "WhatsApp 通道正在啟用或尚未就緒，請稍後再試。",
       channelNotFound: "找不到對應頻道，請重新整理後再試。",

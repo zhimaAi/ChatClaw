@@ -1675,7 +1675,7 @@ export default {
       channelNotFound: "İlgili kanal bulunamadı. Yenileyip tekrar deneyin.",
       pluginInstallTryLater: "Resmi WeChat eklentisi arka planda kuruluyor veya etkinleştiriliyor. Lütfen daha sonra tekrar deneyin.",
       editNotSupported: "WeChat QR kod taramasıyla bağlandığı için burada düzenlenemez. Hesap değiştirmek için kanallar sayfasında bu kanalı silin ve tekrar tarayarak yeniden ekleyin.",
-      qrExpiredHint: "二维码已失效或等待超时，请点击下方「刷新」重新获取。",
+      qrExpiredHint: "QR kodu artık geçerli değil veya bekleme süresi doldu. Yenisini almak için aşağıda Yenile'ye dokunun.",
     },
     whatsapp: {
       emptyTitle: "Henüz WhatsApp eklenmedi",
@@ -1692,6 +1692,8 @@ export default {
       scanHint: "Yetkilendirmek için aşağıdaki QR kodu WhatsApp ile tarayın",
       waitingForScan: "Tarama bekleniyor…",
       refresh: "Yenile",
+      qrExpired: "QR kodunun süresi doldu",
+      qrExpiredHint: "QR kodunun süresi doldu veya bekleme zaman aşımına uğradı. Yenisini almak için aşağıda Yenile'ye dokunun.",
       loginSuccess: "WhatsApp bağlandı",
       pluginInstallTryLater: "WhatsApp kanalı hâlâ etkinleştiriliyor veya hazır değil. Lütfen daha sonra tekrar deneyin.",
       channelNotFound: "İlgili kanal bulunamadı. Yenileyip tekrar deneyin.",

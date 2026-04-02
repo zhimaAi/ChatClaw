@@ -1751,7 +1751,7 @@ export default {
       channelNotFound: "The corresponding channel was not found. Refresh and try again.",
       pluginInstallTryLater: "The official WeChat plugin is being installed or enabled in the background. Please try again later.",
       editNotSupported: "WeChat is connected by QR-code scanning and cannot be edited here. To switch accounts, delete this channel on the channels page and add it again by scanning.",
-      qrExpiredHint: "二维码已失效或等待超时，请点击下方「刷新」重新获取。",
+      qrExpiredHint: "The QR code is no longer valid or the wait timed out. Click Refresh below to get a new one.",
     },
     whatsapp: {
       emptyTitle: "No WhatsApp added yet",
@@ -1768,6 +1768,8 @@ export default {
       scanHint: "Scan the QR code below with WhatsApp to authorize",
       waitingForScan: "Waiting for scan…",
       refresh: "Refresh",
+      qrExpired: "QR code expired",
+      qrExpiredHint: "The QR code expired or timed out. Click Refresh below to get a new one.",
       loginSuccess: "WhatsApp connected",
       pluginInstallTryLater: "The WhatsApp channel is still being enabled or is not ready yet. Please try again later.",
       channelNotFound: "The corresponding channel was not found. Refresh and try again.",

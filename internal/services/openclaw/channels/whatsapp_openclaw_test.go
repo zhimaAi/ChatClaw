@@ -222,8 +222,120 @@ func TestNextWhatsappAutoChannelName(t *testing.T) {
 	}
 }
 
+func TestFirstConfiguredWhatsappAccountID(t *testing.T) {
+	tests := []struct {
+		name    string
+		channel map[string]any
+		want    string
+	}{
+		{
+			name:    "defaults when accounts are missing",
+			channel: nil,
+			want:    whatsappDefaultAccountID,
+		},
+		{
+			name: "prefers explicit default account",
+			channel: map[string]any{
+				"accounts": map[string]any{
+					"secondary": map[string]any{},
+					"default":   map[string]any{},
+				},
+			},
+			want: whatsappDefaultAccountID,
+		},
+		{
+			name: "falls back to first non-empty configured account",
+			channel: map[string]any{
+				"accounts": map[string]any{
+					" custom ": map[string]any{},
+				},
+			},
+			want: "custom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := firstConfiguredWhatsappAccountID(tt.channel); got != tt.want {
+				t.Fatalf("firstConfiguredWhatsappAccountID(%v) = %q, want %q", tt.channel, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWhatsappConfiguredAgentIDFromConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		cfg       map[string]any
+		accountID string
+		want      string
+	}{
+		{
+			name: "uses account level agent binding first",
+			cfg: map[string]any{
+				"channels": map[string]any{
+					"whatsapp": map[string]any{
+						"accounts": map[string]any{
+							"default": map[string]any{
+								"agentId": "main",
+							},
+						},
+					},
+				},
+				"bindings": []any{
+					map[string]any{
+						"type":    "route",
+						"agentId": "fallback",
+						"match": map[string]any{
+							"channel":   "whatsapp",
+							"accountId": "default",
+						},
+					},
+				},
+			},
+			accountID: "default",
+			want:      "main",
+		},
+		{
+			name: "falls back to route binding",
+			cfg: map[string]any{
+				"bindings": []any{
+					map[string]any{
+						"type":    "route",
+						"agentId": "fallback",
+						"match": map[string]any{
+							"channel":   "whatsapp",
+							"accountId": "custom",
+						},
+					},
+				},
+			},
+			accountID: "custom",
+			want:      "fallback",
+		},
+		{
+			name: "returns empty when nothing configured",
+			cfg: map[string]any{
+				"channels": map[string]any{
+					"whatsapp": map[string]any{},
+				},
+			},
+			accountID: "default",
+			want:      "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := whatsappConfiguredAgentIDFromConfig(tt.cfg, tt.accountID); got != tt.want {
+				t.Fatalf("whatsappConfiguredAgentIDFromConfig(%v, %q) = %q, want %q", tt.cfg, tt.accountID, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildWhatsappWebLoginStartParams(t *testing.T) {
-	params := buildWhatsappWebLoginStartParams("default", 25*time.Second)
+	params := buildWhatsappWebLoginStartParams("default", 25*time.Second, true)
 
 	if got, ok := params["timeoutMs"].(int); !ok || got != 25000 {
 		t.Fatalf("timeoutMs = %#v, want 25000", params["timeoutMs"])
@@ -236,6 +348,17 @@ func TestBuildWhatsappWebLoginStartParams(t *testing.T) {
 	}
 	if got, ok := params["verbose"].(bool); !ok || !got {
 		t.Fatalf("verbose = %#v, want true", params["verbose"])
+	}
+}
+
+func TestBuildWhatsappWebLoginStartParamsWithoutForce(t *testing.T) {
+	params := buildWhatsappWebLoginStartParams("default", whatsappQRFastStartTimeout, false)
+
+	if got, ok := params["timeoutMs"].(int); !ok || got != 8000 {
+		t.Fatalf("timeoutMs = %#v, want 8000", params["timeoutMs"])
+	}
+	if _, ok := params["force"]; ok {
+		t.Fatalf("force unexpectedly present in start params: %#v", params["force"])
 	}
 }
 
@@ -293,6 +416,43 @@ func TestWhatsappLoginWaitMessageSuggestsRetry(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := whatsappLoginWaitMessageSuggestsRetry(tt.msg); got != tt.want {
 				t.Fatalf("whatsappLoginWaitMessageSuggestsRetry(%q) = %v, want %v", tt.msg, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWhatsappQRStartMessageSuggestsRetry(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want bool
+	}{
+		{
+			name: "qr timeout",
+			msg:  "Timed out waiting for WhatsApp QR from gateway",
+			want: true,
+		},
+		{
+			name: "restart required",
+			msg:  "WhatsApp login failed: status=515 Unknown Stream Errored (restart required)",
+			want: true,
+		},
+		{
+			name: "empty message gets one retry",
+			msg:  "",
+			want: true,
+		},
+		{
+			name: "logged out is terminal",
+			msg:  "WhatsApp reported the session is logged out. Cleared cached web session; please scan a new QR.",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := whatsappQRStartMessageSuggestsRetry(tt.msg); got != tt.want {
+				t.Fatalf("whatsappQRStartMessageSuggestsRetry(%q) = %v, want %v", tt.msg, got, tt.want)
 			}
 		})
 	}

@@ -1806,7 +1806,7 @@ export default {
       channelNotFound: "해당 채널을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.",
       pluginInstallTryLater: "공식 WeChat 플러그인이 백그라운드에서 설치되거나 활성화되는 중입니다. 잠시 후 다시 시도하세요.",
       editNotSupported: "WeChat은 QR 코드 스캔으로 연결되므로 여기서 편집할 수 없습니다. 계정을 바꾸려면 채널 페이지에서 이 채널을 삭제한 뒤 다시 스캔해서 추가하세요.",
-      qrExpiredHint: "二维码已失效或等待超时，请点击下方「刷新」重新获取。",
+      qrExpiredHint: "QR 코드가 더 이상 유효하지 않거나 대기 시간이 초과되었습니다. 아래 \"새로고침\"을 눌러 다시 받으세요.",
     },
     whatsapp: {
       emptyTitle: "아직 WhatsApp이 추가되지 않았습니다",
@@ -1823,6 +1823,8 @@ export default {
       scanHint: "아래 QR 코드를 WhatsApp으로 스캔하여 인증하세요",
       waitingForScan: "스캔 대기 중…",
       refresh: "새로고침",
+      qrExpired: "QR 코드 만료",
+      qrExpiredHint: "QR 코드가 만료되었거나 대기 시간이 초과되었습니다. 아래의 \"새로고침\"을 눌러 다시 받으세요.",
       loginSuccess: "WhatsApp 연결됨",
       pluginInstallTryLater: "WhatsApp 채널이 아직 활성화 중이거나 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
       channelNotFound: "해당 채널을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.",

@@ -1677,7 +1677,7 @@ export default {
       channelNotFound: "Không tìm thấy kênh tương ứng. Hãy làm mới rồi thử lại.",
       pluginInstallTryLater: "Plugin WeChat chính thức đang được cài đặt hoặc kích hoạt trong nền. Vui lòng thử lại sau.",
       editNotSupported: "WeChat được kết nối bằng cách quét mã QR nên không hỗ trợ chỉnh sửa tại đây. Nếu muốn đổi tài khoản, hãy xóa kênh này trên trang kênh rồi quét mã để thêm lại.",
-      qrExpiredHint: "二维码已失效或等待超时，请点击下方「刷新」重新获取。",
+      qrExpiredHint: "Mã QR không còn hiệu lực hoặc hết thời gian chờ. Nhấn Làm mới bên dưới để lấy mã mới.",
     },
     whatsapp: {
       emptyTitle: "Chưa thêm WhatsApp",
@@ -1694,6 +1694,8 @@ export default {
       scanHint: "Dùng WhatsApp quét mã QR bên dưới để xác thực",
       waitingForScan: "Đang chờ quét…",
       refresh: "Làm mới",
+      qrExpired: "Mã QR đã hết hạn",
+      qrExpiredHint: "Mã QR đã hết hạn hoặc hết thời gian chờ. Nhấn Làm mới bên dưới để lấy mã mới.",
       loginSuccess: "Đã kết nối WhatsApp",
       pluginInstallTryLater: "Kênh WhatsApp đang được bật hoặc chưa sẵn sàng. Vui lòng thử lại sau.",
       channelNotFound: "Không tìm thấy kênh tương ứng. Hãy làm mới và thử lại.",

@@ -1677,7 +1677,7 @@ export default {
       channelNotFound: "Ustreznega kanala ni bilo mogoče najti. Osvežite in poskusite znova.",
       pluginInstallTryLater: "Uradni vtičnik WeChat se v ozadju še namešča ali omogoča. Poskusite znova pozneje.",
       editNotSupported: "WeChat se poveže s skeniranjem QR kode, zato ga tukaj ni mogoče urejati. Če želite zamenjati račun, ta kanal izbrišite na strani kanalov in ga nato znova dodajte s skeniranjem.",
-      qrExpiredHint: "二维码已失效或等待超时，请点击下方「刷新」重新获取。",
+      qrExpiredHint: "QR-koda ni več veljavna ali je čakanje poteklo. Spodaj kliknite Osveži za novo kodo.",
     },
     whatsapp: {
       emptyTitle: "WhatsApp še ni dodan",
@@ -1694,6 +1694,8 @@ export default {
       scanHint: "Za odobritev skenirajte spodnjo QR kodo z WhatsAppom",
       waitingForScan: "Čakanje na skeniranje…",
       refresh: "Osveži",
+      qrExpired: "QR-koda je potekla",
+      qrExpiredHint: "QR-koda je potekla ali je čakanje poteklo. Spodaj kliknite Osveži za novo kodo.",
       loginSuccess: "WhatsApp je povezan",
       pluginInstallTryLater: "WhatsApp kanal se še omogoča ali še ni pripravljen. Poskusite znova pozneje.",
       channelNotFound: "Ustrezen kanal ni bil najden. Osvežite in poskusite znova.",

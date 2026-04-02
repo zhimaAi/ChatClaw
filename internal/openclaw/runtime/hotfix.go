@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+type openClawRuntimeHotfix struct {
+	needle string
+	value  string
+}
+
 const (
 	openClawThinkingStreamPatchNeedle1 = `streamReasoning: reasoningMode === "stream" && typeof params.onReasoningStream === "function",`
 	openClawThinkingStreamPatchValue1  = `streamReasoning: reasoningMode === "stream",`
@@ -38,6 +43,34 @@ const (
 		}`
 )
 
+var openClawRuntimeHotfixTargets = []string{
+	"auth-profiles-*.js",
+	"channel.runtime-*.js",
+}
+
+var openClawRuntimeHotfixes = []openClawRuntimeHotfix{
+	{
+		needle: openClawThinkingStreamPatchNeedle1,
+		value:  openClawThinkingStreamPatchValue1,
+	},
+	{
+		needle: openClawThinkingStreamPatchNeedle2,
+		value:  openClawThinkingStreamPatchValue2,
+	},
+	{
+		needle: openClawThinkingStreamPatchNeedle3,
+		value:  openClawThinkingStreamPatchValue3,
+	},
+	{
+		needle: openClawFallbackRetryPromptPatchNeedle,
+		value:  openClawFallbackRetryPromptPatchValue,
+	},
+	{
+		needle: openClawWhatsappDirectEchoPatchNeedle,
+		value:  openClawWhatsappDirectEchoPatchValue,
+	},
+}
+
 // applyBundledRuntimeHotfixes patches known upstream OpenClaw runtime issues in
 // the resolved bundle. The hotfix is idempotent and only rewrites files when it
 // finds the vulnerable code pattern.
@@ -46,35 +79,13 @@ func applyBundledRuntimeHotfixes(bundle *bundledRuntime) (int, error) {
 		return 0, nil
 	}
 
-	pattern := filepath.Join(
-		bundle.Root,
-		"lib",
-		"node_modules",
-		"openclaw",
-		"dist",
-		"auth-profiles-*.js",
-	)
-	files, err := filepath.Glob(pattern)
+	files, err := openClawRuntimeHotfixTargetFiles(bundle.Root)
 	if err != nil {
-		return 0, fmt.Errorf("glob runtime hotfix target: %w", err)
+		return 0, err
 	}
 	if len(files) == 0 {
 		return 0, nil
 	}
-
-	whatsappPattern := filepath.Join(
-		bundle.Root,
-		"lib",
-		"node_modules",
-		"openclaw",
-		"dist",
-		"channel.runtime-*.js",
-	)
-	whatsappFiles, err := filepath.Glob(whatsappPattern)
-	if err != nil {
-		return 0, fmt.Errorf("glob whatsapp runtime hotfix target: %w", err)
-	}
-	files = append(files, whatsappFiles...)
 
 	patched := 0
 	for _, path := range files {
@@ -89,6 +100,25 @@ func applyBundledRuntimeHotfixes(bundle *bundledRuntime) (int, error) {
 	return patched, nil
 }
 
+func openClawRuntimeHotfixTargetFiles(root string) ([]string, error) {
+	files := make([]string, 0, len(openClawRuntimeHotfixTargets))
+	for _, pattern := range openClawRuntimeHotfixTargets {
+		matches, err := filepath.Glob(filepath.Join(
+			root,
+			"lib",
+			"node_modules",
+			"openclaw",
+			"dist",
+			pattern,
+		))
+		if err != nil {
+			return nil, fmt.Errorf("glob runtime hotfix target %q: %w", pattern, err)
+		}
+		files = append(files, matches...)
+	}
+	return files, nil
+}
+
 func applyOpenClawRuntimeHotfixFile(path string) (bool, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -97,31 +127,7 @@ func applyOpenClawRuntimeHotfixFile(path string) (bool, error) {
 	content := string(raw)
 	updated := content
 
-	for _, patch := range []struct {
-		needle string
-		value  string
-	}{
-		{
-			needle: openClawThinkingStreamPatchNeedle1,
-			value:  openClawThinkingStreamPatchValue1,
-		},
-		{
-			needle: openClawThinkingStreamPatchNeedle2,
-			value:  openClawThinkingStreamPatchValue2,
-		},
-		{
-			needle: openClawThinkingStreamPatchNeedle3,
-			value:  openClawThinkingStreamPatchValue3,
-		},
-		{
-			needle: openClawFallbackRetryPromptPatchNeedle,
-			value:  openClawFallbackRetryPromptPatchValue,
-		},
-		{
-			needle: openClawWhatsappDirectEchoPatchNeedle,
-			value:  openClawWhatsappDirectEchoPatchValue,
-		},
-	} {
+	for _, patch := range openClawRuntimeHotfixes {
 		if !strings.Contains(updated, patch.value) && strings.Contains(updated, patch.needle) {
 			updated = strings.ReplaceAll(updated, patch.needle, patch.value)
 		}
