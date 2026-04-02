@@ -6,9 +6,9 @@ import { Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmojiPicker } from '@/components/ui/emoji-picker'
-import { useThemeLogo } from '@/composables/useLogo'
 import { defaultAvatars } from '@/assets/avatars'
 import { ProviderIcon } from '@/components/ui/provider-icon'
+import openclawDefaultAvatar from '@/assets/icons/openclaw.svg?url'
 import {
   Select,
   SelectContent,
@@ -528,7 +528,7 @@ const handleDelete = async () => {
                       @click="handlePickIcon"
                     >
                       <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
-                      <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
+                      <img v-else :src="openclawDefaultAvatar" class="size-icon-lg" alt="ChatClaw logo" />
                     </button>
                     <div class="text-xs text-muted-foreground">
                       {{ t('assistant.icon.hint') }}
