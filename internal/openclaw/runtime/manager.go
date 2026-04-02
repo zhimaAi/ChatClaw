@@ -35,6 +35,7 @@ type EventListener func(event string, payload json.RawMessage)
 // Implemented as an interface to avoid a cyclic import.
 type ToolchainServiceIF interface {
 	InstallOpenClawRuntime() error
+	SetUpgradeProgressCallback(cb func(progress int, message string))
 }
 
 type Manager struct {
@@ -62,6 +63,8 @@ type Manager struct {
 
 	eventListenersMu sync.RWMutex
 	eventListeners   map[string]EventListener // keyed by caller-chosen ID
+
+	upgradeProgressCb func(progress int, message string)
 }
 
 func gatewayOperatorScopes() []string {
@@ -85,6 +88,10 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService, too
 		},
 		eventListeners: make(map[string]EventListener),
 	}
+	// Set up progress callback for OSS install to forward to frontend via status events
+	if toolchainSvc != nil {
+		toolchainSvc.SetUpgradeProgressCallback(m.broadcastUpgradeProgress)
+	}
 	return m
 }
 
@@ -92,6 +99,10 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService, too
 // Call this before Manager.Start() so the OSS fallback is available.
 func (m *Manager) SetToolchainService(svc ToolchainServiceIF) {
 	m.toolchainSvc = svc
+}
+
+func (m *Manager) SetUpgradeProgressCallback(cb func(progress int, message string)) {
+	m.upgradeProgressCb = cb
 }
 
 func (m *Manager) Start() {
@@ -169,6 +180,16 @@ func (m *Manager) InstallAndStartRuntime() (*RuntimeUpgradeResult, error) {
 	m.closeClient()
 	m.stopProcess()
 
+	// Proactively kill stray node.exe processes that might hold file locks on
+	// runtime directories (e.g., leftover from a previous aborted upgrade or
+	// a testers manual delete attempt). Do this before any file operations.
+	_ = killAllNodeProcesses()
+
+	// Set up progress callback so the UI can show install progress
+	if m.upgradeProgressCb != nil {
+		m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
+	}
+
 	if err := m.toolchainSvc.InstallOpenClawRuntime(); err != nil {
 		_ = m.reconcileLocked(false)
 		return nil, fmt.Errorf("OSS runtime install: %w", err)
@@ -223,6 +244,10 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 	cfg := m.store.Get()
 
+	// Best-effort cleanup: kill stray node.exe processes that could be holding
+	// file locks on any runtime directory we are about to read/write.
+	_ = killAllNodeProcesses()
+
 	fail := func(msg string, err error, version string, pid int) error {
 		m.app.Logger.Error("openclaw: "+msg, "error", err)
 		m.broadcastStatus(RuntimeStatus{
@@ -255,17 +280,21 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 	bundle, err := resolveBundledRuntime()
 	if err != nil {
-		// No bundled runtime found — try installing from OSS as a fallback
-		m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
-		m.broadcastStatus(RuntimeStatus{
-			Phase:      PhaseUpgrading,
-			Message:    "No OpenClaw runtime found, downloading from OSS...",
-			GatewayURL: gatewayURL(cfg.GatewayPort),
-		})
-		if m.toolchainSvc == nil {
-			return fail("resolveBundledRuntime", err, "", 0)
-		}
-		if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
+	// No bundled runtime found — try installing from OSS as a fallback
+	m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
+	m.broadcastStatus(RuntimeStatus{
+		Phase:      PhaseUpgrading,
+		Message:    "No OpenClaw runtime found, downloading from OSS...",
+		GatewayURL: gatewayURL(cfg.GatewayPort),
+	})
+	if m.toolchainSvc == nil {
+		return fail("resolveBundledRuntime", err, "", 0)
+	}
+	// Set up progress callback so the UI can show install progress
+	if m.upgradeProgressCb != nil {
+		m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
+	}
+	if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
 			return fail("OSS runtime install", installErr, "", 0)
 		}
 		// Reload bundle after OSS install

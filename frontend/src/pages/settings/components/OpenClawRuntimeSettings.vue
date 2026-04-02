@@ -31,6 +31,9 @@ const isTransitioning = computed(() => {
   return p === 'starting' || p === 'connecting' || p === 'restarting' || p === 'upgrading'
 })
 
+// 是否处于升级阶段（显示进度条）
+const isUpgrading = computed(() => status.value.phase === 'upgrading')
+
 const gatewayConnectionLabel = computed(() => {
   if (gatewayState.value.authenticated) return t('settings.openclawRuntime.gateway.authenticated')
   if (gatewayState.value.connected) return t('settings.openclawRuntime.gateway.connected')
@@ -60,8 +63,9 @@ const upgradeProgress = computed(() => {
   return status.value.progress || 0
 })
 
+// 显示升级进度条：当处于 upgrading 阶段时显示
 const showUpgradeProgress = computed(() => {
-  return upgrading.value && status.value.phase === 'upgrading'
+  return status.value.phase === 'upgrading'
 })
 
 const badgeText = computed(() => {

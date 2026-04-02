@@ -261,9 +261,7 @@ export default {
       title: "OpenClaw Service",
       pageSubtitle: "Configure gateway and basic runtime settings",
       gatewayStatusLabel: "Gateway status",
-      /** Short prefix for sidebar one-line gateway + status chip */
       sidebarGatewayPrefix: "Gateway",
-      /** Between prefix and status in sidebar tag (e.g. "Gateway: running") */
       sidebarGatewayLabelSeparator: ": ",
       statusBadge: {
         running: "running",
@@ -350,6 +348,10 @@ export default {
         installing: "Installing...",
         installed: "Installed",
         notInstalled: "Not Installed",
+        update: "Update",
+        newVersionHint: "New version {version}",
+        openPathHint: "Open containing folder in file manager",
+        openPathFailed: "Could not open that path",
         installFailed: "Installation failed",
         clearState: "Clear",
         testInstall: {
@@ -392,6 +394,7 @@ export default {
           name: "OpenClaw Runtime",
           description: "OpenClaw Agent's Node.js runtime environment, including openclaw CLI and Gateway. Downloaded from OSS and installed to ~/.chatclaw/openclaw/runtime/",
         },
+        updatesAvailableToast: "检测到扩展组件有新版本，请到「设置 → 常规设置」中手动更新。",
       },
     },
     memory: {
@@ -2005,11 +2008,9 @@ export default {
   },
   openclawGateway: {
     banner: {
-      channels:
-        "The gateway is not running. You cannot manage message channels until the gateway is enabled.",
-      scheduledTasks:
-        "The gateway is not running. You cannot manage scheduled tasks until the gateway is enabled.",
       starting: "The gateway is starting. Please try again in a moment.",
+      channels: "网关未运行，未启用网关时无法管理消息频道",
+      scheduledTasks: "网关未运行，未启用网关时无法管理定时任务",
     },
   },
   openclawCron: {
