@@ -59,7 +59,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
 
 const tab = ref<TabKey>('general')
 const saving = ref(false)
@@ -521,18 +520,6 @@ const handleDelete = async () => {
             >
               <!-- General: identity + model -->
               <div v-if="tab === 'general'" class="flex flex-col gap-5">
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-sm font-medium text-foreground">
-                    {{ t('assistant.fields.name') }}
-                    <span class="text-destructive">*</span>
-                  </label>
-                  <Input
-                    v-model="name"
-                    :placeholder="t('assistant.fields.namePlaceholder')"
-                    maxlength="100"
-                  />
-                </div>
-
                 <div class="flex flex-col gap-4">
                   <div class="flex flex-col items-center gap-2">
                     <button
@@ -579,6 +566,18 @@ const handleDelete = async () => {
                       </button>
                     </div>
                   </div>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-sm font-medium text-foreground">
+                    {{ t('assistant.fields.name') }}
+                    <span class="text-destructive">*</span>
+                  </label>
+                  <Input
+                    v-model="name"
+                    :placeholder="t('assistant.fields.namePlaceholder')"
+                    maxlength="100"
+                  />
                 </div>
 
                 <div class="flex flex-col gap-1.5">
