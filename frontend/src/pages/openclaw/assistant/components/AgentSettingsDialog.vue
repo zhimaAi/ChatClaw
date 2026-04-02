@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Dialogs } from '@wailsio/runtime'
 import { Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmojiPicker } from '@/components/ui/emoji-picker'
+import { useThemeLogo } from '@/composables/useLogo'
+import { defaultAvatars } from '@/assets/avatars'
 import { ProviderIcon } from '@/components/ui/provider-icon'
 import {
   Select,
@@ -56,12 +59,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { logoSrc } = useThemeLogo()
 
 const tab = ref<TabKey>('general')
 const saving = ref(false)
 const deleteConfirmOpen = ref(false)
 
 const name = ref('')
+const icon = ref<string>('')
+const iconChanged = ref(false)
 const identityEmoji = ref('')
 const identityTheme = ref('')
 
@@ -214,6 +220,35 @@ const isValid = computed(() => name.value.trim() !== '')
 
 const handleClose = () => emit('update:open', false)
 
+const handleSelectDefaultAvatar = (src: string) => {
+  icon.value = src
+  iconChanged.value = true
+}
+
+const handlePickIcon = async () => {
+  if (saving.value) return
+  try {
+    const path = await Dialogs.OpenFile({
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Title: t('assistant.icon.pickTitle'),
+      Filters: [
+        {
+          DisplayName: t('assistant.icon.filterImages'),
+          Pattern: '*.png;*.jpg;*.jpeg;*.gif;*.webp;*.svg',
+        },
+      ],
+    })
+    if (!path) return
+    icon.value = await OpenClawAgentsService.ReadIconFile(path)
+    iconChanged.value = true
+  } catch (error) {
+    if (String(error).includes('cancelled by user')) return
+    console.error('Failed to pick icon:', error)
+  }
+}
+
 const toJsonArray = (csv: string): string => {
   const items = csv
     .split(',')
@@ -244,6 +279,8 @@ function parseJsonArrayToList(v: string | undefined): string[] {
 
 function syncFormFromAgent(agent: OpenClawAgent) {
   name.value = agent.name ?? ''
+  icon.value = agent.icon ?? ''
+  iconChanged.value = false
   identityEmoji.value = agent.identity_emoji ?? ''
   identityTheme.value = agent.identity_theme ?? ''
 
@@ -387,7 +424,7 @@ const handleSave = async () => {
     }
     const updated = await OpenClawAgentsService.UpdateAgent(props.agent.id, {
       name: name.value.trim(),
-      icon: null,
+      icon: iconChanged.value ? icon.value : null,
       default_llm_provider_id: wantsModelUpdate ? modelProviderId.value : null,
       default_llm_model_id: wantsModelUpdate ? modelId.value : null,
       enable_llm_temperature: null,
@@ -421,6 +458,7 @@ const handleSave = async () => {
     emit('updated', updated)
     toast.success(t('assistant.toasts.updated'))
     modelChanged.value = false
+    iconChanged.value = false
     emit('update:open', false)
   } catch (error: unknown) {
     toast.error(getErrorMessage(error) || t('assistant.errors.updateFailed'))
@@ -493,6 +531,54 @@ const handleDelete = async () => {
                     :placeholder="t('assistant.fields.namePlaceholder')"
                     maxlength="100"
                   />
+                </div>
+
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-col items-center gap-2">
+                    <button
+                      class="flex size-icon-box items-center justify-center rounded-icon-box border border-border bg-white text-foreground dark:border-white/15 dark:bg-white/5"
+                      type="button"
+                      @click="handlePickIcon"
+                    >
+                      <img v-if="icon" :src="icon" class="size-icon-lg rounded-md object-contain" />
+                      <img v-else :src="logoSrc" class="size-icon-lg" alt="ChatClaw logo" />
+                    </button>
+                    <div class="text-xs text-muted-foreground">
+                      {{ t('assistant.icon.hint') }}
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <div class="text-xs text-muted-foreground">
+                      {{ t('assistant.icon.defaultAvatars') }}
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                      <button
+                        v-for="avatar in defaultAvatars"
+                        :key="avatar.id"
+                        type="button"
+                        class="relative flex size-12 items-center justify-center rounded-xl border transition-colors"
+                        :class="
+                          icon === avatar.src
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-foreground/40 hover:bg-muted/60 dark:border-white/10'
+                        "
+                        @click="handleSelectDefaultAvatar(avatar.src)"
+                      >
+                        <img :src="avatar.src" class="size-10 rounded-lg object-cover" />
+                        <div
+                          v-if="icon === avatar.src"
+                          class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40"
+                        >
+                          <span
+                            class="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+                          >
+                            ✓
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="flex flex-col gap-1.5">

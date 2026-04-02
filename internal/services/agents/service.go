@@ -102,7 +102,7 @@ func (s *AgentsService) EnsureMainAgent() error {
 	defer cancel()
 
 	agent := newAgentModel(
-		define.DefaultAgentNameForLocale(i18n.GetLocale()),
+		define.DefaultAgentNameForLocale(i18n.GetLocale(), define.SystemOwnerChatClaw),
 		define.OpenClawMainAgentID,
 		define.DefaultAgentPromptForLocale(i18n.GetLocale()),
 		"",

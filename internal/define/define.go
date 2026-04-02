@@ -87,12 +87,26 @@ func DefaultAgentPromptForLocale(locale string) string {
 		"- Note that the knowledge base may contain unrelated information — carefully analyse the user's question and select the most relevant knowledge to answer."
 }
 
-// DefaultAgentNameForLocale returns the built-in default agent name for the given locale.
-func DefaultAgentNameForLocale(locale string) string {
+// SystemOwner identifies the product surface (matches frontend appStore currentSystem).
+const (
+	SystemOwnerChatClaw  = "chatclaw"
+	SystemOwnerOpenClaw = "openclaw"
+)
+
+// DefaultAgentNameForLocale returns the built-in default agent name for the given locale and system.
+// system should be SystemOwnerChatClaw or SystemOwnerOpenClaw; empty system is treated as chatclaw.
+func DefaultAgentNameForLocale(locale, system string) string {
+	openClaw := system == SystemOwnerOpenClaw
 	if locale == "zh-CN" {
-		return "默认助手"
+		if openClaw {
+			return "openclaw助手"
+		}
+		return "chatclaw助手"
 	}
-	return "Default Assistant"
+	if openClaw {
+		return "OpenClaw Assistant"
+	}
+	return "ChatClaw Assistant"
 }
 
 // NewOpenClawManagedAgentID generates a unique lowercase OpenClaw agent ID.
