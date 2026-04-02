@@ -1486,7 +1486,6 @@ export default {
       wechat: "ويتشات",
       whatsapp: "WhatsApp",
       qq: "QQ",
-      twitter: "X (Twitter)",
     },
     config: {
       title: "تكوين بوت {platform}",

@@ -16,8 +16,7 @@ const (
 	PlatformWeCom    = "wecom"
 	PlatformWechat   = "wechat"
 	PlatformWhatsapp = "whatsapp"
-	PlatformQQ       = "qq"
-	PlatformTwitter  = "twitter"
+	PlatformQQ = "qq"
 )
 
 // Connection status

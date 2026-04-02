@@ -1489,7 +1489,6 @@ export default {
       wechat: "WeChat",
       whatsapp: "WhatsApp",
       qq: "QQ",
-      twitter: "X (Twitter)",
     },
     config: {
       title: "Configurer le bot {platform}",

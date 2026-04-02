@@ -1486,7 +1486,6 @@ export default {
       wechat: "উইচ্যাট",
       whatsapp: "WhatsApp",
       qq: "QQ",
-      twitter: "X (Twitter)",
     },
     config: {
       title: "{platform} বট কনফিগার",

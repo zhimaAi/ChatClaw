@@ -1503,7 +1503,6 @@ export default {
       wechat: "WeChat",
       whatsapp: "WhatsApp",
       qq: "QQ",
-      twitter: "X (Twitter)",
     },
     config: {
       title: "{platform} बॉट कॉन्फ़िगर करें",

@@ -1469,7 +1469,6 @@ export default {
       wechat: '微信',
       whatsapp: 'WhatsApp',
       qq: 'QQ',
-      twitter: 'X-Twitter',
     },
     config: {
       title: '配置{platform}机器人',

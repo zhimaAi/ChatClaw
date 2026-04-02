@@ -172,7 +172,6 @@ func (s *OpenClawChannelService) GetSupportedPlatforms() []channels.PlatformMeta
 		{ID: channels.PlatformWechat, Name: "WeChat", AuthType: "qrcode"},
 		{ID: channels.PlatformWhatsapp, Name: "WhatsApp", AuthType: "qrcode"},
 		{ID: channels.PlatformQQ, Name: "QQ", AuthType: "token"},
-		{ID: channels.PlatformTwitter, Name: "X (Twitter)", AuthType: "token"},
 	}
 }
 

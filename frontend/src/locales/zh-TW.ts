@@ -1467,7 +1467,6 @@ export default {
       wechat: "微信",
       whatsapp: "WhatsApp",
       qq: "QQ",
-      twitter: "X（Twitter）",
     },
     config: {
       title: "設定{platform}機器人",
