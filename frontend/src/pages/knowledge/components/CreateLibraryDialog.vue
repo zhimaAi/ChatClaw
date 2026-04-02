@@ -29,7 +29,6 @@ import { ProvidersService } from '@bindings/chatclaw/internal/services/providers
 
 import type { Library } from '@bindings/chatclaw/internal/services/library'
 import { LibraryService, CreateLibraryInput } from '@bindings/chatclaw/internal/services/library'
-import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
@@ -39,6 +38,7 @@ import {
   getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
+import { isGlobalEmbeddingConfigReady } from '../utils/embeddingConfig'
 
 const props = defineProps<{
   open: boolean
@@ -126,11 +126,7 @@ const canSubmit = computed(() => {
 const loadEmbeddingReady = async () => {
   loadingEmbedding.value = true
   try {
-    const [p, m] = await Promise.all([
-      SettingsService.Get('embedding_provider_id'),
-      SettingsService.Get('embedding_model_id'),
-    ])
-    embeddingReady.value = !!(p?.value?.trim() && m?.value?.trim())
+    embeddingReady.value = await isGlobalEmbeddingConfigReady()
   } catch (error) {
     console.error('Failed to read embedding settings:', error)
     embeddingReady.value = false

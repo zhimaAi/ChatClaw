@@ -64,12 +64,12 @@ import {
   getBinding as getBindingCached,
   getLibraryListOnlyOpen as getLibraryListOnlyOpenCached,
 } from '@/lib/chatwikiCache'
-import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
 import { FileStack } from 'lucide-vue-next'
 import { useAgents } from '@/pages/assistant/composables/useAgents'
 import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
 import { supportsMultimodal } from '@/composables/useMultimodal'
 import { toast } from '@/components/ui/toast'
+import { isGlobalEmbeddingConfigReady } from './utils/embeddingConfig'
 
 type LibraryTab = 'personal' | 'team'
 
@@ -528,11 +528,7 @@ watch(
 
 const ensureEmbeddingConfigured = async (): Promise<boolean> => {
   try {
-    const [p, m] = await Promise.all([
-      SettingsService.Get('embedding_provider_id'),
-      SettingsService.Get('embedding_model_id'),
-    ])
-    return !!(p?.value?.trim() && m?.value?.trim())
+    return await isGlobalEmbeddingConfigReady()
   } catch (error) {
     console.error('Failed to read embedding settings:', error)
     return false
@@ -550,6 +546,10 @@ const handleCreateClick = async () => {
 }
 
 const handleEmbeddingSettingsClick = () => {
+  embeddingSettingsOpen.value = true
+}
+
+const handleEmbeddingSettingsRequired = () => {
   embeddingSettingsOpen.value = true
 }
 
@@ -1968,6 +1968,7 @@ const handleRemoveImage = (id: string) => {
         @folder-updated="handleFolderUpdated"
         @folder-deleted="handleFolderDeleted"
         @folder-tree-updated="handleFolderTreeUpdated"
+        @embedding-settings-required="handleEmbeddingSettingsRequired"
       />
 
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->

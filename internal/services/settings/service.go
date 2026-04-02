@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"chatclaw/internal/define"
+	"chatclaw/internal/eino/processor"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/document"
 	"chatclaw/internal/sqlite"
@@ -330,6 +331,10 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	if _, err := processor.ResolveEmbeddingConfig(ctx, db, providerID, modelID, input.Dimension); err != nil {
+		return err
+	}
 
 	// Update in a transaction to keep config consistent.
 	updates := []struct {

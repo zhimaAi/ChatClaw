@@ -55,6 +55,7 @@ import {
   type Document as BackendDocument,
 } from '@bindings/chatclaw/internal/services/document'
 import { useAppStore } from '@/stores'
+import { isGlobalEmbeddingConfigReady } from '../utils/embeddingConfig'
 
 // 进度事件数据（从后端接收）
 interface ProgressEvent {
@@ -91,6 +92,7 @@ const emit = defineEmits<{
   'folder-updated': []
   'folder-deleted': []
   'folder-tree-updated': [libraryId: number, folders: Folder[]]
+  'embedding-settings-required': []
 }>()
 
 const { t } = useI18n()
@@ -625,7 +627,23 @@ const toggleSort = () => {
   resetAndLoad()
 }
 
+const ensureEmbeddingConfiguredBeforeUpload = async (): Promise<boolean> => {
+  try {
+    const ready = await isGlobalEmbeddingConfigReady()
+    if (ready) return true
+  } catch (error) {
+    console.error('Failed to read embedding settings:', error)
+  }
+
+  toast.error(t('knowledge.embeddingSettings.required'))
+  emit('embedding-settings-required')
+  return false
+}
+
 const handleAddDocument = async () => {
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
+
   if (appStore.isServerMode) {
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
@@ -703,6 +721,9 @@ const uploadBrowserFiles = async (files: FileList | File[]) => {
   if (!props.library?.id) return
   if (isUploading.value) return
 
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
+
   const fileArray = Array.from(files)
   if (fileArray.length === 0) return
 
@@ -752,6 +773,9 @@ const handleBrowserFileInputChange = (event: Event) => {
 const handleFileDrop = async (filePaths: string[]) => {
   if (!props.library?.id || filePaths.length === 0) return
   if (isUploading.value) return
+
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
 
   try {
     isUploading.value = true

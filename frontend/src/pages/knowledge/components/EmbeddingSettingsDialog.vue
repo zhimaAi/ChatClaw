@@ -58,6 +58,16 @@ type ChatwikiDisplayModel = Model & {
 
 const normalizeText = (value?: string | null) => value?.trim() || ''
 
+const DEFAULT_EMBEDDING_DIMENSION = '1536'
+const TEXT_EMBEDDING_V3_DIMENSION = '1024'
+
+const getDefaultEmbeddingDimension = (selectedKey: string) => {
+  const [, modelId] = selectedKey.split('::')
+  return modelId === 'text-embedding-v3'
+    ? TEXT_EMBEDDING_V3_DIMENSION
+    : DEFAULT_EMBEDDING_DIMENSION
+}
+
 const getEmbeddingModelLabel = (providerId: string, model: Model) => {
   let label = normalizeText(model.name) || normalizeText(model.model_id) || '-'
   if (providerId === 'chatwiki') {
@@ -71,7 +81,7 @@ const getEmbeddingModelLabel = (providerId: string, model: Model) => {
 }
 
 const embeddingSelectedKey = ref<string>('') // `${providerId}::${modelId}`
-const embeddingDimension = ref<string>('1536')
+const embeddingDimension = ref<string>(DEFAULT_EMBEDDING_DIMENSION)
 
 const embeddingCurrentLabel = computed(() => {
   const [pid, mid] = embeddingSelectedKey.value.split('::')
@@ -190,12 +200,26 @@ const ensureDefaultSelection = () => {
   )
 }
 
+watch(embeddingSelectedKey, (selectedKey, previousSelectedKey) => {
+  if (!selectedKey || selectedKey === previousSelectedKey) return
+
+  const previousDefaultDimension = previousSelectedKey
+    ? getDefaultEmbeddingDimension(previousSelectedKey)
+    : DEFAULT_EMBEDDING_DIMENSION
+  const shouldResetDimension =
+    !embeddingDimension.value || embeddingDimension.value === previousDefaultDimension
+
+  if (shouldResetDimension) {
+    embeddingDimension.value = getDefaultEmbeddingDimension(selectedKey)
+  }
+})
+
 watch(
   () => props.open,
   async (open) => {
     if (!open) return
     embeddingSelectedKey.value = ''
-    embeddingDimension.value = '1536'
+    embeddingDimension.value = DEFAULT_EMBEDDING_DIMENSION
     await Promise.all([loadGroups(), loadCurrentSettings()])
     ensureDefaultSelection()
   }

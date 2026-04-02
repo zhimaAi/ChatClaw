@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"chatclaw/internal/eino/processor"
 	"chatclaw/internal/errs"
-	"chatclaw/internal/services/settings"
 	"chatclaw/internal/sqlite"
 	"chatclaw/internal/taskmanager"
 
@@ -91,18 +91,6 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		return nil, errs.Newf("error.library_name_duplicate", map[string]any{"Name": name})
 	}
 
-	// 全局嵌入配置（来自 settings 缓存）
-	embeddingProviderID, ok := settings.GetValue("embedding_provider_id")
-	if !ok || strings.TrimSpace(embeddingProviderID) == "" {
-		return nil, errs.New("error.library_embedding_global_not_set")
-	}
-	embeddingModelID, ok := settings.GetValue("embedding_model_id")
-	if !ok || strings.TrimSpace(embeddingModelID) == "" {
-		return nil, errs.New("error.library_embedding_global_not_set")
-	}
-	embeddingProviderID = strings.TrimSpace(embeddingProviderID)
-	embeddingModelID = strings.TrimSpace(embeddingModelID)
-
 	// 语义分段开关（默认关闭）
 	semanticSegmentationEnabled := false
 	if input.SemanticSegmentationEnabled != nil {
@@ -134,37 +122,10 @@ func (s *LibraryService) CreateLibrary(input CreateLibraryInput) (*Library, erro
 		chunkOverlap = *input.ChunkOverlap
 	}
 
-	// embedding 配置为全局 settings（不落库到 library 表），但创建前必须校验：
-	// 1) provider 已启用
-	// 2) embedding 模型存在且已启用（type=embedding）
-	{
-		var providerCount int
-		if err := db.NewSelect().
-			Table("providers").
-			ColumnExpr("COUNT(1)").
-			Where("provider_id = ?", embeddingProviderID).
-			Where("enabled = ?", true).
-			Scan(ctx, &providerCount); err != nil {
-			return nil, errs.Wrap("error.library_create_failed", err)
-		}
-		if providerCount == 0 {
-			return nil, errs.New("error.library_embedding_global_not_set")
-		}
-
-		var modelCount int
-		if err := db.NewSelect().
-			Table("models").
-			ColumnExpr("COUNT(1)").
-			Where("provider_id = ?", embeddingProviderID).
-			Where("model_id = ?", embeddingModelID).
-			Where("type = ?", "embedding").
-			Where("enabled = ?", true).
-			Scan(ctx, &modelCount); err != nil {
-			return nil, errs.Wrap("error.library_create_failed", err)
-		}
-		if modelCount == 0 {
-			return nil, errs.New("error.library_embedding_global_not_set")
-		}
+	// embedding 配置为全局 settings（不落库到 library 表），创建前需确保配置真实可用，
+	// 避免默认 openai/text-embedding-* 在未填写 API Key 时被误判为“已配置”。
+	if _, err := processor.GetEmbeddingConfig(ctx, db); err != nil {
+		return nil, err
 	}
 
 	// sort_order 自动 +1（越新越大）
