@@ -23,11 +23,11 @@ import IconSidebarCollapse from '@/assets/icons/sidebar-collapse.svg'
 import IconChevronDown from '@/assets/icons/down-icon.svg'
 import IconChevronRight from '@/assets/icons/right-icon.svg'
 import IconSession from '@/assets/icons/session-icon.svg'
+import openclawDefaultAvatar from '@/assets/icons/openclaw.svg?url'
 import { Pin, PinOff, MoreHorizontal } from 'lucide-vue-next'
 import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 import type { Conversation } from '@bindings/chatclaw/internal/services/conversations'
 import type { Robot } from '@bindings/chatclaw/internal/services/chatwiki'
-import { useThemeLogo } from '@/composables/useLogo'
 
 type ListMode = 'personal' | 'team'
 
@@ -81,7 +81,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
 
 const handleAgentClick = (agentId: number) => {
   emit('update:activeAgentId', agentId)
@@ -244,7 +243,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               class="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-muted/70 text-foreground"
             >
               <img v-if="a.icon" :src="a.icon" class="size-full object-cover" />
-              <img v-else :src="logoSrc" class="size-5 opacity-90" alt="ChatClaw logo" />
+              <img v-else :src="openclawDefaultAvatar" class="size-5 opacity-90" alt="" />
             </div>
 
             <div class="min-w-0 flex-1">
@@ -447,7 +446,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
               class="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-[5px] bg-muted/70 text-foreground"
             >
               <img v-if="r.icon" :src="r.icon" class="size-full object-cover" alt="" />
-              <img v-else :src="logoSrc" class="size-5 opacity-90" alt="ChatClaw logo" />
+              <img v-else :src="openclawDefaultAvatar" class="size-5 opacity-90" alt="" />
             </div>
             <div class="min-w-0 flex-1">
               <div class="truncate text-sm font-medium text-foreground">{{ r.name }}</div>

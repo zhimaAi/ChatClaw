@@ -1040,7 +1040,7 @@ func (s *OpenClawChannelService) EnsureAgentForChannel(channelID int64) (int64, 
 
 	agentName := strings.TrimSpace(m.Name)
 	if agentName == "" {
-		agentName = define.DefaultAgentNameForLocale(i18n.GetLocale())
+		agentName = define.DefaultAgentNameForLocale(i18n.GetLocale(), define.SystemOwnerOpenClaw)
 	}
 	agent, err := s.agentsSvc.CreateAgent(openclawagents.CreateOpenClawAgentInput{
 		Name: agentName,

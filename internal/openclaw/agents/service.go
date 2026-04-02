@@ -142,7 +142,7 @@ func (s *OpenClawAgentsService) EnsureMainAgent() error {
 	defer cancel()
 
 	agent := newOpenClawAgentModel(
-		define.DefaultAgentNameForLocale(i18n.GetLocale()),
+		define.DefaultAgentNameForLocale(i18n.GetLocale(), define.SystemOwnerOpenClaw),
 		define.OpenClawMainAgentID,
 		"",
 	)
