@@ -333,6 +333,10 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	app.RegisterService(application.NewService(library.NewLibraryService(app)))
 	// 注册文档服务
 	app.RegisterService(application.NewService(document.NewDocumentService(app)))
+	// Startup self-heal for sqlite-vec shadow-table drift caused by previous
+	// embedding-dimension swaps. Run after taskmanager init so repair can queue
+	// global re-embedding jobs when needed.
+	go settings.NewSettingsService(app).RepairEmbeddingIndexIfNeeded()
 	// 注册频道网关 + 频道管理服务
 	// Use indirection so the handler closure can reference the gateway.
 	var channelGW *channels.Gateway

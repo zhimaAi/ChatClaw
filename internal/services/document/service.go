@@ -131,6 +131,14 @@ func (s *DocumentService) GetDocumentsDir() (string, error) {
 	return filepath.Join(dir, "documents"), nil
 }
 
+func (s *DocumentService) ensureEmbeddingConfiguredForUpload(ctx context.Context, db *bun.DB) error {
+	if _, err := processor.GetEmbeddingConfig(ctx, db); err != nil {
+		s.app.Logger.Warn("document upload blocked because embedding model is not configured", "error", err)
+		return errs.New("error.library_embedding_global_not_set")
+	}
+	return nil
+}
+
 // ListDocumentsPage 获取知识库文档分页（cursor 分页）
 // - 无关键词时：按 sort_by 排序，支持 before_id 游标分页
 //   - "created_desc"（默认）: id DESC, before_id 为上一页最小 id
@@ -346,6 +354,13 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := s.ensureEmbeddingConfiguredForUpload(ctx, db); err != nil {
+		return nil, err
+	}
+
 	docsDir, err := s.GetDocumentsDir()
 	if err != nil {
 		return nil, err
@@ -356,9 +371,6 @@ func (s *DocumentService) UploadDocuments(input UploadInput) ([]Document, error)
 	if err := os.MkdirAll(libraryDir, 0o755); err != nil {
 		return nil, errs.Wrap("error.document_upload_failed", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	uploaded := make([]Document, 0, len(input.FilePaths))
 	total := len(input.FilePaths)
@@ -415,6 +427,13 @@ func (s *DocumentService) UploadBrowserDocuments(input UploadBrowserInput) ([]Do
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := s.ensureEmbeddingConfiguredForUpload(ctx, db); err != nil {
+		return nil, err
+	}
+
 	docsDir, err := s.GetDocumentsDir()
 	if err != nil {
 		return nil, err
@@ -424,9 +443,6 @@ func (s *DocumentService) UploadBrowserDocuments(input UploadBrowserInput) ([]Do
 	if err := os.MkdirAll(libraryDir, 0o755); err != nil {
 		return nil, errs.Wrap("error.document_upload_failed", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	uploaded := make([]Document, 0, len(input.Files))
 	total := len(input.Files)

@@ -55,6 +55,7 @@ import {
   type Document as BackendDocument,
 } from '@bindings/chatclaw/internal/services/document'
 import { useAppStore } from '@/stores'
+import { isGlobalEmbeddingConfigReady } from '../utils/embeddingConfig'
 
 // 进度事件数据（从后端接收）
 interface ProgressEvent {
@@ -91,6 +92,7 @@ const emit = defineEmits<{
   'folder-updated': []
   'folder-deleted': []
   'folder-tree-updated': [libraryId: number, folders: Folder[]]
+  'embedding-settings-required': []
 }>()
 
 const { t } = useI18n()
@@ -625,7 +627,36 @@ const toggleSort = () => {
   resetAndLoad()
 }
 
+const openEmbeddingSettingsRequired = () => {
+  toast.error(t('knowledge.embeddingSettings.required'))
+  emit('embedding-settings-required')
+}
+
+const ensureEmbeddingConfiguredBeforeUpload = async (notify = true): Promise<boolean> => {
+  try {
+    const ready = await isGlobalEmbeddingConfigReady()
+    if (ready) return true
+  } catch (error) {
+    console.error('Failed to read embedding settings:', error)
+  }
+
+  if (notify) {
+    openEmbeddingSettingsRequired()
+  }
+  return false
+}
+
+const maybeOpenEmbeddingSettingsAfterUploadError = async (): Promise<boolean> => {
+  const ready = await ensureEmbeddingConfiguredBeforeUpload(false)
+  if (ready) return false
+  openEmbeddingSettingsRequired()
+  return true
+}
+
 const handleAddDocument = async () => {
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
+
   if (appStore.isServerMode) {
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
@@ -676,6 +707,7 @@ const handleAddDocument = async () => {
     // User cancelled the file dialog — not an error
     if (String(error).includes('cancelled by user')) return
     console.error('Failed to upload documents:', error)
+    if (await maybeOpenEmbeddingSettingsAfterUploadError()) return
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {
     isUploading.value = false
@@ -702,6 +734,9 @@ const readFileAsBase64 = (file: File): Promise<string> => {
 const uploadBrowserFiles = async (files: FileList | File[]) => {
   if (!props.library?.id) return
   if (isUploading.value) return
+
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
 
   const fileArray = Array.from(files)
   if (fileArray.length === 0) return
@@ -731,6 +766,7 @@ const uploadBrowserFiles = async (files: FileList | File[]) => {
     toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
   } catch (error) {
     console.error('Failed to upload browser documents:', error)
+    if (await maybeOpenEmbeddingSettingsAfterUploadError()) return
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {
     isUploading.value = false
@@ -753,6 +789,9 @@ const handleFileDrop = async (filePaths: string[]) => {
   if (!props.library?.id || filePaths.length === 0) return
   if (isUploading.value) return
 
+  const ok = await ensureEmbeddingConfiguredBeforeUpload()
+  if (!ok) return
+
   try {
     isUploading.value = true
     uploadTotal.value = filePaths.length
@@ -771,6 +810,7 @@ const handleFileDrop = async (filePaths: string[]) => {
     toast.success(t('knowledge.content.upload.count', { count: uploaded.length }))
   } catch (error) {
     console.error('Failed to upload dropped files:', error)
+    if (await maybeOpenEmbeddingSettingsAfterUploadError()) return
     toast.error(getErrorMessage(error) || t('knowledge.content.upload.failed'))
   } finally {
     isUploading.value = false

@@ -4,15 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"chatclaw/internal/define"
+	"chatclaw/internal/eino/processor"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/document"
 	"chatclaw/internal/sqlite"
@@ -331,6 +334,10 @@ func (s *SettingsService) UpdateEmbeddingConfig(input UpdateEmbeddingConfigInput
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if _, err := processor.ResolveEmbeddingConfig(ctx, db, providerID, modelID, input.Dimension); err != nil {
+		return err
+	}
+
 	// Update in a transaction to keep config consistent.
 	updates := []struct {
 		Key string
@@ -387,47 +394,13 @@ func (s *SettingsService) triggerReembedAllDocuments(dimension int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// 1) Rebuild vec0 table to match new dimension
-	// Best-effort: create a tmp table first, then swap to reduce downtime.
-	tmpName := fmt.Sprintf("doc_vec_tmp_%d", time.Now().UnixNano())
-	oldName := fmt.Sprintf("doc_vec_old_%d", time.Now().UnixNano())
-
-	_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, tmpName))
-	_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, oldName))
-
-	_, err := db.ExecContext(ctx, fmt.Sprintf(
-		`CREATE VIRTUAL TABLE "%s" USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
-		tmpName, dimension,
-	))
-	if err != nil {
-		s.app.Logger.Error("create tmp doc_vec failed", "error", err)
+	// 1) Rebuild vec0 table to match the configured dimension.
+	// vec0 uses shadow tables under the hood; rename-swap can leave them behind
+	// and produce blob-size mismatches later. We therefore fully clean doc_vec*
+	// artifacts before recreating the table.
+	if err := rebuildDocVecTable(ctx, db, dimension); err != nil {
+		s.app.Logger.Error("rebuild doc_vec failed", "error", err)
 		return
-	}
-
-	// Try rename-swap first (keeps old table if swap fails).
-	_, errRenameOld := db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE doc_vec RENAME TO "%s";`, oldName))
-	_, errRenameNew := db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO doc_vec;`, tmpName))
-	if errRenameNew != nil {
-		// Rollback: try restoring old table name if we renamed it.
-		if errRenameOld == nil {
-			_, _ = db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO doc_vec;`, oldName))
-		}
-		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, tmpName))
-
-		// Fallback to drop+create (as last resort).
-		_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS doc_vec;`)
-		_, err2 := db.ExecContext(ctx, fmt.Sprintf(
-			`CREATE VIRTUAL TABLE IF NOT EXISTS doc_vec USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
-			dimension,
-		))
-		if err2 != nil {
-			s.app.Logger.Error("fallback rebuild doc_vec failed", "error", err2)
-		}
-		return
-	}
-	// Drop old table after swap (ignore errors).
-	if errRenameOld == nil {
-		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, oldName))
 	}
 
 	// 2) Submit embedding-only jobs for all documents
@@ -472,4 +445,190 @@ func (s *SettingsService) triggerReembedAllDocuments(dimension int) {
 		taskKey := fmt.Sprintf("doc:%d", r.ID)
 		tm.Submit(taskmanager.QueueDocument, document.JobTypeReembed, taskKey, runID, jobData)
 	}
+}
+
+// RepairEmbeddingIndexIfNeeded checks whether the sqlite-vec backing tables are
+// inconsistent with the current embedding dimension and, if so, rebuilds the
+// index and queues a global re-embedding pass.
+func (s *SettingsService) RepairEmbeddingIndexIfNeeded() {
+	db := sqlite.DB()
+	if db == nil {
+		return
+	}
+
+	dimension := GetInt("embedding_dimension", 0)
+	if dimension <= 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	needsRepair, reason, err := inspectDocVecState(ctx, db, dimension)
+	if err != nil {
+		s.app.Logger.Warn("inspect doc_vec state failed", "error", err)
+		return
+	}
+	if !needsRepair {
+		return
+	}
+
+	cfg, err := processor.GetEmbeddingConfig(ctx, db)
+	if err != nil {
+		s.app.Logger.Warn("doc_vec needs repair but embedding config is unavailable", "reason", reason, "error", err)
+		return
+	}
+
+	s.app.Logger.Warn("detected inconsistent doc_vec index; scheduling rebuild", "reason", reason, "dimension", cfg.Dimension)
+	go s.triggerReembedAllDocuments(cfg.Dimension)
+}
+
+type sqliteMasterRow struct {
+	Name string         `bun:"name"`
+	SQL  sql.NullString `bun:"sql"`
+}
+
+func inspectDocVecState(ctx context.Context, db *bun.DB, expectedDimension int) (bool, string, error) {
+	rows := make([]sqliteMasterRow, 0, 8)
+	if err := db.NewRaw(`
+		SELECT name, sql
+		FROM sqlite_master
+		WHERE type = 'table' AND (name = 'doc_vec' OR name LIKE 'doc_vec_%')
+		ORDER BY name ASC
+	`).Scan(ctx, &rows); err != nil {
+		return false, "", err
+	}
+
+	presentNames := make(map[string]struct{}, len(rows))
+	reasons := make([]string, 0, 4)
+	declaredDimension := 0
+
+	for _, row := range rows {
+		presentNames[row.Name] = struct{}{}
+		if row.Name == "doc_vec" {
+			declaredDimension = parseVecDimension(row.SQL.String)
+		}
+		if strings.HasPrefix(row.Name, "doc_vec_old_") || strings.HasPrefix(row.Name, "doc_vec_tmp_") {
+			reasons = append(reasons, fmt.Sprintf("found stale vec artifact %s", row.Name))
+		}
+	}
+
+	if _, ok := presentNames["doc_vec"]; !ok {
+		reasons = append(reasons, "doc_vec table missing")
+	}
+	if declaredDimension <= 0 {
+		reasons = append(reasons, "doc_vec dimension unreadable")
+	} else if expectedDimension > 0 && declaredDimension != expectedDimension {
+		reasons = append(reasons, fmt.Sprintf("doc_vec dimension=%d expected=%d", declaredDimension, expectedDimension))
+	}
+
+	requiredShadowTables := []string{
+		"doc_vec_chunks",
+		"doc_vec_info",
+		"doc_vec_rowids",
+		"doc_vec_vector_chunks00",
+	}
+	for _, name := range requiredShadowTables {
+		if _, ok := presentNames[name]; !ok {
+			reasons = append(reasons, fmt.Sprintf("missing shadow table %s", name))
+		}
+	}
+
+	if declaredDimension > 0 {
+		expectedChunkBytes := declaredDimension * 4 * 1024
+		var badChunk int
+		err := db.NewRaw(`
+			SELECT EXISTS(
+				SELECT 1
+				FROM doc_vec_vector_chunks00
+				WHERE length(vectors) <> ?
+				LIMIT 1
+			)
+		`, expectedChunkBytes).Scan(ctx, &badChunk)
+		if err != nil && !isMissingSQLiteObject(err) {
+			return false, "", err
+		}
+		if badChunk == 1 {
+			reasons = append(reasons, fmt.Sprintf("vector chunk blob size does not match dimension %d", declaredDimension))
+		}
+	}
+
+	if len(reasons) == 0 {
+		return false, "", nil
+	}
+	return true, strings.Join(reasons, "; "), nil
+}
+
+func rebuildDocVecTable(ctx context.Context, db *bun.DB, dimension int) error {
+	if dimension <= 0 {
+		return errors.New("invalid embedding dimension")
+	}
+
+	// Drop the main virtual table first so sqlite-vec can clean up the active
+	// shadow tables it still tracks internally.
+	_, _ = db.ExecContext(ctx, `DROP TABLE IF EXISTS "doc_vec";`)
+
+	rows := make([]sqliteMasterRow, 0, 8)
+	if err := db.NewRaw(`
+		SELECT name, sql
+		FROM sqlite_master
+		WHERE type = 'table' AND (name = 'doc_vec' OR name LIKE 'doc_vec_%')
+		ORDER BY name DESC
+	`).Scan(ctx, &rows); err != nil {
+		return fmt.Errorf("list doc_vec artifacts: %w", err)
+	}
+
+	for _, row := range rows {
+		name := row.Name
+		if name == "" {
+			continue
+		}
+		if _, err := db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s";`, escapeSQLiteIdentifier(name))); err != nil {
+			return fmt.Errorf("drop %s: %w", name, err)
+		}
+	}
+
+	if _, err := db.ExecContext(ctx, fmt.Sprintf(
+		`CREATE VIRTUAL TABLE "doc_vec" USING vec0(id INTEGER PRIMARY KEY, content FLOAT[%d]);`,
+		dimension,
+	)); err != nil {
+		return fmt.Errorf("create doc_vec: %w", err)
+	}
+	return nil
+}
+
+func parseVecDimension(createSQL string) int {
+	createSQL = strings.TrimSpace(createSQL)
+	if createSQL == "" {
+		return 0
+	}
+
+	upper := strings.ToUpper(createSQL)
+	idx := strings.Index(upper, "FLOAT[")
+	if idx < 0 {
+		return 0
+	}
+	start := idx + len("FLOAT[")
+	end := strings.IndexByte(upper[start:], ']')
+	if end < 0 {
+		return 0
+	}
+
+	dim, err := strconv.Atoi(strings.TrimSpace(createSQL[start : start+end]))
+	if err != nil || dim <= 0 {
+		return 0
+	}
+	return dim
+}
+
+func escapeSQLiteIdentifier(name string) string {
+	return strings.ReplaceAll(name, `"`, `""`)
+}
+
+func isMissingSQLiteObject(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") || strings.Contains(msg, "no such module")
 }

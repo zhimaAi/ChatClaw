@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -879,17 +880,7 @@ func GetEmbeddingConfig(ctx context.Context, db *bun.DB) (*EmbeddingConfig, erro
 		return nil, errors.New("嵌入模型未配置")
 	}
 
-	// 获取供应商详情
-	err = db.NewSelect().
-		TableExpr("providers").
-		Column("type", "api_key", "api_endpoint", "extra_config").
-		Where("provider_id = ?", config.ProviderID).
-		Scan(ctx, &config.ProviderType, &config.APIKey, &config.APIEndpoint, &config.ExtraConfig)
-	if err != nil {
-		return nil, fmt.Errorf("获取供应商详情: %w", err)
-	}
-
-	return config, nil
+	return ResolveEmbeddingConfig(ctx, db, config.ProviderID, config.ModelID, config.Dimension)
 }
 
 // GetProviderInfo 从数据库获取供应商信息
@@ -904,4 +895,102 @@ func GetProviderInfo(ctx context.Context, db *bun.DB, providerID string) (*Provi
 		return nil, err
 	}
 	return info, nil
+}
+
+// ResolveEmbeddingConfig resolves and validates an embedding configuration against the current DB state.
+func ResolveEmbeddingConfig(ctx context.Context, db *bun.DB, providerID, modelID string, dimension int) (*EmbeddingConfig, error) {
+	providerID = strings.TrimSpace(providerID)
+	modelID = strings.TrimSpace(modelID)
+	if providerID == "" || modelID == "" {
+		return nil, errors.New("嵌入模型未配置")
+	}
+
+	config := &EmbeddingConfig{
+		ProviderID: providerID,
+		ModelID:    modelID,
+		Dimension:  dimension,
+	}
+
+	var providerRow struct {
+		Type        string `bun:"type"`
+		APIKey      string `bun:"api_key"`
+		APIEndpoint string `bun:"api_endpoint"`
+		ExtraConfig string `bun:"extra_config"`
+		Enabled     bool   `bun:"enabled"`
+	}
+	if err := db.NewSelect().
+		TableExpr("providers").
+		Column("type", "api_key", "api_endpoint", "extra_config", "enabled").
+		Where("provider_id = ?", providerID).
+		Scan(ctx, &providerRow); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("嵌入供应商不存在")
+		}
+		return nil, fmt.Errorf("获取嵌入供应商详情: %w", err)
+	}
+	if !providerRow.Enabled {
+		return nil, errors.New("嵌入供应商未启用")
+	}
+
+	var modelCount int
+	if err := db.NewSelect().
+		TableExpr("models").
+		ColumnExpr("COUNT(1)").
+		Where("provider_id = ?", providerID).
+		Where("model_id = ?", modelID).
+		Where("type = ?", "embedding").
+		Where("enabled = ?", true).
+		Scan(ctx, &modelCount); err != nil {
+		return nil, fmt.Errorf("获取嵌入模型详情: %w", err)
+	}
+	if modelCount == 0 {
+		return nil, errors.New("嵌入模型不可用")
+	}
+
+	config.ProviderType = strings.TrimSpace(providerRow.Type)
+	config.APIKey = strings.TrimSpace(providerRow.APIKey)
+	config.APIEndpoint = strings.TrimSpace(providerRow.APIEndpoint)
+	config.ExtraConfig = strings.TrimSpace(providerRow.ExtraConfig)
+
+	if err := validateEmbeddingProviderConfig(config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func validateEmbeddingProviderConfig(config *EmbeddingConfig) error {
+	if config == nil {
+		return errors.New("嵌入模型未配置")
+	}
+
+	if strings.TrimSpace(config.ProviderType) == "ollama" {
+		return nil
+	}
+
+	if strings.TrimSpace(config.APIKey) == "" {
+		return errors.New("嵌入供应商未配置 API Key")
+	}
+
+	if strings.TrimSpace(config.ProviderType) != "azure" {
+		return nil
+	}
+
+	if strings.TrimSpace(config.APIEndpoint) == "" {
+		return errors.New("嵌入供应商未配置 API Endpoint")
+	}
+
+	var extraConfig struct {
+		APIVersion string `json:"api_version"`
+	}
+	if strings.TrimSpace(config.ExtraConfig) != "" {
+		if err := json.Unmarshal([]byte(config.ExtraConfig), &extraConfig); err != nil {
+			return errors.New("嵌入供应商配置无效")
+		}
+	}
+	if strings.TrimSpace(extraConfig.APIVersion) == "" {
+		return errors.New("嵌入供应商未配置 API Version")
+	}
+
+	return nil
 }
