@@ -847,6 +847,7 @@ export default {
     chat: {
       selectModel: "Selecionar Modelo",
       freeBadge: "Grátis",
+      goToChatwikiLogin: "Entrar",
       noModel: "Nenhum modelo disponível",
       selectKnowledge: "Selecionar Base de Conhecimento",
       openclawTeamKnowledgeDisabled: "Bases de conhecimento em equipe ainda não estão disponíveis no OpenClaw",

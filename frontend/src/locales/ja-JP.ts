@@ -848,6 +848,7 @@ export default {
     chat: {
       selectModel: "モデルを選択",
       freeBadge: "無料",
+      goToChatwikiLogin: "ログインへ",
       noModel: "利用可能なモデルがありません",
       selectKnowledge: "ナレッジベースを選択",
       openclawTeamKnowledgeDisabled: "OpenClaw ではチーム知識ベースはまだ利用できません",

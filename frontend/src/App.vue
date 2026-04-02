@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, KeepAlive, onMounted, onUnmounted, ref, watch } from 'vue'
 import { MainLayout } from '@/components/layout'
 import { Toaster } from '@/components/ui/toast'
 import { useNavigationStore, useAppStore, type NavModule } from '@/stores'
@@ -48,6 +48,11 @@ const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
 const activeTab = computed(() => navigationStore.activeTab)
+const activeTabComponent = computed(() => {
+  const tab = activeTab.value
+  if (!tab) return null
+  return moduleComponents[tab.module] ?? null
+})
 
 function resolveAssistantModule(system: typeof appStore.currentSystem): NavModule {
   return system === 'openclaw' ? 'openclaw' : 'assistant'
@@ -534,19 +539,19 @@ onUnmounted(() => {
   <MainLayout>
     <!--
       标签页状态保留架构：
-      - 为每个打开的标签页渲染独立的组件实例（通过 :key="tab.id" 确保独立）
-      - 使用 v-show 控制显示/隐藏，而不是 v-if 销毁组件
-      - 这样切换标签页时，组件实例不会被销毁，所有状态自然保留
+      - 只渲染当前激活页，避免所有重页面同时常驻 DOM
+      - 通过 KeepAlive + :key="tab.id" 为每个标签页保留独立实例
+      - 切换标签页时实例不销毁，但关闭标签页时才真正释放
     -->
-    <template v-for="tab in navigationStore.tabs" :key="tab.id">
+    <KeepAlive>
       <component
-        :is="moduleComponents[tab.module]"
-        v-if="moduleComponents[tab.module]"
-        v-show="navigationStore.activeTabId === tab.id"
-        :tab-id="tab.id"
-        :system-owner="tab.systemOwner"
+        :is="activeTabComponent"
+        v-if="activeTab && activeTabComponent"
+        :key="activeTab.id"
+        :tab-id="activeTab.id"
+        :system-owner="activeTab.systemOwner"
         class="absolute inset-0"
       />
-    </template>
+    </KeepAlive>
   </MainLayout>
 </template>

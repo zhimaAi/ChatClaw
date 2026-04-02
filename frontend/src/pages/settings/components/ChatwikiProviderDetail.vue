@@ -33,6 +33,7 @@ import {
   type ModelCatalog,
   type ModelCatalogItem,
 } from '@bindings/chatclaw/internal/services/chatwiki'
+import { formatChatwikiIntegralNumber } from '@/lib/chatwikiCreditsFormat'
 import {
   shouldShowChatwikiAccountCard,
   shouldShowChatwikiCreditsCard,
@@ -133,7 +134,7 @@ function toStatText(value: string): string {
   if (!value) return '--'
   const num = Number(value)
   if (Number.isNaN(num)) return value
-  return num.toLocaleString(undefined, { maximumFractionDigits: 3 })
+  return formatChatwikiIntegralNumber(num)
 }
 
 function extractStatValue(catalog: ModelCatalog | null, key: string): string {

@@ -847,6 +847,7 @@ export default {
     chat: {
       selectModel: "Model seç",
       freeBadge: "Ücretsiz",
+      goToChatwikiLogin: "Giriş yap",
       noModel: "Mevcut model yok",
       selectKnowledge: "Bilgi tabanı seç",
       openclawTeamKnowledgeDisabled: "OpenClaw’da ekip bilgi tabanları henüz kullanılamıyor",

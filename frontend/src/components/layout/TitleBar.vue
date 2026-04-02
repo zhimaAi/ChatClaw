@@ -113,6 +113,10 @@ const handleAddAssistantTab = () => {
   navigationStore.addTab({ module: 'assistant', titleKey: 'nav.assistant' })
 }
 
+const handleCloseAllTabs = (tabId: string) => {
+  navigationStore.closeOtherTabs(tabId)
+}
+
 /**
  * Double-click on the title bar drag area to zoom/maximize the window.
  * macOS: triggers Window.Zoom() (same as green traffic-light button behavior)
@@ -274,7 +278,7 @@ const handleTitleBarDoubleClick = async (event: MouseEvent) => {
             {{ t('tab.closeRight') }}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem @click="navigationStore.closeAllTabs()">
+          <ContextMenuItem @click="handleCloseAllTabs(tab.id)">
             {{ t('tab.closeAll') }}
           </ContextMenuItem>
         </ContextMenuContent>

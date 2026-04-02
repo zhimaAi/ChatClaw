@@ -849,6 +849,7 @@ export default {
     chat: {
       selectModel: "Izberi model",
       freeBadge: "Brezplačno",
+      goToChatwikiLogin: "Prijava",
       noModel: "Ni na voljo modelov",
       selectKnowledge: "Izberi bazo znanja",
       openclawTeamKnowledgeDisabled: "Ekipne baze znanja v OpenClaw še niso na voljo",

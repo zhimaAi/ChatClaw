@@ -265,6 +265,30 @@ export const useNavigationStore = defineStore('navigation', () => {
   }
 
   /**
+   * Replace all tabs with a single target module in one update.
+   * This avoids the transient `tabs = []` state that can trigger extra
+   * watcher-driven navigation and duplicate remount work.
+   */
+  const resetToSingleTab = (module: NavModule, systemOwner?: SystemOwner) => {
+    const id = createTabId()
+    const { icon, iconIsDefault } = resolveTabIcon(module)
+
+    tabs.value = [
+      {
+        id,
+        titleKey: moduleLabels[module],
+        module,
+        systemOwner,
+        icon,
+        iconIsDefault,
+      },
+    ]
+    activeTabId.value = id
+    activeModule.value = module
+    pendingChatData.value = null
+  }
+
+  /**
    * 关闭标签页
    */
   const closeTab = (tabId: string) => {
@@ -476,6 +500,7 @@ export const useNavigationStore = defineStore('navigation', () => {
     closeOtherTabs,
     closeRightTabs,
     closeAllTabs,
+    resetToSingleTab,
     setActiveTab,
     updateTabIcon,
     updateTabTitle,

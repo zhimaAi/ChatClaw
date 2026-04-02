@@ -848,6 +848,7 @@ export default {
     chat: {
       selectModel: "اختر النموذج",
       freeBadge: "مجاني",
+      goToChatwikiLogin: "تسجيل الدخول",
       noModel: "لا يوجد نموذج متاح",
       selectKnowledge: "اختر قاعدة المعرفة",
       openclawTeamKnowledgeDisabled: "قواعد معرفة الفريق غير متاحة في OpenClaw بعد",

@@ -1,4 +1,5 @@
 import { i18n } from '@/i18n'
+import { formatChatwikiIntegralNumber } from '@/lib/chatwikiCreditsFormat'
 import { isChatwikiDevBinding } from '@/lib/chatwikiBindingVersion'
 
 export type ChatwikiSidebarBindingLike = {
@@ -81,7 +82,7 @@ function formatCreditsLabel(value: string): string {
   }
 
   return t('settings.chatwiki.creditsValue', {
-    value: num.toLocaleString(undefined, { maximumFractionDigits: 3 }),
+    value: formatChatwikiIntegralNumber(num),
   })
 }
 

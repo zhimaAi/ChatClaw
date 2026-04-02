@@ -849,6 +849,7 @@ export default {
     chat: {
       selectModel: "মডেল সিলেক্ট",
       freeBadge: "ফ্রি",
+      goToChatwikiLogin: "লগ ইন",
       noModel: "কোনো মডেল নেই",
       selectKnowledge: "নলেজ বেস সিলেক্ট",
       openclawTeamKnowledgeDisabled: "OpenClaw-এ টিম নলেজ বেস এখনো উপলব্ধ নয়",

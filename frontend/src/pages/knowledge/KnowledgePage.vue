@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, MoreHorizontal, Settings, FileText, Folder as FolderIcon } from 'lucide-vue-next'
 import IconKnowledge from '@/assets/icons/knowledge.svg'
@@ -12,12 +12,14 @@ import { Events } from '@wailsio/runtime'
  */
 const props = defineProps<{
   tabId: string
+  /** Captured when the tab was created; prefer over global appStore.currentSystem (see navigation Tab.systemOwner). */
+  systemOwner?: SystemOwner
 }>()
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { getErrorMessage } from '@/composables/useErrorMessage'
-import { useNavigationStore, useSettingsStore, useAppStore } from '@/stores'
+import { useNavigationStore, useSettingsStore, useAppStore, type SystemOwner } from '@/stores'
 import CreateLibraryDialog from './components/CreateLibraryDialog.vue'
 import EmbeddingSettingsDialog from './components/EmbeddingSettingsDialog.vue'
 import RenameLibraryDialog from './components/RenameLibraryDialog.vue'
@@ -26,7 +28,8 @@ import LibraryContentArea from './components/LibraryContentArea.vue'
 import FolderTreeItem from './components/FolderTreeItem.vue'
 import TeamFolderCard from './components/TeamFolderCard.vue'
 import TeamFileCard from './components/TeamFileCard.vue'
-import ChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
+import AssistantChatInputArea from '@/pages/assistant/components/ChatInputArea.vue'
+import OpenClawChatInputArea from '@/pages/openclaw/assistant/components/ChatInputArea.vue'
 import IconRename from '@/assets/icons/library-rename.svg'
 import IconLibSettings from '@/assets/icons/library-settings.svg'
 import IconDelete from '@/assets/icons/library-delete.svg'
@@ -65,8 +68,13 @@ import {
   getLibraryListOnlyOpen as getLibraryListOnlyOpenCached,
 } from '@/lib/chatwikiCache'
 import { FileStack } from 'lucide-vue-next'
-import { useAgents } from '@/pages/assistant/composables/useAgents'
-import { useModelSelection } from '@/pages/assistant/composables/useModelSelection'
+import { useAgents as useChatClawAgents } from '@/pages/assistant/composables/useAgents'
+import { useAgents as useOpenClawAgents } from '@/pages/openclaw/assistant/composables/useAgents'
+import { useModelSelection as useChatClawModelSelection } from '@/pages/assistant/composables/useModelSelection'
+import { useModelSelection as useOpenClawModelSelection } from '@/pages/openclaw/assistant/composables/useModelSelection'
+import type { Agent } from '@bindings/chatclaw/internal/services/agents'
+import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
+import type { Conversation } from '@bindings/chatclaw/internal/services/conversations'
 import { supportsMultimodal } from '@/composables/useMultimodal'
 import { toast } from '@/components/ui/toast'
 import { isGlobalEmbeddingConfigReady } from './utils/embeddingConfig'
@@ -77,6 +85,97 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const navigationStore = useNavigationStore()
 const settingsStore = useSettingsStore()
+
+/** Which product UI this knowledge tab belongs to (tab snapshot, not only global switcher). */
+const knowledgePageEffectiveSystem = computed(() => props.systemOwner ?? appStore.currentSystem)
+
+const chatClawAgentsState = useChatClawAgents()
+const openClawAgentsState = useOpenClawAgents()
+
+/** Agent list for knowledge chat: ChatClaw vs OpenClaw APIs depending on tab system. */
+const agents = computed(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw'
+    ? openClawAgentsState.agents.value
+    : chatClawAgentsState.agents.value
+)
+
+const activeAgentId = computed({
+  get() {
+    return knowledgePageEffectiveSystem.value === 'openclaw'
+      ? openClawAgentsState.activeAgentId.value
+      : chatClawAgentsState.activeAgentId.value
+  },
+  set(v: number | null) {
+    if (knowledgePageEffectiveSystem.value === 'openclaw') {
+      openClawAgentsState.activeAgentId.value = v
+    } else {
+      chatClawAgentsState.activeAgentId.value = v
+    }
+  },
+})
+
+const loadAgents = async () => {
+  if (knowledgePageEffectiveSystem.value === 'openclaw') {
+    await openClawAgentsState.loadAgents()
+  } else {
+    await chatClawAgentsState.loadAgents()
+  }
+}
+
+const chatClawModelsState = useChatClawModelSelection()
+const openClawModelsState = useOpenClawModelSelection()
+
+const providersWithModels = computed(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw'
+    ? openClawModelsState.providersWithModels.value
+    : chatClawModelsState.providersWithModels.value
+)
+
+const selectedModelKey = computed({
+  get() {
+    return knowledgePageEffectiveSystem.value === 'openclaw'
+      ? openClawModelsState.selectedModelKey.value
+      : chatClawModelsState.selectedModelKey.value
+  },
+  set(v: string) {
+    if (knowledgePageEffectiveSystem.value === 'openclaw') {
+      openClawModelsState.selectedModelKey.value = v
+    } else {
+      chatClawModelsState.selectedModelKey.value = v
+    }
+  },
+})
+
+const hasModels = computed(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw'
+    ? openClawModelsState.hasModels.value
+    : chatClawModelsState.hasModels.value
+)
+
+const selectedModelInfo = computed(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw'
+    ? openClawModelsState.selectedModelInfo.value
+    : chatClawModelsState.selectedModelInfo.value
+)
+
+const loadModels = async () => {
+  if (knowledgePageEffectiveSystem.value === 'openclaw') {
+    await openClawModelsState.loadModels()
+  } else {
+    await chatClawModelsState.loadModels()
+  }
+}
+
+const selectDefaultModel = (
+  agent: Agent | OpenClawAgent | null,
+  activeConversation: Conversation | null
+) => {
+  if (knowledgePageEffectiveSystem.value === 'openclaw') {
+    openClawModelsState.selectDefaultModel(agent as OpenClawAgent | null, activeConversation)
+  } else {
+    chatClawModelsState.selectDefaultModel(agent as Agent | null, activeConversation)
+  }
+}
 
 const activeTab = ref<LibraryTab>('personal')
 const createDialogOpen = ref(false)
@@ -103,18 +202,6 @@ const chatInput = ref('')
 const enableThinking = ref(false)
 const chatMode = ref('task')
 const pendingImages = ref<PendingImage[]>([])
-
-// Use composables for agent and model selection
-const { agents, activeAgentId, loadAgents } = useAgents()
-
-const {
-  providersWithModels,
-  selectedModelKey,
-  hasModels,
-  selectedModelInfo,
-  loadModels,
-  selectDefaultModel,
-} = useModelSelection()
 
 interface PendingImage {
   id: string
@@ -205,7 +292,20 @@ const teamGroupCards = computed(() => teamLibraryGroups.value)
 const selectedTeamGroupName = computed(
   () => teamLibraryGroups.value.find((group) => group.id === selectedTeamGroupId.value)?.name || ''
 )
-const shouldHideOpenClawKnowledgeChatToggles = computed(() => appStore.currentSystem === 'openclaw')
+const shouldHideOpenClawKnowledgeChatToggles = computed(
+  () => knowledgePageEffectiveSystem.value === 'openclaw'
+)
+
+const knowledgePageChatInputComponent = computed<Component>(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw' ? OpenClawChatInputArea : AssistantChatInputArea
+)
+
+/** OpenClaw ChatInputArea has no hideThinkingToggle prop; only pass it for the assistant build. */
+const knowledgePageChatInputAssistantOnlyProps = computed(() =>
+  knowledgePageEffectiveSystem.value === 'openclaw'
+    ? {}
+    : { hideThinkingToggle: shouldHideOpenClawKnowledgeChatToggles.value }
+)
 
 // Team sidebar group cache (per library)
 const teamLibraryGroupsByLibraryId = ref<Map<string, ChatWikiLibraryGroup[]>>(new Map())
@@ -342,7 +442,7 @@ const showChatInputArea = computed(
     (activeTab.value === 'personal' && !isLibraryEmpty.value) ||
     (activeTab.value === 'team' &&
       !!selectedTeamLibrary.value &&
-      appStore.currentSystem !== 'openclaw')
+      knowledgePageEffectiveSystem.value !== 'openclaw')
 )
 
 const loadLibraries = async () => {
@@ -1025,6 +1125,16 @@ watch([activeTab, teamLibraryTab, selectedTeamLibraryId], ([tab, libType, librar
   void reloadTeamNormalContent()
 })
 
+// When product (ChatClaw vs OpenClaw) changes, load the matching agents and models
+watch(knowledgePageEffectiveSystem, async () => {
+  if (knowledgePageEffectiveSystem.value === 'openclaw' && activeTab.value === 'team') {
+    activeTab.value = 'personal'
+  }
+  await loadAgents()
+  await loadModels()
+  selectDefaultModel(activeAgent.value, null)
+})
+
 // When agent changes, re-select default model
 watch(activeAgentId, () => {
   selectDefaultModel(activeAgent.value, null)
@@ -1072,7 +1182,7 @@ const handleSendMessage = () => {
 
   // Set pending chat data and open a new assistant tab
   navigationStore.setPendingChatAndOpenAssistant({
-    module: appStore.currentSystem === 'openclaw' ? 'openclaw' : 'assistant',
+    module: knowledgePageEffectiveSystem.value === 'openclaw' ? 'openclaw' : 'assistant',
     chatInput: messageContent,
     libraryIds,
     ...(teamLibraryId && { teamLibraryId }),
@@ -1166,12 +1276,15 @@ const handleRemoveImage = (id: string) => {
             </button>
             <button
               type="button"
+              :disabled="knowledgePageEffectiveSystem === 'openclaw'"
               :class="
                 cn(
                   'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'team'
                     ? 'bg-background text-foreground shadow-sm font-medium'
-                    : 'text-foreground'
+                    : 'text-foreground',
+                  knowledgePageEffectiveSystem === 'openclaw' &&
+                    'cursor-not-allowed opacity-50'
                 )
               "
               @click="activeTab = 'team'"
@@ -1973,7 +2086,8 @@ const handleRemoveImage = (id: string) => {
 
       <!-- Bottom chat input: shown for personal tab (when library selected) and team tab (when team library selected) -->
       <div v-if="showChatInputArea" class="mt-auto shrink-0 bg-background pt-1 pb-1">
-        <ChatInputArea
+        <component
+          :is="knowledgePageChatInputComponent"
           v-model:chat-input="chatInput"
           v-model:chat-mode="chatMode"
           v-model:selected-model-key="selectedModelKey"
@@ -1981,7 +2095,7 @@ const handleRemoveImage = (id: string) => {
           v-model:active-agent-id="activeAgentId"
           mode="knowledge"
           :hide-chat-mode-selector="shouldHideOpenClawKnowledgeChatToggles"
-          :hide-thinking-toggle="shouldHideOpenClawKnowledgeChatToggles"
+          v-bind="knowledgePageChatInputAssistantOnlyProps"
           :providers-with-models="providersWithModels"
           :has-models="hasModels"
           :selected-model-info="selectedModelInfo"

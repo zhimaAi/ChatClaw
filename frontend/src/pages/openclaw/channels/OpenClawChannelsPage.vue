@@ -186,7 +186,14 @@ function getAgentName(agentId: number): string {
   return agent ? agent.name : t('channels.agentFallback')
 }
 
-function handleAddChannel() {
+async function handleAddChannel() {
+  if (selectedFilter.value !== 'all') {
+    const platform = platforms.value.find((p) => p.id === selectedFilter.value)
+    if (platform && isChannelPlatformSelectable(platform.id)) {
+      await handleSelectPlatform(platform)
+      return
+    }
+  }
   addDialogOpen.value = true
 }
 

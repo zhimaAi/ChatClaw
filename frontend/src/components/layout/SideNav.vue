@@ -98,9 +98,8 @@ const selectSystem = (system: SystemOwner) => {
     return
   }
   appStore.setCurrentSystem(system)
-  navigationStore.closeAllTabs()
   const assistantModule: NavModule = system === 'openclaw' ? 'openclaw' : 'assistant'
-  navigationStore.navigateToModule(assistantModule, system)
+  navigationStore.resetToSingleTab(assistantModule, system)
   switcherOpen.value = false
 }
 
@@ -240,8 +239,9 @@ const handleNavClick = (item: NavItem) => {
 /** Side nav row: OpenClaw active uses #FFE2E2 background; icon color applied separately. */
 const navButtonClass = (item: NavItem) =>
   cn(
-    'group mx-2 flex items-center gap-2 rounded-md px-2 py-[9px] text-left text-[15px] font-bold transition-colors',
+    'group mx-2 flex items-center gap-2 rounded-md px-2 py-[9px] text-left text-[15px] transition-colors',
     navigationStore.sidebarCollapsed && 'justify-center',
+    isActive(item) ? 'font-bold' : 'font-normal',
     isActive(item)
       ? cn(
           'text-accent-foreground',

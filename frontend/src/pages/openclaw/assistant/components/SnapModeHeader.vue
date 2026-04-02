@@ -11,9 +11,9 @@ import {
   SelectLabel,
   SelectTrigger,
 } from '@/components/ui/select'
-import { useThemeLogo } from '@/composables/useLogo'
 import IconSnapAttached from '@/assets/icons/snap-attached.svg'
 import IconSnapDetached from '@/assets/icons/snap-detached.svg'
+import openclawIconUrl from '@/assets/icons/openclaw.svg?url'
 import type { OpenClawAgent } from '@bindings/chatclaw/internal/openclaw/agents'
 import type { Robot } from '@bindings/chatclaw/internal/services/chatwiki'
 import { SettingsService } from '@bindings/chatclaw/internal/services/settings'
@@ -21,17 +21,24 @@ import { Window } from '@wailsio/runtime'
 
 export type SnapListMode = 'personal' | 'team'
 
-const props = defineProps<{
-  listMode: SnapListMode
-  agents: OpenClawAgent[]
-  activeAgent: OpenClawAgent | null
-  activeAgentId: number | null
-  teamRobots: Robot[]
-  activeTeamRobot: Robot | null
-  activeTeamRobotId: string | null
-  teamLoading: boolean
-  hasAttachedTarget: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    listMode: SnapListMode
+    agents: OpenClawAgent[]
+    activeAgent: OpenClawAgent | null
+    activeAgentId: number | null
+    teamRobots: Robot[]
+    activeTeamRobot: Robot | null
+    activeTeamRobotId: string | null
+    teamLoading: boolean
+    hasAttachedTarget: boolean
+    /** When true, hide personal/team switch — OpenClaw snap mode is personal-only. */
+    teamListDisabled?: boolean
+  }>(),
+  {
+    teamListDisabled: false,
+  }
+)
 
 const emit = defineEmits<{
   'update:listMode': [value: SnapListMode]
@@ -44,7 +51,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
 const SNAP_DRAG_GUARD_UNTIL_KEY = 'snap_drag_guard_until_unix_ms'
 
 const setDragGuardUntil = (untilMs: number) => {
@@ -134,6 +140,7 @@ onUnmounted(() => {
 
 const handleListModeChange = (value: unknown) => {
   const s = value != null ? String(value) : ''
+  if (props.teamListDisabled && s === 'team') return
   if (s === 'personal' || s === 'team') {
     emit('update:listMode', s)
   }
@@ -142,7 +149,7 @@ const handleListModeChange = (value: unknown) => {
 const handleAssistantChange = (value: unknown) => {
   const s = value != null ? String(value) : ''
   if (s === '') return
-  if (props.listMode === 'personal') {
+  if (props.teamListDisabled || props.listMode === 'personal') {
     emit('update:activeAgentId', Number(s))
   } else {
     emit('update:activeTeamRobotId', s)
@@ -167,8 +174,12 @@ const handleAssistantChange = (value: unknown) => {
       class="flex min-w-0 items-center gap-1.5"
       style="--wails-draggable: no-drag"
     >
-      <!-- First dropdown: Personal / Team -->
-      <Select :model-value="listMode" @update:model-value="handleListModeChange">
+      <!-- First dropdown: Personal / Team (hidden in OpenClaw — team list not supported) -->
+      <Select
+        v-if="!teamListDisabled"
+        :model-value="listMode"
+        @update:model-value="handleListModeChange"
+      >
         <SelectTrigger
           class="h-7 w-auto min-w-[72px] max-w-[90px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50"
         >
@@ -187,24 +198,33 @@ const handleAssistantChange = (value: unknown) => {
       <!-- Second dropdown: Agent (personal) or Team robot (team) -->
       <Select
         :model-value="
-          listMode === 'personal' ? (activeAgentId?.toString() ?? '') : (activeTeamRobotId ?? '')
+          teamListDisabled || listMode === 'personal'
+            ? (activeAgentId?.toString() ?? '')
+            : (activeTeamRobotId ?? '')
         "
         :disabled="
-          listMode === 'personal' ? agents.length === 0 : teamLoading || teamRobots.length === 0
+          teamListDisabled || listMode === 'personal'
+            ? agents.length === 0
+            : teamLoading || teamRobots.length === 0
         "
         @update:model-value="handleAssistantChange"
       >
         <SelectTrigger
           class="h-7 w-auto min-w-[120px] max-w-[180px] border-0 bg-transparent px-2 text-sm font-medium shadow-none hover:bg-muted/50"
         >
-          <template v-if="listMode === 'personal'">
+          <template v-if="teamListDisabled || listMode === 'personal'">
             <div v-if="activeAgent" class="flex items-center gap-1.5">
               <img
                 v-if="activeAgent.icon"
                 :src="activeAgent.icon"
                 class="size-4 rounded object-contain"
               />
-              <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+              <img
+                v-else
+                :src="openclawIconUrl"
+                class="size-4 rounded object-contain"
+                alt=""
+              />
               <span class="truncate">{{ activeAgent.name }}</span>
             </div>
             <span v-else class="text-muted-foreground">{{
@@ -219,7 +239,12 @@ const handleAssistantChange = (value: unknown) => {
                 class="size-4 rounded object-contain"
                 alt=""
               />
-              <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+              <img
+                v-else
+                :src="openclawIconUrl"
+                class="size-4 rounded object-contain"
+                alt=""
+              />
               <span class="truncate">{{ activeTeamRobot.name }}</span>
             </div>
             <span v-else class="text-muted-foreground">{{
@@ -230,11 +255,16 @@ const handleAssistantChange = (value: unknown) => {
         <SelectContent>
           <SelectGroup>
             <SelectLabel>{{ t('assistant.placeholders.noAgentSelected') }}</SelectLabel>
-            <template v-if="listMode === 'personal'">
+            <template v-if="teamListDisabled || listMode === 'personal'">
               <SelectItem v-for="a in agents" :key="a.id" :value="a.id.toString()">
                 <div class="flex items-center gap-2">
                   <img v-if="a.icon" :src="a.icon" class="size-4 rounded object-contain" />
-                  <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+                  <img
+                    v-else
+                    :src="openclawIconUrl"
+                    class="size-4 rounded object-contain"
+                    alt=""
+                  />
                   <span>{{ a.name }}</span>
                 </div>
               </SelectItem>
@@ -243,7 +273,12 @@ const handleAssistantChange = (value: unknown) => {
               <SelectItem v-for="r in teamRobots" :key="r.id" :value="r.id">
                 <div class="flex items-center gap-2">
                   <img v-if="r.icon" :src="r.icon" class="size-4 rounded object-contain" alt="" />
-                  <img v-else :src="logoSrc" class="size-4" alt="ChatClaw logo" />
+                  <img
+                    v-else
+                    :src="openclawIconUrl"
+                    class="size-4 rounded object-contain"
+                    alt=""
+                  />
                   <span>{{ r.name }}</span>
                 </div>
               </SelectItem>

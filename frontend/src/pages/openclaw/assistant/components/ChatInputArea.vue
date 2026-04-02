@@ -52,10 +52,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-import type { ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
+import type { Model, ProviderWithModels } from '@bindings/chatclaw/internal/services/providers'
 import type { Library } from '@bindings/chatclaw/internal/services/library'
-import { useThemeLogo } from '@/composables/useLogo'
-
+import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
+import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import {
+  CHATWIKI_PROVIDER_ID,
+  formatModelDisplayLabel,
+  formatProviderDisplayLabel,
+  getChatwikiAvailabilityStatus,
+  isModelSelectionDisabled,
+} from '@/lib/chatwikiModelAvailability'
+import { useNavigationStore, useSettingsStore } from '@/stores'
 interface PendingImage {
   id: string
   file: File
@@ -159,7 +167,27 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { logoSrc } = useThemeLogo()
+const navigationStore = useNavigationStore()
+const settingsStore = useSettingsStore()
+const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+/** Keeps model Select in controlled open state so we can close it before navigating away */
+const modelSelectOpen = ref(false)
+
+async function goToChatwikiLogin() {
+  modelSelectOpen.value = false
+  await nextTick()
+  settingsStore.requestChatwikiCloudLogin()
+  settingsStore.setActiveMenu('chatwiki')
+  navigationStore.navigateToModule('settings')
+}
+
+function getDisplayModelName(providerId: string, model: Model): string {
+  return formatModelDisplayLabel(
+    providerId,
+    model.name?.trim() || model.model_id?.trim() || '-',
+    chatwikiAvailability.value
+  )
+}
 
 const handleChatEnter = (event: KeyboardEvent) => {
   // Prevent sending when IME is composing (Chinese/Japanese/Korean input).
@@ -300,6 +328,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const inputContainerRef = ref<HTMLDivElement | null>(null)
 const toolbarRef = ref<HTMLDivElement | null>(null)
 const isDragging = ref(false)
+let unsubscribeChatwikiBindingChanged: (() => void) | null = null
 const isToolbarNarrow = ref(false)
 
 const MAX_IMAGES = 4
@@ -515,6 +544,21 @@ let toolbarObserver: ResizeObserver | null = null
 
 // Setup event listeners
 onMounted(() => {
+  void getChatwikiBinding()
+    .then((binding) => {
+      chatwikiAvailability.value = getChatwikiAvailabilityStatus(binding)
+    })
+    .catch(() => {
+      chatwikiAvailability.value = 'unbound'
+    })
+  unsubscribeChatwikiBindingChanged = onChatwikiBindingChanged((bound) => {
+    chatwikiAvailability.value =
+      typeof bound === 'boolean'
+        ? bound
+          ? 'available'
+          : 'unbound'
+        : getChatwikiAvailabilityStatus(bound)
+  })
   if (textareaRef.value) {
     textareaRef.value.addEventListener('paste', handlePaste)
   }
@@ -533,6 +577,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unsubscribeChatwikiBindingChanged?.()
+  unsubscribeChatwikiBindingChanged = null
   if (textareaRef.value) {
     textareaRef.value.removeEventListener('paste', handlePaste)
   }
@@ -640,7 +686,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Selected knowledge bases: personal + team chips (both removable; same style) -->
+        <!-- Selected knowledge bases: personal + team chips (same style; knowledge mode: chip locked, no remove) -->
         <div
           v-if="
             !isTeamMode &&
@@ -649,22 +695,38 @@ onUnmounted(() => {
           "
           class="-mt-1 mb-3 flex flex-wrap items-center gap-2"
         >
-          <!-- Personal libraries -->
-          <div
-            v-for="lib in visibleLibraries"
-            :key="'p-' + lib.id"
-            class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
-          >
-            <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
-            <span class="max-w-[148px] truncate">{{ lib.name }}</span>
-            <button
-              type="button"
-              class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
-              @click="handleRemoveLibrary(lib.id)"
-            >
-              <X class="size-4" />
-            </button>
-          </div>
+          <TooltipProvider>
+            <!-- Personal libraries -->
+            <template v-for="lib in visibleLibraries" :key="'p-' + lib.id">
+              <Tooltip v-if="currentMode === 'knowledge'">
+                <TooltipTrigger as-child>
+                  <div
+                    class="group flex h-8 cursor-default items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80"
+                  >
+                    <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+                    <span class="max-w-[148px] truncate">{{ lib.name }}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{{ t('assistant.chat.knowledgeChipRemoveNotSupported') }}</p>
+                </TooltipContent>
+              </Tooltip>
+              <div
+                v-else
+                class="group flex h-8 items-center gap-2 rounded-xl bg-muted px-3.5 text-sm text-foreground/80 transition-colors hover:bg-muted/80"
+              >
+                <IconKnowledge class="size-4 shrink-0 text-muted-foreground" />
+                <span class="max-w-[148px] truncate">{{ lib.name }}</span>
+                <button
+                  type="button"
+                  class="cursor-pointer rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground active:scale-95"
+                  @click="handleRemoveLibrary(lib.id)"
+                >
+                  <X class="size-4" />
+                </button>
+              </div>
+            </template>
+          </TooltipProvider>
           <span
             v-if="overflowCount > 0"
             class="inline-flex h-8 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground"
@@ -765,7 +827,7 @@ onUnmounted(() => {
                         class="h-8 w-auto min-w-[100px] max-w-[160px] cursor-pointer rounded-full border border-transparent bg-muted px-3 text-xs shadow-none hover:bg-muted/80 active:bg-muted/90 active:scale-95"
                       >
                         <div v-if="activeAgent" class="flex min-w-0 items-center gap-1.5">
-                          <img :src="logoSrc" class="size-3.5 shrink-0" alt="ChatClaw logo" />
+                          <img :src="openclawIconUrl" class="size-3.5 shrink-0" alt="OpenClaw" />
                           <span class="truncate">{{ activeAgent.name }}</span>
                         </div>
                         <span v-else class="text-muted-foreground">
@@ -796,6 +858,7 @@ onUnmounted(() => {
                   <TooltipTrigger as-child>
                     <div class="min-w-0">
                       <Select
+                        v-model:open="modelSelectOpen"
                         :model-value="selectedModelKey"
                         :disabled="!hasModels"
                         @update:model-value="
@@ -830,15 +893,42 @@ onUnmounted(() => {
                               :key="pw.provider.provider_id"
                             >
                               <SelectLabel
-                                class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
+                                :class="
+                                  cn(
+                                    'mt-2 flex items-center gap-1.5 text-xs text-muted-foreground',
+                                    pw.provider.provider_id === CHATWIKI_PROVIDER_ID &&
+                                      chatwikiAvailability === 'unbound' &&
+                                      'justify-between gap-2 pr-1'
+                                  )
+                                "
                               >
-                                <span>{{ pw.provider.name }}</span>
-                                <span
-                                  v-if="isProviderFree(pw)"
-                                  class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                                >
-                                  {{ t('assistant.chat.freeBadge') }}
+                                <span class="flex min-w-0 flex-1 items-center gap-1.5">
+                                  <span class="truncate">{{
+                                    formatProviderDisplayLabel(
+                                      pw.provider.provider_id,
+                                      pw.provider.name,
+                                      chatwikiAvailability
+                                    )
+                                  }}</span>
+                                  <span
+                                    v-if="isProviderFree(pw)"
+                                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                                  >
+                                    {{ t('assistant.chat.freeBadge') }}
+                                  </span>
                                 </span>
+                                <button
+                                  v-if="
+                                    pw.provider.provider_id === CHATWIKI_PROVIDER_ID &&
+                                    chatwikiAvailability === 'unbound'
+                                  "
+                                  type="button"
+                                  class="shrink-0 border-0 bg-transparent p-0 text-xs font-medium text-[color:var(--color-blue-600)] underline-offset-2 hover:underline hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  @click.stop="goToChatwikiLogin"
+                                  @pointerdown.stop
+                                >
+                                  {{ t('assistant.chat.goToChatwikiLogin') }}
+                                </button>
                               </SelectLabel>
                               <template v-for="g in pw.model_groups" :key="g.type">
                                 <template v-if="g.type === 'llm'">
@@ -846,9 +936,17 @@ onUnmounted(() => {
                                     v-for="m in g.models"
                                     :key="pw.provider.provider_id + '::' + m.model_id"
                                     :value="pw.provider.provider_id + '::' + m.model_id"
+                                    :disabled="
+                                      isModelSelectionDisabled(
+                                        pw.provider.provider_id,
+                                        chatwikiAvailability
+                                      )
+                                    "
                                   >
                                     <div class="flex items-center gap-2">
-                                      <span>{{ m.name }}</span>
+                                      <span>{{
+                                        getDisplayModelName(pw.provider.provider_id, m)
+                                      }}</span>
                                       <template v-if="m.capabilities && m.capabilities.length > 0">
                                         <span
                                           v-for="cap in m.capabilities.slice(0, 3)"

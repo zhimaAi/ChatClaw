@@ -853,6 +853,7 @@ export default {
     chat: {
       selectModel: '选择模型',
       freeBadge: '免费',
+      goToChatwikiLogin: '去登录',
       noModel: '暂无模型',
       selectKnowledge: '选择知识库',
       openclawTeamKnowledgeDisabled: '团队知识库暂未开放',

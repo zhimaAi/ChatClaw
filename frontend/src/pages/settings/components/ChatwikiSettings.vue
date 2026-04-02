@@ -19,6 +19,7 @@ import {
 } from '@/lib/chatwikiCache'
 import { buildChatWikiLoginUrl, openChatWikiCloudLogin } from '@/lib/chatwikiAuth'
 import { notifyChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
+import { useAppStore } from '@/stores/app'
 import { useSettingsStore } from '@/stores/settings'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,11 @@ import {
 } from '@/components/ui/alert-dialog'
 
 const { t } = useI18n()
+const appStore = useAppStore()
 const settingsStore = useSettingsStore()
+
+/** ChatClaw-only: robots/libraries toggles are not used in OpenClaw mode */
+const showApplicationsAndKnowledgeCards = computed(() => appStore.currentSystem !== 'openclaw')
 
 const BINDING_TIMEOUT_SEC = 120
 /** Cloud URL loaded from backend on mount (respects dev/prod build config) */
@@ -238,6 +243,7 @@ async function syncLibraries(options?: { silent?: boolean }) {
 }
 
 watch(libraryTab, (newType) => {
+  if (!showApplicationsAndKnowledgeCards.value) return
   void loadLibraries(Number(newType))
 })
 
@@ -473,7 +479,9 @@ async function finishSuccess() {
   finishSuccessLoading.value = true
   try {
     // Sync apps and knowledge bases after (re-)binding so list view has fresh data
-    await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    if (showApplicationsAndKnowledgeCards.value) {
+      await Promise.all([syncRobots({ silent: true }), syncLibraries({ silent: true })])
+    }
     await ProvidersService.GetProviderWithModels('chatwiki')
     await refreshBindingStateAndModelViews()
     toast.success(t('settings.chatwiki.syncSuccess'))
@@ -510,7 +518,7 @@ async function confirmUnbind() {
 }
 
 watch(isBound, (bound) => {
-  if (bound) {
+  if (bound && showApplicationsAndKnowledgeCards.value) {
     void loadRobots().catch((err) => {
       if (isChatWikiAuthExpiredError(err)) {
         toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
@@ -522,6 +530,20 @@ watch(isBound, (bound) => {
       }
     })
   }
+})
+
+watch(showApplicationsAndKnowledgeCards, (show) => {
+  if (!show || !isBound.value) return
+  void loadRobots().catch((err) => {
+    if (isChatWikiAuthExpiredError(err)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    }
+  })
+  void loadLibraries(Number(libraryTab.value)).catch((err) => {
+    if (isChatWikiAuthExpiredError(err)) {
+      toast.error(t('settings.chatwiki.authExpiredPleaseReauth'))
+    }
+  })
 })
 
 onMounted(() => {
@@ -613,8 +635,9 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Applications card -->
+      <!-- Applications card (ChatClaw only) -->
       <div
+        v-if="showApplicationsAndKnowledgeCards"
         class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <div class="flex items-center justify-between">
@@ -687,8 +710,9 @@ onUnmounted(() => {
         </template>
       </div>
 
-      <!-- Knowledge bases card -->
+      <!-- Knowledge bases card (ChatClaw only) -->
       <div
+        v-if="showApplicationsAndKnowledgeCards"
         class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <div class="flex items-center justify-between">

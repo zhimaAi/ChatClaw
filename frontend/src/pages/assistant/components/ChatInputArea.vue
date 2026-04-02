@@ -14,6 +14,7 @@ import {
   FileText,
   Mic,
   Video,
+  File,
   Plus,
   MoreHorizontal,
 } from 'lucide-vue-next'
@@ -58,11 +59,13 @@ import { useThemeLogo } from '@/composables/useLogo'
 import { getBinding as getChatwikiBinding } from '@/lib/chatwikiCache'
 import { onChatwikiBindingChanged } from '@/lib/chatwikiBindingState'
 import {
+  CHATWIKI_PROVIDER_ID,
   formatModelDisplayLabel,
   formatProviderDisplayLabel,
   getChatwikiAvailabilityStatus,
   isModelSelectionDisabled,
 } from '@/lib/chatwikiModelAvailability'
+import { useNavigationStore, useSettingsStore } from '@/stores'
 
 interface PendingImage {
   id: string
@@ -170,7 +173,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { logoSrc } = useThemeLogo()
+const navigationStore = useNavigationStore()
+const settingsStore = useSettingsStore()
 const chatwikiAvailability = ref<'available' | 'unbound' | 'non_cloud'>('available')
+/** Keeps model Select in controlled open state so we can close it before navigating away */
+const modelSelectOpen = ref(false)
+
+async function goToChatwikiLogin() {
+  modelSelectOpen.value = false
+  await nextTick()
+  settingsStore.requestChatwikiCloudLogin()
+  settingsStore.setActiveMenu('chatwiki')
+  navigationStore.navigateToModule('settings')
+}
 
 function getDisplayModelName(providerId: string, model: Model): string {
   return formatModelDisplayLabel(
@@ -637,8 +652,8 @@ onUnmounted(() => {
         v-if="currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating"
         class="flex items-center gap-3"
       >
-        <img :src="logoSrc" class="size-10" alt="ChatClaw logo" />
-        <div class="text-2xl font-semibold text-foreground">
+        <img :src="logoSrc" class="h-[48px] w-[48px]" alt="ChatClaw logo" />
+        <div class="text-[36px] font-semibold leading-none text-foreground">
           {{ t('app.title') }}
         </div>
       </div>
@@ -883,6 +898,7 @@ onUnmounted(() => {
                   <TooltipTrigger as-child>
                     <div class="min-w-0">
                       <Select
+                        v-model:open="modelSelectOpen"
                         :model-value="selectedModelKey"
                         :disabled="!hasModels"
                         @update:model-value="
@@ -917,21 +933,42 @@ onUnmounted(() => {
                               :key="pw.provider.provider_id"
                             >
                               <SelectLabel
-                                class="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"
-                              >
-                                <span>{{
-                                  formatProviderDisplayLabel(
-                                    pw.provider.provider_id,
-                                    pw.provider.name,
-                                    chatwikiAvailability
+                                :class="
+                                  cn(
+                                    'mt-2 flex items-center gap-1.5 text-xs text-muted-foreground',
+                                    pw.provider.provider_id === CHATWIKI_PROVIDER_ID &&
+                                      chatwikiAvailability === 'unbound' &&
+                                      'justify-between gap-2 pr-1'
                                   )
-                                }}</span>
-                                <span
-                                  v-if="isProviderFree(pw)"
-                                  class="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
-                                >
-                                  {{ t('assistant.chat.freeBadge') }}
+                                "
+                              >
+                                <span class="flex min-w-0 flex-1 items-center gap-1.5">
+                                  <span class="truncate">{{
+                                    formatProviderDisplayLabel(
+                                      pw.provider.provider_id,
+                                      pw.provider.name,
+                                      chatwikiAvailability
+                                    )
+                                  }}</span>
+                                  <span
+                                    v-if="isProviderFree(pw)"
+                                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                                  >
+                                    {{ t('assistant.chat.freeBadge') }}
+                                  </span>
                                 </span>
+                                <button
+                                  v-if="
+                                    pw.provider.provider_id === CHATWIKI_PROVIDER_ID &&
+                                    chatwikiAvailability === 'unbound'
+                                  "
+                                  type="button"
+                                  class="shrink-0 border-0 bg-transparent p-0 text-xs font-medium text-[color:var(--color-blue-600)] underline-offset-2 hover:underline hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                  @click.stop="goToChatwikiLogin"
+                                  @pointerdown.stop
+                                >
+                                  {{ t('assistant.chat.goToChatwikiLogin') }}
+                                </button>
                               </SelectLabel>
                               <template v-for="g in pw.model_groups" :key="g.type">
                                 <template v-if="g.type === 'llm'">

@@ -849,6 +849,7 @@ export default {
     chat: {
       selectModel: "Chọn mô hình",
       freeBadge: "Miễn phí",
+      goToChatwikiLogin: "Đăng nhập",
       noModel: "Không có mô hình khả dụng",
       selectKnowledge: "Chọn Cơ sở tri thức",
       openclawTeamKnowledgeDisabled: "Cơ sở tri thức nhóm chưa khả dụng trong OpenClaw",

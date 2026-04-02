@@ -847,6 +847,7 @@ export default {
     chat: {
       selectModel: "選擇模型",
       freeBadge: "免費",
+      goToChatwikiLogin: "去登入",
       noModel: "暫無模型",
       selectKnowledge: "選擇知識庫",
       openclawTeamKnowledgeDisabled: "團隊知識庫尚未開放",

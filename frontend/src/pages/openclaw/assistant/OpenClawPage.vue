@@ -148,8 +148,14 @@ function goToChatwikiBindingSettings() {
   navigationStore.navigateToModule('settings')
 }
 
-// Local state
+// Local state (OpenClaw: team list in sidebar/snap header is disabled — only personal agents)
+const OPENCLAW_TEAM_LIST_DISABLED = true
 const listMode = ref<ListMode>('personal')
+watch(listMode, (m) => {
+  if (OPENCLAW_TEAM_LIST_DISABLED && m === 'team') {
+    listMode.value = 'personal'
+  }
+})
 const createOpen = ref(false)
 const settingsOpen = ref(false)
 const settingsAgent = ref<OpenClawAgent | null>(null)
@@ -222,7 +228,9 @@ function teamLibraryIdsToString(ids: string[]): string {
 const renameConversationOpen = ref(false)
 const deleteConversationOpen = ref(false)
 const actionConversation = ref<Conversation | null>(null)
-const isTeamMode = computed(() => listMode.value === 'team')
+const isTeamMode = computed(
+  () => !OPENCLAW_TEAM_LIST_DISABLED && listMode.value === 'team'
+)
 const activeTeamRobot = computed(() => activeRobot.value)
 const activeTeamConversationId = ref<number | null>(null)
 
@@ -473,6 +481,7 @@ const handleNewConversation = async () => {
 }
 
 const handleListModeChange = (mode: ListMode) => {
+  if (OPENCLAW_TEAM_LIST_DISABLED && mode === 'team') return
   logTeam('switch list mode', { from: listMode.value, to: mode })
   listMode.value = mode
   if (mode === 'team') {
@@ -490,7 +499,8 @@ const handleListModeChange = (mode: ListMode) => {
 
 // Snap mode: persist list mode and assistant selection to cache
 function persistSnapCache() {
-  void SettingsService.SetValue(SNAP_CACHE_LIST_MODE, listMode.value).catch(() => {})
+  const modeToSave = OPENCLAW_TEAM_LIST_DISABLED ? 'personal' : listMode.value
+  void SettingsService.SetValue(SNAP_CACHE_LIST_MODE, modeToSave).catch(() => {})
   void SettingsService.SetValue(
     SNAP_CACHE_AGENT_ID,
     activeAgentId.value != null ? String(activeAgentId.value) : ''
@@ -503,21 +513,12 @@ function persistSnapCache() {
 // Snap mode: restore list mode and assistant selection from cache (default: personal)
 async function restoreSnapCache() {
   try {
-    const cachedMode = (await SettingsService.Get(SNAP_CACHE_LIST_MODE))?.value ?? 'personal'
-    listMode.value = cachedMode === 'team' ? 'team' : 'personal'
-    if (listMode.value === 'team') {
-      await loadTeamRobots()
-      const cachedRobotId = (await SettingsService.Get(SNAP_CACHE_TEAM_ROBOT_ID))?.value?.trim()
-      if (cachedRobotId && teamRobots.value.some((r) => r.id === cachedRobotId)) {
-        activeTeamRobotId.value = cachedRobotId
-      }
-    } else {
-      const cachedAgentId = (await SettingsService.Get(SNAP_CACHE_AGENT_ID))?.value?.trim()
-      if (cachedAgentId) {
-        const id = Number(cachedAgentId)
-        if (Number.isFinite(id) && agents.value.some((a) => a.id === id)) {
-          activeAgentId.value = id
-        }
+    listMode.value = 'personal'
+    const cachedAgentId = (await SettingsService.Get(SNAP_CACHE_AGENT_ID))?.value?.trim()
+    if (cachedAgentId) {
+      const id = Number(cachedAgentId)
+      if (Number.isFinite(id) && agents.value.some((a) => a.id === id)) {
+        activeAgentId.value = id
       }
     }
   } catch {
@@ -1371,11 +1372,6 @@ watch(isTabActive, (active) => {
       await loadAgents()
       await loadLibrariesFn()
 
-      // When on team tab and unbound, re-check binding so we refresh after user binds in settings
-      if (listMode.value === 'team' && !teamBound.value) {
-        await loadTeamRobots()
-      }
-
       // Only refresh conversations here if loadAgents didn't change the active agent.
       // If it did change, watch(activeAgentId) already handled the conversation reload.
       if (activeAgentId.value != null && activeAgentId.value === agentIdBefore) {
@@ -1781,6 +1777,7 @@ onUnmounted(() => {
       :active-team-robot-id="activeTeamRobotId"
       :team-loading="teamLoading"
       :has-attached-target="hasAttachedTarget"
+      :team-list-disabled="OPENCLAW_TEAM_LIST_DISABLED"
       @update:list-mode="handleListModeChange"
       @update:active-agent-id="activeAgentId = $event"
       @update:active-team-robot-id="activeTeamRobotId = $event"
@@ -1807,30 +1804,22 @@ onUnmounted(() => {
         :active-conversation-id="activeDisplayConversationId"
         :loading="loading"
         :list-mode="listMode"
+        :team-list-disabled="OPENCLAW_TEAM_LIST_DISABLED"
         :is-snap-mode="isSnapMode"
         :get-agent-conversations="getAgentConversations"
         :get-all-agent-conversations="getAllAgentConversations"
         :ensure-conversations-loaded="ensureConversationsLoaded"
-        :get-team-conversation-agent-id="getTeamConversationAgentId"
-        :team-robots="teamRobots"
-        :active-team-robot-id="activeTeamRobotId"
-        :team-loading="teamLoading"
-        :team-binding-checked="teamBindingChecked"
-        :team-bound="teamBound"
         :on-wake-attached="handleWakeAttachedPointerDown"
         @go-bind="goToChatwikiBindingSettings"
         @update:active-agent-id="activeAgentId = $event"
-        @update:active-team-robot-id="activeTeamRobotId = $event"
         @update:list-mode="handleListModeChange"
         @create="createOpen = true"
         @open-settings="openSettings"
         @open-channels="openChannels"
         @new-conversation="handleNewConversation"
         @new-conversation-for-agent="handleNewConversationForAgent"
-        @new-conversation-for-team-robot="handleNewConversationForTeamRobot"
         @select-conversation="handleSelectConversation"
         @select-conversation-for-agent="handleSelectConversationForAgent"
-        @select-conversation-for-team-robot="handleSelectConversationForTeamRobot"
         @toggle-pin="handleTogglePin"
         @open-rename="handleOpenRenameConversation"
         @open-delete="handleOpenDeleteConversation"

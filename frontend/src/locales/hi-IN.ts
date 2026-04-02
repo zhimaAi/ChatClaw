@@ -866,6 +866,7 @@ export default {
     chat: {
       selectModel: "मॉडल चुनें",
       freeBadge: "मुफ्त",
+      goToChatwikiLogin: "लॉग इन करें",
       noModel: "कोई मॉडल उपलब्ध नहीं",
       selectKnowledge: "नॉलेज बेस चुनें",
       openclawTeamKnowledgeDisabled: "OpenClaw में टीम नॉलेज बेस अभी उपलब्ध नहीं हैं",
