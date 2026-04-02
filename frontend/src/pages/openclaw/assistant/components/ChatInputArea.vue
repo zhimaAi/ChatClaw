@@ -42,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import IconKnowledge from '@/assets/icons/knowledge-icon.svg'
 import IconUpload from '@/assets/icons/upload-icon.svg'
 import IconClean from '@/assets/icons/clean-icon.svg'
+import openclawIconUrl from '@/assets/icons/openclaw.svg?url'
 import { getFileTypeIconUrl } from '@/lib/fileTypeIconUrls'
 import ChatModeSelector from './ChatModeSelector.vue'
 import {
@@ -565,9 +566,9 @@ onUnmounted(() => {
         v-if="currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating"
         class="flex items-center gap-3"
       >
-        <img :src="logoSrc" class="size-10" alt="ChatClaw logo" />
-        <div class="text-2xl font-semibold text-foreground">
-          {{ t('app.title') }}
+        <img :src="openclawIconUrl" class="h-[48px] w-[48px]" alt="openclaw" />
+        <div class="text-[36px] font-semibold leading-none text-foreground">
+          OpenClaw
         </div>
       </div>
 
@@ -1265,7 +1266,7 @@ onUnmounted(() => {
                   <span class="inline-flex" @click="handleDisabledSendClick">
                     <Button
                       size="icon"
-                      class="size-8 pointer-events-none rounded-full border border-transparent bg-muted text-muted-foreground disabled:opacity-100"
+                      class="size-8 pointer-events-none rounded-full border border-transparent bg-[#FFE2E2] text-[#FCA5A5] disabled:opacity-100"
                       disabled
                     >
                       <ArrowUp class="size-4" />
@@ -1280,7 +1281,7 @@ onUnmounted(() => {
             <Button
               v-else
               size="icon"
-              class="size-8 rounded-full border border-transparent bg-muted text-foreground hover:bg-muted/80 active:bg-muted/90 active:scale-95"
+              class="size-8 rounded-full border border-transparent bg-[#FFE2E2] text-[#FCA5A5] hover:bg-[#FFD6D6] active:bg-[#FFCACA] active:scale-95"
               :title="t('assistant.chat.send')"
               @click="handleSendClick"
             >

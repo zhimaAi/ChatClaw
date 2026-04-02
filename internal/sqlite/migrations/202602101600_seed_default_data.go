@@ -40,14 +40,14 @@ func seedDataForLocale(locale string) defaultSeedContent {
 	if locale == "zh-CN" {
 		return defaultSeedContent{
 			LibraryName: "默认知识库",
-			AgentName:   define.DefaultAgentNameForLocale(locale),
+			AgentName:   define.DefaultAgentNameForLocale(locale, define.SystemOwnerChatClaw),
 			AgentPrompt: define.DefaultAgentPromptForLocale(locale),
 		}
 	}
 	// en-US and all other locales
 	return defaultSeedContent{
 		LibraryName: "Default Library",
-		AgentName:   define.DefaultAgentNameForLocale(locale),
+		AgentName:   define.DefaultAgentNameForLocale(locale, define.SystemOwnerChatClaw),
 		AgentPrompt: define.DefaultAgentPromptForLocale(locale),
 	}
 }

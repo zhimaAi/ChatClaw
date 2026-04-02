@@ -294,10 +294,31 @@ func SaveBinding(app *application.App, serverURL, token, ttl, exp, userID, userN
 		}
 		return err
 	}
+	enableChatWikiProviderForModelService(ctx, db, app)
 	if app != nil {
 		app.Logger.Info("ChatWiki binding saved", "user_id", userID, "user_name", userName)
 	}
 	return nil
+}
+
+// enableChatWikiProviderForModelService turns on the builtin chatwiki provider after a successful bind
+// so Model Service lists ChatWiki as enabled by default (builtin seed inserts it as disabled).
+func enableChatWikiProviderForModelService(ctx context.Context, db bun.IDB, app *application.App) {
+	_, err := db.NewUpdate().
+		Table("providers").
+		Where("provider_id = ?", "chatwiki").
+		Set("enabled = ?", true).
+		Set("updated_at = ?", sqlite.NowUTC()).
+		Exec(ctx)
+	if err != nil {
+		if app != nil {
+			app.Logger.Warn("Failed to enable chatwiki provider after binding", "error", err)
+		}
+		return
+	}
+	if app != nil {
+		app.Event.Emit("providers:config-changed", nil)
+	}
 }
 
 func saveBindingWithDB(ctx context.Context, db bun.IDB, serverURL, token, ttl, exp, userID, userName, chatWikiVersion string) error {

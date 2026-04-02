@@ -14,6 +14,7 @@ import {
   Monitor,
   File as FileIcon,
   ExternalLink,
+  Loader2,
 } from 'lucide-vue-next'
 import { cn, copyToClipboard } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -239,6 +240,20 @@ const displaySegments = computed((): MessageSegment[] => {
   return segs
 })
 
+// True once any thinking or main reply text has arrived (streaming or persisted)
+const hasThinkingOrMessageBody = computed(() => {
+  for (const seg of displaySegments.value) {
+    if (seg.type === 'thinking' && seg.content) return true
+    if (seg.type === 'content' && seg.content) return true
+  }
+  return false
+})
+
+// Show loading until first thinking/content chunk appears (tools/retrieval alone still count as "waiting for reply")
+const showAssistantStreamLoading = computed(
+  () => isAssistant.value && !!props.isStreaming && !hasThinkingOrMessageBody.value
+)
+
 // Check if a given index is the last content segment (for cursor display)
 const isLastContentSegment = (idx: number): boolean => {
   for (let i = displaySegments.value.length - 1; i >= 0; i--) {
@@ -441,13 +456,16 @@ onUnmounted(() => {
           <RetrievalBlock v-if="segment.type === 'retrieval'" :items="segment.items" />
         </template>
 
-        <!-- Streaming cursor when no content segments yet (e.g. agent starts with tool calls) -->
-        <MarkdownRenderer
-          v-if="isStreaming && displaySegments.length === 0"
-          content=""
-          :is-streaming="true"
-          class="min-w-0 wrap-break-word"
-        />
+        <!-- Loading until first thinking or reply text arrives (e.g. network delay or tool-only prefix) -->
+        <div
+          v-if="showAssistantStreamLoading"
+          role="status"
+          aria-live="polite"
+          class="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <Loader2 class="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <span>{{ t('common.loading') }}</span>
+        </div>
 
         <!-- Status indicator (after all segments) -->
         <div v-if="showStatus" class="mt-2 text-xs">
