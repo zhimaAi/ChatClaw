@@ -354,7 +354,7 @@ func (m *Manager) reconcileLocked(restart bool) error {
 	m.mu.RUnlock()
 
 	if needProcess {
-		if err := m.startProcess(cfg, bundle, version); err != nil {
+		if err := m.startProcess(cfg, bundle, version, restart); err != nil {
 			return fail("startProcess", err, version, 0)
 		}
 		m.mu.RLock()
@@ -403,41 +403,62 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 // --- Process management ---
 
-// ensurePortClean checks if the gateway port is in use by a stale process. If so,
-// it first tries the graceful "openclaw gateway stop" CLI command, then falls back
-// to killing the process directly. This handles the case where a previous gateway
-// instance was not launched by this Manager (e.g. manual run, other app instance).
-func (m *Manager) ensurePortClean(port int, cliPath string) {
+// gatewayPortOccupied reports whether something accepts TCP connections on the gateway loopback port.
+func gatewayPortOccupied(port int) bool {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-	if err == nil {
-		conn.Close()
-		return
+	if err != nil {
+		return false
 	}
-	if isConnRefused(err) {
-		return
-	}
-	// Port is in use by something other than a refused connection.
-	m.app.Logger.Info("openclaw: port in use, attempting graceful gateway stop", "port", port)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, cliPath, "gateway", "stop")
-	_ = cmd.Run()
-	time.Sleep(500 * time.Millisecond)
-	// Check again.
-	conn, err = net.DialTimeout("tcp", addr, 2*time.Second)
-	if err == nil {
-		conn.Close()
-		return // still in use; proceed and let start fail naturally
-	}
-	if isConnRefused(err) {
-		m.app.Logger.Info("openclaw: port cleared after graceful stop", "port", port)
-	}
-	// Something still using port — proceed; start will fail with clearer error.
+	_ = conn.Close()
+	return true
 }
 
-func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string) error {
-	m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath)
+func (m *Manager) runGatewayStopCLI(cliPath string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cliPath, "gateway", "stop")
+	setCmdHideWindow(cmd)
+	if err := cmd.Run(); err != nil {
+		m.app.Logger.Warn("openclaw: gateway stop CLI finished with error", "error", err)
+	}
+}
+
+// ensurePortClean frees the gateway port before starting a new process. If TCP dial
+// succeeds, something is already listening — we must run "openclaw gateway stop" and,
+// when that is not enough, kill listeners (netstat/taskkill on Windows) and optionally
+// all node.exe processes (restart path). The previous implementation incorrectly treated
+// a successful dial as "nothing to do".
+func (m *Manager) ensurePortClean(port int, cliPath string, aggressive bool) {
+	const maxRounds = 5
+	for round := 0; round < maxRounds; round++ {
+		if !gatewayPortOccupied(port) {
+			if round > 0 {
+				m.app.Logger.Info("openclaw: gateway port is free after cleanup", "port", port)
+			}
+			return
+		}
+		m.app.Logger.Info("openclaw: gateway port occupied; cleanup",
+			"port", port, "round", round+1, "aggressiveRestart", aggressive)
+
+		m.runGatewayStopCLI(cliPath)
+		time.Sleep(800 * time.Millisecond)
+
+		_ = killListenersOnLocalTCPPort(port)
+		time.Sleep(400 * time.Millisecond)
+
+		// User restart: always clear stray node children; cold start escalates after first round.
+		if aggressive || round >= 1 {
+			_ = killAllNodeProcesses()
+			time.Sleep(500 * time.Millisecond)
+			_ = killListenersOnLocalTCPPort(port)
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+}
+
+func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string, aggressiveCleanup bool) error {
+	m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath, aggressiveCleanup)
 
 	logFile, err := openGatewayLogFile(bundle.LogsDir)
 	if err != nil {
@@ -1344,11 +1365,6 @@ func ensureSandboxConfigured(bundle *bundledRuntime) {
 		return
 	}
 	_ = os.WriteFile(bundle.ConfigPath, out, 0o644)
-}
-
-func isConnRefused(err error) bool {
-	var opErr *net.OpError
-	return errors.As(err, &opErr) && strings.Contains(err.Error(), "refused")
 }
 
 func isDockerAvailable() bool {
