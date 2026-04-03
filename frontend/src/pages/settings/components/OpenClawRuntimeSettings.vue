@@ -22,6 +22,7 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 import SettingsCard from './SettingsCard.vue'
 import OpenClawDoctorConsole from '@/components/openclaw/OpenClawDoctorConsole.vue'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 /** When true, match Figma ChatClaw openclaw管家: page column 874px, cards 700px centered */
 const props = withDefaults(
@@ -34,6 +35,10 @@ const props = withDefaults(
 const { t } = useI18n()
 const navigationStore = useNavigationStore()
 const gatewayStore = useOpenClawGatewayStore()
+
+/** Title-bar gateway switch: hidden in release; visible when Vite dev or VITE_DEV=true */
+const showDevGatewaySwitch =
+  import.meta.env.DEV || import.meta.env.VITE_DEV === 'true'
 
 const status = ref<RuntimeStatus>(new RuntimeStatus({ phase: 'idle' }))
 const gatewayState = ref<GatewayConnectionState>(new GatewayConnectionState())
@@ -233,12 +238,21 @@ onUnmounted(() => {
     >
     <SettingsCard :title="t('settings.openclawRuntime.title')" fullWidth>
       <template #header-right>
-        <Switch
-          :model-value="gatewaySwitchOn"
-          :disabled="gatewaySwitchBusy || gatewayStore.runtimePhase === 'upgrading'"
-          :aria-label="t('settings.openclawRuntime.autoStartLabel')"
-          @update:model-value="handleGatewaySwitchToggle"
-        />
+        <TooltipProvider v-if="showDevGatewaySwitch">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Switch
+                :model-value="gatewaySwitchOn"
+                :disabled="gatewaySwitchBusy || gatewayStore.runtimePhase === 'upgrading'"
+                :aria-label="t('settings.openclawRuntime.autoStartLabel')"
+                @update:model-value="handleGatewaySwitchToggle"
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p class="text-xs">{{ t('settings.openclawRuntime.autoStartTooltip') }}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </template>
 
       <!-- Gateway status row: badge + restart -->

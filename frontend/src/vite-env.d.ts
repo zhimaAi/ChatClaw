@@ -10,6 +10,8 @@ declare module '*.vue' {
 // Vite 环境变量类型
 interface ImportMetaEnv {
   readonly VITE_APP_TITLE?: string
+  /** When "true", show dev-only UI (e.g. OpenClaw gateway switch) in production-like builds */
+  readonly VITE_DEV?: string
   // 添加更多环境变量类型...
 }
 

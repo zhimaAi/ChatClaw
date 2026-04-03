@@ -262,6 +262,7 @@ export default {
       pageSubtitle: "Configure gateway and basic runtime settings",
       gatewayStatusLabel: "Gateway status",
       autoStartLabel: "Gateway running switch",
+      autoStartTooltip: "Toggle OpenClaw Gateway auto-start: when enabled, the gateway starts automatically when the app launches",
       autoStartEnabled: "OpenClaw Gateway enabled",
       autoStartDisabled: "OpenClaw Gateway disabled",
       autoStartFailed: "Failed to change gateway state",
