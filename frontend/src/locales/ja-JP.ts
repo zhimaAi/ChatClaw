@@ -838,6 +838,7 @@ export default {
       collapse: "折りたたむ",
       expand: "展開",
       newConversation: "新しい会話",
+      taskAssistant: "タスクアシスタント",
     },
     chatMode: {
       chat: "チャットモード",

@@ -837,6 +837,7 @@ export default {
       collapse: "Daralt",
       expand: "Genişlet",
       newConversation: "Yeni sohbet",
+      taskAssistant: "Görev Asistanı",
     },
     chatMode: {
       chat: "Sohbet modu",

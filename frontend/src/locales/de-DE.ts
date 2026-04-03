@@ -837,6 +837,7 @@ export default {
       collapse: "Einklappen",
       expand: "Erweitern",
       newConversation: "Neues Gespräch",
+      taskAssistant: "Aufgabenassistent",
     },
     chatMode: {
       chat: "Chat-Modus",

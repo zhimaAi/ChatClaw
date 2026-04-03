@@ -856,6 +856,7 @@ export default {
       collapse: "संकुचित करें",
       expand: "विस्तार करें",
       newConversation: "नई बातचीत",
+      taskAssistant: "कार्य सहायक",
     },
     chatMode: {
       chat: "चैट मोड",

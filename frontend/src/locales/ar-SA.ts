@@ -838,6 +838,7 @@ export default {
       collapse: "طي",
       expand: "توسيع",
       newConversation: "محادثة جديدة",
+      taskAssistant: "مساعد المهام",
     },
     chatMode: {
       chat: "وضع المحادثة",

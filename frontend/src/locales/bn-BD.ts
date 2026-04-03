@@ -839,6 +839,7 @@ export default {
       collapse: "সঙ্কুচিত",
       expand: "সম্প্রসারণ",
       newConversation: "নতুন কথোপকথন",
+      taskAssistant: "কাজের সহায়ক",
     },
     chatMode: {
       chat: "চ্যাট মোড",

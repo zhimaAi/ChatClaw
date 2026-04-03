@@ -843,6 +843,7 @@ export default {
       collapse: '收起',
       expand: '展开',
       newConversation: '新会话',
+      taskAssistant: "任务助手",
     },
     chatMode: {
       chat: '聊天模式',
