@@ -89,6 +89,17 @@ func openClawSessionKey(agentID string, conversationID int64) string {
 	return fmt.Sprintf("agent:%s:conv_%d", agentID, conversationID)
 }
 
+func openClawSessionCandidateAgentIDs(openClawAgentID string) []string {
+	id := strings.TrimSpace(openClawAgentID)
+	if id == "" {
+		id = define.OpenClawMainAgentID
+	}
+	if strings.EqualFold(id, define.OpenClawMainAgentID) {
+		return []string{define.OpenClawMainAgentID}
+	}
+	return []string{id, define.OpenClawMainAgentID}
+}
+
 func openClawConversationSourceFromExternalID(externalID string) (channels.ChannelConversationSource, bool) {
 	source, ok := channels.ParseChannelConversationExternalID(externalID)
 	if !ok || source.ChannelID <= 0 || strings.TrimSpace(source.TargetID) == "" {
@@ -282,14 +293,134 @@ func discardPartialJSONLLine(file *os.File) {
 	}
 }
 
+func appendOpenClawChannelSessionCandidates(candidates []string, agentIDs []string, platform, scope, targetID string) []string {
+	targetID = strings.TrimSpace(targetID)
+	scope = strings.TrimSpace(scope)
+	if targetID == "" || len(agentIDs) == 0 {
+		return candidates
+	}
+
+	appendForAgent := func(agentID string, keys ...string) {
+		agentID = strings.TrimSpace(agentID)
+		if agentID == "" {
+			return
+		}
+		for _, key := range keys {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			candidates = append(candidates, fmt.Sprintf("agent:%s:%s", agentID, key))
+		}
+	}
+
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformWeCom:
+		lowerTarget := strings.ToLower(targetID)
+		for _, agentID := range agentIDs {
+			// Prefer the exact platform-native namespace when we know the chat scope.
+			if scope == channels.ChannelConversationScopeGroup || scope == channels.ChannelConversationScopeDM {
+				exact := []string{
+					fmt.Sprintf("wecom:%s:%s", scope, lowerTarget),
+					fmt.Sprintf("wecom:%s:%s", scope, targetID),
+				}
+				if scope == channels.ChannelConversationScopeDM {
+					exact = append([]string{
+						fmt.Sprintf("wecom:direct:%s", lowerTarget),
+						fmt.Sprintf("wecom:direct:%s", targetID),
+					}, exact...)
+				}
+				appendForAgent(agentID, exact...)
+				continue
+			}
+			// Legacy conversations have no stored scope; keep trying both namespaces.
+			appendForAgent(agentID,
+				fmt.Sprintf("wecom:group:%s", lowerTarget),
+				fmt.Sprintf("wecom:dm:%s", lowerTarget),
+				fmt.Sprintf("wecom:direct:%s", lowerTarget),
+				fmt.Sprintf("wecom:group:%s", targetID),
+				fmt.Sprintf("wecom:dm:%s", targetID),
+				fmt.Sprintf("wecom:direct:%s", targetID),
+			)
+		}
+	case channels.PlatformFeishu:
+		for _, agentID := range agentIDs {
+			switch scope {
+			case channels.ChannelConversationScopeDM:
+				appendForAgent(agentID,
+					fmt.Sprintf("feishu:direct:%s", targetID),
+					fmt.Sprintf("feishu:dm:%s", targetID),
+					fmt.Sprintf("feishu:chat:%s", targetID),
+				)
+			case channels.ChannelConversationScopeGroup:
+				appendForAgent(agentID,
+					fmt.Sprintf("feishu:group:%s", targetID),
+					fmt.Sprintf("feishu:chat:%s", targetID),
+				)
+			default:
+				appendForAgent(agentID,
+					fmt.Sprintf("feishu:group:%s", targetID),
+					fmt.Sprintf("feishu:chat:%s", targetID),
+					fmt.Sprintf("feishu:direct:%s", targetID),
+					fmt.Sprintf("feishu:dm:%s", targetID),
+				)
+			}
+		}
+	case channels.PlatformDingTalk:
+		for _, agentID := range agentIDs {
+			switch scope {
+			case channels.ChannelConversationScopeGroup:
+				appendForAgent(agentID,
+					fmt.Sprintf("dingtalk:group:%s", targetID),
+					fmt.Sprintf("dingtalk-connector:group:%s", targetID),
+				)
+			case channels.ChannelConversationScopeDM:
+				appendForAgent(agentID,
+					fmt.Sprintf("dingtalk:dm:%s", targetID),
+					fmt.Sprintf("dingtalk:direct:%s", targetID),
+					fmt.Sprintf("dingtalk-connector:dm:%s", targetID),
+					fmt.Sprintf("dingtalk-connector:direct:%s", targetID),
+				)
+			default:
+				appendForAgent(agentID,
+					fmt.Sprintf("dingtalk:group:%s", targetID),
+					fmt.Sprintf("dingtalk:dm:%s", targetID),
+					fmt.Sprintf("dingtalk-connector:group:%s", targetID),
+					fmt.Sprintf("dingtalk-connector:dm:%s", targetID),
+				)
+			}
+		}
+	case channels.PlatformWhatsapp:
+		for _, agentID := range agentIDs {
+			switch scope {
+			case channels.ChannelConversationScopeDM:
+				appendForAgent(agentID,
+					fmt.Sprintf("whatsapp:dm:%s", targetID),
+					fmt.Sprintf("whatsapp:direct:%s", targetID),
+				)
+			case channels.ChannelConversationScopeGroup:
+				appendForAgent(agentID,
+					fmt.Sprintf("whatsapp:group:%s", targetID),
+				)
+			default:
+				appendForAgent(agentID,
+					fmt.Sprintf("whatsapp:group:%s", targetID),
+					fmt.Sprintf("whatsapp:dm:%s", targetID),
+					fmt.Sprintf("whatsapp:direct:%s", targetID),
+				)
+			}
+		}
+	}
+
+	return candidates
+}
+
 // resolveOpenClawSessionKeys returns candidate session keys for a conversation.
 // Channel-originated OpenClaw conversations may be written into platform-native
 // keys (e.g. "agent:main:wecom:group:<id>"), while local runs use "conv_<id>".
 func (s *ChatService) resolveOpenClawSessionKeys(conversationID int64, openClawAgentID string) []string {
-	id := strings.TrimSpace(openClawAgentID)
-	if id == "" {
-		id = define.OpenClawMainAgentID
-	}
+	agentIDs := openClawSessionCandidateAgentIDs(openClawAgentID)
+	id := agentIDs[0]
 
 	candidates := []string{
 		fmt.Sprintf("agent:%s:conv_%d", id, conversationID),
@@ -325,103 +456,13 @@ func (s *ChatService) resolveOpenClawSessionKeys(conversationID int64, openClawA
 		return candidates
 	}
 
-	switch strings.TrimSpace(platform) {
-	case channels.PlatformWeCom:
-		targetID := strings.TrimSpace(source.TargetID)
-		lowerTarget := strings.ToLower(targetID)
-		scope := strings.TrimSpace(source.Scope)
-		// Prefer the exact platform-native namespace when we know the chat scope.
-		if scope == channels.ChannelConversationScopeGroup || scope == channels.ChannelConversationScopeDM {
-			exact := []string{
-				fmt.Sprintf("agent:%s:wecom:%s:%s", id, scope, lowerTarget),
-				fmt.Sprintf("agent:%s:wecom:%s:%s", id, scope, targetID),
-			}
-			if scope == channels.ChannelConversationScopeDM {
-				exact = append([]string{
-					fmt.Sprintf("agent:%s:wecom:direct:%s", id, lowerTarget),
-					fmt.Sprintf("agent:%s:wecom:direct:%s", id, targetID),
-				}, exact...)
-			}
-			candidates = append(exact, candidates...)
-			break
-		}
-		// Legacy conversations have no stored scope; keep trying both namespaces.
-		candidates = append([]string{
-			fmt.Sprintf("agent:%s:wecom:group:%s", id, lowerTarget),
-			fmt.Sprintf("agent:%s:wecom:dm:%s", id, lowerTarget),
-			fmt.Sprintf("agent:%s:wecom:direct:%s", id, lowerTarget),
-			fmt.Sprintf("agent:%s:wecom:group:%s", id, targetID),
-			fmt.Sprintf("agent:%s:wecom:dm:%s", id, targetID),
-			fmt.Sprintf("agent:%s:wecom:direct:%s", id, targetID),
-		}, candidates...)
-	case channels.PlatformFeishu:
-		targetID := strings.TrimSpace(source.TargetID)
-		scope := strings.TrimSpace(source.Scope)
-		switch scope {
-		case channels.ChannelConversationScopeDM:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
-			}, candidates...)
-		case channels.ChannelConversationScopeGroup:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
-			}, candidates...)
-		default:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:feishu:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:chat:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:direct:%s", id, targetID),
-				fmt.Sprintf("agent:%s:feishu:dm:%s", id, targetID),
-			}, candidates...)
-		}
-	case channels.PlatformDingTalk:
-		targetID := strings.TrimSpace(source.TargetID)
-		scope := strings.TrimSpace(source.Scope)
-		switch scope {
-		case channels.ChannelConversationScopeGroup:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:dingtalk:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk-connector:group:%s", id, targetID),
-			}, candidates...)
-		case channels.ChannelConversationScopeDM:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:dingtalk:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk:direct:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk-connector:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk-connector:direct:%s", id, targetID),
-			}, candidates...)
-		default:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:dingtalk:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk-connector:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:dingtalk-connector:dm:%s", id, targetID),
-			}, candidates...)
-		}
-	case channels.PlatformWhatsapp:
-		targetID := strings.TrimSpace(source.TargetID)
-		scope := strings.TrimSpace(source.Scope)
-		switch scope {
-		case channels.ChannelConversationScopeDM:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:whatsapp:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:whatsapp:direct:%s", id, targetID),
-			}, candidates...)
-		case channels.ChannelConversationScopeGroup:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:whatsapp:group:%s", id, targetID),
-			}, candidates...)
-		default:
-			candidates = append([]string{
-				fmt.Sprintf("agent:%s:whatsapp:group:%s", id, targetID),
-				fmt.Sprintf("agent:%s:whatsapp:dm:%s", id, targetID),
-				fmt.Sprintf("agent:%s:whatsapp:direct:%s", id, targetID),
-			}, candidates...)
-		}
-	}
+	candidates = appendOpenClawChannelSessionCandidates(
+		candidates,
+		agentIDs,
+		strings.TrimSpace(platform),
+		strings.TrimSpace(source.Scope),
+		strings.TrimSpace(source.TargetID),
+	)
 
 	return dedupeStrings(candidates)
 }
@@ -845,7 +886,10 @@ func (s *ChatService) GetOpenClawLastAssistantReply(conversationID int64) string
 	if err != nil {
 		return ""
 	}
-	sessionKeys := s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)
+	sessionKeys := dedupeStrings(append(
+		[]string{strings.TrimSpace(cfg.SessionKey)},
+		s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)...,
+	))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1407,8 +1451,12 @@ func (s *ChatService) GetOpenClawMessages(conversationID int64) ([]Message, erro
 	if err != nil {
 		return nil, err
 	}
+	storedRaw := strings.TrimSpace(cfg.SessionKey)
 	primary := resolveOpenClawSessionKey(cfg, conversationID)
-	candidates := dedupeStrings(append([]string{primary}, s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)...))
+	candidates := dedupeStrings(append(
+		[]string{storedRaw, primary},
+		s.resolveOpenClawSessionKeys(conversationID, cfg.OpenClawAgentID)...,
+	))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

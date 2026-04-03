@@ -74,9 +74,7 @@ watch(open, (val) => {
   }
   preparing.value = false
   if (!val) {
-    if (sessionKey.value) {
-      void OpenClawChannelService.CancelWhatsappLogin(sessionKey.value)
-    }
+    void OpenClawChannelService.CancelWhatsappLogin(sessionKey.value)
     step.value = 'initial'
     qrcodeDataUrl.value = ''
     sessionKey.value = ''

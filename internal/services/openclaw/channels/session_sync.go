@@ -341,7 +341,10 @@ func (s *OpenClawChannelService) syncSessionConversation(
 	if lastMessage != "" {
 		q = q.Set("last_message = ?", lastMessage)
 	}
-	if sk := normalizeOpenClawPluginSessionKeyAgent(openClawSessionKey, openclawAgentID); sk != "" {
+	// Keep the raw plugin session key here. Channel sessions may still live under
+	// "main" after a bind/rebind, and history loading now tries both the stored raw
+	// key and assistant/main fallbacks. Rewriting it here can hide the only valid key.
+	if sk := strings.TrimSpace(openClawSessionKey); sk != "" {
 		q = q.Set("openclaw_session_key = ?", sk)
 	}
 	if _, err := q.Exec(context.Background()); err != nil {
