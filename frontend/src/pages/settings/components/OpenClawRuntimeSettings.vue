@@ -370,7 +370,7 @@ onMounted(() => {
           <Button
             size="sm"
             variant="outline"
-            :disabled="stopping || isGatewayStopped || restarting || upgrading"
+            :disabled="stopping || restarting || upgrading"
             @click="handleStop"
           >
             <Square v-if="!stopping" class="mr-1.5 size-3.5" />
