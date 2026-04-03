@@ -2,15 +2,16 @@ package openclawchannels
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
-	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 	"chatclaw/internal/services/channels"
 )
@@ -18,10 +19,14 @@ import (
 const (
 	openClawWhatsappChannelID    = "whatsapp"
 	whatsappDefaultChannelName   = "WhatsApp"
+	whatsappAccountIDPrefix      = "whatsapp_"
+	whatsappAccountIDSuffixLen   = 7
+	whatsappAccountIDMaxAttempts = 32
 	whatsappLoginWaitTimeout     = 8 * time.Minute
 	whatsappLoginRetryDelay      = 1500 * time.Millisecond
 	whatsappQRFastStartTimeout   = 8 * time.Second
-	whatsappQRStartTimeout       = 25 * time.Second
+	whatsappQRSlowStartTimeout   = 35 * time.Second
+	whatsappQRResetStartTimeout  = 45 * time.Second
 	whatsappPluginInstallTimeout = 5 * time.Minute
 	whatsappDefaultAccountID     = "default"
 	whatsappConfigKeyEnabled     = "enabled"
@@ -30,12 +35,36 @@ const (
 	whatsappConfigKeyAgentID     = "agentId"
 )
 
+const whatsappAccountIDAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+
 func normalizeWhatsappAccountID(accountID string) string {
 	accountID = strings.TrimSpace(accountID)
 	if accountID == "" {
 		return whatsappDefaultAccountID
 	}
 	return accountID
+}
+
+func withWhatsappAccountID(extraConfig string, accountID string) (string, error) {
+	extraConfig = strings.TrimSpace(extraConfig)
+	accountID = normalizeWhatsappAccountID(accountID)
+
+	var cfg appCredentialsJSON
+	if extraConfig != "" {
+		if err := json.Unmarshal([]byte(extraConfig), &cfg); err != nil {
+			return "", err
+		}
+	}
+	if strings.TrimSpace(cfg.Platform) == "" {
+		cfg.Platform = channels.PlatformWhatsapp
+	}
+	cfg.AccountID = accountID
+
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 func shortenWhatsappSessionKey(sessionKey string) string {
@@ -71,6 +100,40 @@ func nextWhatsappAutoChannelName(existingNames []string) string {
 		}
 		candidateIndex++
 	}
+}
+
+func generateWhatsappLoginAccountID(existingIDs []string, randomReader io.Reader) (string, error) {
+	occupied := make(map[string]struct{}, len(existingIDs))
+	for _, accountID := range existingIDs {
+		normalized := strings.ToLower(strings.TrimSpace(accountID))
+		if normalized == "" {
+			continue
+		}
+		occupied[normalized] = struct{}{}
+	}
+
+	if randomReader == nil {
+		randomReader = cryptorand.Reader
+	}
+
+	buf := make([]byte, whatsappAccountIDSuffixLen)
+	for attempt := 0; attempt < whatsappAccountIDMaxAttempts; attempt++ {
+		if _, err := io.ReadFull(randomReader, buf); err != nil {
+			return "", fmt.Errorf("read random whatsapp account id: %w", err)
+		}
+		var suffix strings.Builder
+		suffix.Grow(whatsappAccountIDSuffixLen)
+		for _, b := range buf {
+			suffix.WriteByte(whatsappAccountIDAlphabet[int(b)%len(whatsappAccountIDAlphabet)])
+		}
+		candidate := whatsappAccountIDPrefix + suffix.String()
+		if _, exists := occupied[strings.ToLower(candidate)]; exists {
+			continue
+		}
+		return candidate, nil
+	}
+
+	return "", fmt.Errorf("generate unique whatsapp account id: exhausted %d attempts", whatsappAccountIDMaxAttempts)
 }
 
 func ensureWhatsappConfigEntry(entry map[string]any) (map[string]any, bool) {
@@ -190,6 +253,41 @@ func whatsappConfiguredAgentIDFromConfig(cfg map[string]any, accountID string) s
 	return whatsappConfiguredAgentIDFromBindings(cfg, accountID)
 }
 
+func whatsappManagedBindingAccountIDs(cfg map[string]any) []string {
+	bindings := configBindings(cfg)
+	if len(bindings) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(bindings))
+	out := make([]string, 0, len(bindings))
+	for _, raw := range bindings {
+		entry, _ := raw.(map[string]any)
+		if entry == nil {
+			continue
+		}
+		match, _ := entry["match"].(map[string]any)
+		if match == nil {
+			continue
+		}
+		channelID := strings.TrimSpace(fmt.Sprint(match["channel"]))
+		if channelID != openClawManagedRouteChannel(channels.PlatformWhatsapp) {
+			continue
+		}
+		accountID := strings.TrimSpace(fmt.Sprint(match["accountId"]))
+		if accountID == "" {
+			continue
+		}
+		normalized := strings.ToLower(accountID)
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, accountID)
+	}
+	return out
+}
+
 func resolveWhatsappConfigBool(channelCfg map[string]any, accountCfg map[string]any, key string) (bool, bool) {
 	if accountCfg != nil {
 		if v, ok := accountCfg[key].(bool); ok {
@@ -263,6 +361,29 @@ func (s *OpenClawChannelService) ensureWhatsappLoginMap() {
 	}
 }
 
+func (s *OpenClawChannelService) readPreparedWhatsappAccountID() string {
+	s.whatsappLoginMu.Lock()
+	defer s.whatsappLoginMu.Unlock()
+	return strings.TrimSpace(s.whatsappPreparedAccountID)
+}
+
+func (s *OpenClawChannelService) rememberPreparedWhatsappAccountID(accountID string) {
+	s.whatsappLoginMu.Lock()
+	defer s.whatsappLoginMu.Unlock()
+	s.whatsappPreparedAccountID = strings.TrimSpace(accountID)
+}
+
+func (s *OpenClawChannelService) clearPreparedWhatsappAccountID(accountID string) {
+	accountID = strings.TrimSpace(accountID)
+	s.whatsappLoginMu.Lock()
+	defer s.whatsappLoginMu.Unlock()
+	if accountID != "" && s.whatsappPreparedAccountID != "" &&
+		!strings.EqualFold(strings.TrimSpace(s.whatsappPreparedAccountID), accountID) {
+		return
+	}
+	s.whatsappPreparedAccountID = ""
+}
+
 func (s *OpenClawChannelService) cancelAllWhatsappLoginSessions() {
 	s.whatsappLoginMu.Lock()
 	defer s.whatsappLoginMu.Unlock()
@@ -272,8 +393,113 @@ func (s *OpenClawChannelService) cancelAllWhatsappLoginSessions() {
 	}
 }
 
-func (s *OpenClawChannelService) ensureOpenClawWhatsappPluginInstalled(ctx context.Context) error {
-	accountID := normalizeWhatsappAccountID(s.readFirstWhatsappAccountIDFromOpenClawJSON())
+func cancelWhatsappLoginSession(sessions map[string]*whatsappLoginSession, preparedAccountID string, sessionKey string) (string, bool) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	preparedAccountID = strings.TrimSpace(preparedAccountID)
+	if len(sessions) == 0 {
+		return preparedAccountID, preparedAccountID != "" && sessionKey == ""
+	}
+	if sessionKey == "" {
+		for key := range sessions {
+			delete(sessions, key)
+		}
+		return preparedAccountID, preparedAccountID != ""
+	}
+
+	sess, ok := sessions[sessionKey]
+	if !ok || sess == nil {
+		return "", false
+	}
+	accountID := normalizeWhatsappAccountID(sess.accountID)
+	delete(sessions, sessionKey)
+	for key, other := range sessions {
+		if strings.TrimSpace(key) == sessionKey || other == nil {
+			continue
+		}
+		if normalizeWhatsappAccountID(other.accountID) == accountID {
+			return accountID, false
+		}
+	}
+	return accountID, accountID != ""
+}
+
+func (s *OpenClawChannelService) shouldCleanupCancelledWhatsappAccount(accountID string) bool {
+	accountID = normalizeWhatsappAccountID(accountID)
+	existing, err := s.findWhatsappChannelByAccountID(accountID)
+	if err != nil {
+		s.app.Logger.Warn("openclaw: failed to inspect whatsapp channel before cancel cleanup",
+			"accountId", accountID,
+			"error", err)
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return !existing.Enabled
+}
+
+func (s *OpenClawChannelService) cleanupCancelledWhatsappAccount(accountID string) {
+	accountID = normalizeWhatsappAccountID(accountID)
+	if accountID == "" {
+		return
+	}
+	if !s.shouldCleanupCancelledWhatsappAccount(accountID) {
+		s.clearPreparedWhatsappAccountID(accountID)
+		return
+	}
+
+	cfg, configPath, err := loadOpenClawJSONConfig()
+	if err != nil {
+		s.app.Logger.Warn("openclaw: failed to load config while cleaning cancelled whatsapp login",
+			"accountId", accountID,
+			"error", err)
+		return
+	}
+
+	hadBinding := false
+	for _, raw := range configBindings(cfg) {
+		entry, _ := raw.(map[string]any)
+		if isManagedChannelBinding(entry, openClawWhatsappChannelID, accountID) {
+			hadBinding = true
+			break
+		}
+	}
+	hadAccountConfig := whatsappAccountConfigFromChannel(whatsappChannelConfigFromRoot(cfg), accountID) != nil
+	if !hadBinding && !hadAccountConfig {
+		s.clearPreparedWhatsappAccountID(accountID)
+		return
+	}
+
+	logoutCtx, logoutCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer logoutCancel()
+	if err := s.runOpenClawWhatsappLogout(logoutCtx, accountID); err != nil {
+		s.app.Logger.Warn("openclaw: whatsapp logout during cancel cleanup failed",
+			"accountId", accountID,
+			"error", err)
+	}
+
+	purgeWhatsappChannelFromOpenClawJSON(cfg, accountID)
+	if err := saveOpenClawJSONConfig(configPath, cfg); err != nil {
+		s.app.Logger.Warn("openclaw: failed to save config while cleaning cancelled whatsapp login",
+			"accountId", accountID,
+			"config", configPath,
+			"error", err)
+		return
+	}
+	if err := s.restartOpenClawGateway(); err != nil {
+		s.app.Logger.Warn("openclaw: failed to restart gateway after cleaning cancelled whatsapp login",
+			"accountId", accountID,
+			"error", err)
+		return
+	}
+	s.clearPreparedWhatsappAccountID(accountID)
+	s.app.Logger.Info("openclaw: cleaned cancelled whatsapp login config",
+		"accountId", accountID,
+		"config", configPath)
+}
+
+func (s *OpenClawChannelService) ensureOpenClawWhatsappPluginInstalled(ctx context.Context, accountID string) error {
+	accountID = normalizeWhatsappAccountID(accountID)
 	startedAt := time.Now()
 	s.app.Logger.Info("openclaw: ensuring whatsapp channel is enabled",
 		"accountId", accountID)
@@ -317,6 +543,108 @@ func (s *OpenClawChannelService) ensureOpenClawWhatsappPluginInstalled(ctx conte
 		"accountId", accountID,
 		"duration", time.Since(startedAt).String())
 	return nil
+}
+
+func (s *OpenClawChannelService) nextWhatsappLoginAccountID() (string, error) {
+	occupied := make([]string, 0)
+
+	if cfg, _, err := loadOpenClawJSONConfig(); err == nil {
+		occupied = append(occupied, whatsappManagedBindingAccountIDs(cfg)...)
+	}
+
+	db, err := s.db()
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	extraConfigs := make([]string, 0)
+	if err := db.NewSelect().
+		Model((*channelModel)(nil)).
+		Column("extra_config").
+		Where("platform = ?", channels.PlatformWhatsapp).
+		Where("openclaw_scope = ?", true).
+		Scan(ctx, &extraConfigs); err != nil {
+		return "", errs.Wrap("error.channel_list_failed", err)
+	}
+
+	for _, extraConfig := range extraConfigs {
+		accountID := extractWhatsappAccountID(extraConfig)
+		if accountID == "" {
+			accountID = whatsappDefaultAccountID
+		}
+		occupied = append(occupied, accountID)
+	}
+
+	return generateWhatsappLoginAccountID(occupied, nil)
+}
+
+func (s *OpenClawChannelService) findLatestPendingWhatsappDraftChannel() (*channelModel, error) {
+	db, err := s.db()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var models []channelModel
+	if err := db.NewSelect().
+		Model(&models).
+		Where("ch.platform = ?", channels.PlatformWhatsapp).
+		Where("ch.openclaw_scope = ?", true).
+		Where("ch.enabled = ?", false).
+		Where("ch.last_connected_at IS NULL").
+		OrderExpr("ch.id DESC").
+		Limit(1).
+		Scan(ctx); err != nil {
+		return nil, errs.Wrap("error.channel_read_failed", err)
+	}
+	if len(models) == 0 {
+		return nil, nil
+	}
+	return &models[0], nil
+}
+
+func (s *OpenClawChannelService) resolveWhatsappLoginAccountID() (string, error) {
+	if pending, err := s.findLatestPendingWhatsappDraftChannel(); err != nil {
+		return "", err
+	} else if pending != nil {
+		accountID := strings.TrimSpace(extractWhatsappAccountID(pending.ExtraConfig))
+		if accountID != "" && !strings.EqualFold(accountID, whatsappDefaultAccountID) {
+			s.rememberPreparedWhatsappAccountID(accountID)
+			return accountID, nil
+		}
+
+		accountID, err = s.nextWhatsappLoginAccountID()
+		if err != nil {
+			return "", err
+		}
+		nextExtraConfig, err := withWhatsappAccountID(pending.ExtraConfig, accountID)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(nextExtraConfig) != strings.TrimSpace(pending.ExtraConfig) {
+			if _, err := s.channelSvc.UpdateChannel(pending.ID, channels.UpdateChannelInput{ExtraConfig: &nextExtraConfig}); err != nil {
+				return "", err
+			}
+		}
+		s.rememberPreparedWhatsappAccountID(accountID)
+		return accountID, nil
+	}
+
+	if accountID := strings.TrimSpace(s.readPreparedWhatsappAccountID()); accountID != "" {
+		return accountID, nil
+	}
+
+	accountID, err := s.nextWhatsappLoginAccountID()
+	if err != nil {
+		return "", err
+	}
+	s.rememberPreparedWhatsappAccountID(accountID)
+	return accountID, nil
 }
 
 func (s *OpenClawChannelService) ensureWhatsappChannelEnabled(accountID string) (bool, error) {
@@ -371,7 +699,14 @@ func (s *OpenClawChannelService) ensureWhatsappChannelEnabled(accountID string) 
 // PrepareWhatsappChannel ensures the bundled WhatsApp channel is enabled before QR login starts.
 func (s *OpenClawChannelService) PrepareWhatsappChannel() (*WhatsappChannelPreparation, error) {
 	startedAt := time.Now()
-	accountID := normalizeWhatsappAccountID(s.readFirstWhatsappAccountIDFromOpenClawJSON())
+	accountID, accountErr := s.resolveWhatsappLoginAccountID()
+	if accountErr != nil {
+		s.app.Logger.Warn("openclaw: failed to resolve whatsapp login account before prepare",
+			"duration", time.Since(startedAt).String(),
+			"error", accountErr)
+		return nil, accountErr
+	}
+	accountID = normalizeWhatsappAccountID(accountID)
 	s.app.Logger.Info("openclaw: preparing whatsapp channel",
 		"accountId", accountID)
 	if err := s.ensureOpenClawReady(); err != nil {
@@ -383,7 +718,7 @@ func (s *OpenClawChannelService) PrepareWhatsappChannel() (*WhatsappChannelPrepa
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), whatsappPluginInstallTimeout)
 	defer cancel()
-	if err := s.ensureOpenClawWhatsappPluginInstalled(ctx); err != nil {
+	if err := s.ensureOpenClawWhatsappPluginInstalled(ctx, accountID); err != nil {
 		s.app.Logger.Warn("openclaw: failed to prepare whatsapp channel",
 			"accountId", accountID,
 			"duration", time.Since(startedAt).String(),
@@ -442,6 +777,23 @@ func whatsappQRStartMessageSuggestsRetry(blob string) bool {
 	}
 	return whatsappLoginOutputSuggestsQRTimeout(b) ||
 		whatsappLoginWaitMessageSuggestsRetry(b)
+}
+
+func whatsappQRStartReady(start *whatsappGatewayLoginStartResult) bool {
+	return start != nil && strings.TrimSpace(start.QRDataURL) != ""
+}
+
+func whatsappQRStartNeedsRetry(start *whatsappGatewayLoginStartResult, err error) bool {
+	if err != nil {
+		return !whatsappLoginOutputSuggestsMissingPluginOrChannel(err.Error())
+	}
+	if whatsappQRStartReady(start) {
+		return false
+	}
+	if start == nil {
+		return true
+	}
+	return whatsappQRStartMessageSuggestsRetry(start.Message)
 }
 
 type whatsappGatewayLoginStartResult struct {
@@ -512,10 +864,20 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 			"error", err)
 		return nil, err
 	}
+
+	accountID, accountErr := s.resolveWhatsappLoginAccountID()
+	if accountErr != nil {
+		s.app.Logger.Warn("openclaw: failed to choose whatsapp account before qr login",
+			"duration", time.Since(startedAt).String(),
+			"error", accountErr)
+		return nil, accountErr
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), whatsappPluginInstallTimeout)
 	defer cancel()
-	if err := s.ensureOpenClawWhatsappPluginInstalled(ctx); err != nil {
+	if err := s.ensureOpenClawWhatsappPluginInstalled(ctx, accountID); err != nil {
 		s.app.Logger.Warn("openclaw: failed to generate whatsapp qr because channel is not ready",
+			"accountId", accountID,
 			"duration", time.Since(startedAt).String(),
 			"error", err)
 		return nil, errs.Wrap("error.whatsapp_plugin_not_ready", err)
@@ -523,7 +885,6 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 
 	s.cancelAllWhatsappLoginSessions()
 
-	accountID := normalizeWhatsappAccountID(s.readFirstWhatsappAccountIDFromOpenClawJSON())
 	startQRCode := func(resetSession bool, force bool, qrTimeout time.Duration) (*whatsappGatewayLoginStartResult, error) {
 		if resetSession {
 			logoutCtx, logoutCancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -572,29 +933,36 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 	}
 
 	start, startErr := startQRCode(false, false, whatsappQRFastStartTimeout)
-	if startErr != nil {
-		if !whatsappLoginOutputSuggestsMissingPluginOrChannel(startErr.Error()) {
-			s.app.Logger.Warn("openclaw: fast whatsapp qr request failed, retrying with reset",
-				"accountId", accountID,
-				"duration", time.Since(startedAt).String(),
-				"error", startErr)
-			start, startErr = startQRCode(true, true, whatsappQRStartTimeout)
+	if !whatsappQRStartReady(start) && whatsappQRStartNeedsRetry(start, startErr) {
+		startMessage := ""
+		if start != nil {
+			startMessage = strings.TrimSpace(start.Message)
 		}
+		s.app.Logger.Info("openclaw: whatsapp qr not ready after fast start, retrying without reset",
+			"accountId", accountID,
+			"duration", time.Since(startedAt).String(),
+			"timeout", whatsappQRSlowStartTimeout.String(),
+			"error", startErr,
+			"message", startMessage)
+		start, startErr = startQRCode(false, false, whatsappQRSlowStartTimeout)
+	}
+	if !whatsappQRStartReady(start) && whatsappQRStartNeedsRetry(start, startErr) {
+		startMessage := ""
+		if start != nil {
+			startMessage = strings.TrimSpace(start.Message)
+		}
+		s.app.Logger.Warn("openclaw: whatsapp qr start still returned transient state, retrying after reset",
+			"accountId", accountID,
+			"duration", time.Since(startedAt).String(),
+			"timeout", whatsappQRResetStartTimeout.String(),
+			"error", startErr,
+			"message", startMessage)
+		start, startErr = startQRCode(true, true, whatsappQRResetStartTimeout)
 	}
 	if startErr != nil {
 		return nil, wrapWhatsappQRStartError(startErr)
 	}
-	if start != nil && strings.TrimSpace(start.QRDataURL) == "" && whatsappQRStartMessageSuggestsRetry(start.Message) {
-		s.app.Logger.Warn("openclaw: whatsapp qr start returned transient state, retrying after reset",
-			"accountId", accountID,
-			"duration", time.Since(startedAt).String(),
-			"message", strings.TrimSpace(start.Message))
-		start, startErr = startQRCode(true, true, whatsappQRStartTimeout)
-		if startErr != nil {
-			return nil, wrapWhatsappQRStartError(startErr)
-		}
-	}
-	if start == nil || strings.TrimSpace(start.QRDataURL) == "" {
+	if !whatsappQRStartReady(start) {
 		s.app.Logger.Warn("openclaw: whatsapp qr response missing qr data url",
 			"accountId", accountID,
 			"duration", time.Since(startedAt).String(),
@@ -621,14 +989,16 @@ func (s *OpenClawChannelService) GenerateWhatsappQRCode() (*WhatsappQRCodeResult
 // CancelWhatsappLogin clears the local session mapping for the pending QR flow.
 func (s *OpenClawChannelService) CancelWhatsappLogin(sessionKey string) {
 	sessionKey = strings.TrimSpace(sessionKey)
-	if sessionKey == "" {
-		s.cancelAllWhatsappLoginSessions()
-		return
-	}
+
+	accountID := ""
+	shouldCleanup := false
 	s.whatsappLoginMu.Lock()
 	s.ensureWhatsappLoginMap()
-	delete(s.whatsappLogins, sessionKey)
+	accountID, shouldCleanup = cancelWhatsappLoginSession(s.whatsappLogins, s.whatsappPreparedAccountID, sessionKey)
 	s.whatsappLoginMu.Unlock()
+	if shouldCleanup {
+		s.cleanupCancelledWhatsappAccount(accountID)
+	}
 }
 
 // WaitForWhatsappLogin waits on the OpenClaw gateway's QR-login session, then creates a local channel row.
@@ -749,31 +1119,15 @@ func (s *OpenClawChannelService) WaitForWhatsappLogin(sessionKey string, channel
 		s.app.Logger.Warn("openclaw: failed to upsert whatsapp channel after login", "error", chErr)
 		return &WhatsappLoginResult{Connected: false, Message: chErr.Error()}, nil
 	}
+	s.clearPreparedWhatsappAccountID(accountID)
 	s.app.Logger.Info("openclaw: whatsapp channel record ready", "channel_id", ch.ID, "accountId", accountID)
-
-	var agentID int64
-	targetOpenClawAgentID := strings.TrimSpace(s.readWhatsappConfiguredOpenClawAgentID(accountID))
-	if targetOpenClawAgentID == "" {
-		targetOpenClawAgentID = define.OpenClawMainAgentID
-	}
-	targetLocalAgent, ensureAgentErr := s.agentsSvc.EnsureAgentRecordByOpenClawAgentID(targetOpenClawAgentID, "")
-	if ensureAgentErr != nil {
-		s.app.Logger.Warn("openclaw: failed to ensure whatsapp target agent before bind", "channel_id", ch.ID, "openclaw_agent_id", targetOpenClawAgentID, "error", ensureAgentErr)
-	} else if targetLocalAgent != nil {
-		if bindErr := s.channelSvc.BindAgent(ch.ID, targetLocalAgent.ID); bindErr != nil {
-			s.app.Logger.Warn("openclaw: failed to bind whatsapp channel to configured agent", "channel_id", ch.ID, "agent_id", targetLocalAgent.ID, "openclaw_agent_id", targetOpenClawAgentID, "error", bindErr)
-		} else {
-			agentID = targetLocalAgent.ID
-			s.app.Logger.Info("openclaw: whatsapp channel bound to configured assistant", "channel_id", ch.ID, "agent_id", agentID, "openclaw_agent_id", targetOpenClawAgentID)
-		}
-	}
-
-	if agentID > 0 {
-		if rErr := s.syncChannelRoutingBinding(ch.ID, agentID); rErr != nil {
-			s.app.Logger.Warn("openclaw: failed to apply whatsapp openclaw routing after login", "channel_id", ch.ID, "error", rErr)
-		}
+	// Defer assistant binding until the caller decides which assistant should own
+	// the channel. The UI binds immediately after QR login, and rebinding here can
+	// race with that follow-up bind, causing duplicate route sync/restarts.
+	if ch.AgentID > 0 {
+		s.app.Logger.Info("openclaw: whatsapp channel kept existing assistant binding after login", "channel_id", ch.ID, "agent_id", ch.AgentID, "accountId", accountID)
 	} else {
-		s.app.Logger.Warn("openclaw: whatsapp channel left unbound after login", "channel_id", ch.ID, "accountId", accountID)
+		s.app.Logger.Info("openclaw: whatsapp channel created without assistant binding after login", "channel_id", ch.ID, "accountId", accountID)
 	}
 
 	if err := s.setChannelOnlineStatus(context.Background(), ch.ID, true); err != nil {
@@ -906,6 +1260,68 @@ func (s *OpenClawChannelService) runOpenClawWhatsappLogout(ctx context.Context, 
 	return err
 }
 
+func shouldDeleteWhatsappChannelSection(channelCfg map[string]any) bool {
+	if len(channelCfg) == 0 {
+		return true
+	}
+	for key, value := range channelCfg {
+		switch strings.TrimSpace(key) {
+		case whatsappConfigKeyEnabled, whatsappConfigKeySelfChat:
+			continue
+		case whatsappConfigKeyAccounts:
+			accounts, _ := value.(map[string]any)
+			if len(accounts) == 0 {
+				continue
+			}
+			return false
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func purgeWhatsappChannelFromOpenClawJSON(cfg map[string]any, accountID string) {
+	if cfg == nil {
+		return
+	}
+
+	accountID = normalizeWhatsappAccountID(accountID)
+	cfg["bindings"] = removeManagedBindings(configBindings(cfg), openClawWhatsappChannelID, accountID)
+
+	channelsMap, _ := cfg["channels"].(map[string]any)
+	if channelsMap == nil {
+		return
+	}
+	whatsappSection, _ := channelsMap[openClawWhatsappChannelID].(map[string]any)
+	if whatsappSection == nil {
+		return
+	}
+
+	accounts := whatsappAccountConfigs(whatsappSection)
+	if accounts != nil {
+		delete(accounts, accountID)
+		if len(accounts) == 0 {
+			delete(whatsappSection, whatsappConfigKeyAccounts)
+		} else {
+			whatsappSection[whatsappConfigKeyAccounts] = accounts
+		}
+	}
+
+	if shouldDeleteWhatsappChannelSection(whatsappSection) {
+		delete(channelsMap, openClawWhatsappChannelID)
+		if len(channelsMap) == 0 {
+			delete(cfg, "channels")
+			return
+		}
+		cfg["channels"] = channelsMap
+		return
+	}
+
+	channelsMap[openClawWhatsappChannelID] = whatsappSection
+	cfg["channels"] = channelsMap
+}
+
 func (s *OpenClawChannelService) purgeWhatsappChannelOpenClawIntegration(m *channelModel) error {
 	accountID := openClawManagedAccountID(channels.PlatformWhatsapp, m.ID, m.ExtraConfig)
 	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
@@ -913,7 +1329,12 @@ func (s *OpenClawChannelService) purgeWhatsappChannelOpenClawIntegration(m *chan
 	if err := s.runOpenClawWhatsappLogout(ctx, accountID); err != nil {
 		s.app.Logger.Warn("openclaw: whatsapp logout during purge failed", "error", err)
 	}
-	if err := s.removeManagedRouteBinding(openClawWhatsappChannelID, accountID); err != nil {
+	cfg, configPath, err := loadOpenClawJSONConfig()
+	if err != nil {
+		return err
+	}
+	purgeWhatsappChannelFromOpenClawJSON(cfg, accountID)
+	if err := saveOpenClawJSONConfig(configPath, cfg); err != nil {
 		return err
 	}
 	return s.restartOpenClawGateway()
@@ -925,7 +1346,7 @@ func (s *OpenClawChannelService) connectWhatsappViaPlugin(id int64, m *channelMo
 	}
 	readyCtx, readyCancel := context.WithTimeout(context.Background(), whatsappPluginInstallTimeout)
 	defer readyCancel()
-	if err := s.ensureOpenClawWhatsappPluginInstalled(readyCtx); err != nil {
+	if err := s.ensureOpenClawWhatsappPluginInstalled(readyCtx, openClawManagedAccountID(channels.PlatformWhatsapp, id, m.ExtraConfig)); err != nil {
 		return errs.Wrap("error.whatsapp_plugin_not_ready", err)
 	}
 	syncCtx, syncCancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)

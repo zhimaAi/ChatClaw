@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // PanelRight removed — workspace drawer not used in OpenClaw mode
 import IconAssistant from '@/assets/icons/assistant.svg'
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -1981,10 +1981,6 @@ onUnmounted(() => {
               <div
                 class="rounded-2xl border border-border/70 bg-background/95 px-6 py-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
               >
-                <div class="mb-5 flex items-center gap-3 text-sm text-muted-foreground">
-                  <Loader2 class="size-4 animate-spin" />
-                  <span>{{ t('common.loading') }}</span>
-                </div>
                 <div class="space-y-4">
                   <div class="flex justify-start">
                     <div class="w-full max-w-[72%] rounded-2xl bg-muted/60 px-4 py-3">
