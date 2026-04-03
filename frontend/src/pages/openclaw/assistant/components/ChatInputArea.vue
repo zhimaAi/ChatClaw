@@ -102,6 +102,7 @@ const props = withDefaults(
     selectedLibraryIds: number[]
     libraries: Library[]
     isGenerating: boolean
+    isLoadingConversation?: boolean
     canSend: boolean
     sendDisabledReason: string
     chatMessages: any[]
@@ -135,6 +136,7 @@ const props = withDefaults(
     assistantSelectedTeamLibraryIds: () => [],
     pendingImages: () => [],
     pendingFiles: () => [],
+    isLoadingConversation: false,
   }
 )
 
@@ -255,6 +257,14 @@ const MAX_VISIBLE_TEAM = 3
 const visibleTeamLibraries = computed(() => selectedTeamLibraries.value.slice(0, MAX_VISIBLE_TEAM))
 const teamOverflowCount = computed(() =>
   Math.max(0, selectedTeamLibraries.value.length - MAX_VISIBLE_TEAM)
+)
+
+const showAssistantEmptyState = computed(
+  () =>
+    currentMode.value === 'assistant' &&
+    props.chatMessages.length === 0 &&
+    !props.isGenerating &&
+    !props.isLoadingConversation
 )
 
 const selectedKnowledgeCount = computed(
@@ -594,9 +604,7 @@ onUnmounted(() => {
     :class="
       cn(
         'flex px-6',
-        currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating
-          ? 'flex-1 items-center justify-center'
-          : 'pb-4'
+        showAssistantEmptyState ? 'flex-1 items-center justify-center' : 'pb-4'
       )
     "
   >
@@ -604,14 +612,11 @@ onUnmounted(() => {
       :class="
         cn(
           'flex w-full flex-col items-center gap-10',
-          chatMessages.length === 0 && !isGenerating && '-translate-y-10'
+          showAssistantEmptyState && '-translate-y-10'
         )
       "
     >
-      <div
-        v-if="currentMode === 'assistant' && chatMessages.length === 0 && !isGenerating"
-        class="flex items-center gap-3"
-      >
+      <div v-if="showAssistantEmptyState" class="flex items-center gap-3">
         <img :src="openclawIconUrl" class="h-[48px] w-[48px]" alt="openclaw" />
         <div class="text-[36px] font-semibold leading-none text-foreground">
           OpenClaw

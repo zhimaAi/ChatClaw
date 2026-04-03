@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // PanelRight removed — workspace drawer not used in OpenClaw mode
 import IconAssistant from '@/assets/icons/assistant.svg'
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toast'
@@ -342,6 +342,20 @@ const chatMessages = computed(() => {
   if (!activeDisplayConversationId.value) return []
   return chatStore.getMessages(activeDisplayConversationId.value).value
 })
+
+const isActiveConversationLoading = computed(() => {
+  const conversationId = activeDisplayConversationId.value
+  if (!conversationId) return false
+  return !!chatStore.loadingByConversation[conversationId]
+})
+
+const showConversationLoadingState = computed(
+  () =>
+    !!activeDisplayConversationId.value &&
+    isActiveConversationLoading.value &&
+    chatMessages.value.length === 0 &&
+    !isGenerating.value
+)
 
 const canSend = computed(() => {
   const hasContent =
@@ -1958,6 +1972,45 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Conversation loading state: keep layout stable and show a loader instead of empty-state jump -->
+          <div
+            v-else-if="showConversationLoadingState"
+            class="flex min-w-0 flex-1 items-center justify-center overflow-hidden px-6 py-4"
+          >
+            <div class="w-full max-w-[800px]">
+              <div
+                class="rounded-2xl border border-border/70 bg-background/95 px-6 py-6 shadow-sm dark:shadow-none dark:ring-1 dark:ring-white/10"
+              >
+                <div class="mb-5 flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 class="size-4 animate-spin" />
+                  <span>{{ t('common.loading') }}</span>
+                </div>
+                <div class="space-y-4">
+                  <div class="flex justify-start">
+                    <div class="w-full max-w-[72%] rounded-2xl bg-muted/60 px-4 py-3">
+                      <div class="h-3 w-24 animate-pulse rounded bg-muted-foreground/15" />
+                      <div class="mt-3 h-3 w-full animate-pulse rounded bg-muted-foreground/10" />
+                      <div class="mt-2 h-3 w-5/6 animate-pulse rounded bg-muted-foreground/10" />
+                    </div>
+                  </div>
+                  <div class="flex justify-end">
+                    <div class="w-full max-w-[58%] rounded-2xl bg-muted/40 px-4 py-3">
+                      <div class="h-3 w-full animate-pulse rounded bg-muted-foreground/10" />
+                      <div class="mt-2 h-3 w-3/4 animate-pulse rounded bg-muted-foreground/10" />
+                    </div>
+                  </div>
+                  <div class="flex justify-start">
+                    <div class="w-full max-w-[66%] rounded-2xl bg-muted/50 px-4 py-3">
+                      <div class="h-3 w-2/3 animate-pulse rounded bg-muted-foreground/10" />
+                      <div class="mt-2 h-3 w-full animate-pulse rounded bg-muted-foreground/10" />
+                      <div class="mt-2 h-3 w-1/2 animate-pulse rounded bg-muted-foreground/10" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Chat messages area - show when we have an active conversation -->
           <ChatMessageList
             v-else-if="activeDisplayConversationId"
@@ -2002,6 +2055,7 @@ onUnmounted(() => {
             :assistant-team-libraries="
               listMode !== 'team' && teamBound ? assistantTeamLibraries : []
             "
+            :is-loading-conversation="showConversationLoadingState"
             :assistant-selected-team-library-ids="
               listMode !== 'team' ? assistantSelectedTeamLibraryIds : []
             "
@@ -2062,6 +2116,7 @@ onUnmounted(() => {
         :selected-library-ids="selectedLibraryIds"
         :libraries="libraries"
         :assistant-team-libraries="listMode !== 'team' && teamBound ? assistantTeamLibraries : []"
+        :is-loading-conversation="showConversationLoadingState"
         :assistant-selected-team-library-ids="
           listMode !== 'team' ? assistantSelectedTeamLibraryIds : []
         "

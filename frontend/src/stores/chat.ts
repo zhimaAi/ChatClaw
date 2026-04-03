@@ -188,6 +188,11 @@ function mergeOpenClawFetchedWithLocalOptimistic(fetched: Message[], current: Me
   return merged
 }
 
+type ParsedSegmentsCacheEntry = {
+  cacheKey: string
+  segments: MessageSegment[]
+}
+
 export const useChatStore = defineStore('chat', () => {
   // Messages by conversation ID
   const messagesByConversation = ref<Record<number, Message[]>>({})
@@ -216,6 +221,14 @@ export const useChatStore = defineStore('chat', () => {
   // Persisted segments by message ID (for interleaved display after streaming ends)
   const segmentsByMessage = ref<Record<number, MessageSegment[]>>({})
 
+  // Deduplicate concurrent loads for the same conversation to avoid double
+  // history RPCs and repeated heavy JSON parsing on page/conversation switches.
+  const loadPromiseByConversation = new Map<number, Promise<void>>()
+
+  // Cache parsed backend segments by message id + raw payload, so re-opening the
+  // same conversation does not repeatedly parse identical segments/tool calls.
+  const parsedSegmentsCacheByMessage = new Map<number, ParsedSegmentsCacheEntry>()
+
   // Get messages for a conversation
   const getMessages = (conversationId: number) => {
     return computed(() => messagesByConversation.value[conversationId] ?? [])
@@ -234,109 +247,127 @@ export const useChatStore = defineStore('chat', () => {
   // Load messages from backend
   const loadMessages = async (conversationId: number) => {
     if (conversationId <= 0) return
+    const existingLoad = loadPromiseByConversation.get(conversationId)
+    if (existingLoad) {
+      return existingLoad
+    }
 
-    loadingByConversation.value[conversationId] = true
-    errorByConversation.value[conversationId] = null
+    const loadPromise = (async () => {
+      loadingByConversation.value[conversationId] = true
+      errorByConversation.value[conversationId] = null
 
-    try {
-      const isOpenClaw = openClawConversations.value.has(conversationId)
-      const messages = isOpenClaw
-        ? await ChatService.GetOpenClawMessages(conversationId)
-        : await ChatService.GetMessages(conversationId)
-      const fetched = messages ?? []
-      const current = messagesByConversation.value[conversationId] ?? []
-      const streaming = streamingByConversation.value[conversationId]
+      try {
+        const isOpenClaw = openClawConversations.value.has(conversationId)
+        const messages = isOpenClaw
+          ? await ChatService.GetOpenClawMessages(conversationId)
+          : await ChatService.GetMessages(conversationId)
+        const fetched = messages ?? []
+        const current = messagesByConversation.value[conversationId] ?? []
+        const streaming = streamingByConversation.value[conversationId]
 
-      if (isOpenClaw) {
-        // OpenClaw messages come from Gateway (authoritative source).
-        if (streaming && fetched.length > 0) {
-          // Channel-originated runs use tab "channel_backend": user text exists in Gateway
-          // immediately, but streaming events only update the assistant row. Merge transcript
-          // from Gateway with the live streaming assistant placeholder.
-          const streamRow = current.find((m) => m.id === streaming.messageId)
-          if (streamRow) {
-            let merged = mergeOpenClawFetchedWithLocalOptimistic(fetched, current)
-            if (merged.length > 0 && merged[merged.length - 1].role === MessageRole.ASSISTANT) {
-              merged = merged.slice(0, -1)
+        if (isOpenClaw) {
+          // OpenClaw messages come from Gateway (authoritative source).
+          if (streaming && fetched.length > 0) {
+            // Channel-originated runs use tab "channel_backend": user text exists in Gateway
+            // immediately, but streaming events only update the assistant row. Merge transcript
+            // from Gateway with the live streaming assistant placeholder.
+            const streamRow = current.find((m) => m.id === streaming.messageId)
+            if (streamRow) {
+              let merged = mergeOpenClawFetchedWithLocalOptimistic(fetched, current)
+              if (merged.length > 0 && merged[merged.length - 1].role === MessageRole.ASSISTANT) {
+                merged = merged.slice(0, -1)
+              }
+              merged.push(streamRow)
+              messagesByConversation.value[conversationId] = merged
             }
-            merged.push(streamRow)
+          } else if (streaming) {
+            // Gateway empty (lag) — keep local state; streaming events manage assistant.
+          } else if (fetched.length > 0) {
+            // Not streaming: Gateway history is authoritative — replace entirely.
+            // Keep local optimistic user turns when Gateway only stored OpenClaw's
+            // internal retry prompt instead of the original outbound user message.
+            const merged = mergeOpenClawFetchedWithLocalOptimistic(fetched, current)
+            // Clean up old segment data for messages that will be replaced.
+            for (const msg of current) {
+              delete segmentsByMessage.value[msg.id]
+              parsedSegmentsCacheByMessage.delete(msg.id)
+            }
+            messagesByConversation.value[conversationId] = merged
+          } else if (fetched.length === 0 && current.length > 0) {
+            // Gateway returned empty but we have local messages (e.g. optimistic
+            // user message just sent). Keep them until Gateway catches up.
+          }
+        } else {
+          const normalizeContent = (v: unknown) => String(v ?? '').trim()
+
+          // IMPORTANT:
+          // On first app launch / first message, there are multiple async flows running:
+          // - ChatMessageList watches conversationId and calls loadMessages()
+          // - sendMessage() optimistically appends a local user message (negative ID)
+          // - backend emits streaming events to upsert the assistant placeholder
+          //
+          // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
+          // user message and/or streaming assistant placeholder, making the UI look empty until
+          // a later reload (often when streaming completes).
+          //
+          // Strategy:
+          // - If backend returns empty but we already have local messages, do not overwrite.
+          // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
+          if (fetched.length === 0 && current.length > 0) {
+            // Keep current messages; avoid clobbering optimistic/streaming state.
+          } else {
+            const fetchedIds = new Set(fetched.map((m) => m.id))
+            const merged: Message[] = [...fetched]
+
+            // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
+            // This avoids duplicates after a later reload.
+            for (const msg of current) {
+              if (msg.id >= 0) continue
+              const existsOnServer = fetched.some(
+                (fm) =>
+                  fm.role === msg.role &&
+                  normalizeContent(fm.content) === normalizeContent(msg.content)
+              )
+              if (!existsOnServer) {
+                merged.push(msg)
+              }
+            }
+
+            // Keep streaming assistant placeholder/message if it's not in fetched yet.
+            if (streaming && !fetchedIds.has(streaming.messageId)) {
+              const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
+              if (localStreamingMsg) {
+                merged.push(localStreamingMsg)
+              }
+            }
+
             messagesByConversation.value[conversationId] = merged
           }
-        } else if (streaming) {
-          // Gateway empty (lag) — keep local state; streaming events manage assistant.
-        } else if (fetched.length > 0) {
-          // Not streaming: Gateway history is authoritative — replace entirely.
-          // Keep local optimistic user turns when Gateway only stored OpenClaw's
-          // internal retry prompt instead of the original outbound user message.
-          const merged = mergeOpenClawFetchedWithLocalOptimistic(fetched, current)
-          // Clean up old segment data for messages that will be replaced.
-          for (const msg of current) {
-            delete segmentsByMessage.value[msg.id]
-          }
-          messagesByConversation.value[conversationId] = merged
-        } else if (fetched.length === 0 && current.length > 0) {
-          // Gateway returned empty but we have local messages (e.g. optimistic
-          // user message just sent). Keep them until Gateway catches up.
         }
-      } else {
-        const normalizeContent = (v: unknown) => String(v ?? '').trim()
 
-        // IMPORTANT:
-        // On first app launch / first message, there are multiple async flows running:
-        // - ChatMessageList watches conversationId and calls loadMessages()
-        // - sendMessage() optimistically appends a local user message (negative ID)
-        // - backend emits streaming events to upsert the assistant placeholder
-        //
-        // If loadMessages() blindly replaces the array, it can temporarily wipe the optimistic
-        // user message and/or streaming assistant placeholder, making the UI look empty until
-        // a later reload (often when streaming completes).
-        //
-        // Strategy:
-        // - If backend returns empty but we already have local messages, do not overwrite.
-        // - Otherwise, merge fetched messages with local optimistic messages and streaming placeholder.
-        if (fetched.length === 0 && current.length > 0) {
-          // Keep current messages; avoid clobbering optimistic/streaming state.
-        } else {
-          const fetchedIds = new Set(fetched.map((m) => m.id))
-          const merged: Message[] = [...fetched]
+        // Build a map of tool results from tool-role messages (tool_call_id → content)
+        const toolResultMap = new Map<string, string>()
+        for (const msg of fetched) {
+          if (msg.role === 'tool' && msg.tool_call_id) {
+            toolResultMap.set(msg.tool_call_id, msg.content)
+          }
+        }
+        const toolResultCacheKey = fetched
+          .filter((msg) => msg.role === 'tool' && msg.tool_call_id)
+          .map((msg) => `${msg.tool_call_id}\u0000${msg.content}`)
+          .join('\u0001')
 
-          // Keep local optimistic messages (negative IDs) unless the backend already has the same one.
-          // This avoids duplicates after a later reload.
-          for (const msg of current) {
-            if (msg.id >= 0) continue
-            const existsOnServer = fetched.some(
-              (fm) =>
-                fm.role === msg.role &&
-                normalizeContent(fm.content) === normalizeContent(msg.content)
-            )
-            if (!existsOnServer) {
-              merged.push(msg)
-            }
+        // Parse and restore segments from backend for each assistant message
+        for (const msg of fetched) {
+          if (msg.role !== 'assistant' || !msg.segments) continue
+
+          const cacheKey = `${msg.segments}\u0002${msg.tool_calls || ''}\u0002${toolResultCacheKey}`
+          const cached = parsedSegmentsCacheByMessage.get(msg.id)
+          if (cached?.cacheKey === cacheKey) {
+            segmentsByMessage.value[msg.id] = cached.segments
+            continue
           }
 
-          // Keep streaming assistant placeholder/message if it's not in fetched yet.
-          if (streaming && !fetchedIds.has(streaming.messageId)) {
-            const localStreamingMsg = current.find((m) => m.id === streaming.messageId)
-            if (localStreamingMsg) {
-              merged.push(localStreamingMsg)
-            }
-          }
-
-          messagesByConversation.value[conversationId] = merged
-        }
-      }
-
-      // Build a map of tool results from tool-role messages (tool_call_id → content)
-      const toolResultMap = new Map<string, string>()
-      for (const msg of fetched) {
-        if (msg.role === 'tool' && msg.tool_call_id) {
-          toolResultMap.set(msg.tool_call_id, msg.content)
-        }
-      }
-
-      // Parse and restore segments from backend for each assistant message
-      for (const msg of fetched) {
-        if (msg.role === 'assistant' && msg.segments) {
           try {
             const rawSegments = JSON.parse(msg.segments) as Array<{
               type: string
@@ -344,76 +375,84 @@ export const useChatStore = defineStore('chat', () => {
               tool_call_ids?: string[]
               retrieval_items?: Array<{ source: string; content: string; score: number }>
             }>
-            if (Array.isArray(rawSegments) && rawSegments.length > 0) {
-              // Parse tool_calls from the message to build ToolCallInfo map
-              const toolCallMap = new Map<string, ToolCallInfo>()
-              if (msg.tool_calls) {
-                try {
-                  const toolCalls = JSON.parse(msg.tool_calls) as Array<{
-                    ID?: string
-                    id?: string
-                    Function?: { Name?: string; Arguments?: string }
-                    function?: { name?: string; arguments?: string }
-                  }>
-                  for (const tc of toolCalls) {
-                    const id = tc.ID || tc.id || ''
-                    const name = tc.Function?.Name || tc.function?.name || ''
-                    const args = tc.Function?.Arguments || tc.function?.arguments || ''
-                    if (id) {
-                      toolCallMap.set(id, {
-                        toolCallId: id,
-                        toolName: name,
-                        argsJson: args,
-                        resultJson: toolResultMap.get(id),
-                        status: 'completed',
-                      })
-                    }
+            if (!Array.isArray(rawSegments) || rawSegments.length === 0) continue
+
+            // Parse tool_calls from the message to build ToolCallInfo map
+            const toolCallMap = new Map<string, ToolCallInfo>()
+            if (msg.tool_calls) {
+              try {
+                const toolCalls = JSON.parse(msg.tool_calls) as Array<{
+                  ID?: string
+                  id?: string
+                  Function?: { Name?: string; Arguments?: string }
+                  function?: { name?: string; arguments?: string }
+                }>
+                for (const tc of toolCalls) {
+                  const id = tc.ID || tc.id || ''
+                  const name = tc.Function?.Name || tc.function?.name || ''
+                  const args = tc.Function?.Arguments || tc.function?.arguments || ''
+                  if (id) {
+                    toolCallMap.set(id, {
+                      toolCallId: id,
+                      toolName: name,
+                      argsJson: args,
+                      resultJson: toolResultMap.get(id),
+                      status: 'completed',
+                    })
                   }
-                } catch {
-                  // Ignore parse errors for tool_calls
                 }
+              } catch {
+                // Ignore parse errors for tool_calls
               }
-
-              // Convert backend segments to frontend format
-              const frontendSegments: MessageSegment[] = rawSegments.map((seg) => {
-                if (seg.type === 'thinking') {
-                  return { type: 'thinking' as const, content: seg.content || '' }
-                } else if (seg.type === 'content') {
-                  return { type: 'content' as const, content: seg.content || '' }
-                } else if (seg.type === 'tools') {
-                  const toolCalls: ToolCallInfo[] = (seg.tool_call_ids || [])
-                    .map((id) => toolCallMap.get(id))
-                    .filter((tc): tc is ToolCallInfo => tc !== undefined)
-                  return { type: 'tools' as const, toolCalls }
-                } else if (seg.type === 'retrieval') {
-                  const items: RetrievalItemInfo[] = (seg.retrieval_items || []).map((item) => ({
-                    source: item.source as 'knowledge' | 'memory',
-                    content: item.content,
-                    score: item.score,
-                  }))
-                  return { type: 'retrieval' as const, items }
-                }
-                // Fallback for unknown segment types
-                return { type: 'content' as const, content: '' }
-              })
-
-              segmentsByMessage.value[msg.id] = frontendSegments
             }
+
+            // Convert backend segments to frontend format
+            const frontendSegments: MessageSegment[] = rawSegments.map((seg) => {
+              if (seg.type === 'thinking') {
+                return { type: 'thinking' as const, content: seg.content || '' }
+              } else if (seg.type === 'content') {
+                return { type: 'content' as const, content: seg.content || '' }
+              } else if (seg.type === 'tools') {
+                const toolCalls: ToolCallInfo[] = (seg.tool_call_ids || [])
+                  .map((id) => toolCallMap.get(id))
+                  .filter((tc): tc is ToolCallInfo => tc !== undefined)
+                return { type: 'tools' as const, toolCalls }
+              } else if (seg.type === 'retrieval') {
+                const items: RetrievalItemInfo[] = (seg.retrieval_items || []).map((item) => ({
+                  source: item.source as 'knowledge' | 'memory',
+                  content: item.content,
+                  score: item.score,
+                }))
+                return { type: 'retrieval' as const, items }
+              }
+              // Fallback for unknown segment types
+              return { type: 'content' as const, content: '' }
+            })
+
+            segmentsByMessage.value[msg.id] = frontendSegments
+            parsedSegmentsCacheByMessage.set(msg.id, {
+              cacheKey,
+              segments: frontendSegments,
+            })
           } catch {
             // Ignore parse errors for segments
           }
         }
+      } catch (error: unknown) {
+        errorByConversation.value[conversationId] =
+          error instanceof Error ? error.message : 'Failed to load messages'
+        // Do not clear existing messages on transient failures; keeping UI stable is preferred.
+        if (!messagesByConversation.value[conversationId]) {
+          messagesByConversation.value[conversationId] = []
+        }
+      } finally {
+        loadingByConversation.value[conversationId] = false
+        loadPromiseByConversation.delete(conversationId)
       }
-    } catch (error: unknown) {
-      errorByConversation.value[conversationId] =
-        error instanceof Error ? error.message : 'Failed to load messages'
-      // Do not clear existing messages on transient failures; keeping UI stable is preferred.
-      if (!messagesByConversation.value[conversationId]) {
-        messagesByConversation.value[conversationId] = []
-      }
-    } finally {
-      loadingByConversation.value[conversationId] = false
-    }
+    })()
+
+    loadPromiseByConversation.set(conversationId, loadPromise)
+    return loadPromise
   }
 
   const ensureConversationMessages = (conversationId: number) => {
@@ -846,6 +885,7 @@ export const useChatStore = defineStore('chat', () => {
       delete segmentsByMessage.value[msg.id]
       delete errorKeyByMessage.value[msg.id]
       delete errorDetailByMessage.value[msg.id]
+      parsedSegmentsCacheByMessage.delete(msg.id)
     }
 
     messagesByConversation.value[conversationId] = []
