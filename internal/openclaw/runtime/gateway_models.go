@@ -120,8 +120,10 @@ func buildModelsPatch(providersSvc *providers.ProvidersService, allProviders []p
 						ID:   m.ModelID,
 						Name: m.Name,
 					}
-					if len(m.Capabilities) > 0 {
-						entry.Input = m.Capabilities
+					// Strip to OpenClaw-allowed values only; omit input field entirely
+					// if nothing valid remains so OpenClaw defaults to ["text"].
+					if ok, filtered := validOpenClawInputs(m.Capabilities); ok {
+						entry.Input = filtered
 					}
 					ocProvider.Models = append(ocProvider.Models, entry)
 				}
@@ -137,6 +139,46 @@ func buildModelsPatch(providersSvc *providers.ProvidersService, allProviders []p
 			"providers": providerMap,
 		},
 	}
+}
+
+// validOpenClawInputs strips model capabilities to only those accepted by OpenClaw.
+// OpenClaw rejects any input value outside ["text", "image"]; everything else (file,
+// audio, video, document, function_call, rerank, etc.) is stripped. Returns ok=false
+// when the input field should be omitted entirely (no valid capabilities remain),
+// allowing OpenClaw to default to ["text"].
+func validOpenClawInputs(capabilities []string) (ok bool, filtered []string) {
+	if len(capabilities) == 0 {
+		return false, nil
+	}
+	valid := make([]string, 0, 2)
+	for _, c := range capabilities {
+		lower := strings.ToLower(strings.TrimSpace(c))
+		if lower == "text" || lower == "image" {
+			valid = append(valid, lower)
+		}
+	}
+	if len(valid) == 0 {
+		return false, nil
+	}
+	return true, valid
+}
+
+// BuildModelsSectionPatch returns the same "models" object as full config sync (mode + providers).
+// Used when pushing only the models slice to the Gateway (must match OpenClaw schema).
+func BuildModelsSectionPatch(svc *providers.ProvidersService) (map[string]any, error) {
+	if svc == nil {
+		return nil, fmt.Errorf("providers service is nil")
+	}
+	allProviders, err := svc.ListProviders()
+	if err != nil {
+		return nil, err
+	}
+	patch := buildModelsPatch(svc, allProviders)
+	models, ok := patch["models"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("buildModelsPatch missing models section")
+	}
+	return models, nil
 }
 
 // fetchChatWikiSyncData fetches ChatWiki binding and model catalog for sync.
@@ -244,9 +286,12 @@ func buildChatWikiProvider(data *chatWikiSyncData) *openclawProviderConfig {
 				ID:   m.ModelID,
 				Name: m.Name,
 			}
-			if len(m.Capabilities) > 0 {
-				entry.Input = m.Capabilities
-			}
+			// CRITICAL: OpenClaw only accepts ["text"] and/or ["image"] for input.
+			// ChatWiki API capabilities include "document", "video", "audio", "function_call",
+			// "rerank" etc. which all cause INVALID_REQUEST. Force to ["text"] for all ChatWiki
+			// models until multi-capability support is confirmed safe. This also sidesteps any
+			// caching issues in buildModelsPatch where the DB catalog may hold stale values.
+			entry.Input = []string{"text"}
 			ocProvider.Models = append(ocProvider.Models, entry)
 		}
 	}

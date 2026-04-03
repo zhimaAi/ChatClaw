@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"strings"
+
 	"chatclaw/internal/services/chatwiki"
 )
 
@@ -41,11 +43,32 @@ func (s *ProvidersService) chatWikiCatalogItemsToModels(providerID string, items
 			ModelSupplier: item.ModelSupplier,
 			UniModelName:  item.UniModelName,
 			Type:          item.Type,
-			Capabilities:  append([]string(nil), item.Capabilities...),
+			Capabilities:  filterOpenClawCapabilities(item.Capabilities),
 			IsBuiltin:     true,
 			Enabled:       item.Enabled,
 			SortOrder:     item.SortOrder,
 		})
 	}
 	return models
+}
+
+// filterOpenClawCapabilities keeps only capabilities that OpenClaw accepts:
+// "text" and "image". All other values (document, video, audio, function_call,
+// etc.) are stripped because OpenClaw validates this field strictly and rejects
+// any unknown value with "INVALID_REQUEST: invalid config".
+func filterOpenClawCapabilities(capabilities []string) []string {
+	if len(capabilities) == 0 {
+		return []string{"text"}
+	}
+	valid := make([]string, 0, 2)
+	for _, c := range capabilities {
+		lower := strings.ToLower(strings.TrimSpace(c))
+		if lower == "text" || lower == "image" {
+			valid = append(valid, lower)
+		}
+	}
+	if len(valid) == 0 {
+		return []string{"text"}
+	}
+	return valid
 }

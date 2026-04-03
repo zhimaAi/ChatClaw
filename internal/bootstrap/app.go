@@ -360,6 +360,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 	openclawManager.SetToolchainService(toolchainService)
 	// 注册 OpenClaw Runtime 服务（管理 OpenClaw Gateway 进程的生命周期）
 	configSvc := openclawruntime.NewConfigService(openclawManager)
+	configSvc.SetProvidersService(providersSvc)
 	configSvc.Register("responses", openclawruntime.ResponsesEndpointSection())
 	configSvc.Register("models", openclawruntime.NewModelsSectionBuilder(providersSvc))
 	configSvc.Register("mcp", func(ctx context.Context) (map[string]any, error) {
@@ -393,6 +394,7 @@ func NewApp(opts Options) (app *application.App, cleanup func(), err error) {
 		}, nil
 	})
 	agentGWSvc := openclawruntime.NewAgentService(app, openclawManager, openClawAgentsService, configSvc)
+	openclawManager.SetConfigService(configSvc)
 	openclawManager.RegisterReadyHook(agentGWSvc.OnGatewayReady)
 	openclawManager.RegisterReadyHook(openClawChannelService.OnGatewayReadyOpenClawPluginSessionSync)
 	// 统一注册 OpenClaw 渠道 reply target 同步钩子。

@@ -69,6 +69,8 @@ type Manager struct {
 	upgradeInProgress atomic.Bool // set during upgrade so reconcileLocked skips OSS fallback
 
 	doctorRunSeq uint64 // atomic: correlates streamed doctor chunks with the active UI run
+
+	configSvc *ConfigService // injected via SetConfigService for SyncConfig
 }
 
 func gatewayOperatorScopes() []string {
@@ -103,6 +105,31 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService, too
 // Call this before Manager.Start() so the OSS fallback is available.
 func (m *Manager) SetToolchainService(svc ToolchainServiceIF) {
 	m.toolchainSvc = svc
+}
+
+// SetConfigService injects the ConfigService for model/agent config sync.
+func (m *Manager) SetConfigService(svc *ConfigService) {
+	m.configSvc = svc
+}
+
+// SyncConfig triggers an immediate config sync to push latest models/agents to the Gateway.
+// This ensures new ChatWiki models are available before sending messages.
+func (m *Manager) SyncConfig(ctx context.Context) error {
+	if m.configSvc == nil {
+		return nil
+	}
+	return m.configSvc.Sync(ctx)
+}
+
+// EnsureModelRegistered checks the Gateway's live config for the given provider/model
+// and registers it via a targeted patch if it is missing. This guarantees that the
+// model will be available when the subsequent chat message is sent, even if the
+// periodic full-sync was skipped (e.g. due to a cache hit or catalog fetch failure).
+func (m *Manager) EnsureModelRegistered(ctx context.Context, providerID, modelID string) error {
+	if m.configSvc == nil {
+		return nil
+	}
+	return m.configSvc.EnsureModelRegistered(ctx, providerID, modelID)
 }
 
 func (m *Manager) SetUpgradeProgressCallback(cb func(progress int, message string)) {

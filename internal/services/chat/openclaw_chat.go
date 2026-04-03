@@ -33,6 +33,8 @@ type OpenClawGatewayInfo interface {
 	QueryRequest(ctx context.Context, method string, params any, out any) error
 	AddEventListener(key string, fn func(event string, payload json.RawMessage))
 	RemoveEventListener(key string)
+	SyncConfig(ctx context.Context) error
+	EnsureModelRegistered(ctx context.Context, providerID, modelID string) error
 }
 
 // SetOpenClawGateway injects the OpenClaw gateway info.
@@ -1529,6 +1531,14 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 		return nil, errs.New("error.openclaw_gateway_not_ready")
 	}
 
+	// Sync config before sending to ensure latest ChatWiki models are available.
+	syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if syncErr := s.openclawGateway.SyncConfig(syncCtx); syncErr != nil {
+		s.app.Logger.Warn("[openclaw-chat] config sync before send failed",
+			"conv", input.ConversationID, "error", syncErr)
+	}
+	syncCancel()
+
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		gen := existing.(*activeGeneration)
 		if gen.tabID != input.TabID {
@@ -1540,6 +1550,23 @@ func (s *ChatService) SendOpenClawMessage(input SendMessageInput) (*SendMessageR
 	agentConfig, err := s.getOpenClawAgentConfig(input.ConversationID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Ensure the conversation's provider/model is registered on the Gateway (same as edit-resend).
+	// Normal sends use this path; without it the gateway can report Unknown model.
+	if agentConfig.ProviderID != "" && agentConfig.ModelID != "" {
+		ensureCtx, ensureCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if ensureErr := s.openclawGateway.EnsureModelRegistered(ensureCtx, agentConfig.ProviderID, agentConfig.ModelID); ensureErr != nil {
+			s.app.Logger.Warn("[openclaw-chat] ensure model registered failed, proceeding anyway",
+				"conv", input.ConversationID,
+				"provider", agentConfig.ProviderID, "model", agentConfig.ModelID,
+				"error", ensureErr)
+		} else {
+			s.app.Logger.Info("[openclaw-chat] model registered or already present",
+				"conv", input.ConversationID,
+				"provider", agentConfig.ProviderID, "model", agentConfig.ModelID)
+		}
+		ensureCancel()
 	}
 
 	attachments := input.Images
@@ -1607,6 +1634,14 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 		return nil, errs.New("error.openclaw_gateway_not_ready")
 	}
 
+	// Sync config before sending to ensure latest ChatWiki models are available.
+	syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if syncErr := s.openclawGateway.SyncConfig(syncCtx); syncErr != nil {
+		s.app.Logger.Warn("[openclaw-chat] config sync before edit-resend failed",
+			"conv", input.ConversationID, "error", syncErr)
+	}
+	syncCancel()
+
 	if existing, ok := s.activeGenerations.Load(input.ConversationID); ok {
 		oldGen := existing.(*activeGeneration)
 		oldGen.cancel()
@@ -1621,6 +1656,24 @@ func (s *ChatService) EditAndResendOpenClaw(input EditAndResendInput) (*SendMess
 	agentConfig, err := s.getOpenClawAgentConfig(input.ConversationID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Ensure the specific model for this conversation is registered in the Gateway.
+	// This bridges the gap when SyncConfig() was skipped (cache hit) or the model
+	// was not in the catalog at sync time.
+	if agentConfig.ProviderID != "" && agentConfig.ModelID != "" {
+		ensureCtx, ensureCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if ensureErr := s.openclawGateway.EnsureModelRegistered(ensureCtx, agentConfig.ProviderID, agentConfig.ModelID); ensureErr != nil {
+			s.app.Logger.Warn("[openclaw-chat] ensure model registered failed, proceeding anyway",
+				"conv", input.ConversationID,
+				"provider", agentConfig.ProviderID, "model", agentConfig.ModelID,
+				"error", ensureErr)
+		} else {
+			s.app.Logger.Info("[openclaw-chat] model registered or already present",
+				"conv", input.ConversationID,
+				"provider", agentConfig.ProviderID, "model", agentConfig.ModelID)
+		}
+		ensureCancel()
 	}
 
 	attachments := input.Images
