@@ -1,6 +1,7 @@
 package openclawruntime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"chatclaw/internal/openclaw"
@@ -261,7 +263,7 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 		}
 
 		onProgress(10, fmt.Sprintf("Downloading openclaw@%s from registry", version))
-		if err := installOpenClawPackage(activeBundle.Root, version, registryURL, npmPrefix); err != nil {
+		if err := installOpenClawPackage(activeBundle.Root, version, registryURL, npmPrefix, onProgress); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
 			return nil, nil, nil, err
 		}
@@ -388,7 +390,7 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 	return stagedBundle, restore, cleanup, nil
 }
 
-func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string) error {
+func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string, onProgress upgradeProgress) error {
 	npmPath := bundledNpmPath(bundleRoot)
 	if _, err := os.Stat(npmPath); err != nil {
 		return fmt.Errorf("bundled npm is missing at %s: %w", npmPath, err)
@@ -397,23 +399,70 @@ func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string) 
 	args := []string{
 		"install", "-g",
 		"--prefix", npmPrefix,
-		"--loglevel", "error",
+		"--loglevel", "warn",
 		"--no-fund", "--no-audit",
+		"--progress",
 		"--registry", registryURL,
 		"openclaw@" + version,
 	}
 	cmd := exec.Command(npmPath, args...)
 	cmd.Env = buildBundledNodeEnv(bundleRoot)
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
 	setCmdHideWindow(cmd)
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("install openclaw runtime: %w: %s", err, msg)
+
+	// Stream npm stdout so the UI sees download progress lines.
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("open stdout for npm install: %w", err)
+	}
+	// Preserve stderr for error reporting; npm uses it for warnings and errors.
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("open stderr for npm install: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start npm install: %w", err)
+	}
+
+	var stderrLines []string
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sc := bufio.NewScanner(stderr)
+		// npm stderr lines are typically short; bump scanner buffer.
+		// npm prepends progress bars to stdout, not stderr, but capture stderr just in case.
+		for sc.Scan() {
+			stderrLines = append(stderrLines, sc.Text())
 		}
-		return fmt.Errorf("install openclaw runtime: %w", err)
+	}()
+
+	// Stream stdout: each non-empty line is forwarded as a progress update.
+	// Progress is estimated as npm install is not seekable; map 10→90% of the download phase.
+	const progressStart, progressEnd = 10, 90
+	cur := progressStart
+	sc := bufio.NewScanner(stdout)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		onProgress(cur, line)
+		// Advance progress in small increments; npm update phases roughly fill 10% each.
+		if cur < progressEnd {
+			cur += 5
+		}
+	}
+	wg.Wait()
+	scanErr := sc.Err()
+	waitErr := cmd.Wait()
+
+	if waitErr != nil || scanErr != nil {
+		errMsg := strings.TrimSpace(strings.Join(stderrLines, "\n"))
+		if errMsg != "" {
+			return fmt.Errorf("install openclaw@%s: %w\n%s", version, waitErr, errMsg)
+		}
+		return fmt.Errorf("install openclaw@%s: %w", version, waitErr)
 	}
 	return nil
 }
