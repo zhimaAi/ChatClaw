@@ -29,6 +29,29 @@ func (s *OpenClawRuntimeService) StopGateway() {
 	s.manager.Shutdown()
 }
 
+// GetAutoStart returns the current auto-start preference.
+func (s *OpenClawRuntimeService) GetAutoStart() bool {
+	return s.manager.store.Get().AutoStart
+}
+
+// SetAutoStart persists the auto-start preference and applies it immediately:
+//   - true:  saves the preference; starts/reconciles when there is no process or status is idle/error.
+//   - false: saves the preference; if gateway is running, stops it.
+func (s *OpenClawRuntimeService) SetAutoStart(v bool) {
+	s.manager.store.SetAutoStart(v)
+	if v {
+		s.manager.mu.RLock()
+		running := s.manager.process != nil
+		phase := s.manager.status.Phase
+		s.manager.mu.RUnlock()
+		if !running || phase == PhaseError || phase == PhaseIdle {
+			go func() { _ = s.manager.reconcile(false) }()
+		}
+	} else {
+		s.manager.Shutdown()
+	}
+}
+
 func (s *OpenClawRuntimeService) UpgradeRuntime() (*RuntimeUpgradeResult, error) {
 	return s.manager.UpgradeRuntime()
 }

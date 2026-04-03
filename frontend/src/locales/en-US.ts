@@ -261,6 +261,10 @@ export default {
       title: "OpenClaw Service",
       pageSubtitle: "Configure gateway and basic runtime settings",
       gatewayStatusLabel: "Gateway status",
+      autoStartLabel: "Gateway running switch",
+      autoStartEnabled: "OpenClaw Gateway enabled",
+      autoStartDisabled: "OpenClaw Gateway disabled",
+      autoStartFailed: "Failed to change gateway state",
       sidebarGatewayPrefix: "Gateway",
       sidebarGatewayLabelSeparator: ": ",
       statusBadge: {

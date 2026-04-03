@@ -106,6 +106,9 @@ func (m *Manager) SetUpgradeProgressCallback(cb func(progress int, message strin
 }
 
 func (m *Manager) Start() {
+	if !m.store.Get().AutoStart {
+		return
+	}
 	go func() { _ = m.reconcile(false) }()
 }
 

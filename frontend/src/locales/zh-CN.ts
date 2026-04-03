@@ -261,6 +261,10 @@ export default {
       title: "OpenClaw 管家",
       pageSubtitle: "配置网关等基础设置信息",
       gatewayStatusLabel: "网关状态",
+      autoStartLabel: "网关运行开关",
+      autoStartEnabled: "OpenClaw 网关已开启",
+      autoStartDisabled: "OpenClaw 网关已关闭",
+      autoStartFailed: "切换网关状态失败",
       sidebarGatewayPrefix: "网关",
       sidebarGatewayLabelSeparator: "：",
       statusBadge: {
