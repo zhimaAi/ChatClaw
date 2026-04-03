@@ -1699,6 +1699,10 @@ export default {
       toastDescription: "Kanal in prehod se še ustvarjata ali usklajujeta. Stanje povezave se bo samodejno posodobilo. Počakajte.",
       toastDescriptionWithAgent: "Kanal, pomočnik ali prehod se še ustvarjajo ali usklajujejo. Počakajte.",
     },
+    wecom: {
+      emptyTitle: "WeCom še ni dodan",
+      emptyDesc: "Povežite WeCom s skeniranjem QR kode z uradnim vtičnikom Tencent OpenClaw ali integrirajte obstoječega bota.",
+    },
     wechat: {
       emptyTitle: "WeChat še ni dodan",
       emptyDesc: "Povežite svoj osebni WeChat tako, da s pomočjo uradnega vtičnika Tencent OpenClaw skenirate QR kodo, nato pa začnite prejemati in obdelovati sporočila WeChat.",

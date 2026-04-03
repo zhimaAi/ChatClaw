@@ -35,9 +35,7 @@ watch(
   (system) => {
     if (
       system === 'openclaw' &&
-      (settingsStore.activeMenu === 'chatwiki' ||
-        settingsStore.activeMenu === 'mcp' ||
-        settingsStore.activeMenu === 'openclawRuntime')
+      (settingsStore.activeMenu === 'mcp' || settingsStore.activeMenu === 'openclawRuntime')
     ) {
       settingsStore.setActiveMenu('generalSettings')
     }

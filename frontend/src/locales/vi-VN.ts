@@ -1699,6 +1699,10 @@ export default {
       toastDescription: "Kênh và gateway vẫn đang được tạo hoặc đồng bộ. Trạng thái kết nối sẽ tự động cập nhật. Vui lòng chờ.",
       toastDescriptionWithAgent: "Kênh, trợ lý hoặc gateway vẫn đang được tạo hoặc đồng bộ. Vui lòng chờ.",
     },
+    wecom: {
+      emptyTitle: "Chưa thêm WeCom",
+      emptyDesc: "Kết nối WeCom bằng cách quét mã QR với plugin OpenClaw chính thức của Tencent hoặc tích hợp bot có sẵn.",
+    },
     wechat: {
       emptyTitle: "Chưa thêm WeChat",
       emptyDesc: "Kết nối WeChat cá nhân bằng cách quét mã QR với plugin OpenClaw chính thức của Tencent và bắt đầu nhận, xử lý tin nhắn WeChat.",

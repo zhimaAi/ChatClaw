@@ -1782,6 +1782,10 @@ export default {
       noDesc: "No description",
       confirm: "Confirm binding",
     },
+    wecom: {
+      emptyTitle: "No WeCom added yet",
+      emptyDesc: "Connect WeCom by scanning a QR code with Tencent's official OpenClaw plugin, or integrate an existing bot.",
+    },
     wechat: {
       emptyTitle: "No WeChat added yet",
       emptyDesc: "Connect your personal WeChat by scanning a QR code with the official Tencent OpenClaw plugin and start receiving and processing WeChat messages.",

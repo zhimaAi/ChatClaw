@@ -1697,6 +1697,10 @@ export default {
       noDesc: "Keine Beschreibung",
       confirm: "Bindung bestätigen",
     },
+    wecom: {
+      emptyTitle: "WeCom noch nicht hinzugefügt",
+      emptyDesc: "Verbinden Sie WeCom per QR-Code-Scan mit dem offiziellen Tencent OpenClaw-Plugin oder integrieren Sie einen vorhandenen Bot.",
+    },
     wechat: {
       emptyTitle: "WeChat noch nicht hinzugefügt",
       emptyDesc: "Verbinden Sie Ihr persönliches WeChat per QR-Code-Scan mit dem offiziellen Tencent OpenClaw-Plugin und beginnen Sie damit, WeChat-Nachrichten zu empfangen und zu verarbeiten.",

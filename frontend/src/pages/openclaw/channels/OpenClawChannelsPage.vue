@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus,
@@ -127,6 +127,7 @@ const inlineFormAppId = ref('')
 const inlineFormAppSecret = ref('')
 const inlineFormSaving = ref(false)
 const inlineFormVerifying = ref(false)
+let provisioningRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
 const filteredChannels = computed(() => {
   if (selectedFilter.value === 'all') return channels.value
@@ -159,7 +160,25 @@ const inlineAppSecretPlaceholderKey = computed(() =>
     : 'channels.config.appSecretPlaceholder'
 )
 
+function clearProvisioningRefreshTimer() {
+  if (provisioningRefreshTimer) {
+    clearTimeout(provisioningRefreshTimer)
+    provisioningRefreshTimer = null
+  }
+}
+
+function scheduleProvisioningRefresh() {
+  clearProvisioningRefreshTimer()
+  const hasProvisioning = channels.value.some((ch) => channelConnDisplay(ch) === 'provisioning')
+  if (!hasProvisioning || !isTabActive.value) return
+  provisioningRefreshTimer = setTimeout(() => {
+    provisioningRefreshTimer = null
+    void loadData()
+  }, 3000)
+}
+
 async function loadData() {
+  clearProvisioningRefreshTimer()
   loading.value = true
   try {
     const [channelList, channelStats, platformList, agentsList] = await Promise.all([
@@ -173,6 +192,7 @@ async function loadData() {
     stats.value = channelStats || { total: 0, connected: 0, disconnected: 0 }
     platforms.value = platformList || []
     agents.value = agentsList || []
+    scheduleProvisioningRefresh()
     void OpenClawChannelService.EnsureDingTalkPluginIfNeeded()
   } catch (error) {
     toast.error(getErrorMessage(error))
@@ -185,6 +205,12 @@ function getAgentName(agentId: number): string {
   if (!agentId) return t('channels.agentFallback')
   const agent = agents.value.find((a) => a.id === agentId)
   return agent ? agent.name : t('channels.agentFallback')
+}
+
+function applyLocalChannelAgentBinding(channelId: number, agentId: number) {
+  channels.value = channels.value.map((channel) =>
+    channel.id === channelId ? { ...channel, agent_id: agentId } : channel
+  )
 }
 
 async function handleAddChannel() {
@@ -253,6 +279,7 @@ function handleWecomManualEntry() {
 }
 
 function handleEditChannel(channel: Channel) {
+  if (isChannelConnectionProvisioning(channel)) return
   channelToEdit.value = channel
   selectedPlatform.value = platforms.value.find((p) => p.id === channel.platform) || null
   configDialogOpen.value = true
@@ -323,11 +350,20 @@ async function handleDisableChannel(channel: Channel) {
 
 /** Connection pill: disabled channel is never "online" even if API status is stale. */
 function channelConnDisplay(ch: Channel): 'provisioning' | 'online' | 'error' | 'offline' {
-  if (isGatewayProvisioning(ch)) return 'provisioning'
+  if (ch.status === 'error') return 'error'
+  if (ch.status === 'provisioning' || isGatewayProvisioning(ch)) return 'provisioning'
   if (!ch.enabled) return 'offline'
   if (ch.status === 'online') return 'online'
-  if (ch.status === 'error') return 'error'
   return 'offline'
+}
+
+/** Connection status "creating" — only delete is allowed on the card. */
+function isChannelConnectionProvisioning(ch: Channel): boolean {
+  return channelConnDisplay(ch) === 'provisioning'
+}
+
+function isBindStatusProvisioning(ch: Channel): boolean {
+  return isBindProvisioning(ch) && !isChannelConnectionProvisioning(ch)
 }
 
 function channelConnStatusI18nKey(ch: Channel) {
@@ -344,6 +380,7 @@ function channelConnStatusI18nKey(ch: Channel) {
 }
 
 async function handleToggleConnection(channel: Channel, val: boolean) {
+  if (isChannelConnectionProvisioning(channel)) return
   if (channel.platform === 'wechat' && val) {
     try {
       const prep = await OpenClawChannelService.PrepareWechatChannel()
@@ -415,6 +452,7 @@ async function confirmToggle() {
 }
 
 function openUnbindConfirm(channel: Channel) {
+  if (isChannelConnectionProvisioning(channel)) return
   channelToUnbind.value = channel
   unbindDialogOpen.value = true
 }
@@ -434,6 +472,7 @@ async function confirmUnbindAssistant() {
 }
 
 function handleOpenBind(channel: Channel) {
+  if (isChannelConnectionProvisioning(channel)) return
   channelToBind.value = channel
   bindFromCreate.value = false
   bindDialogOpen.value = true
@@ -444,6 +483,7 @@ async function handleBindAgent(agentId: number) {
   const channel = channelToBind.value
   try {
     await OpenClawChannelService.BindAgent(channel.id, agentId)
+    applyLocalChannelAgentBinding(channel.id, agentId)
     // Match QQ: after create→bind, enable OpenClaw plugin config + local enabled (Feishu/WeCom/DingTalk were missing).
     const connectAfterCreateBind =
       bindFromCreate.value &&
@@ -517,6 +557,7 @@ async function handleAutoGenerate() {
       return
     }
     await OpenClawChannelService.BindAgent(ch.id, created.id)
+    applyLocalChannelAgentBinding(ch.id, created.id)
     await OpenClawChannelService.ConnectChannel(ch.id)
     toast.success(t('channels.bindAgent.autoGenerateSuccess'))
     await loadData()
@@ -679,6 +720,10 @@ async function handleInlineVerify() {
 onMounted(() => {
   console.info('[OpenClawChannelsPage] mounted, loading channel data', { tabId: props.tabId })
   void loadData()
+})
+
+onUnmounted(() => {
+  clearProvisioningRefreshTimer()
 })
 
 // Refresh when user switches back to this tab (component often stays mounted).
@@ -844,7 +889,7 @@ watch(isTabActive, (active) => {
               <!-- Enable switch: turning on enables the channel and then auto-connects it. -->
               <Switch
                 :model-value="channel.enabled"
-                :disabled="channel.agent_id === 0"
+                :disabled="channel.agent_id === 0 || isChannelConnectionProvisioning(channel)"
                 @update:model-value="(v: boolean) => handleToggleConnection(channel, v)"
               />
               <DropdownMenu>
@@ -862,6 +907,7 @@ watch(isTabActive, (active) => {
                   class="min-w-24 rounded-md bg-white p-0.5 shadow-[0_8px_10px_-5px_rgba(0,0,0,0.08),0_16px_24px_2px_rgba(0,0,0,0.04),0_6px_30px_5px_rgba(0,0,0,0.05)] dark:bg-popover"
                 >
                   <DropdownMenuItem
+                    v-if="!isChannelConnectionProvisioning(channel)"
                     class="gap-2 rounded px-4 py-[5px]"
                     @click="handleEditChannel(channel)"
                   >
@@ -869,6 +915,7 @@ watch(isTabActive, (active) => {
                     {{ t('common.edit') }}
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    v-if="!isChannelConnectionProvisioning(channel)"
                     class="gap-2 rounded px-4 py-[5px]"
                     @click="handleOpenBind(channel)"
                   >
@@ -880,6 +927,7 @@ watch(isTabActive, (active) => {
                     }}
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    v-if="!isChannelConnectionProvisioning(channel)"
                     class="gap-2 rounded px-4 py-[5px]"
                     :disabled="channel.agent_id === 0"
                     @click="openUnbindConfirm(channel)"
@@ -887,7 +935,10 @@ watch(isTabActive, (active) => {
                     <Unlink class="h-4 w-4" />
                     {{ t('channels.card.unbind') }}
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator class="my-0.5 bg-[#f0f0f0] dark:bg-border" />
+                  <DropdownMenuSeparator
+                    v-if="!isChannelConnectionProvisioning(channel)"
+                    class="my-0.5 bg-[#f0f0f0] dark:bg-border"
+                  />
                   <DropdownMenuItem
                     class="gap-2 rounded px-4 py-[5px] text-destructive focus:bg-destructive/10 focus:text-destructive"
                     @click="confirmDelete(channel)"
@@ -901,7 +952,9 @@ watch(isTabActive, (active) => {
           </div>
 
           <!-- App / plugin account id (WeChat: account_id from ilink) -->
-          <p class="text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground">
+          <p
+            class="min-w-0 truncate text-xs leading-5 text-[#8c8c8c] dark:text-muted-foreground"
+          >
             {{ getChannelCredentialLabel(channel.platform) }}:
             {{ getChannelCredentialDisplay(channel.platform, channel.extra_config) }}
           </p>
@@ -936,18 +989,26 @@ watch(isTabActive, (active) => {
             <div
               class="inline-flex min-w-0 items-center gap-1 rounded-full bg-[#f0f0f0] px-2 py-0.5 dark:bg-muted"
               :class="[
-                channel.agent_id !== 0 && !isBindProvisioning(channel)
+                channel.agent_id !== 0 && !isBindStatusProvisioning(channel)
                   ? 'max-w-[12rem]'
                   : 'max-w-full',
                 {
                   'cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-muted/80 transition-colors':
-                    channel.agent_id === 0 && !isBindProvisioning(channel),
+                    channel.agent_id === 0 &&
+                    !isBindStatusProvisioning(channel) &&
+                    !isChannelConnectionProvisioning(channel),
                 },
               ]"
-              @click="channel.agent_id === 0 && !isBindProvisioning(channel) ? handleOpenBind(channel) : undefined"
+              @click="
+                channel.agent_id === 0 &&
+                !isBindStatusProvisioning(channel) &&
+                !isChannelConnectionProvisioning(channel)
+                  ? handleOpenBind(channel)
+                  : undefined
+              "
             >
               <LoaderCircle
-                v-if="isBindProvisioning(channel)"
+                v-if="isBindStatusProvisioning(channel)"
                 class="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground"
               />
               <IconCheck
@@ -961,7 +1022,7 @@ watch(isTabActive, (active) => {
               <span
                 class="min-w-0 truncate text-xs leading-4 text-[#595959] dark:text-muted-foreground"
                 :title="
-                  isBindProvisioning(channel)
+                  isBindStatusProvisioning(channel)
                     ? t('channels.card.provisioning')
                     : channel.agent_id !== 0
                       ? getAgentName(channel.agent_id)
@@ -969,7 +1030,7 @@ watch(isTabActive, (active) => {
                 "
               >
                 {{
-                  isBindProvisioning(channel)
+                  isBindStatusProvisioning(channel)
                     ? t('channels.card.provisioning')
                     : channel.agent_id !== 0
                       ? getAgentName(channel.agent_id)
@@ -981,7 +1042,7 @@ watch(isTabActive, (active) => {
         </div>
       </div>
 
-      <!-- Empty State - All platforms -->
+      <!-- Empty State - All platforms tab (generic) or WeCom tab (WeCom-specific copy) -->
       <div
         v-else-if="selectedFilter === 'all' || selectedFilter === 'wecom'"
         class="flex flex-col items-center justify-center py-12 text-center"
@@ -992,10 +1053,18 @@ watch(isTabActive, (active) => {
           <SquareDashed class="h-6 w-6 text-[#737373] dark:text-muted-foreground" />
         </div>
         <h3 class="text-base font-medium text-[#262626] dark:text-foreground">
-          {{ t('channels.empty.title') }}
+          {{
+            selectedFilter === 'wecom'
+              ? t('channels.wecom.emptyTitle')
+              : t('channels.empty.title')
+          }}
         </h3>
         <p class="mt-2 max-w-sm text-sm text-[#737373] dark:text-muted-foreground">
-          {{ t('channels.empty.desc') }}
+          {{
+            selectedFilter === 'wecom'
+              ? t('channels.wecom.emptyDesc')
+              : t('channels.empty.desc')
+          }}
         </p>
         <Button
           class="mt-6 gap-1 bg-[#171717] text-white hover:bg-[#171717]/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"

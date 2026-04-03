@@ -1679,6 +1679,10 @@ export default {
       noDesc: "未設定描述",
       confirm: "確認綁定",
     },
+    wecom: {
+      emptyTitle: "尚未新增企業微信",
+      emptyDesc: "透過騰訊官方 OpenClaw 外掛掃描 QR Code 連線企業微信，同時支援接入既有機器人。",
+    },
     wechat: {
       emptyTitle: "尚未新增微信",
       emptyDesc: "透過騰訊官方 OpenClaw 外掛掃描 QR Code 連線個人微信，開始接收並處理微信訊息。",

@@ -1698,6 +1698,10 @@ export default {
       toastDescription: "Il canale e il gateway sono ancora in fase di creazione o sincronizzazione. Lo stato della connessione si aggiornerà automaticamente. Attendi.",
       toastDescriptionWithAgent: "Canale, assistente o gateway sono ancora in fase di creazione o sincronizzazione. Attendi.",
     },
+    wecom: {
+      emptyTitle: "WeCom non ancora aggiunto",
+      emptyDesc: "Collega WeCom scansionando un codice QR con il plugin ufficiale Tencent OpenClaw o integra un bot esistente.",
+    },
     wechat: {
       emptyTitle: "WeChat non ancora aggiunto",
       emptyDesc: "Collega il tuo WeChat personale scansionando un codice QR con il plugin ufficiale Tencent OpenClaw e inizia a ricevere ed elaborare i messaggi di WeChat.",

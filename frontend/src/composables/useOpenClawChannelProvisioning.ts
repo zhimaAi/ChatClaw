@@ -45,7 +45,7 @@ export function syncPendingFromChannels(channels: Channel[]) {
       nextG.delete(id)
       continue
     }
-    if (ch.status === 'online' || ch.status === 'error') {
+    if (ch.status !== 'provisioning') {
       nextG.delete(id)
     }
   }
@@ -66,6 +66,7 @@ export function syncPendingFromChannels(channels: Channel[]) {
 }
 
 export function isGatewayProvisioning(ch: Channel): boolean {
+  if (ch.status === 'provisioning') return true
   if (!pendingGatewayIds.value.has(ch.id)) return false
   return ch.status !== 'online' && ch.status !== 'error'
 }
@@ -75,9 +76,7 @@ export function isAgentProvisioning(ch: Channel): boolean {
   return ch.agent_id === 0
 }
 
-/** Bind pill: show "creating" while gateway syncs (unbound) or assistant is being created. */
+/** Bind pill only reflects assistant creation to avoid duplicate "creating" badges. */
 export function isBindProvisioning(ch: Channel): boolean {
-  if (isAgentProvisioning(ch)) return true
-  if (ch.agent_id !== 0) return false
-  return isGatewayProvisioning(ch)
+  return isAgentProvisioning(ch)
 }

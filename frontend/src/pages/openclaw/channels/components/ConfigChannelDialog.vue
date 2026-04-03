@@ -101,6 +101,17 @@ const platformTipConfig = computed(() => {
       suffix: t('channels.config.dingtalkTipSuffix'),
     }
   }
+  if (currentPlatformId.value === 'qq') {
+    return {
+      platformUrl: 'https://q.qq.com/#/',
+      docsUrl: getPlatformDocsUrl('qq'),
+      prefix: t('channels.config.qqTipPrefix'),
+      platformLink: t('channels.config.qqPlatformLink'),
+      middle: t('channels.config.qqTipMiddle'),
+      guideLink: t('channels.config.qqGuideLink'),
+      suffix: t('channels.config.qqTipSuffix'),
+    }
+  }
   return {
     platformUrl: 'https://open.feishu.cn/',
     docsUrl: getPlatformDocsUrl('feishu'),
@@ -122,6 +133,8 @@ const dialogTitle = computed(() => {
     botName = t('channels.meta.wecom.botName', 'wecom')
   } else if (currentPlatformId.value === 'dingtalk') {
     botName = t('channels.meta.dingtalk.botName', 'dingtalk')
+  } else if (currentPlatformId.value === 'qq') {
+    botName = t('channels.meta.qq.botName', 'qq')
   } else {
     botName = t('channels.meta.feishu.botName', 'feishu')
   }
