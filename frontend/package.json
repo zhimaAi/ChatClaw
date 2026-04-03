@@ -19,6 +19,7 @@
     "@vue-office/excel": "^1.7.14",
     "@vueuse/core": "^14.2.1",
     "@wailsio/runtime": "latest",
+    "ansi-to-html": "^0.7.2",
     "bestofdview": "^0.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

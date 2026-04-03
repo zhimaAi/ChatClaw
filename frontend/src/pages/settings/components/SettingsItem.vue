@@ -14,14 +14,16 @@ defineProps<{
 
 <template>
   <div
-    class="flex items-center justify-between p-4"
+    class="flex flex-wrap items-center gap-x-4 gap-y-2 p-4 sm:flex-nowrap sm:justify-between"
     :class="bordered !== false && 'border-b border-border dark:border-white/10'"
   >
     <slot name="label">
-      <span class="text-sm font-medium text-foreground">
+      <span class="min-w-0 shrink-0 text-sm font-medium text-foreground">
         {{ label }}
       </span>
     </slot>
-    <slot />
+    <div class="min-w-0 shrink-0 sm:ml-auto">
+      <slot />
+    </div>
   </div>
 </template>

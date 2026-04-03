@@ -354,8 +354,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-settings-card">
-    <div class="flex flex-col gap-6">
+  <div class="w-full min-w-0">
+    <div class="flex w-full min-w-0 flex-col gap-6">
       <div class="flex items-center justify-between bg-background px-4 py-4">
         <div>
           <p class="text-base font-semibold text-foreground">

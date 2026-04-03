@@ -1,10 +1,12 @@
 package openclawruntime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -16,11 +18,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"chatclaw/internal/services/settings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 // EventListener receives gateway events. Parameters are event name and raw JSON payload.
@@ -30,6 +35,7 @@ type EventListener func(event string, payload json.RawMessage)
 // Implemented as an interface to avoid a cyclic import.
 type ToolchainServiceIF interface {
 	InstallOpenClawRuntime() error
+	SetUpgradeProgressCallback(cb func(progress int, message string))
 }
 
 type Manager struct {
@@ -57,6 +63,10 @@ type Manager struct {
 
 	eventListenersMu sync.RWMutex
 	eventListeners   map[string]EventListener // keyed by caller-chosen ID
+
+	upgradeProgressCb func(progress int, message string)
+
+	doctorRunSeq uint64 // atomic: correlates streamed doctor chunks with the active UI run
 }
 
 func gatewayOperatorScopes() []string {
@@ -80,6 +90,10 @@ func NewManager(app *application.App, settingsSvc *settings.SettingsService, too
 		},
 		eventListeners: make(map[string]EventListener),
 	}
+	// Set up progress callback for OSS install to forward to frontend via status events
+	if toolchainSvc != nil {
+		toolchainSvc.SetUpgradeProgressCallback(m.broadcastUpgradeProgress)
+	}
 	return m
 }
 
@@ -89,7 +103,14 @@ func (m *Manager) SetToolchainService(svc ToolchainServiceIF) {
 	m.toolchainSvc = svc
 }
 
+func (m *Manager) SetUpgradeProgressCallback(cb func(progress int, message string)) {
+	m.upgradeProgressCb = cb
+}
+
 func (m *Manager) Start() {
+	if !m.store.Get().AutoStart {
+		return
+	}
 	go func() { _ = m.reconcile(false) }()
 }
 
@@ -101,6 +122,32 @@ func (m *Manager) Shutdown() {
 	m.mu.Unlock()
 	m.closeClient()
 	m.stopProcess()
+
+	cfg := m.store.Get()
+	m.mu.RLock()
+	prev := m.status
+	m.mu.RUnlock()
+
+	// User-initiated stop: refresh persisted status so GetStatus/UI match reality.
+	// Without this, phase stays "connected" while the process is gone (misleading toast + badge).
+	m.broadcastStatus(RuntimeStatus{
+		Phase:            PhaseIdle,
+		Message:          "OpenClaw Gateway stopped",
+		InstalledVersion: prev.InstalledVersion,
+		RuntimeSource:    prev.RuntimeSource,
+		RuntimePath:      prev.RuntimePath,
+		GatewayPID:       0,
+		GatewayURL:       gatewayURL(cfg.GatewayPort),
+	})
+	m.broadcastGatewayState(GatewayConnectionState{
+		Connected:     false,
+		Authenticated: false,
+		Reconnecting:  false,
+	})
+
+	m.mu.Lock()
+	m.shuttingDown = false
+	m.mu.Unlock()
 }
 
 func (m *Manager) GetStatus() RuntimeStatus {
@@ -137,6 +184,16 @@ func (m *Manager) InstallAndStartRuntime() (*RuntimeUpgradeResult, error) {
 	})
 	m.closeClient()
 	m.stopProcess()
+
+	// Proactively kill stray node.exe processes that might hold file locks on
+	// runtime directories (e.g., leftover from a previous aborted upgrade or
+	// a testers manual delete attempt). Do this before any file operations.
+	_ = killAllNodeProcesses()
+
+	// Set up progress callback so the UI can show install progress
+	if m.upgradeProgressCb != nil {
+		m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
+	}
 
 	if err := m.toolchainSvc.InstallOpenClawRuntime(); err != nil {
 		_ = m.reconcileLocked(false)
@@ -224,17 +281,21 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 	bundle, err := resolveBundledRuntime()
 	if err != nil {
-		// No bundled runtime found — try installing from OSS as a fallback
-		m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
-		m.broadcastStatus(RuntimeStatus{
-			Phase:      PhaseUpgrading,
-			Message:    "No OpenClaw runtime found, downloading from OSS...",
-			GatewayURL: gatewayURL(cfg.GatewayPort),
-		})
-		if m.toolchainSvc == nil {
-			return fail("resolveBundledRuntime", err, "", 0)
-		}
-		if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
+	// No bundled runtime found — try installing from OSS as a fallback
+	m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
+	m.broadcastStatus(RuntimeStatus{
+		Phase:      PhaseUpgrading,
+		Message:    "No OpenClaw runtime found, downloading from OSS...",
+		GatewayURL: gatewayURL(cfg.GatewayPort),
+	})
+	if m.toolchainSvc == nil {
+		return fail("resolveBundledRuntime", err, "", 0)
+	}
+	// Set up progress callback so the UI can show install progress
+	if m.upgradeProgressCb != nil {
+		m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
+	}
+	if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
 			return fail("OSS runtime install", installErr, "", 0)
 		}
 		// Reload bundle after OSS install
@@ -569,6 +630,23 @@ func (m *Manager) handleGatewayDisconnect(err error) {
 		m.mu.Unlock()
 		return
 	}
+	// No gateway process — nothing to reconnect to (e.g. late WS close after Stop).
+	if m.process == nil {
+		m.client = nil
+		if m.queryClient != nil {
+			_ = m.queryClient.Close()
+			m.queryClient = nil
+		}
+		m.readyAt = time.Time{}
+		m.mu.Unlock()
+		m.broadcastGatewayState(GatewayConnectionState{
+			Connected:     false,
+			Authenticated: false,
+			Reconnecting:  false,
+			LastError:     errStr(err),
+		})
+		return
+	}
 	m.client = nil
 	if m.queryClient != nil {
 		_ = m.queryClient.Close()
@@ -867,6 +945,109 @@ func (m *Manager) RegisterReadyHook(fn func()) {
 	m.readyHooks = append(m.readyHooks, fn)
 }
 
+// RunDoctorCommand executes an openclaw doctor command, streams stdout/stderr via EventDoctorOutput, and returns the final result.
+func (m *Manager) RunDoctorCommand(command string, fix bool) (*DoctorCommandResult, error) {
+	bundle, err := resolveBundledRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("resolve openclaw runtime for doctor: %w", err)
+	}
+
+	args := []string{"doctor"}
+	if fix {
+		args = append(args, "--fix", "--yes", "--non-interactive")
+	}
+
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, bundle.CLIPath, args...)
+	cmd.Env = buildGatewayEnv(m.store.Get(), bundle)
+	cmd.Dir = bundle.Root
+	setCmdHideWindow(cmd)
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("openclaw doctor stdout: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("openclaw doctor stderr: %w", err)
+	}
+
+	runID := atomic.AddUint64(&m.doctorRunSeq, 1)
+
+	var fullStdout strings.Builder
+	var fullStderr strings.Builder
+	var wg sync.WaitGroup
+
+	emitChunk := func(stream, text string) {
+		if m.app == nil || text == "" {
+			return
+		}
+		m.app.Event.Emit(EventDoctorOutput, map[string]any{
+			"runId":  runID,
+			"stream": stream,
+			"text":   text,
+		})
+	}
+
+	pump := func(r io.Reader, stream string, acc *strings.Builder) {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(buf)
+			if n > 0 {
+				chunk := decodeWindowsConsoleOutput(buf[:n])
+				_, _ = acc.WriteString(chunk)
+				emitChunk(stream, chunk)
+			}
+			if readErr == io.EOF {
+				return
+			}
+			if readErr != nil {
+				return
+			}
+		}
+	}
+
+	startTime := time.Now()
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("openclaw doctor start: %w", err)
+	}
+
+	wg.Add(2)
+	go pump(stdoutPipe, "stdout", &fullStdout)
+	go pump(stderrPipe, "stderr", &fullStderr)
+
+	waitErr := cmd.Wait()
+	wg.Wait()
+	duration := time.Since(startTime)
+
+	result := &DoctorCommandResult{
+		Command:    command,
+		Stdout:     fullStdout.String(),
+		Stderr:     fullStderr.String(),
+		Duration:   int(duration.Milliseconds()),
+		WorkingDir: bundle.Root,
+	}
+
+	if waitErr != nil {
+		if result.Stderr == "" {
+			result.Stderr = waitErr.Error()
+		} else {
+			result.Stderr = result.Stderr + "\n" + waitErr.Error()
+		}
+		result.ExitCode = 1
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		}
+		result.Fixed = false
+	} else {
+		result.ExitCode = 0
+		result.Fixed = fix
+	}
+
+	return result, nil
+}
+
 func (m *Manager) notifyReadyHooks() {
 	m.mu.RLock()
 	hooks := append([]func(){}, m.readyHooks...)
@@ -877,6 +1058,27 @@ func (m *Manager) notifyReadyHooks() {
 }
 
 // --- Helpers ---
+
+// decodeWindowsConsoleOutput converts subprocess bytes to UTF-8 for JSON and the web UI.
+// On Chinese Windows, tools like schtasks emit GBK (CP936); Go's string(out) treats bytes as UTF-8
+// and invalid sequences become U+FFFD in clients.
+func decodeWindowsConsoleOutput(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	if runtime.GOOS != "windows" {
+		return string(b)
+	}
+	r := transform.NewReader(bytes.NewReader(b), simplifiedchinese.GBK.NewDecoder())
+	decoded, decErr := io.ReadAll(r)
+	if decErr != nil || len(decoded) == 0 {
+		return string(b)
+	}
+	return string(decoded)
+}
 
 func verifyInstalled(bundle *bundledRuntime) (string, error) {
 	if _, err := os.Stat(bundle.CLIPath); err != nil {

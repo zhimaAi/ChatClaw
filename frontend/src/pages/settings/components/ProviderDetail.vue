@@ -618,10 +618,10 @@ const confirmDeleteModel = async () => {
       @refresh="emit('refresh')"
     />
 
-    <!-- 通用详情内容 -->
-    <div v-else class="mx-auto w-full max-w-settings-card">
+    <!-- Generic provider detail: fill the third column; parent already applies p-6 padding -->
+    <div v-else class="w-full min-w-0">
       <div
-        class="rounded-xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+        class="w-full rounded-xl border border-border bg-card p-6 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <!-- Error banner (models failed to load, but form still usable) -->
         <div

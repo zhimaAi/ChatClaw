@@ -569,7 +569,7 @@ onUnmounted(() => {
     <div class="flex flex-col gap-6">
       <!-- Main ChatWiki card: binding info only -->
       <div
-        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+        class="mx-auto w-full max-w-[calc(100%-10rem)] lg:max-w-settings-card flex flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
@@ -638,7 +638,7 @@ onUnmounted(() => {
       <!-- Applications card (ChatClaw only) -->
       <div
         v-if="showApplicationsAndKnowledgeCards"
-        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+        class="mx-auto w-full max-w-[calc(100%-10rem)] lg:max-w-settings-card flex flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold tracking-tight text-foreground">
@@ -713,7 +713,7 @@ onUnmounted(() => {
       <!-- Knowledge bases card (ChatClaw only) -->
       <div
         v-if="showApplicationsAndKnowledgeCards"
-        class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+        class="mx-auto w-full max-w-[calc(100%-10rem)] lg:max-w-settings-card flex flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
       >
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold tracking-tight text-foreground">
@@ -776,7 +776,7 @@ onUnmounted(() => {
   <!-- Binding flow: choose / binding / success / failure -->
   <div
     v-else
-    class="flex w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
+    class="mx-auto flex w-full max-w-[calc(100%-10rem)] lg:max-w-settings-card flex-col gap-6 rounded-2xl border border-border bg-card p-8 shadow-sm dark:border-white/15 dark:shadow-none dark:ring-1 dark:ring-white/5"
   >
     <div class="flex flex-col gap-2">
       <h1 class="text-xl font-semibold text-foreground">

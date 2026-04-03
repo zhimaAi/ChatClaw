@@ -49,6 +49,7 @@ import {
   type OpenClawCronFormState,
 } from './utils'
 import { getLastRunVisualState } from './status'
+import OpenClawGatewayOfflineBanner from '@/components/openclaw/OpenClawGatewayOfflineBanner.vue'
 
 defineProps<{
   tabId: string
@@ -294,8 +295,9 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <div class="flex flex-1 min-h-0 flex-col overflow-auto px-6 pb-6">
-      <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div class="flex flex-1 min-h-0 flex-col overflow-auto px-6 pb-6 pt-6">
+      <OpenClawGatewayOfflineBanner variant="scheduledTasks" />
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div
           v-for="card in summaryCards"
           :key="card.key"

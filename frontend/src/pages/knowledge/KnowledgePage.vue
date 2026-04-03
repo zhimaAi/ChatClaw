@@ -1246,7 +1246,7 @@ const handleRemoveImage = (id: string) => {
 
 <template>
   <div class="flex h-full w-full bg-background text-foreground">
-    <!-- 左侧：个人/团队 tab 与知识库列表，始终展示以支持切换；支持收起/展开 -->
+    <!-- 左侧：个人/团队切换（非 OpenClaw）或知识库标题（OpenClaw）与列表；支持收起/展开 -->
     <aside
       :class="
         cn(
@@ -1259,7 +1259,16 @@ const handleRemoveImage = (id: string) => {
         class="flex w-full items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2"
       >
         <template v-if="!sidebarCollapsed">
-          <div class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]">
+          <div
+            v-if="knowledgePageEffectiveSystem === 'openclaw'"
+            class="min-w-0 flex-1 truncate px-0.5 text-sm font-semibold leading-none tracking-tight text-foreground"
+          >
+            {{ t('nav.knowledge') }}
+          </div>
+          <div
+            v-else
+            class="inline-flex w-fit shrink-0 rounded-lg bg-muted p-[3px]"
+          >
             <button
               type="button"
               :class="
@@ -1276,15 +1285,12 @@ const handleRemoveImage = (id: string) => {
             </button>
             <button
               type="button"
-              :disabled="knowledgePageEffectiveSystem === 'openclaw'"
               :class="
                 cn(
                   'min-h-[29px] min-w-[29px] rounded-[10px] px-2 py-1 text-sm transition-all',
                   activeTab === 'team'
                     ? 'bg-background text-foreground shadow-sm font-medium'
-                    : 'text-foreground',
-                  knowledgePageEffectiveSystem === 'openclaw' &&
-                    'cursor-not-allowed opacity-50'
+                    : 'text-foreground'
                 )
               "
               @click="activeTab = 'team'"

@@ -3,6 +3,8 @@ package openclawruntime
 const (
 	EventStatus       = "openclaw:status"
 	EventGatewayState = "openclaw:gateway-state"
+	// EventDoctorOutput streams stdout/stderr chunks while RunDoctorCommand runs (runId + stream + text).
+	EventDoctorOutput = "openclaw:doctor-output"
 )
 
 const (
@@ -40,4 +42,14 @@ type RuntimeUpgradeResult struct {
 	Upgraded        bool   `json:"upgraded"`
 	RuntimeSource   string `json:"runtimeSource,omitempty"`
 	RuntimePath     string `json:"runtimePath,omitempty"`
+}
+
+type DoctorCommandResult struct {
+	Command    string `json:"command"`
+	ExitCode   int    `json:"exitCode"`
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	Duration   int    `json:"duration"` // in milliseconds
+	Fixed      bool   `json:"fixed,omitempty"` // whether issues were fixed
+	WorkingDir string `json:"workingDir,omitempty"`
 }

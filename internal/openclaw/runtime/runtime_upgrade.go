@@ -63,6 +63,40 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 	m.closeClient()
 	m.stopProcess()
 
+	// Kill stray node processes that may lock runtime directories before any
+	// file operations (backup/rename/remove). Non-fatal if it fails.
+	_ = killAllNodeProcesses()
+
+	// Fast path: if the user runtime current directory already contains the target
+	// version, skip downloading/building and just activate it directly.
+	target := runtime.GOOS + "-" + runtime.GOARCH
+	currentDir, err := openclaw.UserRuntimeCurrentDir(target)
+	if err != nil {
+		// Not fatal — fall through to full install flow
+	} else {
+		if skip, _ := checkUserRuntimeAlreadyHasVersion(currentDir, latestVersion); skip {
+			// Quick switch: point resolveBundledRuntime to currentDir as user candidate,
+			// then reconcile to activate. No download required.
+			m.app.Logger.Info("openclaw: runtime already at latest version, activating",
+				"version", latestVersion, "dir", currentDir)
+			if err := m.reconcileLocked(false); err != nil {
+				return nil, fmt.Errorf("activate existing runtime: %w", err)
+			}
+			status := m.GetStatus()
+			result.Upgraded = true
+			result.CurrentVersion = latestVersion
+			result.RuntimeSource = runtimeSourceUser
+			result.RuntimePath = currentDir
+			if status.RuntimeSource == "" {
+				result.RuntimeSource = status.RuntimeSource
+			}
+			if status.RuntimePath == "" {
+				result.RuntimePath = status.RuntimePath
+			}
+			return result, nil
+		}
+	}
+
 	stagedBundle, restore, cleanup, err := installUserRuntimeOverride(activeBundle, latestVersion, registryURL, func(progress int, msg string) {
 		m.broadcastUpgradeProgress(progress, msg)
 	})
@@ -92,6 +126,17 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 		result.RuntimeSource = stagedBundle.Source
 	}
 	return result, nil
+}
+
+// FetchLatestOpenClawPackageVersion returns the latest openclaw npm package version (read-only).
+func FetchLatestOpenClawPackageVersion(ctx context.Context) (string, error) {
+	v, _, err := fetchLatestOpenClawVersion(ctx)
+	return v, err
+}
+
+// IsOpenClawCLIUpgradeAvailable reports whether latest is newer than current (semver when possible).
+func IsOpenClawCLIUpgradeAvailable(currentVersion, latestVersion string) bool {
+	return isRuntimeUpgradeAvailable(currentVersion, latestVersion)
 }
 
 func isRuntimeUpgradeAvailable(currentVersion, latestVersion string) bool {
@@ -554,7 +599,9 @@ func copyFile(src, dst string, mode os.FileMode) error {
 // OpenClaw gateway may fork child node processes (agents, sandboxes) that survive
 // the gateway exit and hold file locks on the runtime directory, blocking the
 // os.Rename that activates the upgraded staging directory.
-func killNodeProcessesHoldingRuntimeDir(runtimeDir string) error {
+// killAllNodeProcesses kills all node.exe processes on Windows.
+// Best-effort: errors are logged but not returned, as this is a cleanup safeguard.
+func killAllNodeProcesses() error {
 	if runtime.GOOS != "windows" {
 		return nil
 	}
@@ -566,13 +613,19 @@ func killNodeProcessesHoldingRuntimeDir(runtimeDir string) error {
 	)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
-	_ = cmd.Run()
-	if stderr.Len() > 0 {
+	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
-		if !strings.Contains(msg, "no tasks") && !strings.Contains(msg, "not found") {
-			return fmt.Errorf("kill node processes: %s", msg)
+		if msg != "" && !strings.Contains(msg, "no tasks") && !strings.Contains(msg, "not found") {
+			return fmt.Errorf("kill node processes: %w: %s", err, msg)
 		}
 	}
+	return nil
+}
+
+// killNodeProcessesHoldingRuntimeDir is a legacy alias kept for callers that
+// pass a directory argument for logging purposes.
+func killNodeProcessesHoldingRuntimeDir(runtimeDir string) error {
+	_ = killAllNodeProcesses()
 	return nil
 }
 

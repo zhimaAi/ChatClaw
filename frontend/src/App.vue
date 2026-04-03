@@ -43,8 +43,10 @@ const ToolsPage = defineAsyncComponent(() => import('@/pages/tools/ToolsPage.vue
 import { SnapService } from '@bindings/chatclaw/internal/services/windows'
 import { TextSelectionService } from '@bindings/chatclaw/internal/services/textselection'
 import UpdateDialog from '@/pages/settings/components/UpdateDialog.vue'
+import { useToast } from '@/components/ui/toast'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
+const { toast: pushToast } = useToast()
 const navigationStore = useNavigationStore()
 const appStore = useAppStore()
 const activeTab = computed(() => navigationStore.activeTab)
@@ -205,6 +207,8 @@ const updateDialogNotes = ref('')
 let unsubscribeUpdateAvailable: (() => void) | null = null
 let unsubscribeShowDialog: (() => void) | null = null
 let unsubscribeFloatingBallSettings: (() => void) | null = null
+let unsubscribeToolchainUpdates: (() => void) | null = null
+let toolchainUpdatesToastShown = false
 
 let unsubscribeTextSelection: (() => void) | null = null
 let unsubscribeRequestDisableSetting: (() => void) | null = null
@@ -280,6 +284,19 @@ onMounted(async () => {
     updateDialogNotes.value = payload?.release_notes || ''
     updateDialogMode.value = payload?.mode || 'new-version'
     updateDialogOpen.value = true
+  })
+
+  // Extension components (uv / bun / codex only): deferred updates — remind once per session.
+  unsubscribeToolchainUpdates = Events.On('toolchain:updates-available', (event: any) => {
+    const raw = event?.data?.[0] ?? event?.data ?? event
+    if (!raw || typeof raw !== 'object') return
+    if (toolchainUpdatesToastShown) return
+    toolchainUpdatesToastShown = true
+    pushToast({
+      title: t('settings.general.toolchain.updatesAvailableToast'),
+      duration: 6000,
+      variant: 'default',
+    })
   })
 
   // Floating ball: open settings page
@@ -465,6 +482,8 @@ onUnmounted(() => {
   unsubscribeShowDialog = null
   unsubscribeFloatingBallSettings?.()
   unsubscribeFloatingBallSettings = null
+  unsubscribeToolchainUpdates?.()
+  unsubscribeToolchainUpdates = null
 
   // Clean up in-app popup timer
   if (inAppPopupHideTimer) {
