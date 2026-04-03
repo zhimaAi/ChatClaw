@@ -403,7 +403,42 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 // --- Process management ---
 
+// ensurePortClean checks if the gateway port is in use by a stale process. If so,
+// it first tries the graceful "openclaw gateway stop" CLI command, then falls back
+// to killing the process directly. This handles the case where a previous gateway
+// instance was not launched by this Manager (e.g. manual run, other app instance).
+func (m *Manager) ensurePortClean(port int, cliPath string) {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err == nil {
+		conn.Close()
+		return
+	}
+	if isConnRefused(err) {
+		return
+	}
+	// Port is in use by something other than a refused connection.
+	m.app.Logger.Info("openclaw: port in use, attempting graceful gateway stop", "port", port)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cliPath, "gateway", "stop")
+	_ = cmd.Run()
+	time.Sleep(500 * time.Millisecond)
+	// Check again.
+	conn, err = net.DialTimeout("tcp", addr, 2*time.Second)
+	if err == nil {
+		conn.Close()
+		return // still in use; proceed and let start fail naturally
+	}
+	if isConnRefused(err) {
+		m.app.Logger.Info("openclaw: port cleared after graceful stop", "port", port)
+	}
+	// Something still using port — proceed; start will fail with clearer error.
+}
+
 func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string) error {
+	m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath)
+
 	logFile, err := openGatewayLogFile(bundle.LogsDir)
 	if err != nil {
 		return err
@@ -1309,6 +1344,11 @@ func ensureSandboxConfigured(bundle *bundledRuntime) {
 		return
 	}
 	_ = os.WriteFile(bundle.ConfigPath, out, 0o644)
+}
+
+func isConnRefused(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && strings.Contains(err.Error(), "refused")
 }
 
 func isDockerAvailable() bool {
