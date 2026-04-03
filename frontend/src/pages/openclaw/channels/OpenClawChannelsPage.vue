@@ -45,6 +45,7 @@ import ConfigChannelDialog from './components/ConfigChannelDialog.vue'
 import WecomAddDialog from './components/WecomAddDialog.vue'
 import BindAgentDialog from './components/BindAgentDialog.vue'
 import WechatConfigDialog from './components/WechatConfigDialog.vue'
+import OpenClawGatewayOfflineBanner from '@/components/openclaw/OpenClawGatewayOfflineBanner.vue'
 import WhatsappConfigDialog from './components/WhatsappConfigDialog.vue'
 import { getPlatformDocsUrl, openExternalLink } from '@/pages/common/platformDocs'
 import { getPlatformIcon } from '@/pages/common/channelUtils'
@@ -709,6 +710,7 @@ watch(isTabActive, (active) => {
     </div>
 
     <div class="flex-1 overflow-y-auto px-6 pb-6">
+      <OpenClawGatewayOfflineBanner variant="channels" />
       <!-- Stats Cards Row -->
       <div class="mb-6 flex flex-wrap gap-4">
         <!-- Card 1: Total -->

@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -81,6 +82,52 @@ func (s *BrowserService) OpenDirectory(dir string) error {
 		cmd = exec.Command("xdg-open", dir)
 	}
 
+	if err := cmd.Start(); err != nil {
+		return errs.Wrap("error.browser_open_failed", err)
+	}
+	return nil
+}
+
+// OpenPathInFileManager opens the folder for path in the system file manager.
+// If path is a directory, that directory is opened. If it is a file (e.g. .exe), its parent is opened.
+// The target directory must already exist; nothing is created.
+func (s *BrowserService) OpenPathInFileManager(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return errs.New("error.browser_url_required")
+	}
+
+	dir := path
+	if fi, err := os.Stat(path); err == nil {
+		if !fi.IsDir() {
+			dir = filepath.Dir(path)
+		}
+	} else {
+		dir = filepath.Dir(path)
+	}
+	dir = filepath.Clean(dir)
+	if dir == "." {
+		return errs.New("error.browser_open_failed")
+	}
+
+	fi, err := os.Stat(dir)
+	if err != nil {
+		return errs.Wrap("error.browser_open_failed", err)
+	}
+	if !fi.IsDir() {
+		return errs.New("error.browser_open_failed")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", dir)
+	case "windows":
+		cmd = exec.Command("explorer", dir)
+		setCmdHideWindow(cmd)
+	default:
+		cmd = exec.Command("xdg-open", dir)
+	}
 	if err := cmd.Start(); err != nil {
 		return errs.Wrap("error.browser_open_failed", err)
 	}

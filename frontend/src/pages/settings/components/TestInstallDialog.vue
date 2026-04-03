@@ -141,6 +141,13 @@ const handleStart = async () => {
   try {
     // openclaw uses InstallAndStartRuntime (OSS download + install + gateway start), not TestInstall
     if (selectedTool.value === 'openclaw') {
+      const rt = await OpenClawRuntimeService.GetStatus()
+      if (rt.phase === 'upgrading') {
+        isRunning.value = false
+        progress.status = 'blocked'
+        progress.message = t('settings.openclawRuntime.upgrading')
+        return
+      }
       await OpenClawRuntimeService.InstallAndStartRuntime()
       isFinished.value = true
       isRunning.value = false

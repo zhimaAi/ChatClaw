@@ -137,7 +137,7 @@ async function loadDetail(reconnect = false) {
       getErrorMessage(error) ||
       t(
         'openclawCron.history.detailLoadFailedReason',
-        '请确认 OpenClaw Gateway 已启动，并稍后重试。'
+        'Please make sure OpenClaw Gateway is running and try again shortly.'
       )
     await cleanupGatewayStream()
   } finally {

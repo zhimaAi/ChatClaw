@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { AcceptableValue } from 'reka-ui'
 import { Events } from '@wailsio/runtime'
@@ -11,18 +12,29 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useAppStore, type Theme } from '@/stores'
+import {
+  useAppStore,
+  useOpenClawGatewayStore,
+  isOpenClawRuntimeMutatingPhase,
+  type Theme,
+} from '@/stores'
 import { useLocale, SUPPORTED_LOCALES, type Locale } from '@/composables/useLocale'
 import * as ToolchainService from '@bindings/chatclaw/internal/services/toolchain/toolchainservice'
+import { BrowserService } from '@bindings/chatclaw/internal/services/browser'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import { ToolStatus } from '@bindings/chatclaw/internal/services/toolchain/models'
 import { Download, Check, Loader2, Package, FolderOpen, Play } from 'lucide-vue-next'
+import { RuntimeStatus } from '@bindings/chatclaw/internal/openclaw/runtime/models'
 import SettingsCard from './SettingsCard.vue'
 import SettingsItem from './SettingsItem.vue'
 import TestInstallDialog from './TestInstallDialog.vue'
+import { toast } from '@/components/ui/toast'
+import { getErrorMessage } from '@/composables/useErrorMessage'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const gatewayStore = useOpenClawGatewayStore()
+const { runtimePhase } = storeToRefs(gatewayStore)
 const { locale: currentLocale, switchLocale } = useLocale()
 const testInstallOpen = ref(false)
 
@@ -130,13 +142,17 @@ interface OpenClawStatus {
   name: string
   installed: boolean
   installed_version: string
-  latest_version: string
-  has_update: boolean
   installing: boolean
   runtime_path: string
 }
 const openclawStatus = ref<OpenClawStatus | null>(null)
 const openclawInstallError = ref(false)
+
+/** Install row busy: local OSS install or runtime dir mutation from OpenClaw manager upgrade. */
+const openclawExtensionRuntimeBusy = computed(
+  () =>
+    !!openclawStatus.value?.installing || isOpenClawRuntimeMutatingPhase(runtimePhase.value)
+)
 
 const isDevMode = ref(false)
 
@@ -148,8 +164,6 @@ const loadOpenClawStatus = async () => {
         name: status.name,
         installed: status.installed,
         installed_version: status.installed_version,
-        latest_version: status.latest_version || '',
-        has_update: status.has_update,
         installing: status.installing,
         runtime_path: status.runtime_path,
       }
@@ -161,8 +175,6 @@ const loadOpenClawStatus = async () => {
       name: 'openclaw',
       installed: false,
       installed_version: '',
-      latest_version: '',
-      has_update: false,
       installing: false,
       runtime_path: '',
     }
@@ -170,6 +182,9 @@ const loadOpenClawStatus = async () => {
 }
 
 const handleInstallOpenClaw = async () => {
+  if (isOpenClawRuntimeMutatingPhase(runtimePhase.value) && !openclawStatus.value?.installing) {
+    return
+  }
   openclawInstallError.value = false
   if (openclawStatus.value) {
     openclawStatus.value = { ...openclawStatus.value, installing: true }
@@ -249,6 +264,17 @@ const loadToolStatuses = async () => {
   await loadDevMode()
 }
 
+const handleOpenExtensionPath = async (pathStr: string | undefined) => {
+  const p = pathStr?.trim()
+  if (!p) return
+  try {
+    await BrowserService.OpenPathInFileManager(p)
+  } catch (e) {
+    console.error('Failed to open path in file manager:', e)
+    toast.error(getErrorMessage(e) || t('settings.general.toolchain.openPathFailed'))
+  }
+}
+
 const handleInstall = async (toolId: string) => {
   installErrors[toolId] = false
   const existing = toolStatuses[toolId]
@@ -271,9 +297,17 @@ const handleInstall = async (toolId: string) => {
 
 let unsubscribeToolchain: (() => void) | null = null
 let unsubscribeProgress: (() => void) | null = null
+let unsubscribeOpenClawStatus: (() => void) | null = null
 
 onMounted(() => {
   void loadToolStatuses()
+  void gatewayStore.poll()
+  unsubscribeOpenClawStatus = Events.On('openclaw:status', (event: any) => {
+    const data = event?.data?.[0] ?? event?.data ?? event
+    if (data) {
+      gatewayStore.ingestRuntimeStatus(RuntimeStatus.createFrom(data))
+    }
+  })
   unsubscribeToolchain = Events.On('toolchain:status', async (event: any) => {
     const data = event?.data?.[0] ?? event?.data ?? event
     if (data && data.name) {
@@ -301,6 +335,8 @@ onUnmounted(() => {
   unsubscribeToolchain = null
   unsubscribeProgress?.()
   unsubscribeProgress = null
+  unsubscribeOpenClawStatus?.()
+  unsubscribeOpenClawStatus = null
 })
 </script>
 
@@ -355,14 +391,16 @@ onUnmounted(() => {
             <p class="text-xs text-muted-foreground truncate">
               {{ t('settings.general.toolchain.openclaw.description') }}
             </p>
-            <p
+            <button
               v-if="openclawStatus?.runtime_path"
-              class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
-              :title="openclawStatus.runtime_path"
+              type="button"
+              class="mt-1 flex min-w-0 max-w-full items-center gap-1 rounded-sm text-left text-xs text-muted-foreground/70 truncate hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :title="t('settings.general.toolchain.openPathHint')"
+              @click="handleOpenExtensionPath(openclawStatus.runtime_path)"
             >
-              <FolderOpen class="size-3 shrink-0" />
-              {{ openclawStatus.runtime_path }}
-            </p>
+              <FolderOpen class="size-3 shrink-0 text-muted-foreground" />
+              <span class="truncate">{{ openclawStatus.runtime_path }}</span>
+            </button>
             <p
               v-if="openclawStatus?.installed && openclawStatus?.installed_version"
               class="mt-0.5 text-xs text-muted-foreground/60"
@@ -405,36 +443,36 @@ onUnmounted(() => {
         </div>
 
         <div class="flex shrink-0 flex-col items-end gap-2 pt-0.5">
-          <!-- Installed badge (same width pattern as uv/bun/codex — no long version here) -->
-          <span
-            v-if="openclawStatus?.installed && !openclawStatus?.installing"
-            class="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
-          >
-            <Check class="size-3 shrink-0" />
-            {{ t('settings.general.toolchain.installed') }}
-          </span>
+          <template v-if="openclawStatus?.installed && !openclawExtensionRuntimeBusy">
+            <span
+              class="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
+            >
+              <Check class="size-3 shrink-0" />
+              {{ t('settings.general.toolchain.installed') }}
+            </span>
+          </template>
 
-          <!-- Installing state -->
+          <!-- Installing / runtime dir busy (e.g. upgrade from OpenClaw manager) -->
           <span
-            v-else-if="openclawStatus?.installing"
+            v-else-if="openclawExtensionRuntimeBusy"
             class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
           >
             <Loader2 class="size-3 animate-spin" />
-            {{ t('settings.general.toolchain.installing') }}
+            {{
+              openclawStatus?.installing
+                ? t('settings.general.toolchain.installing')
+                : t('settings.openclawRuntime.upgrading')
+            }}
           </span>
 
-          <!-- Install / Update button -->
+          <!-- Install (missing runtime) -->
           <template v-else>
             <span v-if="openclawInstallError" class="text-xs text-destructive">{{
               t('settings.general.toolchain.installFailed')
             }}</span>
             <Button size="sm" variant="outline" @click="handleInstallOpenClaw">
               <Download class="size-3.5" />
-              {{
-                openclawStatus?.installed
-                  ? t('settings.general.toolchain.install')
-                  : t('settings.general.toolchain.install')
-              }}
+              {{ t('settings.general.toolchain.install') }}
             </Button>
           </template>
         </div>
@@ -455,14 +493,16 @@ onUnmounted(() => {
           <div class="min-w-0 flex-1">
             <span class="text-sm font-medium text-foreground">{{ t(tool.nameKey) }}</span>
             <p class="text-xs text-muted-foreground truncate">{{ t(tool.descKey) }}</p>
-            <p
+            <button
               v-if="toolStatuses[tool.id]?.bin_path"
-              class="mt-1 flex items-center gap-1 text-xs text-muted-foreground/70 truncate"
-              :title="toolStatuses[tool.id]?.bin_path"
+              type="button"
+              class="mt-1 flex min-w-0 max-w-full items-center gap-1 rounded-sm text-left text-xs text-muted-foreground/70 truncate hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :title="t('settings.general.toolchain.openPathHint')"
+              @click="handleOpenExtensionPath(toolStatuses[tool.id]?.bin_path)"
             >
-              <FolderOpen class="size-3 shrink-0" />
-              {{ toolStatuses[tool.id]?.bin_path }}
-            </p>
+              <FolderOpen class="size-3 shrink-0 text-muted-foreground" />
+              <span class="truncate">{{ toolStatuses[tool.id]?.bin_path }}</span>
+            </button>
 
             <!-- Download Progress（仅安装中时显示，完成后隐藏，不依赖后端事件顺序） -->
             <div
@@ -496,15 +536,33 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="flex shrink-0 items-center gap-2">
-          <!-- Installed badge -->
-          <span
-            v-if="toolStatuses[tool.id]?.installed && !toolStatuses[tool.id]?.installing"
-            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
-          >
-            <Check class="size-3" />
-            {{ t('settings.general.toolchain.installed') }}
-          </span>
+        <div class="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <template v-if="toolStatuses[tool.id]?.installed && !toolStatuses[tool.id]?.installing">
+            <div class="flex flex-col items-end gap-2">
+              <span
+                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border dark:ring-white/10"
+              >
+                <Check class="size-3" />
+                {{ t('settings.general.toolchain.installed') }}
+              </span>
+              <template v-if="toolStatuses[tool.id]?.has_update">
+                <p
+                  v-if="toolStatuses[tool.id]?.latest_version"
+                  class="max-w-[200px] text-right text-xs text-muted-foreground"
+                >
+                  {{
+                    t('settings.general.toolchain.newVersionHint', {
+                      version: toolStatuses[tool.id]?.latest_version,
+                    })
+                  }}
+                </p>
+                <Button size="sm" variant="outline" @click="handleInstall(tool.id)">
+                  <Download class="size-3.5" />
+                  {{ t('settings.general.toolchain.update') }}
+                </Button>
+              </template>
+            </div>
+          </template>
 
           <!-- Installing state -->
           <span

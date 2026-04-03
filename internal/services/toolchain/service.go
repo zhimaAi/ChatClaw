@@ -23,6 +23,7 @@ import (
 	"chatclaw/internal/define"
 	"chatclaw/internal/errs"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -116,7 +117,14 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 
 	s.app.Logger.Info("toolchain: installing openclaw runtime from OSS", "target", target, "version", version)
 
+	emitProgress := func(progress int, message string) {
+		if s.upgradeProgressCb != nil {
+			s.upgradeProgressCb(progress, message)
+		}
+	}
+
 	// Fetch download URL from API using fixed version
+	emitProgress(5, "Fetching download URL...")
 	ossURL, err := s.fetchOSSDownloadURL("openclaw", version, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		s.app.Logger.Error("toolchain: failed to fetch openclaw download URL from API", "error", err)
@@ -144,10 +152,12 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 	// Download from OSS with progress reporting
 	archiveFormat := openclawSpec.archiveFormat(runtime.GOOS)
 	archivePath := filepath.Join(stagingDir, "archive."+archiveFormat)
+	emitProgress(10, "Downloading OpenClaw runtime...")
 	if err := s.downloadOpenClawArchive(context.Background(), ossURL, archivePath, version); err != nil {
 		cleanup()
 		return fmt.Errorf("download openclaw from OSS: %w", err)
 	}
+	emitProgress(60, "Download complete, extracting archive...")
 
 	// Extract: OSS zip is flat (bin/, lib/, tools/, manifest.json). Do not use stripArchiveRoot.
 	// Windows: prefer bundled tar -xf (same as NSIS) for large trees; fall back to Go flat unzip.
@@ -159,6 +169,7 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 		return fmt.Errorf("extract openclaw archive: %w", err)
 	}
 	_ = os.Remove(archivePath)
+	emitProgress(70, "Archive extracted, verifying installation...")
 
 	// Verify extracted layout
 	if err := verifyOpenClawLibLayout(stagingDir); err != nil {
@@ -177,6 +188,7 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 		cleanup()
 		return fmt.Errorf("openclaw CLI smoke check: %w", err)
 	}
+	emitProgress(75, "Installation verified, activating...")
 
 	// Atomic activation: backup current, rename staging to current
 	currentDir, err := openclawRuntimeCurrentDir(target)
@@ -187,12 +199,14 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 	hadCurrent := false
 	if _, err := os.Stat(currentDir); err == nil {
 		hadCurrent = true
+		emitProgress(80, "Backing up current runtime...")
 		if err := os.Rename(currentDir, backupDir); err != nil {
 			cleanup()
 			return fmt.Errorf("backup current runtime: %w", err)
 		}
 	}
 
+	emitProgress(85, "Activating new runtime...")
 	if err := os.Rename(stagingDir, currentDir); err != nil {
 		if hadCurrent {
 			_ = os.Rename(backupDir, currentDir)
@@ -200,12 +214,14 @@ func (s *ToolchainService) InstallOpenClawRuntime() error {
 		cleanup()
 		return fmt.Errorf("activate openclaw runtime: %w", err)
 	}
+	emitProgress(95, "Cleaning up...")
 
 	cleanup = func() {
 		_ = os.RemoveAll(stagingDir)
 		_ = os.RemoveAll(backupDir)
 	}
 	cleanup()
+	emitProgress(100, "Installation complete")
 
 	s.app.Logger.Info("toolchain: openclaw runtime installed", "version", version, "path", currentDir)
 	return nil
@@ -229,7 +245,7 @@ type OpenClawRuntimeStatus struct {
 //   2) <exeDir>/rt/<target> (NSIS / installer bundle next to ChatClaw.exe)
 //   3) on macOS: <exeDir>/../Resources/rt/<target> (app bundle)
 // We do not spawn openclaw --version here: on Windows that flashes a console window, and CLI
-// output is verbose while manifest.openclawVersion matches API semver for updates.
+// output is verbose. Upgrade availability is handled by the OpenClaw runtime service (manager UI).
 func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, error) {
 	target := runtime.GOOS + "-" + runtime.GOARCH
 
@@ -260,8 +276,9 @@ func (s *ToolchainService) GetOpenClawRuntimeStatus() (*OpenClawRuntimeStatus, e
 	status.Installed = true
 	status.RuntimePath = root
 
-	// OpenClaw uses a fixed version (not fetched from API), so HasUpdate is always false
-	status.LatestVersion = manifest.OpenClawVersion
+	// Extension settings only show install/path/version. OpenClaw upgrade checks belong to
+	// the OpenClaw manager (runtime service), not the toolchain extension list.
+	status.LatestVersion = ""
 	status.HasUpdate = false
 
 	return status, nil
@@ -852,12 +869,17 @@ type ToolchainService struct {
 
 	mu          sync.Mutex
 	installing  map[string]bool // tracks which tools are currently being installed
-	proxyProbed bool
-	needProxy   bool
+	// pendingToolLatest records a newer remote version discovered during EnsureAll;
+	// we do not auto-download when the tool is already installed — user must use Install from settings.
+	pendingToolLatest map[string]string
+	proxyProbed       bool
+	needProxy         bool
 
 	// testInstall 用于测试安装的上下文（支持取消）
 	testInstallCtx    map[string]context.CancelFunc // tool name -> cancel function
 	testInstallCalled map[string]bool               // tool name -> 是否已调用过（用于触发进度事件）
+
+	upgradeProgressCb func(progress int, message string)
 }
 
 // NewToolchainService creates a new ToolchainService.
@@ -870,6 +892,14 @@ func NewToolchainService(app *application.App) *ToolchainService {
 		testInstallCtx:    make(map[string]context.CancelFunc),
 		testInstallCalled: make(map[string]bool),
 	}
+}
+
+// SetUpgradeProgressCallback sets a callback to be invoked during OpenClaw runtime
+// upgrade/install progress updates. The callback receives progress (0-100) and a message.
+func (s *ToolchainService) SetUpgradeProgressCallback(cb func(progress int, message string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.upgradeProgressCb = cb
 }
 
 // BinDir returns the path to the bin directory where tools are installed.
@@ -954,6 +984,7 @@ func (s *ToolchainService) InstallTool(name string) (*ToolStatus, error) {
 		s.app.Logger.Info("toolchain: installed successfully", "tool", name, "version", latestVersion)
 	}
 
+	s.clearPendingToolUpdate(name)
 	MarkInstalled(name)
 	st := s.getStatus(name)
 	s.emitStatus(name)
@@ -1247,6 +1278,43 @@ func (s *ToolchainService) ClearInstallingState(toolName string) {
 	}
 }
 
+func (s *ToolchainService) setPendingToolUpdate(name, latest string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pendingToolLatest == nil {
+		s.pendingToolLatest = make(map[string]string)
+	}
+	s.pendingToolLatest[name] = latest
+}
+
+func (s *ToolchainService) clearPendingToolUpdate(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pendingToolLatest != nil {
+		delete(s.pendingToolLatest, name)
+	}
+}
+
+func (s *ToolchainService) pendingToolLatestVersion(name string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pendingToolLatest == nil {
+		return ""
+	}
+	return s.pendingToolLatest[name]
+}
+
+// isManagedToolUpgradeAvailable mirrors OpenClaw runtime semver rules for uv/bun/codex tags.
+func isManagedToolUpgradeAvailable(currentVersion, latestVersion string) bool {
+	current, err1 := semver.NewVersion(strings.TrimSpace(extractVersion(currentVersion)))
+	latest, err2 := semver.NewVersion(strings.TrimSpace(extractVersion(latestVersion)))
+	if err1 != nil || err2 != nil {
+		return strings.TrimSpace(extractVersion(currentVersion)) != strings.TrimSpace(extractVersion(latestVersion)) &&
+			strings.TrimSpace(extractVersion(latestVersion)) != ""
+	}
+	return latest.GreaterThan(current)
+}
+
 // GetInstallingState 获取当前正在安装的工具列表
 func (s *ToolchainService) GetInstallingState() []string {
 	s.mu.Lock()
@@ -1292,6 +1360,25 @@ func (s *ToolchainService) EnsureAll() {
 	wg.Wait()
 	s.app.Logger.Info("toolchain: all tools checked")
 	s.syncState()
+	s.emitUpdatesAvailableIfAny()
+}
+
+// emitUpdatesAvailableIfAny notifies the UI when optional updates were deferred (no auto-install).
+func (s *ToolchainService) emitUpdatesAvailableIfAny() {
+	if s.app == nil {
+		return
+	}
+	s.mu.Lock()
+	payload := make(map[string]string, len(s.pendingToolLatest)+1)
+	for k, v := range s.pendingToolLatest {
+		payload[k] = v
+	}
+	s.mu.Unlock()
+
+	if len(payload) == 0 {
+		return
+	}
+	s.app.Event.Emit("toolchain:updates-available", payload)
 }
 
 // syncState refreshes the package-level state snapshot from actual binary checks.
@@ -1324,14 +1411,20 @@ func (s *ToolchainService) getStatus(name string) ToolStatus {
 	isInstalling := s.installing[name]
 	s.mu.Unlock()
 
-	return ToolStatus{
+	st := ToolStatus{
 		Name:             name,
 		Installed:        installed != "",
 		InstalledVersion: installed,
-		HasUpdate:        false, // populated lazily — checking remote on every call is too slow
+		HasUpdate:        false,
 		Installing:       isInstalling,
 		BinPath:          binPath,
 	}
+	if pending := s.pendingToolLatestVersion(name); pending != "" && installed != "" &&
+		isManagedToolUpgradeAvailable(installed, pending) {
+		st.LatestVersion = pending
+		st.HasUpdate = true
+	}
+	return st
 }
 
 func (s *ToolchainService) emitStatus(name string) {
@@ -1399,20 +1492,19 @@ func (s *ToolchainService) resolveProxy() bool {
 	return s.needProxy
 }
 
-// ensureTool installs or updates a single tool.
+// ensureTool installs a missing tool on startup. If the tool is already installed but a newer
+// version exists, we only record a pending update and emit status — the user must tap Update in settings.
 func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bool) {
 	binName := spec.binaryName(runtime.GOOS)
 	binPath := filepath.Join(binDir, binName)
 
 	installedVersion := s.getInstalledVersion(binPath, spec.versionArgs)
 
-	// 优先尝试从 GitHub 获取最新版本
 	latestVersion, err := s.fetchLatestVersion(spec)
 	if err != nil {
 		s.app.Logger.Warn("toolchain: failed to fetch latest version from GitHub",
 			"tool", spec.name, "error", err)
-		// 尝试 API 兜底获取版本
-		_, ossURL, apiErr := s.fetchToolLatest(spec.name, runtime.GOOS, runtime.GOARCH)
+		apiVersionRaw, ossURL, apiErr := s.fetchToolLatest(spec.name, runtime.GOOS, runtime.GOARCH)
 		if apiErr != nil {
 			if installedVersion != "" {
 				s.app.Logger.Info("toolchain: keeping existing version",
@@ -1420,12 +1512,26 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 			}
 			return
 		}
-		// API 获取到版本，继续使用 OSS 下载
-		latestVersion = ""
-		if installedVersion == "" {
-			s.app.Logger.Info("toolchain: no version info, will use OSS",
-				"tool", spec.name)
+		apiVer := extractVersion(strings.TrimSpace(apiVersionRaw))
+		if apiVer == "" {
+			apiVer = strings.TrimSpace(apiVersionRaw)
 		}
+
+		if installedVersion != "" {
+			if !isManagedToolUpgradeAvailable(installedVersion, apiVer) {
+				s.clearPendingToolUpdate(spec.name)
+				s.emitStatus(spec.name)
+				s.app.Logger.Info("toolchain: already up to date (API)",
+					"tool", spec.name, "version", installedVersion)
+				return
+			}
+			s.setPendingToolUpdate(spec.name, apiVer)
+			s.emitStatus(spec.name)
+			s.app.Logger.Info("toolchain: update available (API), deferred until user installs from settings",
+				"tool", spec.name, "installed", installedVersion, "latest", apiVer)
+			return
+		}
+
 		if !s.markInstalling(spec.name) {
 			s.app.Logger.Info("toolchain: already being installed by another caller",
 				"tool", spec.name)
@@ -1437,28 +1543,31 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 		}()
 		s.emitStatus(spec.name)
 
-		if installedVersion != "" {
-			s.app.Logger.Info("toolchain: updating via OSS",
-				"tool", spec.name, "from", installedVersion)
-		} else {
-			s.app.Logger.Info("toolchain: installing via OSS",
-				"tool", spec.name)
-		}
-
+		s.app.Logger.Info("toolchain: installing via OSS", "tool", spec.name)
 		s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
 		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
 			s.app.Logger.Error("toolchain: install failed",
 				"tool", spec.name, "error", err)
 			return
 		}
+		s.clearPendingToolUpdate(spec.name)
 		s.app.Logger.Info("toolchain: installed successfully via OSS",
 			"tool", spec.name, "path", binPath)
 		return
 	}
 
-	if installedVersion != "" && installedVersion == latestVersion {
-		s.app.Logger.Info("toolchain: already up to date",
-			"tool", spec.name, "version", installedVersion)
+	if installedVersion != "" {
+		if !isManagedToolUpgradeAvailable(installedVersion, latestVersion) {
+			s.clearPendingToolUpdate(spec.name)
+			s.emitStatus(spec.name)
+			s.app.Logger.Info("toolchain: already up to date",
+				"tool", spec.name, "version", installedVersion)
+			return
+		}
+		s.setPendingToolUpdate(spec.name, latestVersion)
+		s.emitStatus(spec.name)
+		s.app.Logger.Info("toolchain: update available, deferred until user installs from settings",
+			"tool", spec.name, "installed", installedVersion, "latest", latestVersion)
 		return
 	}
 
@@ -1467,44 +1576,34 @@ func (s *ToolchainService) ensureTool(spec toolSpec, binDir string, needProxy bo
 			"tool", spec.name)
 		return
 	}
-	// defer 必须在所有 return 之前，确保 installing 状态被清除并通知前端
 	defer func() {
 		s.clearInstalling(spec.name)
 		s.emitStatus(spec.name)
 	}()
 	s.emitStatus(spec.name)
 
-	if installedVersion != "" {
-		s.app.Logger.Info("toolchain: updating",
-			"tool", spec.name, "from", installedVersion, "to", latestVersion)
-	} else {
-		s.app.Logger.Info("toolchain: installing",
-			"tool", spec.name, "version", latestVersion)
-	}
+	s.app.Logger.Info("toolchain: installing",
+		"tool", spec.name, "version", latestVersion)
 
-	// 优先尝试从 GitHub 直连/代理下载，失败后尝试 API/OSS 兜底
 	if err := s.downloadAndInstall(spec, latestVersion, binDir, needProxy); err != nil {
-		// GitHub 下载失败，尝试 API/OSS 兜底
 		s.app.Logger.Warn("toolchain: GitHub download failed, trying API/OSS", "tool", spec.name, "error", err)
 		ossURL, ossErr := s.fetchLatestDownloadURL(spec.name, runtime.GOOS, runtime.GOARCH)
 		if ossErr != nil {
 			s.app.Logger.Error("toolchain: install failed (GitHub and API both failed)",
 				"tool", spec.name, "version", latestVersion, "error", err)
-			// defer 会处理状态更新
 			return
 		}
 		s.app.Logger.Info("toolchain: downloading from OSS", "tool", spec.name, "url", ossURL)
 		if err := s.downloadFromOSSURL(spec, ossURL); err != nil {
 			s.app.Logger.Error("toolchain: install failed",
 				"tool", spec.name, "version", latestVersion, "error", err)
-			// defer 会处理状态更新
 			return
 		}
 	}
 
+	s.clearPendingToolUpdate(spec.name)
 	s.app.Logger.Info("toolchain: installed successfully",
 		"tool", spec.name, "version", latestVersion, "path", binPath)
-	// defer 会处理状态更新
 }
 
 // getInstalledVersion runs the binary with version args and parses the output.

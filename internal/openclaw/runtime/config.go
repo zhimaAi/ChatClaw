@@ -10,13 +10,15 @@ import (
 )
 
 const (
-	keyGatewayPort  = "openclaw_gateway_port"
-	keyGatewayToken = "openclaw_gateway_token"
+	keyGatewayPort   = "openclaw_gateway_port"
+	keyGatewayToken  = "openclaw_gateway_token"
+	keyAutoStart     = "openclaw_autostart"
 )
 
 type OpenClawConfig struct {
 	GatewayPort  int
 	GatewayToken string
+	AutoStart    bool
 }
 
 type configStore struct {
@@ -31,6 +33,7 @@ func newConfigStore(svc *settings.SettingsService) *configStore {
 		cfg: OpenClawConfig{
 			GatewayPort:  settings.GetInt(keyGatewayPort, 39960),
 			GatewayToken: mustGetOrInit(svc, keyGatewayToken, generateToken),
+			AutoStart:    settings.GetBool(keyAutoStart, true),
 		},
 	}
 }
@@ -39,6 +42,15 @@ func (s *configStore) Get() OpenClawConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg
+}
+
+func (s *configStore) SetAutoStart(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.AutoStart = v
+	if s.svc != nil {
+		_, _ = s.svc.SetValue(keyAutoStart, boolToStr(v))
+	}
 }
 
 func mustGetOrInit(svc *settings.SettingsService, key string, gen func() string) string {
@@ -58,4 +70,11 @@ func generateToken() string {
 		return "chatclaw-fallback-token"
 	}
 	return fmt.Sprintf("%x", b)
+}
+
+func boolToStr(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
 }

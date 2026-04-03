@@ -96,7 +96,20 @@ const currentComponent = computed(() => menuComponents[settingsStore.activeMenu]
       class="flex flex-1 flex-col overflow-auto"
       :class="!isFullWidthComponent && 'items-center py-8'"
     >
-      <component :is="currentComponent" v-if="currentComponent" />
+      <div
+        v-if="currentComponent"
+        class="w-full min-w-0"
+        :class="
+          settingsStore.activeMenu === 'openclawRuntime'
+            ? 'mx-auto max-w-[88%] px-6 sm:px-8'
+            : ''
+        "
+      >
+        <component
+          :is="currentComponent"
+          v-bind="settingsStore.activeMenu === 'openclawRuntime' ? { figmaLayout: true } : {}"
+        />
+      </div>
       <!-- 占位内容：当其他菜单页面还没实现时显示 -->
       <div
         v-else
