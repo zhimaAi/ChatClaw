@@ -10,8 +10,10 @@ import {
   useNavigationStore,
   useOpenClawGatewayStore,
   gatewayBadgeClass,
+  gatewaySidebarTagLoaderClass,
   GatewayVisualStatus,
 } from '@/stores'
+import { cn } from '@/lib/utils'
 import {
   RuntimeStatus,
   GatewayConnectionState,
@@ -99,6 +101,10 @@ const badgeText = computed(() => {
 })
 
 const badgeClass = computed(() => gatewayBadgeClass[gatewayStore.visualStatus])
+
+const isGatewayStartingUi = computed(
+  () => gatewayStore.visualStatus === GatewayVisualStatus.Starting
+)
 
 function syncGatewayStore() {
   gatewayStore.applySnapshot(status.value, gatewayState.value)
@@ -243,9 +249,19 @@ onUnmounted(() => {
           <span class="shrink-0 text-sm text-foreground">
             {{ t('settings.openclawRuntime.gatewayStatusLabel') }}
           </span>
-          <Loader2 v-if="isTransitioning" class="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          <span v-else :class="badgeClass">
-            {{ badgeText }}
+          <span class="inline-flex min-w-0 items-center gap-1.5">
+            <span :class="badgeClass">
+              {{ badgeText }}
+            </span>
+            <Loader2
+              v-if="isGatewayStartingUi"
+              :class="
+                cn(
+                  'size-3.5 shrink-0 animate-spin',
+                  gatewaySidebarTagLoaderClass[gatewayStore.visualStatus]
+                )
+              "
+            />
           </span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">

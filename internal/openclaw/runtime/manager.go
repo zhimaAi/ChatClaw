@@ -65,6 +65,8 @@ type Manager struct {
 	eventListeners   map[string]EventListener // keyed by caller-chosen ID
 
 	upgradeProgressCb func(progress int, message string)
+
+	doctorRunSeq uint64 // atomic: correlates streamed doctor chunks with the active UI run
 }
 
 func gatewayOperatorScopes() []string {
@@ -943,14 +945,13 @@ func (m *Manager) RegisterReadyHook(fn func()) {
 	m.readyHooks = append(m.readyHooks, fn)
 }
 
-// RunDoctorCommand executes an openclaw doctor command and returns the result.
+// RunDoctorCommand executes an openclaw doctor command, streams stdout/stderr via EventDoctorOutput, and returns the final result.
 func (m *Manager) RunDoctorCommand(command string, fix bool) (*DoctorCommandResult, error) {
 	bundle, err := resolveBundledRuntime()
 	if err != nil {
 		return nil, fmt.Errorf("resolve openclaw runtime for doctor: %w", err)
 	}
 
-	// Build command arguments
 	args := []string{"doctor"}
 	if fix {
 		args = append(args, "--fix", "--yes", "--non-interactive")
@@ -962,30 +963,85 @@ func (m *Manager) RunDoctorCommand(command string, fix bool) (*DoctorCommandResu
 	cmd.Dir = bundle.Root
 	setCmdHideWindow(cmd)
 
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("openclaw doctor stdout: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("openclaw doctor stderr: %w", err)
+	}
+
+	runID := atomic.AddUint64(&m.doctorRunSeq, 1)
+
+	var fullStdout strings.Builder
+	var fullStderr strings.Builder
+	var wg sync.WaitGroup
+
+	emitChunk := func(stream, text string) {
+		if m.app == nil || text == "" {
+			return
+		}
+		m.app.Event.Emit(EventDoctorOutput, map[string]any{
+			"runId":  runID,
+			"stream": stream,
+			"text":   text,
+		})
+	}
+
+	pump := func(r io.Reader, stream string, acc *strings.Builder) {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(buf)
+			if n > 0 {
+				chunk := decodeWindowsConsoleOutput(buf[:n])
+				_, _ = acc.WriteString(chunk)
+				emitChunk(stream, chunk)
+			}
+			if readErr == io.EOF {
+				return
+			}
+			if readErr != nil {
+				return
+			}
+		}
+	}
+
 	startTime := time.Now()
-	out, err := cmd.CombinedOutput()
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("openclaw doctor start: %w", err)
+	}
+
+	wg.Add(2)
+	go pump(stdoutPipe, "stdout", &fullStdout)
+	go pump(stderrPipe, "stderr", &fullStderr)
+
+	waitErr := cmd.Wait()
+	wg.Wait()
 	duration := time.Since(startTime)
 
 	result := &DoctorCommandResult{
 		Command:    command,
-		Stdout:     decodeWindowsConsoleOutput(out),
-		Stderr:     "",
+		Stdout:     fullStdout.String(),
+		Stderr:     fullStderr.String(),
 		Duration:   int(duration.Milliseconds()),
 		WorkingDir: bundle.Root,
 	}
 
-	if err != nil {
-		result.Stderr = err.Error()
+	if waitErr != nil {
+		if result.Stderr == "" {
+			result.Stderr = waitErr.Error()
+		} else {
+			result.Stderr = result.Stderr + "\n" + waitErr.Error()
+		}
 		result.ExitCode = 1
-		// Try to parse exit code from error
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		}
 		result.Fixed = false
 	} else {
 		result.ExitCode = 0
-		// Doctor command with --fix sets exit code 0 if fixes applied
-		// We consider it fixed if exit code is 0 and command had --fix
 		result.Fixed = fix
 	}
 

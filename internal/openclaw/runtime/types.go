@@ -3,6 +3,8 @@ package openclawruntime
 const (
 	EventStatus       = "openclaw:status"
 	EventGatewayState = "openclaw:gateway-state"
+	// EventDoctorOutput streams stdout/stderr chunks while RunDoctorCommand runs (runId + stream + text).
+	EventDoctorOutput = "openclaw:doctor-output"
 )
 
 const (

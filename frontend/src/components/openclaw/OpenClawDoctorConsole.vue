@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Terminal, AlertCircle, Clock } from 'lucide-vue-next'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
@@ -8,6 +9,27 @@ import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
 
 const { t } = useI18n()
+
+/** Correlates Wails chunks with the current run (backend increments runId per invocation). */
+const activeDoctorRunId = ref<number | null>(null)
+const stdoutScrollEl = ref<HTMLElement | null>(null)
+const stderrScrollEl = ref<HTMLElement | null>(null)
+
+function parseDoctorOutputEvent(event: unknown): Record<string, unknown> | null {
+  const e = event as { data?: unknown }
+  const raw = Array.isArray(e?.data) ? e.data[0] : e?.data ?? event
+  if (raw && typeof raw === 'object') return raw as Record<string, unknown>
+  return null
+}
+
+function scrollStreamPanelsToBottom() {
+  const o = stdoutScrollEl.value
+  const s = stderrScrollEl.value
+  if (o) o.scrollTop = o.scrollHeight
+  if (s) s.scrollTop = s.scrollHeight
+}
+
+let unsubscribeDoctorOutput: (() => void) | null = null
 
 // 执行状态
 const isRunning = ref(false)
@@ -18,6 +40,9 @@ const duration = ref<number>(0)
 const wasFixed = ref(false)
 const stdout = ref('')
 const stderr = ref('')
+
+// Command / stdout / stderr block stays hidden until Run or Run and fix
+const outputPanelVisible = ref(false)
 
 // 判断执行是否成功
 const isSuccess = computed(() => exitCode.value === 0)
@@ -31,6 +56,8 @@ const formatDuration = (ms: number): string => {
 const runDoctor = async (fix: boolean = false) => {
   if (isRunning.value) return
 
+  outputPanelVisible.value = true
+  activeDoctorRunId.value = null
   isRunning.value = true
   stdout.value = ''
   stderr.value = ''
@@ -58,8 +85,9 @@ const runDoctor = async (fix: boolean = false) => {
       return
     }
 
-    stdout.value = result.stdout || ''
-    stderr.value = result.stderr || ''
+    // Prefer streamed text; fall back if events were not delivered
+    if (!stdout.value && result.stdout) stdout.value = result.stdout
+    if (!stderr.value && result.stderr) stderr.value = result.stderr
     exitCode.value = result.exitCode
     wasFixed.value = result.fixed || false
 
@@ -103,6 +131,24 @@ const loadWorkingDir = async () => {
 
 onMounted(() => {
   void loadWorkingDir()
+  unsubscribeDoctorOutput = Events.On('openclaw:doctor-output', (event: unknown) => {
+    const d = parseDoctorOutputEvent(event)
+    if (!d) return
+    const runId = Number(d.runId)
+    const stream = String(d.stream ?? '')
+    const text = String(d.text ?? '')
+    if (!Number.isFinite(runId) || runId <= 0) return
+    if (activeDoctorRunId.value === null) activeDoctorRunId.value = runId
+    if (runId !== activeDoctorRunId.value) return
+    if (stream === 'stdout') stdout.value += text
+    else if (stream === 'stderr') stderr.value += text
+    void nextTick(() => scrollStreamPanelsToBottom())
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeDoctorOutput?.()
+  unsubscribeDoctorOutput = null
 })
 </script>
 
@@ -148,8 +194,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 输出区域 -->
-    <div class="bg-white p-4 dark:bg-card">
+    <!-- Output area: hidden until Run / Run and fix -->
+    <div v-if="outputPanelVisible" class="bg-white p-4 dark:bg-card">
       <!-- 顶部状态标签 -->
       <div class="mb-4 flex items-center gap-2">
         <div
@@ -245,7 +291,10 @@ onMounted(() => {
               {{ t('settings.openclawRuntime.doctor.stdout') }}
             </span>
           </div>
-          <div class="min-h-48 max-h-[32rem] overflow-auto rounded-lg border border-border bg-muted/20 p-3 dark:bg-muted/10">
+          <div
+            ref="stdoutScrollEl"
+            class="min-h-48 max-h-[32rem] overflow-auto rounded-lg border border-border bg-muted/20 p-3 dark:bg-muted/10"
+          >
             <pre
               v-if="stdout"
               class="whitespace-pre-wrap break-words font-mono text-xs text-foreground"
@@ -267,7 +316,10 @@ onMounted(() => {
               {{ t('settings.openclawRuntime.doctor.stderr') }}
             </span>
           </div>
-          <div class="min-h-48 max-h-[32rem] overflow-auto rounded-lg border border-border bg-muted/20 p-3 dark:bg-muted/10">
+          <div
+            ref="stderrScrollEl"
+            class="min-h-48 max-h-[32rem] overflow-auto rounded-lg border border-border bg-muted/20 p-3 dark:bg-muted/10"
+          >
             <pre
               v-if="stderr"
               class="whitespace-pre-wrap break-words font-mono text-xs text-destructive"
