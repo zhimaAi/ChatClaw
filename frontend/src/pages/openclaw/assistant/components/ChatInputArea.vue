@@ -1065,7 +1065,7 @@ onUnmounted(() => {
               @change="handleDocFilesSelected"
             />
 
-            <!-- Knowledge base select: icon-only like upload file/image; tooltip shows "选择知识库" -->
+            <!-- Knowledge base select: icon-only like upload file/image; tooltip uses assistant.chat.selectKnowledge -->
             <TooltipProvider v-if="!isTeamMode && !selectedTeamLibrary">
               <Tooltip>
                 <TooltipTrigger as-child>
@@ -1123,7 +1123,7 @@ onUnmounted(() => {
                           :side-offset="5"
                         >
                           <div class="mb-1 flex items-center justify-between gap-1 px-0.5">
-                            <div class="flex items-center gap-0.5 rounded-[6px] bg-muted/70 p-0.5">
+                            <!--<div class="flex items-center gap-0.5 rounded-[6px] bg-muted/70 p-0.5">
                               <button
                                 class="h-8 cursor-pointer rounded-[6px] px-3 text-sm font-medium transition-colors"
                                 :class="
@@ -1152,6 +1152,11 @@ onUnmounted(() => {
                                   <p>{{ t('channels.comingSoon') }}</p>
                                 </TooltipContent>
                               </Tooltip>
+                            </div>-->
+                            <div
+                              class="min-w-0 flex-1 truncate px-1 text-left text-xs font-semibold leading-none text-foreground"
+                            >
+                              {{ t('assistant.chat.selectKnowledge') }}
                             </div>
                             <button
                               class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

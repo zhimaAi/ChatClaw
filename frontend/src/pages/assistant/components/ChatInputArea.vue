@@ -67,6 +67,7 @@ import {
 } from '@/lib/chatwikiModelAvailability'
 import { useOpenClawGatewayComposerGate } from '@/composables/useOpenClawGatewayComposerGate'
 import OpenClawGatewayComposerBanner from '@/components/openclaw/OpenClawGatewayComposerBanner.vue'
+import { useNavigationStore, useSettingsStore } from '@/stores'
 
 interface PendingImage {
   id: string

@@ -885,6 +885,7 @@ export default {
       collapse: "Thu gọn",
       expand: "Mở rộng",
       newConversation: "Cuộc trò chuyện mới",
+      taskAssistant: "Trợ lý nhiệm vụ",
     },
     chatMode: {
       chat: "Chế độ chat",

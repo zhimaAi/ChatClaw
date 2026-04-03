@@ -927,6 +927,7 @@ export default {
       collapse: "접기",
       expand: "펼치기",
       newConversation: "새 대화",
+      taskAssistant: "작업 도우미",
     },
     chatMode: {
       chat: "채팅 모드",

@@ -113,7 +113,7 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
     </div>
 
     <div class="flex items-center justify-between gap-2 border-b border-[#F5F5F5] px-2 py-2">
-      <div class="inline-flex rounded-lg bg-muted p-[3px]">
+      <!---<div class="inline-flex rounded-lg bg-muted p-[3px]">
         <button
           type="button"
           :class="
@@ -145,6 +145,11 @@ const handleWakeAttached = (e: globalThis.PointerEvent) => {
         >
           {{ t('assistant.modes.team') }}
         </button>
+      </div>-->
+      <div
+        class="min-w-0 flex-1 truncate px-0.5 text-sm font-semibold leading-none tracking-tight text-foreground"
+      >
+        {{ t('assistant.sidebar.taskAssistant') }}
       </div>
 
       <Button

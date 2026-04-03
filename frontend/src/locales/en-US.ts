@@ -982,6 +982,7 @@ export default {
       collapse: "Collapse",
       expand: "Expand",
       newConversation: "New Conversation",
+      taskAssistant: "Task Assistant",
     },
     chatMode: {
       chat: "Chat Mode",

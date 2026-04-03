@@ -883,6 +883,7 @@ export default {
       collapse: "Contraer",
       expand: "Expandir",
       newConversation: "Nueva conversación",
+      taskAssistant: "Asistente de tareas",
     },
     chatMode: {
       chat: "Modo chat",

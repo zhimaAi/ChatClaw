@@ -885,6 +885,7 @@ export default {
       collapse: "Strni",
       expand: "Razširi",
       newConversation: "Nov pogovor",
+      taskAssistant: "Pomočnik za naloge",
     },
     chatMode: {
       chat: "Klepet",
