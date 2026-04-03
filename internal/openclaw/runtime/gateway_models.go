@@ -10,64 +10,15 @@ import (
 
 	"chatclaw/internal/define"
 	"chatclaw/internal/services/chatwiki"
+	"chatclaw/internal/services/providers"
 	"chatclaw/internal/sqlite"
 
 	"github.com/uptrace/bun"
 )
 
-// ProvidersService is imported here for type reference only.
-// The actual provider listing is done via direct DB queries to avoid circular dependencies.
-type ProvidersService interface {
-	ListProviders() ([]ProviderDTO, error)
-	GetProviderWithModels(providerID string) (*ProviderWithModelsDTO, error)
-}
-
-// ProviderDTO is a minimal provider struct for model sync.
-type ProviderDTO struct {
-	ID          int64
-	ProviderID  string
-	Name        string
-	Type        string
-	Icon        string
-	IsBuiltin   bool
-	IsFree      bool
-	Enabled     bool
-	SortOrder   int
-	APIEndpoint string
-	APIKey      string
-	ExtraConfig string
-}
-
-// ProviderWithModelsDTO is a minimal provider with models struct.
-type ProviderWithModelsDTO struct {
-	Provider    ProviderDTO
-	ModelGroups []ModelGroupDTO
-}
-
-// ModelGroupDTO is a minimal model group struct.
-type ModelGroupDTO struct {
-	Type   string
-	Models []ModelDTO
-}
-
-// ModelDTO is a minimal model struct.
-type ModelDTO struct {
-	ID           int64
-	ProviderID   string
-	ModelID      string
-	Name         string
-	ModelSupplier string
-	UniModelName string
-	Type         string
-	Capabilities []string
-	IsBuiltin    bool
-	Enabled      bool
-	SortOrder    int
-}
-
 // NewModelsSectionBuilder returns a SectionBuilder that produces the OpenClaw
 // "models" config section from ChatClaw's enabled providers and LLM models.
-func NewModelsSectionBuilder(providersSvc ProvidersService) SectionBuilder {
+func NewModelsSectionBuilder(providersSvc *providers.ProvidersService) SectionBuilder {
 	return func(ctx context.Context) (map[string]any, error) {
 		allProviders, err := providersSvc.ListProviders()
 		if err != nil {
@@ -120,7 +71,7 @@ type chatWikiBindingDTO struct {
 	UserID    string
 }
 
-func buildModelsPatch(providersSvc ProvidersService, allProviders []ProviderDTO) map[string]any {
+func buildModelsPatch(providersSvc *providers.ProvidersService, allProviders []providers.Provider) map[string]any {
 	providerMap := make(map[string]any)
 
 	// Pre-fetch ChatWiki binding and catalog for sync.
@@ -293,7 +244,7 @@ func buildChatWikiProvider(data *chatWikiSyncData) *openclawProviderConfig {
 	return ocProvider
 }
 
-func buildSingleProvider(p ProviderDTO) *openclawProviderConfig {
+func buildSingleProvider(p providers.Provider) *openclawProviderConfig {
 	api, ok := chatclawTypeToOpenClawAPI[p.Type]
 	if !ok {
 		api = "openai-completions"
