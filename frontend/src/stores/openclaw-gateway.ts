@@ -155,16 +155,6 @@ export const useOpenClawGatewayStore = defineStore('openclawGateway', () => {
     })
   }
 
-  /**
-   * Unsubscribe from Wails events to prevent duplicate handlers on re-subscribe.
-   */
-  function unsubscribeFromEvents() {
-    statusUnsubscribe?.()
-    statusUnsubscribe = null
-    gatewayUnsubscribe?.()
-    gatewayUnsubscribe = null
-  }
-
   async function poll() {
     try {
       const s = await OpenClawRuntimeService.GetStatus()

@@ -47,6 +47,7 @@ type openClawAgentConfig struct {
 	SessionKey      string
 	ProviderID      string
 	ModelID         string
+	Name            string // Conversation name for OpenClaw session label
 	Capabilities    []string
 	EnableThinking  bool
 	LibraryIDs      []int64
@@ -479,6 +480,7 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 
 	type conversationRow struct {
 		AgentID            int64  `bun:"agent_id"`
+		Name               string `bun:"name"`
 		LLMProviderID      string `bun:"llm_provider_id"`
 		LLMModelID         string `bun:"llm_model_id"`
 		EnableThinking     bool   `bun:"enable_thinking"`
@@ -488,7 +490,7 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 	var conv conversationRow
 	if err := db.NewSelect().
 		Table("conversations").
-		Column("agent_id", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids", "openclaw_session_key").
+		Column("agent_id", "name", "llm_provider_id", "llm_model_id", "enable_thinking", "library_ids", "openclaw_session_key").
 		Where("id = ?", conversationID).
 		Scan(ctx, &conv); err != nil {
 		return openClawAgentConfig{}, errs.New("error.chat_conversation_not_found")
@@ -519,6 +521,7 @@ func (s *ChatService) getOpenClawAgentConfig(conversationID int64) (openClawAgen
 
 	cfg := openClawAgentConfig{
 		AgentID:         conv.AgentID,
+		Name:            strings.TrimSpace(conv.Name),
 		OpenClawAgentID: agent.OpenClawAgentID,
 		SessionKey:      strings.TrimSpace(conv.OpenClawSessionKey),
 		ProviderID:      providerID,
@@ -2496,6 +2499,22 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 	// Use the dedicated query connection and a slightly longer timeout so we do
 	// not self-cancel before the gateway's normal lock window expires.
 	patchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+
+	// Build session patch params: label (conversation name) and model for OpenClaw console display.
+	patchParams := map[string]any{
+		"key":            sessionKey,
+		"reasoningLevel": "stream",
+	}
+	// Sync conversation name to OpenClaw session label for console UI.
+	if cfg.Name != "" {
+		patchParams["label"] = cfg.Name
+	}
+	// Sync model config to OpenClaw session to ensure correct model is used.
+	// Format: provider/model (e.g., "openai/gpt-4o").
+	if cfg.ProviderID != "" && cfg.ModelID != "" {
+		patchParams["model"] = cfg.ProviderID + "/" + cfg.ModelID
+	}
+
 	var patchResp struct {
 		Key   string `json:"key"`
 		Entry *struct {
@@ -2503,20 +2522,21 @@ func (s *ChatService) runOpenClawChatRun(ctx context.Context, conversationID int
 			SessionID      string `json:"sessionId"`
 		} `json:"entry"`
 	}
-	if err := s.openclawGateway.QueryRequest(patchCtx, "sessions.patch", map[string]any{
-		"key":            sessionKey,
-		"reasoningLevel": "stream",
-	}, &patchResp); err != nil {
-		s.app.Logger.Warn("[openclaw-chat] failed to request reasoning stream for session",
+	if err := s.openclawGateway.QueryRequest(patchCtx, "sessions.patch", patchParams, &patchResp); err != nil {
+		s.app.Logger.Warn("[openclaw-chat] failed to patch session with label and model",
 			"conv", conversationID,
 			"sessionKey", sessionKey,
+			"label", cfg.Name,
+			"model", cfg.ProviderID+"/"+cfg.ModelID,
 			"enableThinking", cfg.EnableThinking,
 			"error", err)
 	} else {
-		s.app.Logger.Info("[openclaw-chat] reasoning stream requested for session",
+		s.app.Logger.Info("[openclaw-chat] session patched with label and model",
 			"conv", conversationID,
 			"sessionKey", sessionKey,
 			"resolvedKey", strings.TrimSpace(patchResp.Key),
+			"label", cfg.Name,
+			"model", cfg.ProviderID+"/"+cfg.ModelID,
 			"resolvedReasoningLevel", strings.TrimSpace(func() string {
 				if patchResp.Entry == nil {
 					return ""
