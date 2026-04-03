@@ -5,7 +5,7 @@ import { useColorMode } from '@vueuse/core'
 import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Terminal, AlertCircle, Clock } from 'lucide-vue-next'
-import { AnsiToHtml } from 'ansi-to-html'
+import AnsiToHtml from 'ansi-to-html'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import { toast } from '@/components/ui/toast'
 import { getErrorMessage } from '@/composables/useErrorMessage'
@@ -73,7 +73,7 @@ function ansiToHtml(raw: string, dark: boolean): string {
 watch(
   [stdoutRaw, stderrRaw, colorMode],
   () => {
-    const dark = colorMode === 'dark'
+    const dark = colorMode.value === 'dark'
     stdoutHtml.value = ansiToHtml(stdoutRaw.value, dark)
     stderrHtml.value = ansiToHtml(stderrRaw.value, dark)
   },
@@ -93,7 +93,7 @@ function appendChunk(stream: 'stdout' | 'stderr', text: string) {
   } else {
     stderrRaw.value += text
   }
-  const dark = colorMode === 'dark'
+  const dark = colorMode.value === 'dark'
   if (stream === 'stdout') {
     stdoutHtml.value = ansiToHtml(stdoutRaw.value, dark)
   } else {
@@ -162,7 +162,7 @@ const runDoctor = async (fix: boolean = false) => {
     if (!result) {
       exitCode.value = 1
       stderrRaw.value = t('settings.openclawRuntime.doctor.failed')
-      stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode === 'dark')
+      stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode.value === 'dark')
       toast.error(t('settings.openclawRuntime.doctor.failed'))
       return
     }
@@ -171,11 +171,11 @@ const runDoctor = async (fix: boolean = false) => {
     if (!stdoutRaw.value && result.stdout) stdoutRaw.value = result.stdout
     if (!stderrRaw.value && result.stderr) stderrRaw.value = result.stderr
     // Re-render full ANSI if fallback was used
-    if (stdoutHtml.value !== ansiToHtml(stdoutRaw.value, colorMode === 'dark')) {
-      stdoutHtml.value = ansiToHtml(stdoutRaw.value, colorMode === 'dark')
+    if (stdoutHtml.value !== ansiToHtml(stdoutRaw.value, colorMode.value === 'dark')) {
+      stdoutHtml.value = ansiToHtml(stdoutRaw.value, colorMode.value === 'dark')
     }
-    if (stderrHtml.value !== ansiToHtml(stderrRaw.value, colorMode === 'dark')) {
-      stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode === 'dark')
+    if (stderrHtml.value !== ansiToHtml(stderrRaw.value, colorMode.value === 'dark')) {
+      stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode.value === 'dark')
     }
     exitCode.value = result.exitCode
     wasFixed.value = result.fixed || false
@@ -189,7 +189,7 @@ const runDoctor = async (fix: boolean = false) => {
     const endTime = Date.now()
     duration.value = endTime - startTime
     stderrRaw.value = getErrorMessage(e) || e.message || 'Unknown error'
-    stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode === 'dark')
+    stderrHtml.value = ansiToHtml(stderrRaw.value, colorMode.value === 'dark')
     exitCode.value = 1
     toast.error(getErrorMessage(e) || t('settings.openclawRuntime.doctor.failed'))
   } finally {
