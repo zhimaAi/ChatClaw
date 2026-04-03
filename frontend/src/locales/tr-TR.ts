@@ -1697,6 +1697,10 @@ export default {
       toastDescription: "Kanal ve ağ geçidi hala oluşturuluyor veya senkronize ediliyor. Bağlantı durumu otomatik olarak güncellenecek. Lütfen bekleyin.",
       toastDescriptionWithAgent: "Kanal, yardımcı veya ağ geçidi hala oluşturuluyor ya da senkronize ediliyor. Lütfen bekleyin.",
     },
+    wecom: {
+      emptyTitle: "Henüz WeCom eklenmedi",
+      emptyDesc: "Tencent resmi OpenClaw eklentisi ile QR kodunu tarayarak WeCom bağlayın veya mevcut bir botu entegre edin.",
+    },
     wechat: {
       emptyTitle: "Henüz WeChat eklenmedi",
       emptyDesc: "Tencent resmi OpenClaw eklentisi ile QR kodunu tarayarak kişisel WeChat hesabınızı bağlayın ve WeChat mesajlarını almaya ve işlemeye başlayın.",

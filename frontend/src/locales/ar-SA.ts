@@ -1699,6 +1699,10 @@ export default {
       toastDescription: "لا يزال يتم إنشاء القناة والبوابة أو مزامنتهما. سيتم تحديث حالة الاتصال تلقائيًا، يرجى الانتظار.",
       toastDescriptionWithAgent: "لا يزال يتم إنشاء القناة أو المساعد أو البوابة أو مزامنتهما. يرجى الانتظار.",
     },
+    wecom: {
+      emptyTitle: "لم تتم إضافة WeCom بعد",
+      emptyDesc: "امسح رمز الاستجابة السريعة عبر الإضافة الرسمية من Tencent OpenClaw لربط WeCom أو دمج بوت موجود.",
+    },
     wechat: {
       emptyTitle: "لم تتم إضافة WeChat بعد",
       emptyDesc: "امسح رمز الاستجابة السريعة عبر الإضافة الرسمية من Tencent OpenClaw لربط WeChat الشخصي والبدء في استقبال رسائل WeChat ومعالجتها.",

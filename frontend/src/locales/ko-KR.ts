@@ -1832,6 +1832,10 @@ export default {
       noDesc: "설명 없음",
       confirm: "연결 확인",
     },
+    wecom: {
+      emptyTitle: "아직 WeCom(기업 위챗)이 추가되지 않았습니다",
+      emptyDesc: "Tencent 공식 OpenClaw 플러그인으로 QR 코드를 스캔해 기업 위챗을 연결하거나 기존 봇을 연동할 수 있습니다.",
+    },
     wechat: {
       emptyTitle: "아직 WeChat이 추가되지 않았습니다",
       emptyDesc: "Tencent 공식 OpenClaw 플러그인으로 QR 코드를 스캔해 개인 WeChat을 연결하고 WeChat 메시지 수신 및 처리를 시작하세요.",

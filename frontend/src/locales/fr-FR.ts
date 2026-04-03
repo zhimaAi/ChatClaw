@@ -1702,6 +1702,10 @@ export default {
       toastDescription: "Le canal et la passerelle sont encore en cours de création ou de synchronisation. L’état de la connexion se mettra à jour automatiquement. Veuillez patienter.",
       toastDescriptionWithAgent: "Le canal, l’assistant ou la passerelle sont encore en cours de création ou de synchronisation. Veuillez patienter.",
     },
+    wecom: {
+      emptyTitle: "Aucun WeCom ajouté pour le moment",
+      emptyDesc: "Connectez WeCom en scannant un QR code avec le plugin officiel Tencent OpenClaw ou intégrez un bot existant.",
+    },
     wechat: {
       emptyTitle: "Aucun WeChat ajouté pour le moment",
       emptyDesc: "Connectez votre WeChat personnel en scannant un QR code avec le plugin officiel Tencent OpenClaw, puis commencez à recevoir et traiter les messages WeChat.",
