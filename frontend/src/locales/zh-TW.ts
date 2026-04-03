@@ -307,6 +307,7 @@ export default {
         gatewayTagError: "網關異常",
         gatewayTagStop: "網關未運行",
         gatewayTagStarting: "網關啟動中",
+        gatewayTagUpgrading: "運行時在升級",
         gatewayDisabledHint: "網關未啟用",
       },
       doctor: {
@@ -336,6 +337,7 @@ export default {
         running: "running",
         starting: "starting",
         stop: "stop",
+        upgrading: "升级中",
       },
     },
     general: {
@@ -1945,6 +1947,7 @@ export default {
       channels: "網關未運行，未啟用網關時無法管理訊息頻道",
       scheduledTasks: "網關未運行，未啟用網關時無法管理定時任務",
       starting: "網關正在啟動，請稍後再試",
+      upgrading: "OpenClaw 運行包正在升級，請稍後再試",
     },
   },
   openclawCron: {

@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { RefreshCw, Loader2, ExternalLink, Download } from 'lucide-vue-next'
+import { RefreshCw, Loader2, ExternalLink, Download, Square } from 'lucide-vue-next'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import {
   useNavigationStore,
@@ -38,24 +36,13 @@ const gatewayStore = useOpenClawGatewayStore()
 const status = ref<RuntimeStatus>(new RuntimeStatus({ phase: 'idle' }))
 const gatewayState = ref<GatewayConnectionState>(new GatewayConnectionState())
 const restarting = ref(false)
+const stopping = ref(false)
 const upgrading = ref(false)
-/** True while handling gateway on/off from the title-bar switch */
-const gatewaySwitchBusy = ref(false)
 
 const isActive = computed(() => status.value.phase === 'connected')
 const isTransitioning = computed(() => {
   const p = status.value.phase
   return p === 'starting' || p === 'connecting' || p === 'restarting' || p === 'upgrading'
-})
-
-/**
- * Same source as sidebar + status badge: Pinia store is refreshed by global heartbeat poll,
- * while local `status` is only updated on mount/events — using `status.phase` here caused OFF while badge showed running.
- */
-const gatewaySwitchOn = computed(() => {
-  if (gatewayStore.runtimePhase === 'upgrading') return false
-  const v = gatewayStore.visualStatus
-  return v === GatewayVisualStatus.Running || v === GatewayVisualStatus.Starting
 })
 
 // 是否处于升级阶段（显示进度条）
@@ -103,7 +90,9 @@ const badgeText = computed(() => {
 const badgeClass = computed(() => gatewayBadgeClass[gatewayStore.visualStatus])
 
 const isGatewayStartingUi = computed(
-  () => gatewayStore.visualStatus === GatewayVisualStatus.Starting
+  () =>
+    gatewayStore.visualStatus === GatewayVisualStatus.Starting ||
+    gatewayStore.visualStatus === GatewayVisualStatus.Upgrading
 )
 
 function syncGatewayStore() {
@@ -124,37 +113,87 @@ const loadStatus = async () => {
   syncGatewayStore()
 }
 
-/** Title switch: off → stop + disable autostart; on → enable autostart + start/restart gateway */
-const handleGatewaySwitchToggle = async (checked: boolean) => {
-  if (gatewaySwitchBusy.value) return
-  gatewaySwitchBusy.value = true
-  try {
-    await OpenClawRuntimeService.SetAutoStart(checked)
-    if (checked) {
-      toast.success(t('settings.openclawRuntime.autoStartEnabled'))
-    } else {
-      toast.success(t('settings.openclawRuntime.autoStartDisabled'))
-    }
-    await loadStatus()
-  } catch (e) {
-    console.error('Failed to toggle gateway:', e)
-    toast.error(getErrorMessage(e) || t('settings.openclawRuntime.autoStartFailed'))
-  } finally {
-    gatewaySwitchBusy.value = false
-  }
-}
-
 const handleRestart = async () => {
   restarting.value = true
   try {
+    // First check if port is occupied
+    const portStatus = await OpenClawRuntimeService.CheckPortOccupied()
+    if (portStatus.occupied) {
+      const processName = portStatus.processName || 'Unknown'
+      toast.error(
+        t('settings.openclawRuntime.portOccupiedHint', {
+          port: portStatus.port,
+          process: processName,
+          pid: portStatus.pid,
+        })
+      )
+      await loadStatus()
+      restarting.value = false
+      return
+    }
+
     status.value = await OpenClawRuntimeService.RestartGateway()
     syncGatewayStore()
-    toast.success(t('settings.openclawRuntime.restartSuccess'))
+
+    // Check if restart failed due to port occupation
+    if (status.value.phase === 'error' && status.value.message?.includes('port')) {
+      const portStatusAfter = await OpenClawRuntimeService.CheckPortOccupied()
+      if (portStatusAfter.occupied) {
+        const processName = portStatusAfter.processName || 'Unknown'
+        toast.error(
+          t('settings.openclawRuntime.portOccupiedHint', {
+            port: portStatusAfter.port,
+            process: processName,
+            pid: portStatusAfter.pid,
+          })
+        )
+        restarting.value = false
+        return
+      }
+    }
+
+    if (status.value.phase === 'error') {
+      toast.error(status.value.message || t('settings.openclawRuntime.restartFailed'))
+    } else {
+      toast.success(t('settings.openclawRuntime.restartSuccess'))
+    }
   } catch (e) {
     console.error('Failed to restart OpenClaw gateway:', e)
     toast.error(getErrorMessage(e) || t('settings.openclawRuntime.restartFailed'))
   } finally {
     restarting.value = false
+  }
+}
+
+const handleStop = async () => {
+  if (stopping.value) return
+  stopping.value = true
+  try {
+    await OpenClawRuntimeService.SetAutoStart(false)
+    toast.success(t('settings.openclawRuntime.stopSuccess'))
+
+    // Wait a moment for cleanup
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    // Check if port is still occupied after stop
+    const portStatus = await OpenClawRuntimeService.CheckPortOccupied()
+    if (portStatus.occupied) {
+      const processName = portStatus.processName || 'Unknown'
+      toast.error(
+        t('settings.openclawRuntime.portStillOccupiedAfterStopHint', {
+          port: portStatus.port,
+          pid: portStatus.pid,
+        }) +
+          ` (${processName})`
+      )
+    }
+
+    await loadStatus()
+  } catch (e) {
+    console.error('Failed to stop OpenClaw gateway:', e)
+    toast.error(getErrorMessage(e) || t('settings.openclawRuntime.stopFailed'))
+  } finally {
+    stopping.value = false
   }
 }
 
@@ -185,31 +224,42 @@ const handleOpenDashboard = () => {
   navigationStore.navigateToModule('openclaw-dashboard')
 }
 
-let unsubscribeStatus: (() => void) | null = null
-let unsubscribeGateway: (() => void) | null = null
+// Sync local refs when store's runtimePhase changes (from global event subscriptions)
+// This keeps the detailed status display in sync with the store
+watch(
+  () => gatewayStore.runtimePhase,
+  (phase) => {
+    if (status.value.phase !== phase) {
+      status.value.phase = phase
+    }
+  }
+)
 
-watch([status, gatewayState], () => syncGatewayStore(), { deep: true })
+// Sync gateway connection state from store
+watch(
+  () => gatewayStore.lastGatewayState,
+  (gw) => {
+    gatewayState.value.connected = gw.connected
+    gatewayState.value.authenticated = gw.authenticated
+    gatewayState.value.reconnecting = gw.reconnecting
+    gatewayState.value.lastError = gw.lastError
+  },
+  { deep: true }
+)
+
+// Sync full status from store when detailed fields change (e.g., installedVersion, message)
+watch(
+  () => gatewayStore.visualStatus,
+  () => {
+    // When visual status changes, refresh local status to get latest details
+    void loadStatus()
+  }
+)
 
 onMounted(() => {
   void loadStatus()
+  // Store's heartbeat will subscribe to events and poll, keeping this component in sync
   void gatewayStore.poll()
-
-  unsubscribeStatus = Events.On('openclaw:status', (event: any) => {
-    const data = event?.data?.[0] ?? event?.data ?? event
-    if (data) status.value = RuntimeStatus.createFrom(data)
-  })
-
-  unsubscribeGateway = Events.On('openclaw:gateway-state', (event: any) => {
-    const data = event?.data?.[0] ?? event?.data ?? event
-    if (data) gatewayState.value = GatewayConnectionState.createFrom(data)
-  })
-})
-
-onUnmounted(() => {
-  unsubscribeStatus?.()
-  unsubscribeStatus = null
-  unsubscribeGateway?.()
-  unsubscribeGateway = null
 })
 </script>
 
@@ -232,14 +282,7 @@ onUnmounted(() => {
       "
     >
     <SettingsCard :title="t('settings.openclawRuntime.title')" fullWidth>
-      <template #header-right>
-        <Switch
-          :model-value="gatewaySwitchOn"
-          :disabled="gatewaySwitchBusy || gatewayStore.runtimePhase === 'upgrading'"
-          :aria-label="t('settings.openclawRuntime.autoStartLabel')"
-          @update:model-value="handleGatewaySwitchToggle"
-        />
-      </template>
+      <template #header-right />
 
       <!-- Gateway status row: badge + restart -->
       <div
@@ -265,6 +308,16 @@ onUnmounted(() => {
           </span>
         </div>
         <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="stopping || restarting || upgrading"
+            @click="handleStop"
+          >
+            <Square v-if="!stopping" class="mr-1.5 size-3.5" />
+            <Loader2 v-else class="mr-1.5 size-3.5 animate-spin" />
+            {{ t('settings.openclawRuntime.stop') }}
+          </Button>
           <Button
             size="sm"
             variant="outline"

@@ -262,6 +262,7 @@ export default {
       pageSubtitle: "Configure gateway and basic runtime settings",
       gatewayStatusLabel: "Gateway status",
       autoStartLabel: "Gateway running switch",
+      autoStartTooltip: "Toggle OpenClaw Gateway auto-start: when enabled, the gateway starts automatically when the app launches",
       autoStartEnabled: "OpenClaw Gateway enabled",
       autoStartDisabled: "OpenClaw Gateway disabled",
       autoStartFailed: "Failed to change gateway state",
@@ -272,6 +273,7 @@ export default {
         error: "error",
         stop: "stop",
         starting: "starting",
+        upgrading: "upgrading",
       },
       restart: "Restart",
       logs: "Logs",
@@ -318,10 +320,15 @@ export default {
       stop: "Stop",
       stopSuccess: "Gateway stopped",
       stopFailed: "Failed to stop gateway",
+      portOccupied: "Port occupied",
+      portOccupiedHint: "Port {port} is occupied by process {process} (PID: {pid}). Please stop that process first.",
+      portStillOccupiedAfterStop: "Port {port} is still occupied after gateway stop",
+      portStillOccupiedAfterStopHint: "Please manually terminate the process occupying the port (PID: {pid}).",
       composer: {
         gatewayTagError: "Gateway error",
         gatewayTagStop: "Gateway stopped",
         gatewayTagStarting: "Gateway starting",
+        gatewayTagUpgrading: "Runtime upgrading",
         gatewayDisabledHint: "Gateway is not enabled.",
       },
       doctor: {
@@ -2041,6 +2048,7 @@ export default {
   openclawGateway: {
     banner: {
       starting: "The gateway is starting. Please try again in a moment.",
+      upgrading: "OpenClaw runtime is upgrading. Please try again in a moment.",
       channels: "网关未运行，未启用网关时无法管理消息频道",
       scheduledTasks: "网关未运行，未启用网关时无法管理定时任务",
     },

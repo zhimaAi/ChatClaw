@@ -30,6 +30,9 @@ const message = computed(() => {
   if (visualStatus.value === GatewayVisualStatus.Starting) {
     return t('openclawGateway.banner.starting')
   }
+  if (visualStatus.value === GatewayVisualStatus.Upgrading) {
+    return t('openclawGateway.banner.upgrading')
+  }
   if (props.variant === 'channels') {
     return t('openclawGateway.banner.channels')
   }

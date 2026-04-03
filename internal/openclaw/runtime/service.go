@@ -1,6 +1,14 @@
 package openclawruntime
 
-import "fmt"
+import (
+	"fmt"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
+
+	"chatclaw/internal/define"
+)
 
 // OpenClawRuntimeService is the Wails-bound service that exposes
 // OpenClaw runtime management to the frontend.
@@ -74,11 +82,60 @@ func (s *OpenClawRuntimeService) GetDashboardURL() string {
 	return fmt.Sprintf("http://127.0.0.1:%d?token=%s", cfg.GatewayPort, cfg.GatewayToken)
 }
 
-// IsDevMode returns true when the frontend runs with DEV=true (dev server / Wails dev).
+// IsDevMode returns true when the application is running in development mode.
 func (s *OpenClawRuntimeService) IsDevMode() bool {
-	// Backend can also read from env if needed; here we just return false
-	// because the frontend already guards the button.
-	// The binding exists so the frontend can call it without hitting a missing-method error
-	// in production builds where the button is hidden anyway.
-	return false
+	return define.IsDev()
+}
+
+// PortOccupiedResult contains information about port occupation status.
+type PortOccupiedResult struct {
+	Occupied    bool   `json:"occupied"`
+	Port        int    `json:"port"`
+	ProcessName string `json:"processName,omitempty"`
+	PID         int    `json:"pid,omitempty"`
+}
+
+// CheckPortOccupied checks if the gateway port is currently occupied and returns details.
+func (s *OpenClawRuntimeService) CheckPortOccupied() PortOccupiedResult {
+	cfg := s.manager.store.Get()
+	port := cfg.GatewayPort
+
+	if !gatewayPortOccupied(port) {
+		return PortOccupiedResult{
+			Occupied: false,
+			Port:     port,
+		}
+	}
+
+	pid := getOccupyingProcessPID(port)
+	processName := ""
+	if pid > 0 {
+		processName = getProcessNameByPID(pid)
+	}
+
+	return PortOccupiedResult{
+		Occupied:    true,
+		Port:        port,
+		ProcessName: processName,
+		PID:         pid,
+	}
+}
+
+// getProcessNameByPID returns the process name for a given PID on Windows.
+func getProcessNameByPID(pid int) string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	cmd := exec.Command("tasklist", "/FI", "PID eq "+strconv.Itoa(pid), "/FO", "CSV", "/NH")
+	setCmdHideWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// CSV format: "processname","pid","sessionname","session#","memusage"
+	fields := strings.Split(strings.TrimSpace(string(out)), ",")
+	if len(fields) > 0 {
+		return strings.Trim(fields[0], "\"")
+	}
+	return ""
 }

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
+import { Events } from '@wailsio/runtime'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import {
   RuntimeStatus,
@@ -15,6 +16,8 @@ export enum GatewayVisualStatus {
   Error = 'error',
   Stop = 'stop',
   Starting = 'starting',
+  /** Runtime bundle download/install; distinct from gateway process starting. */
+  Upgrading = 'upgrading',
 }
 
 export const gatewayBadgeClass: Record<GatewayVisualStatus, string> = {
@@ -25,6 +28,8 @@ export const gatewayBadgeClass: Record<GatewayVisualStatus, string> = {
   [GatewayVisualStatus.Stop]:
     'inline-flex items-center rounded-md border border-neutral-300 px-1.5 py-0.5 text-sm text-neutral-600 dark:border-white/20 dark:text-muted-foreground',
   [GatewayVisualStatus.Starting]:
+    'inline-flex items-center rounded-md border border-amber-300 px-1.5 py-0.5 text-sm text-amber-700 dark:border-amber-600/50 dark:text-amber-400',
+  [GatewayVisualStatus.Upgrading]:
     'inline-flex items-center rounded-md border border-amber-300 px-1.5 py-0.5 text-sm text-amber-700 dark:border-amber-600/50 dark:text-amber-400',
 }
 
@@ -38,6 +43,8 @@ export const gatewaySidebarTagShellClass: Record<GatewayVisualStatus, string> = 
     'border-neutral-300 bg-neutral-100/90 dark:border-white/20 dark:bg-neutral-900/55 dark:ring-1 dark:ring-white/10',
   [GatewayVisualStatus.Starting]:
     'border-amber-300 bg-amber-50/95 dark:border-amber-600/50 dark:bg-amber-950/45 dark:ring-1 dark:ring-amber-500/25',
+  [GatewayVisualStatus.Upgrading]:
+    'border-amber-300 bg-amber-50/95 dark:border-amber-600/50 dark:bg-amber-950/45 dark:ring-1 dark:ring-amber-500/25',
 }
 
 /** Prefix + separator text (same hue family as border). */
@@ -48,6 +55,8 @@ export const gatewaySidebarTagLabelClass: Record<GatewayVisualStatus, string> = 
   [GatewayVisualStatus.Stop]: 'text-neutral-700 dark:text-neutral-400',
   [GatewayVisualStatus.Starting]:
     'text-amber-950/90 dark:text-amber-200/88',
+  [GatewayVisualStatus.Upgrading]:
+    'text-amber-950/90 dark:text-amber-200/88',
 }
 
 /** Status word after colon (weight comes from parent font-bold). */
@@ -57,6 +66,7 @@ export const gatewaySidebarTagStatusClass: Record<GatewayVisualStatus, string> =
   [GatewayVisualStatus.Error]: 'text-rose-600 dark:text-rose-400',
   [GatewayVisualStatus.Stop]: 'text-neutral-600 dark:text-neutral-300',
   [GatewayVisualStatus.Starting]: 'text-amber-700 dark:text-amber-400',
+  [GatewayVisualStatus.Upgrading]: 'text-amber-700 dark:text-amber-400',
 }
 
 /** Spinner icon on starting state. */
@@ -66,6 +76,8 @@ export const gatewaySidebarTagLoaderClass: Record<GatewayVisualStatus, string> =
   [GatewayVisualStatus.Error]: 'text-rose-600 dark:text-rose-400',
   [GatewayVisualStatus.Stop]: 'text-neutral-500 dark:text-neutral-400',
   [GatewayVisualStatus.Starting]:
+    'text-amber-600 dark:text-amber-400',
+  [GatewayVisualStatus.Upgrading]:
     'text-amber-600 dark:text-amber-400',
 }
 
@@ -80,12 +92,8 @@ function mapToVisual(
 ): GatewayVisualStatus {
   const phase = status.phase || 'idle'
   if (phase === 'error') return GatewayVisualStatus.Error
-  if (
-    phase === 'starting' ||
-    phase === 'connecting' ||
-    phase === 'restarting' ||
-    phase === 'upgrading'
-  ) {
+  if (phase === 'upgrading') return GatewayVisualStatus.Upgrading
+  if (phase === 'starting' || phase === 'connecting' || phase === 'restarting') {
     return GatewayVisualStatus.Starting
   }
   if (phase === 'connected') return GatewayVisualStatus.Running
@@ -98,6 +106,9 @@ export const useOpenClawGatewayStore = defineStore('openclawGateway', () => {
   const runtimePhase = ref<string>('idle')
   const lastGatewayState = ref<GatewayConnectionState>(new GatewayConnectionState())
   let heartbeatId: ReturnType<typeof setInterval> | null = null
+  /** Tracks whether global Wails event listeners have been registered. */
+  let statusUnsubscribe: (() => void) | null = null
+  let gatewayUnsubscribe: (() => void) | null = null
 
   function applySnapshot(status: RuntimeStatus, gw: GatewayConnectionState) {
     lastGatewayState.value = gw
@@ -114,6 +125,36 @@ export const useOpenClawGatewayStore = defineStore('openclawGateway', () => {
     visualStatus.value = mapToVisual(status, lastGatewayState.value)
   }
 
+  /**
+   * Apply gateway connection state updates (e.g. openclaw:gateway-state).
+   * Combines with last known runtime status to update visual state.
+   */
+  function ingestGatewayState(gw: GatewayConnectionState) {
+    lastGatewayState.value = gw
+  }
+
+  /**
+   * Subscribe to global Wails events for backend status updates.
+   * Called once on first heartbeat start; idempotent.
+   */
+  function subscribeToEvents() {
+    if (statusUnsubscribe) return // Already subscribed
+
+    statusUnsubscribe = Events.On('openclaw:status', (event: unknown) => {
+      const data = (event as any)?.data?.[0] ?? (event as any)?.data ?? event
+      if (data) {
+        ingestRuntimeStatus(RuntimeStatus.createFrom(data))
+      }
+    })
+
+    gatewayUnsubscribe = Events.On('openclaw:gateway-state', (event: unknown) => {
+      const data = (event as any)?.data?.[0] ?? (event as any)?.data ?? event
+      if (data) {
+        ingestGatewayState(GatewayConnectionState.createFrom(data))
+      }
+    })
+  }
+
   async function poll() {
     try {
       const s = await OpenClawRuntimeService.GetStatus()
@@ -126,6 +167,7 @@ export const useOpenClawGatewayStore = defineStore('openclawGateway', () => {
 
   function startHeartbeat() {
     if (heartbeatId != null) return
+    subscribeToEvents()
     heartbeatId = setInterval(() => {
       void poll()
     }, 5000)
@@ -136,13 +178,18 @@ export const useOpenClawGatewayStore = defineStore('openclawGateway', () => {
       clearInterval(heartbeatId)
       heartbeatId = null
     }
+    // Keep event subscriptions active — they are lightweight and allow
+    // the store to stay in sync even when the heartbeat interval stops.
+    // Duplicate subscribeToEvents() calls are prevented by the null check.
   }
 
   return {
     visualStatus,
     runtimePhase,
+    lastGatewayState,
     applySnapshot,
     ingestRuntimeStatus,
+    ingestGatewayState,
     poll,
     startHeartbeat,
     stopHeartbeat,

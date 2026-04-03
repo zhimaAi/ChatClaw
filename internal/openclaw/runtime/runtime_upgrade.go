@@ -1,17 +1,20 @@
 package openclawruntime
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"chatclaw/internal/openclaw"
@@ -28,6 +31,12 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 	if m.isShuttingDown() {
 		return nil, fmt.Errorf("runtime is shutting down")
 	}
+
+	m.upgradeInProgress.Store(true)
+	defer m.upgradeInProgress.Store(false)
+
+	m.upgradeMu.Lock()
+	defer m.upgradeMu.Unlock()
 
 	activeBundle, err := resolveBundledRuntime()
 	if err != nil {
@@ -71,12 +80,8 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 	// version, skip downloading/building and just activate it directly.
 	target := runtime.GOOS + "-" + runtime.GOARCH
 	currentDir, err := openclaw.UserRuntimeCurrentDir(target)
-	if err != nil {
-		// Not fatal — fall through to full install flow
-	} else {
+	if err == nil {
 		if skip, _ := checkUserRuntimeAlreadyHasVersion(currentDir, latestVersion); skip {
-			// Quick switch: point resolveBundledRuntime to currentDir as user candidate,
-			// then reconcile to activate. No download required.
 			m.app.Logger.Info("openclaw: runtime already at latest version, activating",
 				"version", latestVersion, "dir", currentDir)
 			if err := m.reconcileLocked(false); err != nil {
@@ -85,46 +90,96 @@ func (m *Manager) upgradeRuntimeLocked() (*RuntimeUpgradeResult, error) {
 			status := m.GetStatus()
 			result.Upgraded = true
 			result.CurrentVersion = latestVersion
-			result.RuntimeSource = runtimeSourceUser
-			result.RuntimePath = currentDir
-			if status.RuntimeSource == "" {
-				result.RuntimeSource = status.RuntimeSource
-			}
-			if status.RuntimePath == "" {
-				result.RuntimePath = status.RuntimePath
-			}
+			result.RuntimeSource = status.RuntimeSource
+			result.RuntimePath = status.RuntimePath
 			return result, nil
 		}
 	}
 
-	stagedBundle, restore, cleanup, err := installUserRuntimeOverride(activeBundle, latestVersion, registryURL, func(progress int, msg string) {
+	installResult, err := installUserRuntimeOverride(activeBundle, latestVersion, registryURL, func(progress int, msg string) {
 		m.broadcastUpgradeProgress(progress, msg)
 	})
 	if err != nil {
-		_ = m.reconcileLocked(false)
-		return nil, err
-	}
-	defer cleanup()
-
-	if err := m.reconcileLocked(false); err != nil {
-		if restoreErr := restore(); restoreErr != nil {
-			m.app.Logger.Error("openclaw: restore previous runtime failed", "error", restoreErr)
+		// Install failed (npm download or staging). No .current dir was created, no .backup touched.
+		// Try to recover: attempt reconcile once (uses embedded or OSS).
+		m.app.Logger.Error("openclaw: install failed, attempting recovery", "error", err)
+		m.broadcastUpgradeProgress(0, "Installation failed, attempting recovery...")
+		if reconcileErr := m.reconcileLocked(false); reconcileErr != nil {
+			m.app.Logger.Error("openclaw: recovery reconcile failed", "error", reconcileErr)
 		}
-		_ = m.reconcileLocked(false)
 		return nil, err
 	}
+
+	// Activation succeeded (currentDir now points to the new version).
+	// Try starting the gateway up to 5 times before declaring the upgrade a failure.
+	const maxStartAttempts = 5
+	var startupErr error
+	for attempt := 1; attempt <= maxStartAttempts; attempt++ {
+		m.broadcastUpgradeProgress(90, fmt.Sprintf("Starting gateway (attempt %d/%d)...", attempt, maxStartAttempts))
+
+		// Safety check: if the port is still in use, log a warning and wait.
+		// reconcileLocked will call stopProcess first (which kills the old gateway),
+		// so the port will be freed before startProcess tries to bind it.
+		port := m.store.Get().GatewayPort
+		if !isPortAvailable(port) {
+			m.app.Logger.Warn("openclaw: gateway port may still be in use",
+				"port", port, "attempt", attempt)
+			m.broadcastUpgradeProgress(90, fmt.Sprintf("Waiting for port %d to be released...", port))
+			time.Sleep(1 * time.Second)
+		}
+
+		if reconcileErr := m.reconcileLocked(false); reconcileErr == nil {
+			// Gateway started successfully.
+			startupErr = nil
+			goto upgradeSucceeded
+		} else {
+			startupErr = reconcileErr
+			m.app.Logger.Warn("openclaw: gateway start attempt failed",
+				"attempt", attempt, "maxAttempts", maxStartAttempts, "error", startupErr)
+			if attempt == maxStartAttempts {
+				break
+			}
+			// Retry: roll back first-install failures; do nothing between attempts with a backup.
+			if !installResult.HadCurrent {
+				m.broadcastUpgradeProgress(0, fmt.Sprintf("Gateway failed (attempt %d/%d), running diagnostic...", attempt, maxStartAttempts))
+				if _, fixErr := m.RunDoctorCommand("check", true); fixErr != nil {
+					m.app.Logger.Warn("openclaw: doctor fix failed", "error", fixErr)
+				}
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	// All 5 attempts failed.
+	if installResult.HadCurrent {
+		m.app.Logger.Error("openclaw: gateway failed after 5 attempts, rolling back",
+			"error", startupErr)
+		m.broadcastUpgradeProgress(0, "Gateway failed after 5 attempts, rolling back to previous version...")
+		if rollbackErr := installResult.Restore(); rollbackErr != nil {
+			m.app.Logger.Error("openclaw: rollback failed", "error", rollbackErr)
+		}
+		time.Sleep(500 * time.Millisecond)
+		_ = m.reconcileLocked(false)
+	} else {
+		m.app.Logger.Error("openclaw: first-install gateway failed after 5 attempts",
+			"error", startupErr)
+		m.broadcastUpgradeProgress(0, "OpenClaw failed to start after 5 attempts, please run openclaw doctor manually.")
+		_ = m.reconcileLocked(false)
+	}
+	return nil, fmt.Errorf("gateway failed after %d attempts: %w", maxStartAttempts, startupErr)
+
+upgradeSucceeded:
+
+	// Gateway started successfully. Now clean up old staging dirs and the safety backup.
+	// .backup is only safe to delete now because the gateway is running with the new version.
+	installResult.DeleteBackup()
+	installResult.Cleanup()
 
 	status := m.GetStatus()
 	result.Upgraded = true
 	result.CurrentVersion = latestVersion
 	result.RuntimeSource = status.RuntimeSource
 	result.RuntimePath = status.RuntimePath
-	if status.RuntimePath == "" {
-		result.RuntimePath = stagedBundle.Root
-	}
-	if status.RuntimeSource == "" {
-		result.RuntimeSource = stagedBundle.Source
-	}
 	return result, nil
 }
 
@@ -207,76 +262,86 @@ func fetchLatestOpenClawVersionFromRegistry(ctx context.Context, registryURL str
 // progress is 0-100, message is a human-readable step description.
 type upgradeProgress func(progress int, message string)
 
-func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryURL string, onProgress upgradeProgress) (*bundledRuntime, func() error, func(), error) {
+// userRuntimeOverrideResult is returned by installUserRuntimeOverride to give the caller
+// full control over rollback, cleanup, and retry decisions.
+type userRuntimeOverrideResult struct {
+	Staged       *bundledRuntime // the newly installed runtime; Root points to currentDir after activation
+	HadCurrent   bool            // true if a pre-existing runtime was backed up to .backup (rollback possible)
+	Restore      func() error     // rollback: delete currentDir, rename .backup → currentDir. Idempotent (no-op if .backup absent)
+	Cleanup      func()           // delete stale .staging-* dirs. Does NOT delete .backup.
+	DeleteBackup func()          // delete .backup — only safe to call after upgrade succeeds and gateway is running.
+}
+
+// installUserRuntimeOverride installs the given openclaw version and activates it.
+// It never deletes .backup on failure — the caller decides when to roll back.
+// A stale .staging-<version> dir is reused if already complete.
+func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryURL string, onProgress upgradeProgress) (*userRuntimeOverrideResult, error) {
 	target := runtime.GOOS + "-" + runtime.GOARCH
 	userTargetDir, err := openclaw.UserRuntimeTargetDir(target)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	currentDir, err := openclaw.UserRuntimeCurrentDir(target)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if err := os.MkdirAll(userTargetDir, 0o700); err != nil {
-		return nil, nil, nil, fmt.Errorf("create user runtime dir: %w", err)
+		return nil, fmt.Errorf("create user runtime dir: %w", err)
 	}
 
-	// Use a stable staging directory name (version-only, no timestamp) so that
-	// a previous failed upgrade leaves a reusable staging dir for the same version.
 	targetStagingDir := filepath.Join(userTargetDir, ".staging-"+sanitizeRuntimeVersion(version))
 	backupDir := filepath.Join(userTargetDir, ".backup")
-	restore := func() error { return nil }
-	cleanup := func() {}
+	result := &userRuntimeOverrideResult{DeleteBackup: func() {}}
 
-	// Determine whether we can reuse an existing staging directory.
-	// A staging dir is reusable if it already has a complete openclaw install.
+	// Reuse a complete staging dir for the same version (e.g. a previous failed upgrade left it).
 	needsBuild := true
 	if dirExists, err := os.Stat(targetStagingDir); err == nil && dirExists.IsDir() {
 		if isComplete, verifyErr := verifyStagingComplete(targetStagingDir); verifyErr == nil && isComplete {
 			needsBuild = false
+			onProgress(5, "Reusing cached staging directory")
 		}
 	}
 
 	var stagingDir string
 	if needsBuild {
-		// Clean up any leftover staging dirs for this version before creating a fresh one.
+		// Clean up the staging dir for this version only (don't touch .backup).
 		_ = os.RemoveAll(targetStagingDir)
 		if err := os.MkdirAll(targetStagingDir, 0o755); err != nil {
-			return nil, nil, nil, fmt.Errorf("create staging runtime dir: %w", err)
+			return nil, fmt.Errorf("create staging runtime dir: %w", err)
 		}
 		stagingDir = targetStagingDir
 
 		onProgress(5, fmt.Sprintf("Copying Node.js runtime for %s", version))
 		if err := copyDirRecursive(filepath.Join(activeBundle.Root, "tools", "node"), filepath.Join(stagingDir, "tools", "node")); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, fmt.Errorf("copy bundled node: %w", err)
+			return nil, fmt.Errorf("copy bundled node: %w", err)
 		}
 
 		npmPrefix := npmGlobalInstallPrefix(stagingDir, runtime.GOOS)
 		if runtime.GOOS == "windows" {
 			if err := os.MkdirAll(npmPrefix, 0o755); err != nil {
 				_ = os.RemoveAll(targetStagingDir)
-				return nil, nil, nil, fmt.Errorf("create npm prefix dir: %w", err)
+				return nil, fmt.Errorf("create npm prefix dir: %w", err)
 			}
 		}
 
 		onProgress(10, fmt.Sprintf("Downloading openclaw@%s from registry", version))
-		if err := installOpenClawPackage(activeBundle.Root, version, registryURL, npmPrefix); err != nil {
+		if err := installOpenClawPackage(activeBundle.Root, version, registryURL, npmPrefix, onProgress); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, err
+			return nil, err
 		}
 		onProgress(40, "Verifying installation")
 		if err := verifyOpenClawLibLayout(stagingDir); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, err
+			return nil, err
 		}
 		if err := os.MkdirAll(filepath.Join(stagingDir, "bin"), 0o755); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, fmt.Errorf("create runtime bin dir: %w", err)
+			return nil, fmt.Errorf("create runtime bin dir: %w", err)
 		}
 		if err := writeCLIWrappers(stagingDir, runtime.GOOS); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, fmt.Errorf("write runtime CLI wrappers: %w", err)
+			return nil, fmt.Errorf("write runtime CLI wrappers: %w", err)
 		}
 		if err := writeRuntimeManifest(filepath.Join(stagingDir, "manifest.json"), bundledRuntimeManifest{
 			OpenClawVersion: version,
@@ -285,12 +350,11 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 			Arch:            runtime.GOARCH,
 		}); err != nil {
 			_ = os.RemoveAll(targetStagingDir)
-			return nil, nil, nil, fmt.Errorf("write runtime manifest: %w", err)
+			return nil, fmt.Errorf("write runtime manifest: %w", err)
 		}
 		onProgress(50, "Staging directory ready")
 	} else {
 		stagingDir = targetStagingDir
-		onProgress(5, "Reusing existing staging directory")
 	}
 
 	stagedBundle, err := loadBundledRuntimeCandidate(
@@ -300,7 +364,7 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 		runtimeCandidate{Root: stagingDir, Source: runtimeSourceUser},
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	// If user already has this exact version (current dir), skip the install and activate directly.
@@ -309,11 +373,14 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 		stagedBundle.Root = currentDir
 		stagedBundle.CLIPath = filepath.Join(currentDir, "bin", cliName())
 		stagedBundle.Source = runtimeSourceUser
-		return stagedBundle, restore, cleanup, nil
+		result.Staged = stagedBundle
+		result.HadCurrent = false // not a real upgrade, just switching active version
+		result.Cleanup = func() { cleanOldStagingDirs(userTargetDir, version) }
+		return result, nil
 	}
 
 	if _, err := verifyInstalled(stagedBundle); err != nil {
-		return nil, nil, nil, fmt.Errorf("verify staged runtime: %w", err)
+		return nil, fmt.Errorf("verify staged runtime: %w", err)
 	}
 
 	// Phase 1 — backup: must happen BEFORE any rename of current.
@@ -326,9 +393,10 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 		time.Sleep(500 * time.Millisecond)
 		_ = os.RemoveAll(backupDir)
 		if err := os.Rename(currentDir, backupDir); err != nil {
-			return nil, nil, nil, fmt.Errorf("backup current runtime: %w", err)
+			return nil, fmt.Errorf("backup current runtime: %w", err)
 		}
 	}
+	result.HadCurrent = hadCurrent
 
 	// Phase 2 — activate: rename staging → current.
 	// If rename fails, node.exe is still holding a lock; kill and retry once.
@@ -341,17 +409,14 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 			if hadCurrent {
 				_ = killNodeProcessesHoldingRuntimeDir(backupDir)
 				time.Sleep(200 * time.Millisecond)
-				if restoreErr := os.Rename(backupDir, currentDir); restoreErr != nil {
-					// currentDir may be partially replaced; best-effort restore.
-				}
+				_ = os.Rename(backupDir, currentDir)
 			}
-			return nil, nil, nil, fmt.Errorf("activate upgraded runtime after retry: %w", retryErr)
+			return nil, fmt.Errorf("activate upgraded runtime after retry: %w", retryErr)
 		}
 	}
 	onProgress(80, "Verifying new runtime")
 
-	restore = func() error {
-		// Kill node processes before restoring so the backup rename succeeds.
+	result.Restore = func() error {
 		_ = killNodeProcessesHoldingRuntimeDir(currentDir)
 		time.Sleep(500 * time.Millisecond)
 		_ = os.RemoveAll(currentDir)
@@ -362,33 +427,39 @@ func installUserRuntimeOverride(activeBundle *bundledRuntime, version, registryU
 		time.Sleep(200 * time.Millisecond)
 		return os.Rename(backupDir, currentDir)
 	}
-	cleanup = func() {
-		_ = os.RemoveAll(backupDir)
-		// Clean up any old staging directories that are not the current version.
-		// These have names like .staging-1.2.3 or .staging-2026.3.31-timestamp.
-		entries, err := os.ReadDir(userTargetDir)
-		if err != nil {
-			return
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() || !strings.HasPrefix(entry.Name(), ".staging-") {
-				continue
-			}
-			// Skip the staging dir for the version we just installed (now at currentDir).
-			if entry.Name() == ".staging-"+sanitizeRuntimeVersion(version) {
-				continue
-			}
-			_ = os.RemoveAll(filepath.Join(userTargetDir, entry.Name()))
-		}
-	}
+	// cleanup only removes old staging dirs — never .backup.
+	result.Cleanup = func() { cleanOldStagingDirs(userTargetDir, version) }
+	// Only delete .backup after the upgrade is fully confirmed (gateway is running).
+	result.DeleteBackup = func() { _ = os.RemoveAll(backupDir) }
 
 	stagedBundle.Root = currentDir
 	stagedBundle.CLIPath = filepath.Join(currentDir, "bin", cliName())
 	stagedBundle.Source = runtimeSourceUser
-	return stagedBundle, restore, cleanup, nil
+	result.Staged = stagedBundle
+	return result, nil
 }
 
-func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string) error {
+// cleanOldStagingDirs removes staging directories for versions other than current.
+// It intentionally skips .backup and the directory for the given version.
+func cleanOldStagingDirs(userTargetDir, currentVersion string) {
+	entries, err := os.ReadDir(userTargetDir)
+	if err != nil {
+		return
+	}
+	currentStagingName := ".staging-" + sanitizeRuntimeVersion(currentVersion)
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), ".staging-") {
+			continue
+		}
+		// Keep the current version's staging dir for reuse.
+		if entry.Name() == currentStagingName {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(userTargetDir, entry.Name()))
+	}
+}
+
+func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string, onProgress upgradeProgress) error {
 	npmPath := bundledNpmPath(bundleRoot)
 	if _, err := os.Stat(npmPath); err != nil {
 		return fmt.Errorf("bundled npm is missing at %s: %w", npmPath, err)
@@ -397,23 +468,70 @@ func installOpenClawPackage(bundleRoot, version, registryURL, npmPrefix string) 
 	args := []string{
 		"install", "-g",
 		"--prefix", npmPrefix,
-		"--loglevel", "error",
+		"--loglevel", "warn",
 		"--no-fund", "--no-audit",
+		"--progress",
 		"--registry", registryURL,
 		"openclaw@" + version,
 	}
 	cmd := exec.Command(npmPath, args...)
 	cmd.Env = buildBundledNodeEnv(bundleRoot)
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
 	setCmdHideWindow(cmd)
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("install openclaw runtime: %w: %s", err, msg)
+
+	// Stream npm stdout so the UI sees download progress lines.
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("open stdout for npm install: %w", err)
+	}
+	// Preserve stderr for error reporting; npm uses it for warnings and errors.
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("open stderr for npm install: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start npm install: %w", err)
+	}
+
+	var stderrLines []string
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sc := bufio.NewScanner(stderr)
+		// npm stderr lines are typically short; bump scanner buffer.
+		// npm prepends progress bars to stdout, not stderr, but capture stderr just in case.
+		for sc.Scan() {
+			stderrLines = append(stderrLines, sc.Text())
 		}
-		return fmt.Errorf("install openclaw runtime: %w", err)
+	}()
+
+	// Stream stdout: each non-empty line is forwarded as a progress update.
+	// Progress is estimated as npm install is not seekable; map 10→90% of the download phase.
+	const progressStart, progressEnd = 10, 90
+	cur := progressStart
+	sc := bufio.NewScanner(stdout)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		onProgress(cur, line)
+		// Advance progress in small increments; npm update phases roughly fill 10% each.
+		if cur < progressEnd {
+			cur += 5
+		}
+	}
+	wg.Wait()
+	scanErr := sc.Err()
+	waitErr := cmd.Wait()
+
+	if waitErr != nil || scanErr != nil {
+		errMsg := strings.TrimSpace(strings.Join(stderrLines, "\n"))
+		if errMsg != "" {
+			return fmt.Errorf("install openclaw@%s: %w\n%s", version, waitErr, errMsg)
+		}
+		return fmt.Errorf("install openclaw@%s: %w", version, waitErr)
 	}
 	return nil
 }
@@ -669,4 +787,14 @@ func verifyStagingComplete(stagingDir string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// isPortAvailable reports whether the given TCP port is free to bind.
+func isPortAvailable(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err == nil {
+		ln.Close()
+		return true
+	}
+	return false
 }

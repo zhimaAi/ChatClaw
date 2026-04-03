@@ -57,14 +57,16 @@ type Manager struct {
 	processDone  chan error
 	processLog   *os.File
 
-	expectedStopPID int
-	shuttingDown    bool
-	reconnecting    atomic.Bool
+	expectedStopPID   int
+	shuttingDown      bool
+	reconnecting      atomic.Bool
 
 	eventListenersMu sync.RWMutex
 	eventListeners   map[string]EventListener // keyed by caller-chosen ID
 
-	upgradeProgressCb func(progress int, message string)
+	upgradeProgressCb  func(progress int, message string)
+	upgradeMu         sync.Mutex  // serialises upgradeRuntimeLocked vs reconcileLocked to prevent OSS cascade
+	upgradeInProgress atomic.Bool // set during upgrade so reconcileLocked skips OSS fallback
 
 	doctorRunSeq uint64 // atomic: correlates streamed doctor chunks with the active UI run
 }
@@ -127,6 +129,49 @@ func (m *Manager) Shutdown() {
 	m.mu.RLock()
 	prev := m.status
 	m.mu.RUnlock()
+
+	// Verify port is released after shutdown; if still occupied, force kill.
+	if gatewayPortOccupied(cfg.GatewayPort) {
+		m.app.Logger.Warn("openclaw: port still occupied after stop, attempting force cleanup",
+			"port", cfg.GatewayPort)
+
+		// Try openclaw gateway stop one more time
+		bundle, err := resolveBundledRuntime()
+		if err == nil {
+			m.runGatewayStopCLI(bundle.CLIPath)
+			time.Sleep(800 * time.Millisecond)
+		}
+
+		// Kill any remaining listeners
+		if err := killListenersOnLocalTCPPort(cfg.GatewayPort); err != nil {
+			m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort failed during shutdown", "error", err)
+		}
+		time.Sleep(400 * time.Millisecond)
+
+		// Last resort: kill all node processes
+		if gatewayPortOccupied(cfg.GatewayPort) {
+			m.app.Logger.Warn("openclaw: port still occupied after CLI stop, killing node processes",
+				"port", cfg.GatewayPort)
+			if err := killAllNodeProcesses(); err != nil {
+				m.app.Logger.Warn("openclaw: killAllNodeProcesses failed during shutdown", "error", err)
+			}
+			time.Sleep(500 * time.Millisecond)
+
+			if err := killListenersOnLocalTCPPort(cfg.GatewayPort); err != nil {
+				m.app.Logger.Warn("openclaw: final killListenersOnLocalTCPPort failed", "error", err)
+			}
+		}
+
+		// Final check: report if port is still occupied
+		if gatewayPortOccupied(cfg.GatewayPort) {
+			occupyingPID := getOccupyingProcessPID(cfg.GatewayPort)
+			m.app.Logger.Error("openclaw: port still occupied after shutdown cleanup",
+				"port", cfg.GatewayPort, "occupyingPID", occupyingPID)
+		} else {
+			m.app.Logger.Info("openclaw: port successfully released after shutdown",
+				"port", cfg.GatewayPort)
+		}
+	}
 
 	// User-initiated stop: refresh persisted status so GetStatus/UI match reality.
 	// Without this, phase stays "connected" while the process is gone (misleading toast + badge).
@@ -281,21 +326,28 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 	bundle, err := resolveBundledRuntime()
 	if err != nil {
-	// No bundled runtime found — try installing from OSS as a fallback
-	m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
-	m.broadcastStatus(RuntimeStatus{
-		Phase:      PhaseUpgrading,
-		Message:    "No OpenClaw runtime found, downloading from OSS...",
-		GatewayURL: gatewayURL(cfg.GatewayPort),
-	})
-	if m.toolchainSvc == nil {
-		return fail("resolveBundledRuntime", err, "", 0)
-	}
-	// Set up progress callback so the UI can show install progress
-	if m.upgradeProgressCb != nil {
-		m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
-	}
-	if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
+		// No bundled runtime found.
+		// If an upgrade is in progress, do NOT attempt OSS install here — let the upgrade path
+		// handle rollback and retry. Otherwise, fall back to OSS install.
+		if m.upgradeInProgress.Load() {
+			m.app.Logger.Warn("openclaw: no bundled runtime found during upgrade, skipping OSS fallback",
+				"error", err)
+			return fail("resolveBundledRuntime", err, "", 0)
+		}
+		m.app.Logger.Info("openclaw: no bundled runtime found, attempting OSS install", "error", err)
+		m.broadcastStatus(RuntimeStatus{
+			Phase:      PhaseUpgrading,
+			Message:    "No OpenClaw runtime found, downloading from OSS...",
+			GatewayURL: gatewayURL(cfg.GatewayPort),
+		})
+		if m.toolchainSvc == nil {
+			return fail("resolveBundledRuntime", err, "", 0)
+		}
+		// Set up progress callback so the UI can show install progress
+		if m.upgradeProgressCb != nil {
+			m.toolchainSvc.SetUpgradeProgressCallback(m.upgradeProgressCb)
+		}
+		if installErr := m.toolchainSvc.InstallOpenClawRuntime(); installErr != nil {
 			return fail("OSS runtime install", installErr, "", 0)
 		}
 		// Reload bundle after OSS install
@@ -345,7 +397,7 @@ func (m *Manager) reconcileLocked(restart bool) error {
 	m.mu.RUnlock()
 
 	if needProcess {
-		if err := m.startProcess(cfg, bundle, version); err != nil {
+		if err := m.startProcess(cfg, bundle, version, restart); err != nil {
 			return fail("startProcess", err, version, 0)
 		}
 		m.mu.RLock()
@@ -394,7 +446,104 @@ func (m *Manager) reconcileLocked(restart bool) error {
 
 // --- Process management ---
 
-func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string) error {
+// gatewayPortOccupied reports whether something accepts TCP connections on the gateway loopback port.
+func gatewayPortOccupied(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+func (m *Manager) runGatewayStopCLI(cliPath string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, cliPath, "gateway", "stop")
+	setCmdHideWindow(cmd)
+	if err := cmd.Run(); err != nil {
+		m.app.Logger.Warn("openclaw: gateway stop CLI finished with error", "error", err)
+	}
+}
+
+// ensurePortClean frees the gateway port before starting a new process. If TCP dial
+// succeeds, something is already listening — we must run "openclaw gateway stop" and,
+// when that is not enough, kill listeners (netstat/taskkill on Windows) and optionally
+// all node.exe processes (restart path). Returns an error if the port cannot be freed
+// after all cleanup attempts.
+func (m *Manager) ensurePortClean(port int, cliPath string, aggressive bool) error {
+	const maxRounds = 5
+	var lastErr error
+
+	for round := 0; round < maxRounds; round++ {
+		if !gatewayPortOccupied(port) {
+			if round > 0 {
+				m.app.Logger.Info("openclaw: gateway port is free after cleanup", "port", port)
+			}
+			return nil
+		}
+
+		m.app.Logger.Info("openclaw: gateway port occupied; cleanup",
+			"port", port, "round", round+1, "aggressiveRestart", aggressive)
+
+		// Step 1: Run openclaw gateway stop
+		m.runGatewayStopCLI(cliPath)
+		time.Sleep(800 * time.Millisecond)
+
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
+
+		// Step 2: Kill listeners on the specific port
+		if err := killListenersOnLocalTCPPort(port); err != nil {
+			m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort failed", "error", err)
+			lastErr = err
+		}
+		time.Sleep(400 * time.Millisecond)
+
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
+
+		// Step 3: Kill all node processes (aggressive cleanup)
+		if aggressive || round >= 1 {
+			if err := killAllNodeProcesses(); err != nil {
+				m.app.Logger.Warn("openclaw: killAllNodeProcesses failed", "error", err)
+				lastErr = err
+			}
+			time.Sleep(500 * time.Millisecond)
+
+			if err := killListenersOnLocalTCPPort(port); err != nil {
+				m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort after node kill failed", "error", err)
+				lastErr = err
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
+	}
+
+	// After all cleanup attempts, check once more and report the occupying process
+	if gatewayPortOccupied(port) {
+		occupyingPID := getOccupyingProcessPID(port)
+		errMsg := fmt.Sprintf("port %d is still occupied after cleanup attempts (PID: %d)", port, occupyingPID)
+		m.app.Logger.Error("openclaw: " + errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	return lastErr
+}
+
+func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string, aggressiveCleanup bool) error {
+	// Ensure port is clean before starting; if it fails, return error to prevent restart loop.
+	if err := m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath, aggressiveCleanup); err != nil {
+		m.app.Logger.Error("openclaw: port cleanup failed, cannot start gateway", "error", err)
+		return fmt.Errorf("port %d cleanup failed: %w", cfg.GatewayPort, err)
+	}
+
 	logFile, err := openGatewayLogFile(bundle.LogsDir)
 	if err != nil {
 		return err
@@ -409,7 +558,10 @@ func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, insta
 		"--bind", "loopback",
 		"--auth", "token",
 		"--token", cfg.GatewayToken,
-		"--force",
+		// Note: Do NOT pass --force here. The Manager already calls stopProcess()
+		// (via reconcileLocked) before startProcess, so the port is guaranteed
+		// clean. On Windows, --force runs "fuser" which is unavailable and causes
+		// the gateway to exit with status 1, triggering an unwanted restart loop.
 	)
 	cmd.Env = buildGatewayEnv(cfg, bundle)
 	cmd.Stdout = logFile

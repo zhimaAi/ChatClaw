@@ -29,7 +29,11 @@ const { visualStatus } = storeToRefs(gatewayStore)
 const badgeText = computed(() =>
   t(`settings.openclawRuntime.statusBadge.${visualStatus.value}`)
 )
-const isStarting = computed(() => visualStatus.value === GatewayVisualStatus.Starting)
+const isStarting = computed(
+  () =>
+    visualStatus.value === GatewayVisualStatus.Starting ||
+    visualStatus.value === GatewayVisualStatus.Upgrading
+)
 
 const labelSeparator = computed(() => t('settings.openclawRuntime.sidebarGatewayLabelSeparator'))
 
@@ -51,7 +55,9 @@ const dotClass = computed(() =>
     visualStatus.value === GatewayVisualStatus.Running && 'bg-emerald-500',
     visualStatus.value === GatewayVisualStatus.Error && 'bg-rose-500',
     visualStatus.value === GatewayVisualStatus.Stop && 'bg-neutral-400 dark:bg-neutral-500',
-    visualStatus.value === GatewayVisualStatus.Starting && 'bg-amber-500'
+    (visualStatus.value === GatewayVisualStatus.Starting ||
+      visualStatus.value === GatewayVisualStatus.Upgrading) &&
+      'bg-amber-500'
   )
 )
 </script>
@@ -83,11 +89,11 @@ const dotClass = computed(() =>
         {{ labelSeparator }}
       </span>
       <span class="inline-flex min-w-0 flex-1 items-center justify-start gap-1.5">
+        <span :class="cn('min-w-0 truncate tabular-nums', tagStatusClass)">{{ badgeText }}</span>
         <Loader2
           v-if="isStarting"
           :class="cn('size-4 shrink-0 animate-spin', tagLoaderClass)"
         />
-        <span :class="cn('min-w-0 truncate tabular-nums', tagStatusClass)">{{ badgeText }}</span>
       </span>
     </button>
   </div>

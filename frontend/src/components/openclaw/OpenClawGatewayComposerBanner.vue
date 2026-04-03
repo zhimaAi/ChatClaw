@@ -18,6 +18,8 @@ const tagText = computed(() => {
       return t('settings.openclawRuntime.composer.gatewayTagStop')
     case GatewayVisualStatus.Starting:
       return t('settings.openclawRuntime.composer.gatewayTagStarting')
+    case GatewayVisualStatus.Upgrading:
+      return t('settings.openclawRuntime.composer.gatewayTagUpgrading')
     default:
       return t('settings.openclawRuntime.composer.gatewayTagStop')
   }
@@ -30,7 +32,8 @@ const tagClass = computed(() =>
       'border-rose-300 text-rose-600 dark:border-rose-600/50 dark:text-rose-400',
     props.visualStatus === GatewayVisualStatus.Stop &&
       'border-neutral-300 text-neutral-600 dark:border-white/25 dark:text-muted-foreground',
-    props.visualStatus === GatewayVisualStatus.Starting &&
+    (props.visualStatus === GatewayVisualStatus.Starting ||
+      props.visualStatus === GatewayVisualStatus.Upgrading) &&
       'border-amber-300 text-amber-700 dark:border-amber-600/50 dark:text-amber-400'
   )
 )

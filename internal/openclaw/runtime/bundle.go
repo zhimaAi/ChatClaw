@@ -140,6 +140,16 @@ func bundledRuntimeCandidates(target string) ([]runtimeCandidate, error) {
 
 	var candidates []runtimeCandidate
 
+	// --- User overrides (OSS install / UI upgrade) — highest priority ---
+	// These take precedence over bundled and development paths so that a
+	// user-initiated upgrade always wins over stale development or bundled runtimes.
+	if current, err := openclaw.UserRuntimeCurrentDir(target); err == nil {
+		candidates = append(candidates, runtimeCandidate{Root: current, Source: runtimeSourceUser})
+	}
+	if userTarget, err := openclaw.UserRuntimeTargetDir(target); err == nil {
+		candidates = append(candidates, runtimeCandidate{Root: userTarget, Source: runtimeSourceUser})
+	}
+
 	// --- Embedded (bundled with installer / NSIS) — fallback priority ---
 	// Used when no user override exists. Bundled runtime is the authoritative
 	// version for production when the user has not initiated an upgrade.
@@ -171,16 +181,6 @@ func bundledRuntimeCandidates(target string) ([]runtimeCandidate, error) {
 			break
 		}
 		dir = parent
-	}
-
-	// --- User overrides (OSS install / UI upgrade) — highest priority ---
-	// These take precedence over bundled and development paths so that a
-	// user-initiated upgrade always wins over stale development or bundled runtimes.
-	if current, err := openclaw.UserRuntimeCurrentDir(target); err == nil {
-		candidates = append(candidates, runtimeCandidate{Root: current, Source: runtimeSourceUser})
-	}
-	if userTarget, err := openclaw.UserRuntimeTargetDir(target); err == nil {
-		candidates = append(candidates, runtimeCandidate{Root: userTarget, Source: runtimeSourceUser})
 	}
 
 	// Deduplicate
