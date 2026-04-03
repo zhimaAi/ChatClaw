@@ -341,7 +341,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div class="flex w-full flex-col gap-4">
     <SettingsCard :title="t('settings.general.title')">
       <!-- 语言设置 -->
       <SettingsItem :label="t('settings.general.language')">
@@ -376,15 +376,14 @@ onUnmounted(() => {
     <SettingsCard :title="t('settings.general.toolchain.title')">
       <!-- OpenClaw 运行环境（独立卡片，不走 toolDefs 循环） -->
       <div
-        class="flex items-start justify-between gap-4 p-4 border-b border-border dark:border-white/10"
+        class="flex items-start gap-4 border-b border-border p-4 dark:border-white/10"
       >
-        <div class="flex min-w-0 flex-1 items-start gap-3">
-          <div
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
-          >
-            <Package class="size-4" />
-          </div>
-          <div class="min-w-0 flex-1">
+        <div
+          class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
+        >
+          <Package class="size-4" />
+        </div>
+        <div class="min-w-0 flex-1 pt-0.5">
             <span class="text-sm font-medium text-foreground">{{
               t('settings.general.toolchain.openclaw.name')
             }}</span>
@@ -439,7 +438,6 @@ onUnmounted(() => {
                 }}</span>
               </div>
             </div>
-          </div>
         </div>
 
         <div class="flex shrink-0 flex-col items-end gap-2 pt-0.5">
@@ -481,16 +479,15 @@ onUnmounted(() => {
       <div
         v-for="(tool, index) in toolDefs"
         :key="tool.id"
-        class="flex items-center justify-between gap-4 p-4"
+        class="flex items-start gap-4 p-4"
         :class="index < toolDefs.length - 1 && 'border-b border-border dark:border-white/10'"
       >
-        <div class="flex items-center gap-3 min-w-0">
-          <div
-            class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
-          >
-            <Package class="size-4" />
-          </div>
-          <div class="min-w-0 flex-1">
+        <div
+          class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 text-muted-foreground dark:border-white/10 dark:bg-white/5"
+        >
+          <Package class="size-4" />
+        </div>
+        <div class="min-w-0 flex-1 pt-0.5">
             <span class="text-sm font-medium text-foreground">{{ t(tool.nameKey) }}</span>
             <p class="text-xs text-muted-foreground truncate">{{ t(tool.descKey) }}</p>
             <button
@@ -533,10 +530,9 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-          </div>
         </div>
 
-        <div class="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
+        <div class="flex shrink-0 flex-col items-end gap-2 pt-0.5 sm:flex-row sm:items-center">
           <template v-if="toolStatuses[tool.id]?.installed && !toolStatuses[tool.id]?.installing">
             <div class="flex flex-col items-end gap-2">
               <span
@@ -594,15 +590,18 @@ onUnmounted(() => {
           </template>
         </div>
       </div>
-    </SettingsCard>
 
-    <!-- 测试安装按钮（仅开发模式显示） -->
-    <div v-if="isDevMode" class="flex justify-end">
-      <Button variant="outline" size="sm" @click="testInstallOpen = true">
-        <Play class="mr-1 size-3.5" />
-        {{ t('settings.general.toolchain.testInstall.button') }}
-      </Button>
-    </div>
+      <!-- Dev-only: same p-4 as toolchain rows so actions align on all breakpoints -->
+      <div
+        v-if="isDevMode"
+        class="flex justify-end border-t border-border p-4 dark:border-white/10"
+      >
+        <Button variant="outline" size="sm" @click="testInstallOpen = true">
+          <Play class="mr-1 size-3.5" />
+          {{ t('settings.general.toolchain.testInstall.button') }}
+        </Button>
+      </div>
+    </SettingsCard>
 
     <!-- 测试安装对话框 -->
     <TestInstallDialog v-model:open="testInstallOpen" />

@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-settings-card">
+  <div class="mx-auto flex w-full max-w-[calc(100%-10rem)] lg:max-w-settings-card">
     <div class="flex flex-col gap-6">
       <div class="flex items-center justify-between bg-background px-4 py-4">
         <div>
