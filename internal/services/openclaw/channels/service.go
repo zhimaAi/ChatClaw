@@ -38,8 +38,9 @@ type OpenClawChannelService struct {
 	wechatPluginInstallMu      sync.Mutex
 	wechatPluginInstallRunning bool
 
-	whatsappLoginMu sync.Mutex
-	whatsappLogins  map[string]*whatsappLoginSession
+	whatsappLoginMu           sync.Mutex
+	whatsappLogins            map[string]*whatsappLoginSession
+	whatsappPreparedAccountID string
 }
 
 const wecomPluginPackage = "@wecom/wecom-openclaw-plugin"
@@ -189,6 +190,22 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, err
 	}
 	platform := openClawPlatformFromInput(input.Platform, input.ExtraConfig)
+	if platform == channels.PlatformWhatsapp && strings.TrimSpace(extractWhatsappAccountID(input.ExtraConfig)) == "" {
+		accountID := strings.TrimSpace(s.readPreparedWhatsappAccountID())
+		if accountID == "" {
+			var accountErr error
+			accountID, accountErr = s.nextWhatsappLoginAccountID()
+			if accountErr != nil {
+				return nil, errs.Wrap("error.channel_create_failed", accountErr)
+			}
+		}
+		extraConfigWithAccountID, accountErr := withWhatsappAccountID(input.ExtraConfig, accountID)
+		if accountErr != nil {
+			return nil, errs.Wrap("error.channel_create_failed", accountErr)
+		}
+		input.ExtraConfig = extraConfigWithAccountID
+		s.rememberPreparedWhatsappAccountID(accountID)
+	}
 
 	// Create local DB row first to obtain a stable channel ID for the account key.
 	ch, err := s.channelSvc.CreateChannel(channels.CreateChannelInput{
@@ -1009,7 +1026,7 @@ func (s *OpenClawChannelService) VerifyChannelConfig(platform string, extraConfi
 	if p == channels.PlatformWhatsapp {
 		ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
 		defer cancel()
-		if err := s.ensureOpenClawWhatsappPluginInstalled(ctx); err != nil {
+		if err := s.ensureOpenClawWhatsappPluginInstalled(ctx, extractWhatsappAccountID(extraConfig)); err != nil {
 			return errs.Wrap("error.channel_verify_failed", err)
 		}
 	}
