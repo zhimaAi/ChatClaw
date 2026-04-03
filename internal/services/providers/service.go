@@ -52,7 +52,15 @@ func validateModelID(modelID string) error {
 }
 
 func NewProvidersService(app *application.App) *ProvidersService {
-	return &ProvidersService{app: app}
+	svc := &ProvidersService{app: app}
+	// Set up the ChatWiki model catalog refresh function for OpenClaw sync.
+	chatwiki.RefreshChatWikiModelCatalog = func() error {
+		// Trigger ChatWiki model catalog refresh via GetProviderWithModels.
+		// This is a bit hacky but avoids circular dependencies.
+		_, err := svc.GetProviderWithModels("chatwiki")
+		return err
+	}
+	return svc
 }
 
 func (s *ProvidersService) db() (*bun.DB, error) {

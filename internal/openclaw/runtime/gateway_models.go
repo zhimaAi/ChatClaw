@@ -139,6 +139,7 @@ func buildModelsPatch(providersSvc *providers.ProvidersService, allProviders []p
 }
 
 // fetchChatWikiSyncData fetches ChatWiki binding and model catalog for sync.
+// It first triggers a catalog refresh to ensure we have the latest models.
 func fetchChatWikiSyncData() *chatWikiSyncData {
 	chatWikiSyncMu.Lock()
 	defer chatWikiSyncMu.Unlock()
@@ -146,6 +147,12 @@ func fetchChatWikiSyncData() *chatWikiSyncData {
 	// Check if cache is still valid (within last 5 minutes).
 	if chatWikiSyncCache != nil && time.Since(chatWikiSyncCache.CachedAt) < 5*time.Minute {
 		return chatWikiSyncCache
+	}
+
+	// Refresh the ChatWiki model catalog to ensure we have the latest models.
+	// This handles cases where models were added/removed/updated in ChatWiki.
+	if chatwiki.RefreshChatWikiModelCatalog != nil {
+		_ = chatwiki.RefreshChatWikiModelCatalog()
 	}
 
 	result := &chatWikiSyncData{CachedAt: time.Now()}
@@ -158,7 +165,7 @@ func fetchChatWikiSyncData() *chatWikiSyncData {
 	}
 	result.Binding = binding
 
-	// Fetch model catalog.
+	// Fetch model catalog (now should be fresh after refresh).
 	catalog, err := chatwiki.GetModelCatalogForSync()
 	if err != nil || catalog == nil {
 		chatWikiSyncCache = result
