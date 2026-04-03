@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Events } from '@wailsio/runtime'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Loader2, ExternalLink, Download, Square } from 'lucide-vue-next'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
@@ -129,9 +128,47 @@ const loadStatus = async () => {
 const handleRestart = async () => {
   restarting.value = true
   try {
+    // First check if port is occupied
+    const portStatus = await OpenClawRuntimeService.CheckPortOccupied()
+    if (portStatus.occupied) {
+      const processName = portStatus.processName || 'Unknown'
+      toast.error(
+        t('settings.openclawRuntime.portOccupiedHint', {
+          port: portStatus.port,
+          process: processName,
+          pid: portStatus.pid,
+        })
+      )
+      await loadStatus()
+      restarting.value = false
+      return
+    }
+
     status.value = await OpenClawRuntimeService.RestartGateway()
     syncGatewayStore()
-    toast.success(t('settings.openclawRuntime.restartSuccess'))
+
+    // Check if restart failed due to port occupation
+    if (status.value.phase === 'error' && status.value.message?.includes('port')) {
+      const portStatusAfter = await OpenClawRuntimeService.CheckPortOccupied()
+      if (portStatusAfter.occupied) {
+        const processName = portStatusAfter.processName || 'Unknown'
+        toast.error(
+          t('settings.openclawRuntime.portOccupiedHint', {
+            port: portStatusAfter.port,
+            process: processName,
+            pid: portStatusAfter.pid,
+          })
+        )
+        restarting.value = false
+        return
+      }
+    }
+
+    if (status.value.phase === 'error') {
+      toast.error(status.value.message || t('settings.openclawRuntime.restartFailed'))
+    } else {
+      toast.success(t('settings.openclawRuntime.restartSuccess'))
+    }
   } catch (e) {
     console.error('Failed to restart OpenClaw gateway:', e)
     toast.error(getErrorMessage(e) || t('settings.openclawRuntime.restartFailed'))
@@ -146,6 +183,23 @@ const handleStop = async () => {
   try {
     await OpenClawRuntimeService.SetAutoStart(false)
     toast.success(t('settings.openclawRuntime.stopSuccess'))
+
+    // Wait a moment for cleanup
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+
+    // Check if port is still occupied after stop
+    const portStatus = await OpenClawRuntimeService.CheckPortOccupied()
+    if (portStatus.occupied) {
+      const processName = portStatus.processName || 'Unknown'
+      toast.error(
+        t('settings.openclawRuntime.portStillOccupiedAfterStopHint', {
+          port: portStatus.port,
+          pid: portStatus.pid,
+        }) +
+          ` (${processName})`
+      )
+    }
+
     await loadStatus()
   } catch (e) {
     console.error('Failed to stop OpenClaw gateway:', e)
@@ -182,32 +236,43 @@ const handleOpenDashboard = () => {
   navigationStore.navigateToModule('openclaw-dashboard')
 }
 
-let unsubscribeStatus: (() => void) | null = null
-let unsubscribeGateway: (() => void) | null = null
+// Sync local refs when store's runtimePhase changes (from global event subscriptions)
+// This keeps the detailed status display in sync with the store
+watch(
+  () => gatewayStore.runtimePhase,
+  (phase) => {
+    if (status.value.phase !== phase) {
+      status.value.phase = phase
+    }
+  }
+)
 
-watch([status, gatewayState], () => syncGatewayStore(), { deep: true })
+// Sync gateway connection state from store
+watch(
+  () => gatewayStore.lastGatewayState,
+  (gw) => {
+    gatewayState.value.connected = gw.connected
+    gatewayState.value.authenticated = gw.authenticated
+    gatewayState.value.reconnecting = gw.reconnecting
+    gatewayState.value.lastError = gw.lastError
+  },
+  { deep: true }
+)
+
+// Sync full status from store when detailed fields change (e.g., installedVersion, message)
+watch(
+  () => gatewayStore.visualStatus,
+  () => {
+    // When visual status changes, refresh local status to get latest details
+    void loadStatus()
+  }
+)
 
 onMounted(() => {
   void loadStatus()
   void loadDevMode()
+  // Store's heartbeat will subscribe to events and poll, keeping this component in sync
   void gatewayStore.poll()
-
-  unsubscribeStatus = Events.On('openclaw:status', (event: any) => {
-    const data = event?.data?.[0] ?? event?.data ?? event
-    if (data) status.value = RuntimeStatus.createFrom(data)
-  })
-
-  unsubscribeGateway = Events.On('openclaw:gateway-state', (event: any) => {
-    const data = event?.data?.[0] ?? event?.data ?? event
-    if (data) gatewayState.value = GatewayConnectionState.createFrom(data)
-  })
-})
-
-onUnmounted(() => {
-  unsubscribeStatus?.()
-  unsubscribeStatus = null
-  unsubscribeGateway?.()
-  unsubscribeGateway = null
 })
 </script>
 

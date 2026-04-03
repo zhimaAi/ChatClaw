@@ -320,6 +320,10 @@ export default {
       stop: "Stop",
       stopSuccess: "Gateway stopped",
       stopFailed: "Failed to stop gateway",
+      portOccupied: "Port occupied",
+      portOccupiedHint: "Port {port} is occupied by process {process} (PID: {pid}). Please stop that process first.",
+      portStillOccupiedAfterStop: "Port {port} is still occupied after gateway stop",
+      portStillOccupiedAfterStopHint: "Please manually terminate the process occupying the port (PID: {pid}).",
       composer: {
         gatewayTagError: "Gateway error",
         gatewayTagStop: "Gateway stopped",

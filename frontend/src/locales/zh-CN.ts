@@ -320,6 +320,10 @@ export default {
       stop: "停止",
       stopSuccess: "网关已停止",
       stopFailed: "网关停止失败",
+      portOccupied: "端口被占用",
+      portOccupiedHint: "端口 {port} 被进程 {process} (PID: {pid}) 占用，请先停止该进程后再试。",
+      portStillOccupiedAfterStop: "停止网关后端口 {port} 仍未释放",
+      portStillOccupiedAfterStopHint: "请手动终止占用端口的进程 (PID: {pid})。",
       composer: {
         gatewayTagError: "网关异常",
         gatewayTagStop: "网关未运行",

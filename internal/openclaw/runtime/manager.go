@@ -130,6 +130,49 @@ func (m *Manager) Shutdown() {
 	prev := m.status
 	m.mu.RUnlock()
 
+	// Verify port is released after shutdown; if still occupied, force kill.
+	if gatewayPortOccupied(cfg.GatewayPort) {
+		m.app.Logger.Warn("openclaw: port still occupied after stop, attempting force cleanup",
+			"port", cfg.GatewayPort)
+
+		// Try openclaw gateway stop one more time
+		bundle, err := resolveBundledRuntime()
+		if err == nil {
+			m.runGatewayStopCLI(bundle.CLIPath)
+			time.Sleep(800 * time.Millisecond)
+		}
+
+		// Kill any remaining listeners
+		if err := killListenersOnLocalTCPPort(cfg.GatewayPort); err != nil {
+			m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort failed during shutdown", "error", err)
+		}
+		time.Sleep(400 * time.Millisecond)
+
+		// Last resort: kill all node processes
+		if gatewayPortOccupied(cfg.GatewayPort) {
+			m.app.Logger.Warn("openclaw: port still occupied after CLI stop, killing node processes",
+				"port", cfg.GatewayPort)
+			if err := killAllNodeProcesses(); err != nil {
+				m.app.Logger.Warn("openclaw: killAllNodeProcesses failed during shutdown", "error", err)
+			}
+			time.Sleep(500 * time.Millisecond)
+
+			if err := killListenersOnLocalTCPPort(cfg.GatewayPort); err != nil {
+				m.app.Logger.Warn("openclaw: final killListenersOnLocalTCPPort failed", "error", err)
+			}
+		}
+
+		// Final check: report if port is still occupied
+		if gatewayPortOccupied(cfg.GatewayPort) {
+			occupyingPID := getOccupyingProcessPID(cfg.GatewayPort)
+			m.app.Logger.Error("openclaw: port still occupied after shutdown cleanup",
+				"port", cfg.GatewayPort, "occupyingPID", occupyingPID)
+		} else {
+			m.app.Logger.Info("openclaw: port successfully released after shutdown",
+				"port", cfg.GatewayPort)
+		}
+	}
+
 	// User-initiated stop: refresh persisted status so GetStatus/UI match reality.
 	// Without this, phase stays "connected" while the process is gone (misleading toast + badge).
 	m.broadcastStatus(RuntimeStatus{
@@ -427,38 +470,79 @@ func (m *Manager) runGatewayStopCLI(cliPath string) {
 // ensurePortClean frees the gateway port before starting a new process. If TCP dial
 // succeeds, something is already listening — we must run "openclaw gateway stop" and,
 // when that is not enough, kill listeners (netstat/taskkill on Windows) and optionally
-// all node.exe processes (restart path). The previous implementation incorrectly treated
-// a successful dial as "nothing to do".
-func (m *Manager) ensurePortClean(port int, cliPath string, aggressive bool) {
+// all node.exe processes (restart path). Returns an error if the port cannot be freed
+// after all cleanup attempts.
+func (m *Manager) ensurePortClean(port int, cliPath string, aggressive bool) error {
 	const maxRounds = 5
+	var lastErr error
+
 	for round := 0; round < maxRounds; round++ {
 		if !gatewayPortOccupied(port) {
 			if round > 0 {
 				m.app.Logger.Info("openclaw: gateway port is free after cleanup", "port", port)
 			}
-			return
+			return nil
 		}
+
 		m.app.Logger.Info("openclaw: gateway port occupied; cleanup",
 			"port", port, "round", round+1, "aggressiveRestart", aggressive)
 
+		// Step 1: Run openclaw gateway stop
 		m.runGatewayStopCLI(cliPath)
 		time.Sleep(800 * time.Millisecond)
 
-		_ = killListenersOnLocalTCPPort(port)
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
+
+		// Step 2: Kill listeners on the specific port
+		if err := killListenersOnLocalTCPPort(port); err != nil {
+			m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort failed", "error", err)
+			lastErr = err
+		}
 		time.Sleep(400 * time.Millisecond)
 
-		// User restart: always clear stray node children; cold start escalates after first round.
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
+
+		// Step 3: Kill all node processes (aggressive cleanup)
 		if aggressive || round >= 1 {
-			_ = killAllNodeProcesses()
+			if err := killAllNodeProcesses(); err != nil {
+				m.app.Logger.Warn("openclaw: killAllNodeProcesses failed", "error", err)
+				lastErr = err
+			}
 			time.Sleep(500 * time.Millisecond)
-			_ = killListenersOnLocalTCPPort(port)
+
+			if err := killListenersOnLocalTCPPort(port); err != nil {
+				m.app.Logger.Warn("openclaw: killListenersOnLocalTCPPort after node kill failed", "error", err)
+				lastErr = err
+			}
 			time.Sleep(300 * time.Millisecond)
 		}
+
+		if !gatewayPortOccupied(port) {
+			return nil
+		}
 	}
+
+	// After all cleanup attempts, check once more and report the occupying process
+	if gatewayPortOccupied(port) {
+		occupyingPID := getOccupyingProcessPID(port)
+		errMsg := fmt.Sprintf("port %d is still occupied after cleanup attempts (PID: %d)", port, occupyingPID)
+		m.app.Logger.Error("openclaw: " + errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	return lastErr
 }
 
 func (m *Manager) startProcess(cfg OpenClawConfig, bundle *bundledRuntime, installedVersion string, aggressiveCleanup bool) error {
-	m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath, aggressiveCleanup)
+	// Ensure port is clean before starting; if it fails, return error to prevent restart loop.
+	if err := m.ensurePortClean(cfg.GatewayPort, bundle.CLIPath, aggressiveCleanup); err != nil {
+		m.app.Logger.Error("openclaw: port cleanup failed, cannot start gateway", "error", err)
+		return fmt.Errorf("port %d cleanup failed: %w", cfg.GatewayPort, err)
+	}
 
 	logFile, err := openGatewayLogFile(bundle.LogsDir)
 	if err != nil {

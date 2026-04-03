@@ -2,6 +2,10 @@ package openclawruntime
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
 
 	"chatclaw/internal/define"
 )
@@ -81,4 +85,57 @@ func (s *OpenClawRuntimeService) GetDashboardURL() string {
 // IsDevMode returns true when the application is running in development mode.
 func (s *OpenClawRuntimeService) IsDevMode() bool {
 	return define.IsDev()
+}
+
+// PortOccupiedResult contains information about port occupation status.
+type PortOccupiedResult struct {
+	Occupied    bool   `json:"occupied"`
+	Port        int    `json:"port"`
+	ProcessName string `json:"processName,omitempty"`
+	PID         int    `json:"pid,omitempty"`
+}
+
+// CheckPortOccupied checks if the gateway port is currently occupied and returns details.
+func (s *OpenClawRuntimeService) CheckPortOccupied() PortOccupiedResult {
+	cfg := s.manager.store.Get()
+	port := cfg.GatewayPort
+
+	if !gatewayPortOccupied(port) {
+		return PortOccupiedResult{
+			Occupied: false,
+			Port:     port,
+		}
+	}
+
+	pid := getOccupyingProcessPID(port)
+	processName := ""
+	if pid > 0 {
+		processName = getProcessNameByPID(pid)
+	}
+
+	return PortOccupiedResult{
+		Occupied:    true,
+		Port:        port,
+		ProcessName: processName,
+		PID:         pid,
+	}
+}
+
+// getProcessNameByPID returns the process name for a given PID on Windows.
+func getProcessNameByPID(pid int) string {
+	if runtime.GOOS != "windows" {
+		return ""
+	}
+	cmd := exec.Command("tasklist", "/FI", "PID eq "+strconv.Itoa(pid), "/FO", "CSV", "/NH")
+	setCmdHideWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// CSV format: "processname","pid","sessionname","session#","memusage"
+	fields := strings.Split(strings.TrimSpace(string(out)), ",")
+	if len(fields) > 0 {
+		return strings.Trim(fields[0], "\"")
+	}
+	return ""
 }
