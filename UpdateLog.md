@@ -1,5 +1,50 @@
 ## Changelog
 
+### 2026/04/03
+1. **OpenClaw Doctor Console Enhancement**: Integrated `ansi-to-html` for enhanced console output rendering with ANSI color support in both light and dark themes. Added streaming support for doctor command output with improved stdout/stderr handling and event emission for UI updates.
+2. **OpenClaw Runtime Upgrade System**: Implemented comprehensive upgrade status management with "Upgrading" state across components and localization files. Enhanced npm package installation with progress updates and improved error handling, including rollback mechanisms.
+3. **Gateway Port Management**: Added port occupation checks with user feedback for gateway operations. Implemented `ensurePortClean` method to detect and gracefully stop stale processes using the gateway port. Added stop port functionality.
+4. **ChatWiki Sync Enhancement**: Enhanced ChatWiki sync data fetching to support forced refresh for up-to-date model catalog. Implemented model catalog refresh mechanism for OpenClaw sync to ensure models stay current.
+5. **OpenClaw Auto-Start**: Implemented auto-start functionality for OpenClaw gateway with UI toggle and localization support. Configuration persists auto-start preference with toast notifications for state changes.
+6. **Chat Session Sync**: Implemented OpenClaw chat session synchronization functionality.
+7. **WhatsApp Integration**: Enhanced WhatsApp binding functionality.
+8. **QQ/Enterprise WeChat Optimization**: Resolved download plugin rate limiting issues. Fixed Chinese/English prompts and login redirect issues.
+9. **Style Updates**: Removed team features from OpenClaw mode. Updated settings component layout and styling for improved responsiveness.
+10. **Version Bump**: Application version updated to 0.9.1. OpenClaw version updated to 2026.4.2.
+
+### 2026/04/02
+1. **OpenClaw Doctor Integration**: Added gateway status handling in SideNav with localized messages. Updated ChatInputArea to reflect gateway state with relevant UI components.
+2. **i18n Enhancement**: Added translation files for new gateway and doctor messages across multiple languages. Added toast notifications for toolchain updates.
+3. **OpenClaw Version Update**: Updated OpenClaw version to 2026.4.1 with enhanced gateway integration in frontend.
+
+
+### 2026/04/01
+1. **Version 0.9.0 Release**: Updated application version to 0.9.0 in build configuration.
+2. **OpenClaw Installer Bundling**: Enhanced Taskfile.yml and NSIS installer with conditional OpenClaw runtime bundling support, including zip file existence checks before bundling.
+3. **OpenClaw Version Update**: Upgraded OpenClaw runtime to version 2026.3.31.
+4. **Multi-Language Translations**: Updated translations across Arabic, Bengali, German, English, Spanish, and French locales with new keys and improved consistency.
+5. **Scheduled Task Bug Fixes**: Fixed cron display anomalies and edited scheduled task issues.
+6. **WeChat Text Updates**: Updated WeChat-related text copy and default naming conventions.
+
+### 2026/03/31
+1. **WeChat/WeCom/QQ Channel Conflict Resolution**: Merged WeChat, WeCom, and QQ channel support with conflict resolution and QR code login for WeChat bots.
+2. **Feishu Message Hook**: Added Feishu (Lark) message webhook integration.
+3. **Tool Selection**: Available tools list now supports selection and configuration.
+4. **Eino Framework Upgrade**: Upgraded Eino framework to version 0.8.5.
+5. **Console Window Optimization**: Updated BUILD_FLAGS to improve DEV environment debugging and suppress console flash in production builds.
+6. **Channel Delivery Bug Fixes**: Fixed channel push exceptions, delivery anomalies, and assistant/channel sync delay issues.
+7. **Scheduled Task Refinements**: Fixed task editing, filter issues, and partial save/edit failures.
+8. **Memory Optimization**: Improved memory handling and last_sender_id tracking.
+9. **Multi-Language Support**: Added Traditional Chinese (zh-TW) locale support.
+
+### 2026/03/30
+1. **OpenClaw QQ Integration Complete**: Completed QQ channel integration for OpenClaw, with style adjustments for knowledge base selection and account management display.
+2. **WeChat Bot QR Code Login**: Implemented QR code login for creating WeChat bots via scan.
+3. **DingTalk Enhancements**: Added DingTalk plugin installation, session synchronization, and agent binding functionality.
+4. **Linux Server OpenClaw Runtime Export**: Added OpenClaw runtime export support for Linux servers.
+5. **Streaming Output**: Enhanced streaming output for OpenClaw agents.
+6. **Scheduled Task Adjustments**: Translation updates and scheduled task configuration refinements.
+
 ### 2026/03/27
 1. **OpenClaw Runtime Install/Uninstall Optimization**: Replaced file copy with robocopy for efficiency, optimized process termination logic to prevent file lock issues, updated NSIS installer packaging format (tar/zip).
 2. **OpenClaw Manager Standalone Page**: Implemented OpenClaw manager as a standalone page, unified chat assistant style in OpenClaw mode to match ChatClaw.

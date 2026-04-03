@@ -302,31 +302,31 @@ ChatClaw_D2/
 To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
 
-### 2026/03/27
-1. **OpenClaw Runtime Install/Uninstall Optimization**: Replaced file copy with robocopy for efficiency, optimized process termination logic to prevent file lock issues, updated NSIS installer packaging format (tar/zip).
-2. **OpenClaw Manager Standalone Page**: Implemented OpenClaw manager as a standalone page, unified chat assistant style in OpenClaw mode to match ChatClaw.
-3. **Feishu Channel Integration**: Completed Feishu message sync functionality, support for group message replies.
-4. **DingTalk Channel Integration**: Added new DingTalk Agent and DingTalk channel functionality.
-5. **OpenClaw Skills Page**: Refactored `OpenClawSkillsPage.vue` component structure for Vue 3 single root element compliance, enhanced dialog for adding skills.
-6. **License Update**: Restored and updated license to MTI agreement.
+### 2026/04/03
+1. **OpenClaw Doctor Console Enhancement**: Integrated `ansi-to-html` for enhanced console output rendering with ANSI color support in both light and dark themes. Added streaming support for doctor command output with improved stdout/stderr handling and event emission for UI updates.
+2. **OpenClaw Runtime Upgrade System**: Implemented comprehensive upgrade status management with "Upgrading" state across components and localization files. Enhanced npm package installation with progress updates and improved error handling, including rollback mechanisms.
+3. **Gateway Port Management**: Added port occupation checks with user feedback for gateway operations. Implemented `ensurePortClean` method to detect and gracefully stop stale processes using the gateway port. Added stop port functionality.
+4. **ChatWiki Sync Enhancement**: Enhanced ChatWiki sync data fetching to support forced refresh for up-to-date model catalog. Implemented model catalog refresh mechanism for OpenClaw sync to ensure models stay current.
+5. **OpenClaw Auto-Start**: Implemented auto-start functionality for OpenClaw gateway with UI toggle and localization support. Configuration persists auto-start preference with toast notifications for state changes.
+6. **Chat Session Sync**: Implemented OpenClaw chat session synchronization functionality.
+7. **WhatsApp Integration**: Enhanced WhatsApp binding functionality.
+8. **QQ/Enterprise WeChat Optimization**: Resolved download plugin rate limiting issues. Fixed Chinese/English prompts and login redirect issues.
+9. **Style Updates**: Removed team features from OpenClaw mode. Updated settings component layout and styling for improved responsiveness.
+10. **Version Bump**: Application version updated to 0.9.1. OpenClaw version updated to 2026.4.2.
 
-### 2026/03/26
-1. **OpenClaw Skills Feature**: Implemented OpenClaw Skills page and backend service integration, added runtime bundling and NSIS installer support.
-2. **OpenClaw Version Update**: Upgraded OpenClaw version to 2026.3.24, updated Docker command execution logic and layout configuration.
-3. **Scheduled Task Channel Optimization**: Optimized scheduled task editing, added channel logic, improved immediate execution functionality, fixed required field timeout issues.
-4. **History Task Optimization**: Optimized history task compatibility with task assistant conversations, list errors, and history record processing.
-5. **Feishu Channel Integration**: Completed Feishu channel integration.
-6. **Code Split**: Refactored localization files and MCP configuration management.
+### 2026/04/02
+1. **OpenClaw Doctor Integration**: Added gateway status handling in SideNav with localized messages. Updated ChatInputArea to reflect gateway state with relevant UI components.
+2. **i18n Enhancement**: Added translation files for new gateway and doctor messages across multiple languages. Added toast notifications for toolchain updates.
+3. **OpenClaw Version Update**: Updated OpenClaw version to 2026.4.1 with enhanced gateway integration in frontend.
 
-### 2026/03/25
-1. **OpenClaw Mode Optimization**: Hidden thinking mode and task mode in OpenClaw mode's knowledge base interface, support for selecting knowledge base.
-2. **Feishu Channel**: Completed Feishu integration, support for group message replies, optimized channel creation.
-3. **Scheduled Task Refinement**: Fixed scheduled task editing and real-time channel configuration update issues, hidden CMD command popup.
-4. **Image Model Error Handling**: Added image model error prompts.
-5. **File Migration**: Implemented file migration functionality.
-6. **History Task Compatibility**: History task compatible with task assistant conversations, fixed history conversation list loading.
-7. **Agent Sync**: OpenClaw Agent streaming output, history message rendering and error handling.
-8. **Upgrade Logic**: OpenClaw upgrade logic optimization.
+
+### 2026/04/01
+1. **Version 0.9.0 Release**: Updated application version to 0.9.0 in build configuration.
+2. **OpenClaw Installer Bundling**: Enhanced Taskfile.yml and NSIS installer with conditional OpenClaw runtime bundling support, including zip file existence checks before bundling.
+3. **OpenClaw Version Update**: Upgraded OpenClaw runtime to version 2026.3.31.
+4. **Multi-Language Translations**: Updated translations across Arabic, Bengali, German, English, Spanish, and French locales with new keys and improved consistency.
+5. **Scheduled Task Bug Fixes**: Fixed cron display anomalies and edited scheduled task issues.
+6. **WeChat Text Updates**: Updated WeChat-related text copy and default naming conventions.
 
 
 
