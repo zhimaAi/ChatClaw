@@ -231,6 +231,7 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 		return nil, errs.Wrap("error.channel_create_failed", err)
 	}
 	ch.ExtraConfig = extraConfigWithID
+	autoProvisionOnCreate := shouldAutoProvisionOpenClawChannelOnCreate(platform)
 
 	if platform == channels.PlatformDingTalk {
 		go s.installDingTalkPluginBackground(ch.ID)
@@ -240,6 +241,9 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 	} else if platform == channels.PlatformWhatsapp {
 		// WhatsApp uses the OpenClaw gateway QR-login flow; provisioning happens via
 		// GenerateWhatsappQRCode()/WaitForWhatsappLogin(), not through config sync on draft create.
+	} else if autoProvisionOnCreate {
+		// WeCom / QQ create only the local draft + bound assistant first.
+		// OpenClaw plugin install, remote agent/channel creation, and enable happen in background.
 	} else if platform == channels.PlatformQQ {
 		// QQ is provisioned on connect so drafts do not create remote OpenClaw state yet.
 	} else if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, name, input.ExtraConfig, false); err != nil {
@@ -252,11 +256,30 @@ func (s *OpenClawChannelService) CreateChannel(input CreateChannelInput) (*chann
 			return nil, err
 		}
 		ch.AgentID = input.AgentID
-		if platform != channels.PlatformQQ && platform != channels.PlatformWhatsapp {
+		if !autoProvisionOnCreate && platform != channels.PlatformWhatsapp {
 			if err := s.syncChannelRoutingBinding(ch.ID, input.AgentID); err != nil {
 				return nil, wrapOpenClawSyncErr(err, "error.channel_create_failed", nil)
 			}
 		}
+	} else if autoProvisionOnCreate {
+		agentID, err := s.EnsureAgentForChannel(ch.ID)
+		if err != nil {
+			_ = s.channelSvc.DeleteChannel(ch.ID)
+			return nil, errs.Wrap("error.channel_create_failed", err)
+		}
+		ch.AgentID = agentID
+	}
+
+	if autoProvisionOnCreate && ch.AgentID > 0 {
+		enabled := true
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer bgCancel()
+		if err := s.setOpenClawChannelState(bgCtx, ch.ID, &enabled, channels.StatusProvisioning); err != nil {
+			return nil, errs.Wrap("error.channel_create_failed", err)
+		}
+		ch.Enabled = true
+		ch.Status = channels.StatusProvisioning
+		go s.connectChannelInBackground(ch.ID)
 	}
 
 	return ch, nil
@@ -376,79 +399,10 @@ func (s *OpenClawChannelService) DeleteChannel(id int64) error {
 		return err
 	}
 
-	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
-	platform := strings.TrimSpace(m.Platform)
-	if platform == "" {
-		platform = channels.PlatformFeishu
-	}
-	if err := s.ensureOpenClawReady(); err != nil {
-		return err
-	}
-
-	if platform == channels.PlatformWechat {
-		// Remove openclaw.json bindings + channels.openclaw-weixin.accounts, plugin credential files, restart gateway.
-		// Do not require ensureOpenClawReady (file-based cleanup, same rationale as BindAgent for WeChat).
-		if err := s.purgeWechatChannelOpenClawIntegration(m); err != nil {
-			s.app.Logger.Warn("openclaw: wechat purge failed before DB delete", "channel_id", id, "error", err)
-		}
-	} else if platform == channels.PlatformWhatsapp {
-		if err := s.purgeWhatsappChannelOpenClawIntegration(m); err != nil {
-			s.app.Logger.Warn("openclaw: whatsapp purge failed before DB delete", "channel_id", id, "error", err)
-		}
-	} else {
-		if err := s.ensureOpenClawReady(); err != nil {
-			return err
-		}
-		if platform == channels.PlatformDingTalk {
-			if err := s.removeOpenClawDingTalkAccount(ctx, accountKey); err != nil {
-				s.app.Logger.Warn("openclaw config unset dingtalk account failed, proceeding with local delete", "account", accountKey, "error", err)
-			}
-		} else if platform == channels.PlatformQQ {
-			if err := s.removeOpenClawQQChannel(ctx, id, m.ExtraConfig); err != nil {
-				s.app.Logger.Warn("openclaw qq channel remove failed, proceeding with local delete", "error", err)
-			}
-			accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
-			if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
-				s.app.Logger.Warn("openclaw qq route binding cleanup failed before delete", "channel_id", id, "error", err)
-			}
-			if err := s.restartOpenClawGateway(); err != nil {
-				s.app.Logger.Warn("openclaw qq gateway restart failed after delete cleanup", "channel_id", id, "error", err)
-			}
-		} else if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
-			s.app.Logger.Warn("openclaw config unset channel failed, proceeding with local delete", "platform", platform, "account", accountKey, "error", err)
-		}
-	}
-
 	if err := s.channelSvc.DeleteChannel(id); err != nil {
 		return err
 	}
-
-	if platform == channels.PlatformDingTalk {
-		if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
-			s.app.Logger.Warn("openclaw dingtalk default account sync failed after delete", "error", err)
-		}
-		return nil
-	}
-	if platform == channels.PlatformQQ {
-		return nil
-	}
-
-	if platform == channels.PlatformWechat {
-		return nil
-	}
-	if platform == channels.PlatformWhatsapp {
-		return nil
-	}
-
-	if isPluginManagedOpenClawPlatform(platform) {
-		accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
-		if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
-			s.app.Logger.Warn("openclaw channel route binding cleanup failed after delete", "channel_id", id, "platform", platform, "error", err)
-		}
-	}
-	if err := s.syncOpenClawPlatformConfigAfterDelete(ctx, platform); err != nil {
-		s.app.Logger.Warn("openclaw channel default config sync failed after delete", "platform", platform, "error", err)
-	}
+	go s.deleteChannelInBackground(*m)
 	return nil
 }
 
@@ -547,41 +501,17 @@ func (s *OpenClawChannelService) ConnectChannel(id int64) error {
 		return s.connectWechatViaPlugin(id, m)
 	}
 	if m.Platform == channels.PlatformWhatsapp {
-		return s.connectWhatsappViaPlugin(id, m)
+		// validated below via the synchronous connect path
 	}
-
-	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
-	platform := strings.TrimSpace(m.Platform)
-	if platform == "" {
-		platform = channels.PlatformFeishu
+	if m.AgentID == 0 && (isPluginManagedOpenClawPlatform(m.Platform) || m.Platform == channels.PlatformDingTalk) {
+		return errs.New("error.channel_connect_requires_agent")
 	}
-	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, m.Name, m.ExtraConfig, true); err != nil {
-		return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
+	enabled := true
+	if err := s.setOpenClawChannelState(ctx, id, &enabled, channels.StatusProvisioning); err != nil {
+		return err
 	}
-
-	extraConfigWithID, encodeErr := withOpenClawChannelID(m.ExtraConfig, accountKey)
-	if encodeErr == nil {
-		if _, updateErr := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{ExtraConfig: &extraConfigWithID}); updateErr != nil {
-			return updateErr
-		}
-	}
-
-	if isPluginManagedOpenClawPlatform(platform) {
-		if m.AgentID == 0 {
-			return errs.New("error.channel_connect_requires_agent")
-		}
-		if err := s.syncChannelRoutingBinding(id, m.AgentID); err != nil {
-			return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
-		}
-		_ = s.gateway.DisconnectChannel(context.Background(), id)
-		enabled := true
-		if _, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
-			return err
-		}
-		return s.setOpenClawPluginChannelStatus(ctx, id, true)
-	}
-
-	return s.channelSvc.ConnectChannel(id)
+	go s.connectChannelInBackground(id)
+	return nil
 }
 
 // DisconnectChannel disables the OpenClaw plugin-managed channel.
@@ -647,13 +577,16 @@ func (s *OpenClawChannelService) DisconnectChannel(id int64) error {
 // effectiveOpenClawListStatus derives list UI status without treating "OpenClaw runtime ready"
 // as per-channel online (that incorrectly showed 已连接 for every enabled Feishu/WeCom/QQ row).
 func (s *OpenClawChannelService) effectiveOpenClawListStatus(ch channels.Channel) string {
+	st := strings.TrimSpace(ch.Status)
+	if st == channels.StatusProvisioning {
+		return st
+	}
 	if !ch.Enabled {
 		return channels.StatusOffline
 	}
 	if s.gateway.IsConnected(ch.ID) {
 		return channels.StatusOnline
 	}
-	st := strings.TrimSpace(ch.Status)
 	if st == channels.StatusOnline || st == channels.StatusOffline || st == channels.StatusError {
 		return st
 	}
@@ -663,29 +596,84 @@ func (s *OpenClawChannelService) effectiveOpenClawListStatus(ch channels.Channel
 	return st
 }
 
-// setOpenClawPluginChannelStatus persists connection status for OpenClaw plugin-managed rows
-// (Feishu/WeCom/QQ list uses DB status; gateway adapters are not used for those platforms).
-func (s *OpenClawChannelService) setOpenClawPluginChannelStatus(ctx context.Context, channelID int64, online bool) error {
-	db, err := s.db()
+func (s *OpenClawChannelService) connectChannelInBackground(id int64) {
+	if err := s.connectChannelNow(id); err != nil {
+		s.app.Logger.Warn("openclaw: background connect channel failed", "channel_id", id, "error", err)
+		errCtx, errCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer errCancel()
+		enabled := true
+		if setErr := s.setOpenClawChannelState(errCtx, id, &enabled, channels.StatusError); setErr != nil {
+			s.app.Logger.Warn("openclaw: failed to persist channel error state", "channel_id", id, "error", setErr)
+		}
+	}
+}
+
+func (s *OpenClawChannelService) connectChannelNow(id int64) error {
+	if err := s.ensureOpenClawReady(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
+	defer cancel()
+	m, err := s.getChannelModel(ctx, id)
 	if err != nil {
 		return err
 	}
+
+	if m.Platform == channels.PlatformDingTalk {
+		return s.connectDingTalkViaPlugin(id, m)
+	}
+	if m.Platform == channels.PlatformQQ {
+		return s.connectQQViaPlugin(id, m)
+	}
+	if m.Platform == channels.PlatformWechat {
+		return s.connectWechatViaPlugin(id, m)
+	}
+	if m.Platform == channels.PlatformWhatsapp {
+		return s.connectWhatsappViaPlugin(id, m)
+	}
+
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
+	if err := s.syncOpenClawChannelConfig(ctx, platform, accountKey, m.Name, m.ExtraConfig, true); err != nil {
+		return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
+	}
+
+	extraConfigWithID, encodeErr := withOpenClawChannelID(m.ExtraConfig, accountKey)
+	if encodeErr == nil {
+		if _, updateErr := s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{ExtraConfig: &extraConfigWithID}); updateErr != nil {
+			return updateErr
+		}
+	}
+
+	if isPluginManagedOpenClawPlatform(platform) {
+		if m.AgentID == 0 {
+			return errs.New("error.channel_connect_requires_agent")
+		}
+		if err := s.syncChannelRoutingBinding(id, m.AgentID); err != nil {
+			return wrapOpenClawSyncErr(err, "error.channel_connect_failed", map[string]any{"Name": m.Name})
+		}
+		_ = s.gateway.DisconnectChannel(context.Background(), id)
+		enabled := true
+		if _, err = s.channelSvc.UpdateChannel(id, channels.UpdateChannelInput{Enabled: &enabled}); err != nil {
+			return err
+		}
+		return s.setOpenClawPluginChannelStatus(ctx, id, true)
+	}
+
+	return s.channelSvc.ConnectChannel(id)
+}
+
+// setOpenClawPluginChannelStatus persists connection status for OpenClaw plugin-managed rows
+// (Feishu/WeCom/QQ list uses DB status; gateway adapters are not used for those platforms).
+func (s *OpenClawChannelService) setOpenClawPluginChannelStatus(ctx context.Context, channelID int64, online bool) error {
 	status := channels.StatusOffline
 	if online {
 		status = channels.StatusOnline
 	}
-	q := db.NewUpdate().
-		Model((*channelModel)(nil)).
-		Where("id = ?", channelID).
-		Set("status = ?", status).
-		Set("updated_at = ?", sqlite.NowUTC())
-	if online {
-		q = q.Set("last_connected_at = ?", sqlite.NowUTC())
-	}
-	if _, err = q.Exec(ctx); err != nil {
-		return errs.Wrap("error.channel_update_failed", err)
-	}
-	return nil
+	return s.setOpenClawChannelState(ctx, channelID, nil, status)
 }
 
 func isPluginManagedOpenClawPlatform(platform string) bool {
@@ -694,6 +682,101 @@ func isPluginManagedOpenClawPlatform(platform string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func shouldAutoProvisionOpenClawChannelOnCreate(platform string) bool {
+	switch strings.TrimSpace(platform) {
+	case channels.PlatformWeCom, channels.PlatformQQ:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *OpenClawChannelService) setOpenClawChannelState(ctx context.Context, channelID int64, enabled *bool, status string) error {
+	db, err := s.db()
+	if err != nil {
+		return err
+	}
+	q := db.NewUpdate().
+		Model((*channelModel)(nil)).
+		Where("id = ?", channelID).
+		Set("status = ?", strings.TrimSpace(status)).
+		Set("updated_at = ?", sqlite.NowUTC())
+	if enabled != nil {
+		q = q.Set("enabled = ?", *enabled)
+	}
+	if strings.TrimSpace(status) == channels.StatusOnline {
+		q = q.Set("last_connected_at = ?", sqlite.NowUTC())
+	}
+	if _, err = q.Exec(ctx); err != nil {
+		return errs.Wrap("error.channel_update_failed", err)
+	}
+	return nil
+}
+
+func (s *OpenClawChannelService) deleteChannelInBackground(m channelModel) {
+	id := m.ID
+	platform := strings.TrimSpace(m.Platform)
+	if platform == "" {
+		platform = channels.PlatformFeishu
+	}
+	accountKey := openClawChannelAccountKey(id, m.ExtraConfig)
+	ctx, cancel := context.WithTimeout(context.Background(), openClawChannelSyncTimeout)
+	defer cancel()
+
+	if platform == channels.PlatformWechat {
+		if err := s.purgeWechatChannelOpenClawIntegration(&m); err != nil {
+			s.app.Logger.Warn("openclaw: wechat purge failed after local delete", "channel_id", id, "error", err)
+		}
+		return
+	}
+	if platform == channels.PlatformWhatsapp {
+		if err := s.purgeWhatsappChannelOpenClawIntegration(&m); err != nil {
+			s.app.Logger.Warn("openclaw: whatsapp purge failed after local delete", "channel_id", id, "error", err)
+		}
+		return
+	}
+	if err := s.ensureOpenClawReady(); err != nil {
+		s.app.Logger.Warn("openclaw: skip remote delete cleanup because gateway is not ready", "channel_id", id, "error", err)
+		return
+	}
+
+	if platform == channels.PlatformDingTalk {
+		if err := s.removeOpenClawDingTalkAccount(ctx, accountKey); err != nil {
+			s.app.Logger.Warn("openclaw config unset dingtalk account failed after local delete", "account", accountKey, "error", err)
+		}
+		if err := s.syncOpenClawDingTalkDefaultAccount(ctx); err != nil {
+			s.app.Logger.Warn("openclaw dingtalk default account sync failed after delete", "error", err)
+		}
+		return
+	}
+	if platform == channels.PlatformQQ {
+		if err := s.removeOpenClawQQChannel(ctx, id, m.ExtraConfig); err != nil {
+			s.app.Logger.Warn("openclaw qq channel remove failed after local delete", "channel_id", id, "error", err)
+		}
+		accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
+		if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
+			s.app.Logger.Warn("openclaw qq route binding cleanup failed after delete", "channel_id", id, "error", err)
+		}
+		if err := s.restartOpenClawGateway(); err != nil {
+			s.app.Logger.Warn("openclaw qq gateway restart failed after delete cleanup", "channel_id", id, "error", err)
+		}
+		return
+	}
+
+	if err := s.removeOpenClawChannelConfig(ctx, platform, accountKey); err != nil {
+		s.app.Logger.Warn("openclaw config unset channel failed after local delete", "platform", platform, "account", accountKey, "error", err)
+	}
+	if isPluginManagedOpenClawPlatform(platform) {
+		accountID := openClawManagedAccountID(platform, id, m.ExtraConfig)
+		if err := s.removeManagedRouteBinding(platform, accountID); err != nil {
+			s.app.Logger.Warn("openclaw channel route binding cleanup failed after delete", "channel_id", id, "platform", platform, "error", err)
+		}
+	}
+	if err := s.syncOpenClawPlatformConfigAfterDelete(ctx, platform); err != nil {
+		s.app.Logger.Warn("openclaw channel default config sync failed after delete", "platform", platform, "error", err)
 	}
 }
 

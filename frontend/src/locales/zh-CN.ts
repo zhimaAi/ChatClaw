@@ -1927,6 +1927,7 @@ export default {
       yearOption: "{year} 年",
       monthOption: "{month} 月",
     },
+    emptyDescription: "创建定时任务以自动化 AI 工作流。任务可在指定时间发送消息、运行查询或执行操作。",
   },
   openclawGateway: {
     banner: {
