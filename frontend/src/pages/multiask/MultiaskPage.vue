@@ -41,11 +41,17 @@ const STORAGE_KEY_SELECTED_MODELS = 'chatclaw:multiask:selected-models'
 const STORAGE_KEY_ENABLED_MODELS = 'chatclaw:multiask:enabled-models'
 const STORAGE_KEY_DISABLED_MODELS = 'chatclaw:multiask:disabled-models'
 const STORAGE_KEY_SELECTOR_COLLAPSED = 'chatclaw:multiask:selector-collapsed'
+const MULTIASK_PANEL_PREFIX = 'multiask-panel-'
 
 /**
  * 服务是否已初始化
  */
 const serviceInitialized = ref(false)
+
+/**
+ * Whether this page instance is already disposed.
+ */
+let isDisposed = false
 
 /**
  * 初始化服务
@@ -57,6 +63,7 @@ const initService = async () => {
     console.log('[MultiaskPage] Initializing MultiaskService...')
     await MultiaskService.Initialize('ChatClaw')
     serviceInitialized.value = true
+    await syncExistingPanels()
     console.log('[MultiaskPage] MultiaskService initialized successfully')
     return true
   } catch (err) {
@@ -490,6 +497,11 @@ const messageInputRef = ref<InstanceType<typeof MessageInput> | null>(null)
 const createdPanelIds = ref<Set<string>>(new Set())
 
 /**
+ * Panel creation calls can overlap when mount/layout events happen together.
+ */
+const panelCreationPromises = new Map<string, Promise<void>>()
+
+/**
  * 获取选中的模型详情
  */
 const selectedModels = computed(() => {
@@ -556,7 +568,43 @@ const handleToggleModel = (modelId: string) => {
 /**
  * 生成面板 ID
  */
-const getPanelId = (modelId: string) => `multiask-panel-${modelId}`
+const getPanelId = (modelId: string) => `${MULTIASK_PANEL_PREFIX}${modelId}`
+
+const isMultiaskPanelId = (panelId: string) => panelId.startsWith(MULTIASK_PANEL_PREFIX)
+
+const getErrorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return String(err)
+  }
+}
+
+const isPanelAlreadyExistsError = (err: unknown, panelId: string) => {
+  return getErrorMessage(err).includes(`panel ${panelId} already exists`)
+}
+
+const isPanelNotFoundError = (err: unknown, panelId: string) => {
+  return getErrorMessage(err).includes(`panel ${panelId} not found`)
+}
+
+/**
+ * Reconnect local state to panels that survived a frontend remount/HMR refresh.
+ */
+const syncExistingPanels = async () => {
+  try {
+    const panelIds = await MultiaskService.GetPanelIDs()
+    for (const panelId of panelIds || []) {
+      if (isMultiaskPanelId(panelId)) {
+        createdPanelIds.value.add(panelId)
+      }
+    }
+  } catch (err) {
+    console.warn('[MultiaskPage] Failed to sync existing panels:', err)
+  }
+}
 
 /**
  * 设置面板引用
@@ -580,6 +628,8 @@ const createPanel = async (
 
   console.log(`[MultiaskPage] createPanel called for ${panelId} with bounds:`, bounds)
 
+  if (isDisposed) return
+
   // 确保服务已初始化
   if (!serviceInitialized.value) {
     const ok = await initService()
@@ -593,6 +643,29 @@ const createPanel = async (
   if (createdPanelIds.value.has(panelId)) {
     console.log(`[MultiaskPage] Panel ${panelId} already exists, updating bounds`)
     await updatePanelBounds(model.id, bounds)
+    if (shouldShowPanels.value) {
+      await showPanel(model.id)
+    } else {
+      await hidePanel(model.id)
+    }
+    return
+  }
+
+  const pendingCreation = panelCreationPromises.get(panelId)
+  if (pendingCreation) {
+    try {
+      await pendingCreation
+    } catch (err) {
+      if (!isPanelAlreadyExistsError(err, panelId)) {
+        console.warn(`[MultiaskPage] Pending creation failed for ${panelId}:`, err)
+      }
+    }
+    await updatePanelBounds(model.id, bounds)
+    if (shouldShowPanels.value) {
+      await showPanel(model.id)
+    } else {
+      await hidePanel(model.id)
+    }
     return
   }
 
@@ -600,6 +673,7 @@ const createPanel = async (
     console.warn(`[MultiaskPage] No URL configured for model: ${model.id}`)
     return
   }
+  const panelURL = model.url
 
   // 验证 bounds
   if (bounds.width <= 0 || bounds.height <= 0) {
@@ -607,15 +681,21 @@ const createPanel = async (
     return
   }
 
-  try {
+  const creation = (async () => {
     console.log(`[MultiaskPage] Calling MultiaskService.CreatePanel for ${panelId}...`)
     await MultiaskService.CreatePanel(
       panelId,
       model.name,
       model.displayName || model.name,
-      model.url,
+      panelURL,
       bounds
     )
+
+    if (isDisposed) {
+      await MultiaskService.DestroyPanel(panelId).catch(() => {})
+      return
+    }
+
     createdPanelIds.value.add(panelId)
     console.log(`[MultiaskPage] Successfully created panel: ${panelId}`)
 
@@ -623,8 +703,29 @@ const createPanel = async (
     if (!shouldShowPanels.value) {
       await hidePanel(model.id)
     }
+  })()
+
+  panelCreationPromises.set(panelId, creation)
+
+  try {
+    await creation
   } catch (err) {
+    if (isPanelAlreadyExistsError(err, panelId)) {
+      console.warn(`[MultiaskPage] Panel ${panelId} already exists in backend, reusing it`)
+      createdPanelIds.value.add(panelId)
+      await updatePanelBounds(model.id, bounds)
+      if (shouldShowPanels.value) {
+        await showPanel(model.id)
+      } else {
+        await hidePanel(model.id)
+      }
+      return
+    }
     console.error(`[MultiaskPage] Failed to create panel ${panelId}:`, err)
+  } finally {
+    if (panelCreationPromises.get(panelId) === creation) {
+      panelCreationPromises.delete(panelId)
+    }
   }
 }
 
@@ -641,6 +742,10 @@ const updatePanelBounds = async (
   try {
     await MultiaskService.UpdatePanelBounds(panelId, bounds)
   } catch (err) {
+    if (isPanelNotFoundError(err, panelId)) {
+      createdPanelIds.value.delete(panelId)
+      return
+    }
     console.error(`[MultiaskPage] Failed to update panel bounds ${panelId}:`, err)
   }
 }
@@ -655,6 +760,10 @@ const showPanel = async (modelId: string) => {
   try {
     await MultiaskService.ShowPanel(panelId)
   } catch (err) {
+    if (isPanelNotFoundError(err, panelId)) {
+      createdPanelIds.value.delete(panelId)
+      return
+    }
     console.error(`[MultiaskPage] Failed to show panel ${panelId}:`, err)
   }
 }
@@ -669,6 +778,10 @@ const hidePanel = async (modelId: string) => {
   try {
     await MultiaskService.HidePanel(panelId)
   } catch (err) {
+    if (isPanelNotFoundError(err, panelId)) {
+      createdPanelIds.value.delete(panelId)
+      return
+    }
     console.error(`[MultiaskPage] Failed to hide panel ${panelId}:`, err)
   }
 }
@@ -685,20 +798,30 @@ const destroyPanel = async (modelId: string) => {
     createdPanelIds.value.delete(panelId)
     console.log(`[MultiaskPage] Destroyed panel: ${panelId}`)
   } catch (err) {
+    if (isPanelNotFoundError(err, panelId)) {
+      createdPanelIds.value.delete(panelId)
+      return
+    }
     console.error(`[MultiaskPage] Failed to destroy panel ${panelId}:`, err)
   }
 }
 
 /**
- * 销毁所有面板
+ * Destroy panels owned by this multiask page.
  */
-const destroyAllPanels = async () => {
-  try {
-    await MultiaskService.DestroyAllPanels()
-    createdPanelIds.value.clear()
-    console.log('[MultiaskPage] Destroyed all panels')
-  } catch (err) {
-    console.error('[MultiaskPage] Failed to destroy all panels:', err)
+const destroyOwnedPanels = async () => {
+  const panelIds = Array.from(createdPanelIds.value).filter(isMultiaskPanelId)
+  createdPanelIds.value.clear()
+
+  for (const panelId of panelIds) {
+    try {
+      await MultiaskService.DestroyPanel(panelId)
+      console.log(`[MultiaskPage] Destroyed panel: ${panelId}`)
+    } catch (err) {
+      if (!isPanelNotFoundError(err, panelId)) {
+        console.error(`[MultiaskPage] Failed to destroy panel ${panelId}:`, err)
+      }
+    }
   }
 }
 
@@ -733,8 +856,19 @@ const handleSend = async () => {
 
   try {
     // 向所有已显示的面板发送消息
-    const errors = await MultiaskService.SendMessageToAllPanels(message)
-    if (errors && errors.length > 0) {
+    const errors: string[] = []
+    for (const model of visibleModels.value) {
+      const panelId = getPanelId(model.id)
+      if (!createdPanelIds.value.has(panelId)) continue
+
+      try {
+        await MultiaskService.SendMessageToPanel(panelId, message)
+      } catch (err) {
+        errors.push(`${panelId}: ${getErrorMessage(err)}`)
+      }
+    }
+
+    if (errors.length > 0) {
       console.warn('[MultiaskPage] Some panels failed to receive message:', errors)
     }
   } catch (err) {
@@ -760,6 +894,7 @@ const focusMessageInput = async () => {
  * 页面首次进入时，如果输入框存在则自动聚焦
  */
 onMounted(() => {
+  isDisposed = false
   setTimeout(() => {
     focusMessageInput()
   }, 4000)
@@ -857,7 +992,9 @@ watch(
  * 组件卸载时销毁所有面板
  */
 onUnmounted(() => {
-  destroyAllPanels()
+  isDisposed = true
+  panelCreationPromises.clear()
+  void destroyOwnedPanels()
 })
 </script>
 
