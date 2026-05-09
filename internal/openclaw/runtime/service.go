@@ -3,12 +3,19 @@ package openclawruntime
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"chatclaw/internal/define"
+	"chatclaw/internal/errs"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // OpenClawRuntimeService is the Wails-bound service that exposes
@@ -181,6 +188,111 @@ func (s *OpenClawRuntimeService) GatewayLogTail(n int) (string, error) {
 // GatewayLogPath returns the absolute path to the gateway log file.
 func (s *OpenClawRuntimeService) GatewayLogPath() (string, error) {
 	return s.manager.GatewayLogPath()
+}
+
+// ResetToFactory deletes the OpenClaw data directory and restarts the application.
+// This is intended for users who want to reset their OpenClaw environment to a clean state.
+func (s *OpenClawRuntimeService) ResetToFactory() error {
+	// Shutdown the gateway first
+	s.manager.Shutdown()
+
+	// Get the OpenClaw data directory
+	dataDir, err := define.OpenClawDataRootDir()
+	if err != nil {
+		return errs.Wrap("error.openclaw_reset_failed", err)
+	}
+
+	// Delete the entire openclaw data directory
+	if err := os.RemoveAll(dataDir); err != nil {
+		return errs.Wrap("error.openclaw_reset_delete_failed", err)
+	}
+
+	// Restart the application
+	return restartApp(s.manager.app)
+}
+
+// restartApp launches a new instance of the application and exits the current one.
+func restartApp(app *application.App) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return errs.Wrap("error.update_restart_failed", err)
+	}
+
+	// Windows needs special handling: SingleInstance rejects a second process,
+	// and the .old binary cleanup requires cd + relative path. Use a bat script
+	// that waits for this process to exit, cleans up, then launches the new exe.
+	if runtime.GOOS == "windows" {
+		exeDir := filepath.Dir(exe)
+		exeName := filepath.Base(exe)
+		oldName := "." + exeName + ".old"
+		batPath := filepath.Join(os.TempDir(), "chatclaw_restart.bat")
+		batContent := fmt.Sprintf(
+			"@echo off\r\n"+
+				"ping localhost -n 3 >nul\r\n"+
+				"cd /D \"%s\"\r\n"+
+				"attrib -H \"%s\" >nul 2>&1\r\n"+
+				"del /F \"%s\" >nul 2>&1\r\n"+
+				"start \"\" \"%s\"\r\n"+
+				"del \"%%~f0\"\r\n",
+			exeDir, oldName, oldName, exe,
+		)
+		if err := os.WriteFile(batPath, []byte(batContent), 0o644); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		cmd := exec.Command("cmd", "/C", batPath)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow: true,
+		}
+
+		if err := cmd.Start(); err != nil {
+			return errs.Wrap("error.update_restart_failed", err)
+		}
+
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			app.Quit()
+		}()
+
+		return nil
+	}
+
+	// macOS / Linux
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return errs.Wrap("error.update_restart_failed", err)
+	}
+
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		appPath := exe
+		for i := 0; i < 3; i++ {
+			appPath = filepath.Dir(appPath)
+		}
+		if filepath.Ext(appPath) == ".app" {
+			cmd = exec.Command("open", "-n", appPath)
+		} else {
+			cmd = exec.Command(exe)
+		}
+	default:
+		cmd = exec.Command(exe)
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return errs.Wrap("error.update_restart_failed", err)
+	}
+
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(0)
+	}()
+
+	return nil
 }
 
 // getProcessNameByPID returns the process name for a given PID on Windows.

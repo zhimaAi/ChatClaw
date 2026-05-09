@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useColorMode } from '@vueuse/core'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { RefreshCw, Loader2, ExternalLink, Download, Square, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { RefreshCw, Loader2, ExternalLink, Download, Square, ChevronDown, ChevronUp, RotateCcw } from 'lucide-vue-next'
 import AnsiToHtml from 'ansi-to-html'
 import * as OpenClawRuntimeService from '@bindings/chatclaw/internal/openclaw/runtime/openclawruntimeservice'
 import {
@@ -43,6 +44,10 @@ const gatewayState = ref<GatewayConnectionState>(new GatewayConnectionState())
 const restarting = ref(false)
 const stopping = ref(false)
 const upgrading = ref(false)
+const resetting = ref(false)
+const resetConfirmOpen = ref(false)
+const resetElapsed = ref(0)
+let resetTimer: ReturnType<typeof setInterval> | null = null
 
 // 后端事件取消订阅函数
 let unsubscribeStatus: (() => void) | undefined
@@ -501,6 +506,43 @@ const handleOpenDashboard = () => {
   navigationStore.navigateToModule('openclaw-dashboard')
 }
 
+// 重置到出厂设置
+const handleResetToFactory = async () => {
+  resetConfirmOpen.value = false
+  resetting.value = true
+  resetElapsed.value = 0
+
+  // 启动计时器
+  resetTimer = setInterval(() => {
+    resetElapsed.value++
+  }, 1000)
+
+  try {
+    await OpenClawRuntimeService.ResetToFactory()
+  } catch (e) {
+    console.error('Failed to reset OpenClaw to factory:', e)
+    toast.error(getErrorMessage(e) || t('settings.openclawRuntime.resetFailed'))
+    resetting.value = false
+    if (resetTimer) {
+      clearInterval(resetTimer)
+      resetTimer = null
+    }
+  }
+}
+
+const cancelReset = () => {
+  resetConfirmOpen.value = false
+}
+
+// 格式化重置耗时显示
+const resetElapsedDisplay = computed(() => {
+  const s = resetElapsed.value
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${m}m ${sec}s`
+})
+
 // 升级输出自动滚动
 watch(
   () => gatewayStore.upgradeOutput,
@@ -949,6 +991,30 @@ onUnmounted(() => {
             {{ t('settings.openclawRuntime.openDashboard') }}
           </Button>
         </div>
+
+        <!-- 重置到出厂设置按钮 -->
+        <div
+          class="flex items-center justify-between border-t border-border p-4 dark:border-white/10"
+        >
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5 pr-4">
+            <span class="shrink-0 text-sm font-medium text-foreground">
+              {{ t('settings.openclawRuntime.resetToFactory') }}
+            </span>
+            <span class="shrink-0 text-xs text-muted-foreground">
+              {{ t('settings.openclawRuntime.resetToFactoryHint') }}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="!isGatewayStopped || resetting"
+            @click="resetConfirmOpen = true"
+          >
+            <Loader2 v-if="resetting" class="mr-1.5 size-3.5 animate-spin" />
+            <RotateCcw v-else class="mr-1.5 size-3.5" />
+            {{ resetting ? resetElapsedDisplay : t('settings.openclawRuntime.resetToFactory') }}
+          </Button>
+        </div>
       </SettingsCard>
 
       <!-- 继续/重新升级弹窗 -->
@@ -992,6 +1058,24 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- 重置到出厂设置确认弹窗 -->
+      <AlertDialog :open="resetConfirmOpen" @update:open="(v) => !v && cancelReset()">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{{ t('settings.openclawRuntime.resetConfirmTitle') }}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {{ t('settings.openclawRuntime.resetConfirmDesc') }}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+            <AlertDialogAction @click="handleResetToFactory">
+              {{ t('common.confirm') }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <OpenClawDoctorConsole />
     </div>
