@@ -87,7 +87,7 @@ var registry = map[string]toolSpec{
 
 // openclawVersion is the bundled OpenClaw runtime version (matches build/runtime.yml).
 // Used for OSS downloads when no bundled runtime is available. Must match backend tool-download registry format.
-const openclawVersion = "2026.4.2"
+const openclawVersion = "2026.3.24"
 
 // openclawSpec is a placeholder entry for the openclaw runtime in the registry.
 // The actual download URL is resolved via the API at runtime (see InstallOpenClawRuntime),
