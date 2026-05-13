@@ -175,6 +175,7 @@ export default {
     systemChatClaw: 'ChatClaw',
     systemOpenClaw: 'OpenClawアシスタント',
     skillmarket: '技能市场',
+    openclawTerminal: 'ターミナル',
   },
   toolsPage: {
     subtitle: '注目ツールへすばやくアクセス',
@@ -335,13 +336,13 @@ export default {
       restart: '重启',
       restartFailed: '网关重启失败',
       restartSuccess: '网关已重启',
-      sidebarGatewayLabelSeparator: '：',
+      sidebarGatewayLabelSeparator: ': ',
       sidebarGatewayPrefix: '网关',
       statusBadge: {
-        error: 'error',
-        running: 'running',
-        starting: 'starting',
-        stop: 'stop',
+        error: 'エラー',
+        running: '実行中',
+        starting: '起動中',
+        stop: '停止',
         upgrading: 'アップグレード中',
       },
       stop: '停止',
@@ -378,6 +379,14 @@ export default {
         stoppedExisting: '已停止原有进程',
         verifiedInstall: '已验证安装版本 {version}',
       },
+      gatewayLog: 'ゲートウェイログ',
+      resetConfirmDesc: 'この操作は、プラグイン、会話履歴、チャネル設定などを含むOpenClawのすべてのデータストレージフォルダを削除します。この操作は元に戻せません。続行しますか？',
+      resetConfirmTitle: '工場出荷時リセットの確認',
+      resetFailed: '工場出荷時リセットに失敗しました',
+      resetToFactory: '工場出荷時リセット',
+      resetToFactoryHint: 'OpenClawデータディレクトリを削除してアプリを再起動します。環境異常が発生した場合に適用されます。',
+      viewGatewayLog: 'ログを表示',
+      waitingForLog: 'ログ出力を待っています...',
     },
     general: {
       title: '一般設定',
@@ -564,7 +573,7 @@ export default {
       title: 'MCP',
       enable: 'MCP を有効化',
       directory: 'MCP 設定ディレクトリ',
-      tabServers: 'MCP',
+      tabServers: 'MCPサーバー',
       tabSettings: '設定',
       tabInstalled: 'インストール済み',
       tabMarket: 'マーケット',
@@ -778,6 +787,8 @@ export default {
         loginNow: '今すぐログイン',
         loginLater: 'あとで',
       },
+      openclawDescription: 'chatwikiの認証とバインディング、chatwiki独自のモデルとアカウントクレジットの使用',
+      switchBinding: 'バインディングの切り替え',
     },
     tools: {
       tray: {
@@ -896,7 +907,7 @@ export default {
       listSubheading: 'リモートからローカルへ AI スキルをダウンロード',
       refreshCta: '更新',
       openDir: 'ディレクトリを開く',
-      selectAgent: 'Agent',
+      selectAgent: 'エージェント',
       loadingAgents: 'Agent を読み込み中...',
       agentNone: 'なし',
       selectTarget: 'インストール先',
@@ -925,36 +936,18 @@ export default {
       uninstallFailed: 'アンインストールに失敗しました',
       deleteConfirm: 'このスキルをアンインストールしてもよろしいですか',
       builtInCannotUninstall: '組み込みスキルはアンインストールできません',
-      builtInUninstallHint:
-        'このスキルはアプリに同梱されているため、アンインストールできません。',
       enable: '有効化',
       disable: '無効化',
       toggleFailed: '切り替えに失敗しました',
       openMainWorkspaceSkillsDir: 'メインワークスペースのスキルディレクトリを開く',
       filePreviewNA: 'リモートファイルのプレビューは利用できません',
       addSkillHint: '共有スキルを追加',
-      addSkillHintDesc:
-        '開いたディレクトリに新しいフォルダを作成し、SKILL.md を追加して共有スキルを作成します。',
-      addSkillHintDescShared:
-        '{dir} に新しいフォルダを作成し、SKILL.md を追加して共有スキルを作成します。',
-      addSkillHintDescAgent:
-        '{dir} に新しいフォルダを作成し、SKILL.md を追加してこの Agent 用スキルを作成します。',
-      addSkillViaChatPrompt:
-        '新しい AI スキルを作成したいので、スキル名、説明、機能、実装案の設計を手伝ってください。スキルは Agent #{agentId}（{agentName}）の作業ディレクトリ {dir} にインストールされます。',
-      addSkillViaChatPromptShared:
-        '新しい AI スキルを作成したいので、スキル名、説明、機能、実装案の設計を手伝ってください。スキルは共有スキルディレクトリ {dir} にインストールされます。',
       addSkillDialogTitle: 'スキルを追加',
       addSkillViaChatTitle: 'チャットで作成',
       addSkillViaChatDesc: 'AI と会話しながら、スキル名、説明、実装案を設計します。',
       addSkillViaChatGuideLabel: 'SkillHub を開く',
-      addSkillViaChatGuideDesc:
-        '必要なスキルを検索し、インストール用プロンプトを Agent に送信します。',
       addSkillChoosePackageTitle: 'スキルパッケージを選択',
-      addSkillChoosePackageDesc:
-        '対象ディレクトリを開き、ダウンロードしたスキルパッケージを配置します。',
       addSkillChoosePackageGuideLabel: 'ClawHub を開く',
-      addSkillChoosePackageGuideDesc:
-        '必要なスキルを検索し、インストールファイルを対象ディレクトリにダウンロードします。',
       agentWorkspaceDirLoading: 'ディレクトリを読み込み中...',
       agentWorkspaceDirHint: 'まず Agent を選択してください',
       scopeSharedOption: '共有スキル',
@@ -964,13 +957,18 @@ export default {
       actionInstallSkill: 'スキルをインストール',
       introTitle: 'スキル紹介',
       usageTitle: '使い方',
-      securityVerifiedHint:
-        '安全性とコンプライアンスの確認を完了しており、悪意のあるコードやデータ漏えいのリスクはありません。',
       viewDetail: '詳細を見る',
       badgeBuiltIn: '組み込みスキル',
       badgeWorkspace: 'ワークスペース',
       syncFailedTitle: 'スキルマーケットの同期に失敗しました',
       syncFailedDescription: 'バックエンドサービスに接続できません',
+      addSkillChoosePackageDesc: '対応するディレクトリを開き、ダウンロードしたスキルパッケージを配置します。',
+      addSkillChoosePackageGuideDesc: '必要なスキルを検索し、インストールファイルを対応するディレクトリにダウンロードします。',
+      addSkillHintDesc: '開いたディレクトリに新しいフォルダを作成し、共有スキルを作成するためにSKILL.mdファイルを追加します。',
+      addSkillHintDescShared: '{dir}ディレクトリに新しいフォルダを作成し、共有スキルを作成するためにSKILL.mdファイルを追加します。',
+      addSkillViaChatGuideDesc: '必要なスキルを検索し、インストールプロンプトをコピーしてAgentに送信します。',
+      builtInUninstallHint: 'このスキルはバンドルされたスキルであり、ソフトウェアと一緒に提供されます。アンインストールできません。',
+      securityVerifiedHint: 'セキュリティとコンプライアンスの検証済み、悪意のあるコードやデータ漏えいのリスクはありません。',
     },
   },
   assistant: {
@@ -1015,6 +1013,7 @@ export default {
       create: '作成',
       save: '保存',
       settings: 'エージェント設定',
+      confirm: '確認',
     },
     placeholders: {
       noAgentSelected: 'エージェントを選択',
@@ -1223,6 +1222,8 @@ export default {
         contextCount: 'コンテキスト数',
         maxTokens: '最大トークン数',
         unlimited: '無制限',
+        setDefaultModelDesc: 'アシスタント「{name}」はデフォルトモデルが設定されていません。続行するにはモデルを選択してください。',
+        setDefaultModelTitle: 'デフォルトモデルを設定',
       },
       retrieval: {
         matchThreshold: '一致しきい値',
@@ -1751,7 +1752,7 @@ export default {
     },
     meta: {
       feishu: {
-        name: 'Feishu / Lark',
+        name: '飛書 / Lark',
         botName: 'Feishu',
         description: 'Feishu/Lark ボット（長時間接続）',
       },
@@ -1768,7 +1769,7 @@ export default {
       whatsapp: {
         name: 'WhatsApp',
         botName: 'WhatsApp',
-        description: 'WhatsApp Business API',
+        description: 'WhatsApp ビジネスAPI',
       },
       dingtalk: {
         name: 'DingTalk',
@@ -2124,9 +2125,9 @@ export default {
       selectExpirationDate: '有効期限を選択',
       today: '今日',
       clear: 'クリア',
-      calendarTitle: '{year} / {month}',
-      yearOption: '{year}',
-      monthOption: '{month}',
+      calendarTitle: '{year}年 {month}月',
+      yearOption: '{year}年',
+      monthOption: '{month}月',
       expiredHint: '该任务已过期，不会再执行。如需恢复执行，请将到期时间修改到未来。',
     },
     deleteConfirmDescription: '确定要删除任务“{name}”吗？此操作无法撤销。',
@@ -2290,5 +2291,9 @@ export default {
       },
       weekly: '每周 {weekday} {time}',
     },
+  },
+  openclawTerminal: {
+    loading: '読み込み中...',
+    tools: 'ツール',
   },
 }

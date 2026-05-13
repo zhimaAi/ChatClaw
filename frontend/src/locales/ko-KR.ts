@@ -186,6 +186,7 @@ export default {
     systemChatClaw: '채팅클로',
     systemOpenClaw: 'OpenClaw 어시스턴트',
     skillmarket: '技能市场',
+    openclawTerminal: '터미널',
   },
   toolsPage: {
     subtitle: '추천 도구에 빠르게 접근',
@@ -359,7 +360,7 @@ export default {
       restart: '重启',
       restartFailed: '网关重启失败',
       restartSuccess: '网关已重启',
-      sidebarGatewayLabelSeparator: '：',
+      sidebarGatewayLabelSeparator: ': ',
       sidebarGatewayPrefix: '网关',
       statusBadge: {
         error: '오류',
@@ -389,6 +390,14 @@ export default {
       upgradeCancelled: '升级已取消',
       upgradeDetails: '详情',
       upgradeOutputWaiting: '等待输出...',
+      gatewayLog: '게이트웨이 로그',
+      resetConfirmDesc: '이 작업은 플러그인, 대화 기록, 채널 구성 등을 포함한 OpenClaw의 모든 데이터 저장 폴더를 삭제합니다. 이 작업은 취소할 수 없습니다. 계속하시겠습니까?',
+      resetConfirmTitle: '공장 초기화 확인',
+      resetFailed: '공장 초기화 실패',
+      resetToFactory: '공장 초기화',
+      resetToFactoryHint: 'OpenClaw 데이터 디렉토리를 삭제하고 앱을 다시 시작합니다. 환경 이상 발생 시 적용됩니다.',
+      viewGatewayLog: '로그 보기',
+      waitingForLog: '로그 출력 대기 중...',
     },
     general: {
       title: '확장',
@@ -586,7 +595,7 @@ export default {
       enableHint: '활성화되면 AI 어시스턴트가 구성된 MCP서버에 자동으로 연결하여 사용합니다.',
       directory: 'MCP 구성 디렉터리',
       directoryHint: 'MCP서버 구성 파일을 이 디렉토리에 놓으면 자동으로 감지 및 연결됩니다.',
-      tabServers: 'MCP',
+      tabServers: 'MCP 서버',
       tabSettings: '설정',
       tabInstalled: '설치됨',
       tabMarket: '마켓',
@@ -815,6 +824,8 @@ export default {
       openSourceLoginHint: '현재 오픈소스 버전으로 로그인되어 있습니다. 지식 베이스/앱 동기화만 지원됩니다. ChatWiki 모델 서비스는 사용할 수 없습니다.',
       modelServiceDesc: '绑定 ChatWiki 后可直接在模型服务中查看可用模型与积分情况',
       unbindConfirmDesc: '解除绑定后，将无法使用 ChatWiki 提供的应用和知识库。确定要继续吗？',
+      openclawDescription: 'chatwiki 인증 및 바인딩, chatwiki 자체 모델 및 계정 크레딧 사용',
+      switchBinding: '바인딩 전환',
     },
     tools: {
       tray: {
@@ -939,7 +950,7 @@ export default {
       listSubheading: '원격 AI 스킬을 로컬로 다운로드',
       refreshCta: '새로고침',
       openDir: '디렉터리 열기',
-      selectAgent: 'Agent',
+      selectAgent: '에이전트',
       loadingAgents: 'Agent 불러오는 중...',
       agentNone: '없음',
       selectTarget: '설치 대상',
@@ -968,35 +979,19 @@ export default {
       uninstallFailed: '제거에 실패했습니다',
       deleteConfirm: '이 스킬을 제거하시겠습니까',
       builtInCannotUninstall: '내장 스킬은 제거할 수 없습니다',
-      builtInUninstallHint:
-        '이 스킬은 앱에 기본 포함된 내장 스킬이므로 제거할 수 없습니다.',
       enable: '활성화',
       disable: '비활성화',
       toggleFailed: '전환에 실패했습니다. 잠시 후 다시 시도해 주세요',
       openMainWorkspaceSkillsDir: '메인 워크스페이스 스킬 디렉터리 열기',
       filePreviewNA: '원격 파일 미리보기는 아직 지원되지 않습니다',
       addSkillHint: '공유 스킬 추가',
-      addSkillHintDesc:
-        '열린 디렉터리에 새 폴더를 만들고 SKILL.md 파일을 추가해 공유 스킬을 만드세요.',
-      addSkillHintDescShared:
-        '{dir} 디렉터리에 새 폴더를 만들고 SKILL.md 파일을 추가해 공유 스킬을 만드세요.',
-      addSkillHintDescAgent:
-        '{dir} 디렉터리에 새 폴더를 만들고 SKILL.md 파일을 추가해 이 Agent용 스킬을 만드세요.',
-      addSkillViaChatPrompt:
-        '새로운 AI 스킬을 만들고 싶습니다. 스킬 이름, 설명, 기능, 구현 방안을 설계해 주세요. 이 스킬은 Agent #{agentId} ({agentName})의 작업 디렉터리 {dir}에 설치됩니다.',
-      addSkillViaChatPromptShared:
-        '새로운 AI 스킬을 만들고 싶습니다. 스킬 이름, 설명, 기능, 구현 방안을 설계해 주세요. 이 스킬은 공유 스킬 디렉터리 {dir}에 설치됩니다.',
       addSkillDialogTitle: '스킬 추가',
       addSkillViaChatTitle: '대화로 만들기',
       addSkillViaChatDesc: 'AI와 대화하면서 스킬 이름, 설명, 구현 방안을 설계합니다.',
       addSkillViaChatGuideLabel: 'SkillHub 열기',
       addSkillViaChatGuideDesc: '필요한 스킬을 검색하고 설치 프롬프트를 Agent에게 보내세요.',
       addSkillChoosePackageTitle: '스킬 패키지 선택',
-      addSkillChoosePackageDesc:
-        '대상 디렉터리를 열고 다운로드한 스킬 패키지를 그 안에 넣으세요.',
       addSkillChoosePackageGuideLabel: 'ClawHub 열기',
-      addSkillChoosePackageGuideDesc:
-        '필요한 스킬을 검색하고 설치 파일을 대상 디렉터리에 다운로드하세요.',
       agentWorkspaceDirLoading: '디렉터리 불러오는 중...',
       agentWorkspaceDirHint: '먼저 Agent를 선택하세요',
       scopeSharedOption: '공유 스킬',
@@ -1006,13 +1001,17 @@ export default {
       actionInstallSkill: '스킬 설치',
       introTitle: '스킬 소개',
       usageTitle: '사용 방법',
-      securityVerifiedHint:
-        '보안 및 컴플라이언스 검증을 통과했으며 악성 코드나 데이터 유출 위험이 없습니다.',
       viewDetail: '자세히 보기',
       badgeBuiltIn: '내장 스킬',
       badgeWorkspace: '워크스페이스',
       syncFailedTitle: '스킬 마켓 동기화 실패',
       syncFailedDescription: '백엔드 서비스에 연결할 수 없습니다',
+      addSkillChoosePackageDesc: '해당 디렉토리를 열고 다운로드한 스킬 패키지를 배치합니다.',
+      addSkillChoosePackageGuideDesc: '필요한 스킬을 검색하고 설치 파일을 해당 디렉토리에 다운로드합니다.',
+      addSkillHintDesc: '열린 디렉토리에 새 폴더를 만들고 공유 스킬을 생성하려면 SKILL.md 파일을 추가합니다.',
+      addSkillHintDescShared: '{dir} 디렉토리에 새 폴더를 만들고 공유 스킬을 생성하려면 SKILL.md 파일을 추가합니다.',
+      builtInUninstallHint: '이 스킬은 번들 스킬이며 소프트웨어와 함께 제공됩니다. 제거할 수 없습니다.',
+      securityVerifiedHint: '보안 및 규정 준수 검증 완료, 악성 코드나 데이터 유출 위험 없음.',
     },
   },
   assistant: {
@@ -1057,6 +1056,7 @@ export default {
       create: '만들기',
       save: '저장',
       settings: '에이전트 설정',
+      confirm: '확인',
     },
     placeholders: {
       noAgentSelected: '에이전트를 선택하세요',
@@ -1272,6 +1272,8 @@ export default {
         contextCount: '컨텍스트 수',
         maxTokens: '최대 토큰 수',
         unlimited: '무제한',
+        setDefaultModelDesc: '어시스턴트 "{name}"에 기본 모델이 설정되지 않았습니다. 계속하려면 모델을 선택하세요.',
+        setDefaultModelTitle: '기본 모델 설정',
       },
       retrieval: {
         matchThreshold: '일치 임계값',
@@ -1291,7 +1293,7 @@ export default {
         sandbox_off: '비활성화',
         sandbox_all: '모든 에이전트',
         groupChatMentionPatterns: '그룹 채팅 멘션 패턴',
-        groupChatMentionPatternsPlaceholder: "'@'어시스턴트, '@'봇",
+        groupChatMentionPatternsPlaceholder: '"@"어시스턴트, "@"봇',
         groupChatInsertPreset: '프리셋 삽입',
         tools: '도구 설정',
         toolsProfile: '도구 프리셋',
@@ -2451,5 +2453,9 @@ export default {
       },
       weekly: '每周 {weekday} {time}',
     },
+  },
+  openclawTerminal: {
+    loading: '로딩 중...',
+    tools: '도구',
   },
 }
