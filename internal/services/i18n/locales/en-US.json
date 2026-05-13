@@ -193,12 +193,12 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw configuration sync timed out. Retry later or verify the OpenClaw Gateway is running.",
   "error.channel_update_failed": "failed to update channel",
   "error.dingtalk_plugin_not_ready": "DingTalk connector plugin is still installing or not ready. Please try again later.",
-  "error.dingtalk_plugin_install_failed": "Failed to install DingTalk connector plugin. This may be due to network issues or the plugin repository being unavailable. Please try again later.",
+  "error.dingtalk_plugin_install_failed": "Failed to install DingTalk connector plugin ({{.Package}}). If auto-install fails, please run 'openclaw plugins install {{.Package}}' manually in the terminal.",
   "error.qq_plugin_not_ready": "The QQ OpenClaw plugin is not installed or not ready. Install the plugin before syncing configuration.",
   "error.wecom_plugin_not_ready": "The WeCom OpenClaw plugin is not installed or not ready. Install the plugin before syncing configuration.",
-  "error.wecom_plugin_install_failed": "Failed to install WeCom OpenClaw plugin. This may be due to network issues or the plugin repository being unavailable. Please try again later.",
+  "error.wecom_plugin_install_failed": "Failed to install WeCom OpenClaw plugin ({{.Package}}). If auto-install fails, please run 'openclaw plugins install {{.Package}}' manually in the terminal.",
   "error.wechat_plugin_not_ready": "WeChat OpenClaw plugin is still installing or not ready. Please try again later.",
-  "error.wechat_plugin_install_failed": "Failed to install WeChat OpenClaw plugin. This may be due to network issues or the plugin repository being unavailable. Please try again later.",
+  "error.wechat_plugin_install_failed": "Failed to install WeChat OpenClaw plugin ({{.Package}}). If auto-install fails, please run 'openclaw plugins install {{.Package}}' manually in the terminal.",
   "error.channel_delete_failed": "failed to delete channel",
   "error.channel_read_failed": "failed to read channel",
   "error.channel_not_found": "channel '{{.ID}}' not found",
@@ -248,5 +248,6 @@
   "error.whatsapp_login_failed": "WhatsApp login session is missing or invalid.",
   "error.whatsapp_login_timeout": "WhatsApp QR login timed out. Please scan the code within the time limit.",
   "error.library_batch_max_documents_invalid": "batch max documents is invalid (allowed: 1~5)",
-  "error.library_batch_max_chunks_invalid": "batch max chunks is invalid (allowed: 1~20)"
+  "error.library_batch_max_chunks_invalid": "batch max chunks is invalid (allowed: 1~20)",
+  "error.qq_plugin_install_failed": "Failed to install QQ OpenClaw plugin ({{.Package}}). If auto-install fails, please run 'openclaw plugins install {{.Package}}' manually in the terminal."
 }

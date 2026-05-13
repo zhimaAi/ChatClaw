@@ -244,9 +244,10 @@
   "error.whatsapp_login_timeout": "WhatsApp QR login timed out. Please scan the code within the time limit.",
   "error.library_batch_max_documents_invalid": "1回あたりの文書数が無効です（1〜5）",
   "error.library_batch_max_chunks_invalid": "1回あたりのセグメント数が無効です（1〜20）",
-  "error.dingtalk_plugin_install_failed": "钉钉连接器插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.dingtalk_plugin_install_failed": "DingTalk コネクター プラグイン（{{.Package}}）のインストールに失敗しました。自動インストールに失敗した場合は、ターミナルで 'openclaw plugins install {{.Package}}' を手動で実行してください。",
   "error.openclaw_reset_delete_failed": "重置 OpenClaw 失败：删除数据目录失败",
   "error.openclaw_reset_failed": "重置 OpenClaw 失败：获取数据目录失败",
-  "error.wechat_plugin_install_failed": "微信 OpenClaw 官方插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
-  "error.wecom_plugin_install_failed": "企业微信 OpenClaw 插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。"
+  "error.wechat_plugin_install_failed": "WeChat OpenClaw プラグイン（{{.Package}}）のインストールに失敗しました。自動インストールに失敗した場合は、ターミナルで 'openclaw plugins install {{.Package}}' を手動で実行してください。",
+  "error.wecom_plugin_install_failed": "WeCom OpenClaw プラグイン（{{.Package}}）のインストールに失敗しました。自動インストールに失敗した場合は、ターミナルで 'openclaw plugins install {{.Package}}' を手動で実行してください。",
+  "error.qq_plugin_install_failed": "QQ OpenClaw プラグイン（{{.Package}}）のインストールに失敗しました。自動インストールに失敗した場合は、ターミナルで 'openclaw plugins install {{.Package}}' を手動で実行してください。"
 }
