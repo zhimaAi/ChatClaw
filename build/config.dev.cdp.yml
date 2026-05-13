@@ -9,7 +9,7 @@ info:
   description: "ChatClaw"
   copyright: "Copyright © 2016- 2026 Sesame Small Customer Service Network Technology Co., Ltd."
   comments: "ChatClaw"
-  version: "0.9.6"
+  version: "0.9.7"
 
 dev_mode:
   root_path: .
