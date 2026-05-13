@@ -193,12 +193,12 @@
   "error.channel_openclaw_sync_timeout": "OpenClaw 配置同步超时，请稍后重试，或检查 OpenClaw Gateway 是否正常运行",
   "error.channel_update_failed": "更新频道失败",
   "error.dingtalk_plugin_not_ready": "钉钉连接器插件仍在安装或未就绪，请稍后再试。",
-  "error.dingtalk_plugin_install_failed": "钉钉连接器插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.dingtalk_plugin_install_failed": "钉钉连接器插件（{{.Package}}）安装失败，如自动安装失败，请在终端中手动执行 'openclaw plugins install {{.Package}}'。",
   "error.qq_plugin_not_ready": "QQ OpenClaw 插件未安装或未就绪，请先完成插件安装后再同步配置。",
   "error.wecom_plugin_not_ready": "企业微信 OpenClaw 插件未安装或未就绪，请先完成插件安装后再同步配置。",
-  "error.wecom_plugin_install_failed": "企业微信 OpenClaw 插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.wecom_plugin_install_failed": "企业微信 OpenClaw 插件（{{.Package}}）安装失败，如自动安装失败，请在终端中手动执行 'openclaw plugins install {{.Package}}'。",
   "error.wechat_plugin_not_ready": "微信 OpenClaw 官方插件仍在安装或未就绪，请稍后再试。",
-  "error.wechat_plugin_install_failed": "微信 OpenClaw 官方插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.wechat_plugin_install_failed": "微信 OpenClaw 插件（{{.Package}}）安装失败，如自动安装失败，请在终端中手动执行 'openclaw plugins install {{.Package}}'。",
   "error.channel_delete_failed": "删除频道失败",
   "error.channel_read_failed": "读取频道失败",
   "error.channel_not_found": "未找到频道「{{.ID}}」",
@@ -248,5 +248,6 @@
   "error.whatsapp_login_failed": "WhatsApp 登录会话无效或已失效。",
   "error.whatsapp_login_timeout": "WhatsApp 扫码登录超时，请在时限内完成扫描。",
   "error.library_batch_max_documents_invalid": "单次处理文档数量不合法（允许 1~5）",
-  "error.library_batch_max_chunks_invalid": "单次处理分段数量不合法（允许 1~20）"
+  "error.library_batch_max_chunks_invalid": "单次处理分段数量不合法（允许 1~20）",
+  "error.qq_plugin_install_failed": "QQ OpenClaw 插件（{{.Package}}）安装失败，如自动安装失败，请在终端中手动执行 'openclaw plugins install {{.Package}}'。"
 }

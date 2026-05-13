@@ -46,7 +46,6 @@ type OpenClawChannelService struct {
 const wecomPluginPackage = "@wecom/wecom-openclaw-plugin"
 const wecomPluginSpecificVersion = "2026.4.22"
 const wecomPluginID = "wecom-openclaw-plugin"
-const wecomPluginFallbackTimeout = 2 * time.Minute
 
 // Timeouts for OpenClaw CLI (config set), plugin install/list.
 const (
@@ -1456,139 +1455,35 @@ func (s *OpenClawChannelService) ensureOpenClawWeComPluginInstalled(ctx context.
 		return nil
 	}
 
-	// Try specific version first (2026.4.22)
-	s.app.Logger.Info("openclaw: installing wecom plugin with specific version 2026.4.22", "plugin", wecomPluginPackage)
-	installOut, installErr := s.execOpenClawPluginCLI(ctx, "plugins", "install", wecomPluginPackage+"@"+wecomPluginSpecificVersion)
+	s.app.Logger.Info("openclaw: installing wecom plugin with specific version "+wecomPluginSpecificVersion,
+		"plugin", wecomPluginPackage+"@"+wecomPluginSpecificVersion)
+
+	installOut, installErr := s.execOpenClawPluginCLI(ctx, "plugins", "install",
+		wecomPluginPackage+"@"+wecomPluginSpecificVersion)
 	if installErr == nil {
-		s.app.Logger.Info("openclaw: wecom plugin installed successfully (specific version 2026.4.22)")
+		s.app.Logger.Info("openclaw: wecom plugin installed successfully (specific version " + wecomPluginSpecificVersion + ")")
 		return nil
 	}
 	installMsg := strings.ToLower(string(installOut) + " " + installErr.Error())
 
-	// Check if already installed
 	if strings.Contains(installMsg, "already installed") || strings.Contains(installMsg, "plugin already exists") ||
 		(strings.Contains(installMsg, "installed plugin:") && containsWeComPluginMarker(string(installOut))) {
-		s.app.Logger.Info("openclaw: wecom plugin already installed (specific version 2026.4.22)")
+		s.app.Logger.Info("openclaw: wecom plugin already installed (specific version " + wecomPluginSpecificVersion + ")")
 		return nil
 	}
 
-	s.app.Logger.Warn("openclaw: wecom plugin specific version 2026.4.22 install failed, falling back to latest",
-		"plugin", wecomPluginPackage, "error", installErr)
+	s.app.Logger.Error("openclaw: wecom plugin install failed",
+		"plugin", wecomPluginPackage+"@"+wecomPluginSpecificVersion,
+		"error", installErr)
 
-	// Fall back to latest
-	installOut, installErr = s.execOpenClawPluginCLI(ctx, "plugins", "install", wecomPluginPackage)
-	if installErr != nil {
-		installMsg = strings.ToLower(string(installOut) + " " + installErr.Error())
-		if isWeComPluginInstallRateLimited(installMsg) {
-			s.app.Logger.Warn("openclaw: wecom plugin install (latest) rate limited by ClawHub, falling back to npm pack install",
-				"plugin", wecomPluginPackage, "error", installErr)
-			fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), wecomPluginFallbackTimeout)
-			defer fallbackCancel()
-			if fallbackErr := s.installOpenClawWeComPluginFromLocalPackage(fallbackCtx); fallbackErr != nil {
-				return errs.New("error.wecom_plugin_install_failed")
-			}
-			verifyOut, verifyErr := s.execOpenClawPluginCLI(ctx, "plugins", "list")
-			if verifyErr != nil {
-				return fmt.Errorf("verify installed plugin %s: %w", wecomPluginPackage, verifyErr)
-			}
-			if !containsWeComPluginMarker(string(verifyOut)) {
-				return fmt.Errorf("plugin %s not found after fallback installation", wecomPluginPackage)
-			}
-			return nil
-		}
-		installedButInterrupted := strings.Contains(installMsg, "installed plugin:") && containsWeComPluginMarker(string(installOut))
-		if installedButInterrupted {
-			s.app.Logger.Warn("openclaw plugin install (latest) interrupted after success marker; will verify by listing plugins", "plugin", wecomPluginPackage, "error", installErr)
-		}
-		if !strings.Contains(installMsg, "plugin already exists") && !installedButInterrupted {
-			return errs.New("error.wecom_plugin_install_failed")
-		}
-	}
-	verifyOut, verifyErr := s.execOpenClawPluginCLI(ctx, "plugins", "list")
-	if verifyErr != nil {
-		return fmt.Errorf("verify installed plugin %s: %w", wecomPluginPackage, verifyErr)
-	}
-	if !containsWeComPluginMarker(string(verifyOut)) {
-		return fmt.Errorf("plugin %s not found after installation", wecomPluginPackage)
-	}
-	return nil
+	return errs.Newf("error.wecom_plugin_install_failed", map[string]any{
+		"Package": wecomPluginPackage + "@" + wecomPluginSpecificVersion,
+	})
 }
 
 func containsWeComPluginMarker(out string) bool {
 	out = strings.ToLower(out)
 	return strings.Contains(out, strings.ToLower(wecomPluginPackage)) || strings.Contains(out, strings.ToLower(wecomPluginID))
-}
-
-func isWeComPluginInstallRateLimited(msg string) bool {
-	m := strings.ToLower(msg)
-	return strings.Contains(m, "rate limit") || strings.Contains(m, "429")
-}
-
-func (s *OpenClawChannelService) installOpenClawWeComPluginFromLocalPackage(ctx context.Context) error {
-	if s.openclawManager == nil {
-		return fmt.Errorf("openclaw manager not available")
-	}
-	tmpDir, err := os.MkdirTemp("", "openclaw-wecom-pack-*")
-	if err != nil {
-		return fmt.Errorf("create wecom plugin temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	registries := []string{
-		"https://registry.npmjs.org",
-		"https://mirrors.cloud.tencent.com/npm/",
-	}
-	var tgzPath string
-	var lastErr error
-	for _, registry := range registries {
-		out, packErr := s.openclawManager.ExecNpx(
-			ctx,
-			"-y",
-			"npm@latest",
-			"pack",
-			wecomPluginPackage,
-			"--pack-destination",
-			tmpDir,
-			"--registry",
-			registry,
-		)
-		if packErr == nil {
-			tgzPath = strings.TrimSpace(string(out))
-			if tgzPath != "" {
-				tgzPath = filepath.Join(tmpDir, filepath.Base(tgzPath))
-			} else {
-				matches, _ := filepath.Glob(filepath.Join(tmpDir, "*.tgz"))
-				if len(matches) > 0 {
-					tgzPath = matches[0]
-				}
-			}
-			if tgzPath != "" {
-				break
-			}
-			lastErr = fmt.Errorf("npm pack succeeded but no tgz found in %s", tmpDir)
-			continue
-		}
-		lastErr = fmt.Errorf("npm pack from %s: %w\n%s", registry, packErr, string(out))
-	}
-	if tgzPath == "" {
-		if lastErr != nil {
-			return lastErr
-		}
-		return fmt.Errorf("npm pack did not produce a package archive")
-	}
-
-	packageDir := filepath.Join(tmpDir, "package")
-	if err := extractTarGz(tgzPath, tmpDir); err != nil {
-		return fmt.Errorf("extract wecom plugin package: %w", err)
-	}
-	if _, statErr := os.Stat(filepath.Join(packageDir, "package.json")); statErr != nil {
-		return fmt.Errorf("wecom plugin package missing package.json after extract: %w", statErr)
-	}
-
-	if _, err := s.execOpenClawPluginCLI(ctx, "plugins", "install", packageDir); err != nil {
-		return fmt.Errorf("install wecom plugin from local package dir: %w", err)
-	}
-	return nil
 }
 
 // execOpenClawPluginCLI uses the same retry strategy as other OpenClaw CLI calls (install/list can be slow).

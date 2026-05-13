@@ -244,9 +244,10 @@
   "error.whatsapp_login_timeout": "WhatsApp QR login timed out. Please scan the code within the time limit.",
   "error.library_batch_max_documents_invalid": "প্রতি ব্যাচে সর্বোচ্চ নথির সংখ্যা অবৈধ (১~৫)",
   "error.library_batch_max_chunks_invalid": "প্রতি ব্যাচে সর্বোচ্চ অংশের সংখ্যা অবৈধ (১~২০)",
-  "error.dingtalk_plugin_install_failed": "钉钉连接器插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.dingtalk_plugin_install_failed": "DingTalk কানেক্টর প্লাগইন ({{.Package}}) ইনস্টল করতে ব্যর্থ হয়েছে। স্বয়ংক্রিয় ইনস্টল ব্যর্থ হলে, অনুগ্রহ করে টার্মিনালে 'openclaw plugins install {{.Package}}' ম্যানুয়ালি চালান।",
   "error.openclaw_reset_delete_failed": "重置 OpenClaw 失败：删除数据目录失败",
   "error.openclaw_reset_failed": "重置 OpenClaw 失败：获取数据目录失败",
-  "error.wechat_plugin_install_failed": "微信 OpenClaw 官方插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
-  "error.wecom_plugin_install_failed": "企业微信 OpenClaw 插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。"
+  "error.wechat_plugin_install_failed": "WeChat OpenClaw প্লাগইন ({{.Package}}) ইনস্টল করতে ব্যর্থ হয়েছে। স্বয়ংক্রিয় ইনস্টল ব্যর্থ হলে, অনুগ্রহ করে টার্মিনালে 'openclaw plugins install {{.Package}}' ম্যানুয়ালি চালান।",
+  "error.wecom_plugin_install_failed": "WeCom OpenClaw প্লাগইন ({{.Package}}) ইনস্টল করতে ব্যর্থ হয়েছে। স্বয়ংক্রিয় ইনস্টল ব্যর্থ হলে, অনুগ্রহ করে টার্মিনালে 'openclaw plugins install {{.Package}}' ম্যানুয়ালি চালান।",
+  "error.qq_plugin_install_failed": "QQ OpenClaw প্লাগইন ({{.Package}}) ইনস্টল করতে ব্যর্থ হয়েছে। স্বয়ংক্রিয় ইনস্টল ব্যর্থ হলে, অনুগ্রহ করে টার্মিনালে 'openclaw plugins install {{.Package}}' ম্যানুয়ালি চালান।"
 }

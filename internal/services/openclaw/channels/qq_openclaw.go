@@ -1,13 +1,8 @@
 package openclawchannels
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,13 +11,13 @@ import (
 )
 
 const (
-	openClawQQPluginPackage = "@tencent-connect/openclaw-qqbot@latest"
-	openClawQQPluginMarker  = "@tencent-connect/openclaw-qqbot"
-	openClawQQPluginID      = "openclaw-qqbot"
-	openClawQQChannelID     = "qqbot"
-	qqPluginVerifyAttempts  = 5
-	qqPluginVerifyDelay     = 1500 * time.Millisecond
-	qqPluginFallbackTimeout = 2 * time.Minute
+	openClawQQPluginPackage         = "@tencent-connect/openclaw-qqbot"
+	openClawQQPluginSpecificVersion  = "1.6.7"
+	openClawQQPluginMarker           = "@tencent-connect/openclaw-qqbot"
+	openClawQQPluginID               = "openclaw-qqbot"
+	openClawQQChannelID              = "qqbot"
+	qqPluginVerifyAttempts           = 5
+	qqPluginVerifyDelay              = 1500 * time.Millisecond
 )
 
 func (s *OpenClawChannelService) ensureOpenClawQQPluginInstalled(ctx context.Context) error {
@@ -31,29 +26,30 @@ func (s *OpenClawChannelService) ensureOpenClawQQPluginInstalled(ctx context.Con
 		return nil
 	}
 
-	if _, installErr := s.execOpenClawPluginCLI(ctx, "plugins", "install", openClawQQPluginPackage); installErr != nil {
-		installMsg := strings.ToLower(installErr.Error())
-		if isQQPluginInstallRateLimited(installMsg) {
-			s.app.Logger.Warn("openclaw: qq plugin install rate limited by ClawHub, falling back to npm pack install",
-				"plugin", openClawQQPluginPackage, "error", installErr)
-			fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), qqPluginFallbackTimeout)
-			defer fallbackCancel()
-			if fallbackErr := s.installOpenClawQQPluginFromLocalPackage(fallbackCtx); fallbackErr != nil {
-				return fmt.Errorf("openclaw plugins install %s rate-limited, fallback failed: %w", openClawQQPluginPackage, fallbackErr)
-			}
-			return s.verifyOpenClawQQPluginInstalled(ctx)
-		}
-		installedButInterrupted := strings.Contains(installMsg, "installed plugin:") && containsOpenClawQQPluginMarker(installMsg)
-		if installedButInterrupted {
-			s.app.Logger.Warn("openclaw qq plugin install interrupted after success marker; will verify by listing plugins",
-				"plugin", openClawQQPluginPackage, "error", installErr)
-		}
-		alreadyInstalled := strings.Contains(installMsg, "plugin already exists")
-		if !alreadyInstalled && !installedButInterrupted {
-			return fmt.Errorf("openclaw plugins install %s: %w", openClawQQPluginPackage, installErr)
-		}
+	s.app.Logger.Info("openclaw: installing qq plugin with specific version "+openClawQQPluginSpecificVersion,
+		"plugin", openClawQQPluginPackage+"@"+openClawQQPluginSpecificVersion)
+
+	installOut, installErr := s.execOpenClawPluginCLI(ctx, "plugins", "install",
+		openClawQQPluginPackage+"@"+openClawQQPluginSpecificVersion)
+	if installErr == nil {
+		s.app.Logger.Info("openclaw: qq plugin installed successfully (specific version " + openClawQQPluginSpecificVersion + ")")
+		return nil
 	}
-	return s.verifyOpenClawQQPluginInstalled(ctx)
+	installMsg := strings.ToLower(string(installOut) + " " + installErr.Error())
+
+	if strings.Contains(installMsg, "already installed") || strings.Contains(installMsg, "plugin already exists") ||
+		(strings.Contains(installMsg, "installed plugin:") && containsOpenClawQQPluginMarker(string(installOut))) {
+		s.app.Logger.Info("openclaw: qq plugin already installed (specific version " + openClawQQPluginSpecificVersion + ")")
+		return nil
+	}
+
+	s.app.Logger.Error("openclaw: qq plugin install failed",
+		"plugin", openClawQQPluginPackage+"@"+openClawQQPluginSpecificVersion,
+		"error", installErr)
+
+	return errs.Newf("error.qq_plugin_install_failed", map[string]any{
+		"Package": openClawQQPluginPackage + "@" + openClawQQPluginSpecificVersion,
+	})
 }
 
 func (s *OpenClawChannelService) isOpenClawQQPluginInstalled(ctx context.Context) (bool, error) {
@@ -69,137 +65,6 @@ func containsOpenClawQQPluginMarker(out string) bool {
 	return strings.Contains(out, strings.ToLower(openClawQQPluginMarker)) ||
 		strings.Contains(out, strings.ToLower(openClawQQPluginID)) ||
 		strings.Contains(out, openClawQQChannelID)
-}
-
-func isQQPluginInstallRateLimited(msg string) bool {
-	m := strings.ToLower(msg)
-	return strings.Contains(m, "rate limit") || strings.Contains(m, "429")
-}
-
-func (s *OpenClawChannelService) installOpenClawQQPluginFromLocalPackage(ctx context.Context) error {
-	if s.openclawManager == nil {
-		return fmt.Errorf("openclaw manager not available")
-	}
-	tmpDir, err := os.MkdirTemp("", "openclaw-qqbot-pack-*")
-	if err != nil {
-		return fmt.Errorf("create qq plugin temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	registries := []string{
-		"https://registry.npmjs.org",
-		"https://mirrors.cloud.tencent.com/npm/",
-	}
-	var tgzPath string
-	var lastErr error
-	for _, registry := range registries {
-		out, packErr := s.openclawManager.ExecNpx(
-			ctx,
-			"-y",
-			"npm@latest",
-			"pack",
-			openClawQQPluginPackage,
-			"--pack-destination",
-			tmpDir,
-			"--registry",
-			registry,
-		)
-		if packErr == nil {
-			tgzPath = strings.TrimSpace(string(out))
-			if tgzPath != "" {
-				tgzPath = filepath.Join(tmpDir, filepath.Base(tgzPath))
-			} else {
-				matches, _ := filepath.Glob(filepath.Join(tmpDir, "*.tgz"))
-				if len(matches) > 0 {
-					tgzPath = matches[0]
-				}
-			}
-			if tgzPath != "" {
-				break
-			}
-			lastErr = fmt.Errorf("npm pack succeeded but no tgz found in %s", tmpDir)
-			continue
-		}
-		lastErr = fmt.Errorf("npm pack from %s: %w\n%s", registry, packErr, string(out))
-	}
-	if tgzPath == "" {
-		if lastErr != nil {
-			return lastErr
-		}
-		return fmt.Errorf("npm pack did not produce a package archive")
-	}
-
-	packageDir := filepath.Join(tmpDir, "package")
-	if err := extractTarGz(tgzPath, tmpDir); err != nil {
-		return fmt.Errorf("extract qq plugin package: %w", err)
-	}
-	if _, statErr := os.Stat(filepath.Join(packageDir, "package.json")); statErr != nil {
-		return fmt.Errorf("qq plugin package missing package.json after extract: %w", statErr)
-	}
-
-	if _, err := s.execOpenClawPluginCLI(ctx, "plugins", "install", packageDir); err != nil {
-		return fmt.Errorf("install qq plugin from local package dir: %w", err)
-	}
-	return nil
-}
-
-func extractTarGz(archivePath string, targetDir string) error {
-	file, err := os.Open(archivePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	gzr, err := gzip.NewReader(file)
-	if err != nil {
-		return err
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if header == nil {
-			continue
-		}
-
-		name := filepath.Clean(header.Name)
-		if name == "." || name == string(filepath.Separator) {
-			continue
-		}
-		destPath := filepath.Join(targetDir, name)
-		if !strings.HasPrefix(destPath, filepath.Clean(targetDir)+string(filepath.Separator)) && filepath.Clean(destPath) != filepath.Clean(targetDir) {
-			return fmt.Errorf("illegal archive path: %s", header.Name)
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(destPath, 0o755); err != nil {
-				return err
-			}
-		case tar.TypeReg, tar.TypeRegA:
-			if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-				return err
-			}
-			out, err := os.OpenFile(destPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
-				return err
-			}
-			if err := out.Close(); err != nil {
-				return err
-			}
-		}
-	}
 }
 
 func (s *OpenClawChannelService) verifyOpenClawQQPluginInstalled(ctx context.Context) error {

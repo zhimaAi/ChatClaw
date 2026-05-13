@@ -244,9 +244,10 @@
   "error.whatsapp_login_timeout": "WhatsApp QR login timed out. Please scan the code within the time limit.",
   "error.library_batch_max_documents_invalid": "Islem basina belge sayisi gecersiz (1~5)",
   "error.library_batch_max_chunks_invalid": "Islem basina parca sayisi gecersiz (1~20)",
-  "error.dingtalk_plugin_install_failed": "钉钉连接器插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
+  "error.dingtalk_plugin_install_failed": "DingTalk bağlayıcı eklentisi ({{.Package}}) yüklenemedi. Otomatik yükleme başarısız olursa, terminalde 'openclaw plugins install {{.Package}}' komutunu manuel olarak çalıştırın.",
   "error.openclaw_reset_delete_failed": "重置 OpenClaw 失败：删除数据目录失败",
   "error.openclaw_reset_failed": "重置 OpenClaw 失败：获取数据目录失败",
-  "error.wechat_plugin_install_failed": "微信 OpenClaw 官方插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。",
-  "error.wecom_plugin_install_failed": "企业微信 OpenClaw 插件安装失败，可能是网络问题或插件仓库不可用，请稍后重试。"
+  "error.wechat_plugin_install_failed": "WeChat OpenClaw eklentisi ({{.Package}}) yüklenemedi. Otomatik yükleme başarısız olursa, terminalde 'openclaw plugins install {{.Package}}' komutunu manuel olarak çalıştırın.",
+  "error.wecom_plugin_install_failed": "WeCom OpenClaw eklentisi ({{.Package}}) yüklenemedi. Otomatik yükleme başarısız olursa, terminalde 'openclaw plugins install {{.Package}}' komutunu manuel olarak çalıştırın.",
+  "error.qq_plugin_install_failed": "QQ OpenClaw eklentisi ({{.Package}}) yüklenemedi. Otomatik yükleme başarısız olursa, terminalde 'openclaw plugins install {{.Package}}' komutunu manuel olarak çalıştırın."
 }
