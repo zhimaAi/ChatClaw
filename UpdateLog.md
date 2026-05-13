@@ -1,5 +1,34 @@
 ## Changelog
 
+### 2026/05/13
+1. **Localization Updates**: Updated localization files for multiple languages; added new error messages for plugin installation failures in English, Spanish, and French.
+
+### 2026/05/11
+1. **Chat File Upload (Major)**: Added comprehensive file upload functionality to chat; support for multiple file types with size limits; enhanced message sending logic to include file attachments.
+2. **OpenClaw Version Management**: Downgraded OpenClaw version to 2026.3.24 in runtime configuration to maintain compatibility.
+3. **Build Script Cleanup**: Removed `start-chatclaw.ps1` script as it is no longer needed.
+
+### 2026/05/09
+1. **OpenClaw Factory Reset**: Implemented factory reset functionality in OpenClaw runtime settings with confirmation dialog and full localization support in English and Chinese.
+2. **Development Documentation**: Updated Node.js and pnpm installation instructions; enhanced frontend testing setup with Playwright CDP debugging; modified Dockerfile for cross-compilation; streamlined Taskfile for frontend dependency management; improved global setup and teardown scripts for testing.
+
+### 2026/05/08
+1. **Frontend Build System**: Updated `.gitignore` to exclude test results and `package-lock.json`; enhanced development documentation with automated testing setup; removed `.npmrc`; updated `package.json` with new test scripts and dependencies.
+2. **Vite Configuration**: Modified Vite config for better chunking and optimized bundling.
+3. **WebView2 Debugging**: Enabled WebView2 debugging in Windows app initialization for improved development experience.
+
+### 2026/05/07
+1. **OpenClaw Version Rollback**: Downgraded OpenClaw version to 2026.3.24 in runtime configuration for stability.
+2. **Multi-Ask Optimization**: Enhanced multi-ask functionality with improved performance and reliability.
+
+### 2026/04/30
+1. **OpenClaw Version Update**: Bumped OpenClaw version to 2026.4.27; implemented temporary workaround to clear WhatsApp channel config for startup errors to address potential gateway startup issues due to incomplete WhatsApp config validation.
+
+### 2026/04/28
+1. **OpenClaw Runtime Settings Enhancement**: Enhanced OpenClaw runtime settings and cleaned up deprecated identity fields; updated gateway connection status to include last error message during reconnection attempts.
+2. **Identity Field Removal**: Removed identity handling from agent entries as OpenClaw 4.26+ no longer supports it via RPC, ensuring cleaner configuration management.
+3. **Last OpenClaw Support**: Updated to use the latest OpenClaw runtime by default.
+
 ### 2026/04/24
 1. **Multi-Language Localization Update**: Updated localization files for Arabic, Bengali, German, Spanish, French, Hindi, and Italian, including translations for app titles, common phrases, tool descriptions, and various UI elements.
 2. **WhatsApp Channel Hotfix**: Fixed WhatsApp channel initialization error configuration issue.

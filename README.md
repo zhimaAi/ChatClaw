@@ -292,17 +292,17 @@ ChatClaw_D2/
 ### Changelog
 To view the complete update log, please click👉️👉️[UpdateLog.md](./UpdateLog.md)
 
-### 2026/04/24
-1. **Multi-Language Localization Update**: Updated localization files for Arabic, Bengali, German, Spanish, French, Hindi, and Italian, including translations for app titles, common phrases, tool descriptions, and various UI elements.
-2. **WhatsApp Channel Hotfix**: Fixed WhatsApp channel initialization error configuration issue.
-3. **Skill Market Synchronization Enhancement**: Enhanced skill synchronization logic with remote metadata for improved skill data management.
+### 2026/05/13
+1. **Localization Updates**: Updated localization files for multiple languages; added new error messages for plugin installation failures in English, Spanish, and French.
 
-### 2026/04/22
-1. **ChatWiki Server URL Version Resolution**: Implemented server URL-based version resolution and enhanced binding logic for ChatWiki integration.
-2. **AGENTS.md Documentation**: Updated AGENTS.md with language conventions, Codex superpowers, archiving and iteration guidelines for comprehensive AI development guidelines.
+### 2026/05/11
+1. **Chat File Upload (Major)**: Added comprehensive file upload functionality to chat; support for multiple file types with size limits; enhanced message sending logic to include file attachments.
+2. **OpenClaw Version Management**: Downgraded OpenClaw version to 2026.3.24 in runtime configuration to maintain compatibility.
+3. **Build Script Cleanup**: Removed `start-chatclaw.ps1` script as it is no longer needed.
 
-### 2026/04/21
-1. **ChatWiki UI Enhancements**: Enhanced account card and provider detail components for improved ChatWiki user experience.
+### 2026/05/09
+1. **OpenClaw Factory Reset**: Implemented factory reset functionality in OpenClaw runtime settings with confirmation dialog and full localization support in English and Chinese.
+2. **Development Documentation**: Updated Node.js and pnpm installation instructions; enhanced frontend testing setup with Playwright CDP debugging; modified Dockerfile for cross-compilation; streamlined Taskfile for frontend dependency management; improved global setup and teardown scripts for testing.
 
 
 
