@@ -220,7 +220,6 @@
   "error.openclaw_gateway_not_ready_channel": "OpenClaw 运行时未启动，请先在桌面端启动 OpenClaw 后再发送消息。",
   "error.openclaw_reset_failed": "重置 OpenClaw 失败：获取数据目录失败",
   "error.openclaw_reset_delete_failed": "重置 OpenClaw 失败：删除数据目录失败",
-  "error.update_restart_failed": "重启应用失败",
   "error.dingtalk_network_dns_failed": "钉钉连接失败：DNS 解析异常，请检查网络或 DNS 设置",
   "channel.feishu_streaming_generating": "正在流式生成回复，请稍候...",
   "channel.dingtalk_streaming_generating": "正在流式生成回复，请稍候...",

@@ -381,14 +381,11 @@ export default {
       resetToFactory: 'Factory Reset',
       resetToFactoryHint: 'Delete OpenClaw data directory and restart the app. Use this to restore factory settings when the environment is broken.',
       resetConfirmTitle: 'Confirm Factory Reset',
-      resetConfirmDesc:
-        'This will delete all OpenClaw data storage folders, including plugins, conversation history, channel configurations, and more. This action cannot be undone. Continue?',
       resetFailed: 'Factory reset failed',
       autoStartTooltip: 'Toggle OpenClaw gateway auto-start. When enabled, the gateway will start automatically when the app launches.',
-      continueOrRestartDesc:
-        'Download cache for version {version} was found. Choose to continue the upgrade (starting from npm install) or download again.',
       portOccupiedHint: 'Port {port} is occupied by process {process} (PID: {pid}). Stop that process first.',
       portStillOccupiedAfterStopHint: 'Manually terminate the process occupying the port (PID: {pid}).',
+      resetConfirmDesc: 'This operation will delete all OpenClaw data storage folders, including plugins, conversation history, channel configurations, etc. This action cannot be undone. Continue?',
     },
     runtimeEnvironment: {
       title: 'Runtime Environment Setup',
@@ -400,10 +397,9 @@ export default {
       pauseFailed: 'Failed to pause',
       startUsing: 'Start Using',
       notInstalledHint: 'OpenClaw runtime is not installed yet. Install it first.',
-      installedHint:
-        'OpenClaw runtime is installed. If you do not need it now, you can pause it and later manage it in ',
       managerText: 'OpenClaw Manager',
       managerSuffix: '.',
+      installedHint: 'OpenClaw runtime is installed. If not using temporarily, you can disable it by left-clicking. Later, you can go to',
     },
     general: {
       title: 'General Settings',
@@ -459,8 +455,7 @@ export default {
         },
         openclaw: {
           name: 'OpenClaw Runtime',
-          description:
-            'Install and manage the OpenClaw runtime with one click to support agent workflows and toolchain capabilities.',
+          description: 'One-click install and manage OpenClaw runtime environment, supporting agent workflows and toolchain capabilities.',
         },
         updatesAvailableToast: '检测到扩展组件有新版本，可以到「设置 → 常规设置」中手动更新。',
       },
@@ -629,29 +624,11 @@ export default {
       openMainWorkspaceSkillsDir: 'Open main workspace skills directory',
       filePreviewNA: 'Remote file preview not available',
       addSkillHint: 'Add Shared Skill',
-      addSkillHintDesc:
-        'Create a new folder in the opened directory and add a SKILL.md file to create a shared skill.',
-      addSkillHintDescShared:
-        'Create a new folder in {dir} and add a SKILL.md file to create a shared skill.',
-      addSkillHintDescAgent:
-        "Create a new folder in {dir} and add a SKILL.md file for this Agent's skill.",
-      addSkillViaChatPrompt:
-        "I want to create a new AI skill, please help me design the skill name, description, features and implementation. The skill will be installed in Agent #{agentId} ({agentName})'s workspace directory {dir}.",
-      addSkillViaChatPromptShared:
-        'I want to create a new AI skill, please help me design the skill name, description, features and implementation. The skill will be installed in the shared skills directory {dir}.',
       addSkillDialogTitle: 'Add Skill',
       addSkillViaChatTitle: 'Create via Chat',
-      addSkillViaChatDesc:
-        'Chat with AI to design the skill name, description, and implementation.',
       addSkillViaChatGuideLabel: 'Visit SkillHub',
-      addSkillViaChatGuideDesc:
-        'Search for the skill you need, then send the install prompt to Agent.',
       addSkillChoosePackageTitle: 'Choose Skill Package',
-      addSkillChoosePackageDesc:
-        'Open the target directory and place the downloaded skill package there.',
       addSkillChoosePackageGuideLabel: 'Visit ClawHub',
-      addSkillChoosePackageGuideDesc:
-        'Search for the skill you need, then download the install files to the target directory.',
       agentWorkspaceDirLoading: 'Loading directory...',
       agentWorkspaceDirHint: 'Please select an Agent first',
       scopeSharedOption: 'Shared Skills',
@@ -661,13 +638,18 @@ export default {
       actionInstallSkill: 'Install Skill',
       introTitle: 'About This Skill',
       usageTitle: 'How to Use',
-      securityVerifiedHint:
-        'Verified for safety and compliance. No malicious code or data leakage risk.',
       viewDetail: 'View Details',
       badgeBuiltIn: 'Built-in',
       badgeWorkspace: 'Workspace',
       syncFailedTitle: 'Skill market sync failed',
       syncFailedDescription: 'Unable to connect to the backend service',
+      addSkillChoosePackageDesc: 'Open the corresponding directory and place downloaded skill packages into it.',
+      addSkillChoosePackageGuideDesc: 'Search for desired skills and download installation files to the corresponding directory.',
+      addSkillHintDesc: 'In the opened directory, create a new folder and add a SKILL.md file to create a shared skill.',
+      addSkillHintDescShared: 'Create a new folder in the {dir} directory and add a SKILL.md file to create a shared skill.',
+      addSkillViaChatDesc: 'Chat with AI and let it help you design skill name, description, and implementation plan.',
+      addSkillViaChatGuideDesc: 'Search for desired skills, copy the installation prompt, and send it to the Agent.',
+      securityVerifiedHint: 'Verified for security and compliance, no malicious code or data leakage risks.',
     },
     openclawCron: {
       title: 'Scheduled Tasks',
@@ -980,6 +962,8 @@ export default {
         loginNow: 'Log in now',
         loginLater: 'Later',
       },
+      openclawDescription: 'Authorize and bind ChatWiki to use ChatWiki"s own models and account credits.',
+      switchBinding: 'Switch Binding',
     },
     tools: {
       tray: {
@@ -2226,10 +2210,8 @@ export default {
       starting: 'The gateway is starting. Please try again in a moment.',
       upgrading: 'OpenClaw runtime is upgrading. Please try again in a moment.',
       channels: 'Gateway is not running. Channels cannot be managed when the gateway is stopped.',
-      scheduledTasks:
-        'Gateway is not running. Scheduled tasks cannot be managed when the gateway is stopped.',
-      notInstalled:
-        'OpenClaw runtime not detected. Go to Settings → General or OpenClaw Manager to install the runtime.',
+      notInstalled: 'OpenClaw runtime environment not detected. Please go to Settings > General Settings or OpenClaw Manager to install.',
+      scheduledTasks: 'Gateway is not running. Scheduled tasks cannot be managed when the gateway is not enabled.',
     },
   },
   openclawTerminal: {

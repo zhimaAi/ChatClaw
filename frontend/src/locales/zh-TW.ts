@@ -175,6 +175,7 @@ export default {
     systemChatClaw: 'ChatClaw',
     systemOpenClaw: 'OpenClaw',
     skillmarket: '技能市场',
+    openclawTerminal: '終端',
   },
   toolsPage: {
     subtitle: '便捷使用特色工具',
@@ -378,6 +379,14 @@ export default {
       upgradeCancelled: '升级已取消',
       upgradeDetails: '详情',
       upgradeOutputWaiting: '等待输出...',
+      gatewayLog: '閘道日誌',
+      resetConfirmDesc: '此操作將刪除 OpenClaw 的全部資料存儲資料夾，包括插件、對話歷史、頻道配置等。操作不可復原，是否繼續？',
+      resetConfirmTitle: '確認恢復出廠設定',
+      resetFailed: '恢復出廠設定失敗',
+      resetToFactory: '恢復出廠設定',
+      resetToFactoryHint: '刪除 OpenClaw 資料目錄並重啟應用，適用於環境異常需要恢復出廠設定的情況',
+      viewGatewayLog: '查看日誌',
+      waitingForLog: '等待日誌輸出...',
     },
     general: {
       title: '一般設定',
@@ -566,7 +575,7 @@ export default {
       enableHint: '啟用後，AI 助手在對話時會自動連線並使用已設定的 MCP 服務。',
       directory: 'MCP 設定目錄',
       directoryHint: '將 MCP 服務設定檔放入該目錄，AI 對話時會自動識別並連線。',
-      tabServers: 'MCP',
+      tabServers: 'MCP 伺服器',
       tabSettings: '設定',
       tabInstalled: '已安裝',
       tabMarket: '市場',
@@ -778,6 +787,8 @@ export default {
         loginNow: '立即登入',
         loginLater: '稍後登入',
       },
+      openclawDescription: '授權綁定chatwiki，使用chatwiki自有模型和帳號積分',
+      switchBinding: '切換綁定',
     },
     tools: {
       tray: {
@@ -895,7 +906,7 @@ export default {
       listSubheading: '從遠端下載 AI 技能到本機',
       refreshCta: '重新整理',
       openDir: '開啟目錄',
-      selectAgent: 'Agent',
+      selectAgent: '代理',
       loadingAgents: '載入 Agent 中...',
       agentNone: '無',
       selectTarget: '安裝目標',
@@ -932,14 +943,6 @@ export default {
       filePreviewNA: '暫不支援遠端檔案預覽',
       addSkillHint: '新增共享技能',
       addSkillHintDesc: '在開啟的目錄中建立新資料夾，並新增 SKILL.md 檔案來建立共享技能。',
-      addSkillHintDescShared:
-        '在 {dir} 目錄中建立新資料夾，並新增 SKILL.md 檔案來建立共享技能。',
-      addSkillHintDescAgent:
-        '在 {dir} 目錄中建立新資料夾，並新增 SKILL.md 檔案來建立此 Agent 的技能。',
-      addSkillViaChatPrompt:
-        '我想建立一個新的 AI 技能，請幫我設計技能名稱、描述、功能與實作方案。技能將安裝在 Agent #{agentId}（{agentName}）的工作目錄 {dir} 中。',
-      addSkillViaChatPromptShared:
-        '我想建立一個新的 AI 技能，請幫我設計技能名稱、描述、功能與實作方案。技能將安裝在共享技能目錄 {dir} 中。',
       addSkillDialogTitle: '新增技能',
       addSkillViaChatTitle: '透過對話建立',
       addSkillViaChatDesc: '與 AI 對話，讓它協助你設計技能名稱、描述與實作方案。',
@@ -964,6 +967,7 @@ export default {
       badgeWorkspace: '工作區',
       syncFailedTitle: '技能市集同步失敗',
       syncFailedDescription: '無法連線到後端服務',
+      addSkillHintDescShared: '在 {dir} 目錄中建立新資料夾，並添加 SKILL.md 檔案來建立共享技能。',
     },
   },
   assistant: {
@@ -1008,6 +1012,7 @@ export default {
       create: '建立',
       save: '儲存',
       settings: '助手設定',
+      confirm: '確認',
     },
     placeholders: {
       noAgentSelected: '請選擇一個助手',
@@ -1216,6 +1221,8 @@ export default {
         contextCount: '上下文數',
         maxTokens: '最大 Token 數',
         unlimited: '不限',
+        setDefaultModelDesc: '助手「{name}」未設定預設模型，請選擇一個模型以繼續使用。',
+        setDefaultModelTitle: '設定預設模型',
       },
       retrieval: {
         matchThreshold: '匹配度閾值',
@@ -2266,5 +2273,9 @@ export default {
       },
       weekly: '每周 {weekday} {time}',
     },
+  },
+  openclawTerminal: {
+    loading: '載入中...',
+    tools: '工具',
   },
 }
